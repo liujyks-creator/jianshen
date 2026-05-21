@@ -1,0 +1,614 @@
+import type {
+  CountdownCue,
+  Exercise,
+  HeartRateState,
+  RecoveryArea,
+  RecoveryRecommendation,
+  StrengthExerciseBlock,
+  TimedCircuitBlock,
+  WorkoutPlan,
+  WorkoutSession,
+} from './contracts'
+
+const defaultCue: CountdownCue = {
+  enabled: true,
+  thresholdSec: 5,
+  soundEnabled: true,
+  vibrationEnabled: true,
+  emphasisAnimationEnabled: true,
+  voiceCueEnabled: false,
+}
+
+const baseCapabilities = {
+  supportsTimedTraining: false,
+  supportsReps: false,
+  supportsWeight: false,
+  supportsFollowAlong: false,
+  supportsWarmupRole: false,
+  supportsStretchRole: false,
+  supportsCircuitRole: false,
+  isUnilateral: false,
+}
+
+export const exercises: Exercise[] = [
+  {
+    id: 'jumping-jack',
+    name: '开合跳',
+    aliases: ['Jumping Jack'],
+    category: 'cardio',
+    primaryMuscleIds: ['cardio', 'calves'],
+    secondaryMuscleIds: ['shoulders', 'core'],
+    equipment: ['bodyweight'],
+    difficulty: 'beginner',
+    roles: ['warmup', 'main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsTimedTraining: true,
+      supportsFollowAlong: true,
+      supportsWarmupRole: true,
+      supportsCircuitRole: true,
+    },
+    instructions: {
+      shortCue: '轻落地，保持呼吸节奏。',
+      steps: ['站直收紧核心。', '跳开双脚并抬高手臂。', '回到起始站姿并连续重复。'],
+      keyPoints: ['膝踝保持缓冲。', '动作节奏均匀。'],
+      commonMistakes: ['落地太重。', '耸肩抢节奏。'],
+      breathingCues: ['保持自然呼吸。'],
+    },
+    recovery: {
+      trainedMuscleIds: ['calves', 'shoulders'],
+      recommendedRecoveryAreaIds: ['calves-release'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'high-knees',
+    name: '高抬腿',
+    category: 'cardio',
+    primaryMuscleIds: ['hip-flexors', 'cardio'],
+    secondaryMuscleIds: ['core'],
+    equipment: ['bodyweight'],
+    difficulty: 'beginner',
+    roles: ['warmup', 'main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsTimedTraining: true,
+      supportsFollowAlong: true,
+      supportsWarmupRole: true,
+      supportsCircuitRole: true,
+    },
+    instructions: {
+      shortCue: '躯干立住，膝盖主动上提。',
+      steps: ['站直并收紧躯干。', '左右膝交替抬高。', '用前脚掌轻快落地。'],
+      keyPoints: ['避免后仰。', '脚步轻快。'],
+      commonMistakes: ['为了速度缩短抬腿幅度。'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'plank',
+    name: '平板支撑',
+    category: 'core',
+    primaryMuscleIds: ['core'],
+    secondaryMuscleIds: ['glutes', 'shoulders'],
+    equipment: ['mat'],
+    difficulty: 'beginner',
+    roles: ['main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsTimedTraining: true,
+      supportsFollowAlong: true,
+      supportsCircuitRole: true,
+    },
+    instructions: {
+      shortCue: '肋骨收住，身体保持一条线。',
+      steps: ['前臂撑地，肩在肘上方。', '脚跟向后推，收紧臀腹。', '保持呼吸与躯干稳定。'],
+      keyPoints: ['骨盆不下沉。', '颈部自然延长。'],
+      commonMistakes: ['塌腰。', '耸肩。'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'barbell-bench-press',
+    name: '杠铃卧推',
+    category: 'chest',
+    primaryMuscleIds: ['chest'],
+    secondaryMuscleIds: ['triceps', 'front-delts'],
+    equipment: ['barbell'],
+    difficulty: 'intermediate',
+    roles: ['main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsReps: true,
+      supportsWeight: true,
+    },
+    instructions: {
+      shortCue: '肩胛稳定，下放可控，推起稳。',
+      steps: ['卧于凳上并固定脚位。', '肩胛收紧，握距稳定。', '控制下放至可控深度后推起。'],
+      keyPoints: ['前臂推起时接近垂直。', '胸廓与肩胛保持稳定。'],
+      commonMistakes: ['肩向前顶。', '下放失控。'],
+      breathingCues: ['下放吸气，推起呼气。'],
+    },
+    substitutions: [
+      { exerciseId: 'dumbbell-bench-press', equipmentFallback: true },
+      { exerciseId: 'machine-chest-press', equipmentFallback: true },
+    ],
+    recovery: {
+      trainedMuscleIds: ['chest', 'triceps', 'front-delts'],
+      recommendedRecoveryAreaIds: ['pec-release', 'triceps-release'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'dumbbell-bench-press',
+    name: '哑铃卧推',
+    category: 'chest',
+    primaryMuscleIds: ['chest'],
+    secondaryMuscleIds: ['triceps', 'front-delts'],
+    equipment: ['dumbbell'],
+    difficulty: 'intermediate',
+    roles: ['main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsReps: true,
+      supportsWeight: true,
+    },
+    instructions: {
+      shortCue: '左右轨迹稳，胸肩不要抢位。',
+      steps: ['举哑铃就位。', '两侧同步控制下放。', '向上推起并保持稳定。'],
+      keyPoints: ['手腕中立。', '肩胛保持贴凳。'],
+      commonMistakes: ['两侧晃动过大。'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'machine-chest-press',
+    name: '器械推胸',
+    category: 'chest',
+    primaryMuscleIds: ['chest'],
+    secondaryMuscleIds: ['triceps'],
+    equipment: ['machine'],
+    difficulty: 'beginner',
+    roles: ['main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsReps: true,
+      supportsWeight: true,
+    },
+    instructions: {
+      shortCue: '调整座位后再推，肩位别耸。',
+      steps: ['调整座位和握把高度。', '稳定肩胛后推起。', '控制回程。'],
+      keyPoints: ['胸部发力优先。'],
+      commonMistakes: ['座位过高导致肩不适。'],
+    },
+    contentStatus: 'draft',
+  },
+  {
+    id: 'goblet-squat',
+    name: '高脚杯深蹲',
+    category: 'legs',
+    primaryMuscleIds: ['quads', 'glutes'],
+    secondaryMuscleIds: ['core'],
+    equipment: ['dumbbell'],
+    difficulty: 'beginner',
+    roles: ['main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsTimedTraining: true,
+      supportsReps: true,
+      supportsWeight: true,
+      supportsFollowAlong: true,
+      supportsCircuitRole: true,
+    },
+    instructions: {
+      shortCue: '重心稳，膝盖朝脚尖方向。',
+      steps: ['双手抱住哑铃。', '髋膝同时屈曲下蹲。', '蹬地回到站立。'],
+      keyPoints: ['躯干保持稳定。', '脚掌三点着地。'],
+      commonMistakes: ['膝内扣。', '脚跟离地。'],
+    },
+    recovery: {
+      trainedMuscleIds: ['quads', 'glutes'],
+      recommendedRecoveryAreaIds: ['quads-release', 'glutes-release'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'one-arm-dumbbell-row',
+    name: '单臂哑铃划船',
+    category: 'back',
+    primaryMuscleIds: ['lats'],
+    secondaryMuscleIds: ['biceps', 'rear-delts'],
+    equipment: ['dumbbell'],
+    difficulty: 'intermediate',
+    roles: ['main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsReps: true,
+      supportsWeight: true,
+      isUnilateral: true,
+    },
+    instructions: {
+      shortCue: '躯干稳住，肘向髋侧拉。',
+      steps: ['支撑身体并稳定脊柱。', '从肩胛带动哑铃上拉。', '控制下放。'],
+      keyPoints: ['不要扭腰借力。'],
+      commonMistakes: ['耸肩。', '用身体甩重量。'],
+    },
+    recovery: {
+      trainedMuscleIds: ['lats', 'rear-delts'],
+      recommendedRecoveryAreaIds: ['upper-back-release'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'band-pull-apart',
+    name: '弹力带拉开',
+    category: 'upper-back',
+    primaryMuscleIds: ['rear-delts', 'upper-back'],
+    secondaryMuscleIds: ['rotator-cuff'],
+    equipment: ['band'],
+    difficulty: 'beginner',
+    roles: ['warmup', 'main'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsTimedTraining: true,
+      supportsReps: true,
+      supportsFollowAlong: true,
+      supportsWarmupRole: true,
+      supportsCircuitRole: true,
+    },
+    instructions: {
+      shortCue: '肋骨别外翻，手臂向两侧拉开。',
+      steps: ['双手持带平举。', '向两侧拉开弹力带。', '缓慢回到起始。'],
+      keyPoints: ['肩不要上提。'],
+      commonMistakes: ['腰部代偿。'],
+    },
+    contentStatus: 'reviewed',
+  },
+  {
+    id: 'doorway-pec-stretch',
+    name: '门框胸部拉伸',
+    category: 'stretch',
+    primaryMuscleIds: ['chest'],
+    equipment: ['bodyweight'],
+    difficulty: 'beginner',
+    roles: ['stretch', 'recovery'],
+    capabilities: {
+      ...baseCapabilities,
+      supportsTimedTraining: true,
+      supportsFollowAlong: true,
+      supportsStretchRole: true,
+    },
+    instructions: {
+      shortCue: '胸前有牵拉即可，不要压肩。',
+      steps: ['前臂扶住门框。', '身体缓慢前移。', '保持可控拉伸。'],
+      keyPoints: ['拉伸感温和。'],
+      commonMistakes: ['用疼痛换幅度。'],
+      cautions: ['肩部不适时减小幅度。'],
+    },
+    contentStatus: 'reviewed',
+  },
+]
+
+export const timedPlan: WorkoutPlan = {
+  id: 'timed-plan-flow',
+  mode: 'timed',
+  title: '12 分钟全身循环',
+  description: '用于验证动作倒计时、休息倒计时和轮次推进。',
+  reminder: { enabled: true, scheduleAt: '18:30' },
+  preferences: {
+    cueSettings: {
+      actionEnding: defaultCue,
+      restEnding: defaultCue,
+    },
+    heartRateDisplay: {
+      enabled: true,
+      showDisconnectedPlaceholder: true,
+    },
+  },
+  blocks: [
+    {
+      id: 'timed-warmup',
+      kind: 'warmup',
+      order: 1,
+      durationSec: 90,
+    },
+    {
+      id: 'timed-circuit',
+      kind: 'timed_circuit',
+      title: '主循环',
+      order: 2,
+      rounds: 2,
+      restBetweenRoundsSec: 18,
+      items: [
+        {
+          id: 'timed-jacks',
+          exerciseId: 'jumping-jack',
+          workDurationSec: 12,
+          restAfterSec: 8,
+          autoAdvance: true,
+        },
+        {
+          id: 'timed-squat',
+          exerciseId: 'goblet-squat',
+          workDurationSec: 12,
+          restAfterSec: 8,
+          autoAdvance: true,
+        },
+        {
+          id: 'timed-plank',
+          exerciseId: 'plank',
+          workDurationSec: 12,
+          restAfterSec: 10,
+          autoAdvance: true,
+        },
+      ],
+    },
+    {
+      id: 'timed-stretch',
+      kind: 'stretch',
+      order: 3,
+      durationSec: 60,
+      items: [
+        {
+          id: 'timed-pec-stretch',
+          exerciseId: 'doorway-pec-stretch',
+          workDurationSec: 30,
+        },
+      ],
+    },
+  ],
+  createdAt: '2026-05-21T00:00:00Z',
+  updatedAt: '2026-05-21T00:00:00Z',
+}
+
+export const strengthPlan: WorkoutPlan = {
+  id: 'strength-plan-foundation',
+  mode: 'strength',
+  title: '胸背基础力量',
+  description: '用于验证组计划、每组耗时、替代动作与休息流程。',
+  reminder: { enabled: true, scheduleAt: '19:15' },
+  preferences: {
+    heartRateDisplay: {
+      enabled: true,
+      showDisconnectedPlaceholder: true,
+    },
+  },
+  blocks: [
+    {
+      id: 'strength-warmup',
+      kind: 'warmup',
+      order: 1,
+      durationSec: 300,
+      items: [
+        {
+          id: 'warmup-band',
+          exerciseId: 'band-pull-apart',
+          workDurationSec: 45,
+          restAfterSec: 15,
+        },
+      ],
+    },
+    {
+      id: 'strength-bench',
+      kind: 'strength_exercise',
+      order: 2,
+      title: '胸部主项',
+      exerciseId: 'barbell-bench-press',
+      setTimerMode: 'manual_start',
+      target: {
+        weight: { value: 60, unit: 'kg' },
+        repTarget: { kind: 'range', minReps: 8, maxReps: 12 },
+        restAfterSetSec: 90,
+      },
+      substitutions: ['dumbbell-bench-press', 'machine-chest-press'],
+      sets: [
+        {
+          id: 'bench-warmup',
+          order: 1,
+          kind: 'warmup',
+          targetWeight: { value: 20, unit: 'kg' },
+          repTarget: { kind: 'fixed', reps: 12 },
+          restAfterSec: 45,
+        },
+        { id: 'bench-work-1', order: 2, kind: 'working' },
+        { id: 'bench-work-2', order: 3, kind: 'working' },
+        { id: 'bench-work-3', order: 4, kind: 'working' },
+      ],
+    },
+    {
+      id: 'strength-row',
+      kind: 'strength_exercise',
+      order: 3,
+      exerciseId: 'one-arm-dumbbell-row',
+      setTimerMode: 'manual_start',
+      target: {
+        weight: { value: 24, unit: 'kg' },
+        repTarget: { kind: 'fixed', reps: 10 },
+        restAfterSetSec: 75,
+      },
+      sets: [
+        { id: 'row-left-1', order: 1, kind: 'working', side: 'left' },
+        { id: 'row-right-1', order: 2, kind: 'working', side: 'right' },
+      ],
+    },
+  ],
+  createdAt: '2026-05-21T00:00:00Z',
+  updatedAt: '2026-05-21T00:00:00Z',
+}
+
+export const followAlongPlan: WorkoutPlan = {
+  ...timedPlan,
+  id: 'follow-plan-quick-flow',
+  mode: 'follow_along',
+  title: '跟练雏形: 基础节奏',
+  description: '动作演示位、短提示与下一动作预告先跑通。',
+  followAlong: {
+    preset: true,
+    coverMediaId: 'cover-follow-flow',
+    coachMediaIds: [],
+    timelineCueIds: ['cue-countdown', 'cue-next-action'],
+  },
+}
+
+export const heartRateStates: HeartRateState[] = [
+  {
+    availability: 'not_connected',
+    message: '未连接设备',
+  },
+  {
+    availability: 'connecting',
+    message: '等待心率数据',
+  },
+  {
+    availability: 'available',
+    bpm: 142,
+    measuredAt: '2026-05-21T10:21:45Z',
+    sourceId: 'wearable-live',
+    warningLevel: 'none',
+    message: '实时',
+  },
+  {
+    availability: 'stale',
+    bpm: 136,
+    measuredAt: '2026-05-21T10:20:12Z',
+    message: '数据短暂中断',
+  },
+  {
+    availability: 'available',
+    bpm: 176,
+    measuredAt: '2026-05-21T10:22:10Z',
+    warningLevel: 'attention',
+    message: '注意强度',
+  },
+]
+
+export const timedCircuit = timedPlan.blocks.find(
+  (block): block is TimedCircuitBlock => block.kind === 'timed_circuit',
+)
+
+export const firstStrengthBlock = strengthPlan.blocks.find(
+  (block): block is StrengthExerciseBlock => block.kind === 'strength_exercise',
+)
+
+export const strengthSession: WorkoutSession = {
+  id: 'session-strength-preview',
+  planId: strengthPlan.id,
+  mode: 'strength',
+  status: 'completed',
+  startedAt: '2026-05-19T11:00:00Z',
+  endedAt: '2026-05-19T11:52:00Z',
+  planSnapshot: {
+    title: strengthPlan.title,
+    mode: strengthPlan.mode,
+    blocks: strengthPlan.blocks,
+    preferences: strengthPlan.preferences,
+  },
+  stepHistory: [],
+  strengthSetRecords: [
+    {
+      id: 'bench-record-1',
+      exerciseId: 'barbell-bench-press',
+      sourceSetPlanId: 'bench-work-1',
+      setOrder: 1,
+      setKind: 'working',
+      plannedWeight: { value: 60, unit: 'kg' },
+      plannedRepTarget: { kind: 'range', minReps: 8, maxReps: 12 },
+      actualWeight: { value: 60, unit: 'kg' },
+      actualReps: 12,
+      activeDurationSec: 36,
+      actualRestAfterSec: 94,
+      effort: 'good',
+    },
+    {
+      id: 'bench-record-2',
+      exerciseId: 'barbell-bench-press',
+      sourceSetPlanId: 'bench-work-2',
+      setOrder: 2,
+      setKind: 'working',
+      plannedWeight: { value: 60, unit: 'kg' },
+      plannedRepTarget: { kind: 'range', minReps: 8, maxReps: 12 },
+      actualWeight: { value: 60, unit: 'kg' },
+      actualReps: 10,
+      activeDurationSec: 42,
+      actualRestAfterSec: 112,
+      effort: 'hard',
+    },
+  ],
+  userFeedback: {
+    overallEffort: 'good',
+    notes: '卧推第二组休息拉长，动作仍稳定。',
+  },
+}
+
+export const timedSession: WorkoutSession = {
+  id: 'session-timed-preview',
+  planId: timedPlan.id,
+  mode: 'timed',
+  status: 'completed',
+  startedAt: '2026-05-20T10:00:00Z',
+  endedAt: '2026-05-20T10:18:00Z',
+  planSnapshot: {
+    title: timedPlan.title,
+    mode: timedPlan.mode,
+    blocks: timedPlan.blocks,
+    preferences: timedPlan.preferences,
+  },
+  stepHistory: [
+    {
+      stepId: 'jumping-jack-round-1',
+      kind: 'timed_work',
+      startedAt: '2026-05-20T10:03:00Z',
+      endedAt: '2026-05-20T10:03:12Z',
+      actualDurationSec: 12,
+    },
+    {
+      stepId: 'rest-round-1',
+      kind: 'timed_rest',
+      startedAt: '2026-05-20T10:03:12Z',
+      endedAt: '2026-05-20T10:03:22Z',
+      actualDurationSec: 10,
+    },
+  ],
+  userFeedback: {
+    overallEffort: 'good',
+  },
+}
+
+export const recoveryAreas: RecoveryArea[] = [
+  {
+    id: 'pec-release',
+    name: '胸前侧放松',
+    bodyRegion: 'front',
+    summary: '卧推后先让胸前侧降张力，再进入温和拉伸。',
+  },
+  {
+    id: 'triceps-release',
+    name: '肱三头肌放松',
+    bodyRegion: 'upper',
+    summary: '推举量较高时关注上臂后侧的紧张感。',
+  },
+  {
+    id: 'upper-back-release',
+    name: '上背放松',
+    bodyRegion: 'back',
+    summary: '划船后用呼吸和轻柔放松恢复肩胛活动。',
+  },
+  {
+    id: 'quads-release',
+    name: '股四头肌放松',
+    bodyRegion: 'lower',
+    summary: '深蹲训练后先做短时放松，再看是否需要拉伸。',
+  },
+  {
+    id: 'glutes-release',
+    name: '臀部放松',
+    bodyRegion: 'back',
+    summary: '臀部训练后保持温和压力，不追求疼痛。',
+  },
+]
+
+export const strengthRecovery: RecoveryRecommendation = {
+  sessionId: strengthSession.id,
+  trainedMuscleIds: ['chest', 'triceps', 'lats'],
+  areaIds: ['pec-release', 'triceps-release', 'upper-back-release'],
+}

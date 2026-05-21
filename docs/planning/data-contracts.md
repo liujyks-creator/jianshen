@@ -1,0 +1,799 @@
+---
+workflowType: data-contracts
+projectName: TrainFlow
+documentLanguage: zh-Hans
+status: draft
+inputDocuments:
+  - docs/planning/prd.md
+  - docs/planning/ux-design.md
+stepsCompleted:
+  - product-data-requirements
+  - initial-contract-draft
+---
+
+# TrainFlow 数据与接口标准草案
+
+**文档状态:** 首版草案  
+**日期:** 2026-05-21  
+**用途:** 为前端原型、动作库导入、训练执行引擎和后续 Android 架构提供共同数据边界。
+
+## 1. 设计目标
+
+本草案先解决 5 个问题：
+
+1. 动作库如何定义，才能逐个导入动作内容而不返工。
+2. 计时训练、力量训练和跟练雏形如何共享计划模型，又保留各自参数。
+3. 计划数据与实际训练记录如何分离。
+4. UI 按钮、未来语音交互、声音、震动和动画如何共用训练命令与训练事件。
+5. 实时心率、课程媒体、音乐节拍和 AI 分析如何预留接口，而不把首版复杂度提前塞进核心模型。
+
+## 2. 总体决策
+
+### 2.1 核心概念
+
+首版建议固定以下概念：
+
+| 概念 | 含义 |
+|---|---|
+| `Exercise` | 动作库中的标准动作 |
+| `WorkoutPlan` | 用户保存的训练计划 |
+| `PlanBlock` | 计划中的阶段或结构块 |
+| `WorkoutSession` | 一次真实训练执行实例 |
+| `SessionStep` | 训练执行引擎当前推进的步骤 |
+| `WorkoutCommand` | 用户或未来语音发出的训练控制命令 |
+| `WorkoutEvent` | 训练执行产生的状态事件 |
+| `HeartRateState` | UI 消费的抽象实时心率状态 |
+
+### 2.2 首版建模原则
+
+1. **动作库标准动作不等于计划动作。**  
+   `Exercise` 提供能力、教学内容和映射；计划中保存的是对动作的引用与用户参数。
+
+2. **计划不直接保存实际训练结果。**  
+   计划描述目标；`WorkoutSession` 保存真实执行数据。
+
+3. **计时训练以步骤推进为主。**  
+   动作时间、休息时间、轮次和临近提醒是核心。
+
+4. **力量训练以动作和组推进为主。**  
+   每组目标、开始本组、完成本组、实际重量次数和休息记录是核心。
+
+5. **跟练首版复用计时执行能力。**  
+   跟练内容在首版可引用计时计划结构，并增加媒体与提示扩展位。
+
+6. **训练引擎只认命令和事件。**  
+   UI 按钮、未来语音和其他输入方式都发 `WorkoutCommand`；声音、动画、震动、日志和未来语音输出都消费 `WorkoutEvent`。
+
+## 3. 标识与枚举约定
+
+### 3.1 ID 建议
+
+- 标准动作用稳定字符串 ID，例如 `barbell-bench-press`。
+- 用户计划、训练记录、组记录使用系统生成 ID。
+- 未来本地与云同步都应保留 `createdAt` 与 `updatedAt`。
+
+### 3.2 基础枚举
+
+```ts
+type WorkoutMode = "timed" | "strength" | "follow_along";
+
+type PlanBlockKind =
+  | "warmup"
+  | "timed_circuit"
+  | "strength_exercise"
+  | "rest"
+  | "stretch"
+  | "cooldown";
+
+type ExerciseDifficulty = "beginner" | "intermediate" | "advanced";
+
+type ExerciseRole = "warmup" | "main" | "stretch" | "recovery";
+
+type ExerciseSide = "both" | "left" | "right" | "alternating";
+
+type EquipmentKind =
+  | "bodyweight"
+  | "dumbbell"
+  | "barbell"
+  | "machine"
+  | "cable"
+  | "band"
+  | "kettlebell"
+  | "mat"
+  | "other";
+```
+
+## 4. 动作库标准
+
+### 4.1 动作库最小标准
+
+每个动作都应至少可用于：
+
+- 动作列表与筛选。
+- 动作详情。
+- 计划编辑。
+- 训练执行中的短提示。
+- 后续恢复建议与动作替代。
+
+### 4.2 动作能力
+
+```ts
+interface ExerciseCapabilities {
+  supportsTimedTraining: boolean;
+  supportsReps: boolean;
+  supportsWeight: boolean;
+  supportsFollowAlong: boolean;
+  supportsWarmupRole: boolean;
+  supportsStretchRole: boolean;
+  supportsCircuitRole: boolean;
+  isUnilateral: boolean;
+}
+```
+
+### 4.3 教学内容
+
+```ts
+interface ExerciseInstructionContent {
+  shortCue: string;
+  steps: string[];
+  keyPoints: string[];
+  commonMistakes: string[];
+  breathingCues?: string[];
+  cautions?: string[];
+}
+```
+
+### 4.4 媒体与内容扩展
+
+```ts
+type MediaKind = "image" | "video" | "animation" | "audio";
+
+interface MediaAssetRef {
+  id: string;
+  kind: MediaKind;
+  uri: string;
+  altText?: string;
+  posterUri?: string;
+  durationMs?: number;
+  locale?: string;
+  role?: "thumbnail" | "demo" | "instruction" | "coach" | "recovery";
+}
+```
+
+媒体字段首版允许为空，但结构必须保留，避免未来导入动作图片、短视频和跟练媒体时重构动作模型。
+
+### 4.5 恢复与替代映射
+
+```ts
+interface ExerciseRecoveryMapping {
+  trainedMuscleIds: string[];
+  recommendedRecoveryAreaIds: string[];
+  recoveryContentIds?: string[];
+}
+
+interface ExerciseSubstitution {
+  exerciseId: string;
+  reasonTags?: string[];
+  equipmentFallback?: boolean;
+}
+```
+
+### 4.6 标准动作接口
+
+```ts
+interface Exercise {
+  id: string;
+  name: string;
+  aliases?: string[];
+  category: string;
+  primaryMuscleIds: string[];
+  secondaryMuscleIds?: string[];
+  equipment: EquipmentKind[];
+  difficulty: ExerciseDifficulty;
+  roles: ExerciseRole[];
+  capabilities: ExerciseCapabilities;
+  instructions: ExerciseInstructionContent;
+  media?: MediaAssetRef[];
+  recovery?: ExerciseRecoveryMapping;
+  substitutions?: ExerciseSubstitution[];
+  contentStatus: "draft" | "reviewed" | "published";
+  sourceMeta?: ContentSourceMeta;
+  extensions?: Record<string, unknown>;
+}
+
+interface ContentSourceMeta {
+  author?: string;
+  reviewer?: string;
+  sourceRefs?: string[];
+  updatedAt?: string;
+}
+```
+
+### 4.7 动作库导入约束
+
+首版动作导入建议遵守：
+
+- 必填字段缺失时不进入可选动作列表。
+- 未审阅动作可以服务内部原型，但正式发布时应区分内容状态。
+- 动作短提示必须存在，训练执行页不能依赖长文案截断。
+- 动作媒体可后补，不阻塞先定义接口。
+
+## 5. 训练计划模型
+
+### 5.1 计划公共字段
+
+```ts
+interface WorkoutPlan {
+  id: string;
+  mode: WorkoutMode;
+  title: string;
+  description?: string;
+  blocks: PlanBlock[];
+  reminder?: PlanReminder;
+  preferences?: PlanPreferences;
+  followAlong?: FollowAlongPlanMeta;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface PlanReminder {
+  enabled: boolean;
+  scheduleAt?: string;
+  repeatRule?: string;
+}
+
+interface PlanPreferences {
+  cueSettings?: CueSettings;
+  heartRateDisplay?: HeartRateDisplayPreference;
+}
+
+interface HeartRateDisplayPreference {
+  enabled: boolean;
+  showDisconnectedPlaceholder: boolean;
+}
+```
+
+### 5.2 计划块
+
+```ts
+type PlanBlock =
+  | WarmupBlock
+  | TimedCircuitBlock
+  | StrengthExerciseBlock
+  | RestBlock
+  | StretchBlock
+  | CooldownBlock;
+
+interface PlanBlockBase {
+  id: string;
+  kind: PlanBlockKind;
+  title?: string;
+  order: number;
+}
+```
+
+### 5.3 热身、拉伸和休息块
+
+```ts
+interface WarmupBlock extends PlanBlockBase {
+  kind: "warmup";
+  durationSec?: number;
+  items?: TimedExerciseItem[];
+}
+
+interface StretchBlock extends PlanBlockBase {
+  kind: "stretch";
+  durationSec?: number;
+  items?: TimedExerciseItem[];
+}
+
+interface CooldownBlock extends PlanBlockBase {
+  kind: "cooldown";
+  durationSec?: number;
+  items?: TimedExerciseItem[];
+}
+
+interface RestBlock extends PlanBlockBase {
+  kind: "rest";
+  durationSec: number;
+  label?: string;
+}
+```
+
+## 6. 计时训练计划
+
+### 6.1 计时训练结构
+
+计时训练主结构建议使用 `TimedCircuitBlock`：
+
+```ts
+interface TimedCircuitBlock extends PlanBlockBase {
+  kind: "timed_circuit";
+  rounds: number;
+  restBetweenRoundsSec?: number;
+  items: TimedExerciseItem[];
+}
+
+interface TimedExerciseItem {
+  id: string;
+  exerciseId: string;
+  labelOverride?: string;
+  side?: ExerciseSide;
+  workDurationSec: number;
+  restAfterSec?: number;
+  cueSettings?: CueSettings;
+  autoAdvance?: boolean;
+}
+```
+
+### 6.2 计时提醒设置
+
+```ts
+interface CueSettings {
+  actionEnding?: CountdownCue;
+  restEnding?: CountdownCue;
+}
+
+interface CountdownCue {
+  enabled: boolean;
+  thresholdSec: number;
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+  emphasisAnimationEnabled: boolean;
+  voiceCueEnabled?: boolean;
+}
+```
+
+首版默认建议：
+
+```ts
+const defaultCountdownCue: CountdownCue = {
+  enabled: true,
+  thresholdSec: 5,
+  soundEnabled: true,
+  vibrationEnabled: true,
+  emphasisAnimationEnabled: true,
+  voiceCueEnabled: false
+};
+```
+
+### 6.3 计时训练示例
+
+```ts
+const timedPlanExample: WorkoutPlan = {
+  id: "plan-timed-001",
+  mode: "timed",
+  title: "全身循环 20 分钟",
+  blocks: [
+    {
+      id: "warmup-1",
+      kind: "warmup",
+      order: 1,
+      durationSec: 300
+    },
+    {
+      id: "circuit-1",
+      kind: "timed_circuit",
+      order: 2,
+      rounds: 3,
+      restBetweenRoundsSec: 90,
+      items: [
+        {
+          id: "item-1",
+          exerciseId: "jumping-jack",
+          workDurationSec: 45,
+          restAfterSec: 15,
+          autoAdvance: true
+        }
+      ]
+    }
+  ],
+  createdAt: "2026-05-21T00:00:00Z",
+  updatedAt: "2026-05-21T00:00:00Z"
+};
+```
+
+## 7. 力量训练计划
+
+### 7.1 力量动作块
+
+```ts
+interface StrengthExerciseBlock extends PlanBlockBase {
+  kind: "strength_exercise";
+  exerciseId: string;
+  target?: StrengthExerciseTarget;
+  sets: StrengthSetPlan[];
+  substitutions?: string[];
+  setTimerMode?: "manual_start" | "auto_after_rest";
+}
+
+interface StrengthExerciseTarget {
+  weight?: WeightValue;
+  repTarget?: RepTarget;
+  restAfterSetSec?: number;
+}
+
+interface StrengthSetPlan {
+  id: string;
+  order: number;
+  kind: "warmup" | "working" | "drop" | "backoff";
+  side?: ExerciseSide;
+  targetWeight?: WeightValue;
+  repTarget?: RepTarget;
+  restAfterSec?: number;
+}
+
+interface WeightValue {
+  value: number;
+  unit: "kg" | "lb";
+}
+
+type RepTarget =
+  | { kind: "fixed"; reps: number }
+  | { kind: "range"; minReps: number; maxReps: number };
+```
+
+### 7.2 力量训练默认值
+
+首版默认建议：
+
+- `repTarget` 默认 `{ kind: "range", minReps: 8, maxReps: 12 }`
+- `setTimerMode` 默认 `"manual_start"`
+- 动作级目标可作为多个组的共享默认值。
+- 用户展开逐组设置后，`StrengthSetPlan` 覆盖动作级默认值。
+
+### 7.3 力量训练示例
+
+```ts
+const strengthBlockExample: StrengthExerciseBlock = {
+  id: "strength-bench-press",
+  kind: "strength_exercise",
+  order: 2,
+  exerciseId: "barbell-bench-press",
+  setTimerMode: "manual_start",
+  target: {
+    weight: { value: 60, unit: "kg" },
+    repTarget: { kind: "range", minReps: 8, maxReps: 12 },
+    restAfterSetSec: 90
+  },
+  sets: [
+    {
+      id: "bench-warmup-1",
+      order: 1,
+      kind: "warmup",
+      targetWeight: { value: 20, unit: "kg" },
+      repTarget: { kind: "fixed", reps: 12 },
+      restAfterSec: 60
+    },
+    {
+      id: "bench-working-1",
+      order: 2,
+      kind: "working"
+    }
+  ],
+  substitutions: ["dumbbell-bench-press", "machine-chest-press"]
+};
+```
+
+## 8. 跟练雏形计划元数据
+
+跟练首版不单独发明完全不同的训练计划引擎。  
+建议使用 `WorkoutPlan`，并通过跟练元数据和媒体提示增加展示能力。
+
+```ts
+interface FollowAlongPlanMeta {
+  preset: boolean;
+  coverMediaId?: string;
+  coachMediaIds?: string[];
+  chapterIds?: string[];
+  timelineCueIds?: string[];
+  musicTrackIds?: string[];
+  aiAnalysisProfileId?: string;
+}
+```
+
+### 8.1 跟练扩展原则
+
+- 计时训练计划可在满足媒体与提示条件时切换为跟练视图。
+- 首版可先用少量预置跟练计划。
+- 教练视频、课程章节、自动语音、音乐节拍与 AI 纠错只保留元数据与扩展位。
+
+## 9. 训练执行会话
+
+### 9.1 计划与会话分离
+
+执行训练时应生成 `WorkoutSession`：
+
+```ts
+interface WorkoutSession {
+  id: string;
+  planId?: string;
+  mode: WorkoutMode;
+  planSnapshot: WorkoutPlanSnapshot;
+  status: SessionStatus;
+  startedAt?: string;
+  endedAt?: string;
+  currentStep?: SessionStep;
+  stepHistory: SessionStepRecord[];
+  strengthSetRecords?: StrengthSetRecord[];
+  userFeedback?: SessionFeedback;
+}
+
+type SessionStatus =
+  | "ready"
+  | "active"
+  | "paused"
+  | "completed"
+  | "abandoned";
+
+interface WorkoutPlanSnapshot {
+  title: string;
+  mode: WorkoutMode;
+  blocks: PlanBlock[];
+  preferences?: PlanPreferences;
+  followAlong?: FollowAlongPlanMeta;
+}
+
+interface SessionFeedback {
+  overallEffort?: "easy" | "good" | "hard";
+  discomfortNotes?: string;
+  notes?: string;
+}
+```
+
+计划快照很重要：用户后来改计划，不应污染历史训练记录。
+
+### 9.2 执行步骤
+
+```ts
+type SessionStepKind =
+  | "prepare"
+  | "timed_work"
+  | "timed_rest"
+  | "strength_prepare_set"
+  | "strength_active_set"
+  | "strength_confirm_set"
+  | "strength_rest"
+  | "stretch"
+  | "completed";
+
+interface SessionStep {
+  id: string;
+  kind: SessionStepKind;
+  blockId?: string;
+  itemId?: string;
+  setPlanId?: string;
+  exerciseId?: string;
+  startedAt?: string;
+  remainingSec?: number;
+  plannedDurationSec?: number;
+}
+
+interface SessionStepRecord {
+  stepId: string;
+  kind: SessionStepKind;
+  startedAt: string;
+  endedAt?: string;
+  skipped?: boolean;
+  actualDurationSec?: number;
+}
+```
+
+### 9.3 力量训练组记录
+
+```ts
+interface StrengthSetRecord {
+  id: string;
+  exerciseId: string;
+  sourceSetPlanId?: string;
+  setOrder: number;
+  setKind: "warmup" | "working" | "drop" | "backoff";
+  side?: ExerciseSide;
+  plannedWeight?: WeightValue;
+  plannedRepTarget?: RepTarget;
+  actualWeight?: WeightValue;
+  actualReps?: number;
+  activeDurationSec?: number;
+  actualRestAfterSec?: number;
+  effort?: SetEffort;
+  substitutedFromExerciseId?: string;
+  notes?: string;
+}
+
+type SetEffort = "easy" | "good" | "hard" | "form_breakdown";
+```
+
+### 9.4 单组默认回填规则
+
+用户完成力量训练单组时：
+
+1. 实际重量默认取本组计划重量。
+2. 若本组未设重量，则取动作级默认重量。
+3. 实际次数默认取固定次数；若为次数区间，UI 可优先提供区间内快捷选择。
+4. 用户可在确认层修改实际重量、实际次数和感受。
+
+## 10. 训练命令
+
+### 10.1 命令接口
+
+```ts
+type WorkoutCommand =
+  | { type: "start_session" }
+  | { type: "pause_session" }
+  | { type: "resume_session" }
+  | { type: "skip_step" }
+  | { type: "extend_rest"; seconds: number }
+  | { type: "start_strength_set"; setPlanId?: string }
+  | { type: "complete_strength_set"; draft?: StrengthSetCompletionDraft }
+  | { type: "confirm_strength_set"; record: StrengthSetCompletionInput }
+  | { type: "replace_exercise"; fromExerciseId: string; toExerciseId: string }
+  | { type: "update_actual_weight"; setRecordId: string; weight: WeightValue }
+  | { type: "update_actual_reps"; setRecordId: string; reps: number }
+  | { type: "end_session"; reason?: string };
+
+interface StrengthSetCompletionDraft {
+  activeDurationSec?: number;
+}
+
+interface StrengthSetCompletionInput {
+  actualWeight?: WeightValue;
+  actualReps?: number;
+  effort?: SetEffort;
+  notes?: string;
+}
+```
+
+### 10.2 输入来源
+
+命令来源应可标识，便于未来语音与调试：
+
+```ts
+type CommandSource = "ui" | "voice" | "system" | "wearable";
+
+interface CommandEnvelope {
+  command: WorkoutCommand;
+  source: CommandSource;
+  issuedAt: string;
+}
+```
+
+## 11. 训练事件
+
+### 11.1 事件接口
+
+```ts
+type WorkoutEvent =
+  | { type: "session_started"; sessionId: string }
+  | { type: "session_paused"; sessionId: string }
+  | { type: "session_resumed"; sessionId: string }
+  | { type: "timed_work_started"; exerciseId?: string; stepId: string }
+  | { type: "timed_work_ending"; stepId: string; remainingSec: number }
+  | { type: "rest_started"; stepId: string; durationSec: number }
+  | { type: "rest_ending"; stepId: string; remainingSec: number }
+  | { type: "strength_set_ready"; setPlanId?: string; exerciseId: string }
+  | { type: "strength_set_started"; setPlanId?: string; exerciseId: string }
+  | { type: "strength_set_completed"; setRecordId: string }
+  | { type: "next_exercise_ready"; exerciseId: string }
+  | { type: "session_completed"; sessionId: string };
+```
+
+### 11.2 事件消费者
+
+首版和后续可按事件驱动：
+
+| 消费者 | 用途 |
+|---|---|
+| UI | 页面状态与过渡 |
+| Sound | 提示音 |
+| Haptics | 震动 |
+| Animation | 临近结束强化动画 |
+| Analytics | 训练行为分析 |
+| Voice Output | 后续语音提示 |
+| Wearable Sync | 后续外设同步 |
+
+## 12. 实时心率状态
+
+### 12.1 UI 状态接口
+
+```ts
+type HeartRateAvailability =
+  | "disabled"
+  | "not_connected"
+  | "connecting"
+  | "available"
+  | "stale"
+  | "error";
+
+interface HeartRateState {
+  availability: HeartRateAvailability;
+  bpm?: number;
+  measuredAt?: string;
+  sourceId?: string;
+  warningLevel?: "none" | "attention" | "high";
+  message?: string;
+}
+```
+
+### 12.2 首版 UI 约束
+
+- 训练执行页消费 `HeartRateState`，不绑定具体手环 SDK。
+- 未连接设备时可以显示占位，也可以由用户偏好隐藏。
+- 首版允许 `warningLevel` 存在，但不要求实现医学化告警规则。
+
+## 13. 恢复建议模型
+
+首版恢复建议先用肌群与恢复区域映射：
+
+```ts
+interface RecoveryArea {
+  id: string;
+  name: string;
+  bodyRegion: "front" | "back" | "upper" | "lower" | "full";
+  summary: string;
+  media?: MediaAssetRef[];
+  cautionText?: string;
+}
+
+interface RecoveryRecommendation {
+  sessionId: string;
+  trainedMuscleIds: string[];
+  areaIds: string[];
+  contentIds?: string[];
+}
+```
+
+## 14. 前端原型假数据标准
+
+第一轮前端原型建议准备以下 fixture：
+
+1. 8 到 12 个标准动作。
+2. 1 个计时训练计划。
+3. 1 个力量训练计划。
+4. 1 个基础跟练计划。
+5. 1 个完成的计时训练会话。
+6. 1 个完成的力量训练会话。
+7. 5 种心率状态。
+8. 1 组恢复建议数据。
+
+### 14.1 首批动作 fixture 覆盖建议
+
+fixture 不追求内容量，先覆盖模型差异：
+
+- 徒手计时动作。
+- 哑铃力量动作。
+- 杠铃力量动作。
+- 单侧动作。
+- 热身动作。
+- 拉伸动作。
+- 有替代动作的动作。
+- 可用于跟练展示的动作。
+
+## 15. 明确不在核心模型里硬编码的能力
+
+以下能力首版留扩展位，不应让核心训练计划模型过早依赖：
+
+- 教练课程商业体系。
+- 课程定价与订阅。
+- AI 实时纠错结果格式细节。
+- 具体音乐播放器与节拍算法。
+- 具体手环厂商字段。
+- 具体语音识别提供方。
+- 医疗级心率告警规则。
+
+## 16. 后续映射建议
+
+### 16.1 前端原型
+
+- 可直接按本文 TypeScript 风格接口准备 mock 数据。
+- UI 原型先消费抽象 `WorkoutPlan`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent` 和 `HeartRateState`。
+
+### 16.2 Android 架构
+
+- 将公共模型映射为 Kotlin data classes。
+- 将训练命令、训练事件和执行状态机放在业务层。
+- 将通知、声音、震动、健康数据和设备适配放在平台层或适配层。
+
+### 16.3 iOS 与跨平台
+
+- 保持计划模型、训练会话模型和事件语义稳定。
+- 健康数据、蓝牙、通知和音频播放继续作为平台能力适配。
