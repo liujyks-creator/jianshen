@@ -1,7 +1,7 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-05-21  
-**仓库:** `liujyks-creator/jianshen`  
+**状态日期:** 2026-05-21
+**仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态

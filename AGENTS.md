@@ -116,4 +116,3 @@ They are local machine paths and are not guaranteed to exist on another computer
 - Add or update documentation when a product decision changes.
 - Prefer explicit branches for feature work, using `codex/<task-name>` when a branch is needed.
 - Do not commit secrets, device logs, generated build output, or unrelated local files.
-
