@@ -18,9 +18,10 @@ Before making product or implementation changes, read these files in order:
 6. `docs/planning/data-contracts.md`
 7. `docs/architecture.md`
 8. `docs/roadmap-backlog.md`
-9. `DESIGN.md`
-10. `docs/ui-extension-guide.md`
-11. `docs/setup.md` when setup or commands matter
+9. `docs/readiness-report.md`
+10. `DESIGN.md`
+11. `docs/ui-extension-guide.md`
+12. `docs/setup.md` when setup or commands matter
 
 Treat `docs/planning/decision-log.md` as the current compact record of accepted decisions. Use the longer planning documents for rationale and detail.
 
@@ -73,6 +74,8 @@ Preserve these modeling choices unless a documented decision changes them:
 The TypeScript prototype contracts live in `prototype/src/data/contracts.ts` and mirror the planning draft in `docs/planning/data-contracts.md`.
 
 The Android production architecture and MVP implementation sequence live in `docs/architecture.md` and `docs/roadmap-backlog.md`.
+
+The implementation readiness gate lives in `docs/readiness-report.md`. Check it before starting Android engineering work, especially E0.1.
 
 ## Prototype Guidance
 

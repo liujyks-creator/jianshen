@@ -6,9 +6,9 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、官方设计系统草案、开源 UI 定制边界草案和一个 React/Vite 前端原型。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案和一个 React/Vite 前端原型。
 
-项目已经可以从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。现有文档足以指导下一轮创建 Android 生产工程，但进入实现前仍应确认最低 Android 版本、包名和工程拆分粒度。
+项目已经可以从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`docs/readiness-report.md` 给出条件通过结论：可以进入 `Story E0.1: 创建 Android 生产工程`，但进入实现前仍应确认最低 Android 版本、包名、Kotlin DSL、工程拆分粒度和后台计时边界。
 
 ## 已有产物
 
@@ -23,8 +23,9 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 5. `docs/planning/decision-log.md`
 6. `docs/architecture.md`
 7. `docs/roadmap-backlog.md`
-8. `DESIGN.md`
-9. `docs/ui-extension-guide.md`
+8. `docs/readiness-report.md`
+9. `DESIGN.md`
+10. `docs/ui-extension-guide.md`
 
 这些文档覆盖：
 
@@ -37,6 +38,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 - 面向未来语音交互与平台适配的训练命令和训练事件。
 - Android 原生首版架构、模块边界、本地持久化、训练执行引擎和平台适配边界。
 - MVP 里程碑、Epic、Story 和验收顺序。
+- E0.1 启动条件、当前 blocking/P1/P2 风险和实现范围边界。
 - 官方默认 UI 设计系统 token、组件语义和训练执行页设计规则。
 - 开源社区定制 UI shell、主题、首页布局和按钮位置的边界。
 
@@ -98,7 +100,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 确认 Android 工程参数：最低 Android 版本、包名、Kotlin DSL、模块拆分粒度。
+1. 确认 `docs/readiness-report.md` 中列出的 Android 工程参数：最低 Android 版本、包名、Kotlin DSL、模块拆分粒度和后台计时边界。
 2. 执行 `docs/roadmap-backlog.md` 中的 `Story E0.1: 创建 Android 生产工程`。
 3. 定义首批动作库导入切片与内容审核清单。
 4. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
@@ -120,6 +122,6 @@ npm.cmd run build
 新会话可从以下指令开始：
 
 ```text
-读取 AGENTS.md、docs/project-status.md、docs/planning/decision-log.md 以及 docs/planning 下的规划文档。
+读取 AGENTS.md、docs/project-status.md、docs/planning/decision-log.md、docs/readiness-report.md 以及 docs/planning 下的规划文档。
 然后检查当前仓库状态与 prototype 原型，基于当前已接受的 MVP 基线继续推进 TrainFlow，不要静默扩大范围。
 ```

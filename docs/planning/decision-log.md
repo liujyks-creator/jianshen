@@ -40,6 +40,7 @@
 | D-021 | Accepted | 官方默认 UI 以 `DESIGN.md` 作为设计系统单一真源。 | 默认风格追求清晰、克制、可信和运动现场能量，训练执行页主信息优先。 |
 | D-022 | Accepted | 开源社区可以定制 UI shell、主题、首页布局和按钮位置。 | 定制不得改变 `WorkoutCommand`、`WorkoutEvent`、训练执行引擎、数据契约和权限/健康边界。 |
 | D-023 | Accepted | MVP 阶段不做运行时插件市场或远程主题下载。 | 开源定制先通过 fork、编译期主题/shell 和社区 PR 实现。 |
+| D-024 | Accepted | E0.1 通过实现准备检查，但必须先确认 Android 工程参数。 | `docs/readiness-report.md` 是进入 Android 工程前的 readiness gate；当前允许启动 E0.1，不代表全量 MVP story 已全部无条件开工。 |
 
 ## 预留能力
 
@@ -74,7 +75,8 @@
 4. `docs/planning/data-contracts.md`
 5. `docs/architecture.md`
 6. `docs/roadmap-backlog.md`
-7. `DESIGN.md`
-8. `docs/ui-extension-guide.md`
+7. `docs/readiness-report.md`
+8. `DESIGN.md`
+9. `docs/ui-extension-guide.md`
 
 当来源文档改变了已接受的产品或架构方向时，同步更新本决策日志。

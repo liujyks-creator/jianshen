@@ -98,8 +98,9 @@ git config --unset http.proxy
 4. `docs/planning/data-contracts.md`
 5. `docs/architecture.md`
 6. `docs/roadmap-backlog.md`
-7. `DESIGN.md`
-8. `docs/ui-extension-guide.md`
+7. `docs/readiness-report.md`
+8. `DESIGN.md`
+9. `docs/ui-extension-guide.md`
 
 ## 6. 启动前端原型
 
@@ -196,7 +197,8 @@ git push -u origin HEAD
 换电脑后，项目状态以 GitHub 仓库内容为准：
 
 1. 产品范围先以 `docs/planning` 为准。
-2. 前端原型先以 `prototype` 为准。
-3. 新决策要写回文档并提交到 Git。
-4. 不依赖单个 Codex 会话记住所有讨论过程。
+2. 实现启动边界先看 `docs/readiness-report.md`。
+3. 前端原型先以 `prototype` 为准。
+4. 新决策要写回文档并提交到 Git。
+5. 不依赖单个 Codex 会话记住所有讨论过程。
 

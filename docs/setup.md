@@ -16,6 +16,7 @@
 | `docs/planning` | 产品简报、PRD、UX、数据契约和决策日志。 |
 | `docs/architecture.md` | Android 首版技术架构、模块边界、执行引擎和平台适配边界。 |
 | `docs/roadmap-backlog.md` | MVP 里程碑、Epic、Story 和验收顺序。 |
+| `docs/readiness-report.md` | 实现准备检查、E0.1 启动条件和当前阻塞项。 |
 | `DESIGN.md` | 官方默认 UI 设计系统 token、组件语义和界面规则。 |
 | `docs/ui-extension-guide.md` | 开源社区定制主题、UI shell、首页和布局的边界。 |
 | `docs/project-status.md` | 当前项目状态与建议下一步。 |
@@ -118,7 +119,7 @@ npm.cmd run build
 用 Codex 打开仓库目录，并从以下指令开始：
 
 ```text
-读取 AGENTS.md、docs/project-status.md、docs/planning/decision-log.md 以及 docs/planning 下的规划文档。
+读取 AGENTS.md、docs/project-status.md、docs/planning/decision-log.md、docs/readiness-report.md 以及 docs/planning 下的规划文档。
 在改变范围或架构前，先检查仓库状态和 prototype 原型。
 ```
 
@@ -132,8 +133,9 @@ npm.cmd run build
 6. `docs/planning/data-contracts.md`
 7. `docs/architecture.md`
 8. `docs/roadmap-backlog.md`
-9. `DESIGN.md`
-10. `docs/ui-extension-guide.md`
+9. `docs/readiness-report.md`
+10. `DESIGN.md`
+11. `docs/ui-extension-guide.md`
 
 ## 9. 分支与提交流
 
