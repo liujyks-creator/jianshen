@@ -160,11 +160,11 @@ git push -u origin HEAD
 
 ## 10. 本地技能
 
-之前的产品讨论引用过：
+当前项目可选使用两个本地技能：
 
-1. `D:\skills\bmad-method`
-2. `D:\skills\design-md`
+1. `skills/bmad-method`
+2. `skills/design-md`
 
-它们是本地路径，不是仓库依赖。
+它们是当前电脑的本地工作副本，不是仓库依赖，也不应提交到 GitHub。根目录 `.gitignore` 已忽略 `skills/`。
 
-如果当前电脑存在这些技能，可在产品和设计规划时使用。若不存在，继续以仓库文档为准，并把新的长期决策写回 `docs/planning/decision-log.md`。
+如果当前电脑存在这些技能，可在产品规划、架构规划、PRD/backlog 拆分或设计系统规划时先读取对应 `SKILL.md`。若不存在，继续以仓库文档为准，并把新的长期决策写回 `docs/planning/decision-log.md`。

@@ -102,12 +102,12 @@ Later Figma work should use the current UX documents and prototype as inputs, no
 
 ## Local Skills
 
-Earlier planning referenced two local skills:
+This project may use two optional local skills for product and design planning:
 
-- `D:\skills\bmad-method`
-- `D:\skills\design-md`
+- `skills/bmad-method`
+- `skills/design-md`
 
-They are local machine paths and are not guaranteed to exist on another computer. If they are available, use them for product and design planning when relevant. If they are missing, continue from the repository documents rather than blocking.
+They are local working copies for this computer only and are intentionally ignored by Git. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, or design-system work when relevant. If they are missing, continue from the repository documents rather than blocking.
 
 ## Working Habits
 
