@@ -14,6 +14,8 @@
 |---|---|
 | `AGENTS.md` | Codex 与协作者接手项目时应遵循的工作说明。 |
 | `docs/planning` | 产品简报、PRD、UX、数据契约和决策日志。 |
+| `docs/architecture.md` | Android 首版技术架构、模块边界、执行引擎和平台适配边界。 |
+| `docs/roadmap-backlog.md` | MVP 里程碑、Epic、Story 和验收顺序。 |
 | `docs/project-status.md` | 当前项目状态与建议下一步。 |
 | `prototype` | React/Vite UX 原型及 TypeScript 假数据与契约。 |
 
@@ -126,6 +128,8 @@ npm.cmd run build
 4. `docs/planning/prd.md`
 5. `docs/planning/ux-design.md`
 6. `docs/planning/data-contracts.md`
+7. `docs/architecture.md`
+8. `docs/roadmap-backlog.md`
 
 ## 9. 分支与提交流
 

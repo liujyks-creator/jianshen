@@ -96,6 +96,8 @@ git config --unset http.proxy
 2. `docs/planning/prd.md`
 3. `docs/planning/ux-design.md`
 4. `docs/planning/data-contracts.md`
+5. `docs/architecture.md`
+6. `docs/roadmap-backlog.md`
 
 ## 6. 启动前端原型
 

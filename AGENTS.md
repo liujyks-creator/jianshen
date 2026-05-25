@@ -16,7 +16,9 @@ Before making product or implementation changes, read these files in order:
 4. `docs/planning/prd.md`
 5. `docs/planning/ux-design.md`
 6. `docs/planning/data-contracts.md`
-7. `docs/setup.md` when setup or commands matter
+7. `docs/architecture.md`
+8. `docs/roadmap-backlog.md`
+9. `docs/setup.md` when setup or commands matter
 
 Treat `docs/planning/decision-log.md` as the current compact record of accepted decisions. Use the longer planning documents for rationale and detail.
 
@@ -67,6 +69,8 @@ Preserve these modeling choices unless a documented decision changes them:
 - Heart-rate UI should consume an abstract heart-rate state rather than a device-specific SDK model.
 
 The TypeScript prototype contracts live in `prototype/src/data/contracts.ts` and mirror the planning draft in `docs/planning/data-contracts.md`.
+
+The Android production architecture and MVP implementation sequence live in `docs/architecture.md` and `docs/roadmap-backlog.md`.
 
 ## Prototype Guidance
 
