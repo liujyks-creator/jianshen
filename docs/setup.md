@@ -16,6 +16,8 @@
 | `docs/planning` | 产品简报、PRD、UX、数据契约和决策日志。 |
 | `docs/architecture.md` | Android 首版技术架构、模块边界、执行引擎和平台适配边界。 |
 | `docs/roadmap-backlog.md` | MVP 里程碑、Epic、Story 和验收顺序。 |
+| `DESIGN.md` | 官方默认 UI 设计系统 token、组件语义和界面规则。 |
+| `docs/ui-extension-guide.md` | 开源社区定制主题、UI shell、首页和布局的边界。 |
 | `docs/project-status.md` | 当前项目状态与建议下一步。 |
 | `prototype` | React/Vite UX 原型及 TypeScript 假数据与契约。 |
 
@@ -130,6 +132,8 @@ npm.cmd run build
 6. `docs/planning/data-contracts.md`
 7. `docs/architecture.md`
 8. `docs/roadmap-backlog.md`
+9. `DESIGN.md`
+10. `docs/ui-extension-guide.md`
 
 ## 9. 分支与提交流
 

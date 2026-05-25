@@ -47,6 +47,7 @@ stepsCompleted:
 | App 平台 | Android 原生 | 未来 iOS 另行适配，业务语义保持可迁移。 |
 | 语言 | Kotlin | 与 Android 生态、协程、Room、Compose 配合。 |
 | UI | Jetpack Compose | 单 Activity，多页面导航，适合训练执行页状态驱动更新。 |
+| 设计系统 | `DESIGN.md` | 官方默认 UI token 与设计语义单一真源。 |
 | 架构风格 | 分层架构 + feature 模块 | UI、domain、data、platform adapter 分离。 |
 | 异步 | Kotlin Coroutines + Flow | 训练计时、状态订阅、数据库流式观察。 |
 | 本地数据库 | Room | 保存动作、计划、会话、组记录、恢复映射。 |
@@ -69,6 +70,9 @@ core:engine
 core:notifications
 core:media
 core:health
+ui:designsystem
+ui:theme
+ui:shell-official
 feature:home
 feature:plans
 feature:exercise-library
@@ -137,7 +141,26 @@ feature:settings
 - 首版不绑定任何具体手环 SDK。
 - 后续可接 Health Connect、Wear OS 或设备厂商 SDK，但不能反向污染训练执行引擎。
 
-### 4.10 feature 模块
+### 4.10 `ui:designsystem`
+
+- 官方默认组件、token 映射和训练状态视觉语言。
+- 以根目录 `DESIGN.md` 为设计系统单一真源。
+- 提供按钮、输入框、卡片、chip、底部导航、训练倒计时、训练确认层等基础组件。
+- 社区 UI 变体可以复用，也可以 fork，但不得改变核心训练语义。
+
+### 4.11 `ui:theme`
+
+- 管理官方主题和社区主题的编译期映射。
+- 主题可以改变颜色、字体、圆角、间距和组件外观。
+- 主题不得隐藏训练执行所需主信息，也不得弱化安全和权限提示。
+
+### 4.12 `ui:shell-official`
+
+- 官方 App shell、首页布局、底部导航和页面组合。
+- 允许开源社区创建替代 shell，例如力量训练优先首页、大字版训练界面或暗色优先 shell。
+- 替代 shell 必须遵守 `docs/ui-extension-guide.md` 的 UI shell 合同。
+
+### 4.13 feature 模块
 
 | 模块 | 职责 |
 |---|---|
@@ -393,6 +416,7 @@ interface HeartRateProvider {
 - 不做云同步与账号体系。
 - 不做 Android 与 iOS 同步开发。
 - 不把具体手环 SDK 字段写进核心模型。
+- 不做运行时插件市场或远程主题下载。
 
 ## 13. 待实现前确认
 
@@ -403,12 +427,15 @@ interface HeartRateProvider {
 3. 首批动作内容是随包静态 JSON，还是 Room seed 数据。
 4. 是否在首版显示心率未连接占位，还是默认隐藏到设置中。
 5. 训练提醒是否只做普通通知，还是在后续版本增加精确提醒选项。
+6. 官方默认 UI 是否先只做浅色工作区 + 深色训练执行页，还是首版同时提供暗色主题。
 
 ## 14. 参考
 
 - `docs/planning/prd.md`
 - `docs/planning/ux-design.md`
 - `docs/planning/data-contracts.md`
+- `DESIGN.md`
+- `docs/ui-extension-guide.md`
 - Android 官方 App Architecture 指南
 - Android 官方 Jetpack Compose 文档
 - Android 官方 Room、DataStore、WorkManager 与 Health Connect 文档

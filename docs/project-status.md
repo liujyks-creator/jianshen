@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案和一个 React/Vite 前端原型。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、官方设计系统草案、开源 UI 定制边界草案和一个 React/Vite 前端原型。
 
 项目已经可以从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。现有文档足以指导下一轮创建 Android 生产工程，但进入实现前仍应确认最低 Android 版本、包名和工程拆分粒度。
 
@@ -23,6 +23,8 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 5. `docs/planning/decision-log.md`
 6. `docs/architecture.md`
 7. `docs/roadmap-backlog.md`
+8. `DESIGN.md`
+9. `docs/ui-extension-guide.md`
 
 这些文档覆盖：
 
@@ -35,6 +37,8 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 - 面向未来语音交互与平台适配的训练命令和训练事件。
 - Android 原生首版架构、模块边界、本地持久化、训练执行引擎和平台适配边界。
 - MVP 里程碑、Epic、Story 和验收顺序。
+- 官方默认 UI 设计系统 token、组件语义和训练执行页设计规则。
+- 开源社区定制 UI shell、主题、首页布局和按钮位置的边界。
 
 ### 前端原型
 
@@ -73,6 +77,8 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 6. 心率展示、语音交互、丰富媒体、音乐节奏和 AI 分析先保留接口，不扩张首版交付范围。
 7. Android 首版采用 Kotlin、Jetpack Compose、本地优先和训练执行引擎独立业务核心。
 8. 首版训练提醒以普通通知为基线，不把闹铃级强提醒作为 MVP 硬依赖。
+9. 官方默认 UI 以 `DESIGN.md` 为设计系统单一真源。
+10. 开源社区可以定制 UI shell、主题和布局，但不能破坏核心训练引擎、命令事件和数据契约。
 
 精简决策记录见 `docs/planning/decision-log.md`。
 
@@ -86,6 +92,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 4. Android 工程脚手架细节，包括最低 Android 版本、包名、Kotlin DSL、单模块起步还是多模块起步。
 5. 后续心率数据源策略和健康数据权限流。
 6. 各 story 的详细开发说明、测试清单和验收记录。
+7. 官方默认 UI 是否首版同时提供暗色主题，还是先提供浅色工作区 + 深色训练执行页。
 
 ## 建议下一步
 
@@ -94,7 +101,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 1. 确认 Android 工程参数：最低 Android 版本、包名、Kotlin DSL、模块拆分粒度。
 2. 执行 `docs/roadmap-backlog.md` 中的 `Story E0.1: 创建 Android 生产工程`。
 3. 定义首批动作库导入切片与内容审核清单。
-4. 在 E0/E1 完成后，再决定是否进入 Figma 与视觉设计系统细化。
+4. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
 
 ## 验证快照
 

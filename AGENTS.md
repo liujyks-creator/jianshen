@@ -18,7 +18,9 @@ Before making product or implementation changes, read these files in order:
 6. `docs/planning/data-contracts.md`
 7. `docs/architecture.md`
 8. `docs/roadmap-backlog.md`
-9. `docs/setup.md` when setup or commands matter
+9. `DESIGN.md`
+10. `docs/ui-extension-guide.md`
+11. `docs/setup.md` when setup or commands matter
 
 Treat `docs/planning/decision-log.md` as the current compact record of accepted decisions. Use the longer planning documents for rationale and detail.
 
@@ -103,6 +105,8 @@ The established UX direction is:
 - No fake first-version controls for reserved capabilities that do not work yet.
 
 Later Figma work should use the current UX documents and prototype as inputs, not replace product decisions by accident.
+
+When changing UI, theme, layout, or components, read `DESIGN.md` first. When changing open-source customization boundaries, read `docs/ui-extension-guide.md` and preserve the core training engine, command, event, and data-contract semantics.
 
 ## Local Skills
 

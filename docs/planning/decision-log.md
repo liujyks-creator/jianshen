@@ -37,6 +37,9 @@
 | D-018 | Accepted | 训练执行引擎作为独立业务核心。 | UI 发送 `WorkoutCommand`，引擎产生状态和 `WorkoutEvent`，事件再驱动声音、震动、动画和通知。 |
 | D-019 | Accepted | 首版训练提醒以普通通知为基线。 | 不把闹铃级强提醒作为 MVP 硬依赖；是否使用前台服务由活跃训练 story 单独验证。 |
 | D-020 | Accepted | 首版 backlog 按工程地基、动作库、计划、计时训练、力量训练、总结恢复、跟练占位和硬化验收推进。 | 具体拆分见 `docs/roadmap-backlog.md`。 |
+| D-021 | Accepted | 官方默认 UI 以 `DESIGN.md` 作为设计系统单一真源。 | 默认风格追求清晰、克制、可信和运动现场能量，训练执行页主信息优先。 |
+| D-022 | Accepted | 开源社区可以定制 UI shell、主题、首页布局和按钮位置。 | 定制不得改变 `WorkoutCommand`、`WorkoutEvent`、训练执行引擎、数据契约和权限/健康边界。 |
+| D-023 | Accepted | MVP 阶段不做运行时插件市场或远程主题下载。 | 开源定制先通过 fork、编译期主题/shell 和社区 PR 实现。 |
 
 ## 预留能力
 
@@ -71,5 +74,7 @@
 4. `docs/planning/data-contracts.md`
 5. `docs/architecture.md`
 6. `docs/roadmap-backlog.md`
+7. `DESIGN.md`
+8. `docs/ui-extension-guide.md`
 
 当来源文档改变了已接受的产品或架构方向时，同步更新本决策日志。
