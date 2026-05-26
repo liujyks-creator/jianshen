@@ -6,9 +6,9 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案和一个 React/Vite 前端原型。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架。
 
-项目已经可以从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`docs/readiness-report.md` 给出条件通过结论：可以进入 `Story E0.1: 创建 Android 生产工程`，但进入实现前仍应确认最低 Android 版本、包名、Kotlin DSL、工程拆分粒度和后台计时边界。
+项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步、预留后台计时/前台服务边界但不实现。
 
 ## 已有产物
 
@@ -91,7 +91,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 1. 首批导入动作库的动作清单和内容深度。
 2. 跟练雏形首版的精确边界。
 3. 首版是否真的播放语音读秒，还是只保留语音接口。
-4. Android 工程脚手架细节，包括最低 Android 版本、包名、Kotlin DSL、单模块起步还是多模块起步。
+4. Android 工程脚手架 E0.1 已采用 `minSdk 26`、`compileSdk/targetSdk 36`、包名 `com.liujyks.trainflow`、Kotlin DSL、单 `app` module 起步。
 5. 后续心率数据源策略和健康数据权限流。
 6. 各 story 的详细开发说明、测试清单和验收记录。
 7. 官方默认 UI 是否首版同时提供暗色主题，还是先提供浅色工作区 + 深色训练执行页。
@@ -100,9 +100,9 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 确认 `docs/readiness-report.md` 中列出的 Android 工程参数：最低 Android 版本、包名、Kotlin DSL、模块拆分粒度和后台计时边界。
-2. 执行 `docs/roadmap-backlog.md` 中的 `Story E0.1: 创建 Android 生产工程`。
-3. 定义首批动作库导入切片与内容审核清单。
+1. 进入 `docs/roadmap-backlog.md` 中的 `Story E0.2: 建立模块与包边界`，将当前单 module 包边界收敛为后续可拆分的核心/feature 边界。
+2. 在 E0.3 前准备 Kotlin data class 映射范围，确保不提前实现训练引擎。
+3. 在 E1.1 前定义首批动作库导入切片与内容审核清单。
 4. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
 
 ## 验证快照
@@ -116,6 +116,19 @@ npm.cmd run build
 ```
 
 新克隆仓库后，应在 `npm.cmd install` 后重新执行这些命令。
+
+Android E0.1 工程曾用以下命令检查：
+
+```powershell
+$env:JAVA_HOME = "<JDK 17 path>"
+$env:ANDROID_HOME = "<Android SDK path>"
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+.\gradlew.bat tasks --all
+.\gradlew.bat app:assembleDebug
+.\gradlew.bat app:lintDebug
+```
+
+当前 E0.1 本地验证使用 Gradle 9.4.1、Android Gradle Plugin 9.2.0、Kotlin/Compose compiler 2.3.21、Compose BOM 2026.05.00、Android SDK Platform 36。
 
 ## 新 Codex 会话提示词
 

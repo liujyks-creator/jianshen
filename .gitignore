@@ -1,1 +1,18 @@
 skills/
+
+# Gradle / Android local state
+.gradle/
+.local/
+**/build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Logs and local runtime output
+*.log
+
+# Prototype dependencies and generated output
+prototype/node_modules/
+prototype/dist/

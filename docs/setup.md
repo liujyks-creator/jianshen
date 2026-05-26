@@ -20,9 +20,10 @@
 | `DESIGN.md` | 官方默认 UI 设计系统 token、组件语义和界面规则。 |
 | `docs/ui-extension-guide.md` | 开源社区定制主题、UI shell、首页和布局的边界。 |
 | `docs/project-status.md` | 当前项目状态与建议下一步。 |
+| `app` | Android 原生生产 App module，当前为 E0.1 空壳 App 与 package 边界。 |
 | `prototype` | React/Vite UX 原型及 TypeScript 假数据与契约。 |
 
-当前仓库还没有生产 Android App 模块。
+当前仓库已经包含生产 Android App module。E0.1 采用单 `app` module 起步，多 Gradle module 留到 E0.2 之后按 story 拆分。
 
 ## 2. 前置环境
 
@@ -31,8 +32,10 @@
 1. Git。
 2. Codex。
 3. Node.js 与 npm。
+4. JDK 17。
+5. Android SDK Platform 36 与 Build Tools 36.0.0。
 
-后续进入 Android 生产开发时，再根据最终架构和脚手架补齐 Android 开发工具。
+Android 生产开发建议使用 Android Studio 或等价命令行环境。当前工程使用 Gradle Kotlin DSL、Android Gradle Plugin 9.2.0、Gradle 9.4.1、Jetpack Compose + Material 3。
 
 ## 3. 克隆仓库
 
@@ -114,7 +117,28 @@ npm.cmd run build
 
 当 PowerShell 执行策略拦住 `npm` shim 时，使用 `npm.cmd`。
 
-## 8. 用 Codex 开始工作
+## 8. 验证 Android 工程
+
+在仓库根目录执行：
+
+```powershell
+$env:JAVA_HOME = "<JDK 17 path>"
+$env:ANDROID_HOME = "<Android SDK path>"
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+.\gradlew.bat tasks --all
+.\gradlew.bat app:assembleDebug
+.\gradlew.bat app:lintDebug
+```
+
+如果 Android SDK 没有放在系统默认位置，也可以创建本地 `local.properties`：
+
+```properties
+sdk.dir=C\:/path/to/android-sdk
+```
+
+不要提交 `local.properties`、`.gradle/`、`.local/`、`app/build/` 或任何本地 SDK/JDK/构建输出。
+
+## 9. 用 Codex 开始工作
 
 用 Codex 打开仓库目录，并从以下指令开始：
 
@@ -137,7 +161,7 @@ npm.cmd run build
 10. `DESIGN.md`
 11. `docs/ui-extension-guide.md`
 
-## 9. 分支与提交流
+## 10. 分支与提交流
 
 开始工作前：
 
@@ -168,7 +192,7 @@ git commit -m "<short summary>"
 git push -u origin HEAD
 ```
 
-## 10. 本地技能
+## 11. 本地技能
 
 当前项目可选使用两个本地技能：
 
