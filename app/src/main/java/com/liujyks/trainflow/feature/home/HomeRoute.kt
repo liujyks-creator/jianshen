@@ -186,13 +186,13 @@ private fun BoundaryCard(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "E0.1 工程边界",
+                text = "E0.2 工程边界",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             BoundaryRow("app module", "Compose + Material 3")
-            BoundaryRow("core packages", "命令、事件、模型后续映射")
-            BoundaryRow("platform packages", "计时、心率、语音只预留")
+            BoundaryRow("core packages", "模型、数据、领域、引擎")
+            BoundaryRow("platform adapters", "计时、通知、媒体、心率、语音")
         }
     }
 }

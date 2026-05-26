@@ -6,9 +6,9 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架和 E0.2 Android 模块/包边界。
 
-项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步、预留后台计时/前台服务边界但不实现。
+项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。
 
 ## 已有产物
 
@@ -100,8 +100,8 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 进入 `docs/roadmap-backlog.md` 中的 `Story E0.2: 建立模块与包边界`，将当前单 module 包边界收敛为后续可拆分的核心/feature 边界。
-2. 在 E0.3 前准备 Kotlin data class 映射范围，确保不提前实现训练引擎。
+1. 进入 `docs/roadmap-backlog.md` 中的 `Story E0.3: 映射核心 Kotlin 模型`，把 `docs/planning/data-contracts.md` 的核心契约映射为不依赖 Android UI 的 Kotlin 类型。
+2. 在 E0.3 中继续避免提前实现训练引擎、Room/DataStore、动作库内容或通知能力。
 3. 在 E1.1 前定义首批动作库导入切片与内容审核清单。
 4. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
 
@@ -126,9 +126,11 @@ $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 .\gradlew.bat tasks --all
 .\gradlew.bat app:assembleDebug
 .\gradlew.bat app:lintDebug
+.\gradlew.bat app:check
 ```
 
 当前 E0.1 本地验证使用 Gradle 9.4.1、Android Gradle Plugin 9.2.0、Kotlin/Compose compiler 2.3.21、Compose BOM 2026.05.00、Android SDK Platform 36。
+E0.2 继续沿用同一技术基线，新增 package boundary 架构测试随 `app:check` 执行。
 
 ## 新 Codex 会话提示词
 

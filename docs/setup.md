@@ -20,10 +20,10 @@
 | `DESIGN.md` | 官方默认 UI 设计系统 token、组件语义和界面规则。 |
 | `docs/ui-extension-guide.md` | 开源社区定制主题、UI shell、首页和布局的边界。 |
 | `docs/project-status.md` | 当前项目状态与建议下一步。 |
-| `app` | Android 原生生产 App module，当前为 E0.1 空壳 App 与 package 边界。 |
+| `app` | Android 原生生产 App module，当前为 E0.2 单 module + package 边界。 |
 | `prototype` | React/Vite UX 原型及 TypeScript 假数据与契约。 |
 
-当前仓库已经包含生产 Android App module。E0.1 采用单 `app` module 起步，多 Gradle module 留到 E0.2 之后按 story 拆分。
+当前仓库已经包含生产 Android App module。E0.2 继续采用单 `app` module 起步，在代码包和架构测试中保留后续可拆分边界；多 Gradle module 留到代码体量或依赖隔离需求明确后再拆分。
 
 ## 2. 前置环境
 
@@ -128,6 +128,7 @@ $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 .\gradlew.bat tasks --all
 .\gradlew.bat app:assembleDebug
 .\gradlew.bat app:lintDebug
+.\gradlew.bat app:check
 ```
 
 如果 Android SDK 没有放在系统默认位置，也可以创建本地 `local.properties`：
