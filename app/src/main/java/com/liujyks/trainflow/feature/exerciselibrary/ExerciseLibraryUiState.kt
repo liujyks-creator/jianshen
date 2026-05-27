@@ -36,3 +36,24 @@ data class ExerciseLibraryItemUiState(
     val shortCue: String,
     val defaultSummary: String?
 )
+
+data class ExerciseDetailUiState(
+    val id: String,
+    val name: String,
+    val aliasSummary: String?,
+    val categoryLabel: String,
+    val difficultyLabel: String,
+    val primaryMuscleLabels: List<String>,
+    val secondaryMuscleLabels: List<String>,
+    val equipmentLabels: List<String>,
+    val capabilityLabels: List<String>,
+    val shortCue: String,
+    val defaultSummary: String?,
+    val steps: List<String>,
+    val keyPoints: List<String>,
+    val commonMistakes: List<String>,
+    val breathingCues: List<String>,
+    val cautions: List<String>,
+    val substitutionLabels: List<String>,
+    val recoveryAreaLabels: List<String>
+)

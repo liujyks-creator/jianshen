@@ -43,9 +43,16 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 @Composable
 fun ExerciseLibraryRoute(modifier: Modifier = Modifier) {
     var filters by remember { mutableStateOf(ExerciseLibraryFilters()) }
+    var selectedExerciseId by remember { mutableStateOf<String?>(null) }
     val uiState = remember(filters) { buildExerciseLibraryUiState(filters) }
 
-    ExerciseLibraryScreen(
+    selectedExerciseId?.let { exerciseId ->
+        ExerciseDetailScreen(
+            uiState = remember(exerciseId) { findExerciseDetailUiState(exerciseId) },
+            onBack = { selectedExerciseId = null },
+            modifier = modifier
+        )
+    } ?: ExerciseLibraryScreen(
         uiState = uiState,
         onTrainingModeSelected = { selected ->
             filters = filters.copy(trainingMode = selected)
@@ -62,6 +69,9 @@ fun ExerciseLibraryRoute(modifier: Modifier = Modifier) {
         onClearFilters = {
             filters = ExerciseLibraryFilters()
         },
+        onExerciseSelected = { exerciseId ->
+            selectedExerciseId = exerciseId
+        },
         modifier = modifier
     )
 }
@@ -74,6 +84,7 @@ private fun ExerciseLibraryScreen(
     onEquipmentSelected: (EquipmentKind) -> Unit,
     onDifficultySelected: (ExerciseDifficulty) -> Unit,
     onClearFilters: () -> Unit,
+    onExerciseSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -104,7 +115,10 @@ private fun ExerciseLibraryScreen(
             }
         } else {
             items(uiState.items, key = { it.id }) { item ->
-                ExerciseSummaryCard(item = item)
+                ExerciseSummaryCard(
+                    item = item,
+                    onClick = { onExerciseSelected(item.id) }
+                )
             }
         }
     }
@@ -232,8 +246,12 @@ private fun FilterRow(
 }
 
 @Composable
-private fun ExerciseSummaryCard(item: ExerciseLibraryItemUiState) {
+private fun ExerciseSummaryCard(
+    item: ExerciseLibraryItemUiState,
+    onClick: () -> Unit
+) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -288,6 +306,165 @@ private fun ExerciseSummaryCard(item: ExerciseLibraryItemUiState) {
 }
 
 @Composable
+private fun ExerciseDetailScreen(
+    uiState: ExerciseDetailUiState?,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(TrainFlowSurfaceMuted)
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            TextButton(onClick = onBack) {
+                Text(text = "返回动作库")
+            }
+        }
+
+        if (uiState == null) {
+            item {
+                MissingExerciseDetailState()
+            }
+        } else {
+            item {
+                ExerciseDetailHeader(uiState)
+            }
+            item {
+                DetailSection(title = "设置与执行", items = uiState.steps, numbered = true)
+            }
+            item {
+                DetailSection(title = "发力要点", items = uiState.keyPoints)
+            }
+            item {
+                DetailSection(title = "常见错误", items = uiState.commonMistakes)
+            }
+            item {
+                DetailSection(title = "呼吸提示", items = uiState.breathingCues)
+            }
+            item {
+                DetailSection(title = "安全说明", items = uiState.cautions)
+            }
+            if (uiState.substitutionLabels.isNotEmpty()) {
+                item {
+                    DetailSection(title = "替代动作", items = uiState.substitutionLabels)
+                }
+            }
+            if (uiState.recoveryAreaLabels.isNotEmpty()) {
+                item {
+                    DetailSection(title = "恢复映射", items = uiState.recoveryAreaLabels)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExerciseDetailHeader(uiState: ExerciseDetailUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = uiState.name,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = uiState.id,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TrainFlowNeutral700
+                )
+                uiState.aliasSummary?.let { aliases ->
+                    Text(
+                        text = "别名 $aliases",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Text(
+                text = uiState.shortCue,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            uiState.defaultSummary?.let { summary ->
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TrainFlowNeutral700
+                )
+            }
+
+            DetailMetaLine(title = "分类", values = listOf(uiState.categoryLabel, uiState.difficultyLabel))
+            DetailMetaLine(title = "主要部位", values = uiState.primaryMuscleLabels)
+            if (uiState.secondaryMuscleLabels.isNotEmpty()) {
+                DetailMetaLine(title = "辅助部位", values = uiState.secondaryMuscleLabels)
+            }
+            DetailMetaLine(title = "器械", values = uiState.equipmentLabels)
+
+            ChipRow(labels = uiState.capabilityLabels)
+        }
+    }
+}
+
+@Composable
+private fun DetailMetaLine(
+    title: String,
+    values: List<String>
+) {
+    Text(
+        text = "$title ${values.joinToString("、")}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun DetailSection(
+    title: String,
+    items: List<String>,
+    numbered: Boolean = false
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            items.forEachIndexed { index, text ->
+                Text(
+                    text = if (numbered) "${index + 1}. $text" else "• $text",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChipRow(labels: List<String>) {
     Row(
         modifier = Modifier
@@ -307,6 +484,32 @@ private fun ChipRow(labels: List<String>) {
                     color = TrainFlowNeutral50
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MissingExerciseDetailState() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "找不到动作详情",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "该动作不在当前动作库中。返回后重新选择。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

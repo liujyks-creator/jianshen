@@ -32,6 +32,16 @@ internal fun buildExerciseLibraryUiState(
     )
 }
 
+internal fun findExerciseDetailUiState(
+    exerciseId: String,
+    entries: List<ActionExerciseFixture> = FirstActionExerciseFixtures.entries
+): ExerciseDetailUiState? {
+    val entriesByExerciseId = entries.associateBy { it.exercise.id }
+    val entry = entriesByExerciseId[exerciseId] ?: return null
+
+    return entry.toDetailUiState(entriesByExerciseId)
+}
+
 private fun buildTrainingModeOptions(
     filters: ExerciseLibraryFilters
 ): List<ExerciseFilterOption<ExerciseTrainingModeFilter>> {
@@ -107,6 +117,38 @@ private fun Exercise.toUiState(entry: ActionExerciseFixture): ExerciseLibraryIte
     )
 }
 
+private fun ActionExerciseFixture.toDetailUiState(
+    entriesByExerciseId: Map<String, ActionExerciseFixture>
+): ExerciseDetailUiState {
+    val exercise = exercise
+
+    return ExerciseDetailUiState(
+        id = exercise.id,
+        name = exercise.name,
+        aliasSummary = exercise.aliases.takeIf { it.isNotEmpty() }?.joinToString("、"),
+        categoryLabel = exercise.category.categoryLabel(),
+        difficultyLabel = exercise.difficulty.label(),
+        primaryMuscleLabels = exercise.primaryMuscleIds.map { it.muscleLabel() },
+        secondaryMuscleLabels = exercise.secondaryMuscleIds.map { it.muscleLabel() },
+        equipmentLabels = exercise.equipment.map { it.label() },
+        capabilityLabels = exercise.capabilityLabels(),
+        shortCue = exercise.instructions.shortCue,
+        defaultSummary = defaultSummary(),
+        steps = exercise.instructions.steps,
+        keyPoints = exercise.instructions.keyPoints,
+        commonMistakes = exercise.instructions.commonMistakes,
+        breathingCues = exercise.instructions.breathingCues,
+        cautions = exercise.instructions.cautions,
+        substitutionLabels = exercise.substitutions.map { substitution ->
+            substitution.detailLabel(entriesByExerciseId)
+        },
+        recoveryAreaLabels = exercise.recovery
+            ?.recommendedRecoveryAreaIds
+            ?.map { it.recoveryAreaLabel() }
+            .orEmpty()
+    )
+}
+
 private fun Exercise.capabilityLabels(): List<String> = buildList {
     if (capabilities.supportsTimedTraining) add("计时")
     if (capabilities.supportsReps) add("次数")
@@ -133,6 +175,48 @@ private fun RepTarget.label(): String {
     return when (this) {
         is RepTarget.Fixed -> "${reps}次"
         is RepTarget.Range -> "${minReps}-${maxReps}次"
+    }
+}
+
+private fun com.liujyks.trainflow.core.model.ExerciseSubstitution.detailLabel(
+    entriesByExerciseId: Map<String, ActionExerciseFixture>
+): String {
+    val exerciseName = entriesByExerciseId[exerciseId]?.exercise?.name ?: exerciseId.readableIdLabel()
+    val reasonLabels = buildList {
+        if (equipmentFallback) add("器械替代")
+        reasonTags.mapTo(this) { it.substitutionReasonLabel() }
+    }.distinct()
+
+    return if (reasonLabels.isEmpty()) {
+        exerciseName
+    } else {
+        "$exerciseName · ${reasonLabels.joinToString("、")}"
+    }
+}
+
+private fun String.substitutionReasonLabel(): String {
+    return when (this) {
+        "low_impact" -> "低冲击"
+        "lower_knee_load" -> "较低膝部压力"
+        "core_stability" -> "核心稳定"
+        "lower_pressure" -> "较低压力"
+        "bilateral" -> "双侧替代"
+        "standing_lower_body" -> "站姿下肢"
+        "mat_core" -> "垫上核心"
+        "no_equipment" -> "无器械"
+        "lower_load" -> "较低负荷"
+        else -> readableIdLabel()
+    }
+}
+
+private fun String.recoveryAreaLabel(): String {
+    return when (this) {
+        "lower-body-release" -> "下肢放松"
+        "posterior-chain-release" -> "臀腿后侧放松"
+        "chest-shoulder-release" -> "胸肩前侧放松"
+        "upper-back-release" -> "背部放松"
+        "core-breathing-reset" -> "核心呼吸重置"
+        else -> readableIdLabel()
     }
 }
 
