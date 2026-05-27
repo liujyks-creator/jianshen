@@ -1,7 +1,7 @@
 # TrainFlow 环境与工作说明
 
 **状态:** 当前仓库环境说明
-**更新日期:** 2026-05-21
+**更新日期:** 2026-05-27
 
 本文档说明如何准备当前仓库并开始工作。
 更短的跨电脑接力版本见 `docs/new-computer-setup.md`。
@@ -20,10 +20,10 @@
 | `DESIGN.md` | 官方默认 UI 设计系统 token、组件语义和界面规则。 |
 | `docs/ui-extension-guide.md` | 开源社区定制主题、UI shell、首页和布局的边界。 |
 | `docs/project-status.md` | 当前项目状态与建议下一步。 |
-| `app` | Android 原生生产 App module，当前为 E0.2 单 module + package 边界。 |
+| `app` | Android 原生生产 App module，当前为 E0.4 单 module + package 边界、Room/DataStore 持久化骨架。 |
 | `prototype` | React/Vite UX 原型及 TypeScript 假数据与契约。 |
 
-当前仓库已经包含生产 Android App module。E0.2 继续采用单 `app` module 起步，在代码包和架构测试中保留后续可拆分边界；多 Gradle module 留到代码体量或依赖隔离需求明确后再拆分。
+当前仓库已经包含生产 Android App module。E0.4 继续采用单 `app` module 起步，在代码包和架构测试中保留后续可拆分边界；多 Gradle module 留到代码体量或依赖隔离需求明确后再拆分。
 
 ## 2. 前置环境
 
@@ -35,7 +35,7 @@
 4. JDK 17。
 5. Android SDK Platform 36 与 Build Tools 36.0.0。
 
-Android 生产开发建议使用 Android Studio 或等价命令行环境。当前工程使用 Gradle Kotlin DSL、Android Gradle Plugin 9.2.0、Gradle 9.4.1、Jetpack Compose + Material 3。
+Android 生产开发建议使用 Android Studio 或等价命令行环境。当前工程使用 Gradle Kotlin DSL、Android Gradle Plugin 9.2.0、Gradle 9.4.1、Jetpack Compose + Material 3、Room 2.8.4、DataStore Preferences 1.2.1、KSP 2.3.9。
 
 ## 3. 克隆仓库
 
@@ -131,6 +131,8 @@ $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 .\gradlew.bat app:check
 ```
 
+E0.4 后 Room schema 导出到 `app/schemas`，该目录是数据库迁移历史的一部分，应随相关数据库结构变更提交。不要提交 `.local/`、`.gradle/`、`app/build/`、lint report、APK 或其他构建输出。
+
 如果 Android SDK 没有放在系统默认位置，也可以创建本地 `local.properties`：
 
 ```properties
@@ -138,6 +140,12 @@ sdk.dir=C\:/path/to/android-sdk
 ```
 
 不要提交 `local.properties`、`.gradle/`、`.local/`、`app/build/` 或任何本地 SDK/JDK/构建输出。
+
+如果网络环境需要代理才能下载 Gradle 或 Maven 依赖，可以只在当前 PowerShell 会话中设置：
+
+```powershell
+$env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=<port> -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=<port>"
+```
 
 ## 9. 用 Codex 开始工作
 

@@ -1,9 +1,9 @@
 package com.liujyks.trainflow.core.datastore
 
 /**
- * E0.2 package boundary for future DataStore-backed training preferences.
+ * Package boundary for DataStore-backed training preferences.
  *
- * Preference persistence is deferred to E0.4; this package reserves the storage
- * boundary without adding runtime dependencies.
+ * DataStore is reserved for lightweight user preferences and should not become
+ * a substitute for structured Room-backed workout data.
  */
 internal object DataStoreBoundary
