@@ -42,6 +42,7 @@
 | D-023 | Accepted | MVP 阶段不做运行时插件市场或远程主题下载。 | 开源定制先通过 fork、编译期主题/shell 和社区 PR 实现。 |
 | D-024 | Accepted | E0.1 通过实现准备检查，但必须先确认 Android 工程参数。 | `docs/readiness-report.md` 是进入 Android 工程前的 readiness gate；当前允许启动 E0.1，不代表全量 MVP story 已全部无条件开工。 |
 | D-025 | Accepted | 首批动作内容切片确定为 11 个动作，优先支持计时训练默认入口，同时覆盖力量训练最小闭环。 | 详见 `docs/planning/action-content-slice.md`；E1.1 只定义内容、字段、审核标准和 fixture 输入，不实现动作库导入、训练引擎、repository 或 UI 闭环。 |
+| D-026 | Accepted | E1.2 以 `docs/planning/data-contracts.md` 为准补齐 prototype `Exercise` 的 `sourceMeta`/`extensions` 字段，并在 Android fixture 中写入 `sourceMeta`。 | `extensions` 在首批 fixture 中保持为空；训练类型支持、计时默认建议、力量默认建议和审核备注保留在 fixture-only 元数据中，不静默扩展核心 `Exercise` 契约。 |
 
 ## 预留能力
 
@@ -65,6 +66,7 @@
 | O-004 | Accepted | 训练日程提醒是否要强于普通通知？ | 已按 D-019 收敛为普通通知基线；强提醒暂不进入 MVP。 |
 | O-005 | Accepted | Android 具体架构和模块拆分是什么？ | 已按 D-016、D-017、D-018 和 `docs/architecture.md` 收敛。 |
 | O-006 | Open | 后续健康数据与可穿戴设备的接入策略是什么？ | 影响权限、适配层、可靠性承诺和支持设备范围。 |
+| O-007 | Accepted | E1.2 如何处理 `sourceMeta`/`extensions` 与 prototype contract 的差异？ | 已按 D-026 收敛：prototype contract 补齐字段，fixture 写入来源信息，扩展与默认建议不进入核心动作模型。 |
 
 ## 来源文档
 

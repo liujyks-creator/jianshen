@@ -133,6 +133,13 @@ $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 
 E0.4 后 Room schema 导出到 `app/schemas`，该目录是数据库迁移历史的一部分，应随相关数据库结构变更提交。不要提交 `.local/`、`.gradle/`、`app/build/`、lint report、APK 或其他构建输出。
 
+E1.2 首批动作 fixture 变更随 `app:check` 执行 `FirstActionExerciseFixturesTest`，校验 11 个动作 ID、必填字段、训练类型能力、计时/力量默认建议、恢复映射和替代动作边界。若同时改动 `prototype/src/data/contracts.ts` 或原型 fixture，也在 `prototype` 目录执行：
+
+```powershell
+npm.cmd run lint
+npm.cmd run build
+```
+
 如果 Android SDK 没有放在系统默认位置，也可以创建本地 `local.properties`：
 
 ```properties

@@ -163,6 +163,8 @@ stepsCompleted:
 
 ### Story E1.2: 导入动作 fixture
 
+**状态:** Done in Android fixture and validation tests
+
 作为用户，  
 我想在动作库中看到首批动作，  
 以便创建训练计划时选择动作。
@@ -172,6 +174,12 @@ stepsCompleted:
 - Given 首批动作 fixture，When 打开动作库，Then 可看到动作名称、部位、器械、难度和能力标签。
 - Then 每个可选动作都有 `shortCue`。
 - Then 未满足必填字段的动作不进入可选列表。
+
+**交付结果:**
+
+- Android 侧新增首批 11 个 `Exercise` fixture，并保留 fixture-only 训练类型支持、计时默认建议、力量默认建议、onboarding suitability 和审核备注。
+- 校验测试覆盖 ID 唯一、必填字段、训练类型与默认建议一致、恢复区域、器械/部位指导和替代动作边界。
+- `sourceMeta`/`extensions` 策略已记录：`sourceMeta` 写入 fixture，`extensions` 保持为空，不把默认建议静默扩展进核心 `Exercise` 契约。
 
 ### Story E1.3: 动作库列表与筛选
 

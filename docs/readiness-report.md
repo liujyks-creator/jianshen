@@ -109,7 +109,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 ### P1
 
-- `O-001` 首批动作库内容切片已在 E1.1 确定；E1.2 前需决定或记录 `sourceMeta`/`extensions` 与 prototype contract 的对齐方式。
+- `O-001` 首批动作库内容切片已在 E1.1 确定；`sourceMeta`/`extensions` 与 prototype contract 的对齐方式已在 E1.2 按 D-026 记录。
 - Android 工程参数必须在 E0.1 开始前确认，否则 package、SDK 和 Gradle 结构会影响后续代码迁移成本。
 
 ### P2

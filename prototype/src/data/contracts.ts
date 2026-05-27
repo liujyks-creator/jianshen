@@ -60,6 +60,13 @@ export interface ExerciseSubstitution {
   equipmentFallback?: boolean
 }
 
+export interface ContentSourceMeta {
+  author?: string
+  reviewer?: string
+  sourceRefs?: string[]
+  updatedAt?: string
+}
+
 export interface Exercise {
   id: string
   name: string
@@ -76,6 +83,8 @@ export interface Exercise {
   recovery?: ExerciseRecoveryMapping
   substitutions?: ExerciseSubstitution[]
   contentStatus: 'draft' | 'reviewed' | 'published'
+  sourceMeta?: ContentSourceMeta
+  extensions?: Record<string, unknown>
 }
 
 export interface PlanReminder {

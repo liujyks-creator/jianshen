@@ -768,6 +768,15 @@ fixture 不追求内容量，先覆盖模型差异：
 - 有替代动作的动作。
 - 可用于跟练展示的动作。
 
+### 14.2 E1.2 fixture 对齐策略
+
+E1.2 导入首批 11 个动作 fixture 时采用以下约束：
+
+- `Exercise.sourceMeta` 按本文档保留，并在首批 fixture 中指向 `docs/planning/action-content-slice.md`。
+- `Exercise.extensions` 保留为空对象/空 map，不把审核备注、默认训练建议或后续内容准备字段塞进核心动作契约。
+- `training type support`、`onboarding suitability`、`timed default suggestion`、`strength default suggestion` 和 `review notes` 属于 fixture-only 元数据，服务 E1.2 校验和后续计划编辑默认值输入，不作为正式 `Exercise` 字段。
+- `prototype/src/data/contracts.ts` 应与本文 `Exercise` 的 `sourceMeta`/`extensions` 字段保持一致；后续如要继续调整 `WorkoutCommand` 细节，应另起 story 对齐。
+
 ## 15. 明确不在核心模型里硬编码的能力
 
 以下能力首版留扩展位，不应让核心训练计划模型过早依赖：

@@ -322,6 +322,6 @@ E1.2 fixture 导入前，每个动作必须通过以下审核：
 
 ## 8. 未决事项
 
-- `prototype/src/data/contracts.ts` 当前没有 `sourceMeta` 和 `extensions`，而 `docs/planning/data-contracts.md` 中有这两个扩展字段。E1.1 不改变契约；E1.2 如需要内容来源/审核人信息，应先决定以文档契约为准补齐 prototype，还是把这些信息留在 fixture 外部清单。
+- `sourceMeta`/`extensions` 对齐策略已在 E1.2 收敛：以 `docs/planning/data-contracts.md` 为准补齐 `prototype/src/data/contracts.ts`，Android fixture 写入 `sourceMeta`，但 `extensions` 保持为空；训练类型支持、计时默认建议、力量默认建议和审核备注保留在 fixture-only 元数据中。
 - `one-arm-dumbbell-row` 的无器械替代动作尚未在首批 11 个动作内覆盖，可在后续内容扩展中补充弹力带划船或器械划船。
 - 股四头肌拉伸的平衡 fallback 未进入首批清单，后续可根据动作详情页反馈补充。
