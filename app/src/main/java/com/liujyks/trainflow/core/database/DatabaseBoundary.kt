@@ -1,9 +1,10 @@
 package com.liujyks.trainflow.core.database
 
 /**
- * E0.2 package boundary for future Room entities, DAO contracts, and migrations.
+ * Package boundary for Room entities, DAO contracts, schema, and migrations.
  *
- * Room is not installed or initialized in E0.2. Feature UI must consume repository
- * or domain models instead of depending on database entities.
+ * Feature UI must consume repository or domain models instead of depending on
+ * database entities. Core model classes stay platform independent and are not
+ * annotated with Room metadata.
  */
 internal object DatabaseBoundary
