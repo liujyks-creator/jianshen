@@ -1,25 +1,29 @@
 package com.liujyks.trainflow.feature.home
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -29,66 +33,101 @@ import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 
 @Composable
-fun HomeRoute(modifier: Modifier = Modifier) {
-    TrainFlowHomeScreen(modifier = modifier)
+fun HomeRoute(
+    onOpenExerciseLibrary: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val uiState = remember { buildHomeScreenState() }
+
+    TrainFlowHomeScreen(
+        uiState = uiState,
+        onOpenExerciseLibrary = onOpenExerciseLibrary,
+        modifier = modifier
+    )
 }
 
 @Composable
-private fun TrainFlowHomeScreen(modifier: Modifier = Modifier) {
-    Column(
+private fun TrainFlowHomeScreen(
+    uiState: HomeScreenState,
+    onOpenExerciseLibrary: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(TrainFlowSurfaceMuted)
             .padding(horizontal = 20.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            HomeHeader(summary = uiState.summary)
+        }
+
+        item {
+            TimedTrainingEntryCard(entry = uiState.primaryEntry)
+        }
+
+        item {
+            Text(
+                text = "同层入口",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        uiState.peerEntries.forEach { entry ->
+            item {
+                HomeEntryCard(
+                    entry = entry,
+                    accent = when (entry.id) {
+                        HomeEntryId.STRENGTH_TRAINING -> TrainFlowAction
+                        HomeEntryId.EXERCISE_LIBRARY -> TrainFlowAccent
+                        else -> TrainFlowNeutral500
+                    },
+                    onClick = if (entry.id == HomeEntryId.EXERCISE_LIBRARY) {
+                        onOpenExerciseLibrary
+                    } else {
+                        null
+                    }
+                )
+            }
+        }
+
+        item {
+            FutureBoundaryPanel(entries = uiState.futureEntries)
+        }
+    }
+}
+
+@Composable
+private fun HomeHeader(summary: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "TrainFlow",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "把训练计划变成清晰、稳定、可回顾的执行流程。",
+            text = summary,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        ExecutionPreviewCard()
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TrainingModeCard(
-                title = "计时训练",
-                label = "默认入口",
-                accent = TrainFlowAccent,
-                modifier = Modifier.weight(1f)
-            )
-            TrainingModeCard(
-                title = "力量训练",
-                label = "并联能力",
-                accent = TrainFlowAction,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        BoundaryCard()
     }
 }
 
 @Composable
-private fun ExecutionPreviewCard(modifier: Modifier = Modifier) {
+private fun TimedTrainingEntryCard(entry: HomeEntryUiState) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = TrainFlowPrimary)
     ) {
@@ -96,62 +135,50 @@ private fun ExecutionPreviewCard(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            StatusPill(text = entry.badge, color = TrainFlowAccent, contentColor = TrainFlowPrimary)
             Text(
-                text = "今日训练",
-                style = MaterialTheme.typography.labelLarge,
-                color = TrainFlowNeutral50.copy(alpha = 0.72f)
-            )
-            Text(
-                text = "准备开始",
+                text = entry.title,
                 style = MaterialTheme.typography.headlineMedium,
                 color = TrainFlowNeutral50
             )
             Text(
-                text = "00:00",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = TrainFlowNeutral50
+                text = entry.description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = TrainFlowNeutral50.copy(alpha = 0.82f)
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusPill("动作")
-                StatusPill("休息")
-                StatusPill("记录")
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatusPill(text = "动作倒计时")
+                StatusPill(text = "休息提醒")
+                StatusPill(text = "训练后记录")
             }
+            DisabledStatusButton(text = entry.status)
         }
     }
 }
 
 @Composable
-private fun StatusPill(text: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = TrainFlowSecondary
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = TrainFlowNeutral50
-        )
-    }
-}
-
-@Composable
-private fun TrainingModeCard(
-    title: String,
-    label: String,
+private fun HomeEntryCard(
+    entry: HomeEntryUiState,
     accent: Color,
-    modifier: Modifier = Modifier
+    onClick: (() -> Unit)?
 ) {
     Card(
-        modifier = modifier,
+        onClick = { onClick?.invoke() },
+        enabled = entry.enabled && onClick != null,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            disabledContainerColor = MaterialTheme.colorScheme.surface
+        ),
         border = BorderStroke(1.dp, TrainFlowNeutral100)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -159,24 +186,41 @@ private fun TrainingModeCard(
                     .clip(RoundedCornerShape(999.dp))
                     .background(accent)
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = entry.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = entry.badge,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TrainFlowNeutral700
+                )
+            }
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = label,
+                text = entry.description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (entry.enabled && onClick != null) {
+                TextButton(onClick = onClick) {
+                    Text(text = entry.status)
+                }
+            } else {
+                DisabledStatusButton(text = entry.status)
+            }
         }
     }
 }
 
 @Composable
-private fun BoundaryCard(modifier: Modifier = Modifier) {
+private fun FutureBoundaryPanel(entries: List<HomeEntryUiState>) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, TrainFlowNeutral100)
@@ -186,34 +230,76 @@ private fun BoundaryCard(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "E0.2 工程边界",
+                text = "后续边界",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            BoundaryRow("app module", "Compose + Material 3")
-            BoundaryRow("core packages", "模型、数据、领域、引擎")
-            BoundaryRow("platform adapters", "计时、通知、媒体、心率、语音")
+            entries.forEach { entry ->
+                FutureBoundaryRow(entry)
+            }
         }
     }
 }
 
 @Composable
-private fun BoundaryRow(title: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun FutureBoundaryRow(entry: HomeEntryUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = entry.status,
+                style = MaterialTheme.typography.labelLarge,
+                color = TrainFlowNeutral500
+            )
+        }
         Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(1.dp))
-        Text(
-            text = value,
+            text = entry.description,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun StatusPill(
+    text: String,
+    color: Color = TrainFlowSecondary,
+    contentColor: Color = TrainFlowNeutral50
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = contentColor
+        )
+    }
+}
+
+@Composable
+private fun DisabledStatusButton(text: String) {
+    Button(
+        onClick = {},
+        enabled = false,
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            disabledContainerColor = TrainFlowNeutral100,
+            disabledContentColor = TrainFlowNeutral700
+        )
+    ) {
+        Text(
+            text = text,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -222,6 +308,9 @@ private fun BoundaryRow(title: String, value: String) {
 @Composable
 private fun TrainFlowHomeScreenPreview() {
     TrainFlowTheme {
-        TrainFlowHomeScreen()
+        TrainFlowHomeScreen(
+            uiState = buildHomeScreenState(),
+            onOpenExerciseLibrary = {}
+        )
     }
 }
