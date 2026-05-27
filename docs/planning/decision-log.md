@@ -41,6 +41,7 @@
 | D-022 | Accepted | 开源社区可以定制 UI shell、主题、首页布局和按钮位置。 | 定制不得改变 `WorkoutCommand`、`WorkoutEvent`、训练执行引擎、数据契约和权限/健康边界。 |
 | D-023 | Accepted | MVP 阶段不做运行时插件市场或远程主题下载。 | 开源定制先通过 fork、编译期主题/shell 和社区 PR 实现。 |
 | D-024 | Accepted | E0.1 通过实现准备检查，但必须先确认 Android 工程参数。 | `docs/readiness-report.md` 是进入 Android 工程前的 readiness gate；当前允许启动 E0.1，不代表全量 MVP story 已全部无条件开工。 |
+| D-025 | Accepted | 首批动作内容切片确定为 11 个动作，优先支持计时训练默认入口，同时覆盖力量训练最小闭环。 | 详见 `docs/planning/action-content-slice.md`；E1.1 只定义内容、字段、审核标准和 fixture 输入，不实现动作库导入、训练引擎、repository 或 UI 闭环。 |
 
 ## 预留能力
 
@@ -58,7 +59,7 @@
 
 | ID | 状态 | 问题 | 影响 |
 |---|---|---|---|
-| O-001 | Open | 首批导入哪些动作，内容深度到哪里？ | 决定内容工作量、审核范围和原型真实性。 |
+| O-001 | Accepted | 首批导入哪些动作，内容深度到哪里？ | 已按 D-025 收敛为 11 个动作与内容审核标准；E1.2 基于 `docs/planning/action-content-slice.md` 导入 fixture。 |
 | O-002 | Open | 跟练首版只支持预置流程，还是允许兼容的计时计划切换为跟练视图？ | 影响计划元数据、导航和编辑规则。 |
 | O-003 | Open | 首版是否播放语音读秒，还是只保留语音接口？ | 影响音频素材、设置和测试。 |
 | O-004 | Accepted | 训练日程提醒是否要强于普通通知？ | 已按 D-019 收敛为普通通知基线；强提醒暂不进入 MVP。 |
@@ -78,5 +79,6 @@
 7. `docs/readiness-report.md`
 8. `DESIGN.md`
 9. `docs/ui-extension-guide.md`
+10. `docs/planning/action-content-slice.md`
 
 当来源文档改变了已接受的产品或架构方向时，同步更新本决策日志。
