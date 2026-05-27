@@ -6,9 +6,9 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射和 E0.4 Room/DataStore 持久化基础骨架。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架和 E1.1 首批动作内容切片。
 
-项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test，仍未引入训练引擎、动作库内容加载、通知调度、真实心率设备或语音能力。
+项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准，仍未引入训练引擎、动作库内容加载、通知调度、真实心率设备或语音能力。
 
 ## 已有产物
 
@@ -26,6 +26,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 8. `docs/readiness-report.md`
 9. `DESIGN.md`
 10. `docs/ui-extension-guide.md`
+11. `docs/planning/action-content-slice.md`
 
 这些文档覆盖：
 
@@ -33,7 +34,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 - 计时训练与力量训练流程。
 - 跟练雏形能力。
 - 动作倒计时、休息提醒和力量组记录。
-- 动作库内容要求与数据接口。
+- 动作库内容要求、首批动作切片与数据接口。
 - 心率展示边界和后续设备接入边界。
 - 面向未来语音交互与平台适配的训练命令和训练事件。
 - Android 原生首版架构、模块边界、本地持久化、训练执行引擎和平台适配边界。
@@ -88,7 +89,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 以下事项在生产实现深入前仍需继续收敛：
 
-1. 首批导入动作库的动作清单和内容深度。
+1. 首批导入动作库的动作清单和内容深度已由 E1.1 收敛，详见 `docs/planning/action-content-slice.md`；后续仍需在 E1.2 决定 fixture 是否补齐 `sourceMeta`/`extensions` 对齐问题。
 2. 跟练雏形首版的精确边界。
 3. 首版是否真的播放语音读秒，还是只保留语音接口。
 4. Android 工程脚手架 E0.1 已采用 `minSdk 26`、`compileSdk/targetSdk 36`、包名 `com.liujyks.trainflow`、Kotlin DSL、单 `app` module 起步。
@@ -101,10 +102,11 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 进入 `docs/roadmap-backlog.md` 中的 `Story E1.1: 定义首批动作内容切片`，先收敛 8 到 12 个首批动作和内容必填字段。
-2. 在 E1.1 前继续避免提前实现动作库内容加载、训练引擎、通知调度、真实心率设备接入或 voice control。
+1. 进入 `docs/roadmap-backlog.md` 中的 `Story E1.2: 导入动作 fixture`，基于 `docs/planning/action-content-slice.md` 导入首批动作 fixture。
+2. 在 E1.2 前继续避免提前实现训练引擎、通知调度、真实心率设备接入或 voice control。
 3. E1.2 导入动作 fixture 时复用 E0.4 的 `core.database` 骨架，但不要让 Room entity 泄漏到 feature/UI。
-4. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
+4. 在 E1.2 开始前先处理或显式记录 `docs/planning/data-contracts.md` 与 `prototype/src/data/contracts.ts` 关于 `sourceMeta`/`extensions` 的差异。
+5. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
 
 ## 验证快照
 

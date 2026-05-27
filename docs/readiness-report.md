@@ -32,7 +32,7 @@ stepsCompleted:
 |---|---|---|
 | E0.1 Android 生产工程 | Go with confirmations | 规划、架构、设计和 backlog 已经给出足够锚点；开始前需要确认 Android 工程参数。 |
 | E0.2-E0.4 架构地基 | Ready after E0.1 | 模块边界、核心模型、Room/DataStore 方向明确，但依赖工程实际结构落地。 |
-| E1 动作库 | Not yet | 需要先完成 `O-001` 首批动作内容切片。 |
+| E1 动作库 | Partially ready after E1.1 | `O-001` 已由 `docs/planning/action-content-slice.md` 收敛；E1.2 可进入 fixture 导入，但仍不得提前实现完整动作库业务层或 UI 闭环。 |
 | E6 跟练雏形 | Not yet | 需要先收敛 `O-002` 跟练边界。 |
 | E7 通知、声音、震动 | Partially ready | 普通通知方向明确；声音倒计时和前台服务策略仍需 Story 前确认。 |
 | 真实心率/健康数据 | Deferred | 首版只保留抽象状态和 UI 占位，不接入真实设备或医疗级判断。 |
@@ -109,7 +109,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 ### P1
 
-- `O-001` 首批动作库内容切片必须在 E1.1 前确定。
+- `O-001` 首批动作库内容切片已在 E1.1 确定；E1.2 前需决定或记录 `sourceMeta`/`extensions` 与 prototype contract 的对齐方式。
 - Android 工程参数必须在 E0.1 开始前确认，否则 package、SDK 和 Gradle 结构会影响后续代码迁移成本。
 
 ### P2
