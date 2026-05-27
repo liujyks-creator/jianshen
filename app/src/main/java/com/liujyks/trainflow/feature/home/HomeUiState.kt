@@ -34,8 +34,8 @@ internal fun buildHomeScreenState(): HomeScreenState {
             title = "计时训练",
             description = "按动作、休息和轮次推进，是新用户默认推荐入口。",
             badge = "推荐默认",
-            status = "E2.2 接入计划编辑",
-            enabled = false,
+            status = "编辑计时计划",
+            enabled = true,
             recommended = true
         ),
         peerEntries = listOf(

@@ -12,9 +12,9 @@ class HomeUiStateTest {
 
         assertEquals(HomeEntryId.TIMED_TRAINING, state.primaryEntry.id)
         assertTrue(state.primaryEntry.recommended)
-        assertFalse(state.primaryEntry.enabled)
+        assertTrue(state.primaryEntry.enabled)
         assertEquals("推荐默认", state.primaryEntry.badge)
-        assertTrue(state.primaryEntry.status.contains("E2.2"))
+        assertEquals("编辑计时计划", state.primaryEntry.status)
     }
 
     @Test
