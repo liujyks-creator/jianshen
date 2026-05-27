@@ -6,9 +6,9 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片和 E1.2 首批动作 fixture。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture 和 E1.3 只读动作库列表与筛选。
 
-项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准。`Story E1.2: 导入动作 fixture` 已将 11 个首批动作导入 Android fixture，并用 fixture 校验测试约束 ID、必填字段、能力标签、默认建议、恢复映射和替代动作边界；本阶段仍未引入训练引擎、动作库内容加载、repository、通知调度、真实心率设备或语音能力。
+项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准。`Story E1.2: 导入动作 fixture` 已将 11 个首批动作导入 Android fixture，并用 fixture 校验测试约束 ID、必填字段、能力标签、默认建议、恢复映射和替代动作边界。`Story E1.3: 动作库列表与筛选` 已基于 E1.2 fixture 落地只读 Compose 列表、训练类型/身体部位/器械/难度筛选、清除筛选、空状态和动作摘要卡片；本阶段仍未引入训练引擎、完整 repository、计划编辑闭环、动作详情完整页、通知调度、真实心率设备或语音能力。
 
 ## 已有产物
 
@@ -102,10 +102,10 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 进入 `docs/roadmap-backlog.md` 中的 `Story E1.3: 动作库列表与筛选`，基于 E1.2 fixture 实现只读动作列表与筛选。
-2. 在 E1.3 前继续避免提前实现训练引擎、通知调度、真实心率设备接入或 voice control。
-3. E1.3 如需要读取动作 fixture，应保持 Room entity 不泄漏到 feature/UI，并避免提前建设完整 repository 业务层之外的能力。
-4. 在 E0/E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
+1. 进入 `docs/roadmap-backlog.md` 中的 `Story E1.4: 动作详情`，基于 E1.2 fixture 展示动作步骤、要点、常见错误、呼吸提示和短提示。
+2. 在 E1.4 前继续避免提前实现训练引擎、通知调度、真实心率设备接入、voice control 或计划编辑闭环。
+3. E1.4 如需要动作详情入口，应继续读取 fixture/domain model，不让 Room entity 泄漏到 feature/UI，也不把详情页扩展成课程内容平台。
+4. 在 E1 完成后，再决定是否进入 Figma 视觉细化或社区 UI shell 示例。
 
 ## 验证快照
 
@@ -135,6 +135,7 @@ $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 E0.2 继续沿用同一技术基线，新增 package boundary 架构测试随 `app:check` 执行。
 E0.3 继续沿用同一技术基线，新增 `core.model` 轻量契约测试随 `app:check` 执行。
 E0.4 在同一单 `app` module 中新增 Room 2.8.4、DataStore Preferences 1.2.1、KSP 2.3.9、Robolectric 4.16.1 和 AndroidX Test Core 1.7.0。Room schema 导出到 `app/schemas`，新增 Room/DataStore smoke test 随 `app:check` 执行。
+E1.3 基于首批 11 个动作 fixture 新增只读动作库列表和筛选，新增筛选逻辑与 fixture-to-UI-state 映射测试，并随 `app:check` 执行。
 
 ## 新 Codex 会话提示词
 

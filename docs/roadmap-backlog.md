@@ -183,6 +183,8 @@ stepsCompleted:
 
 ### Story E1.3: 动作库列表与筛选
 
+**状态:** Done in Android read-only list, filters, and validation tests
+
 作为用户，  
 我想按训练模式、部位、器械和难度筛选动作，  
 以便快速找到适合计划的动作。
@@ -192,6 +194,13 @@ stepsCompleted:
 - Given 动作库列表，When 选择计时训练筛选，Then 只显示支持计时训练的动作。
 - Given 力量训练计划编辑入口，When 添加动作，Then 优先筛选支持 reps 或 weight 的动作。
 - Then 筛选状态可清除。
+
+**交付结果:**
+
+- Android 侧新增首版只读动作库 Compose 页面，直接消费 E1.2 首批 11 个动作 fixture。
+- 支持训练类型、身体部位、器械和难度筛选；力量筛选按支持 reps 或 weight 的动作返回，服务后续计划编辑选动作入口。
+- 动作摘要卡展示名称、分类、难度、主要部位、器械、能力标签、训练中短提示和 fixture 默认建议摘要。
+- 新增纯 Kotlin 筛选逻辑和 fixture 到 UI state 映射测试；本 story 未引入完整 repository、训练引擎、动作详情完整页或计划编辑闭环。
 
 ### Story E1.4: 动作详情
 
@@ -616,16 +625,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E0.1: 创建 Android 生产工程
+Story E1.4: 动作详情
 ```
 
 启动前需要确认：
 
-1. 最低 Android 版本。
-2. 包名。
-3. 是否用 Kotlin DSL。
-4. 是否首版就启用多 Gradle module，还是先用单 app module 加包边界。
-5. 是否需要现在就保留 Compose Material 3 主题与设计 token 文件。
+1. 动作详情是否只从当前动作库列表进入，还是同时预留训练中覆盖层入口。
+2. E1.4 是否继续保持 fixture-only 数据源，不提前引入 repository。
+3. 动作详情媒体位是否仅展示文本/空媒体状态，不新增视频、课程或跟练闭环。
+4. 是否把详情入口接在当前 E1.3 列表卡片上，且仍保持只读。
 
 ## 8. 暂缓事项
 
