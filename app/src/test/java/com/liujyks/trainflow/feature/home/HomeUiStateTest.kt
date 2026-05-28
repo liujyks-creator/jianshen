@@ -28,8 +28,8 @@ class HomeUiStateTest {
             listOf(HomeEntryId.STRENGTH_TRAINING, HomeEntryId.EXERCISE_LIBRARY),
             peerIds
         )
-        assertFalse(strength.enabled)
-        assertTrue(strength.status.contains("E2.3"))
+        assertTrue(strength.enabled)
+        assertEquals("编辑力量计划", strength.status)
         assertTrue(exerciseLibrary.enabled)
         assertEquals("打开动作库", exerciseLibrary.status)
     }

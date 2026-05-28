@@ -44,8 +44,8 @@ internal fun buildHomeScreenState(): HomeScreenState {
                 title = "力量训练",
                 description = "面向重量、次数、组数和组间休息的并联训练能力。",
                 badge = "同层入口",
-                status = "E2.3 接入计划编辑",
-                enabled = false
+                status = "编辑力量计划",
+                enabled = true
             ),
             HomeEntryUiState(
                 id = HomeEntryId.EXERCISE_LIBRARY,

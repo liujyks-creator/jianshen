@@ -271,6 +271,8 @@ stepsCompleted:
 
 ### Story E2.3: 力量计划编辑
 
+**状态:** Done in Android in-memory strength plan editor and contract mapping tests
+
 作为用户，  
 我想创建包含重量、次数、组数和休息的力量计划，  
 以便按计划完成力量训练。
@@ -280,6 +282,14 @@ stepsCompleted:
 - Given 力量计划编辑页，When 添加力量动作，Then 默认次数区间为 `8-12`。
 - Then 可设置目标重量、组数、组间休息。
 - Then 可展开配置热身组和逐组目标。
+
+**交付结果:**
+
+- Android 侧新增 `feature:plans` 的力量计划编辑页，首页力量训练入口已可进入真实编辑基础。
+- 编辑页使用内存态状态，支持计划名称、力量动作选择、目标重量、默认 `8-12` 次区间、固定次数、正式组数、动作内热身组、组间休息和逐组目标展开编辑。
+- 添加动作复用 E1.2 首批 fixture 中支持 reps 或 weight 的动作；不引入完整动作 repository，不让 Room entity 泄漏到 feature/UI。
+- 保存按钮只生成本次编辑中的 `WorkoutPlan` 草稿预览，映射到 `StrengthExerciseBlock`、动作级 `StrengthExerciseTarget`、`StrengthSetPlan`、替代动作候选和默认 `manual_start` 组计时模式；真实持久化、计划列表/详情和力量训练执行引擎留给后续 story。
+- 本 story 未实现完整训练执行引擎、strength set confirmation、actual record 执行闭环、session records、通知调度、真实心率设备、语音控制或跟练完整闭环。
 
 ### Story E2.4: 计划列表、详情、复制与删除
 

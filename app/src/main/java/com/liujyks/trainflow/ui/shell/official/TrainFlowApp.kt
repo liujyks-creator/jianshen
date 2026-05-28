@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
+import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 
 @Composable
@@ -43,10 +44,20 @@ fun TrainFlowApp() {
                     onOpenTimedPlanEditor = {
                         currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR
                     },
+                    onOpenStrengthPlanEditor = {
+                        currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 OfficialShellDestination.TIMED_PLAN_EDITOR -> TimedPlanEditorRoute(
+                    onBackToHome = {
+                        currentDestination = OfficialShellDestination.TRAINING
+                    },
+                    modifier = Modifier.padding(innerPadding)
+                )
+
+                OfficialShellDestination.STRENGTH_PLAN_EDITOR -> StrengthPlanEditorRoute(
                     onBackToHome = {
                         currentDestination = OfficialShellDestination.TRAINING
                     },
@@ -64,6 +75,9 @@ fun TrainFlowApp() {
                     },
                     onOpenTimedPlanEditor = {
                         currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR
+                    },
+                    onOpenStrengthPlanEditor = {
+                        currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -115,6 +129,12 @@ private enum class OfficialShellDestination(
         enabled = true,
         showInBottomBar = false
     ),
+    STRENGTH_PLAN_EDITOR(
+        label = "力量计划编辑",
+        shortLabel = "力",
+        enabled = true,
+        showInBottomBar = false
+    ),
     PLANS(
         label = "计划",
         shortLabel = "计",
@@ -134,7 +154,8 @@ private enum class OfficialShellDestination(
 
 private fun OfficialShellDestination.selectedBottomDestination(): OfficialShellDestination {
     return when (this) {
-        OfficialShellDestination.TIMED_PLAN_EDITOR -> OfficialShellDestination.TRAINING
+        OfficialShellDestination.TIMED_PLAN_EDITOR,
+        OfficialShellDestination.STRENGTH_PLAN_EDITOR -> OfficialShellDestination.TRAINING
         else -> this
     }
 }

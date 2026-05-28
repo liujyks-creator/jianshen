@@ -45,6 +45,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 fun HomeRoute(
     onOpenExerciseLibrary: () -> Unit,
     onOpenTimedPlanEditor: () -> Unit,
+    onOpenStrengthPlanEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildHomeScreenState() }
@@ -53,6 +54,7 @@ fun HomeRoute(
         uiState = uiState,
         onOpenExerciseLibrary = onOpenExerciseLibrary,
         onOpenTimedPlanEditor = onOpenTimedPlanEditor,
+        onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
         modifier = modifier
     )
 }
@@ -62,6 +64,7 @@ private fun TrainFlowHomeScreen(
     uiState: HomeScreenState,
     onOpenExerciseLibrary: () -> Unit,
     onOpenTimedPlanEditor: () -> Unit,
+    onOpenStrengthPlanEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -101,6 +104,8 @@ private fun TrainFlowHomeScreen(
                     },
                     onClick = if (entry.id == HomeEntryId.EXERCISE_LIBRARY) {
                         onOpenExerciseLibrary
+                    } else if (entry.id == HomeEntryId.STRENGTH_TRAINING) {
+                        onOpenStrengthPlanEditor
                     } else {
                         null
                     }
@@ -335,7 +340,8 @@ private fun TrainFlowHomeScreenPreview() {
         TrainFlowHomeScreen(
             uiState = buildHomeScreenState(),
             onOpenExerciseLibrary = {},
-            onOpenTimedPlanEditor = {}
+            onOpenTimedPlanEditor = {},
+            onOpenStrengthPlanEditor = {}
         )
     }
 }
