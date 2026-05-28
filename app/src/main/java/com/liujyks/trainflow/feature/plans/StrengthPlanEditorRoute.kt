@@ -26,6 +26,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -522,11 +523,24 @@ private fun DecimalField(
     onValueChanged: (Double?) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var textValue by remember { mutableStateOf(value.formatWeightInput()) }
+    var lastUserParsedValue by remember { mutableStateOf(value) }
+
+    LaunchedEffect(value) {
+        if (value != lastUserParsedValue) {
+            textValue = value.formatWeightInput()
+            lastUserParsedValue = value
+        }
+    }
+
     OutlinedTextField(
-        value = value?.formatWeightInput().orEmpty(),
+        value = textValue,
         onValueChange = { input ->
-            val cleaned = input.filter { it.isDigit() || it == '.' }
-            onValueChanged(cleaned.toDoubleOrNull())
+            val cleaned = input.sanitizeDecimalInput()
+            val parsedValue = cleaned.toDoubleOrNull()
+            textValue = cleaned
+            lastUserParsedValue = parsedValue
+            onValueChanged(parsedValue)
         },
         modifier = modifier,
         label = { Text(label) },
@@ -600,8 +614,24 @@ private fun StatusPill(
     }
 }
 
-private fun Double.formatWeightInput(): String {
-    return if (this % 1.0 == 0.0) toInt().toString() else toString()
+internal fun String.sanitizeDecimalInput(): String {
+    var decimalSeen = false
+    return filter { character ->
+        when {
+            character.isDigit() -> true
+            character == '.' && !decimalSeen -> {
+                decimalSeen = true
+                true
+            }
+
+            else -> false
+        }
+    }
+}
+
+internal fun Double?.formatWeightInput(): String {
+    val value = this ?: return ""
+    return if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
 }
 
 @Preview(showBackground = true)

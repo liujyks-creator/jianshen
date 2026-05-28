@@ -4,6 +4,7 @@ import com.liujyks.trainflow.core.data.fixture.ActionExerciseFixture
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.data.fixture.WeightInputStrategy
 import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseTarget
 import com.liujyks.trainflow.core.model.StrengthSetKind
@@ -85,6 +86,7 @@ internal data class StrengthPlanExerciseUiState(
         }
 
     fun toStrengthExerciseBlock(order: Int): StrengthExerciseBlock {
+        val plannedSide = if (perSide) ExerciseSide.ALTERNATING else null
         return StrengthExerciseBlock(
             id = "strength-block-$order-$exerciseId",
             order = order,
@@ -96,7 +98,7 @@ internal data class StrengthPlanExerciseUiState(
                 restAfterSetSec = restAfterSetSec.takeIf { it > 0 }
             ),
             sets = setTargets.mapIndexed { index, setTarget ->
-                setTarget.toStrengthSetPlan(blockOrder = order, order = index + 1)
+                setTarget.toStrengthSetPlan(blockOrder = order, order = index + 1, side = plannedSide)
             },
             substitutions = substitutions,
             setTimerMode = StrengthSetTimerMode.MANUAL_START
@@ -120,11 +122,12 @@ internal data class StrengthSetTargetUiState(
             StrengthSetKind.BACKOFF -> "退阶组 $order"
         }
 
-    fun toStrengthSetPlan(blockOrder: Int, order: Int): StrengthSetPlan {
+    fun toStrengthSetPlan(blockOrder: Int, order: Int, side: ExerciseSide?): StrengthSetPlan {
         return StrengthSetPlan(
             id = "strength-set-$blockOrder-$order",
             order = order,
             kind = kind,
+            side = side,
             targetWeight = targetWeightKg.toWeightValueOrNull(),
             repTarget = repTarget.toRepTarget(),
             restAfterSec = restAfterSec.takeIf { it > 0 }

@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.feature.plans
 
+import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
@@ -55,6 +56,20 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun perSideStrengthExerciseMapsPlannedSetsToAlternatingSide() {
+        val state = buildDefaultStrengthPlanEditorState()
+            .addExercise("alternating-reverse-lunge")
+        val lunge = state.exercises.first { it.exerciseId == "alternating-reverse-lunge" }
+        val block = state.toWorkoutPlan().blocks
+            .filterIsInstance<StrengthExerciseBlock>()
+            .first { it.exerciseId == "alternating-reverse-lunge" }
+
+        assertTrue(lunge.perSide)
+        assertTrue(block.sets.isNotEmpty())
+        assertTrue(block.sets.all { it.side == ExerciseSide.ALTERNATING })
+    }
+
+    @Test
     fun fieldEditsUpdateActionTargetSetsWarmupAndContractMapping() {
         val exerciseId = buildDefaultStrengthPlanEditorState().exercises.first().id
         val state = buildDefaultStrengthPlanEditorState()
@@ -96,6 +111,18 @@ class StrengthPlanEditorUiStateTest {
         assertTrue(editedExercise.expandedSetTargets)
         assertEquals(55.0, requireNotNull(secondSet.targetWeight).value, 0.0)
         assertEquals(10, (requireNotNull(secondSet.repTarget) as RepTarget.Fixed).reps)
+    }
+
+    @Test
+    fun decimalWeightInputKeepsTrailingDecimalDraftsParseable() {
+        assertEquals("20.", "20.".sanitizeDecimalInput())
+        assertEquals(20.0, "20.".sanitizeDecimalInput().toDoubleOrNull())
+        assertEquals("7.5", "7.5".sanitizeDecimalInput())
+        assertEquals(7.5, "7.5".sanitizeDecimalInput().toDoubleOrNull())
+        assertEquals("20.5", "20..5kg".sanitizeDecimalInput())
+        assertEquals("20.5", 20.5.formatWeightInput())
+        assertEquals("20", 20.0.formatWeightInput())
+        assertEquals("", null.formatWeightInput())
     }
 
     @Test
