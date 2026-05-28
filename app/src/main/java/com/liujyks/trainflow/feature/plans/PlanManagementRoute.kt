@@ -44,18 +44,18 @@ import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 
 @Composable
-fun PlanManagementRoute(
+internal fun PlanManagementRoute(
+    uiState: PlanManagementScreenState,
+    onStateChange: (PlanManagementScreenState) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var uiState by remember { mutableStateOf(buildDefaultPlanManagementState()) }
-
     PlanManagementScreen(
         uiState = uiState,
-        onSelectPlan = { planId -> uiState = uiState.selectPlan(planId) },
-        onCopyPlan = { planId -> uiState = uiState.copyPlan(planId) },
-        onRequestDeletePlan = { planId -> uiState = uiState.requestDeletePlan(planId) },
-        onConfirmDeletePlan = { uiState = uiState.confirmDeletePlan() },
-        onCancelDeletePlan = { uiState = uiState.cancelDeletePlan() },
+        onSelectPlan = { planId -> onStateChange(uiState.selectPlan(planId)) },
+        onCopyPlan = { planId -> onStateChange(uiState.copyPlan(planId)) },
+        onRequestDeletePlan = { planId -> onStateChange(uiState.requestDeletePlan(planId)) },
+        onConfirmDeletePlan = { onStateChange(uiState.confirmDeletePlan()) },
+        onCancelDeletePlan = { onStateChange(uiState.cancelDeletePlan()) },
         modifier = modifier
     )
 }
@@ -422,6 +422,10 @@ private fun StatusPill(
 @Composable
 private fun PlanManagementRoutePreview() {
     TrainFlowTheme {
-        PlanManagementRoute()
+        var uiState by remember { mutableStateOf(buildDefaultPlanManagementState()) }
+        PlanManagementRoute(
+            uiState = uiState,
+            onStateChange = { nextState -> uiState = nextState }
+        )
     }
 }

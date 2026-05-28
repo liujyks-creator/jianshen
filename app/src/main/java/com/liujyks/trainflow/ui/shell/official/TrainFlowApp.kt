@@ -9,11 +9,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
+import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
@@ -23,44 +25,54 @@ fun TrainFlowApp() {
     var currentDestination by rememberSaveable {
         mutableStateOf(OfficialShellDestination.TRAINING)
     }
+    var planManagementState by remember {
+        mutableStateOf(buildDefaultPlanManagementState())
+    }
+    val shellState = OfficialShellState(
+        currentDestination = currentDestination,
+        planManagementState = planManagementState
+    )
+
+    fun applyShellState(nextState: OfficialShellState) {
+        currentDestination = nextState.currentDestination
+        planManagementState = nextState.planManagementState
+    }
 
     Surface {
         Scaffold(
             bottomBar = {
                 OfficialBottomBar(
-                    currentDestination = currentDestination,
+                    currentDestination = shellState.currentDestination,
                     onDestinationSelected = { destination ->
-                        if (destination.enabled) {
-                            currentDestination = destination
-                        }
+                        applyShellState(shellState.selectDestination(destination))
                     }
                 )
             }
         ) { innerPadding ->
-            when (currentDestination) {
+            when (shellState.currentDestination) {
                 OfficialShellDestination.TRAINING -> HomeRoute(
                     onOpenExerciseLibrary = {
-                        currentDestination = OfficialShellDestination.EXERCISE_LIBRARY
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.EXERCISE_LIBRARY))
                     },
                     onOpenTimedPlanEditor = {
-                        currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.TIMED_PLAN_EDITOR))
                     },
                     onOpenStrengthPlanEditor = {
-                        currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.STRENGTH_PLAN_EDITOR))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 OfficialShellDestination.TIMED_PLAN_EDITOR -> TimedPlanEditorRoute(
                     onBackToHome = {
-                        currentDestination = OfficialShellDestination.TRAINING
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 OfficialShellDestination.STRENGTH_PLAN_EDITOR -> StrengthPlanEditorRoute(
                     onBackToHome = {
-                        currentDestination = OfficialShellDestination.TRAINING
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -70,18 +82,22 @@ fun TrainFlowApp() {
                 )
 
                 OfficialShellDestination.PLANS -> PlanManagementRoute(
+                    uiState = shellState.planManagementState,
+                    onStateChange = { planManagementState ->
+                        applyShellState(shellState.withPlanManagementState(planManagementState))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 OfficialShellDestination.RECORDS -> HomeRoute(
                     onOpenExerciseLibrary = {
-                        currentDestination = OfficialShellDestination.EXERCISE_LIBRARY
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.EXERCISE_LIBRARY))
                     },
                     onOpenTimedPlanEditor = {
-                        currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.TIMED_PLAN_EDITOR))
                     },
                     onOpenStrengthPlanEditor = {
-                        currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.STRENGTH_PLAN_EDITOR))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -96,14 +112,12 @@ private fun OfficialBottomBar(
     onDestinationSelected: (OfficialShellDestination) -> Unit
 ) {
     NavigationBar {
-        val selectedBottomDestination = currentDestination.selectedBottomDestination()
-
-        OfficialShellDestination.entries
-            .filter { it.showInBottomBar }
-            .forEach { destination ->
+        officialShellNavigationEntries(currentDestination)
+            .forEach { entry ->
+                val destination = entry.destination
                 NavigationBarItem(
-                    selected = selectedBottomDestination == destination,
-                    enabled = destination.enabled,
+                    selected = entry.selected,
+                    enabled = entry.enabled,
                     onClick = { onDestinationSelected(destination) },
                     icon = {
                         Text(text = destination.shortLabel)
@@ -113,53 +127,5 @@ private fun OfficialBottomBar(
                     }
                 )
             }
-    }
-}
-
-private enum class OfficialShellDestination(
-    val label: String,
-    val shortLabel: String,
-    val enabled: Boolean,
-    val showInBottomBar: Boolean = true
-) {
-    TRAINING(
-        label = "训练",
-        shortLabel = "训",
-        enabled = true
-    ),
-    TIMED_PLAN_EDITOR(
-        label = "计时计划编辑",
-        shortLabel = "计",
-        enabled = true,
-        showInBottomBar = false
-    ),
-    STRENGTH_PLAN_EDITOR(
-        label = "力量计划编辑",
-        shortLabel = "力",
-        enabled = true,
-        showInBottomBar = false
-    ),
-    PLANS(
-        label = "计划",
-        shortLabel = "计",
-        enabled = true
-    ),
-    EXERCISE_LIBRARY(
-        label = "动作库",
-        shortLabel = "动",
-        enabled = true
-    ),
-    RECORDS(
-        label = "记录",
-        shortLabel = "录",
-        enabled = false
-    )
-}
-
-private fun OfficialShellDestination.selectedBottomDestination(): OfficialShellDestination {
-    return when (this) {
-        OfficialShellDestination.TIMED_PLAN_EDITOR,
-        OfficialShellDestination.STRENGTH_PLAN_EDITOR -> OfficialShellDestination.TRAINING
-        else -> this
     }
 }
