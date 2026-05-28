@@ -1,0 +1,558 @@
+package com.liujyks.trainflow.feature.plans
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.ui.theme.TrainFlowAccent
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
+import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
+import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
+import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+
+@Composable
+fun TimedPlanEditorRoute(
+    onBackToHome: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var uiState by remember { mutableStateOf(buildDefaultTimedPlanEditorState()) }
+
+    TimedPlanEditorScreen(
+        uiState = uiState,
+        onBackToHome = onBackToHome,
+        onTitleChanged = { uiState = uiState.updateTitle(it) },
+        onWarmupDurationChanged = { uiState = uiState.updateWarmupDuration(it) },
+        onStretchDurationChanged = { uiState = uiState.updateStretchDuration(it) },
+        onRoundsChanged = { uiState = uiState.updateRounds(it) },
+        onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRounds(it) },
+        onActionCueThresholdChanged = { uiState = uiState.updateActionCueThreshold(it) },
+        onRestCueThresholdChanged = { uiState = uiState.updateRestCueThreshold(it) },
+        onActionCueEnabledChanged = { uiState = uiState.updateActionCueEnabled(it) },
+        onRestCueEnabledChanged = { uiState = uiState.updateRestCueEnabled(it) },
+        onSoundEnabledChanged = { uiState = uiState.updateSoundEnabled(it) },
+        onVibrationEnabledChanged = { uiState = uiState.updateVibrationEnabled(it) },
+        onEmphasisAnimationEnabledChanged = { uiState = uiState.updateEmphasisAnimationEnabled(it) },
+        onItemWorkDurationChanged = { itemId, seconds ->
+            uiState = uiState.updateItemWorkDuration(itemId, seconds)
+        },
+        onItemRestAfterChanged = { itemId, seconds ->
+            uiState = uiState.updateItemRestAfter(itemId, seconds)
+        },
+        onAddExercise = { exerciseId -> uiState = uiState.addExercise(exerciseId) },
+        onRemoveItem = { itemId -> uiState = uiState.removeItem(itemId) },
+        onSaveDraft = { uiState = uiState.saveDraftPlan() },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun TimedPlanEditorScreen(
+    uiState: TimedPlanEditorScreenState,
+    onBackToHome: () -> Unit,
+    onTitleChanged: (String) -> Unit,
+    onWarmupDurationChanged: (Int) -> Unit,
+    onStretchDurationChanged: (Int) -> Unit,
+    onRoundsChanged: (Int) -> Unit,
+    onRestBetweenRoundsChanged: (Int) -> Unit,
+    onActionCueThresholdChanged: (Int) -> Unit,
+    onRestCueThresholdChanged: (Int) -> Unit,
+    onActionCueEnabledChanged: (Boolean) -> Unit,
+    onRestCueEnabledChanged: (Boolean) -> Unit,
+    onSoundEnabledChanged: (Boolean) -> Unit,
+    onVibrationEnabledChanged: (Boolean) -> Unit,
+    onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
+    onItemWorkDurationChanged: (String, Int) -> Unit,
+    onItemRestAfterChanged: (String, Int) -> Unit,
+    onAddExercise: (String) -> Unit,
+    onRemoveItem: (String) -> Unit,
+    onSaveDraft: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(TrainFlowSurfaceMuted)
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            TextButton(onClick = onBackToHome) {
+                Text(text = "返回训练首页")
+            }
+        }
+
+        item {
+            TimedPlanEditorHeader(uiState)
+        }
+
+        item {
+            PlanBasicsCard(
+                uiState = uiState,
+                onTitleChanged = onTitleChanged,
+                onWarmupDurationChanged = onWarmupDurationChanged,
+                onStretchDurationChanged = onStretchDurationChanged
+            )
+        }
+
+        item {
+            CircuitSettingsCard(
+                uiState = uiState,
+                onRoundsChanged = onRoundsChanged,
+                onRestBetweenRoundsChanged = onRestBetweenRoundsChanged
+            )
+        }
+
+        item {
+            SectionTitle(text = "动作编排")
+        }
+
+        items(uiState.items, key = { it.id }) { item ->
+            TimedExerciseEditorCard(
+                item = item,
+                canRemove = uiState.items.size > 1,
+                onWorkDurationChanged = { seconds -> onItemWorkDurationChanged(item.id, seconds) },
+                onRestAfterChanged = { seconds -> onItemRestAfterChanged(item.id, seconds) },
+                onRemove = { onRemoveItem(item.id) }
+            )
+        }
+
+        item {
+            AddTimedExerciseCard(
+                uiState = uiState,
+                onAddExercise = onAddExercise
+            )
+        }
+
+        item {
+            CueSettingsCard(
+                uiState = uiState,
+                onActionCueThresholdChanged = onActionCueThresholdChanged,
+                onRestCueThresholdChanged = onRestCueThresholdChanged,
+                onActionCueEnabledChanged = onActionCueEnabledChanged,
+                onRestCueEnabledChanged = onRestCueEnabledChanged,
+                onSoundEnabledChanged = onSoundEnabledChanged,
+                onVibrationEnabledChanged = onVibrationEnabledChanged,
+                onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged
+            )
+        }
+
+        item {
+            SaveAndPreviewCard(
+                uiState = uiState,
+                onSaveDraft = onSaveDraft
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatusPill(text = "E2.2 计时计划编辑", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        Text(
+            text = "计时计划编辑",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = uiState.summary,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "当前只生成内存态草稿；训练执行引擎、真实保存和记录闭环留给后续 story。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+    }
+}
+
+@Composable
+private fun PlanBasicsCard(
+    uiState: TimedPlanEditorScreenState,
+    onTitleChanged: (String) -> Unit,
+    onWarmupDurationChanged: (Int) -> Unit,
+    onStretchDurationChanged: (Int) -> Unit
+) {
+    EditorCard {
+        SectionTitle(text = "基础信息")
+        OutlinedTextField(
+            value = uiState.title,
+            onValueChange = onTitleChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("计划名称") },
+            singleLine = true
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            NumberField(
+                label = "热身秒数",
+                value = uiState.warmupDurationSec,
+                onValueChanged = onWarmupDurationChanged,
+                modifier = Modifier.weight(1f)
+            )
+            NumberField(
+                label = "拉伸秒数",
+                value = uiState.stretchDurationSec,
+                onValueChanged = onStretchDurationChanged,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CircuitSettingsCard(
+    uiState: TimedPlanEditorScreenState,
+    onRoundsChanged: (Int) -> Unit,
+    onRestBetweenRoundsChanged: (Int) -> Unit
+) {
+    EditorCard {
+        SectionTitle(text = "轮次与轮间休息")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            NumberField(
+                label = "轮数",
+                value = uiState.rounds,
+                onValueChanged = onRoundsChanged,
+                modifier = Modifier.weight(1f)
+            )
+            NumberField(
+                label = "轮间休息秒数",
+                value = uiState.restBetweenRoundsSec,
+                onValueChanged = onRestBetweenRoundsChanged,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimedExerciseEditorCard(
+    item: TimedPlanEditorItemUiState,
+    canRemove: Boolean,
+    onWorkDurationChanged: (Int) -> Unit,
+    onRestAfterChanged: (Int) -> Unit,
+    onRemove: () -> Unit
+) {
+    EditorCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = item.exerciseName,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = item.shortCue,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (canRemove) {
+                TextButton(onClick = onRemove) {
+                    Text(text = "移除")
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            NumberField(
+                label = "动作秒数",
+                value = item.workDurationSec,
+                onValueChanged = onWorkDurationChanged,
+                modifier = Modifier.weight(1f)
+            )
+            NumberField(
+                label = "动作后休息秒数",
+                value = item.restAfterSec,
+                onValueChanged = onRestAfterChanged,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddTimedExerciseCard(
+    uiState: TimedPlanEditorScreenState,
+    onAddExercise: (String) -> Unit
+) {
+    val selectedIds = uiState.items.map { it.exerciseId }.toSet()
+    val remainingOptions = uiState.selectableExercises.filterNot { it.exerciseId in selectedIds }
+
+    EditorCard {
+        SectionTitle(text = "添加动作")
+        if (remainingOptions.isEmpty()) {
+            Text(
+                text = "首批可用于计时训练的动作都已加入。后续动作库扩展会继续复用同一契约。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                remainingOptions.forEach { option ->
+                    FilterChip(
+                        selected = false,
+                        onClick = { onAddExercise(option.exerciseId) },
+                        label = {
+                            Text("${option.exerciseName} · ${option.defaultSummary}")
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CueSettingsCard(
+    uiState: TimedPlanEditorScreenState,
+    onActionCueThresholdChanged: (Int) -> Unit,
+    onRestCueThresholdChanged: (Int) -> Unit,
+    onActionCueEnabledChanged: (Boolean) -> Unit,
+    onRestCueEnabledChanged: (Boolean) -> Unit,
+    onSoundEnabledChanged: (Boolean) -> Unit,
+    onVibrationEnabledChanged: (Boolean) -> Unit,
+    onEmphasisAnimationEnabledChanged: (Boolean) -> Unit
+) {
+    EditorCard {
+        SectionTitle(text = "临近结束提醒")
+        ToggleRow(
+            title = "动作临近结束提醒",
+            checked = uiState.actionCue.enabled,
+            onCheckedChange = onActionCueEnabledChanged
+        )
+        NumberField(
+            label = "动作提醒阈值秒数",
+            value = uiState.actionCue.thresholdSec,
+            onValueChanged = onActionCueThresholdChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
+        ToggleRow(
+            title = "休息临近结束提醒",
+            checked = uiState.restCue.enabled,
+            onCheckedChange = onRestCueEnabledChanged
+        )
+        NumberField(
+            label = "休息提醒阈值秒数",
+            value = uiState.restCue.thresholdSec,
+            onValueChanged = onRestCueThresholdChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
+        ToggleRow(
+            title = "声音",
+            checked = uiState.actionCue.soundEnabled && uiState.restCue.soundEnabled,
+            onCheckedChange = onSoundEnabledChanged
+        )
+        ToggleRow(
+            title = "震动",
+            checked = uiState.actionCue.vibrationEnabled && uiState.restCue.vibrationEnabled,
+            onCheckedChange = onVibrationEnabledChanged
+        )
+        ToggleRow(
+            title = "强化动画",
+            checked = uiState.actionCue.emphasisAnimationEnabled && uiState.restCue.emphasisAnimationEnabled,
+            onCheckedChange = onEmphasisAnimationEnabledChanged
+        )
+        Text(
+            text = "语音读秒仅保留契约字段，当前不会展示或触发语音能力。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+    }
+}
+
+@Composable
+private fun SaveAndPreviewCard(
+    uiState: TimedPlanEditorScreenState,
+    onSaveDraft: () -> Unit
+) {
+    EditorCard {
+        SectionTitle(text = "草稿预览")
+        Text(
+            text = uiState.summary,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        uiState.statusMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+        }
+
+        uiState.savedPlan?.let { plan ->
+            val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
+            Text(
+                text = "WorkoutPlan: ${plan.mode.contractValue} · ${plan.blocks.size} 个 block · ${circuit.items.size} 个 timed step",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "动作提醒 ${plan.preferences?.cueSettings?.actionEnding?.thresholdSec} 秒；休息提醒 ${plan.preferences?.cueSettings?.restEnding?.thresholdSec} 秒。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = onSaveDraft,
+                enabled = uiState.canSave,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
+            ) {
+                Text(text = "保存草稿")
+            }
+            Button(
+                onClick = {},
+                enabled = false,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = "立即开始（E3 接入）")
+            }
+        }
+    }
+}
+
+@Composable
+private fun NumberField(
+    label: String,
+    value: Int,
+    onValueChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = value.toString(),
+        onValueChange = { input ->
+            input.filter { it.isDigit() }
+                .toIntOrNull()
+                ?.let(onValueChanged)
+        },
+        modifier = modifier,
+        label = { Text(label) },
+        singleLine = true
+    )
+}
+
+@Composable
+private fun ToggleRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+private fun EditorCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
+@Composable
+private fun StatusPill(
+    text: String,
+    color: Color,
+    contentColor: Color
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = contentColor
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TimedPlanEditorRoutePreview() {
+    TrainFlowTheme {
+        TimedPlanEditorRoute(onBackToHome = {})
+    }
+}

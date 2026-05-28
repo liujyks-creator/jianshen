@@ -44,6 +44,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 @Composable
 fun HomeRoute(
     onOpenExerciseLibrary: () -> Unit,
+    onOpenTimedPlanEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildHomeScreenState() }
@@ -51,6 +52,7 @@ fun HomeRoute(
     TrainFlowHomeScreen(
         uiState = uiState,
         onOpenExerciseLibrary = onOpenExerciseLibrary,
+        onOpenTimedPlanEditor = onOpenTimedPlanEditor,
         modifier = modifier
     )
 }
@@ -59,6 +61,7 @@ fun HomeRoute(
 private fun TrainFlowHomeScreen(
     uiState: HomeScreenState,
     onOpenExerciseLibrary: () -> Unit,
+    onOpenTimedPlanEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -73,7 +76,10 @@ private fun TrainFlowHomeScreen(
         }
 
         item {
-            TimedTrainingEntryCard(entry = uiState.primaryEntry)
+            TimedTrainingEntryCard(
+                entry = uiState.primaryEntry,
+                onClick = onOpenTimedPlanEditor
+            )
         }
 
         item {
@@ -125,7 +131,10 @@ private fun HomeHeader(summary: String) {
 }
 
 @Composable
-private fun TimedTrainingEntryCard(entry: HomeEntryUiState) {
+private fun TimedTrainingEntryCard(
+    entry: HomeEntryUiState,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -154,7 +163,22 @@ private fun TimedTrainingEntryCard(entry: HomeEntryUiState) {
                 StatusPill(text = "休息提醒")
                 StatusPill(text = "训练后记录")
             }
-            DisabledStatusButton(text = entry.status)
+            Button(
+                onClick = onClick,
+                enabled = entry.enabled,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TrainFlowAccent,
+                    contentColor = TrainFlowPrimary,
+                    disabledContainerColor = TrainFlowNeutral100,
+                    disabledContentColor = TrainFlowNeutral700
+                )
+            ) {
+                Text(
+                    text = entry.status,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -310,7 +334,8 @@ private fun TrainFlowHomeScreenPreview() {
     TrainFlowTheme {
         TrainFlowHomeScreen(
             uiState = buildHomeScreenState(),
-            onOpenExerciseLibrary = {}
+            onOpenExerciseLibrary = {},
+            onOpenTimedPlanEditor = {}
         )
     }
 }

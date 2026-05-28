@@ -249,6 +249,8 @@ stepsCompleted:
 
 ### Story E2.2: 计时计划编辑
 
+**状态:** Done in Android in-memory timed plan editor and contract mapping tests
+
 作为用户，  
 我想创建包含动作时长、休息和轮数的计时计划，  
 以便执行 HIIT、跳操、热身或拉伸训练。
@@ -258,6 +260,14 @@ stepsCompleted:
 - Given 计时计划编辑页，When 添加动作，Then 可设置动作时长、休息时长、轮数和轮间休息。
 - Then 临近结束提醒默认最后 5 秒。
 - Then 可保存计划并进入详情或立即开始。
+
+**交付结果:**
+
+- Android 侧新增 `feature:plans` 的计时计划编辑页，首页推荐计时入口已可进入真实编辑基础。
+- 编辑页使用内存态状态，支持计划名称、热身/拉伸时长、动作时长、动作后休息、轮数、轮间休息、动作/休息临近结束提醒阈值、声音、震动和强化动画开关。
+- 添加动作复用 E1.2 首批 fixture 中支持计时训练的动作；不引入完整动作 repository，不让 Room entity 泄漏到 feature/UI。
+- 保存按钮只生成本次编辑中的 `WorkoutPlan` 草稿预览，映射到 `TimedCircuitBlock`、`TimedExerciseItem` 和 `CueSettings`；真实持久化、计划列表/详情和立即开始训练留给后续 story。
+- 本 story 未实现训练执行引擎、通知调度、真实 session records、真实心率设备、语音控制或跟练完整闭环。
 
 ### Story E2.3: 力量计划编辑
 

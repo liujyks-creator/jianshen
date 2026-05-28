@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
+import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 
 @Composable
 fun TrainFlowApp() {
@@ -39,6 +40,16 @@ fun TrainFlowApp() {
                     onOpenExerciseLibrary = {
                         currentDestination = OfficialShellDestination.EXERCISE_LIBRARY
                     },
+                    onOpenTimedPlanEditor = {
+                        currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR
+                    },
+                    modifier = Modifier.padding(innerPadding)
+                )
+
+                OfficialShellDestination.TIMED_PLAN_EDITOR -> TimedPlanEditorRoute(
+                    onBackToHome = {
+                        currentDestination = OfficialShellDestination.TRAINING
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
@@ -50,6 +61,9 @@ fun TrainFlowApp() {
                 OfficialShellDestination.RECORDS -> HomeRoute(
                     onOpenExerciseLibrary = {
                         currentDestination = OfficialShellDestination.EXERCISE_LIBRARY
+                    },
+                    onOpenTimedPlanEditor = {
+                        currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -64,31 +78,42 @@ private fun OfficialBottomBar(
     onDestinationSelected: (OfficialShellDestination) -> Unit
 ) {
     NavigationBar {
-        OfficialShellDestination.entries.forEach { destination ->
-            NavigationBarItem(
-                selected = currentDestination == destination,
-                enabled = destination.enabled,
-                onClick = { onDestinationSelected(destination) },
-                icon = {
-                    Text(text = destination.shortLabel)
-                },
-                label = {
-                    Text(text = destination.label)
-                }
-            )
-        }
+        val selectedBottomDestination = currentDestination.selectedBottomDestination()
+
+        OfficialShellDestination.entries
+            .filter { it.showInBottomBar }
+            .forEach { destination ->
+                NavigationBarItem(
+                    selected = selectedBottomDestination == destination,
+                    enabled = destination.enabled,
+                    onClick = { onDestinationSelected(destination) },
+                    icon = {
+                        Text(text = destination.shortLabel)
+                    },
+                    label = {
+                        Text(text = destination.label)
+                    }
+                )
+            }
     }
 }
 
 private enum class OfficialShellDestination(
     val label: String,
     val shortLabel: String,
-    val enabled: Boolean
+    val enabled: Boolean,
+    val showInBottomBar: Boolean = true
 ) {
     TRAINING(
         label = "训练",
         shortLabel = "训",
         enabled = true
+    ),
+    TIMED_PLAN_EDITOR(
+        label = "计时计划编辑",
+        shortLabel = "计",
+        enabled = true,
+        showInBottomBar = false
     ),
     PLANS(
         label = "计划",
@@ -105,4 +130,11 @@ private enum class OfficialShellDestination(
         shortLabel = "录",
         enabled = false
     )
+}
+
+private fun OfficialShellDestination.selectedBottomDestination(): OfficialShellDestination {
+    return when (this) {
+        OfficialShellDestination.TIMED_PLAN_EDITOR -> OfficialShellDestination.TRAINING
+        else -> this
+    }
 }
