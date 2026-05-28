@@ -267,6 +267,7 @@ stepsCompleted:
 - 编辑页使用内存态状态，支持计划名称、热身/拉伸时长、动作时长、动作后休息、轮数、轮间休息、动作/休息临近结束提醒阈值、声音、震动和强化动画开关。
 - 添加动作复用 E1.2 首批 fixture 中支持计时训练的动作；不引入完整动作 repository，不让 Room entity 泄漏到 feature/UI。
 - 保存按钮只生成本次编辑中的 `WorkoutPlan` 草稿预览，映射到 `TimedCircuitBlock`、`TimedExerciseItem` 和 `CueSettings`；真实持久化、计划列表/详情和立即开始训练留给后续 story。
+- E2.2 retro fix 已关闭动作/休息临近结束提醒阈值在短时长配置下的边界问题。
 - 本 story 未实现训练执行引擎、通知调度、真实 session records、真实心率设备、语音控制或跟练完整闭环。
 
 ### Story E2.3: 力量计划编辑
@@ -663,15 +664,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E2.2: 计时计划编辑
+Story E2.4: 计划列表、详情、复制与删除
 ```
 
 启动前需要确认：
 
-1. E2.2 是否继续使用单 `app` module 内的轻量 Compose 状态，不提前引入完整 repository 业务层。
-2. 计时计划编辑是否先基于 fixture/domain model 和本地 UI state 建立最小保存路径，再在后续 story 接入计划列表/详情。
-3. 添加动作入口是否复用 E1.3/E1.4 当前动作库页面与详情能力，并保持 Room entity 不泄漏到 feature/UI。
-4. E2.2 是否只做计时计划编辑基础，不提前实现训练执行引擎、通知调度、真实 session records、跟练闭环或真实心率能力。
+1. E2.4 是否接入真实计划列表、详情、复制和删除，并避免停留在不可用占位功能。
+2. E2.4 是否复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约，让计时和力量计划共享清晰的计划管理入口。
+3. E2.4 是否保持训练执行引擎、`WorkoutSession` / session records、通知调度、真实心率、语音和跟练闭环不提前实现。
+4. E2.4 是否保持 Room/DataStore、repository 和 feature/UI 边界清晰，不让持久化实体泄漏到 UI，也不把 repository 范围静默扩大到训练执行或记录闭环。
 
 ## 8. 暂缓事项
 
