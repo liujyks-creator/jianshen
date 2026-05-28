@@ -294,6 +294,8 @@ stepsCompleted:
 
 ### Story E2.4: 计划列表、详情、复制与删除
 
+**状态:** Done in Android in-memory plan management list/detail/copy/delete
+
 作为用户，  
 我想管理已有计划，  
 以便复用、修改或删除训练安排。
@@ -303,6 +305,14 @@ stepsCompleted:
 - Given 已保存计划，When 打开计划列表，Then 显示模式、名称、预计时长或动作数。
 - Then 可查看详情、复制、编辑、删除。
 - Then 删除前有确认。
+
+**交付结果:**
+
+- Android 侧新增 `feature:plans` 的计划管理列表与详情页，并在官方 shell 中启用底部“计划”入口。
+- 计划管理页复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约种子化内存态计时与力量计划集合，列表显示模式、名称、预计时长/动作数和提醒/组间休息摘要。
+- 详情页展示计时计划结构、力量动作与组摘要，支持复制计划和删除计划；删除前必须先进入确认对话框。
+- 复制和删除仅更新本阶段内存态集合，不接入 Room/DataStore repository；编辑回填和训练启动入口保留后续接入状态。
+- 本 story 未实现训练执行引擎、`WorkoutSession` / session records、通知调度、真实心率设备、语音控制或跟练完整闭环。
 
 ## Epic E3: 计时训练执行闭环
 
@@ -664,15 +674,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E2.4: 计划列表、详情、复制与删除
+Story E3.1: 计时训练执行引擎
 ```
 
 启动前需要确认：
 
-1. E2.4 是否接入真实计划列表、详情、复制和删除，并避免停留在不可用占位功能。
-2. E2.4 是否复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约，让计时和力量计划共享清晰的计划管理入口。
-3. E2.4 是否保持训练执行引擎、`WorkoutSession` / session records、通知调度、真实心率、语音和跟练闭环不提前实现。
-4. E2.4 是否保持 Room/DataStore、repository 和 feature/UI 边界清晰，不让持久化实体泄漏到 UI，也不把 repository 范围静默扩大到训练执行或记录闭环。
+1. E3.1 是否先落地可测试的计时训练状态推进，不把 UI、通知或 session records 混入引擎核心。
+2. E3.1 是否生成动作开始、动作临近结束、休息开始、休息临近结束和训练完成事件，并继续区分动作提醒与休息提醒。
+3. E3.1 是否保持 `WorkoutCommand` / `WorkoutEvent` 语义稳定，为后续声音、震动、动画和未来 voice output 消费事件。
+4. E3.1 前需要处理已知技术债：`standing-quad-stretch` 的 `timedDefault` 当前无法完整表达“每侧 25-30 秒”。
 
 ## 8. 暂缓事项
 

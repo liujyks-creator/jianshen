@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
+import com.liujyks.trainflow.feature.plans.PlanManagementRoute
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 
@@ -68,7 +69,10 @@ fun TrainFlowApp() {
                     modifier = Modifier.padding(innerPadding)
                 )
 
-                OfficialShellDestination.PLANS,
+                OfficialShellDestination.PLANS -> PlanManagementRoute(
+                    modifier = Modifier.padding(innerPadding)
+                )
+
                 OfficialShellDestination.RECORDS -> HomeRoute(
                     onOpenExerciseLibrary = {
                         currentDestination = OfficialShellDestination.EXERCISE_LIBRARY
@@ -138,7 +142,7 @@ private enum class OfficialShellDestination(
     PLANS(
         label = "计划",
         shortLabel = "计",
-        enabled = false
+        enabled = true
     ),
     EXERCISE_LIBRARY(
         label = "动作库",
