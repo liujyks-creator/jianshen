@@ -15,6 +15,9 @@ import com.liujyks.trainflow.core.model.WorkoutPlan
 
 internal const val DefaultTimedPlanTimestamp = "2026-05-28T00:00:00Z"
 
+private const val MinCueThresholdSec = 1
+private const val MaxCueThresholdSec = 60
+
 internal data class TimedPlanEditorScreenState(
     val title: String,
     val warmupDurationSec: Int,
@@ -44,6 +47,7 @@ internal data class TimedPlanEditorScreenState(
         planId: String = "plan-timed-draft",
         timestamp: String = DefaultTimedPlanTimestamp
     ): WorkoutPlan {
+        val cueSafeState = constrainCueSettings()
         val blocks = buildList {
             if (warmupDurationSec > 0) {
                 add(
@@ -89,8 +93,10 @@ internal data class TimedPlanEditorScreenState(
             blocks = blocks,
             preferences = PlanPreferences(
                 cueSettings = CueSettings(
-                    actionEnding = actionCue.toCountdownCue(),
-                    restEnding = restCue.toCountdownCue()
+                    actionEnding = cueSafeState.actionCue.toCountdownCue(),
+                    restEnding = cueSafeState.restCue.toCountdownCue().takeIf {
+                        cueSafeState.hasPositiveRestDuration()
+                    }
                 )
             ),
             createdAt = timestamp,
@@ -165,7 +171,7 @@ internal fun buildDefaultTimedPlanEditorState(
         restCue = CountdownCueUiState(),
         items = defaultItems,
         selectableExercises = timedEntries.map { entry -> entry.toOption() }
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateTitle(value: String): TimedPlanEditorScreenState {
@@ -186,6 +192,7 @@ internal fun TimedPlanEditorScreenState.updateRounds(value: Int): TimedPlanEdito
 
 internal fun TimedPlanEditorScreenState.updateRestBetweenRounds(seconds: Int): TimedPlanEditorScreenState {
     return copy(restBetweenRoundsSec = seconds.sanitizeDuration(), savedPlan = null, statusMessage = null)
+        .constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateActionCueThreshold(seconds: Int): TimedPlanEditorScreenState {
@@ -193,7 +200,7 @@ internal fun TimedPlanEditorScreenState.updateActionCueThreshold(seconds: Int): 
         actionCue = actionCue.copy(thresholdSec = seconds.sanitizeCueThreshold()),
         savedPlan = null,
         statusMessage = null
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateRestCueThreshold(seconds: Int): TimedPlanEditorScreenState {
@@ -201,15 +208,17 @@ internal fun TimedPlanEditorScreenState.updateRestCueThreshold(seconds: Int): Ti
         restCue = restCue.copy(thresholdSec = seconds.sanitizeCueThreshold()),
         savedPlan = null,
         statusMessage = null
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateActionCueEnabled(enabled: Boolean): TimedPlanEditorScreenState {
     return copy(actionCue = actionCue.copy(enabled = enabled), savedPlan = null, statusMessage = null)
+        .constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateRestCueEnabled(enabled: Boolean): TimedPlanEditorScreenState {
     return copy(restCue = restCue.copy(enabled = enabled), savedPlan = null, statusMessage = null)
+        .constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateSoundEnabled(enabled: Boolean): TimedPlanEditorScreenState {
@@ -249,7 +258,7 @@ internal fun TimedPlanEditorScreenState.updateItemWorkDuration(
         },
         savedPlan = null,
         statusMessage = null
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateItemRestAfter(
@@ -262,7 +271,7 @@ internal fun TimedPlanEditorScreenState.updateItemRestAfter(
         },
         savedPlan = null,
         statusMessage = null
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.addExercise(exerciseId: String): TimedPlanEditorScreenState {
@@ -276,7 +285,7 @@ internal fun TimedPlanEditorScreenState.addExercise(exerciseId: String): TimedPl
         items = items + entry.toEditorItem(items.size + 1),
         savedPlan = null,
         statusMessage = null
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.removeItem(itemId: String): TimedPlanEditorScreenState {
@@ -286,7 +295,7 @@ internal fun TimedPlanEditorScreenState.removeItem(itemId: String): TimedPlanEdi
         items = items.filterNot { it.id == itemId },
         savedPlan = null,
         statusMessage = null
-    )
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.saveDraftPlan(
@@ -340,4 +349,42 @@ private fun ActionExerciseFixture.toOption(): TimedExerciseOptionUiState {
 
 private fun Int.sanitizeDuration(min: Int = 0): Int = coerceIn(min, 3600)
 
-private fun Int.sanitizeCueThreshold(): Int = coerceIn(1, 60)
+private fun TimedPlanEditorScreenState.constrainCueSettings(): TimedPlanEditorScreenState {
+    return copy(
+        actionCue = actionCue.constrainToDuration(minWorkDurationSec()),
+        restCue = restCue.constrainToRestDuration(minPositiveRestDurationSec())
+    )
+}
+
+private fun TimedPlanEditorScreenState.minWorkDurationSec(): Int? {
+    return items.minOfOrNull { item -> item.workDurationSec }
+}
+
+private fun TimedPlanEditorScreenState.minPositiveRestDurationSec(): Int? {
+    return (items.map { item -> item.restAfterSec } + restBetweenRoundsSec)
+        .filter { durationSec -> durationSec > 0 }
+        .minOrNull()
+}
+
+private fun TimedPlanEditorScreenState.hasPositiveRestDuration(): Boolean {
+    return minPositiveRestDurationSec() != null
+}
+
+private fun CountdownCueUiState.constrainToDuration(durationSec: Int?): CountdownCueUiState {
+    val maxThresholdSec = durationSec
+        ?.coerceAtLeast(MinCueThresholdSec)
+        ?.coerceAtMost(MaxCueThresholdSec)
+        ?: MaxCueThresholdSec
+
+    return copy(thresholdSec = thresholdSec.coerceIn(MinCueThresholdSec, maxThresholdSec))
+}
+
+private fun CountdownCueUiState.constrainToRestDuration(durationSec: Int?): CountdownCueUiState {
+    if (durationSec == null) {
+        return copy(enabled = false, thresholdSec = thresholdSec.sanitizeCueThreshold())
+    }
+
+    return constrainToDuration(durationSec)
+}
+
+private fun Int.sanitizeCueThreshold(): Int = coerceIn(MinCueThresholdSec, MaxCueThresholdSec)

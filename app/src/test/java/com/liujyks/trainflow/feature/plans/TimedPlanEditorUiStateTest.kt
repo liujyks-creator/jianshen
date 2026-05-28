@@ -58,6 +58,76 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun actionCueThresholdCannotExceedShortestWorkDuration() {
+        val state = buildDefaultTimedPlanEditorState()
+            .updateActionCueThreshold(60)
+
+        assertEquals(30, state.actionCue.thresholdSec)
+        assertEquals(30, state.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
+    }
+
+    @Test
+    fun restCueThresholdCannotExceedShortestPositiveRestDuration() {
+        val state = buildDefaultTimedPlanEditorState()
+            .updateRestCueThreshold(60)
+
+        assertEquals(15, state.restCue.thresholdSec)
+        assertEquals(15, state.toWorkoutPlan().preferences?.cueSettings?.restEnding?.thresholdSec)
+    }
+
+    @Test
+    fun zeroRestStateDisablesRestCueAndOmitsRestEndingCue() {
+        val state = buildDefaultTimedPlanEditorState()
+            .updateRestCueThreshold(5)
+            .updateRestBetweenRounds(0)
+            .withoutItemRests()
+            .updateRestCueEnabled(true)
+
+        assertFalse(state.restCue.enabled)
+        assertNull(state.toWorkoutPlan().preferences?.cueSettings?.restEnding)
+    }
+
+    @Test
+    fun updateItemWorkDurationReclampsActionCueThreshold() {
+        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
+        val state = buildDefaultTimedPlanEditorState()
+            .updateActionCueThreshold(20)
+            .updateItemWorkDuration(firstItemId, 5)
+
+        assertEquals(5, state.actionCue.thresholdSec)
+        assertEquals(5, state.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
+    }
+
+    @Test
+    fun updateItemRestAfterAndRoundRestReclampRestCueThreshold() {
+        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
+        val afterItemRestChange = buildDefaultTimedPlanEditorState()
+            .updateRestCueThreshold(20)
+            .updateItemRestAfter(firstItemId, 10)
+        val afterRoundRestChange = afterItemRestChange.updateRestBetweenRounds(8)
+
+        assertEquals(10, afterItemRestChange.restCue.thresholdSec)
+        assertEquals(8, afterRoundRestChange.restCue.thresholdSec)
+        assertEquals(8, afterRoundRestChange.toWorkoutPlan().preferences?.cueSettings?.restEnding?.thresholdSec)
+    }
+
+    @Test
+    fun toWorkoutPlanClampsCueSettingsEvenWhenStateWasBuiltDirectly() {
+        val invalidState = buildDefaultTimedPlanEditorState().copy(
+            restBetweenRoundsSec = 0,
+            actionCue = CountdownCueUiState(thresholdSec = 60),
+            restCue = CountdownCueUiState(enabled = true, thresholdSec = 60),
+            items = buildDefaultTimedPlanEditorState().items.map { item ->
+                item.copy(workDurationSec = 5, restAfterSec = 0)
+            }
+        )
+        val cues = requireNotNull(invalidState.toWorkoutPlan().preferences?.cueSettings)
+
+        assertEquals(5, cues.actionEnding?.thresholdSec)
+        assertNull(cues.restEnding)
+    }
+
+    @Test
     fun fieldEditsUpdateRoundsRestDurationsAndContractMapping() {
         val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
         val state = buildDefaultTimedPlanEditorState()
@@ -108,5 +178,11 @@ class TimedPlanEditorUiStateTest {
         assertTrue(requireNotNull(saved.statusMessage).contains("后续 E2.4"))
         assertNull(editedAfterSave.savedPlan)
         assertNull(editedAfterSave.statusMessage)
+    }
+
+    private fun TimedPlanEditorScreenState.withoutItemRests(): TimedPlanEditorScreenState {
+        return items.fold(this) { state, item ->
+            state.updateItemRestAfter(item.id, 0)
+        }
     }
 }
