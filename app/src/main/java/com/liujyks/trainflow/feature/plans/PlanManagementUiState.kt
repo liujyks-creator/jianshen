@@ -169,10 +169,11 @@ private fun WorkoutPlan.toDetailState(): PlanDetailUiState {
         sections = detailSections(),
         editStatus = "编辑回填后续接入",
         startStatus = when (mode) {
-            WorkoutMode.TIMED -> "开始训练留给 E3 执行引擎"
+            WorkoutMode.TIMED -> "开始计时训练"
             WorkoutMode.STRENGTH -> "开始训练留给 E4 执行引擎"
             WorkoutMode.FOLLOW_ALONG -> "跟练闭环留给 E6"
-        }
+        },
+        canStartTraining = mode == WorkoutMode.TIMED
     )
 }
 

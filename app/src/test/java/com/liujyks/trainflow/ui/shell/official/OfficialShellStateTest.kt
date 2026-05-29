@@ -39,6 +39,18 @@ class OfficialShellStateTest {
     }
 
     @Test
+    fun timedSessionSelectsTrainingBottomDestination() {
+        assertEquals(
+            OfficialShellDestination.TRAINING,
+            OfficialShellDestination.TIMED_SESSION.selectedBottomDestination()
+        )
+
+        val entries = officialShellNavigationEntries(OfficialShellDestination.TIMED_SESSION)
+
+        assertTrue(requireNotNull(entries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
+    }
+
+    @Test
     fun plansSelectsPlansBottomDestination() {
         assertEquals(
             OfficialShellDestination.PLANS,
@@ -56,6 +68,58 @@ class OfficialShellStateTest {
             .selectDestination(OfficialShellDestination.RECORDS)
 
         assertEquals(OfficialShellDestination.TRAINING, state.currentDestination)
+    }
+
+    @Test
+    fun timedPlanStartsTimedSessionDestination() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val sessionState = initial.startTimedSession(timedPlan)
+
+        assertEquals(OfficialShellDestination.TIMED_SESSION, sessionState.currentDestination)
+        assertEquals(timedPlan.id, sessionState.activeTimedSessionPlan?.id)
+    }
+
+    @Test
+    fun activeTimedSessionHidesBottomBar() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val sessionState = initial.startTimedSession(timedPlan)
+
+        assertFalse(sessionState.showBottomBar)
+    }
+
+    @Test
+    fun activeTimedSessionRejectsBottomNavigationSelection() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val sessionState = initial.startTimedSession(timedPlan)
+        val afterBottomNavigation = sessionState.selectDestination(OfficialShellDestination.PLANS)
+
+        assertEquals(OfficialShellDestination.TIMED_SESSION, afterBottomNavigation.currentDestination)
+        assertEquals(timedPlan.id, afterBottomNavigation.activeTimedSessionPlan?.id)
+    }
+
+    @Test
+    fun strengthPlanDoesNotStartTimedSessionDestination() {
+        val initial = OfficialShellState()
+        val strengthPlan = initial.planManagementState.plans[1]
+        val sessionState = initial.startTimedSession(strengthPlan)
+
+        assertEquals(initial.currentDestination, sessionState.currentDestination)
+        assertEquals(null, sessionState.activeTimedSessionPlan)
+    }
+
+    @Test
+    fun finishingTimedSessionReturnsToPlansAndClearsActivePlan() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val finished = initial
+            .startTimedSession(timedPlan)
+            .finishTimedSession()
+
+        assertEquals(OfficialShellDestination.PLANS, finished.currentDestination)
+        assertEquals(null, finished.activeTimedSessionPlan)
     }
 
     @Test

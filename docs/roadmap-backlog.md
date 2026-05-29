@@ -343,6 +343,8 @@ stepsCompleted:
 
 ### Story E3.2: 计时训练执行页
 
+**状态:** Implemented in Android Compose timed session route and UI state mapper
+
 作为用户，  
 我想在训练中看到当前动作、剩余时间和下一步，  
 以便运动中一眼知道该做什么。
@@ -352,6 +354,14 @@ stepsCompleted:
 - Given 训练执行页，When 进入动作阶段，Then 当前动作和倒计时是主信息。
 - Given 进入休息阶段，Then 显示休息倒计时和下一动作。
 - Then 心率展示位保持辅助层级。
+
+**交付结果:**
+
+- Android 侧新增 `feature.workoutsession` 计时训练执行 UI state mapper 和 Compose route/screen，页面使用深色训练执行面板展示当前动作或休息、主倒计时、步骤/轮次进度、下一步、动作短提示和辅助心率占位。
+- 计划管理详情中仅 `timed` 计划启用“开始计时训练”，`strength` 计划继续保留到 E4 后续接入；官方 shell 新增内存态计时训练执行 destination。
+- 执行页复用 E3.1 `TimedWorkoutEngine`，启动和训练中控制均通过 `WorkoutCommand.StartSession`、`PauseSession`、`ResumeSession`、`SkipStep`、`ExtendRest` 和 `EndSession` 分发，不在 UI 中手写第二套计时状态机。
+- 支持 completed / abandoned 的轻量结束状态；新增纯 Kotlin UI state mapper 测试和 shell/navigation state 测试。
+- 本 story 未实现真实 `WorkoutSession` 持久化、session records 写库、Room/DataStore repository 闭环、通知调度、前台服务、声音、震动、平台动画消费者、真实心率设备、语音能力、完整训练总结、跟练闭环或力量训练执行页。
 
 ### Story E3.3: 临近结束提醒
 
@@ -685,15 +695,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E3.1 Review Gate
+Story E3.2 Review Gate
 ```
 
 Review Gate 建议重点确认：
 
-1. E3.1 是否保持计时训练状态机纯 Kotlin、可测试，并未把 UI、通知、声音、震动或 session records 混入引擎核心。
-2. E3.1 是否正确区分动作提醒与休息提醒，并避免同一 step / remainingSec 重复触发结束提醒事件。
-3. E3.1 是否保持 `WorkoutCommand` / `WorkoutEvent` 语义稳定，为后续声音、震动、动画和未来 voice output 消费事件。
-4. E3.1 是否为 E3.2/E3.3/E3.4 的执行页、临近结束提醒和训练控制扩展保留足够清晰的状态边界。
+1. E3.2 是否只从现有内存态 timed plan 详情启动训练，且 strength 入口仍留给 E4。
+2. E3.2 是否复用 E3.1 `TimedWorkoutEngine` 状态和 `WorkoutCommand`，没有在 UI 中复制计时状态机。
+3. E3.2 是否让当前动作/休息、主倒计时和下一步成为训练执行页主信息，心率占位保持辅助层级。
+4. E3.2 是否没有引入真实 session records、Room/DataStore repository 闭环、通知、声音、震动、真实心率设备、语音或完整总结能力。
 
 ## 8. 暂缓事项
 

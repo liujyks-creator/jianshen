@@ -2,12 +2,26 @@ package com.liujyks.trainflow.ui.shell.official
 
 import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
+import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
 
 internal data class OfficialShellState(
     val currentDestination: OfficialShellDestination = OfficialShellDestination.TRAINING,
-    val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState()
+    val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState(),
+    val activeTimedSessionPlan: WorkoutPlan? = null
 ) {
+    val showBottomBar: Boolean
+        get() = !isTimedSessionNavigationLocked
+
+    private val isTimedSessionNavigationLocked: Boolean
+        get() = currentDestination == OfficialShellDestination.TIMED_SESSION &&
+            activeTimedSessionPlan != null
+
     fun selectDestination(destination: OfficialShellDestination): OfficialShellState {
+        if (isTimedSessionNavigationLocked && destination != OfficialShellDestination.TIMED_SESSION) {
+            return this
+        }
+
         return if (destination.enabled) {
             copy(currentDestination = destination)
         } else {
@@ -17,6 +31,22 @@ internal data class OfficialShellState(
 
     fun withPlanManagementState(planManagementState: PlanManagementScreenState): OfficialShellState {
         return copy(planManagementState = planManagementState)
+    }
+
+    fun startTimedSession(plan: WorkoutPlan): OfficialShellState {
+        if (plan.mode != WorkoutMode.TIMED) return this
+
+        return copy(
+            currentDestination = OfficialShellDestination.TIMED_SESSION,
+            activeTimedSessionPlan = plan
+        )
+    }
+
+    fun finishTimedSession(): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.PLANS,
+            activeTimedSessionPlan = null
+        )
     }
 }
 
@@ -40,6 +70,12 @@ internal enum class OfficialShellDestination(
     STRENGTH_PLAN_EDITOR(
         label = "力量计划编辑",
         shortLabel = "力",
+        enabled = true,
+        showInBottomBar = false
+    ),
+    TIMED_SESSION(
+        label = "计时训练",
+        shortLabel = "训",
         enabled = true,
         showInBottomBar = false
     ),
@@ -84,7 +120,8 @@ internal fun officialShellNavigationEntries(
 internal fun OfficialShellDestination.selectedBottomDestination(): OfficialShellDestination {
     return when (this) {
         OfficialShellDestination.TIMED_PLAN_EDITOR,
-        OfficialShellDestination.STRENGTH_PLAN_EDITOR -> OfficialShellDestination.TRAINING
+        OfficialShellDestination.STRENGTH_PLAN_EDITOR,
+        OfficialShellDestination.TIMED_SESSION -> OfficialShellDestination.TRAINING
         else -> this
     }
 }

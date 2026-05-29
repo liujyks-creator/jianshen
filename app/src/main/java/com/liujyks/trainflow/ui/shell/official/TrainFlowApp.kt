@@ -19,6 +19,8 @@ import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
+import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
+import com.liujyks.trainflow.core.model.WorkoutPlan
 
 @Composable
 fun TrainFlowApp() {
@@ -28,25 +30,32 @@ fun TrainFlowApp() {
     var planManagementState by remember {
         mutableStateOf(buildDefaultPlanManagementState())
     }
+    var activeTimedSessionPlan by remember {
+        mutableStateOf<WorkoutPlan?>(null)
+    }
     val shellState = OfficialShellState(
         currentDestination = currentDestination,
-        planManagementState = planManagementState
+        planManagementState = planManagementState,
+        activeTimedSessionPlan = activeTimedSessionPlan
     )
 
     fun applyShellState(nextState: OfficialShellState) {
         currentDestination = nextState.currentDestination
         planManagementState = nextState.planManagementState
+        activeTimedSessionPlan = nextState.activeTimedSessionPlan
     }
 
     Surface {
         Scaffold(
             bottomBar = {
-                OfficialBottomBar(
-                    currentDestination = shellState.currentDestination,
-                    onDestinationSelected = { destination ->
-                        applyShellState(shellState.selectDestination(destination))
-                    }
-                )
+                if (shellState.showBottomBar) {
+                    OfficialBottomBar(
+                        currentDestination = shellState.currentDestination,
+                        onDestinationSelected = { destination ->
+                            applyShellState(shellState.selectDestination(destination))
+                        }
+                    )
+                }
             }
         ) { innerPadding ->
             when (shellState.currentDestination) {
@@ -77,6 +86,30 @@ fun TrainFlowApp() {
                     modifier = Modifier.padding(innerPadding)
                 )
 
+                OfficialShellDestination.TIMED_SESSION -> {
+                    val activePlan = shellState.activeTimedSessionPlan
+                    if (activePlan != null) {
+                        TimedWorkoutSessionRoute(
+                            plan = activePlan,
+                            onBackToPlans = {
+                                applyShellState(shellState.finishTimedSession())
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    } else {
+                        PlanManagementRoute(
+                            uiState = shellState.planManagementState,
+                            onStateChange = { planManagementState ->
+                                applyShellState(shellState.withPlanManagementState(planManagementState))
+                            },
+                            onStartTimedPlan = { plan ->
+                                applyShellState(shellState.startTimedSession(plan))
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                }
+
                 OfficialShellDestination.EXERCISE_LIBRARY -> ExerciseLibraryRoute(
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -85,6 +118,9 @@ fun TrainFlowApp() {
                     uiState = shellState.planManagementState,
                     onStateChange = { planManagementState ->
                         applyShellState(shellState.withPlanManagementState(planManagementState))
+                    },
+                    onStartTimedPlan = { plan ->
+                        applyShellState(shellState.startTimedSession(plan))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
