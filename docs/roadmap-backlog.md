@@ -320,6 +320,8 @@ stepsCompleted:
 
 ### Story E3.1: 计时训练执行引擎
 
+**状态:** Implemented in `core.engine` pure Kotlin state machine and unit tests
+
 作为用户，  
 我想 App 按动作和休息自动推进，  
 以便训练中不用自己记阶段。
@@ -329,6 +331,15 @@ stepsCompleted:
 - Given 一个有效计时计划，When 开始训练，Then 引擎按动作、休息和轮次推进。
 - Then 生成动作开始、动作临近结束、休息开始、休息临近结束、训练完成事件。
 - Then 暂停后剩余时间冻结，继续后从原状态恢复。
+
+**交付结果:**
+
+- Android 侧新增纯 Kotlin `TimedWorkoutEngine`，可从 `WorkoutPlan` 或 `WorkoutPlanSnapshot` 展开有效计时 timeline。
+- 支持 `start_session`、`pause_session`、`resume_session`、`skip_step`、`extend_rest` 和 `end_session` 命令；`end_session` 进入 `abandoned` 状态，不伪装为正常完成。
+- 支持 `TimedCircuitBlock` 的 items、rounds、item restAfterSec 和 restBetweenRoundsSec，并可产出动作开始、动作临近结束、休息开始、休息临近结束、暂停、继续和完成事件。
+- 支持全局 `PlanPreferences.cueSettings` 与 `TimedExerciseItem.cueSettings`，item 级提醒覆盖全局提醒；大于动作/休息时长的阈值会被忽略，避免短时长边界重复触发。
+- 新增单元测试覆盖核心状态推进、事件触发、暂停恢复、跳过、延长休息、轮次推进、短时长阈值边界和提前结束废弃状态。
+- 本 story 未接入 UI、ViewModel、Room repository、真实 session records、通知调度、声音、震动、动画、心率设备、语音、完整跟练闭环或力量训练执行引擎。
 
 ### Story E3.2: 计时训练执行页
 
@@ -674,15 +685,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E3.1: 计时训练执行引擎
+Story E3.1 Review Gate
 ```
 
-启动前需要确认：
+Review Gate 建议重点确认：
 
-1. E3.1 是否先落地可测试的计时训练状态推进，不把 UI、通知或 session records 混入引擎核心。
-2. E3.1 是否生成动作开始、动作临近结束、休息开始、休息临近结束和训练完成事件，并继续区分动作提醒与休息提醒。
+1. E3.1 是否保持计时训练状态机纯 Kotlin、可测试，并未把 UI、通知、声音、震动或 session records 混入引擎核心。
+2. E3.1 是否正确区分动作提醒与休息提醒，并避免同一 step / remainingSec 重复触发结束提醒事件。
 3. E3.1 是否保持 `WorkoutCommand` / `WorkoutEvent` 语义稳定，为后续声音、震动、动画和未来 voice output 消费事件。
-4. E3.1 前需要处理已知技术债：`standing-quad-stretch` 的 `timedDefault` 当前无法完整表达“每侧 25-30 秒”。
+4. E3.1 是否为 E3.2/E3.3/E3.4 的执行页、临近结束提醒和训练控制扩展保留足够清晰的状态边界。
 
 ## 8. 暂缓事项
 
