@@ -139,6 +139,16 @@ git pull --ff-only
 git status
 ```
 
+如果本机已经在 ignored 的 `.local/` 下准备了 JDK 和 Android SDK，可以先恢复当前 PowerShell 会话环境：
+
+```powershell
+. .\.local\env.ps1
+java -version
+.\gradlew.bat --version
+```
+
+`.local/env.ps1` 是本机辅助脚本，不随 Git 提交。如果新电脑没有这个脚本，请先安装或准备 JDK 17 与 Android SDK，再按 `docs/setup.md` 手动设置 `JAVA_HOME`、`ANDROID_HOME` 和 `ANDROID_SDK_ROOT`。
+
 如果要做一块新功能，先开分支：
 
 ```powershell

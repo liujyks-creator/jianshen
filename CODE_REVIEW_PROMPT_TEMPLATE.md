@@ -34,8 +34,13 @@ C:/Users/25073/Desktop/jianshen
 - 前置 Story review 状态：<reviewed / changes requested / not reviewed>
 
 环境提醒：
-- 如果需要运行 Android 验证，可能需要先在当前 PowerShell 会话恢复本地 JDK / Android SDK。
-- 优先使用仓库 ignored 的 .local/ 下已有 JDK / SDK。
+- 如果需要运行 Android 验证，先尝试在当前 PowerShell 会话运行：
+  - `. .\.local\env.ps1`
+- 然后确认：
+  - `java -version`
+  - `.\gradlew.bat --version`
+- `.local/env.ps1` 只应设置当前会话的 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT` 和 `PATH`。
+- 如果 `.local/env.ps1` 不存在，优先使用仓库 ignored 的 .local/ 下已有 JDK / SDK 手动设置会话环境。
 - .local/ 必须保持 ignored，不得提交。
 - 不要把本机 JDK/SDK 路径写进项目源码。
 

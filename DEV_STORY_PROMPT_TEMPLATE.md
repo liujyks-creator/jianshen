@@ -37,6 +37,15 @@ C:/Users/25073/Desktop/jianshen
 - skills/ 是否仍未被 Git 跟踪
 - .local/ 是否仍未被 Git 跟踪
 
+本地环境恢复：
+- 如果 `.local/env.ps1` 存在，先运行：
+  - `. .\.local\env.ps1`
+- 然后确认：
+  - `java -version`
+  - `.\gradlew.bat --version`
+- `.local/env.ps1` 只应设置当前 PowerShell 会话的 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT` 和 `PATH`，不得提交 `.local/`。
+- 如果 `.local/env.ps1` 不存在或 JDK/Android SDK 不可用，停止并报告，不要修改项目源码来硬编码本机路径。
+
 必读状态文档：
 1. AGENTS.md
 2. docs/project-status.md
