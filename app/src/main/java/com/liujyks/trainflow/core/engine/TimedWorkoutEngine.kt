@@ -171,7 +171,12 @@ object TimedWorkoutEngine {
         seconds: Int
     ): TimedWorkoutEngineResult {
         val currentStep = state.currentStep
-        if (seconds <= 0 || currentStep == null || currentStep.kind != TimedSessionStepKind.REST) {
+        if (
+            state.status != SessionStatus.ACTIVE ||
+            seconds <= 0 ||
+            currentStep == null ||
+            currentStep.kind != TimedSessionStepKind.REST
+        ) {
             return TimedWorkoutEngineResult(state = state)
         }
 

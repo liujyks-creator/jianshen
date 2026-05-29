@@ -224,6 +224,36 @@ class TimedWorkoutEngineTest {
     }
 
     @Test
+    fun abandonedRestIgnoresLateExtendRestCommand() {
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(singleActionPlan(workSec = 2, restSec = 5)),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 2)
+        assertEquals(SessionStepKind.TIMED_REST, result.state.currentSessionStep?.kind)
+        assertEquals(5, result.state.remainingSec)
+
+        result = TimedWorkoutEngine.dispatch(
+            state = result.state,
+            command = WorkoutCommand.EndSession(reason = "user_exit")
+        )
+        val abandonedState = result.state
+
+        result = TimedWorkoutEngine.dispatch(
+            state = abandonedState,
+            command = WorkoutCommand.ExtendRest(seconds = 15)
+        )
+
+        assertEquals(SessionStatus.ABANDONED, result.state.status)
+        assertTrue(result.state.isTerminal)
+        assertEquals(abandonedState.currentStep?.id, result.state.currentStep?.id)
+        assertEquals(5, result.state.remainingSec)
+        assertEquals(0, result.state.extendedRestSec)
+        assertTrue(result.events.isEmpty())
+    }
+
+    @Test
     fun endSessionMarksAbandonedWithoutCompletedEvent() {
         var result = TimedWorkoutEngine.dispatch(
             state = TimedWorkoutEngine.create(singleActionPlan(workSec = 5)),
