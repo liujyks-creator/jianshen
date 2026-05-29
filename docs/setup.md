@@ -122,13 +122,24 @@ npm.cmd run build
 在仓库根目录执行：
 
 ```powershell
-$env:JAVA_HOME = "<JDK 17 path>"
-$env:ANDROID_HOME = "<Android SDK path>"
-$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+. .\.local\env.ps1
+java -version
+.\gradlew.bat --version
 .\gradlew.bat tasks --all
 .\gradlew.bat app:assembleDebug
 .\gradlew.bat app:lintDebug
 .\gradlew.bat app:check
+```
+
+当前开发机可以使用 ignored 的 `.local/env.ps1` 恢复本机 JDK/Android SDK 会话环境。该脚本只设置当前 PowerShell 会话中的 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT` 和 `PATH`，用于避免重启或新对话后丢失 Java/SDK 环境。
+
+如果 `.local/env.ps1` 不存在，可以手动设置：
+
+```powershell
+$env:JAVA_HOME = "<JDK 17 path>"
+$env:ANDROID_HOME = "<Android SDK path>"
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 ```
 
 E0.4 后 Room schema 导出到 `app/schemas`，该目录是数据库迁移历史的一部分，应随相关数据库结构变更提交。不要提交 `.local/`、`.gradle/`、`app/build/`、lint report、APK 或其他构建输出。
