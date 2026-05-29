@@ -81,6 +81,26 @@ class OfficialShellStateTest {
     }
 
     @Test
+    fun activeTimedSessionHidesBottomBar() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val sessionState = initial.startTimedSession(timedPlan)
+
+        assertFalse(sessionState.showBottomBar)
+    }
+
+    @Test
+    fun activeTimedSessionRejectsBottomNavigationSelection() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val sessionState = initial.startTimedSession(timedPlan)
+        val afterBottomNavigation = sessionState.selectDestination(OfficialShellDestination.PLANS)
+
+        assertEquals(OfficialShellDestination.TIMED_SESSION, afterBottomNavigation.currentDestination)
+        assertEquals(timedPlan.id, afterBottomNavigation.activeTimedSessionPlan?.id)
+    }
+
+    @Test
     fun strengthPlanDoesNotStartTimedSessionDestination() {
         val initial = OfficialShellState()
         val strengthPlan = initial.planManagementState.plans[1]

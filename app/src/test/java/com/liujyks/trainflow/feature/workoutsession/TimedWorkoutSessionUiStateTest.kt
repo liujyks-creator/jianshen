@@ -26,6 +26,7 @@ class TimedWorkoutSessionUiStateTest {
         assertTrue(uiState.currentTitle.isNotBlank())
         assertTrue(uiState.nextStepLabel.startsWith("下一步"))
         assertTrue(uiState.shortCue.isNotBlank())
+        assertTrue(uiState.shouldShowNextStepPanel)
         assertTrue(uiState.canPause)
         assertTrue(uiState.canSkip)
         assertFalse(uiState.canExtendRest)
@@ -100,6 +101,7 @@ class TimedWorkoutSessionUiStateTest {
         assertTrue(uiState.isTerminal)
         assertEquals("计时训练已提前结束", uiState.terminalTitle)
         assertTrue(requireNotNull(uiState.terminalSummary).contains("已完成"))
+        assertFalse(uiState.shouldShowNextStepPanel)
         assertFalse(uiState.canEnd)
     }
 }

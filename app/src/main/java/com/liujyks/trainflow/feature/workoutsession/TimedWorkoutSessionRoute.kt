@@ -113,7 +113,9 @@ private fun TimedWorkoutSessionScreen(
     ) {
         SessionHeader(uiState)
         MainCountdownPanel(uiState)
-        NextStepPanel(uiState)
+        if (uiState.shouldShowNextStepPanel) {
+            NextStepPanel(uiState)
+        }
         HeartRatePanel(uiState.heartRate)
 
         if (uiState.isTerminal) {

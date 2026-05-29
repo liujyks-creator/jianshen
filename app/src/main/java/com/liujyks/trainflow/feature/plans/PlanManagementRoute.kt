@@ -152,7 +152,7 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "训练执行、session records、通知、真实心率、语音和跟练闭环仍未接入。",
+            text = "计时训练执行已接入；session records、通知、真实心率、语音、跟练和力量执行仍未接入。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

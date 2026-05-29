@@ -48,12 +48,14 @@ fun TrainFlowApp() {
     Surface {
         Scaffold(
             bottomBar = {
-                OfficialBottomBar(
-                    currentDestination = shellState.currentDestination,
-                    onDestinationSelected = { destination ->
-                        applyShellState(shellState.selectDestination(destination))
-                    }
-                )
+                if (shellState.showBottomBar) {
+                    OfficialBottomBar(
+                        currentDestination = shellState.currentDestination,
+                        onDestinationSelected = { destination ->
+                            applyShellState(shellState.selectDestination(destination))
+                        }
+                    )
+                }
             }
         ) { innerPadding ->
             when (shellState.currentDestination) {

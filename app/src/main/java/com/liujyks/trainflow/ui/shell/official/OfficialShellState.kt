@@ -10,7 +10,18 @@ internal data class OfficialShellState(
     val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState(),
     val activeTimedSessionPlan: WorkoutPlan? = null
 ) {
+    val showBottomBar: Boolean
+        get() = !isTimedSessionNavigationLocked
+
+    private val isTimedSessionNavigationLocked: Boolean
+        get() = currentDestination == OfficialShellDestination.TIMED_SESSION &&
+            activeTimedSessionPlan != null
+
     fun selectDestination(destination: OfficialShellDestination): OfficialShellState {
+        if (isTimedSessionNavigationLocked && destination != OfficialShellDestination.TIMED_SESSION) {
+            return this
+        }
+
         return if (destination.enabled) {
             copy(currentDestination = destination)
         } else {
