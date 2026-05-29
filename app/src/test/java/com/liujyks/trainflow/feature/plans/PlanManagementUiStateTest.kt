@@ -42,6 +42,16 @@ class PlanManagementUiStateTest {
     }
 
     @Test
+    fun timedPlanDetailEnablesStartTrainingForE3SessionScreen() {
+        val state = buildDefaultPlanManagementState()
+        val detail = requireNotNull(state.selectedDetail)
+
+        assertEquals("计时训练", detail.modeLabel)
+        assertTrue(detail.canStartTraining)
+        assertEquals("开始计时训练", detail.startStatus)
+    }
+
+    @Test
     fun copyingAPlanCreatesNewPlanWithNewIdAndKeepsContractShape() {
         val state = buildDefaultPlanManagementState()
         val original = state.plans.first()

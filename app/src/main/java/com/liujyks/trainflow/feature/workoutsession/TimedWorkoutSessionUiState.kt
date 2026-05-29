@@ -1,0 +1,234 @@
+package com.liujyks.trainflow.feature.workoutsession
+
+import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
+import com.liujyks.trainflow.core.engine.TimedSessionStep
+import com.liujyks.trainflow.core.engine.TimedSessionStepKind
+import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
+import com.liujyks.trainflow.core.model.Exercise
+import com.liujyks.trainflow.core.model.HeartRateAvailability
+import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SessionStepKind
+
+internal data class TimedWorkoutSessionScreenState(
+    val planTitle: String,
+    val statusLabel: String,
+    val phaseLabel: String,
+    val currentTitle: String,
+    val timerText: String,
+    val progressLabel: String,
+    val nextStepLabel: String,
+    val shortCue: String,
+    val heartRate: TimedWorkoutHeartRateUiState,
+    val progressFraction: Float,
+    val isPaused: Boolean,
+    val isTerminal: Boolean,
+    val canPause: Boolean,
+    val canResume: Boolean,
+    val canSkip: Boolean,
+    val canExtendRest: Boolean,
+    val canEnd: Boolean,
+    val terminalTitle: String? = null,
+    val terminalSummary: String? = null
+)
+
+internal data class TimedWorkoutHeartRateUiState(
+    val valueText: String,
+    val statusText: String,
+    val isAvailable: Boolean
+)
+
+internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
+    heartRateState: HeartRateState = HeartRateState(availability = HeartRateAvailability.NOT_CONNECTED),
+    exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise }
+): TimedWorkoutSessionScreenState {
+    val exerciseById = exercises.associateBy { exercise -> exercise.id }
+    val current = currentStep
+    val next = nextDisplayStep()
+    val statusLabel = status.toStatusLabel()
+    val phaseLabel = when {
+        status == SessionStatus.PAUSED -> "已暂停"
+        status == SessionStatus.COMPLETED -> "已完成"
+        status == SessionStatus.ABANDONED -> "已结束"
+        current == null -> "准备"
+        current.kind == TimedSessionStepKind.REST -> "休息"
+        current.sessionStepKind == SessionStepKind.STRETCH -> "拉伸"
+        else -> "动作"
+    }
+    val currentTitle = when {
+        status == SessionStatus.COMPLETED -> "训练完成"
+        status == SessionStatus.ABANDONED -> "训练已结束"
+        current == null -> "准备开始"
+        current.kind == TimedSessionStepKind.REST -> "休息"
+        else -> current.displayTitle(exerciseById)
+    }
+    val nextStepLabel = when {
+        status == SessionStatus.COMPLETED -> "没有下一步"
+        status == SessionStatus.ABANDONED -> "本次训练已提前结束"
+        next == null -> "最后一步"
+        else -> "下一步 · ${next.displayTitle(exerciseById)}"
+    }
+    val shortCue = when {
+        status == SessionStatus.PAUSED -> "时间已冻结，继续后从当前剩余时间恢复。"
+        status == SessionStatus.COMPLETED -> "本次流程已完成，先放松呼吸。"
+        status == SessionStatus.ABANDONED -> "本次训练已提前结束。"
+        current == null -> "点击开始后进入第一步。"
+        current.kind == TimedSessionStepKind.REST -> next?.let {
+            "调整呼吸，准备 ${it.displayTitle(exerciseById)}。"
+        } ?: "调整呼吸，准备结束训练。"
+        else -> current.exerciseId
+            ?.let { exerciseById[it]?.instructions?.shortCue }
+            ?: current.blockFallbackCue()
+    }
+    val totalSteps = steps.size.coerceAtLeast(1)
+    val activeStepNumber = when {
+        currentStepIndex >= 0 -> (currentStepIndex + 1).coerceAtMost(steps.size)
+        else -> 0
+    }
+    val progressLabel = buildProgressLabel(current, activeStepNumber, steps.size)
+    val terminalTitle = when (status) {
+        SessionStatus.COMPLETED -> "计时训练完成"
+        SessionStatus.ABANDONED -> "计时训练已提前结束"
+        else -> null
+    }
+    val terminalSummary = when (status) {
+        SessionStatus.COMPLETED -> "完成 $completedStepCount / ${steps.size} 步"
+        SessionStatus.ABANDONED -> "已完成 $completedStepCount / ${steps.size} 步，跳过 ${skippedStepIds.size} 步"
+        else -> null
+    }
+
+    return TimedWorkoutSessionScreenState(
+        planTitle = planTitle,
+        statusLabel = statusLabel,
+        phaseLabel = phaseLabel,
+        currentTitle = currentTitle,
+        timerText = remainingSec.formatTimer(),
+        progressLabel = progressLabel,
+        nextStepLabel = nextStepLabel,
+        shortCue = shortCue,
+        heartRate = heartRateState.toUiState(),
+        progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
+        isPaused = status == SessionStatus.PAUSED,
+        isTerminal = isTerminal,
+        canPause = status == SessionStatus.ACTIVE,
+        canResume = status == SessionStatus.PAUSED,
+        canSkip = status == SessionStatus.ACTIVE && current != null,
+        canExtendRest = status == SessionStatus.ACTIVE && current?.kind == TimedSessionStepKind.REST,
+        canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED,
+        terminalTitle = terminalTitle,
+        terminalSummary = terminalSummary
+    )
+}
+
+private fun TimedWorkoutEngineState.nextDisplayStep(): TimedSessionStep? {
+    val nextIndex = when {
+        currentStepIndex < 0 -> 0
+        else -> currentStepIndex + 1
+    }
+    return steps.getOrNull(nextIndex)
+}
+
+private fun TimedSessionStep.displayTitle(exerciseById: Map<String, Exercise>): String {
+    if (kind == TimedSessionStepKind.REST) {
+        return "休息 ${durationSec.formatShortDuration()}"
+    }
+
+    return exerciseId
+        ?.let { id -> exerciseById[id]?.name }
+        ?: blockFallbackTitle()
+}
+
+private fun TimedSessionStep.blockFallbackTitle(): String {
+    return when {
+        sessionStepKind == SessionStepKind.STRETCH -> "拉伸"
+        blockId.contains("warmup", ignoreCase = true) -> "热身"
+        blockId.contains("cooldown", ignoreCase = true) -> "冷却"
+        else -> "计时动作"
+    }
+}
+
+private fun TimedSessionStep.blockFallbackCue(): String {
+    return when {
+        sessionStepKind == SessionStepKind.STRETCH -> "放慢呼吸，保持动作稳定。"
+        blockId.contains("warmup", ignoreCase = true) -> "逐步提高活动度，不要急着冲强度。"
+        else -> "保持节奏，注意动作质量。"
+    }
+}
+
+private fun buildProgressLabel(
+    current: TimedSessionStep?,
+    activeStepNumber: Int,
+    totalSteps: Int
+): String {
+    val stepText = if (activeStepNumber == 0) {
+        "准备 · 共 $totalSteps 步"
+    } else {
+        "步骤 $activeStepNumber / $totalSteps"
+    }
+    val roundText = current?.round?.let { round ->
+        current.roundCount?.let { roundCount -> " · 第 $round / $roundCount 轮" }
+    }.orEmpty()
+    return stepText + roundText
+}
+
+private fun SessionStatus.toStatusLabel(): String {
+    return when (this) {
+        SessionStatus.READY -> "准备"
+        SessionStatus.ACTIVE -> "进行中"
+        SessionStatus.PAUSED -> "暂停"
+        SessionStatus.COMPLETED -> "完成"
+        SessionStatus.ABANDONED -> "已结束"
+    }
+}
+
+private fun HeartRateState.toUiState(): TimedWorkoutHeartRateUiState {
+    return when (availability) {
+        HeartRateAvailability.DISABLED -> TimedWorkoutHeartRateUiState(
+            valueText = "-- bpm",
+            statusText = "心率显示已关闭",
+            isAvailable = false
+        )
+        HeartRateAvailability.NOT_CONNECTED -> TimedWorkoutHeartRateUiState(
+            valueText = "-- bpm",
+            statusText = "未连接设备",
+            isAvailable = false
+        )
+        HeartRateAvailability.CONNECTING -> TimedWorkoutHeartRateUiState(
+            valueText = "-- bpm",
+            statusText = "等待心率",
+            isAvailable = false
+        )
+        HeartRateAvailability.AVAILABLE -> TimedWorkoutHeartRateUiState(
+            valueText = "${bpm ?: "--"} bpm",
+            statusText = message ?: "心率可用",
+            isAvailable = bpm != null
+        )
+        HeartRateAvailability.STALE -> TimedWorkoutHeartRateUiState(
+            valueText = "${bpm ?: "--"} bpm",
+            statusText = message ?: "数据短暂中断",
+            isAvailable = false
+        )
+        HeartRateAvailability.ERROR -> TimedWorkoutHeartRateUiState(
+            valueText = "-- bpm",
+            statusText = message ?: "心率暂不可用",
+            isAvailable = false
+        )
+    }
+}
+
+private fun Int.formatTimer(): String {
+    val safeSeconds = coerceAtLeast(0)
+    val minutes = safeSeconds / 60
+    val seconds = safeSeconds % 60
+    return "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+}
+
+private fun Int.formatShortDuration(): String {
+    val minutes = this / 60
+    val seconds = this % 60
+    return when {
+        minutes > 0 && seconds > 0 -> "${minutes}分${seconds}秒"
+        minutes > 0 -> "${minutes}分"
+        else -> "${seconds}秒"
+    }
+}

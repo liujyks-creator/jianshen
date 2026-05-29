@@ -42,11 +42,13 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.core.model.WorkoutPlan
 
 @Composable
 internal fun PlanManagementRoute(
     uiState: PlanManagementScreenState,
     onStateChange: (PlanManagementScreenState) -> Unit,
+    onStartTimedPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     PlanManagementScreen(
@@ -56,6 +58,7 @@ internal fun PlanManagementRoute(
         onRequestDeletePlan = { planId -> onStateChange(uiState.requestDeletePlan(planId)) },
         onConfirmDeletePlan = { onStateChange(uiState.confirmDeletePlan()) },
         onCancelDeletePlan = { onStateChange(uiState.cancelDeletePlan()) },
+        onStartTimedPlan = onStartTimedPlan,
         modifier = modifier
     )
 }
@@ -68,6 +71,7 @@ private fun PlanManagementScreen(
     onRequestDeletePlan: (String) -> Unit,
     onConfirmDeletePlan: () -> Unit,
     onCancelDeletePlan: () -> Unit,
+    onStartTimedPlan: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -110,8 +114,10 @@ private fun PlanManagementScreen(
                 item {
                     PlanDetailCard(
                         detail = detail,
+                        plan = uiState.selectedPlan,
                         onCopyPlan = { onCopyPlan(detail.id) },
-                        onRequestDeletePlan = { onRequestDeletePlan(detail.id) }
+                        onRequestDeletePlan = { onRequestDeletePlan(detail.id) },
+                        onStartTimedPlan = onStartTimedPlan
                     )
                 }
             }
@@ -214,8 +220,10 @@ private fun PlanListCard(
 @Composable
 private fun PlanDetailCard(
     detail: PlanDetailUiState,
+    plan: WorkoutPlan?,
     onCopyPlan: () -> Unit,
-    onRequestDeletePlan: () -> Unit
+    onRequestDeletePlan: () -> Unit,
+    onStartTimedPlan: (WorkoutPlan) -> Unit
 ) {
     EditorCard {
         Row(
@@ -272,7 +280,11 @@ private fun PlanDetailCard(
         }
 
         Button(
-            onClick = {},
+            onClick = {
+                if (plan != null) {
+                    onStartTimedPlan(plan)
+                }
+            },
             enabled = detail.canStartTraining,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp)
