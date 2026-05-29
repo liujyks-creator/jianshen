@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.feature.plans
 
 import com.liujyks.trainflow.core.model.CountdownCue
+import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.PlanBlockKind
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
@@ -165,6 +166,19 @@ class TimedPlanEditorUiStateTest {
         assertEquals(added.items.size - 1, removed.items.size)
         assertEquals(removed.items.size, ignoredStrengthOnly.items.size)
         assertFalse(ignoredStrengthOnly.items.any { it.exerciseId == "barbell-bench-press" })
+    }
+
+    @Test
+    fun addingStandingQuadStretchMapsTimedDefaultToAlternatingSide() {
+        val state = buildDefaultTimedPlanEditorState()
+            .addExercise("standing-quad-stretch")
+        val plan = state.toWorkoutPlan()
+        val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
+        val quadStretch = circuit.items.single { it.exerciseId == "standing-quad-stretch" }
+
+        assertEquals(ExerciseSide.ALTERNATING, quadStretch.side)
+        assertEquals(30, quadStretch.workDurationSec)
+        assertEquals(5, quadStretch.restAfterSec)
     }
 
     @Test

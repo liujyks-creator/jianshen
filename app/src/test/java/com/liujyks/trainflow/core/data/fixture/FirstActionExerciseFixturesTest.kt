@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.core.data.fixture
 
 import com.liujyks.trainflow.core.model.ContentStatus
+import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.RepTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -107,6 +108,19 @@ class FirstActionExerciseFixturesTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun standingQuadStretchTimedDefaultIsPerSideInsteadOfLeftOnly() {
+        val entry = FirstActionExerciseFixtures.entries.single {
+            it.exercise.id == "standing-quad-stretch"
+        }
+        val timedDefault = requireNotNull(entry.timedDefault)
+
+        assertTrue(entry.exercise.capabilities.isUnilateral)
+        assertEquals(30, timedDefault.workDurationSec)
+        assertEquals(5, timedDefault.restAfterSec)
+        assertEquals(ExerciseSide.ALTERNATING, timedDefault.side)
     }
 
     @Test

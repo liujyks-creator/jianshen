@@ -647,7 +647,7 @@ object FirstActionExerciseFixtures {
             timedDefault = TimedDefaultSuggestion(
                 workDurationSec = 30,
                 restAfterSec = 5,
-                side = ExerciseSide.LEFT
+                side = ExerciseSide.ALTERNATING
             ),
             reviewNotes = listOf("平衡 fallback 后续补充，不在首批 11 个动作内静默造新动作。")
         )
