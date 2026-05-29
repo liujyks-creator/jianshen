@@ -1,9 +1,9 @@
 package com.liujyks.trainflow.core.engine
 
 /**
- * E0.2 package boundary for the future workout execution engine.
+ * Package marker for workout execution engine code.
  *
- * The engine will later consume workout commands and emit workout events; E0.2
- * intentionally does not implement timers, state machines, or persistence.
+ * Engine implementations consume workout commands and emit workout events while
+ * staying free of UI, storage, notification, media, and platform adapter code.
  */
 internal object EngineBoundary
