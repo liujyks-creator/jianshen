@@ -107,9 +107,9 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 进入 `Story E3.2: 计时训练执行页` Review Gate，重点审查计划详情到执行页的内存态启动路径、UI 是否只消费引擎状态、控制按钮是否全部映射到 `WorkoutCommand`，以及心率占位是否保持辅助层级。
+1. 进入 `Story E3.3: 临近结束提醒` Review Gate，重点审查执行页是否只消费 E3.1 的 `timed_work_ending` / `rest_ending` 事件、动作提醒与休息提醒是否按各自 `CountdownCue` 区分、声音/震动/强化动画是否由 `CueSettings` 开关驱动，以及提醒视觉是否明显但不遮挡训练主信息。
 2. Review Gate 通过后，将阶段分支按主管理对话流程验收并合入 main。
-3. 后续 E3.3/E3.4 应继续复用 E3.1 的引擎状态和事件，不把通知、声音、震动或真实 session records 混入引擎核心。
+3. 后续 E3.4 应继续复用 E3.1 的引擎状态和事件，不把通知、前台服务或真实 session records 混入引擎核心。
 4. 后续计划管理与编辑入口应继续复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约、E1.3/E1.4 的 fixture/domain model 与动作详情 UI state，不让 Room entity 泄漏到 feature/UI，也不把动作详情扩展成课程内容平台。
 
 ## 验证快照
@@ -149,6 +149,7 @@ E2.3 新增内存态力量计划编辑 UI 与状态映射测试；首页力量�
 E2.4 新增内存态计划管理 UI 与状态映射测试；官方 shell 的“计划”入口已启用，列表/详情复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约，支持复制计划和删除确认，但仍不写入 Room、不接入 repository、不启动训练执行引擎、不创建 `WorkoutSession` 或 session records。
 E3.1 新增 `core.engine` 纯 Kotlin 计时训练执行引擎和单元测试；引擎消费 `WorkoutPlan` / `WorkoutPlanSnapshot` 与 `WorkoutCommand`，按 `TimedCircuitBlock` 的动作、休息、轮次和轮间休息推进，产出 `WorkoutEvent`，并固定暂停恢复、跳过、延长休息、提醒阈值覆盖/忽略和提前结束废弃状态边界；本阶段仍不接 UI、Room repository、真实 session records、通知、声音、震动、心率设备、语音或力量训练执行引擎。
 E3.2 新增 `feature.workoutsession` 计时训练执行 UI state、Compose route 和执行页单元测试；计划详情中仅计时计划启用开始入口，官方 shell 使用内存态计划进入深色训练执行页；页面展示当前动作/休息、主倒计时、进度、下一步、短提示和辅助心率占位，暂停、继续、跳过、延长休息和结束训练均通过 `WorkoutCommand` 分发给 E3.1 `TimedWorkoutEngine`；本阶段仍不写入 Room、不创建真实 `WorkoutSession` / session records、不接通知、声音、震动、真实心率设备、语音、完整总结、跟练闭环或力量训练执行页。
+E3.3 新增计时训练临近结束提醒消费链路；执行页捕获 E3.1 的 `timed_work_ending` 与 `rest_ending` 事件，按动作/休息各自的 `CountdownCue` 展示克制强化状态、剩余秒数和提示文案，并通过薄反馈分发边界按 `soundEnabled`、`vibrationEnabled` 与 `emphasisAnimationEnabled` 开关触发声音、触感和视觉强调；本阶段仍不接通知调度、前台服务、真实 session records、真实心率设备、语音或完整总结。
 
 ## 新 Codex 会话提示词
 
