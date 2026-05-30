@@ -1,5 +1,7 @@
 package com.liujyks.trainflow.feature.workoutsession
 
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,14 +33,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
+import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
+import com.liujyks.trainflow.core.media.CountdownReminderFeedbackDispatcher
+import com.liujyks.trainflow.core.media.CountdownReminderFeedbackRequest
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
+import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
@@ -59,20 +69,30 @@ internal fun TimedWorkoutSessionRoute(
     modifier: Modifier = Modifier
 ) {
     var engineState by remember(plan.id) {
-        mutableStateOf(startTimedWorkout(plan))
+        mutableStateOf(TimedWorkoutEngine.create(plan))
+    }
+    val feedbackSink = rememberCountdownReminderFeedbackSink()
+
+    fun applyEngineResult(result: TimedWorkoutEngineResult) {
+        engineState = result.state
+        result.events.dispatchCountdownReminders(
+            state = result.state,
+            feedbackSink = feedbackSink
+        )
     }
 
     LaunchedEffect(plan.id) {
+        applyEngineResult(TimedWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession))
         while (true) {
             delay(1000)
             if (engineState.status == SessionStatus.ACTIVE) {
-                engineState = TimedWorkoutEngine.tick(engineState).state
+                applyEngineResult(TimedWorkoutEngine.tick(engineState))
             }
         }
     }
 
     fun dispatch(command: WorkoutCommand) {
-        engineState = TimedWorkoutEngine.dispatch(engineState, command).state
+        applyEngineResult(TimedWorkoutEngine.dispatch(engineState, command))
     }
 
     TimedWorkoutSessionScreen(
@@ -85,11 +105,6 @@ internal fun TimedWorkoutSessionRoute(
         onBackToPlans = onBackToPlans,
         modifier = modifier
     )
-}
-
-private fun startTimedWorkout(plan: WorkoutPlan): TimedWorkoutEngineState {
-    val initial = TimedWorkoutEngine.create(plan)
-    return TimedWorkoutEngine.dispatch(initial, WorkoutCommand.StartSession).state
 }
 
 @Composable
@@ -160,19 +175,39 @@ private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
 
 @Composable
 private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
+    val reminder = uiState.countdownReminder
+    val reminderActive = reminder.isActive && reminder.emphasisAnimationEnabled
+    val panelColor = if (reminderActive) {
+        TrainFlowAction.copy(alpha = 0.18f)
+    } else {
+        TrainFlowSecondary
+    }
+    val borderColor = if (reminderActive) {
+        TrainFlowAction.copy(alpha = 0.7f)
+    } else {
+        Color.White.copy(alpha = 0.08f)
+    }
+    val timerColor = if (reminderActive) TrainFlowAction else TrainFlowNeutral50
+    val progressColor = if (reminderActive) TrainFlowAction else TrainFlowAccent
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = TrainFlowSecondary),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        colors = CardDefaults.cardColors(containerColor = panelColor),
+        border = BorderStroke(1.dp, borderColor)
     ) {
         Column(
             modifier = Modifier.padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SessionPill(
-                text = uiState.phaseLabel,
-                containerColor = if (uiState.phaseLabel == "休息") TrainFlowAccent else TrainFlowAction,
+                text = if (reminder.isActive) reminder.type.label else uiState.phaseLabel,
+                containerColor = when {
+                    reminder.isActive && reminder.type == TimedWorkoutCountdownReminderType.ACTION_ENDING -> TrainFlowAction
+                    reminder.isActive -> TrainFlowAccent
+                    uiState.phaseLabel == "休息" -> TrainFlowAccent
+                    else -> TrainFlowAction
+                },
                 contentColor = TrainFlowPrimary
             )
             Text(
@@ -185,18 +220,47 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
                 fontSize = 72.sp,
                 lineHeight = 74.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = TrainFlowNeutral50
+                color = timerColor
             )
             LinearProgressIndicator(
                 progress = { uiState.progressFraction.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth(),
-                color = TrainFlowAccent,
+                color = progressColor,
                 trackColor = Color.White.copy(alpha = 0.12f)
             )
+            if (reminder.isActive) {
+                ReminderStatusPanel(reminder)
+            }
             Text(
                 text = uiState.shortCue,
                 style = MaterialTheme.typography.bodyLarge,
                 color = TrainFlowNeutral100
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReminderStatusPanel(reminder: TimedWorkoutCountdownReminderUiState) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = reminder.message,
+                style = MaterialTheme.typography.titleMedium,
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = reminder.feedbackLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral200
             )
         }
     }
@@ -357,6 +421,81 @@ private fun SessionPill(
         )
     }
 }
+
+@Composable
+private fun rememberCountdownReminderFeedbackSink(): CountdownReminderFeedbackSink {
+    val hapticFeedback = LocalHapticFeedback.current
+    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 60) }
+
+    DisposableEffect(toneGenerator) {
+        onDispose { toneGenerator.release() }
+    }
+
+    return remember(hapticFeedback, toneGenerator) {
+        AndroidCountdownReminderFeedbackSink(
+            toneGenerator = toneGenerator,
+            hapticFeedback = hapticFeedback
+        )
+    }
+}
+
+private interface CountdownReminderFeedbackSink {
+    fun dispatch(request: CountdownReminderFeedbackRequest)
+}
+
+private class AndroidCountdownReminderFeedbackSink(
+    private val toneGenerator: ToneGenerator,
+    private val hapticFeedback: HapticFeedback
+) : CountdownReminderFeedbackSink {
+    override fun dispatch(request: CountdownReminderFeedbackRequest) {
+        if (request.soundEnabled) {
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 90)
+        }
+        if (request.vibrationEnabled) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+}
+
+private fun List<WorkoutEvent>.dispatchCountdownReminders(
+    state: TimedWorkoutEngineState,
+    feedbackSink: CountdownReminderFeedbackSink
+) {
+    forEach { event ->
+        val cue = state.endingCueFor(event)
+        val request = CountdownReminderFeedbackDispatcher.requestFor(event = event, cue = cue)
+        if (request != null) {
+            feedbackSink.dispatch(request)
+        }
+    }
+}
+
+private fun TimedWorkoutEngineState.endingCueFor(event: WorkoutEvent) = when (event) {
+    is WorkoutEvent.TimedWorkEnding -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
+    is WorkoutEvent.RestEnding -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
+    else -> null
+}
+
+private val TimedWorkoutCountdownReminderType.label: String
+    get() = when (this) {
+        TimedWorkoutCountdownReminderType.ACTION_ENDING -> "动作提醒"
+        TimedWorkoutCountdownReminderType.REST_ENDING -> "休息提醒"
+        TimedWorkoutCountdownReminderType.NONE -> ""
+    }
+
+private val TimedWorkoutCountdownReminderUiState.feedbackLabel: String
+    get() {
+        val enabled = listOfNotNull(
+            "声音".takeIf { soundEnabled },
+            "震动".takeIf { vibrationEnabled },
+            "强化动画".takeIf { emphasisAnimationEnabled }
+        )
+        return if (enabled.isEmpty()) {
+            "仅显示屏幕提醒"
+        } else {
+            "已启用：${enabled.joinToString("、")}"
+        }
+    }
 
 @Preview(showBackground = true)
 @Composable

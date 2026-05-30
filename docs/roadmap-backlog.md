@@ -375,6 +375,17 @@ stepsCompleted:
 - Given 休息倒计时进入最后 N 秒，Then 触发休息临近结束状态。
 - Then 声音、震动和强化动画按偏好开关工作。
 
+**状态:** Implemented in Android timed session UI, feedback dispatcher boundary, and unit tests
+
+**交付结果:**
+
+- 计时执行页现在消费 E3.1 `TimedWorkoutEngine` 产出的 `timed_work_ending` / `rest_ending` 事件，保留事件驱动边界，不在 UI 中复制计时推进逻辑。
+- `TimedSessionStep` 保留有效 `CountdownCue`，UI state 暴露动作临近结束、休息临近结束、剩余秒数、提醒类型、提醒文案以及声音/震动/强化动画启用项。
+- Compose 执行页在动作或休息进入提醒窗口时强化倒计时颜色、面板边框和短促提示文案；动作提醒与休息提醒在标签和文案上区分，心率占位仍保持辅助层级。
+- 新增 `core.media` 反馈分发边界，根据 `WorkoutEvent` 与 `CueSettings` / `CountdownCue` 生成声音、震动和强化动画请求；Android route 仅做薄 in-app 声音和触感消费，不接通知或前台服务。
+- 新增单元测试覆盖动作提醒、休息提醒、cue 开关、阈值关闭、短时长阈值忽略和事件驱动反馈请求。
+- 本 story 未实现通知调度、前台服务、真实 `WorkoutSession` 持久化、session records 写库、Room/DataStore repository 闭环、真实心率设备、语音能力、完整训练总结、跟练闭环或力量训练执行页。
+
 ### Story E3.4: 暂停、跳过、延长休息与提前结束
 
 作为用户，  
@@ -695,15 +706,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E3.2 Review Gate
+Story E3.3 Review Gate
 ```
 
 Review Gate 建议重点确认：
 
-1. E3.2 是否只从现有内存态 timed plan 详情启动训练，且 strength 入口仍留给 E4。
-2. E3.2 是否复用 E3.1 `TimedWorkoutEngine` 状态和 `WorkoutCommand`，没有在 UI 中复制计时状态机。
-3. E3.2 是否让当前动作/休息、主倒计时和下一步成为训练执行页主信息，心率占位保持辅助层级。
-4. E3.2 是否没有引入真实 session records、Room/DataStore repository 闭环、通知、声音、震动、真实心率设备、语音或完整总结能力。
+1. E3.3 是否只消费 E3.1 `timed_work_ending` / `rest_ending` 事件来驱动提醒状态和反馈请求，没有在 UI 中复制计时状态机。
+2. E3.3 是否按 `CountdownCue.actionEnding` 与 `CountdownCue.restEnding` 分别处理动作提醒和休息提醒，不混用阈值或开关。
+3. E3.3 的视觉强化是否明显但克制，主倒计时、当前动作/休息和下一步仍是训练执行页主信息，心率占位保持辅助层级。
+4. E3.3 是否没有引入通知调度、前台服务、真实 session records、Room/DataStore repository 闭环、真实心率设备、语音或完整总结能力。
 
 ## 8. 暂缓事项
 

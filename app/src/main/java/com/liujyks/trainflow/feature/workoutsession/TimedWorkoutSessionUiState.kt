@@ -19,6 +19,7 @@ internal data class TimedWorkoutSessionScreenState(
     val progressLabel: String,
     val nextStepLabel: String,
     val shortCue: String,
+    val countdownReminder: TimedWorkoutCountdownReminderUiState,
     val heartRate: TimedWorkoutHeartRateUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
@@ -33,6 +34,35 @@ internal data class TimedWorkoutSessionScreenState(
     val terminalSummary: String? = null
 )
 
+internal data class TimedWorkoutCountdownReminderUiState(
+    val type: TimedWorkoutCountdownReminderType,
+    val remainingSec: Int,
+    val message: String,
+    val soundEnabled: Boolean,
+    val vibrationEnabled: Boolean,
+    val emphasisAnimationEnabled: Boolean
+) {
+    val isActive: Boolean
+        get() = type != TimedWorkoutCountdownReminderType.NONE
+
+    companion object {
+        val None = TimedWorkoutCountdownReminderUiState(
+            type = TimedWorkoutCountdownReminderType.NONE,
+            remainingSec = 0,
+            message = "",
+            soundEnabled = false,
+            vibrationEnabled = false,
+            emphasisAnimationEnabled = false
+        )
+    }
+}
+
+internal enum class TimedWorkoutCountdownReminderType {
+    NONE,
+    ACTION_ENDING,
+    REST_ENDING
+}
+
 internal data class TimedWorkoutHeartRateUiState(
     val valueText: String,
     val statusText: String,
@@ -46,6 +76,12 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
     val exerciseById = exercises.associateBy { exercise -> exercise.id }
     val current = currentStep
     val next = nextDisplayStep()
+    val countdownReminder = current.toCountdownReminder(
+        status = status,
+        remainingSec = remainingSec,
+        next = next,
+        exerciseById = exerciseById
+    )
     val statusLabel = status.toStatusLabel()
     val phaseLabel = when {
         status == SessionStatus.PAUSED -> "已暂停"
@@ -74,6 +110,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         status == SessionStatus.COMPLETED -> "本次流程已完成，先放松呼吸。"
         status == SessionStatus.ABANDONED -> "本次训练已提前结束。"
         current == null -> "点击开始后进入第一步。"
+        countdownReminder.isActive -> countdownReminder.message
         current.kind == TimedSessionStepKind.REST -> next?.let {
             "调整呼吸，准备 ${it.displayTitle(exerciseById)}。"
         } ?: "调整呼吸，准备结束训练。"
@@ -107,6 +144,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         progressLabel = progressLabel,
         nextStepLabel = nextStepLabel,
         shortCue = shortCue,
+        countdownReminder = countdownReminder,
         heartRate = heartRateState.toUiState(),
         progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
@@ -119,6 +157,46 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED,
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary
+    )
+}
+
+private fun TimedSessionStep?.toCountdownReminder(
+    status: SessionStatus,
+    remainingSec: Int,
+    next: TimedSessionStep?,
+    exerciseById: Map<String, Exercise>
+): TimedWorkoutCountdownReminderUiState {
+    val step = this ?: return TimedWorkoutCountdownReminderUiState.None
+    val cue = step.endingCue ?: return TimedWorkoutCountdownReminderUiState.None
+    if (
+        status != SessionStatus.ACTIVE ||
+        remainingSec <= 0 ||
+        remainingSec > cue.thresholdSec
+    ) {
+        return TimedWorkoutCountdownReminderUiState.None
+    }
+
+    val type = when (step.kind) {
+        TimedSessionStepKind.WORK -> TimedWorkoutCountdownReminderType.ACTION_ENDING
+        TimedSessionStepKind.REST -> TimedWorkoutCountdownReminderType.REST_ENDING
+    }
+    val message = when (type) {
+        TimedWorkoutCountdownReminderType.ACTION_ENDING ->
+            "动作即将结束，还剩 ${remainingSec} 秒。"
+        TimedWorkoutCountdownReminderType.REST_ENDING -> {
+            val nextTitle = next?.displayTitle(exerciseById) ?: "下一步"
+            "休息即将结束，准备 ${nextTitle}，还剩 ${remainingSec} 秒。"
+        }
+        TimedWorkoutCountdownReminderType.NONE -> ""
+    }
+
+    return TimedWorkoutCountdownReminderUiState(
+        type = type,
+        remainingSec = remainingSec,
+        message = message,
+        soundEnabled = cue.soundEnabled,
+        vibrationEnabled = cue.vibrationEnabled,
+        emphasisAnimationEnabled = cue.emphasisAnimationEnabled
     )
 }
 

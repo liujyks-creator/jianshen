@@ -425,6 +425,7 @@ object TimedWorkoutEngine {
         if (durationSec <= 0) {
             return null
         }
+        val effectiveCue = cue.effectiveCue(durationSec)
 
         return TimedSessionStep(
             id = id,
@@ -440,7 +441,8 @@ object TimedWorkoutEngine {
             durationSec = durationSec,
             round = round,
             roundCount = roundCount,
-            endingCueThresholdSec = cue.effectiveThresholdSec(durationSec)
+            endingCue = effectiveCue,
+            endingCueThresholdSec = effectiveCue?.thresholdSec
         )
     }
 
@@ -457,6 +459,7 @@ object TimedWorkoutEngine {
         if (duration <= 0) {
             return null
         }
+        val effectiveCue = cue.effectiveCue(duration)
 
         return TimedSessionStep(
             id = id,
@@ -467,14 +470,15 @@ object TimedWorkoutEngine {
             durationSec = duration,
             round = round,
             roundCount = roundCount,
-            endingCueThresholdSec = cue.effectiveThresholdSec(duration)
+            endingCue = effectiveCue,
+            endingCueThresholdSec = effectiveCue?.thresholdSec
         )
     }
 
-    private fun CountdownCue?.effectiveThresholdSec(durationSec: Int): Int? {
+    private fun CountdownCue?.effectiveCue(durationSec: Int): CountdownCue? {
         val cue = this ?: return null
-        return cue.thresholdSec.takeIf { threshold ->
-            cue.enabled && threshold > 0 && threshold <= durationSec
+        return cue.takeIf {
+            cue.enabled && cue.thresholdSec > 0 && cue.thresholdSec <= durationSec
         }
     }
 }
@@ -526,6 +530,7 @@ data class TimedSessionStep(
     val durationSec: Int,
     val round: Int? = null,
     val roundCount: Int? = null,
+    val endingCue: CountdownCue? = null,
     val endingCueThresholdSec: Int? = null
 )
 
