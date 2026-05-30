@@ -3,6 +3,8 @@ package com.liujyks.trainflow.feature.workoutsession
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.engine.TimedSessionStep
 import com.liujyks.trainflow.core.engine.TimedSessionStepKind
+import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryEvent
+import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryType
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.Exercise
 import com.liujyks.trainflow.core.model.HeartRateAvailability
@@ -30,6 +32,10 @@ internal data class TimedWorkoutSessionScreenState(
     val canSkip: Boolean,
     val canExtendRest: Boolean,
     val canEnd: Boolean,
+    val skippedStepCount: Int,
+    val extendedRestTotalSec: Int,
+    val historySummaryLabel: String,
+    val lastControlLabel: String,
     val terminalTitle: String? = null,
     val terminalSummary: String? = null
 )
@@ -129,9 +135,13 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         SessionStatus.ABANDONED -> "计时训练已提前结束"
         else -> null
     }
+    val historySummaryLabel = buildHistorySummaryLabel()
     val terminalSummary = when (status) {
-        SessionStatus.COMPLETED -> "完成 $completedStepCount / ${steps.size} 步"
-        SessionStatus.ABANDONED -> "已完成 $completedStepCount / ${steps.size} 步，跳过 ${skippedStepIds.size} 步"
+        SessionStatus.COMPLETED -> "Completed $completedStepCount / ${steps.size} steps. $historySummaryLabel"
+        SessionStatus.ABANDONED -> {
+            val reason = earlyEnd?.reason?.let { " Reason: $it." }.orEmpty()
+            "Abandoned after $completedStepCount / ${steps.size} steps.$reason $historySummaryLabel"
+        }
         else -> null
     }
 
@@ -155,9 +165,31 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         canSkip = status == SessionStatus.ACTIVE && current != null,
         canExtendRest = status == SessionStatus.ACTIVE && current?.kind == TimedSessionStepKind.REST,
         canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED,
+        skippedStepCount = skippedStepHistory.size,
+        extendedRestTotalSec = extendedRestSec,
+        historySummaryLabel = historySummaryLabel,
+        lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary
     )
+}
+
+private fun TimedWorkoutEngineState.buildHistorySummaryLabel(): String {
+    val pauseCount = controlHistory.count { event ->
+        event.type == TimedWorkoutControlHistoryType.PAUSE_SESSION
+    }
+    return "Skipped ${skippedStepHistory.size}, rest +${extendedRestSec}s, pauses $pauseCount."
+}
+
+private fun TimedWorkoutControlHistoryEvent.toLabel(): String {
+    return when (type) {
+        TimedWorkoutControlHistoryType.START_SESSION -> "Started"
+        TimedWorkoutControlHistoryType.PAUSE_SESSION -> "Paused"
+        TimedWorkoutControlHistoryType.RESUME_SESSION -> "Resumed"
+        TimedWorkoutControlHistoryType.SKIP_STEP -> "Skipped current step"
+        TimedWorkoutControlHistoryType.EXTEND_REST -> "Extended rest +${seconds ?: 0}s"
+        TimedWorkoutControlHistoryType.END_SESSION -> "Ended early"
+    }
 }
 
 private fun TimedSessionStep?.toCountdownReminder(

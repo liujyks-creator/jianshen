@@ -61,7 +61,7 @@ object TimedWorkoutEngine {
             WorkoutCommand.ResumeSession -> resume(state)
             WorkoutCommand.SkipStep -> skipStep(state)
             is WorkoutCommand.ExtendRest -> extendRest(state, command.seconds)
-            is WorkoutCommand.EndSession -> endSession(state)
+            is WorkoutCommand.EndSession -> endSession(state, command.reason)
             is WorkoutCommand.StartStrengthSet,
             is WorkoutCommand.CompleteStrengthSet,
             is WorkoutCommand.ConfirmStrengthSet,
@@ -88,13 +88,24 @@ object TimedWorkoutEngine {
             }
 
             if (workingState.remainingSec > 1) {
-                workingState = workingState.copy(remainingSec = workingState.remainingSec - 1)
+                workingState = workingState.copy(
+                    remainingSec = workingState.remainingSec - 1,
+                    activeElapsedSec = workingState.activeElapsedSec + 1
+                )
                 val cueResult = emitEndingCueIfNeeded(workingState)
                 workingState = cueResult.state
                 events += cueResult.events
             } else {
+                val completedState = workingState.completeCurrentStep(
+                    status = TimedSessionStepHistoryStatus.COMPLETED,
+                    endedAtElapsedSec = workingState.activeElapsedSec + 1,
+                    remainingSec = 0
+                )
                 val advanceResult = advanceToNextStep(
-                    state = workingState.copy(completedStepCount = workingState.completedStepCount + 1)
+                    state = completedState.copy(
+                        completedStepCount = completedState.completedStepCount + 1,
+                        activeElapsedSec = completedState.activeElapsedSec + 1
+                    )
                 )
                 workingState = advanceResult.state
                 events += advanceResult.events
@@ -119,6 +130,8 @@ object TimedWorkoutEngine {
             status = SessionStatus.ACTIVE,
             currentStepIndex = 0,
             remainingSec = state.steps.first().durationSec
+        ).appendControlHistory(
+            type = TimedWorkoutControlHistoryType.START_SESSION
         )
         val startEvents = mutableListOf<WorkoutEvent>(WorkoutEvent.SessionStarted(state.sessionId))
         val stepStartResult = emitStepStarted(firstStepState)
@@ -136,7 +149,9 @@ object TimedWorkoutEngine {
         }
 
         return TimedWorkoutEngineResult(
-            state = state.copy(status = SessionStatus.PAUSED),
+            state = state.copy(status = SessionStatus.PAUSED).appendControlHistory(
+                type = TimedWorkoutControlHistoryType.PAUSE_SESSION
+            ),
             events = listOf(WorkoutEvent.SessionPaused(sessionId = state.sessionId))
         )
     }
@@ -147,7 +162,9 @@ object TimedWorkoutEngine {
         }
 
         return TimedWorkoutEngineResult(
-            state = state.copy(status = SessionStatus.ACTIVE),
+            state = state.copy(status = SessionStatus.ACTIVE).appendControlHistory(
+                type = TimedWorkoutControlHistoryType.RESUME_SESSION
+            ),
             events = listOf(WorkoutEvent.SessionResumed(sessionId = state.sessionId))
         )
     }
@@ -158,8 +175,18 @@ object TimedWorkoutEngine {
             return TimedWorkoutEngineResult(state = state)
         }
 
+        val skippedState = state.completeCurrentStep(
+            status = TimedSessionStepHistoryStatus.SKIPPED,
+            endedAtElapsedSec = state.activeElapsedSec,
+            remainingSec = state.remainingSec
+        ).appendControlHistory(
+            type = TimedWorkoutControlHistoryType.SKIP_STEP,
+            step = currentStep,
+            remainingSec = state.remainingSec
+        )
+
         return advanceToNextStep(
-            state = state.copy(
+            state = skippedState.copy(
                 completedStepCount = state.completedStepCount + 1,
                 skippedStepIds = state.skippedStepIds + currentStep.id
             )
@@ -184,16 +211,43 @@ object TimedWorkoutEngine {
             state = state.copy(
                 remainingSec = state.remainingSec + seconds,
                 extendedRestSec = state.extendedRestSec + seconds
-            )
+            ).recordRestExtension(currentStep, seconds)
         )
     }
 
-    private fun endSession(state: TimedWorkoutEngineState): TimedWorkoutEngineResult {
+    private fun endSession(
+        state: TimedWorkoutEngineState,
+        reason: String?
+    ): TimedWorkoutEngineResult {
         if (state.status == SessionStatus.COMPLETED || state.status == SessionStatus.ABANDONED) {
             return TimedWorkoutEngineResult(state = state)
         }
 
-        return TimedWorkoutEngineResult(state = state.copy(status = SessionStatus.ABANDONED))
+        val currentStep = state.currentStep
+        val endedState = state.completeCurrentStep(
+            status = TimedSessionStepHistoryStatus.ABANDONED,
+            endedAtElapsedSec = state.activeElapsedSec,
+            remainingSec = state.remainingSec
+        ).copy(
+            status = SessionStatus.ABANDONED,
+            earlyEnd = TimedWorkoutEarlyEndRecord(
+                reason = reason,
+                elapsedSec = state.activeElapsedSec,
+                completedStepCount = state.completedStepCount,
+                currentStepId = currentStep?.id,
+                currentStepKind = currentStep?.sessionStepKind,
+                currentStepTitle = currentStep?.title,
+                currentStepRemainingSec = currentStep?.let { state.remainingSec },
+                currentStepActualDurationSec = currentStep?.let { state.currentStepActualDurationSec() }
+            )
+        ).appendControlHistory(
+            type = TimedWorkoutControlHistoryType.END_SESSION,
+            step = currentStep,
+            remainingSec = currentStep?.let { state.remainingSec },
+            reason = reason
+        )
+
+        return TimedWorkoutEngineResult(state = endedState)
     }
 
     private fun advanceToNextStep(state: TimedWorkoutEngineState): TimedWorkoutEngineResult {
@@ -235,7 +289,132 @@ object TimedWorkoutEngine {
             )
         }
 
-        return TimedWorkoutEngineResult(state = state, events = listOf(event))
+        return TimedWorkoutEngineResult(state = state.recordStepStarted(step), events = listOf(event))
+    }
+
+    private fun TimedWorkoutEngineState.recordStepStarted(
+        step: TimedSessionStep
+    ): TimedWorkoutEngineState {
+        if (stepHistory.any { record -> record.stepId == step.id }) {
+            return this
+        }
+
+        return copy(
+            stepHistory = stepHistory + TimedSessionStepHistoryRecord(
+                stepId = step.id,
+                kind = step.sessionStepKind,
+                timedKind = step.kind,
+                title = step.title,
+                blockId = step.blockId,
+                itemId = step.itemId,
+                exerciseId = step.exerciseId,
+                plannedDurationSec = step.durationSec,
+                startedAtElapsedSec = activeElapsedSec
+            )
+        )
+    }
+
+    private fun TimedWorkoutEngineState.completeCurrentStep(
+        status: TimedSessionStepHistoryStatus,
+        endedAtElapsedSec: Int,
+        remainingSec: Int
+    ): TimedWorkoutEngineState {
+        val step = currentStep ?: return this
+        val existingRecord = stepHistory.lastOrNull { record -> record.stepId == step.id }
+        val startedAtElapsedSec = existingRecord?.startedAtElapsedSec ?: activeElapsedSec
+        val actualDurationSec = (endedAtElapsedSec - startedAtElapsedSec).coerceAtLeast(0)
+        val completedRecord = (existingRecord ?: TimedSessionStepHistoryRecord(
+            stepId = step.id,
+            kind = step.sessionStepKind,
+            timedKind = step.kind,
+            title = step.title,
+            blockId = step.blockId,
+            itemId = step.itemId,
+            exerciseId = step.exerciseId,
+            plannedDurationSec = step.durationSec,
+            startedAtElapsedSec = startedAtElapsedSec
+        )).copy(
+            endedAtElapsedSec = endedAtElapsedSec,
+            status = status,
+            actualDurationSec = actualDurationSec,
+            remainingSec = remainingSec,
+            extendedRestSec = restExtensionHistory
+                .filter { extension -> extension.stepId == step.id }
+                .sumOf { extension -> extension.addedSec }
+        )
+        val updatedHistory = if (existingRecord == null) {
+            stepHistory + completedRecord
+        } else {
+            stepHistory.map { record ->
+                if (record.stepId == step.id) completedRecord else record
+            }
+        }
+
+        return copy(stepHistory = updatedHistory)
+    }
+
+    private fun TimedWorkoutEngineState.recordRestExtension(
+        step: TimedSessionStep,
+        seconds: Int
+    ): TimedWorkoutEngineState {
+        val cumulativeAddedSec = restExtensionHistory
+            .filter { extension -> extension.stepId == step.id }
+            .sumOf { extension -> extension.addedSec } + seconds
+        val extension = TimedRestExtensionHistoryRecord(
+            stepId = step.id,
+            kind = step.sessionStepKind,
+            title = step.title,
+            addedSec = seconds,
+            cumulativeAddedSec = cumulativeAddedSec,
+            elapsedSec = activeElapsedSec
+        )
+        val updatedStepHistory = stepHistory.map { record ->
+            if (record.stepId == step.id) {
+                record.copy(extendedRestSec = cumulativeAddedSec)
+            } else {
+                record
+            }
+        }
+
+        return copy(
+            stepHistory = updatedStepHistory,
+            restExtensionHistory = restExtensionHistory + extension
+        ).appendControlHistory(
+            type = TimedWorkoutControlHistoryType.EXTEND_REST,
+            step = step,
+            remainingSec = remainingSec,
+            seconds = seconds
+        )
+    }
+
+    private fun TimedWorkoutEngineState.appendControlHistory(
+        type: TimedWorkoutControlHistoryType,
+        step: TimedSessionStep? = currentStep,
+        remainingSec: Int? = step?.let { this.remainingSec },
+        seconds: Int? = null,
+        reason: String? = null
+    ): TimedWorkoutEngineState {
+        return copy(
+            controlHistory = controlHistory + TimedWorkoutControlHistoryEvent(
+                type = type,
+                elapsedSec = activeElapsedSec,
+                stepId = step?.id,
+                stepKind = step?.sessionStepKind,
+                remainingSec = remainingSec,
+                seconds = seconds,
+                reason = reason
+            )
+        )
+    }
+
+    private fun TimedWorkoutEngineState.currentStepActualDurationSec(): Int {
+        val step = currentStep ?: return 0
+        val startedAtElapsedSec = stepHistory
+            .lastOrNull { record -> record.stepId == step.id }
+            ?.startedAtElapsedSec
+            ?: activeElapsedSec
+
+        return (activeElapsedSec - startedAtElapsedSec).coerceAtLeast(0)
     }
 
     private fun emitEndingCueIfNeeded(state: TimedWorkoutEngineState): TimedWorkoutEngineResult {
@@ -438,6 +617,7 @@ object TimedWorkoutEngine {
             blockId = blockId,
             itemId = item?.id,
             exerciseId = item?.exerciseId,
+            title = item?.labelOverride ?: item?.exerciseId ?: blockKind.defaultStepTitle(),
             durationSec = durationSec,
             round = round,
             roundCount = roundCount,
@@ -467,6 +647,7 @@ object TimedWorkoutEngine {
             sessionStepKind = SessionStepKind.TIMED_REST,
             blockId = blockId,
             itemId = itemId,
+            title = "Rest",
             durationSec = duration,
             round = round,
             roundCount = roundCount,
@@ -479,6 +660,15 @@ object TimedWorkoutEngine {
         val cue = this ?: return null
         return cue.takeIf {
             cue.enabled && cue.thresholdSec > 0 && cue.thresholdSec <= durationSec
+        }
+    }
+
+    private fun PlanBlockKind.defaultStepTitle(): String {
+        return when (this) {
+            PlanBlockKind.WARMUP -> "Warmup"
+            PlanBlockKind.STRETCH -> "Stretch"
+            PlanBlockKind.COOLDOWN -> "Cooldown"
+            else -> "Timed work"
         }
     }
 }
@@ -498,6 +688,11 @@ data class TimedWorkoutEngineState(
     val completedStepCount: Int = 0,
     val skippedStepIds: List<String> = emptyList(),
     val extendedRestSec: Int = 0,
+    val activeElapsedSec: Int = 0,
+    val stepHistory: List<TimedSessionStepHistoryRecord> = emptyList(),
+    val controlHistory: List<TimedWorkoutControlHistoryEvent> = emptyList(),
+    val restExtensionHistory: List<TimedRestExtensionHistoryRecord> = emptyList(),
+    val earlyEnd: TimedWorkoutEarlyEndRecord? = null,
     internal val emittedEndingCueKeys: Set<String> = emptySet()
 ) {
     val currentStep: TimedSessionStep?
@@ -518,6 +713,11 @@ data class TimedWorkoutEngineState(
 
     val isTerminal: Boolean
         get() = status == SessionStatus.COMPLETED || status == SessionStatus.ABANDONED
+
+    val skippedStepHistory: List<TimedSessionStepHistoryRecord>
+        get() = stepHistory.filter { record ->
+            record.status == TimedSessionStepHistoryStatus.SKIPPED
+        }
 }
 
 data class TimedSessionStep(
@@ -527,6 +727,7 @@ data class TimedSessionStep(
     val blockId: String,
     val itemId: String? = null,
     val exerciseId: String? = null,
+    val title: String,
     val durationSec: Int,
     val round: Int? = null,
     val roundCount: Int? = null,

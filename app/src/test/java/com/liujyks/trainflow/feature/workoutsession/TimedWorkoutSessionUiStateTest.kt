@@ -107,9 +107,32 @@ class TimedWorkoutSessionUiStateTest {
 
         assertTrue(uiState.isTerminal)
         assertEquals("计时训练已提前结束", uiState.terminalTitle)
-        assertTrue(requireNotNull(uiState.terminalSummary).contains("已完成"))
+        assertTrue(requireNotNull(uiState.terminalSummary).contains("Abandoned"))
+        assertTrue(uiState.terminalSummary.contains("Reason: test"))
         assertFalse(uiState.shouldShowNextStepPanel)
         assertFalse(uiState.canEnd)
+    }
+
+    @Test
+    fun controlHistorySummaryMapsSkippedRestExtensionAndLastControl() {
+        val plan = reminderPlan(
+            workSec = 2,
+            restSec = 5,
+            cueSettings = CueSettings(restEnding = CountdownCue(thresholdSec = 1))
+        )
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+        val uiState = state.toTimedWorkoutSessionScreenState()
+
+        assertEquals(1, uiState.skippedStepCount)
+        assertEquals(15, uiState.extendedRestTotalSec)
+        assertEquals("Skipped current step", uiState.lastControlLabel)
+        assertEquals("Skipped 1, rest +15s, pauses 0.", uiState.historySummaryLabel)
     }
 
     @Test
