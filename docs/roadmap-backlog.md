@@ -416,6 +416,8 @@ stepsCompleted:
 
 ### Story E4.1: 力量训练执行引擎
 
+**状态:** Implemented in `core.engine` pure Kotlin state machine and unit tests
+
 作为用户，  
 我想力量训练按准备、进行、确认和休息推进，  
 以便每组记录清楚。
@@ -426,6 +428,17 @@ stepsCompleted:
 - When 点击开始本组，Then 开始记录本组耗时。
 - When 点击完成本组，Then 进入确认记录状态。
 - When 确认记录，Then 保存组记录并进入休息。
+
+**交付结果:**
+
+- Android 侧新增纯 Kotlin `StrengthWorkoutEngine`，可从 `WorkoutPlan` 或 `WorkoutPlanSnapshot` 展开有效力量训练组步骤。
+- 支持 `start_session`、`pause_session`、`resume_session`、`start_strength_set`、`complete_strength_set`、`confirm_strength_set` 和 `end_session`；`end_session` 进入 `ABANDONED`，不伪装成正常完成。
+- 支持准备本组、进行本组、确认记录、组间休息和 completed / abandoned terminal state；开始本组后才累计 `activeDurationSec`。
+- 完成本组后生成 `StrengthSetDraft` 确认草案，不直接写正式记录；确认后生成内存态 `StrengthSetRecord`，并进入休息或下一组准备。
+- 默认回填规则固定为组级目标优先，缺失时使用动作级目标；固定次数直接回填，次数区间使用 `minReps` 作为稳定默认。
+- 组间休息通过 tick 推进，支持休息临近结束事件；暂停/继续会冻结 active set 计时和 rest 剩余时间，terminal state 后命令不会污染 records/history。
+- 新增单元测试覆盖状态推进、事件触发、默认回填、暂停恢复、休息推进、提前开始下一组、非法命令忽略、完成/废弃边界和空计划完成。
+- 本 story 未接入 UI、ViewModel、Room/DataStore repository、真实 `WorkoutSession` 持久化、session records 写库、通知调度、声音、震动、真实心率设备、语音、完整总结、跟练闭环、动作替换或跳过。
 
 ### Story E4.2: 力量训练执行页
 
@@ -719,23 +732,23 @@ stepsCompleted:
 
 ```text
 E3.4 已关闭并合入 main。
-docs UTF-8 policy 已 review/merge，当前 main 为 0ed03c920e286406bb79b6453d5cf42c857ad31c。
-E3.5 尚未开始。
+docs UTF-8 policy 与 docs/status refresh 已 review/merge，当前 main 为 38915dd561a5204eb6d7d8d61539321743f9f87a。
+E4.1 已在 codex/e4-1-strength-execution-engine 阶段分支实现，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-生成 Story E3.5 Dev Story 提示词
+Story E4.1 Review Gate
 ```
 
-Dev Story 提示词建议重点确认：
+Review Gate 建议重点确认：
 
-1. E3.5 的阶段目标、允许范围和禁止范围，避免提前实现后续 story。
-2. E3.5 依赖的 E3.1 到 E3.4 计时训练引擎、执行页、提醒和控制历史边界。
-3. E3.5 是否继续保持 `WorkoutCommand` / `WorkoutEvent` / session history 边界，不引入未决策的持久化、通知、心率、语音、完整总结、跟练或力量训练执行能力。
-4. E3.5 需要运行的 Android 验证命令、文档更新规则和 review gate 交付要求。
+1. 力量引擎是否只在 `core.engine` 内实现，没有接入 E4.2 UI、E4.3 确认层 UI、E4.4 替换/跳过或真实持久化。
+2. `WorkoutCommand` / `WorkoutEvent` 边界是否保持稳定，UI 和未来语音仍可复用同一命令语义。
+3. 确认草案、默认回填、active set 耗时、actual rest、暂停冻结、提前结束和 terminal command ignore 是否符合 E4.1 验收。
+4. Review 通过后再合入 `main`，下一 story 进入 `Story E4.2: 力量训练执行页`。
 
 ## 8. 暂缓事项
 
