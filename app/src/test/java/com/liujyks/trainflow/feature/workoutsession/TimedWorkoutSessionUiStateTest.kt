@@ -107,8 +107,8 @@ class TimedWorkoutSessionUiStateTest {
 
         assertTrue(uiState.isTerminal)
         assertEquals("计时训练已提前结束", uiState.terminalTitle)
-        assertTrue(requireNotNull(uiState.terminalSummary).contains("Abandoned"))
-        assertTrue(uiState.terminalSummary.contains("Reason: test"))
+        assertTrue(requireNotNull(uiState.terminalSummary).contains("提前结束"))
+        assertTrue(uiState.terminalSummary.contains("原因：test"))
         assertFalse(uiState.shouldShowNextStepPanel)
         assertFalse(uiState.canEnd)
     }
@@ -131,8 +131,8 @@ class TimedWorkoutSessionUiStateTest {
 
         assertEquals(1, uiState.skippedStepCount)
         assertEquals(15, uiState.extendedRestTotalSec)
-        assertEquals("Skipped current step", uiState.lastControlLabel)
-        assertEquals("Skipped 1, rest +15s, pauses 0.", uiState.historySummaryLabel)
+        assertEquals("跳过当前步骤", uiState.lastControlLabel)
+        assertEquals("跳过 1 步，休息延长 15 秒，暂停 0 次。", uiState.historySummaryLabel)
     }
 
     @Test

@@ -137,10 +137,10 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
     }
     val historySummaryLabel = buildHistorySummaryLabel()
     val terminalSummary = when (status) {
-        SessionStatus.COMPLETED -> "Completed $completedStepCount / ${steps.size} steps. $historySummaryLabel"
+        SessionStatus.COMPLETED -> "已完成 $completedStepCount / ${steps.size} 步。$historySummaryLabel"
         SessionStatus.ABANDONED -> {
-            val reason = earlyEnd?.reason?.let { " Reason: $it." }.orEmpty()
-            "Abandoned after $completedStepCount / ${steps.size} steps.$reason $historySummaryLabel"
+            val reason = earlyEnd?.reason?.let { " 原因：$it。" }.orEmpty()
+            "已完成 $completedStepCount / ${steps.size} 步后提前结束。$reason$historySummaryLabel"
         }
         else -> null
     }
@@ -178,17 +178,17 @@ private fun TimedWorkoutEngineState.buildHistorySummaryLabel(): String {
     val pauseCount = controlHistory.count { event ->
         event.type == TimedWorkoutControlHistoryType.PAUSE_SESSION
     }
-    return "Skipped ${skippedStepHistory.size}, rest +${extendedRestSec}s, pauses $pauseCount."
+    return "跳过 ${skippedStepHistory.size} 步，休息延长 ${extendedRestSec} 秒，暂停 $pauseCount 次。"
 }
 
 private fun TimedWorkoutControlHistoryEvent.toLabel(): String {
     return when (type) {
-        TimedWorkoutControlHistoryType.START_SESSION -> "Started"
-        TimedWorkoutControlHistoryType.PAUSE_SESSION -> "Paused"
-        TimedWorkoutControlHistoryType.RESUME_SESSION -> "Resumed"
-        TimedWorkoutControlHistoryType.SKIP_STEP -> "Skipped current step"
-        TimedWorkoutControlHistoryType.EXTEND_REST -> "Extended rest +${seconds ?: 0}s"
-        TimedWorkoutControlHistoryType.END_SESSION -> "Ended early"
+        TimedWorkoutControlHistoryType.START_SESSION -> "开始训练"
+        TimedWorkoutControlHistoryType.PAUSE_SESSION -> "暂停训练"
+        TimedWorkoutControlHistoryType.RESUME_SESSION -> "继续训练"
+        TimedWorkoutControlHistoryType.SKIP_STEP -> "跳过当前步骤"
+        TimedWorkoutControlHistoryType.EXTEND_REST -> "休息延长 ${seconds ?: 0} 秒"
+        TimedWorkoutControlHistoryType.END_SESSION -> "提前结束"
     }
 }
 
