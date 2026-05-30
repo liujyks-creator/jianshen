@@ -350,6 +350,18 @@ private fun SessionControls(
                 Text(text = "+15秒", color = TrainFlowNeutral50)
             }
         }
+        Text(
+            text = uiState.historySummaryLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral200
+        )
+        if (uiState.lastControlLabel.isNotBlank()) {
+            Text(
+                text = uiState.lastControlLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500
+            )
+        }
         TextButton(
             onClick = onEnd,
             enabled = uiState.canEnd,

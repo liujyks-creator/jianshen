@@ -375,7 +375,7 @@ stepsCompleted:
 - Given 休息倒计时进入最后 N 秒，Then 触发休息临近结束状态。
 - Then 声音、震动和强化动画按偏好开关工作。
 
-**状态:** Implemented in Android timed session UI, feedback dispatcher boundary, and unit tests
+**状态:** Merged to `main` from Android timed session UI, feedback dispatcher boundary, and unit tests
 
 **交付结果:**
 
@@ -397,6 +397,18 @@ stepsCompleted:
 - Then 支持暂停、继续、跳过当前步骤、延长休息、提前结束。
 - Then 这些操作通过 `WorkoutCommand` 进入引擎。
 - Then 操作结果写入 session history。
+
+**状态:** Implemented / needs review in `core.engine` timed session history, Android UI state mapper, and unit tests
+
+**交付结果:**
+
+- `TimedWorkoutEngine` 继续只通过 `WorkoutCommand.StartSession`、`PauseSession`、`ResumeSession`、`SkipStep`、`ExtendRest` 和 `EndSession` 接收训练中控制，不在 UI 中绕过执行边界。
+- 计时引擎新增纯 Kotlin session history 边界，记录 step started / completed / skipped / abandoned、控制事件、休息延长明细和提前结束进度。
+- 跳过记录包含 step id、step kind、title、剩余时间和实际执行时长；延长休息只在 active rest step 生效，并记录增加秒数与该 rest step 的累计延长秒数。
+- 提前结束进入 `ABANDONED` terminal state，记录 reason、当前步骤、剩余时间和当前步骤实际执行时长；terminal state 之后的 pause/resume/skip/extend/end 命令不会继续污染 history。
+- 计时执行 UI state mapper 暴露跳过数、累计延长休息秒数、最后控制事件和轻量历史摘要；Compose 执行页只做轻量展示，不做完整训练总结页。
+- 新增单元测试覆盖 pause/resume 冻结与恢复、skip history、extend_rest history、early end history、terminal command 不污染状态和 UI state summary。
+- 本 story 未实现真实 `WorkoutSession` 持久化、Room/DataStore repository 闭环、session records 写库、通知、前台服务、真实心率设备、语音、完整总结、跟练闭环或力量训练执行页。
 
 ## Epic E4: 力量训练执行闭环
 
@@ -706,15 +718,15 @@ stepsCompleted:
 下一轮建议进入：
 
 ```text
-Story E3.3 Review Gate
+Story E3.4 Review Gate
 ```
 
 Review Gate 建议重点确认：
 
-1. E3.3 是否只消费 E3.1 `timed_work_ending` / `rest_ending` 事件来驱动提醒状态和反馈请求，没有在 UI 中复制计时状态机。
-2. E3.3 是否按 `CountdownCue.actionEnding` 与 `CountdownCue.restEnding` 分别处理动作提醒和休息提醒，不混用阈值或开关。
-3. E3.3 的视觉强化是否明显但克制，主倒计时、当前动作/休息和下一步仍是训练执行页主信息，心率占位保持辅助层级。
-4. E3.3 是否没有引入通知调度、前台服务、真实 session records、Room/DataStore repository 闭环、真实心率设备、语音或完整总结能力。
+1. E3.4 是否所有训练中控制仍通过 `WorkoutCommand` 分发给 `TimedWorkoutEngine`，没有在 UI 中直接改写训练状态。
+2. E3.4 的 step history、control history、rest extension history 和 early-end record 是否足够支撑后续 E5 计时训练总结，同时不提前实现真实持久化。
+3. `extend_rest` 是否只在 active rest step 生效，terminal state 之后的训练控制命令是否不会继续污染 history。
+4. E3.4 是否没有引入 Room/DataStore repository 闭环、session records 写库、通知调度、前台服务、真实心率设备、语音、完整总结、跟练闭环或力量训练执行页。
 
 ## 8. 暂缓事项
 

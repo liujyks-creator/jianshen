@@ -86,6 +86,16 @@ class TimedWorkoutEngineTest {
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 3)
         assertEquals(SessionStatus.COMPLETED, result.state.status)
+        assertEquals(
+            listOf(
+                TimedWorkoutControlHistoryType.START_SESSION,
+                TimedWorkoutControlHistoryType.PAUSE_SESSION,
+                TimedWorkoutControlHistoryType.RESUME_SESSION
+            ),
+            result.state.controlHistory.map { event -> event.type }
+        )
+        assertEquals(5, result.state.stepHistory.single().actualDurationSec)
+        assertEquals(TimedSessionStepHistoryStatus.COMPLETED, result.state.stepHistory.single().status)
     }
 
     @Test
@@ -192,6 +202,12 @@ class TimedWorkoutEngineTest {
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.SkipStep)
         assertEquals("circuit-r1-second-work", result.state.currentStep?.id)
         assertEquals(listOf("circuit-r1-first-work"), result.state.skippedStepIds)
+        assertEquals(TimedSessionStepHistoryStatus.SKIPPED, result.state.skippedStepHistory.single().status)
+        assertEquals("circuit-r1-first-work", result.state.skippedStepHistory.single().stepId)
+        assertEquals("jumping-jacks", result.state.skippedStepHistory.single().title)
+        assertEquals(10, result.state.skippedStepHistory.single().remainingSec)
+        assertEquals(0, result.state.skippedStepHistory.single().actualDurationSec)
+        assertEquals(TimedWorkoutControlHistoryType.SKIP_STEP, result.state.controlHistory.last().type)
         assertTrue(result.events.single() is WorkoutEvent.TimedWorkStarted)
 
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.SkipStep)
@@ -217,10 +233,16 @@ class TimedWorkoutEngineTest {
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ExtendRest(seconds = 15))
         assertEquals(17, result.state.remainingSec)
         assertEquals(15, result.state.extendedRestSec)
+        assertEquals(1, result.state.restExtensionHistory.size)
+        assertEquals(15, result.state.restExtensionHistory.single().addedSec)
+        assertEquals(15, result.state.restExtensionHistory.single().cumulativeAddedSec)
+        assertEquals(15, result.state.stepHistory.last().extendedRestSec)
+        assertEquals(TimedWorkoutControlHistoryType.EXTEND_REST, result.state.controlHistory.last().type)
 
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ExtendRest(seconds = -5))
         assertEquals(17, result.state.remainingSec)
         assertEquals(15, result.state.extendedRestSec)
+        assertEquals(1, result.state.restExtensionHistory.size)
     }
 
     @Test
@@ -265,6 +287,41 @@ class TimedWorkoutEngineTest {
         assertEquals(SessionStatus.ABANDONED, result.state.status)
         assertTrue(result.state.isTerminal)
         assertFalse(result.events.any { event -> event is WorkoutEvent.SessionCompleted })
+        assertEquals("user_exit", result.state.earlyEnd?.reason)
+        assertEquals(SessionStatus.ABANDONED, result.state.earlyEnd?.status)
+        assertEquals("circuit-r1-jump-work", result.state.earlyEnd?.currentStepId)
+        assertEquals(5, result.state.earlyEnd?.currentStepRemainingSec)
+        assertEquals(0, result.state.earlyEnd?.currentStepActualDurationSec)
+        assertEquals(TimedSessionStepHistoryStatus.ABANDONED, result.state.stepHistory.single().status)
+        assertEquals(TimedWorkoutControlHistoryType.END_SESSION, result.state.controlHistory.last().type)
+    }
+
+    @Test
+    fun terminalStateIgnoresLateTrainingControlsWithoutHistoryPollution() {
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(singleActionPlan(workSec = 2, restSec = 5)),
+            command = WorkoutCommand.StartSession
+        )
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.EndSession(reason = "done"))
+        val terminalState = result.state
+
+        val lateCommands = listOf(
+            WorkoutCommand.PauseSession,
+            WorkoutCommand.ResumeSession,
+            WorkoutCommand.SkipStep,
+            WorkoutCommand.ExtendRest(seconds = 15),
+            WorkoutCommand.EndSession(reason = "late")
+        )
+
+        lateCommands.forEach { command ->
+            result = TimedWorkoutEngine.dispatch(result.state, command)
+        }
+
+        assertEquals(terminalState, result.state)
+        assertEquals(listOf("done"), result.state.controlHistory.mapNotNull { event -> event.reason })
+        assertEquals(1, result.state.controlHistory.count { event ->
+            event.type == TimedWorkoutControlHistoryType.END_SESSION
+        })
     }
 
     private fun singleActionPlan(
