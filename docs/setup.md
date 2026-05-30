@@ -92,7 +92,25 @@ git config --unset http.proxy
 git credential-manager github list
 ```
 
-## 6. 启动前端原型
+## 6. PowerShell 文本编码
+
+本仓库文本文件统一按 UTF-8 读取和写入。Windows PowerShell 默认编码可能导致中文文档显示乱码或写入 BOM，因此每次新会话读取中文 Markdown、Kotlin、Gradle、JSON 或其他文本文件前，先设置：
+
+```powershell
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+```
+
+读取文件时使用显式 UTF-8：
+
+```powershell
+Get-Content -Raw -Encoding UTF8 <path>
+```
+
+代码和文档编辑优先使用 `apply_patch`。如果必须由 PowerShell 写文本文件，使用 .NET `System.Text.UTF8Encoding($false)` 写入 UTF-8 without BOM，不依赖默认 `Set-Content` 或 `Add-Content`。如果 UTF-8 读取仍异常，先只读检查 BOM 或字节特征，不要猜测内容或自动转码覆盖。
+
+## 7. 启动前端原型
 
 ```powershell
 cd .\prototype
@@ -106,7 +124,7 @@ npm.cmd run dev
 http://127.0.0.1:5173
 ```
 
-## 7. 验证原型改动
+## 8. 验证原型改动
 
 在 `prototype` 目录执行：
 
@@ -117,7 +135,7 @@ npm.cmd run build
 
 当 PowerShell 执行策略拦住 `npm` shim 时，使用 `npm.cmd`。
 
-## 8. 验证 Android 工程
+## 9. 验证 Android 工程
 
 在仓库根目录执行：
 
@@ -165,7 +183,7 @@ sdk.dir=C\:/path/to/android-sdk
 $env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=<port> -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=<port>"
 ```
 
-## 9. 用 Codex 开始工作
+## 10. 用 Codex 开始工作
 
 用 Codex 打开仓库目录，并从以下指令开始：
 
@@ -188,7 +206,7 @@ $env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=<port> -Dhttps.p
 10. `DESIGN.md`
 11. `docs/ui-extension-guide.md`
 
-## 10. 分支与提交流
+## 11. 分支与提交流
 
 开始工作前：
 
@@ -219,7 +237,7 @@ git commit -m "<short summary>"
 git push -u origin HEAD
 ```
 
-## 11. 本地技能
+## 12. 本地技能
 
 当前项目可选使用两个本地技能：
 

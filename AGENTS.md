@@ -127,3 +127,19 @@ They are local working copies for this computer only and are intentionally ignor
 - Add or update documentation when a product decision changes.
 - Prefer explicit branches for feature work, using `codex/<task-name>` when a branch is needed.
 - Do not commit secrets, device logs, generated build output, or unrelated local files.
+
+## Text Encoding
+
+Repository text files are read and written as UTF-8.
+
+On Windows, set PowerShell console encoding before reading Chinese Markdown, Kotlin, Gradle, JSON, or other text files:
+
+```powershell
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+```
+
+Read files with explicit UTF-8, for example `Get-Content -Raw -Encoding UTF8 <path>`. Prefer `apply_patch` for code and documentation edits. If PowerShell must write a text file, write UTF-8 without BOM through .NET APIs instead of relying on default `Set-Content` or `Add-Content` behavior.
+
+Do not report routine recoverable console encoding noise to the user. If a file still cannot be read reliably as UTF-8, do not guess or rewrite it; inspect it read-only for BOM or byte-level encoding clues and report the specific file before editing.
