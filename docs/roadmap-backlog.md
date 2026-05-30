@@ -398,7 +398,7 @@ stepsCompleted:
 - Then 这些操作通过 `WorkoutCommand` 进入引擎。
 - Then 操作结果写入 session history。
 
-**状态:** Implemented / needs review in `core.engine` timed session history, Android UI state mapper, and unit tests
+**状态:** Closed and merged to `main` from `core.engine` timed session history, Android UI state mapper, and unit tests
 
 **交付结果:**
 
@@ -715,18 +715,27 @@ stepsCompleted:
 
 ## 7. 下一轮建议
 
+当前状态说明：
+
+```text
+E3.4 已关闭并合入 main。
+docs UTF-8 policy 已 review/merge，当前 main 为 0ed03c920e286406bb79b6453d5cf42c857ad31c。
+E3.5 尚未开始。
+当前无已知 blocker。
+```
+
 下一轮建议进入：
 
 ```text
-Story E3.4 Review Gate
+生成 Story E3.5 Dev Story 提示词
 ```
 
-Review Gate 建议重点确认：
+Dev Story 提示词建议重点确认：
 
-1. E3.4 是否所有训练中控制仍通过 `WorkoutCommand` 分发给 `TimedWorkoutEngine`，没有在 UI 中直接改写训练状态。
-2. E3.4 的 step history、control history、rest extension history 和 early-end record 是否足够支撑后续 E5 计时训练总结，同时不提前实现真实持久化。
-3. `extend_rest` 是否只在 active rest step 生效，terminal state 之后的训练控制命令是否不会继续污染 history。
-4. E3.4 是否没有引入 Room/DataStore repository 闭环、session records 写库、通知调度、前台服务、真实心率设备、语音、完整总结、跟练闭环或力量训练执行页。
+1. E3.5 的阶段目标、允许范围和禁止范围，避免提前实现后续 story。
+2. E3.5 依赖的 E3.1 到 E3.4 计时训练引擎、执行页、提醒和控制历史边界。
+3. E3.5 是否继续保持 `WorkoutCommand` / `WorkoutEvent` / session history 边界，不引入未决策的持久化、通知、心率、语音、完整总结、跟练或力量训练执行能力。
+4. E3.5 需要运行的 Android 验证命令、文档更新规则和 review gate 交付要求。
 
 ## 8. 暂缓事项
 
