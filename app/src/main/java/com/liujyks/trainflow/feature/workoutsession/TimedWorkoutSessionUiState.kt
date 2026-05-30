@@ -139,7 +139,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
     val terminalSummary = when (status) {
         SessionStatus.COMPLETED -> "已完成 $completedStepCount / ${steps.size} 步。$historySummaryLabel"
         SessionStatus.ABANDONED -> {
-            val reason = earlyEnd?.reason?.let { " 原因：$it。" }.orEmpty()
+            val reason = earlyEnd?.reason.toEarlyEndReasonSummary()
             "已完成 $completedStepCount / ${steps.size} 步后提前结束。$reason$historySummaryLabel"
         }
         else -> null
@@ -172,6 +172,16 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary
     )
+}
+
+private fun String?.toEarlyEndReasonSummary(): String {
+    val reasonText = when (this?.trim()) {
+        null, "" -> return ""
+        "user_requested" -> "用户主动结束"
+        else -> "提前结束"
+    }
+
+    return " 原因：$reasonText。"
 }
 
 private fun TimedWorkoutEngineState.buildHistorySummaryLabel(): String {
