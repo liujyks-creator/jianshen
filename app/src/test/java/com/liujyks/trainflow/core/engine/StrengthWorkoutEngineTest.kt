@@ -9,6 +9,7 @@ import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseTarget
+import com.liujyks.trainflow.core.model.StrengthSetCompletionDraft
 import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
@@ -141,6 +142,38 @@ class StrengthWorkoutEngineTest {
     }
 
     @Test
+    fun completeStrengthSetIgnoresExternalDurationOverride() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(singleSetPlan()),
+            command = WorkoutCommand.StartSession
+        )
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 2)
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.CompleteStrengthSet(
+                draft = StrengthSetCompletionDraft(activeDurationSec = 10)
+            )
+        )
+
+        assertEquals(2, result.state.pendingDraft?.activeDurationSec)
+        assertEquals(2, result.state.activeSetElapsedSec)
+
+        val activeHistory = result.state.stepHistory.single { record ->
+            record.kind == SessionStepKind.STRENGTH_ACTIVE_SET
+        }
+        assertEquals(2, activeHistory.endedAtElapsedSec)
+        assertEquals(2, activeHistory.actualDurationSec)
+
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
+
+        assertEquals(2, result.state.strengthSetRecords.single().activeDurationSec)
+    }
+
+    @Test
     fun pauseFreezesActiveSetTimerAndRestRemainingTime() {
         var result = StrengthWorkoutEngine.dispatch(
             state = StrengthWorkoutEngine.create(twoSetPlan(restAfterFirstSetSec = 5)),
@@ -207,6 +240,78 @@ class StrengthWorkoutEngineTest {
 
         result = StrengthWorkoutEngine.tick(result.state)
         assertEquals(listOf(1), result.events.restEndingRemainingSeconds())
+    }
+
+    @Test
+    fun restEndingCueGreaterThanRestDurationIsIgnored() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(
+                twoSetPlan(
+                    restAfterFirstSetSec = 3,
+                    preferences = PlanPreferences(
+                        cueSettings = CueSettings(restEnding = CountdownCue(thresholdSec = 5))
+                    )
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 1)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
+
+        assertFalse(result.events.any { event -> event is WorkoutEvent.RestEnding })
+
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 3)
+
+        assertTrue(result.events.none { event -> event is WorkoutEvent.RestEnding })
+        assertEquals(SessionStepKind.STRENGTH_PREPARE_SET, result.state.currentSessionStep?.kind)
+    }
+
+    @Test
+    fun advancingAcrossExerciseBlocksEmitsNextExerciseReadyBeforeStrengthSetReady() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(
+                plan(
+                    blocks = listOf(
+                        block(
+                            target = StrengthExerciseTarget(
+                                weight = weight(60.0),
+                                repTarget = RepTarget.Fixed(reps = 5)
+                            ),
+                            sets = listOf(set(id = "bench-working-1", order = 1, restAfterSec = 0))
+                        ),
+                        block(
+                            target = StrengthExerciseTarget(
+                                weight = weight(40.0),
+                                repTarget = RepTarget.Fixed(reps = 8)
+                            ),
+                            sets = listOf(set(id = "row-working-1", order = 1)),
+                            id = "row",
+                            exerciseId = "dumbbell-row",
+                            order = 2
+                        )
+                    )
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 1)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
+
+        assertTrue(result.events[0] is WorkoutEvent.NextExerciseReady)
+        assertTrue(result.events[1] is WorkoutEvent.StrengthSetReady)
+        assertEquals("dumbbell-row", (result.events[0] as WorkoutEvent.NextExerciseReady).exerciseId)
+        assertEquals("dumbbell-row", (result.events[1] as WorkoutEvent.StrengthSetReady).exerciseId)
+        assertEquals("row-working-1", result.state.currentSet?.setPlanId)
     }
 
     @Test
@@ -374,12 +479,15 @@ class StrengthWorkoutEngineTest {
 
     private fun block(
         target: StrengthExerciseTarget,
-        sets: List<StrengthSetPlan>
+        sets: List<StrengthSetPlan>,
+        id: String = "bench",
+        exerciseId: String = "barbell-bench-press",
+        order: Int = 1
     ): StrengthExerciseBlock {
         return StrengthExerciseBlock(
-            id = "bench",
-            order = 1,
-            exerciseId = "barbell-bench-press",
+            id = id,
+            order = order,
+            exerciseId = exerciseId,
             target = target,
             sets = sets
         )

@@ -217,9 +217,7 @@ object StrengthWorkoutEngine {
             return StrengthWorkoutEngineResult(state = state)
         }
 
-        val activeDurationSec = draft?.activeDurationSec
-            ?.takeIf { seconds -> seconds >= 0 }
-            ?: state.activeSetElapsedSec
+        val activeDurationSec = state.activeSetElapsedSec
         val confirmationDraft = currentSet.toDraft(activeDurationSec)
         val activeCompletedState = state.completeCurrentStep(
             status = StrengthSessionStepHistoryStatus.COMPLETED,
@@ -434,8 +432,11 @@ object StrengthWorkoutEngine {
 
     private fun emitRestEndingCueIfNeeded(state: StrengthWorkoutEngineState): StrengthWorkoutEngineResult {
         val cue = state.restEndingCue ?: return StrengthWorkoutEngineResult(state = state)
+        val restDurationSec = state.currentSessionStep?.plannedDurationSec
+            ?: return StrengthWorkoutEngineResult(state = state)
         if (
             state.currentStepKind != SessionStepKind.STRENGTH_REST ||
+            cue.thresholdSec > restDurationSec ||
             state.restRemainingSec > cue.thresholdSec ||
             state.restRemainingSec <= 0 ||
             state.restRemainingSec in state.emittedRestEndingSeconds
