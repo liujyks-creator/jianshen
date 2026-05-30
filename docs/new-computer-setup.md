@@ -102,7 +102,25 @@ git config --unset http.proxy
 8. `DESIGN.md`
 9. `docs/ui-extension-guide.md`
 
-## 6. 启动前端原型
+## 6. 配置 PowerShell 文本编码
+
+本仓库文本文件统一按 UTF-8 读取和写入。新电脑或新 PowerShell 会话读取中文 Markdown、Kotlin、Gradle、JSON 或其他文本文件前，先设置：
+
+```powershell
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+```
+
+读取文件时使用：
+
+```powershell
+Get-Content -Raw -Encoding UTF8 <path>
+```
+
+代码和文档编辑优先使用 `apply_patch`。如果必须由 PowerShell 写文本文件，使用 .NET `System.Text.UTF8Encoding($false)` 写入 UTF-8 without BOM，不依赖默认 `Set-Content` 或 `Add-Content`。如果 UTF-8 读取仍异常，先只读检查 BOM 或字节特征，不要猜测内容或自动转码覆盖。
+
+## 7. 启动前端原型
 
 进入原型目录并安装依赖：
 
@@ -130,7 +148,7 @@ npm.cmd run lint
 npm.cmd run build
 ```
 
-## 7. 每次开始开发前
+## 8. 每次开始开发前
 
 ```powershell
 cd $HOME\Documents\jianshen
@@ -161,7 +179,7 @@ git switch -c codex/<任务名>
 git switch -c codex/android-architecture
 ```
 
-## 8. 每次完成一段工作后
+## 9. 每次完成一段工作后
 
 先检查改动：
 
@@ -180,7 +198,7 @@ git push -u origin HEAD
 
 不要把未确认的临时文件、密钥、设备日志或无关改动一起提交。
 
-## 9. 本项目相关技能
+## 10. 本项目相关技能
 
 本项目可选使用两个本地技能：
 
@@ -202,7 +220,7 @@ git push -u origin HEAD
 如果技能不存在，先基于仓库 docs/planning 继续，不要阻塞开发。
 ```
 
-## 10. 当前项目接力原则
+## 11. 当前项目接力原则
 
 换电脑后，项目状态以 GitHub 仓库内容为准：
 

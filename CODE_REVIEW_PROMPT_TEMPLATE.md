@@ -25,6 +25,17 @@ C:/Users/25073/Desktop/jianshen
 - 本轮默认只做 review。除非用户明确要求修复，不要改文件。
 - 不提交 skills/、.local/、build 输出、日志、设备输出、node_modules、dist 或本地临时文件。
 
+Windows 文本编码规则：
+- 本仓库文本文件统一按 UTF-8 读取和写入。
+- 读取中文 Markdown、Kotlin、Gradle、JSON 或其他文本文件前，先设置：
+  - `[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)`
+  - `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)`
+  - `$OutputEncoding = [Console]::OutputEncoding`
+- 读取文件使用 `Get-Content -Raw -Encoding UTF8 <path>`，搜索优先使用 `rg`。
+- Review 默认不写文件；如用户要求修复，优先用 `apply_patch` 编辑，避免 PowerShell 默认编码写入。
+- 如必须用 PowerShell 写文本文件，使用 .NET `System.Text.UTF8Encoding($false)` 写入 UTF-8 without BOM；不要用默认 `Set-Content` / `Add-Content` 写中文文本。
+- 如果 UTF-8 读取仍异常，不要猜测内容，不要自动转码覆盖；先只读检查 BOM/字节特征，再报告具体文件。
+
 当前状态：
 - main 当前 commit：<main commit>
 - Story 分支：<story branch>
