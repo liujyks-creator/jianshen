@@ -93,7 +93,31 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
-    fun terminalStatesStayLightweight() {
+    fun completedTerminalStateIncludesLightweightSummary() {
+        val plan = buildDefaultPlanManagementState().plans.first()
+        val started = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val completed = TimedWorkoutEngine.tick(
+            started,
+            seconds = started.steps.sumOf { step -> step.durationSec }
+        ).state
+        val uiState = completed.toTimedWorkoutSessionScreenState()
+
+        assertTrue(uiState.isTerminal)
+        assertEquals("计时训练完成", uiState.terminalTitle)
+        assertEquals(
+            "已完成 ${completed.completedStepCount} / ${completed.steps.size} 步。" +
+                uiState.historySummaryLabel,
+            uiState.terminalSummary
+        )
+        assertFalse(uiState.shouldShowNextStepPanel)
+        assertFalse(uiState.canEnd)
+    }
+
+    @Test
+    fun userRequestedEarlyEndReasonIsLocalizedInTerminalSummary() {
         val plan = buildDefaultPlanManagementState().plans.first()
         val started = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(plan),
@@ -101,16 +125,37 @@ class TimedWorkoutSessionUiStateTest {
         ).state
         val ended = TimedWorkoutEngine.dispatch(
             started,
-            WorkoutCommand.EndSession(reason = "test")
+            WorkoutCommand.EndSession(reason = "user_requested")
         ).state
         val uiState = ended.toTimedWorkoutSessionScreenState()
+        val terminalSummary = requireNotNull(uiState.terminalSummary)
 
         assertTrue(uiState.isTerminal)
         assertEquals("计时训练已提前结束", uiState.terminalTitle)
-        assertTrue(requireNotNull(uiState.terminalSummary).contains("Abandoned"))
-        assertTrue(uiState.terminalSummary.contains("Reason: test"))
+        assertTrue(terminalSummary.contains("提前结束"))
+        assertTrue(terminalSummary.contains("原因：用户主动结束"))
+        assertFalse(terminalSummary.contains("user_requested"))
         assertFalse(uiState.shouldShowNextStepPanel)
         assertFalse(uiState.canEnd)
+    }
+
+    @Test
+    fun unknownEarlyEndReasonDoesNotLeakInternalToken() {
+        val plan = buildDefaultPlanManagementState().plans.first()
+        val started = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val ended = TimedWorkoutEngine.dispatch(
+            started,
+            WorkoutCommand.EndSession(reason = "internal_debug_token")
+        ).state
+        val terminalSummary = requireNotNull(
+            ended.toTimedWorkoutSessionScreenState().terminalSummary
+        )
+
+        assertTrue(terminalSummary.contains("原因：提前结束"))
+        assertFalse(terminalSummary.contains("internal_debug_token"))
     }
 
     @Test
@@ -131,8 +176,8 @@ class TimedWorkoutSessionUiStateTest {
 
         assertEquals(1, uiState.skippedStepCount)
         assertEquals(15, uiState.extendedRestTotalSec)
-        assertEquals("Skipped current step", uiState.lastControlLabel)
-        assertEquals("Skipped 1, rest +15s, pauses 0.", uiState.historySummaryLabel)
+        assertEquals("跳过当前步骤", uiState.lastControlLabel)
+        assertEquals("跳过 1 步，休息延长 15 秒，暂停 0 次。", uiState.historySummaryLabel)
     }
 
     @Test
