@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -375,9 +376,10 @@ private fun StrengthSetConfirmationPanel(
             }
 
             if (confirmation.repQuickOptions.isNotEmpty()) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     confirmation.repQuickOptions.forEach { reps ->
                         val selected = input.actualRepsInput == reps.toString()
@@ -398,15 +400,15 @@ private fun StrengthSetConfirmationPanel(
                 }
             }
 
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 confirmation.effortOptions.forEach { option ->
                     val selected = input.selectedEffort == option.effort
                     OutlinedButton(
                         onClick = { onInputChange(input.copy(selectedEffort = option.effort)) },
-                        modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = if (selected) TrainFlowAccent.copy(alpha = 0.18f) else Color.Transparent

@@ -220,6 +220,13 @@ internal fun StrengthSetConfirmationInputState.validateFor(
         weightText.isBlank() -> null
         else -> weightText.toDoubleOrNull()
     }
+    if (weightText.isBlank() && confirmation.weightUnit != null) {
+        return StrengthSetConfirmationValidation(
+            canConfirm = false,
+            errorText = "实际重量不能为空",
+            commandInput = null
+        )
+    }
     if (weightText.isNotBlank() && parsedWeight == null) {
         return StrengthSetConfirmationValidation(
             canConfirm = false,

@@ -170,6 +170,21 @@ class StrengthWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun confirmationRejectsBlankWeightWhenPlannedWeightExists() {
+        val confirmation = completedFirstSet(strengthPlan()).toStrengthWorkoutSessionScreenState()
+            .confirmation
+            .let(::requireNotNull)
+
+        val validation = confirmation.initialInputState()
+            .copy(actualWeightInput = "")
+            .validateFor(confirmation)
+
+        assertFalse(validation.canConfirm)
+        assertEquals("实际重量不能为空", validation.errorText)
+        assertNull(validation.commandInput)
+    }
+
+    @Test
     fun confirmationRejectsNegativeWeightAndInvalidReps() {
         val confirmation = completedFirstSet(strengthPlan()).toStrengthWorkoutSessionScreenState()
             .confirmation
