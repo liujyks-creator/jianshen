@@ -2,8 +2,6 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,7 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -19,6 +20,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,13 +33,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
 import com.liujyks.trainflow.core.model.SessionStatus
-import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
@@ -81,14 +83,29 @@ internal fun StrengthWorkoutSessionRoute(
         applyEngineResult(StrengthWorkoutEngine.dispatch(engineState, command))
     }
 
+    val uiState = engineState.toStrengthWorkoutSessionScreenState()
+    var confirmationInput by remember { mutableStateOf<StrengthSetConfirmationInputState?>(null) }
+    LaunchedEffect(uiState.confirmation?.setKey) {
+        confirmationInput = uiState.confirmation?.initialInputState()
+    }
+    val activeConfirmationInput = uiState.confirmation?.let { confirmation ->
+        confirmationInput ?: confirmation.initialInputState()
+    }
+
     StrengthWorkoutSessionScreen(
-        uiState = engineState.toStrengthWorkoutSessionScreenState(),
+        uiState = uiState,
+        confirmationInput = activeConfirmationInput,
+        onConfirmationInputChange = { input -> confirmationInput = input },
         onStartSet = {
             dispatch(WorkoutCommand.StartStrengthSet(engineState.currentSet?.setPlanId))
         },
         onCompleteSet = { dispatch(WorkoutCommand.CompleteStrengthSet()) },
-        onConfirmPlanned = {
-            dispatch(WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput()))
+        onConfirmSet = {
+            val confirmation = uiState.confirmation
+            val input = confirmation?.let { activeConfirmationInput?.validateFor(it)?.commandInput }
+            if (input != null) {
+                dispatch(WorkoutCommand.ConfirmStrengthSet(input))
+            }
         },
         onStartNextDuringRest = { dispatch(WorkoutCommand.StartStrengthSet()) },
         onPause = { dispatch(WorkoutCommand.PauseSession) },
@@ -102,9 +119,11 @@ internal fun StrengthWorkoutSessionRoute(
 @Composable
 private fun StrengthWorkoutSessionScreen(
     uiState: StrengthWorkoutSessionScreenState,
+    confirmationInput: StrengthSetConfirmationInputState?,
+    onConfirmationInputChange: (StrengthSetConfirmationInputState) -> Unit,
     onStartSet: () -> Unit,
     onCompleteSet: () -> Unit,
-    onConfirmPlanned: () -> Unit,
+    onConfirmSet: () -> Unit,
     onStartNextDuringRest: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -122,6 +141,17 @@ private fun StrengthWorkoutSessionScreen(
     ) {
         StrengthSessionHeader(uiState)
         StrengthMainPanel(uiState)
+        val confirmationValidation = uiState.confirmation?.let { confirmation ->
+            confirmationInput?.validateFor(confirmation)
+        }
+        if (uiState.confirmation != null && confirmationInput != null && confirmationValidation != null) {
+            StrengthSetConfirmationPanel(
+                confirmation = uiState.confirmation,
+                input = confirmationInput,
+                validation = confirmationValidation,
+                onInputChange = onConfirmationInputChange
+            )
+        }
         StrengthNextSetPanel(uiState)
         StrengthHeartRatePanel(uiState.heartRate)
 
@@ -130,9 +160,10 @@ private fun StrengthWorkoutSessionScreen(
         } else {
             StrengthSessionControls(
                 uiState = uiState,
+                confirmationValidation = confirmationValidation,
                 onStartSet = onStartSet,
                 onCompleteSet = onCompleteSet,
-                onConfirmPlanned = onConfirmPlanned,
+                onConfirmSet = onConfirmSet,
                 onStartNextDuringRest = onStartNextDuringRest,
                 onPause = onPause,
                 onResume = onResume,
@@ -243,26 +274,187 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
                 style = MaterialTheme.typography.titleMedium,
                 color = TrainFlowNeutral50
             )
-            uiState.confirmSummary?.let { summary ->
-                StrengthDarkInfoPanel {
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TrainFlowNeutral50
-                    )
-                    Text(
-                        text = "当前记录使用计划重量和计划次数。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TrainFlowNeutral200
-                    )
-                }
-            }
             Text(
                 text = uiState.shortCue,
                 style = MaterialTheme.typography.bodyLarge,
                 color = TrainFlowNeutral100
             )
         }
+    }
+}
+
+@Composable
+private fun StrengthSetConfirmationPanel(
+    confirmation: StrengthSetConfirmationUiState,
+    input: StrengthSetConfirmationInputState,
+    validation: StrengthSetConfirmationValidation,
+    onInputChange: (StrengthSetConfirmationInputState) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, TrainFlowAction.copy(alpha = 0.45f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "确认本组",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TrainFlowNeutral50
+                    )
+                    Text(
+                        text = "${confirmation.exerciseName} · ${confirmation.setProgressLabel}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TrainFlowNeutral200
+                    )
+                }
+                StrengthSessionPill(text = confirmation.setKindLabel)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StrengthConfirmationFact(
+                    label = "计划重量",
+                    value = confirmation.plannedWeightLabel,
+                    modifier = Modifier.weight(1f)
+                )
+                StrengthConfirmationFact(
+                    label = "计划次数",
+                    value = confirmation.plannedRepLabel,
+                    modifier = Modifier.weight(1f)
+                )
+                StrengthConfirmationFact(
+                    label = "本组耗时",
+                    value = confirmation.activeDurationLabel,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = input.actualWeightInput,
+                    onValueChange = { value ->
+                        onInputChange(input.copy(actualWeightInput = value))
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = confirmation.weightUnit != null,
+                    singleLine = true,
+                    label = { Text("实际重量") },
+                    suffix = { Text(confirmation.weightUnit?.contractValue.orEmpty()) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    textStyle = MaterialTheme.typography.titleMedium.copy(color = TrainFlowNeutral50)
+                )
+                OutlinedTextField(
+                    value = input.actualRepsInput,
+                    onValueChange = { value ->
+                        onInputChange(input.copy(actualRepsInput = value))
+                    },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text("实际次数") },
+                    suffix = { Text("次") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle = MaterialTheme.typography.titleMedium.copy(color = TrainFlowNeutral50)
+                )
+            }
+
+            if (confirmation.repQuickOptions.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    confirmation.repQuickOptions.forEach { reps ->
+                        val selected = input.actualRepsInput == reps.toString()
+                        OutlinedButton(
+                            onClick = { onInputChange(input.copy(actualRepsInput = reps.toString())) },
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (selected) TrainFlowAccent else Color.White.copy(alpha = 0.22f)
+                            )
+                        ) {
+                            Text(
+                                text = reps.toString(),
+                                color = if (selected) TrainFlowAccent else TrainFlowNeutral50
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                confirmation.effortOptions.forEach { option ->
+                    val selected = input.selectedEffort == option.effort
+                    OutlinedButton(
+                        onClick = { onInputChange(input.copy(selectedEffort = option.effort)) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (selected) TrainFlowAccent.copy(alpha = 0.18f) else Color.Transparent
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (selected) TrainFlowAccent else Color.White.copy(alpha = 0.2f)
+                        )
+                    ) {
+                        Text(
+                            text = option.label,
+                            color = if (selected) TrainFlowAccent else TrainFlowNeutral50
+                        )
+                    }
+                }
+            }
+
+            validation.errorText?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowError
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrengthConfirmationFact(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = TrainFlowNeutral500
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            color = TrainFlowNeutral50
+        )
     }
 }
 
@@ -315,27 +507,29 @@ private fun StrengthHeartRatePanel(heartRate: StrengthWorkoutHeartRateUiState) {
 @Composable
 private fun StrengthSessionControls(
     uiState: StrengthWorkoutSessionScreenState,
+    confirmationValidation: StrengthSetConfirmationValidation?,
     onStartSet: () -> Unit,
     onCompleteSet: () -> Unit,
-    onConfirmPlanned: () -> Unit,
+    onConfirmSet: () -> Unit,
     onStartNextDuringRest: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onEnd: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val canConfirmSet = uiState.canConfirmPlanned && confirmationValidation?.canConfirm == true
         Button(
             onClick = {
                 when {
                     uiState.canStartSet -> onStartSet()
                     uiState.canCompleteSet -> onCompleteSet()
-                    uiState.canConfirmPlanned -> onConfirmPlanned()
+                    canConfirmSet -> onConfirmSet()
                     uiState.canStartNextDuringRest -> onStartNextDuringRest()
                 }
             },
             enabled = uiState.canStartSet ||
                 uiState.canCompleteSet ||
-                uiState.canConfirmPlanned ||
+                canConfirmSet ||
                 uiState.canStartNextDuringRest,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(10.dp),
@@ -345,7 +539,7 @@ private fun StrengthSessionControls(
                 text = when {
                     uiState.canStartSet -> "开始本组"
                     uiState.canCompleteSet -> "完成本组"
-                    uiState.canConfirmPlanned -> "按计划确认"
+                    uiState.canConfirmPlanned -> "确认本组"
                     uiState.canStartNextDuringRest -> "提前开始本组"
                     else -> "等待下一步"
                 },
