@@ -1,16 +1,16 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-05-31
+**状态日期:** 2026-06-01
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层，以及 E4.4 动作替换与跳过。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过，以及 E4 UI smoke fix。
 
 项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准。`Story E1.2: 导入动作 fixture` 已将 11 个首批动作导入 Android fixture，并用 fixture 校验测试约束 ID、必填字段、能力标签、默认建议、恢复映射和替代动作边界。`Story E1.3: 动作库列表与筛选` 已基于 E1.2 fixture 落地只读 Compose 列表、训练类型/身体部位/器械/难度筛选、清除筛选、空状态和动作摘要卡片。`Story E1.4: 动作详情` 已基于 E1.2 fixture 和 E1.3 列表入口落地只读动作详情，展示短提示、设置与执行步骤、发力要点、常见错误、呼吸提示、安全说明、替代动作和恢复映射。`Story E2.1: 首页与训练入口` 已建立轻量官方 shell、训练首页、计时训练推荐默认入口、力量训练同层入口和可进入 E1.3/E1.4 的动作库入口。`Story E2.2: 计时计划编辑` 已让首页计时推荐入口进入内存态计时计划编辑页，支持计划名称、热身/拉伸时长、动作时长、动作后休息、轮数、轮间休息、动作/休息临近结束提醒阈值和提醒形式开关，并能生成符合 `WorkoutPlan` / `TimedCircuitBlock` / `TimedExerciseItem` / `CueSettings` 契约的本次草稿预览；E2.2 retro fix 已关闭计时提醒阈值边界问题。`Story E2.3: 力量计划编辑` 已让首页力量训练入口进入内存态力量计划编辑页，支持计划名称、力量动作选择、目标重量、默认 `8-12` 次区间、固定次数、正式组数、动作内热身组、组间休息和逐组目标展开编辑，并能生成符合 `WorkoutPlan` / `StrengthExerciseBlock` / `StrengthExerciseTarget` / `StrengthSetPlan` 契约的本次草稿预览。`Story E2.4: 计划列表、详情、复制与删除` 已在官方 shell 中启用“计划”入口，复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约种子化内存态计划集合，支持计划列表、详情、复制和删除确认。`Story E3.1: 计时训练执行引擎` 已在 `core.engine` 内落地纯 Kotlin 状态机，可从有效计时计划/快照展开动作、休息和轮次步骤，支持开始、暂停、继续、跳过、延长休息和提前结束命令，并产出动作开始、动作临近结束、休息开始、休息临近结束、暂停、继续和完成事件。`Story E3.2: 计时训练执行页` 已在 `feature.workoutsession` 中新增计时训练执行 UI state、Compose route 和深色执行页，从现有内存态计划详情仅启用计时计划开始入口，执行页复用 E3.1 `TimedWorkoutEngine` 展示当前动作/休息、主倒计时、轮次/步骤进度、下一步、动作短提示和辅助心率占位，并通过 `WorkoutCommand` 支持暂停、继续、跳过、延长休息和结束训练。`Story E4.1: 力量训练执行引擎` 已在 `core.engine` 内新增纯 Kotlin `StrengthWorkoutEngine`，可从有效力量计划/快照按动作和组推进准备、开始本组、完成本组、确认记录、组间休息和完成/废弃终态。`Story E4.2: 力量训练执行页` 已在 `feature.workoutsession` 中新增力量训练执行 UI state、Compose route 和深色执行页，从内存态力量计划详情启用开始入口，执行页复用 E4.1 `StrengthWorkoutEngine` 展示当前动作、本组目标、组耗时、最小确认、休息倒计时和下一组目标，并通过 `WorkoutCommand` 支持开始本组、完成本组、按计划确认、暂停/继续、休息中提前开始下一组和结束训练。`Story E4.3: 单组完成确认层` 已将 Confirm 状态升级为可编辑确认层，展示计划重量、计划次数、本组耗时、组类型、动作名和组序号，默认回填实际重量/次数，支持次数区间快捷选择与 easy / good / hard / form_breakdown 主观感受，并通过 `WorkoutCommand.ConfirmStrengthSet` 生成正式 `StrengthSetRecord`。`Story E4.4: 动作替换与跳过` 已让力量训练支持通过 `WorkoutCommand.ReplaceExercise` 替换当前动作并在 `StrengthSetRecord.substitutedFromExerciseId` 保留原动作引用，也支持通过 `WorkoutCommand.SkipStep` 跳过当前动作剩余未完成组并继续后续动作；本阶段仍未引入真实 `WorkoutSession` 持久化、Room/DataStore repository 闭环、通知调度、声音/震动平台能力、真实心率设备、语音能力、完整训练总结或跟练闭环。
 
-`Story E3.3: 临近结束提醒`、`Story E3.4: 暂停、跳过、延长休息与提前结束`、`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页` 和 `Story E4.3: 单组完成确认层` 已合入 `main`。当前 `main` / `origin/main` 为 `479683383e1d330b9f5258cae49f5e1f317d5b00`。`Story E4.4` 当前在 `codex/e4-4-strength-replace-skip` 阶段分支实现，等待 Review Gate。当前无已知 blocker。
+`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过` 和 E4 UI smoke fix 均已通过 Review Gate 并合入 `main`。当前 `main` / `origin/main` 为 `fe92eff4a2440a455133426722ca174f31335116`。`emulator-5554` UI 抽查已通过，E4 力量训练闭环可以标记为完成。当前无已知 blocker。
 
 ## 已有产物
 
@@ -109,9 +109,9 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 进入 `Story E4.4` Review Gate，重点检查替换/跳过是否只通过 `WorkoutCommand` 与 `StrengthWorkoutEngine` 改变训练语义。
-2. Review Gate 通过后再合入 `main`，再启动 Epic E5 训练总结、历史与恢复建议。
-3. E5 应消费 E3/E4 的 history、records 与控制历史，不回头让 UI 直接写训练结果。
+1. 生成并启动 `Story E5.1: 计时训练总结` 的 Dev Story 提示词。
+2. E5.1 应消费 E3 的 timed session history、step history、control history 与 rest extension history，不回头让 UI 直接写训练结果。
+3. E5.1 只定义和实现计时训练总结所需的最小闭环，不提前实现 E5.2 力量训练总结、E5.3 历史趋势或 E5.4 恢复建议完整能力。
 4. 后续计划管理与编辑入口应继续复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约、E1.3/E1.4 的 fixture/domain model 与动作详情 UI state，不让 Room entity 泄漏到 feature/UI，也不把动作详情扩展成课程内容平台。
 
 ## 验证快照
@@ -158,6 +158,8 @@ E4.2 新增 `feature.workoutsession` 力量训练执行 UI state、Compose route
 E4.3 新增 `feature.workoutsession` 力量 Confirm 状态的可编辑单组完成确认层和输入校验；确认层展示计划重量、计划次数、本组耗时、组类型、动作名和组序号，实际重量默认回填计划重量，实际次数默认回填固定次数或区间下限，区间次数提供快捷选择，主观感受支持 easy / good / hard / form_breakdown 对应“轻松 / 刚好 / 很吃力 / 动作变形”。确认按钮发送携带 actual weight、actual reps 和 effort 的 `WorkoutCommand.ConfirmStrengthSet`，继续复用 E4.1 `StrengthWorkoutEngine` 推进到休息、下一组或完成。新增 UI state / 输入校验测试覆盖固定 reps、range reps、无重量计划、组级覆盖动作级目标和非法输入禁用。本阶段仍不写入 Room、不创建真实 `WorkoutSession` / session records、不接通知、声音、震动、真实心率设备、语音、完整总结、跟练闭环、动作替换或跳过。
 
 E4.4 新增力量训练动作替换与跳过能力；`StrengthWorkoutEngine` 现在消费 `WorkoutCommand.ReplaceExercise` 和 `WorkoutCommand.SkipStep` 的力量路径，在不改写原 `WorkoutPlan` 的前提下维护当前 block 的 effective exercise，后续 `StrengthSetRecord` 通过 `substitutedFromExerciseId` 保留原计划动作引用；跳过当前动作会跳过当前 `StrengthExerciseBlock` 的剩余未完成组并进入下一动作或 completed。力量执行页新增克制的动作调整面板，替换候选来自计划/动作替代映射和首批 fixture 中适合力量训练的动作，跳过动作需要明确确认。新增引擎与 UI state 测试覆盖替换来源记录、跳过顺序、最后动作跳过完成、active/confirm/rest 跳过语义、terminal state 后忽略命令、候选过滤和命令分发边界。本阶段仍不写入 Room、不创建真实 `WorkoutSession` / session records、不接通知、声音、震动、真实心率设备、语音、完整总结、跟练闭环或恢复建议。
+
+E4 UI smoke fix 已完成并合入 `main`；`emulator-5554` UI 抽查已通过，力量训练从计划详情进入执行、单组确认、替换/跳过与结束态的关键 UI 路径完成收口。当前 E4 力量训练闭环标记为完成，下一步进入 Epic E5 的 `Story E5.1: 计时训练总结`，本状态刷新不提前设计或实现 E5.1。
 
 ## 新 Codex 会话提示词
 

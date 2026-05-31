@@ -416,7 +416,7 @@ stepsCompleted:
 
 ### Story E4.1: 力量训练执行引擎
 
-**状态:** Implemented in `core.engine` pure Kotlin state machine and unit tests
+**状态:** Completed and merged to `main` in `core.engine` pure Kotlin state machine and unit tests
 
 作为用户，  
 我想力量训练按准备、进行、确认和休息推进，  
@@ -442,7 +442,7 @@ stepsCompleted:
 
 ### Story E4.2: 力量训练执行页
 
-**状态:** Implemented in `feature.workoutsession` Compose route, UI state mapper, official shell start path, and unit tests
+**状态:** Completed and merged to `main` in `feature.workoutsession` Compose route, UI state mapper, official shell start path, and unit tests
 
 作为用户，  
 我想看到当前动作、本组目标和主操作按钮，  
@@ -466,7 +466,7 @@ stepsCompleted:
 
 ### Story E4.3: 单组完成确认层
 
-**状态:** Implemented in `feature.workoutsession` editable confirmation layer, input validation, command dispatch, and unit tests
+**状态:** Completed and merged to `main` in `feature.workoutsession` editable confirmation layer, input validation, command dispatch, and unit tests
 
 作为用户，  
 我想完成一组后快速确认实际重量和次数，  
@@ -490,7 +490,7 @@ stepsCompleted:
 
 ### Story E4.4: 动作替换与跳过
 
-**状态:** Implemented in `core.engine` replace/skip handling, strength execution UI controls, and unit tests
+**状态:** Completed and merged to `main` in `core.engine` replace/skip handling, strength execution UI controls, and unit tests
 
 作为用户，  
 我想训练中替换或跳过动作，  
@@ -766,24 +766,25 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E3.4、docs UTF-8 policy、docs/status refresh、E4.1、E4.2 与 E4.3 已 review/merge，当前 main / origin/main 为 479683383e1d330b9f5258cae49f5e1f317d5b00。
-E4.4 已在 codex/e4-4-strength-replace-skip 阶段分支实现，等待 Review Gate。
+E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过，以及 E4 UI smoke fix 均已 Review Gate 通过并合入 main。
+当前 main / origin/main 为 fe92eff4a2440a455133426722ca174f31335116。
+emulator-5554 UI 抽查已通过，E4 力量训练闭环可以标记为完成。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E4.4 Review Gate
+Story E5.1: 计时训练总结
 ```
 
-Review Gate 建议重点确认：
+E5.1 Dev Story 生成建议重点确认：
 
-1. 替换动作是否保留原动作引用，并在后续 `StrengthSetRecord.substitutedFromExerciseId` 中区分替换来源。
-2. 跳过当前动作是否跳过当前 strength block 的剩余未完成组，并稳定进入下一动作或 completed。
-3. UI 是否只通过 `WorkoutCommand.ReplaceExercise` / `WorkoutCommand.SkipStep` 分发命令，没有绕过 `StrengthWorkoutEngine` 写训练语义。
-4. 替换候选是否只展示计划/动作替代映射或 fixture 中适合力量训练的动作，跳过是否有明确确认。
-5. 是否未越界实现真实持久化、完整总结、通知、声音、震动、真实心率、语音或跟练闭环；Review 通过后再合入 `main`，下一阶段进入 Epic E5。
+1. E5.1 只做计时训练总结，不提前实现 E5.2 力量训练总结、E5.3 历史趋势或 E5.4 恢复建议完整能力。
+2. 总结应消费 E3.4 已形成的 timed session history、step history、control history 与 rest extension history。
+3. 展示范围聚焦总时长、完成阶段、完成轮数、跳过内容和休息延长情况。
+4. 恢复建议只保留入口或轻量占位，不在 E5.1 扩展为完整恢复建议闭环。
+5. 继续保持不接真实持久化、通知、声音、震动、真实心率、语音或跟练闭环，除非 E5.1 Dev Story 明确收窄并要求。
 
 ## 8. 暂缓事项
 
