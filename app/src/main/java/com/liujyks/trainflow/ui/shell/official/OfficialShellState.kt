@@ -8,17 +8,18 @@ import com.liujyks.trainflow.core.model.WorkoutPlan
 internal data class OfficialShellState(
     val currentDestination: OfficialShellDestination = OfficialShellDestination.TRAINING,
     val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState(),
-    val activeTimedSessionPlan: WorkoutPlan? = null
+    val activeTimedSessionPlan: WorkoutPlan? = null,
+    val activeStrengthSessionPlan: WorkoutPlan? = null
 ) {
     val showBottomBar: Boolean
-        get() = !isTimedSessionNavigationLocked
+        get() = !isSessionNavigationLocked
 
-    private val isTimedSessionNavigationLocked: Boolean
-        get() = currentDestination == OfficialShellDestination.TIMED_SESSION &&
-            activeTimedSessionPlan != null
+    private val isSessionNavigationLocked: Boolean
+        get() = (currentDestination == OfficialShellDestination.TIMED_SESSION && activeTimedSessionPlan != null) ||
+            (currentDestination == OfficialShellDestination.STRENGTH_SESSION && activeStrengthSessionPlan != null)
 
     fun selectDestination(destination: OfficialShellDestination): OfficialShellState {
-        if (isTimedSessionNavigationLocked && destination != OfficialShellDestination.TIMED_SESSION) {
+        if (isSessionNavigationLocked && destination != currentDestination) {
             return this
         }
 
@@ -38,7 +39,18 @@ internal data class OfficialShellState(
 
         return copy(
             currentDestination = OfficialShellDestination.TIMED_SESSION,
-            activeTimedSessionPlan = plan
+            activeTimedSessionPlan = plan,
+            activeStrengthSessionPlan = null
+        )
+    }
+
+    fun startStrengthSession(plan: WorkoutPlan): OfficialShellState {
+        if (plan.mode != WorkoutMode.STRENGTH) return this
+
+        return copy(
+            currentDestination = OfficialShellDestination.STRENGTH_SESSION,
+            activeTimedSessionPlan = null,
+            activeStrengthSessionPlan = plan
         )
     }
 
@@ -46,6 +58,13 @@ internal data class OfficialShellState(
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
             activeTimedSessionPlan = null
+        )
+    }
+
+    fun finishStrengthSession(): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.PLANS,
+            activeStrengthSessionPlan = null
         )
     }
 }
@@ -76,6 +95,12 @@ internal enum class OfficialShellDestination(
     TIMED_SESSION(
         label = "计时训练",
         shortLabel = "训",
+        enabled = true,
+        showInBottomBar = false
+    ),
+    STRENGTH_SESSION(
+        label = "力量训练",
+        shortLabel = "力",
         enabled = true,
         showInBottomBar = false
     ),
@@ -121,7 +146,8 @@ internal fun OfficialShellDestination.selectedBottomDestination(): OfficialShell
     return when (this) {
         OfficialShellDestination.TIMED_PLAN_EDITOR,
         OfficialShellDestination.STRENGTH_PLAN_EDITOR,
-        OfficialShellDestination.TIMED_SESSION -> OfficialShellDestination.TRAINING
+        OfficialShellDestination.TIMED_SESSION,
+        OfficialShellDestination.STRENGTH_SESSION -> OfficialShellDestination.TRAINING
         else -> this
     }
 }

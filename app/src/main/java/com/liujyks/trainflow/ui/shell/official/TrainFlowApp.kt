@@ -19,6 +19,7 @@ import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
+import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
 import com.liujyks.trainflow.core.model.WorkoutPlan
 
@@ -33,16 +34,21 @@ fun TrainFlowApp() {
     var activeTimedSessionPlan by remember {
         mutableStateOf<WorkoutPlan?>(null)
     }
+    var activeStrengthSessionPlan by remember {
+        mutableStateOf<WorkoutPlan?>(null)
+    }
     val shellState = OfficialShellState(
         currentDestination = currentDestination,
         planManagementState = planManagementState,
-        activeTimedSessionPlan = activeTimedSessionPlan
+        activeTimedSessionPlan = activeTimedSessionPlan,
+        activeStrengthSessionPlan = activeStrengthSessionPlan
     )
 
     fun applyShellState(nextState: OfficialShellState) {
         currentDestination = nextState.currentDestination
         planManagementState = nextState.planManagementState
         activeTimedSessionPlan = nextState.activeTimedSessionPlan
+        activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
     }
 
     Surface {
@@ -105,6 +111,36 @@ fun TrainFlowApp() {
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
+                            onStartStrengthPlan = { plan ->
+                                applyShellState(shellState.startStrengthSession(plan))
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                }
+
+                OfficialShellDestination.STRENGTH_SESSION -> {
+                    val activePlan = shellState.activeStrengthSessionPlan
+                    if (activePlan != null) {
+                        StrengthWorkoutSessionRoute(
+                            plan = activePlan,
+                            onBackToPlans = {
+                                applyShellState(shellState.finishStrengthSession())
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    } else {
+                        PlanManagementRoute(
+                            uiState = shellState.planManagementState,
+                            onStateChange = { planManagementState ->
+                                applyShellState(shellState.withPlanManagementState(planManagementState))
+                            },
+                            onStartTimedPlan = { plan ->
+                                applyShellState(shellState.startTimedSession(plan))
+                            },
+                            onStartStrengthPlan = { plan ->
+                                applyShellState(shellState.startStrengthSession(plan))
+                            },
                             modifier = Modifier.padding(innerPadding)
                         )
                     }
@@ -121,6 +157,9 @@ fun TrainFlowApp() {
                     },
                     onStartTimedPlan = { plan ->
                         applyShellState(shellState.startTimedSession(plan))
+                    },
+                    onStartStrengthPlan = { plan ->
+                        applyShellState(shellState.startStrengthSession(plan))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )

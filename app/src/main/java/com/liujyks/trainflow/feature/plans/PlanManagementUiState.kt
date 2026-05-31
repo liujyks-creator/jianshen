@@ -170,10 +170,10 @@ private fun WorkoutPlan.toDetailState(): PlanDetailUiState {
         editStatus = "编辑回填后续接入",
         startStatus = when (mode) {
             WorkoutMode.TIMED -> "开始计时训练"
-            WorkoutMode.STRENGTH -> "开始训练留给 E4 执行引擎"
+            WorkoutMode.STRENGTH -> "开始力量训练"
             WorkoutMode.FOLLOW_ALONG -> "跟练闭环留给 E6"
         },
-        canStartTraining = mode == WorkoutMode.TIMED
+        canStartTraining = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH
     )
 }
 
@@ -224,7 +224,7 @@ private fun WorkoutPlan.planDetailSummary(): String {
                 .mapNotNull { it.target?.restAfterSetSec }
                 .distinct()
             val restSummary = if (restValues.size == 1) "${restValues.single()}秒休息" else "按动作休息"
-            "$restSummary · 计划值预填实际记录留给执行阶段"
+            "$restSummary · 计划值预填实际记录"
         }
 
         WorkoutMode.FOLLOW_ALONG -> "复用计时流程和动作内容"
