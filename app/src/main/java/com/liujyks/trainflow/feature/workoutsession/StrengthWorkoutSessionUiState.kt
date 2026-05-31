@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.engine.StrengthSessionSetStep
+import com.liujyks.trainflow.core.engine.StrengthSetDraft
 import com.liujyks.trainflow.core.engine.StrengthWorkoutControlHistoryEvent
 import com.liujyks.trainflow.core.engine.StrengthWorkoutControlHistoryType
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
@@ -11,6 +12,8 @@ import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
+import com.liujyks.trainflow.core.model.SetEffort
+import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
@@ -28,6 +31,7 @@ internal data class StrengthWorkoutSessionScreenState(
     val shortCue: String,
     val nextSetLabel: String,
     val confirmSummary: String?,
+    val confirmation: StrengthSetConfirmationUiState?,
     val heartRate: StrengthWorkoutHeartRateUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
@@ -45,6 +49,40 @@ internal data class StrengthWorkoutSessionScreenState(
     val lastControlLabel: String,
     val terminalTitle: String? = null,
     val terminalSummary: String? = null
+)
+
+internal data class StrengthSetConfirmationUiState(
+    val setKey: String,
+    val exerciseName: String,
+    val setProgressLabel: String,
+    val setKindLabel: String,
+    val plannedWeightLabel: String,
+    val plannedRepLabel: String,
+    val activeDurationLabel: String,
+    val actualWeightInput: String,
+    val actualRepsInput: String,
+    val weightUnit: WeightUnit?,
+    val repQuickOptions: List<Int>,
+    val effortOptions: List<StrengthSetEffortOptionUiState>,
+    val selectedEffort: SetEffort,
+    val canConfirm: Boolean
+)
+
+internal data class StrengthSetConfirmationInputState(
+    val actualWeightInput: String,
+    val actualRepsInput: String,
+    val selectedEffort: SetEffort
+)
+
+internal data class StrengthSetConfirmationValidation(
+    val canConfirm: Boolean,
+    val errorText: String?,
+    val commandInput: StrengthSetCompletionInput?
+)
+
+internal data class StrengthSetEffortOptionUiState(
+    val effort: SetEffort,
+    val label: String
 )
 
 internal data class StrengthWorkoutHeartRateUiState(
@@ -111,6 +149,14 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         }
         else -> null
     }
+    val confirmation = pendingDraft?.let { draft ->
+        current?.toConfirmationUiState(
+            exerciseName = currentName,
+            setProgressLabel = current.setProgressLabel(),
+            setKindLabel = current.setKind.label,
+            draft = draft
+        )
+    }
 
     return StrengthWorkoutSessionScreenState(
         planTitle = planTitle,
@@ -131,6 +177,7 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         confirmSummary = pendingDraft?.let { draft ->
             "按计划确认：${draft.defaultActualWeight.formatWeight()} · ${draft.defaultActualReps?.let { "$it 次" } ?: "未设次数"}"
         },
+        confirmation = confirmation,
         heartRate = heartRateState.toStrengthUiState(),
         progressFraction = activeNumber.toFloat() / progressBase.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
@@ -154,6 +201,105 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary
+    )
+}
+
+internal fun StrengthSetConfirmationUiState.initialInputState(): StrengthSetConfirmationInputState {
+    return StrengthSetConfirmationInputState(
+        actualWeightInput = actualWeightInput,
+        actualRepsInput = actualRepsInput,
+        selectedEffort = selectedEffort
+    )
+}
+
+internal fun StrengthSetConfirmationInputState.validateFor(
+    confirmation: StrengthSetConfirmationUiState
+): StrengthSetConfirmationValidation {
+    val weightText = actualWeightInput.trim()
+    val parsedWeight = when {
+        weightText.isBlank() -> null
+        else -> weightText.toDoubleOrNull()
+    }
+    if (weightText.isBlank() && confirmation.weightUnit != null) {
+        return StrengthSetConfirmationValidation(
+            canConfirm = false,
+            errorText = "实际重量不能为空",
+            commandInput = null
+        )
+    }
+    if (weightText.isNotBlank() && parsedWeight == null) {
+        return StrengthSetConfirmationValidation(
+            canConfirm = false,
+            errorText = "重量请输入数字",
+            commandInput = null
+        )
+    }
+    if (parsedWeight != null && parsedWeight < 0.0) {
+        return StrengthSetConfirmationValidation(
+            canConfirm = false,
+            errorText = "重量不能为负数",
+            commandInput = null
+        )
+    }
+    if (parsedWeight != null && confirmation.weightUnit == null) {
+        return StrengthSetConfirmationValidation(
+            canConfirm = false,
+            errorText = "本组没有可记录的重量单位",
+            commandInput = null
+        )
+    }
+
+    val reps = actualRepsInput.trim().toIntOrNull()
+    if (reps == null || reps < 1) {
+        return StrengthSetConfirmationValidation(
+            canConfirm = false,
+            errorText = "次数至少为 1",
+            commandInput = null
+        )
+    }
+
+    val input = StrengthSetCompletionInput(
+        actualWeight = parsedWeight?.let { value ->
+            WeightValue(value = value, unit = requireNotNull(confirmation.weightUnit))
+        },
+        actualReps = reps,
+        effort = selectedEffort
+    )
+
+    return StrengthSetConfirmationValidation(
+        canConfirm = true,
+        errorText = null,
+        commandInput = input
+    )
+}
+
+private fun StrengthSessionSetStep.toConfirmationUiState(
+    exerciseName: String,
+    setProgressLabel: String,
+    setKindLabel: String,
+    draft: StrengthSetDraft
+): StrengthSetConfirmationUiState {
+    val weightInput = draft.defaultActualWeight?.value.toInputText()
+    val repsInput = draft.defaultActualReps?.toString().orEmpty()
+    val confirmation = StrengthSetConfirmationUiState(
+        setKey = draft.recordId,
+        exerciseName = exerciseName,
+        setProgressLabel = setProgressLabel,
+        setKindLabel = setKindLabel,
+        plannedWeightLabel = draft.plannedWeight.formatWeight(),
+        plannedRepLabel = draft.plannedRepTarget.formatRepTarget(),
+        activeDurationLabel = draft.activeDurationSec.formatTimer(),
+        actualWeightInput = weightInput,
+        actualRepsInput = repsInput,
+        weightUnit = draft.defaultActualWeight?.unit,
+        repQuickOptions = draft.plannedRepTarget.quickRepOptions(),
+        effortOptions = setEffortOptions(),
+        selectedEffort = SetEffort.GOOD,
+        canConfirm = true
+    )
+
+    return confirmation.copy(
+        canConfirm = confirmation.initialInputState().validateFor(confirmation).canConfirm
     )
 }
 
@@ -253,6 +399,13 @@ private fun RepTarget?.formatRepTarget(): String {
     }
 }
 
+private fun RepTarget?.quickRepOptions(): List<Int> {
+    return when (this) {
+        is RepTarget.Range -> (minReps..maxReps).toList()
+        else -> emptyList()
+    }
+}
+
 private fun WeightValue?.formatWeight(): String {
     val weight = this ?: return "未设重量"
     val valueText = if (weight.value % 1.0 == 0.0) {
@@ -263,11 +416,29 @@ private fun WeightValue?.formatWeight(): String {
     return "$valueText ${weight.unit.label}"
 }
 
+private fun Double?.toInputText(): String {
+    val value = this ?: return ""
+    return if (value % 1.0 == 0.0) {
+        value.toInt().toString()
+    } else {
+        value.toString()
+    }
+}
+
 private val WeightUnit.label: String
     get() = when (this) {
         WeightUnit.KG -> "kg"
         WeightUnit.LB -> "lb"
     }
+
+private fun setEffortOptions(): List<StrengthSetEffortOptionUiState> {
+    return listOf(
+        StrengthSetEffortOptionUiState(effort = SetEffort.EASY, label = "轻松"),
+        StrengthSetEffortOptionUiState(effort = SetEffort.GOOD, label = "刚好"),
+        StrengthSetEffortOptionUiState(effort = SetEffort.HARD, label = "很吃力"),
+        StrengthSetEffortOptionUiState(effort = SetEffort.FORM_BREAKDOWN, label = "动作变形")
+    )
+}
 
 private fun SessionStatus.toStatusLabel(): String {
     return when (this) {

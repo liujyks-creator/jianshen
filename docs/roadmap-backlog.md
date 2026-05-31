@@ -466,6 +466,8 @@ stepsCompleted:
 
 ### Story E4.3: 单组完成确认层
 
+**状态:** Implemented in `feature.workoutsession` editable confirmation layer, input validation, command dispatch, and unit tests
+
 作为用户，  
 我想完成一组后快速确认实际重量和次数，  
 以便记录不打断训练。
@@ -475,6 +477,16 @@ stepsCompleted:
 - Then 实际重量默认带入计划重量。
 - Then 实际次数默认带入固定次数或提供区间快捷选择。
 - Then 可记录感受：轻松、刚好、很吃力、动作变形。
+
+**交付结果:**
+
+- Android 侧将力量执行页 Confirm 状态从只读“按计划确认”升级为可编辑确认层，继续复用 E4.1 `StrengthWorkoutEngine` 和 `WorkoutCommand.ConfirmStrengthSet`，不在 UI 中写第二套 session 语义。
+- 确认层展示动作名、当前组序号、组类型、计划重量、计划次数和本组耗时；实际重量默认回填组级计划重量，缺失时使用动作级目标重量；实际次数默认回填固定次数，次数区间使用区间下限作为稳定默认并提供区间内快捷选择。
+- 实际重量和实际次数支持输入修改；重量非法数字或负数、次数小于 1 时禁用确认并显示轻量错误。
+- 感受使用四个清晰选项：轻松 / 刚好 / 很吃力 / 动作变形，对应 `SetEffort.EASY` / `GOOD` / `HARD` / `FORM_BREAKDOWN`。
+- 点击“确认本组”后发送携带 actual weight、actual reps 和 effort 的 `WorkoutCommand.ConfirmStrengthSet`，由引擎继续推进到组间休息、下一组或 completed。
+- 新增单元测试覆盖固定 reps、range reps、无重量计划、组级覆盖动作级目标、非法输入禁用以及确认命令 payload。
+- 本 story 未实现 E4.4 动作替换与跳过、真实 `WorkoutSession` 持久化、session records 写库、Room/DataStore repository 业务闭环、训练总结、通知调度、声音、震动、真实心率设备、语音、完整跟练闭环或恢复建议。
 
 ### Story E4.4: 动作替换与跳过
 
@@ -743,24 +755,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E3.4、docs UTF-8 policy、docs/status refresh 与 E4.1 已 review/merge，当前 main / origin/main 为 c8b2462fe1dfb62563c57eab11a90ba9e2a8824c。
-E4.2 已在 codex/e4-2-strength-session-screen 阶段分支实现，等待 Review Gate。
+E3.4、docs UTF-8 policy、docs/status refresh、E4.1 与 E4.2 已 review/merge，当前 main / origin/main 为 f5a5e08f9c28dcd00d95724c66393d1ff0b28874。
+E4.3 已在 codex/e4-3-strength-set-confirmation 阶段分支实现，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E4.2 Review Gate
+Story E4.3 Review Gate
 ```
 
 Review Gate 建议重点确认：
 
-1. 力量执行页是否只复用 E4.1 `StrengthWorkoutEngine` 推进状态，没有在 UI 中实现第二套状态机。
-2. Prepare / Active / Rest 是否满足主按钮和主信息验收；Confirm 是否只做“按计划确认”的最小可用过渡。
-3. 计划详情和官方 shell 是否只对 strength plan 启用力量执行入口，timed plan 仍走 E3 计时执行页。
-4. 是否未越界实现 E4.3 可编辑确认层、E4.4 替换/跳过、真实持久化、完整总结、通知、声音、震动、真实心率、语音或跟练闭环。
-5. Review 通过后再合入 `main`，下一 story 进入 `Story E4.3: 单组完成确认层`。
+1. Confirm 状态是否展示可编辑重量、次数和感受，并保持训练中可读、主按钮明确。
+2. 默认回填是否遵守组级目标优先、动作级目标兜底、固定 reps 直接回填、range reps 使用稳定默认并提供快捷选择。
+3. 点击“确认本组”是否只通过 `WorkoutCommand.ConfirmStrengthSet` 进入 E4.1 `StrengthWorkoutEngine`，没有绕过引擎写记录。
+4. 是否未越界实现 E4.4 动作替换/跳过、真实持久化、完整总结、通知、声音、震动、真实心率、语音或跟练闭环。
+5. Review 通过后再合入 `main`，下一 story 进入 `Story E4.4: 动作替换与跳过`。
 
 ## 8. 暂缓事项
 
