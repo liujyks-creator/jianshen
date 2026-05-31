@@ -517,6 +517,8 @@ stepsCompleted:
 
 ### Story E5.1: 计时训练总结
 
+**状态:** Implemented in `feature.workoutsession` timed summary UI state, terminal summary panel, and unit tests
+
 作为用户，  
 我想看到计时训练完成情况，  
 以便知道本次完成了什么。
@@ -525,6 +527,15 @@ stepsCompleted:
 
 - Then 展示总时长、完成阶段、完成轮数、跳过内容、休息延长情况。
 - Then 提供恢复建议入口。
+
+**交付结果:**
+
+- 新增 `TimedWorkoutSummaryUiState` 与 mapper，直接消费 `TimedWorkoutEngineState` 的 `activeElapsedSec`、`stepHistory`、`controlHistory`、`restExtensionHistory` 和 `earlyEnd`，不新增第二套训练结果来源。
+- completed / abandoned 终态在计时训练执行页展示轻量总结面板，覆盖总时长、完成阶段、步骤进度、轮次进度、跳过内容、休息延长、提前结束进度和训练部位摘要。
+- 总时长明确标注为 engine active elapsed，不伪装成真实 wall-clock `startedAt` / `endedAt` 会话耗时。
+- 恢复建议入口以禁用占位呈现，文案明确 E5.4 后续接入，不暗示已经生成完整恢复建议。
+- 新增 summary mapper 测试覆盖 completed 时长/阶段/轮次、跳过摘要、休息延长、abandoned 原因与进度、无跳过/无延长空状态和恢复建议占位。
+- 本 story 未实现 E5.2 力量训练总结、E5.3 历史趋势、E5.4 完整恢复建议、真实 `WorkoutSession` 持久化、Room/DataStore repository 业务闭环、通知、真实心率设备、语音或跟练闭环。
 
 ### Story E5.2: 力量训练总结
 
@@ -766,25 +777,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过，以及 E4 UI smoke fix 均已 Review Gate 通过并合入 main。
-当前 main / origin/main 为 fe92eff4a2440a455133426722ca174f31335116。
-emulator-5554 UI 抽查已通过，E4 力量训练闭环可以标记为完成。
+E5.1 计时训练总结已在 codex/e5-1-timed-session-summary 实施，等待 Review Gate。
+E5.1 summary 消费 E3.4 history 边界，不写真实 WorkoutSession，不实现历史趋势或完整恢复建议。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E5.1: 计时训练总结
+Story E5.1 Review Gate
 ```
 
-E5.1 Dev Story 生成建议重点确认：
+E5.1 Review Gate 建议重点确认：
 
-1. E5.1 只做计时训练总结，不提前实现 E5.2 力量训练总结、E5.3 历史趋势或 E5.4 恢复建议完整能力。
-2. 总结应消费 E3.4 已形成的 timed session history、step history、control history 与 rest extension history。
-3. 展示范围聚焦总时长、完成阶段、完成轮数、跳过内容和休息延长情况。
-4. 恢复建议只保留入口或轻量占位，不在 E5.1 扩展为完整恢复建议闭环。
-5. 继续保持不接真实持久化、通知、声音、震动、真实心率、语音或跟练闭环，除非 E5.1 Dev Story 明确收窄并要求。
+1. completed / abandoned 终态是否都能看到 summary。
+2. summary 是否覆盖总时长、完成阶段、轮次进度、跳过内容和休息延长情况。
+3. active elapsed 文案是否足够清楚，未伪装为真实 wall-clock `startedAt` / `endedAt`。
+4. 恢复建议入口是否保持 E5.4 占位，没有暗示完整建议已生成。
+5. 是否保持不接真实持久化、通知、声音、震动、真实心率、语音、跟练闭环或力量训练总结。
 
 ## 8. 暂缓事项
 

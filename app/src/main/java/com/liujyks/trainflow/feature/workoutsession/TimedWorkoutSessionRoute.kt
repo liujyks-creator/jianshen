@@ -388,6 +388,9 @@ private fun TerminalPanel(
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral200
         )
+        uiState.summary?.let { summary ->
+            TimedSessionSummaryPanel(summary)
+        }
         Button(
             onClick = onBackToPlans,
             modifier = Modifier.fillMaxWidth(),
@@ -395,6 +398,139 @@ private fun TerminalPanel(
             colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
         ) {
             Text(text = "返回计划", color = TrainFlowPrimary)
+        }
+    }
+}
+
+@Composable
+private fun TimedSessionSummaryPanel(summary: TimedWorkoutSummaryUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = summary.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = when (summary.tone) {
+                TimedWorkoutSummaryTone.COMPLETED -> TrainFlowAccent
+                TimedWorkoutSummaryTone.ABANDONED -> TrainFlowNeutral200
+            }
+        )
+        SummaryMetricGrid(summary.metricItems)
+        Text(
+            text = summary.durationSemanticsNote,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        SummaryDetail(label = "跳过内容", text = summary.skippedSummary)
+        SummaryDetail(label = "休息延长", text = summary.restExtensionSummary)
+        SummaryDetail(label = "结束状态", text = summary.earlyEndSummary)
+        SummaryDetail(label = "训练部位", text = summary.trainedAreaSummary)
+        RecoveryEntryPanel(summary.recoveryEntry)
+    }
+}
+
+@Composable
+private fun SummaryMetricGrid(items: List<TimedWorkoutSummaryMetricUiState>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    SummaryMetricItem(
+                        item = item,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size == 1) {
+                    DarkMetricSpacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryMetricItem(
+    item: TimedWorkoutSummaryMetricUiState,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = TrainFlowNeutral200
+            )
+            Text(
+                text = item.value,
+                style = MaterialTheme.typography.titleMedium,
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = item.helper,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500
+            )
+        }
+    }
+}
+
+@Composable
+private fun DarkMetricSpacer(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = Color.Transparent
+    ) {}
+}
+
+@Composable
+private fun SummaryDetail(
+    label: String,
+    text: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = TrainFlowNeutral200
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral100
+        )
+    }
+}
+
+@Composable
+private fun RecoveryEntryPanel(entry: TimedWorkoutRecoveryEntryUiState) {
+    OutlinedButton(
+        onClick = {},
+        enabled = entry.enabled,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = entry.title,
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = entry.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral200
+            )
         }
     }
 }
