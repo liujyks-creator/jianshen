@@ -338,6 +338,154 @@ class StrengthWorkoutEngineTest {
     }
 
     @Test
+    fun replaceExerciseKeepsOriginalExerciseReferenceInConfirmedRecords() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(twoSetPlan(restAfterFirstSetSec = 0)),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ReplaceExercise(
+                fromExerciseId = "barbell-bench-press",
+                toExerciseId = "incline-push-up"
+            )
+        )
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 6)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
+
+        val record = result.state.strengthSetRecords.single()
+        assertEquals("incline-push-up", record.exerciseId)
+        assertEquals("barbell-bench-press", record.substitutedFromExerciseId)
+        assertEquals(
+            StrengthWorkoutControlHistoryType.REPLACE_EXERCISE,
+            result.state.controlHistory.last { event ->
+                event.type == StrengthWorkoutControlHistoryType.REPLACE_EXERCISE
+            }.type
+        )
+    }
+
+    @Test
+    fun skipExerciseMovesToNextBlockWithoutBreakingSetOrder() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(
+                plan(
+                    blocks = listOf(
+                        block(
+                            target = StrengthExerciseTarget(
+                                weight = weight(60.0),
+                                repTarget = RepTarget.Fixed(reps = 5)
+                            ),
+                            sets = listOf(
+                                set(id = "bench-working-1", order = 1),
+                                set(id = "bench-working-2", order = 2)
+                            )
+                        ),
+                        block(
+                            target = StrengthExerciseTarget(
+                                weight = weight(24.0),
+                                repTarget = RepTarget.Fixed(reps = 10)
+                            ),
+                            sets = listOf(set(id = "row-working-1", order = 1)),
+                            id = "row",
+                            exerciseId = "one-arm-dumbbell-row",
+                            order = 2
+                        )
+                    )
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.SkipStep)
+
+        assertEquals(SessionStepKind.STRENGTH_PREPARE_SET, result.state.currentSessionStep?.kind)
+        assertEquals("row-working-1", result.state.currentSet?.setPlanId)
+        assertEquals(2, result.state.currentSet?.globalSetIndex)
+        assertEquals("one-arm-dumbbell-row", result.state.currentSet?.exerciseId)
+        assertTrue(result.state.strengthSetRecords.isEmpty())
+        assertTrue(result.events.first() is WorkoutEvent.NextExerciseReady)
+        assertEquals(
+            2,
+            result.state.stepHistory.count { record ->
+                record.blockId == "bench" &&
+                    record.status == StrengthSessionStepHistoryStatus.SKIPPED
+            }
+        )
+    }
+
+    @Test
+    fun skipLastExerciseCompletesSession() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(twoSetPlan(restAfterFirstSetSec = 0)),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.SkipStep)
+
+        assertEquals(SessionStatus.COMPLETED, result.state.status)
+        assertTrue(result.events.single() is WorkoutEvent.SessionCompleted)
+        assertEquals(2, result.state.stepHistory.count { record ->
+            record.status == StrengthSessionStepHistoryStatus.SKIPPED
+        })
+    }
+
+    @Test
+    fun skipFromActiveConfirmAndRestStatesHasFixedSemantics() {
+        var activeResult = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(twoBlockPlan(restAfterFirstSetSec = 5)),
+            command = WorkoutCommand.StartSession
+        )
+        activeResult = StrengthWorkoutEngine.dispatch(activeResult.state, WorkoutCommand.StartStrengthSet())
+        activeResult = StrengthWorkoutEngine.tick(activeResult.state, seconds = 3)
+        activeResult = StrengthWorkoutEngine.dispatch(activeResult.state, WorkoutCommand.SkipStep)
+        assertEquals("row-working-1", activeResult.state.currentSet?.setPlanId)
+        assertEquals(3, activeResult.state.stepHistory.single { record ->
+            record.kind == SessionStepKind.STRENGTH_ACTIVE_SET
+        }.actualDurationSec)
+
+        var confirmResult = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(twoBlockPlan(restAfterFirstSetSec = 5)),
+            command = WorkoutCommand.StartSession
+        )
+        confirmResult = StrengthWorkoutEngine.dispatch(confirmResult.state, WorkoutCommand.StartStrengthSet())
+        confirmResult = StrengthWorkoutEngine.tick(confirmResult.state, seconds = 2)
+        confirmResult = StrengthWorkoutEngine.dispatch(confirmResult.state, WorkoutCommand.CompleteStrengthSet())
+        confirmResult = StrengthWorkoutEngine.dispatch(confirmResult.state, WorkoutCommand.SkipStep)
+        assertEquals("row-working-1", confirmResult.state.currentSet?.setPlanId)
+        assertTrue(confirmResult.state.strengthSetRecords.isEmpty())
+        assertNull(confirmResult.state.pendingDraft)
+
+        var restResult = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(twoBlockPlan(restAfterFirstSetSec = 5)),
+            command = WorkoutCommand.StartSession
+        )
+        restResult = StrengthWorkoutEngine.dispatch(restResult.state, WorkoutCommand.StartStrengthSet())
+        restResult = StrengthWorkoutEngine.tick(restResult.state, seconds = 2)
+        restResult = StrengthWorkoutEngine.dispatch(restResult.state, WorkoutCommand.CompleteStrengthSet())
+        restResult = StrengthWorkoutEngine.dispatch(
+            restResult.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
+        restResult = StrengthWorkoutEngine.tick(restResult.state, seconds = 2)
+        restResult = StrengthWorkoutEngine.dispatch(restResult.state, WorkoutCommand.SkipStep)
+        assertEquals("row-working-1", restResult.state.currentSet?.setPlanId)
+        assertEquals(1, restResult.state.strengthSetRecords.size)
+        assertEquals(2, restResult.state.strengthSetRecords.single().actualRestAfterSec)
+        assertEquals(
+            StrengthSessionStepHistoryStatus.SKIPPED,
+            restResult.state.stepHistory.single { record ->
+                record.kind == SessionStepKind.STRENGTH_REST
+            }.status
+        )
+    }
+
+    @Test
     fun illegalCommandsAreIgnoredWithoutHistoryPollution() {
         var result = StrengthWorkoutEngine.dispatch(
             state = StrengthWorkoutEngine.create(twoSetPlan(restAfterFirstSetSec = 5)),
@@ -384,6 +532,11 @@ class StrengthWorkoutEngineTest {
             WorkoutCommand.StartStrengthSet(),
             WorkoutCommand.CompleteStrengthSet(),
             WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput()),
+            WorkoutCommand.ReplaceExercise(
+                fromExerciseId = "barbell-bench-press",
+                toExerciseId = "incline-push-up"
+            ),
+            WorkoutCommand.SkipStep,
             WorkoutCommand.EndSession(reason = "late")
         ).forEach { command ->
             result = StrengthWorkoutEngine.dispatch(result.state, command)
@@ -457,6 +610,33 @@ class StrengthWorkoutEngineTest {
                         set(id = "bench-working-1", order = 1, restAfterSec = restAfterFirstSetSec),
                         set(id = "bench-working-2", order = 2, restAfterSec = 0)
                     )
+                )
+            )
+        )
+    }
+
+    private fun twoBlockPlan(restAfterFirstSetSec: Int): WorkoutPlan {
+        return plan(
+            blocks = listOf(
+                block(
+                    target = StrengthExerciseTarget(
+                        weight = weight(60.0),
+                        repTarget = RepTarget.Fixed(reps = 5)
+                    ),
+                    sets = listOf(
+                        set(id = "bench-working-1", order = 1, restAfterSec = restAfterFirstSetSec),
+                        set(id = "bench-working-2", order = 2)
+                    )
+                ),
+                block(
+                    target = StrengthExerciseTarget(
+                        weight = weight(24.0),
+                        repTarget = RepTarget.Fixed(reps = 10)
+                    ),
+                    sets = listOf(set(id = "row-working-1", order = 1)),
+                    id = "row",
+                    exerciseId = "one-arm-dumbbell-row",
+                    order = 2
                 )
             )
         )

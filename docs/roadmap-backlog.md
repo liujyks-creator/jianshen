@@ -490,6 +490,8 @@ stepsCompleted:
 
 ### Story E4.4: 动作替换与跳过
 
+**状态:** Implemented in `core.engine` replace/skip handling, strength execution UI controls, and unit tests
+
 作为用户，  
 我想训练中替换或跳过动作，  
 以便设备不可用或身体状态变化时继续训练。
@@ -499,6 +501,15 @@ stepsCompleted:
 - Then 替换动作保留原动作引用。
 - Then 本次训练记录能区分替换来源。
 - Then 跳过动作不破坏后续组顺序。
+
+**交付结果:**
+
+- `StrengthWorkoutEngine` 支持 `WorkoutCommand.ReplaceExercise` 的力量训练路径，在不改写原 `WorkoutPlan` 的前提下更新当前 block 的 effective exercise，并让后续 `StrengthSetRecord.substitutedFromExerciseId` 保留原动作引用。
+- `StrengthWorkoutEngine` 支持 `WorkoutCommand.SkipStep` 的力量训练路径，跳过当前动作剩余未完成组后进入下一 strength block；若跳过最后一个动作则进入 completed。
+- strength step history 和 control history 记录 replace / skip 控制语义，便于 E5 总结消费；terminal state 后 replace / skip 继续被忽略。
+- 力量训练执行页新增低层级动作调整面板，替换候选来自计划/动作替代映射和首批 fixture 中适合力量训练的动作；跳过动作需要明确确认。
+- 新增/更新单元测试覆盖替换来源记录、跳过后顺序保持、最后动作跳过完成、active / confirm / rest 跳过语义、terminal state 后忽略命令、UI 候选过滤和命令分发边界。
+- 本 story 未实现真实 `WorkoutSession` 持久化、session records 写库、Room/DataStore repository 业务闭环、训练总结、通知调度、声音、震动、真实心率设备、语音、完整跟练闭环或恢复建议。
 
 ## Epic E5: 训练总结、历史与恢复建议
 
@@ -755,24 +766,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E3.4、docs UTF-8 policy、docs/status refresh、E4.1 与 E4.2 已 review/merge，当前 main / origin/main 为 f5a5e08f9c28dcd00d95724c66393d1ff0b28874。
-E4.3 已在 codex/e4-3-strength-set-confirmation 阶段分支实现，等待 Review Gate。
+E3.4、docs UTF-8 policy、docs/status refresh、E4.1、E4.2 与 E4.3 已 review/merge，当前 main / origin/main 为 479683383e1d330b9f5258cae49f5e1f317d5b00。
+E4.4 已在 codex/e4-4-strength-replace-skip 阶段分支实现，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E4.3 Review Gate
+Story E4.4 Review Gate
 ```
 
 Review Gate 建议重点确认：
 
-1. Confirm 状态是否展示可编辑重量、次数和感受，并保持训练中可读、主按钮明确。
-2. 默认回填是否遵守组级目标优先、动作级目标兜底、固定 reps 直接回填、range reps 使用稳定默认并提供快捷选择。
-3. 点击“确认本组”是否只通过 `WorkoutCommand.ConfirmStrengthSet` 进入 E4.1 `StrengthWorkoutEngine`，没有绕过引擎写记录。
-4. 是否未越界实现 E4.4 动作替换/跳过、真实持久化、完整总结、通知、声音、震动、真实心率、语音或跟练闭环。
-5. Review 通过后再合入 `main`，下一 story 进入 `Story E4.4: 动作替换与跳过`。
+1. 替换动作是否保留原动作引用，并在后续 `StrengthSetRecord.substitutedFromExerciseId` 中区分替换来源。
+2. 跳过当前动作是否跳过当前 strength block 的剩余未完成组，并稳定进入下一动作或 completed。
+3. UI 是否只通过 `WorkoutCommand.ReplaceExercise` / `WorkoutCommand.SkipStep` 分发命令，没有绕过 `StrengthWorkoutEngine` 写训练语义。
+4. 替换候选是否只展示计划/动作替代映射或 fixture 中适合力量训练的动作，跳过是否有明确确认。
+5. 是否未越界实现真实持久化、完整总结、通知、声音、震动、真实心率、语音或跟练闭环；Review 通过后再合入 `main`，下一阶段进入 Epic E5。
 
 ## 8. 暂缓事项
 

@@ -231,6 +231,66 @@ class StrengthWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun replacementCandidatesOnlyIncludeStrengthCapableExercises() {
+        val plan = buildDefaultPlanManagementState().plans[1]
+        val started = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val uiState = started.toStrengthWorkoutSessionScreenState()
+
+        assertTrue(uiState.canReplaceExercise)
+        assertTrue(uiState.replacementOptions.isNotEmpty())
+        assertFalse(uiState.replacementOptions.any { option ->
+            option.exerciseId == started.currentSet?.exerciseId
+        })
+        assertTrue(uiState.replacementOptions.none { option ->
+            option.exerciseId == "jumping-jacks" || option.exerciseId == "forearm-plank"
+        })
+    }
+
+    @Test
+    fun currentReplaceAndSkipActionsBuildWorkoutCommandsForRouteDispatch() {
+        val plan = buildDefaultPlanManagementState().plans[1]
+        val started = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val uiState = started.toStrengthWorkoutSessionScreenState()
+        val replacement = uiState.replacementOptions.first()
+
+        assertEquals(
+            WorkoutCommand.ReplaceExercise(
+                fromExerciseId = requireNotNull(started.currentSet).exerciseId,
+                toExerciseId = replacement.exerciseId
+            ),
+            started.currentReplaceExerciseCommand(replacement.exerciseId)
+        )
+        assertEquals(WorkoutCommand.SkipStep, started.currentSkipExerciseCommand())
+    }
+
+    @Test
+    fun substitutedExerciseMapsOriginalSourceLabel() {
+        val plan = buildDefaultPlanManagementState().plans[1]
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        state = StrengthWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.ReplaceExercise(
+                fromExerciseId = requireNotNull(state.currentSet).exerciseId,
+                toExerciseId = "incline-push-up"
+            )
+        ).state
+        val uiState = state.toStrengthWorkoutSessionScreenState()
+
+        assertTrue(uiState.currentExerciseName.contains("上斜俯卧撑"))
+        assertTrue(uiState.substitutionSummaryLabel.contains("替换"))
+        assertTrue(uiState.canSkipExercise)
+    }
+
+    @Test
     fun completedAndAbandonedStatesMapLightweightTerminalCopy() {
         val plan = buildDefaultPlanManagementState().plans[1]
         var state = StrengthWorkoutEngine.dispatch(

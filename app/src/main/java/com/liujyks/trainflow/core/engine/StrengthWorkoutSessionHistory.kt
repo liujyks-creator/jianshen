@@ -14,12 +14,14 @@ data class StrengthSessionStepHistoryRecord(
     val endedAtElapsedSec: Int? = null,
     val status: StrengthSessionStepHistoryStatus = StrengthSessionStepHistoryStatus.STARTED,
     val actualDurationSec: Int? = null,
-    val remainingSec: Int? = null
+    val remainingSec: Int? = null,
+    val substitutedFromExerciseId: String? = null
 )
 
 enum class StrengthSessionStepHistoryStatus {
     STARTED,
     COMPLETED,
+    SKIPPED,
     ABANDONED
 }
 
@@ -30,7 +32,9 @@ data class StrengthWorkoutControlHistoryEvent(
     val stepKind: SessionStepKind? = null,
     val setPlanId: String? = null,
     val remainingSec: Int? = null,
-    val reason: String? = null
+    val reason: String? = null,
+    val fromExerciseId: String? = null,
+    val toExerciseId: String? = null
 )
 
 enum class StrengthWorkoutControlHistoryType {
@@ -40,6 +44,8 @@ enum class StrengthWorkoutControlHistoryType {
     START_STRENGTH_SET,
     COMPLETE_STRENGTH_SET,
     CONFIRM_STRENGTH_SET,
+    REPLACE_EXERCISE,
+    SKIP_EXERCISE,
     END_SESSION
 }
 

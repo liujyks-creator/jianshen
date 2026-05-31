@@ -17,6 +17,7 @@ import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.WorkoutCommand
 
 internal data class StrengthWorkoutSessionScreenState(
     val planTitle: String,
@@ -47,6 +48,10 @@ internal data class StrengthWorkoutSessionScreenState(
     val totalSetCount: Int,
     val historySummaryLabel: String,
     val lastControlLabel: String,
+    val replacementOptions: List<StrengthExerciseReplacementOptionUiState>,
+    val canReplaceExercise: Boolean,
+    val canSkipExercise: Boolean,
+    val substitutionSummaryLabel: String,
     val terminalTitle: String? = null,
     val terminalSummary: String? = null
 )
@@ -89,6 +94,12 @@ internal data class StrengthWorkoutHeartRateUiState(
     val valueText: String,
     val statusText: String,
     val isAvailable: Boolean
+)
+
+internal data class StrengthExerciseReplacementOptionUiState(
+    val exerciseId: String,
+    val exerciseName: String,
+    val summary: String
 )
 
 internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
@@ -157,6 +168,17 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
             draft = draft
         )
     }
+    val replacementOptions = buildReplacementOptions(
+        current = current,
+        exerciseById = exerciseById,
+        exercises = exercises
+    )
+    val canReplace = status == SessionStatus.ACTIVE &&
+        stepKind in replaceableStrengthUiSteps &&
+        replacementOptions.isNotEmpty()
+    val canSkip = status == SessionStatus.ACTIVE &&
+        stepKind in skippableStrengthUiSteps &&
+        current != null
 
     return StrengthWorkoutSessionScreenState(
         planTitle = planTitle,
@@ -199,9 +221,31 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         totalSetCount = totalSets,
         historySummaryLabel = historySummaryLabel,
         lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
+        replacementOptions = replacementOptions,
+        canReplaceExercise = canReplace,
+        canSkipExercise = canSkip,
+        substitutionSummaryLabel = current.substitutionSummaryLabel(exerciseById),
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary
     )
+}
+
+internal fun StrengthWorkoutEngineState.currentReplaceExerciseCommand(
+    toExerciseId: String
+): WorkoutCommand.ReplaceExercise? {
+    val current = currentSet ?: return null
+    if (status != SessionStatus.ACTIVE || currentStepKind !in replaceableStrengthUiSteps) return null
+    if (current.exerciseId == toExerciseId) return null
+    return WorkoutCommand.ReplaceExercise(
+        fromExerciseId = current.exerciseId,
+        toExerciseId = toExerciseId
+    )
+}
+
+internal fun StrengthWorkoutEngineState.currentSkipExerciseCommand(): WorkoutCommand? {
+    val current = currentSet ?: return null
+    if (status != SessionStatus.ACTIVE || currentStepKind !in skippableStrengthUiSteps) return null
+    return WorkoutCommand.SkipStep.takeIf { current.exerciseId.isNotBlank() }
 }
 
 internal fun StrengthSetConfirmationUiState.initialInputState(): StrengthSetConfirmationInputState {
@@ -312,6 +356,55 @@ private fun StrengthWorkoutEngineState.nextDisplaySet(): StrengthSessionSetStep?
     return setSteps.getOrNull(nextIndex)
 }
 
+private fun buildReplacementOptions(
+    current: StrengthSessionSetStep?,
+    exerciseById: Map<String, Exercise>,
+    exercises: List<Exercise>
+): List<StrengthExerciseReplacementOptionUiState> {
+    val set = current ?: return emptyList()
+    val exerciseSubstitutions = listOfNotNull(
+        exerciseById[set.exerciseId],
+        set.substitutedFromExerciseId?.let { exerciseId -> exerciseById[exerciseId] }
+    ).flatMap { exercise ->
+        exercise.substitutions.map { substitution -> substitution.exerciseId }
+    }
+    val explicitCandidates = (
+        set.substitutionExerciseIds +
+            exerciseSubstitutions
+        ).distinct()
+    val fallbackCandidates = exercises
+        .filter { exercise -> exercise.isStrengthCapable() }
+        .map { exercise -> exercise.id }
+    val candidateIds = (explicitCandidates + fallbackCandidates).distinct()
+
+    return candidateIds
+        .asSequence()
+        .filter { exerciseId -> exerciseId != set.exerciseId }
+        .mapNotNull { exerciseId -> exerciseById[exerciseId] }
+        .filter { exercise -> exercise.isStrengthCapable() }
+        .map { exercise ->
+            StrengthExerciseReplacementOptionUiState(
+                exerciseId = exercise.id,
+                exerciseName = exercise.name,
+                summary = exercise.replacementSummary()
+            )
+        }
+        .toList()
+}
+
+private fun Exercise.isStrengthCapable(): Boolean {
+    return capabilities.supportsReps || capabilities.supportsWeight
+}
+
+private fun Exercise.replacementSummary(): String {
+    val load = when {
+        capabilities.supportsWeight -> "可记录重量"
+        capabilities.supportsReps -> "可记录次数"
+        else -> "力量可用"
+    }
+    return "$load · ${equipment.joinToString(" / ") { equipment -> equipment.contractValue }}"
+}
+
 private fun StrengthWorkoutEngineState.buildShortCue(
     current: StrengthSessionSetStep?,
     next: StrengthSessionSetStep?,
@@ -351,7 +444,13 @@ private fun StrengthWorkoutEngineState.buildHistorySummaryLabel(): String {
         event.type == StrengthWorkoutControlHistoryType.PAUSE_SESSION
     }
     val recordedRestSec = strengthSetRecords.sumOf { record -> record.actualRestAfterSec ?: 0 }
-    return "记录休息 ${recordedRestSec} 秒，暂停 $pauseCount 次。"
+    val replaceCount = controlHistory.count { event ->
+        event.type == StrengthWorkoutControlHistoryType.REPLACE_EXERCISE
+    }
+    val skipCount = controlHistory.count { event ->
+        event.type == StrengthWorkoutControlHistoryType.SKIP_EXERCISE
+    }
+    return "记录休息 ${recordedRestSec} 秒，暂停 $pauseCount 次，替换 $replaceCount 次，跳过 $skipCount 次。"
 }
 
 private fun StrengthWorkoutControlHistoryEvent.toLabel(): String {
@@ -362,6 +461,8 @@ private fun StrengthWorkoutControlHistoryEvent.toLabel(): String {
         StrengthWorkoutControlHistoryType.START_STRENGTH_SET -> "开始本组"
         StrengthWorkoutControlHistoryType.COMPLETE_STRENGTH_SET -> "完成本组"
         StrengthWorkoutControlHistoryType.CONFIRM_STRENGTH_SET -> "按计划确认"
+        StrengthWorkoutControlHistoryType.REPLACE_EXERCISE -> "替换动作"
+        StrengthWorkoutControlHistoryType.SKIP_EXERCISE -> "跳过动作"
         StrengthWorkoutControlHistoryType.END_SESSION -> "提前结束"
     }
 }
@@ -376,6 +477,13 @@ private fun StrengthSessionSetStep.setProgressLabel(): String {
 
 private fun StrengthSessionSetStep.targetSummary(): String {
     return "${plannedWeight.formatWeight()} · ${plannedRepTarget.formatRepTarget()}"
+}
+
+private fun StrengthSessionSetStep?.substitutionSummaryLabel(exerciseById: Map<String, Exercise>): String {
+    val set = this ?: return ""
+    val originalExerciseId = set.substitutedFromExerciseId ?: return ""
+    val originalName = exerciseById[originalExerciseId]?.name ?: originalExerciseId
+    return "本次由 $originalName 替换"
 }
 
 private fun StrengthSessionSetStep?.toNextSetLabel(exerciseById: Map<String, Exercise>): String {
@@ -484,6 +592,19 @@ private fun HeartRateState.toStrengthUiState(): StrengthWorkoutHeartRateUiState 
         )
     }
 }
+
+private val replaceableStrengthUiSteps = setOf(
+    SessionStepKind.STRENGTH_PREPARE_SET,
+    SessionStepKind.STRENGTH_ACTIVE_SET,
+    SessionStepKind.STRENGTH_CONFIRM_SET
+)
+
+private val skippableStrengthUiSteps = setOf(
+    SessionStepKind.STRENGTH_PREPARE_SET,
+    SessionStepKind.STRENGTH_ACTIVE_SET,
+    SessionStepKind.STRENGTH_CONFIRM_SET,
+    SessionStepKind.STRENGTH_REST
+)
 
 private fun Int.formatTimer(): String {
     val safeSeconds = coerceAtLeast(0)
