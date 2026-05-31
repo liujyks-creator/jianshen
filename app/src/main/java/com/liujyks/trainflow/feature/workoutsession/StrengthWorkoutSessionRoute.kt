@@ -92,11 +92,36 @@ internal fun StrengthWorkoutSessionRoute(
     val activeConfirmationInput = uiState.confirmation?.let { confirmation ->
         confirmationInput ?: confirmation.initialInputState()
     }
+    var showReplacementOptions by remember { mutableStateOf(false) }
+    var showSkipConfirmation by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.canReplaceExercise, uiState.canSkipExercise, uiState.currentExerciseName) {
+        if (!uiState.canReplaceExercise) showReplacementOptions = false
+        if (!uiState.canSkipExercise) showSkipConfirmation = false
+    }
 
     StrengthWorkoutSessionScreen(
         uiState = uiState,
         confirmationInput = activeConfirmationInput,
         onConfirmationInputChange = { input -> confirmationInput = input },
+        showReplacementOptions = showReplacementOptions,
+        onToggleReplacementOptions = {
+            showReplacementOptions = !showReplacementOptions
+            showSkipConfirmation = false
+        },
+        onReplaceExercise = { exerciseId ->
+            engineState.currentReplaceExerciseCommand(exerciseId)?.let(::dispatch)
+            showReplacementOptions = false
+        },
+        showSkipConfirmation = showSkipConfirmation,
+        onRequestSkipExercise = {
+            showSkipConfirmation = true
+            showReplacementOptions = false
+        },
+        onCancelSkipExercise = { showSkipConfirmation = false },
+        onConfirmSkipExercise = {
+            engineState.currentSkipExerciseCommand()?.let(::dispatch)
+            showSkipConfirmation = false
+        },
         onStartSet = {
             dispatch(WorkoutCommand.StartStrengthSet(engineState.currentSet?.setPlanId))
         },
@@ -122,6 +147,13 @@ private fun StrengthWorkoutSessionScreen(
     uiState: StrengthWorkoutSessionScreenState,
     confirmationInput: StrengthSetConfirmationInputState?,
     onConfirmationInputChange: (StrengthSetConfirmationInputState) -> Unit,
+    showReplacementOptions: Boolean,
+    onToggleReplacementOptions: () -> Unit,
+    onReplaceExercise: (String) -> Unit,
+    showSkipConfirmation: Boolean,
+    onRequestSkipExercise: () -> Unit,
+    onCancelSkipExercise: () -> Unit,
+    onConfirmSkipExercise: () -> Unit,
     onStartSet: () -> Unit,
     onCompleteSet: () -> Unit,
     onConfirmSet: () -> Unit,
@@ -154,6 +186,16 @@ private fun StrengthWorkoutSessionScreen(
             )
         }
         StrengthNextSetPanel(uiState)
+        StrengthExerciseAdjustmentPanel(
+            uiState = uiState,
+            showReplacementOptions = showReplacementOptions,
+            onToggleReplacementOptions = onToggleReplacementOptions,
+            onReplaceExercise = onReplaceExercise,
+            showSkipConfirmation = showSkipConfirmation,
+            onRequestSkipExercise = onRequestSkipExercise,
+            onCancelSkipExercise = onCancelSkipExercise,
+            onConfirmSkipExercise = onConfirmSkipExercise
+        )
         StrengthHeartRatePanel(uiState.heartRate)
 
         if (uiState.isTerminal) {
@@ -475,6 +517,137 @@ private fun StrengthNextSetPanel(uiState: StrengthWorkoutSessionScreenState) {
             style = MaterialTheme.typography.bodySmall,
             color = TrainFlowNeutral200
         )
+    }
+}
+
+@Composable
+private fun StrengthExerciseAdjustmentPanel(
+    uiState: StrengthWorkoutSessionScreenState,
+    showReplacementOptions: Boolean,
+    onToggleReplacementOptions: () -> Unit,
+    onReplaceExercise: (String) -> Unit,
+    showSkipConfirmation: Boolean,
+    onRequestSkipExercise: () -> Unit,
+    onCancelSkipExercise: () -> Unit,
+    onConfirmSkipExercise: () -> Unit
+) {
+    if (uiState.isTerminal || (!uiState.canReplaceExercise && !uiState.canSkipExercise)) return
+
+    StrengthDarkInfoPanel {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "动作调整",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TrainFlowNeutral50
+                )
+                Text(
+                    text = uiState.substitutionSummaryLabel.ifBlank { "设备不可用或状态变化时使用。" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral200
+                )
+            }
+            StrengthSessionPill(text = "辅助")
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedButton(
+                onClick = onToggleReplacementOptions,
+                enabled = uiState.canReplaceExercise,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = "替换动作", color = TrainFlowNeutral50)
+            }
+            OutlinedButton(
+                onClick = onRequestSkipExercise,
+                enabled = uiState.canSkipExercise,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, TrainFlowError.copy(alpha = 0.55f))
+            ) {
+                Text(text = "跳过动作", color = TrainFlowError)
+            }
+        }
+
+        if (showReplacementOptions) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                uiState.replacementOptions.forEach { option ->
+                    OutlinedButton(
+                        onClick = { onReplaceExercise(option.exerciseId) },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, TrainFlowAccent.copy(alpha = 0.55f))
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(text = option.exerciseName, color = TrainFlowNeutral50)
+                            Text(
+                                text = option.summary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TrainFlowNeutral200
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showSkipConfirmation) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = TrainFlowError.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, TrainFlowError.copy(alpha = 0.45f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "确认跳过当前动作剩余未完成组？",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TrainFlowNeutral50
+                    )
+                    Text(
+                        text = "会直接进入下一动作；已确认的组记录会保留。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TrainFlowNeutral200
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onCancelSkipExercise,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(text = "取消", color = TrainFlowNeutral50)
+                        }
+                        Button(
+                            onClick = onConfirmSkipExercise,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowError)
+                        ) {
+                            Text(text = "确认跳过", color = TrainFlowNeutral50)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -69,9 +69,9 @@ object StrengthWorkoutEngine {
             is WorkoutCommand.CompleteStrengthSet -> completeStrengthSet(state, command.draft)
             is WorkoutCommand.ConfirmStrengthSet -> confirmStrengthSet(state, command.record)
             is WorkoutCommand.EndSession -> endSession(state, command.reason)
-            WorkoutCommand.SkipStep,
+            WorkoutCommand.SkipStep -> skipExercise(state)
+            is WorkoutCommand.ReplaceExercise -> replaceExercise(state, command.fromExerciseId, command.toExerciseId)
             is WorkoutCommand.ExtendRest,
-            is WorkoutCommand.ReplaceExercise,
             is WorkoutCommand.UpdateActualWeight,
             is WorkoutCommand.UpdateActualReps -> StrengthWorkoutEngineResult(state = state)
         }
@@ -320,6 +320,143 @@ object StrengthWorkoutEngine {
         return StrengthWorkoutEngineResult(state = endedState)
     }
 
+    private fun replaceExercise(
+        state: StrengthWorkoutEngineState,
+        fromExerciseId: String,
+        toExerciseId: String
+    ): StrengthWorkoutEngineResult {
+        val currentSet = state.currentSet
+        if (
+            state.status != SessionStatus.ACTIVE ||
+            state.currentStepKind !in replaceableStrengthSteps ||
+            currentSet == null ||
+            currentSet.exerciseId != fromExerciseId ||
+            fromExerciseId == toExerciseId
+        ) {
+            return StrengthWorkoutEngineResult(state = state)
+        }
+
+        val originalExerciseId = currentSet.substitutedFromExerciseId ?: fromExerciseId
+        val updatedSteps = state.setSteps.map { step ->
+            if (step.blockId == currentSet.blockId && step.globalSetIndex >= state.currentSetIndex) {
+                step.copy(
+                    exerciseId = toExerciseId,
+                    substitutedFromExerciseId = originalExerciseId
+                )
+            } else {
+                step
+            }
+        }
+        val updatedHistory = state.stepHistory.map { record ->
+            if (
+                record.blockId == currentSet.blockId &&
+                record.setPlanId == currentSet.setPlanId &&
+                record.status == StrengthSessionStepHistoryStatus.STARTED
+            ) {
+                record.copy(
+                    exerciseId = toExerciseId,
+                    substitutedFromExerciseId = originalExerciseId
+                )
+            } else {
+                record
+            }
+        }
+        val updatedDraft = state.pendingDraft?.copy(
+            exerciseId = toExerciseId,
+            substitutedFromExerciseId = originalExerciseId
+        )
+        val replacedState = state.copy(
+            setSteps = updatedSteps,
+            stepHistory = updatedHistory,
+            pendingDraft = updatedDraft
+        ).appendControlHistory(
+            type = StrengthWorkoutControlHistoryType.REPLACE_EXERCISE,
+            set = currentSet.copy(
+                exerciseId = toExerciseId,
+                substitutedFromExerciseId = originalExerciseId
+            ),
+            fromExerciseId = originalExerciseId,
+            toExerciseId = toExerciseId
+        )
+
+        return StrengthWorkoutEngineResult(
+            state = replacedState,
+            events = listOf(WorkoutEvent.NextExerciseReady(exerciseId = toExerciseId))
+        )
+    }
+
+    private fun skipExercise(state: StrengthWorkoutEngineState): StrengthWorkoutEngineResult {
+        val currentSet = state.currentSet
+        if (
+            state.status != SessionStatus.ACTIVE ||
+            state.currentStepKind !in skippableStrengthSteps ||
+            currentSet == null
+        ) {
+            return StrengthWorkoutEngineResult(state = state)
+        }
+
+        val skippedCurrentState = when (state.currentStepKind) {
+            SessionStepKind.STRENGTH_REST -> state.completeCurrentStep(
+                status = StrengthSessionStepHistoryStatus.SKIPPED,
+                endedAtElapsedSec = state.sessionElapsedSec,
+                actualDurationSec = state.restElapsedSec,
+                remainingSec = state.restRemainingSec
+            ).copy(
+                strengthSetRecords = state.strengthSetRecords.mapIndexed { index, record ->
+                    if (index == state.strengthSetRecords.lastIndex) {
+                        record.copy(actualRestAfterSec = state.restElapsedSec)
+                    } else {
+                        record
+                    }
+                }
+            )
+
+            else -> state.completeCurrentStep(
+                status = StrengthSessionStepHistoryStatus.SKIPPED,
+                endedAtElapsedSec = state.sessionElapsedSec,
+                actualDurationSec = state.currentStepActualDurationSec(),
+                remainingSec = state.currentStepRemainingSec()
+            )
+        }
+        val firstSkippedSetIndex = if (state.currentStepKind == SessionStepKind.STRENGTH_REST) {
+            state.currentSetIndex + 1
+        } else {
+            state.currentSetIndex
+        }
+        val nextSetIndex = skippedCurrentState.setSteps.indexOfFirst { step ->
+            step.globalSetIndex > state.currentSetIndex && step.blockId != currentSet.blockId
+        }.takeIf { index -> index >= 0 }
+        val lastSkippedSetIndex = (nextSetIndex ?: skippedCurrentState.setSteps.size) - 1
+        val withSkippedHistory = if (firstSkippedSetIndex <= lastSkippedSetIndex) {
+            skippedCurrentState.recordSkippedSetSteps(
+                firstIndex = firstSkippedSetIndex,
+                lastIndex = lastSkippedSetIndex
+            )
+        } else {
+            skippedCurrentState
+        }
+        val skippedState = withSkippedHistory.copy(
+            pendingDraft = null,
+            activeSetElapsedSec = 0,
+            restRemainingSec = 0,
+            restElapsedSec = 0
+        ).appendControlHistory(
+            type = StrengthWorkoutControlHistoryType.SKIP_EXERCISE,
+            set = currentSet,
+            remainingSec = state.currentStepRemainingSec(),
+            fromExerciseId = currentSet.exerciseId
+        )
+
+        return if (nextSetIndex == null) {
+            completeSession(skippedState)
+        } else {
+            advanceToPrepare(
+                state = skippedState,
+                nextSetIndex = nextSetIndex
+            )
+        }
+    }
+
     private fun enterPrepare(
         state: StrengthWorkoutEngineState,
         setIndex: Int
@@ -474,9 +611,38 @@ object StrengthWorkoutEngine {
                 blockId = step.blockId,
                 setPlanId = step.setPlanId,
                 setOrder = step.setOrder,
-                startedAtElapsedSec = sessionElapsedSec
+                startedAtElapsedSec = sessionElapsedSec,
+                substitutedFromExerciseId = step.substitutedFromExerciseId
             )
         )
+    }
+
+    private fun StrengthWorkoutEngineState.recordSkippedSetSteps(
+        firstIndex: Int,
+        lastIndex: Int
+    ): StrengthWorkoutEngineState {
+        val newRecords = setSteps
+            .slice(firstIndex..lastIndex)
+            .map { step ->
+                StrengthSessionStepHistoryRecord(
+                    stepId = step.prepareStepId,
+                    kind = SessionStepKind.STRENGTH_PREPARE_SET,
+                    exerciseId = step.exerciseId,
+                    blockId = step.blockId,
+                    setPlanId = step.setPlanId,
+                    setOrder = step.setOrder,
+                    startedAtElapsedSec = sessionElapsedSec,
+                    endedAtElapsedSec = sessionElapsedSec,
+                    status = StrengthSessionStepHistoryStatus.SKIPPED,
+                    actualDurationSec = 0,
+                    substitutedFromExerciseId = step.substitutedFromExerciseId
+                )
+            }
+            .filterNot { skipped ->
+                stepHistory.any { record -> record.stepId == skipped.stepId }
+            }
+
+        return copy(stepHistory = stepHistory + newRecords)
     }
 
     private fun StrengthWorkoutEngineState.completeCurrentStep(
@@ -495,7 +661,8 @@ object StrengthWorkoutEngine {
                 blockId = set.blockId,
                 setPlanId = set.setPlanId,
                 setOrder = set.setOrder,
-                startedAtElapsedSec = sessionElapsedSec
+                startedAtElapsedSec = sessionElapsedSec,
+                substitutedFromExerciseId = set.substitutedFromExerciseId
             )
         } ?: return this).copy(
             endedAtElapsedSec = endedAtElapsedSec,
@@ -538,7 +705,9 @@ object StrengthWorkoutEngine {
         type: StrengthWorkoutControlHistoryType,
         set: StrengthSessionSetStep? = currentSet,
         remainingSec: Int? = currentStepRemainingSec(),
-        reason: String? = null
+        reason: String? = null,
+        fromExerciseId: String? = null,
+        toExerciseId: String? = null
     ): StrengthWorkoutEngineState {
         return copy(
             controlHistory = controlHistory + StrengthWorkoutControlHistoryEvent(
@@ -548,7 +717,9 @@ object StrengthWorkoutEngine {
                 stepKind = currentStepKind,
                 setPlanId = set?.setPlanId,
                 remainingSec = remainingSec,
-                reason = reason
+                reason = reason,
+                fromExerciseId = fromExerciseId,
+                toExerciseId = toExerciseId
             )
         )
     }
@@ -597,7 +768,8 @@ object StrengthWorkoutEngine {
             plannedRepTarget = setPlan.repTarget ?: target?.repTarget,
             restAfterSec = setPlan.restAfterSec ?: target?.restAfterSetSec,
             exerciseSetIndex = exerciseSetIndex,
-            exerciseSetCount = exerciseSetCount
+            exerciseSetCount = exerciseSetCount,
+            substitutionExerciseIds = substitutions
         )
     }
 
@@ -613,7 +785,8 @@ object StrengthWorkoutEngine {
             plannedRepTarget = plannedRepTarget,
             defaultActualWeight = plannedWeight,
             defaultActualReps = plannedRepTarget.defaultActualReps(),
-            activeDurationSec = activeDurationSec
+            activeDurationSec = activeDurationSec,
+            substitutedFromExerciseId = substitutedFromExerciseId
         )
     }
 
@@ -639,6 +812,7 @@ object StrengthWorkoutEngine {
             actualReps = input.actualReps ?: defaultActualReps,
             activeDurationSec = activeDurationSec,
             effort = input.effort,
+            substitutedFromExerciseId = substitutedFromExerciseId,
             notes = input.notes
         )
     }
@@ -720,7 +894,9 @@ data class StrengthSessionSetStep(
     val exerciseSetIndex: Int,
     val exerciseSetCount: Int,
     val globalSetIndex: Int = 0,
-    val totalSetCount: Int = 0
+    val totalSetCount: Int = 0,
+    val substitutedFromExerciseId: String? = null,
+    val substitutionExerciseIds: List<String> = emptyList()
 ) {
     val prepareStepId: String = "$blockId-$setPlanId-prepare"
     val activeStepId: String = "$blockId-$setPlanId-active"
@@ -749,5 +925,19 @@ data class StrengthSetDraft(
     val plannedRepTarget: RepTarget? = null,
     val defaultActualWeight: WeightValue? = null,
     val defaultActualReps: Int? = null,
-    val activeDurationSec: Int
+    val activeDurationSec: Int,
+    val substitutedFromExerciseId: String? = null
+)
+
+private val replaceableStrengthSteps = setOf(
+    SessionStepKind.STRENGTH_PREPARE_SET,
+    SessionStepKind.STRENGTH_ACTIVE_SET,
+    SessionStepKind.STRENGTH_CONFIRM_SET
+)
+
+private val skippableStrengthSteps = setOf(
+    SessionStepKind.STRENGTH_PREPARE_SET,
+    SessionStepKind.STRENGTH_ACTIVE_SET,
+    SessionStepKind.STRENGTH_CONFIRM_SET,
+    SessionStepKind.STRENGTH_REST
 )
