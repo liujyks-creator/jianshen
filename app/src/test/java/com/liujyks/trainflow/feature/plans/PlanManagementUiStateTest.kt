@@ -35,8 +35,8 @@ class PlanManagementUiStateTest {
 
         assertEquals(strengthId, detail.id)
         assertEquals("力量训练", detail.modeLabel)
-        assertFalse(detail.canStartTraining)
-        assertTrue(detail.startStatus.contains("E4"))
+        assertTrue(detail.canStartTraining)
+        assertEquals("开始力量训练", detail.startStatus)
         assertTrue(detail.editStatus.contains("后续接入"))
         assertTrue(detail.sections.any { section -> section.title == "动作与组" })
     }

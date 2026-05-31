@@ -42,6 +42,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 
 @Composable
@@ -49,6 +50,7 @@ internal fun PlanManagementRoute(
     uiState: PlanManagementScreenState,
     onStateChange: (PlanManagementScreenState) -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit = {},
+    onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     PlanManagementScreen(
@@ -59,6 +61,7 @@ internal fun PlanManagementRoute(
         onConfirmDeletePlan = { onStateChange(uiState.confirmDeletePlan()) },
         onCancelDeletePlan = { onStateChange(uiState.cancelDeletePlan()) },
         onStartTimedPlan = onStartTimedPlan,
+        onStartStrengthPlan = onStartStrengthPlan,
         modifier = modifier
     )
 }
@@ -72,6 +75,7 @@ private fun PlanManagementScreen(
     onConfirmDeletePlan: () -> Unit,
     onCancelDeletePlan: () -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit,
+    onStartStrengthPlan: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -117,7 +121,8 @@ private fun PlanManagementScreen(
                         plan = uiState.selectedPlan,
                         onCopyPlan = { onCopyPlan(detail.id) },
                         onRequestDeletePlan = { onRequestDeletePlan(detail.id) },
-                        onStartTimedPlan = onStartTimedPlan
+                        onStartTimedPlan = onStartTimedPlan,
+                        onStartStrengthPlan = onStartStrengthPlan
                     )
                 }
             }
@@ -152,7 +157,7 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "计时训练执行已接入；session records、通知、真实心率、语音、跟练和力量执行仍未接入。",
+            text = "计时与力量训练执行已接入；session records、通知、真实心率、语音和跟练仍未接入。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -223,7 +228,8 @@ private fun PlanDetailCard(
     plan: WorkoutPlan?,
     onCopyPlan: () -> Unit,
     onRequestDeletePlan: () -> Unit,
-    onStartTimedPlan: (WorkoutPlan) -> Unit
+    onStartTimedPlan: (WorkoutPlan) -> Unit,
+    onStartStrengthPlan: (WorkoutPlan) -> Unit
 ) {
     EditorCard {
         Row(
@@ -282,7 +288,11 @@ private fun PlanDetailCard(
         Button(
             onClick = {
                 if (plan != null) {
-                    onStartTimedPlan(plan)
+                    when (plan.mode) {
+                        WorkoutMode.TIMED -> onStartTimedPlan(plan)
+                        WorkoutMode.STRENGTH -> onStartStrengthPlan(plan)
+                        WorkoutMode.FOLLOW_ALONG -> Unit
+                    }
                 }
             },
             enabled = detail.canStartTraining,

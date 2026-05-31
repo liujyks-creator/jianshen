@@ -442,6 +442,8 @@ stepsCompleted:
 
 ### Story E4.2: 力量训练执行页
 
+**状态:** Implemented in `feature.workoutsession` Compose route, UI state mapper, official shell start path, and unit tests
+
 作为用户，  
 我想看到当前动作、本组目标和主操作按钮，  
 以便训练中不用搜索关键信息。
@@ -451,6 +453,16 @@ stepsCompleted:
 - Prepare 状态主按钮为 `开始本组`。
 - Active 状态主按钮为 `完成本组`。
 - Rest 状态主信息为休息倒计时和下一组目标。
+
+**交付结果:**
+
+- Android 侧新增 `StrengthWorkoutSessionScreenState` mapper，覆盖 prepare / active / confirm / rest / completed / abandoned 的当前动作、本组目标、组进度、主计时、下一组提示、轻量历史摘要和抽象心率 UI 状态。
+- 新增 `StrengthWorkoutSessionRoute` Compose 深色执行页，复用 E4.1 `StrengthWorkoutEngine`，不在 UI 中手写第二套力量状态机。
+- 计划详情中 strength plan 启用“开始力量训练”；官方 shell 新增 `STRENGTH_SESSION` 导航状态、active strength plan 边界和训练中锁定底部导航。
+- Prepare 主按钮为“开始本组”，Active 主按钮为“完成本组”，Confirm 仅提供“按计划确认”，Rest 主信息展示休息倒计时和下一组/下一动作目标，并允许休息中提前开始下一组。
+- 支持暂停、继续和提前结束；completed / abandoned 仅展示轻量结束态，不生成完整训练总结。
+- 新增单元测试覆盖力量执行 UI mapper、计划详情 strength start enable、官方 shell strength session 导航与锁定边界。
+- 本 story 未实现 E4.3 可编辑确认层、E4.4 动作替换与跳过、真实 `WorkoutSession` 持久化、session records 写库、Room/DataStore repository 业务闭环、训练总结、通知调度、声音、震动、真实心率设备、语音、完整跟练闭环或恢复建议。
 
 ### Story E4.3: 单组完成确认层
 
@@ -731,24 +743,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E3.4 已关闭并合入 main。
-docs UTF-8 policy 与 docs/status refresh 已 review/merge，当前 main 为 38915dd561a5204eb6d7d8d61539321743f9f87a。
-E4.1 已在 codex/e4-1-strength-execution-engine 阶段分支实现，等待 Review Gate。
+E3.4、docs UTF-8 policy、docs/status refresh 与 E4.1 已 review/merge，当前 main / origin/main 为 c8b2462fe1dfb62563c57eab11a90ba9e2a8824c。
+E4.2 已在 codex/e4-2-strength-session-screen 阶段分支实现，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E4.1 Review Gate
+Story E4.2 Review Gate
 ```
 
 Review Gate 建议重点确认：
 
-1. 力量引擎是否只在 `core.engine` 内实现，没有接入 E4.2 UI、E4.3 确认层 UI、E4.4 替换/跳过或真实持久化。
-2. `WorkoutCommand` / `WorkoutEvent` 边界是否保持稳定，UI 和未来语音仍可复用同一命令语义。
-3. 确认草案、默认回填、active set 耗时、actual rest、暂停冻结、提前结束和 terminal command ignore 是否符合 E4.1 验收。
-4. Review 通过后再合入 `main`，下一 story 进入 `Story E4.2: 力量训练执行页`。
+1. 力量执行页是否只复用 E4.1 `StrengthWorkoutEngine` 推进状态，没有在 UI 中实现第二套状态机。
+2. Prepare / Active / Rest 是否满足主按钮和主信息验收；Confirm 是否只做“按计划确认”的最小可用过渡。
+3. 计划详情和官方 shell 是否只对 strength plan 启用力量执行入口，timed plan 仍走 E3 计时执行页。
+4. 是否未越界实现 E4.3 可编辑确认层、E4.4 替换/跳过、真实持久化、完整总结、通知、声音、震动、真实心率、语音或跟练闭环。
+5. Review 通过后再合入 `main`，下一 story 进入 `Story E4.3: 单组完成确认层`。
 
 ## 8. 暂缓事项
 
