@@ -305,7 +305,7 @@ internal fun TimedPlanEditorScreenState.saveDraftPlan(
 
     return copy(
         savedPlan = toWorkoutPlan(timestamp = timestamp),
-        statusMessage = "已生成本次计时计划草稿，后续 E2.4 接入真实保存。"
+        statusMessage = "已生成本次计时计划草稿，可用于当前内存态计划预览；真实保存后续接入。"
     )
 }
 

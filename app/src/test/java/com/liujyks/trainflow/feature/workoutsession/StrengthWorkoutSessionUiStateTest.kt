@@ -228,6 +228,8 @@ class StrengthWorkoutSessionUiStateTest {
         assertTrue(uiState.nextSetLabel.contains("kg"))
         assertTrue(uiState.canStartNextDuringRest)
         assertFalse(uiState.canStartSet)
+        assertFalse(uiState.canReplaceExercise)
+        assertTrue(uiState.canSkipExercise)
     }
 
     @Test

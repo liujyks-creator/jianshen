@@ -41,7 +41,7 @@ internal data class StrengthPlanEditorScreenState(
             id = planId,
             mode = WorkoutMode.STRENGTH,
             title = title.trim(),
-            description = "E2.3 内存态力量计划草稿",
+            description = "内存态力量计划草稿",
             blocks = exercises.mapIndexed { index, exercise ->
                 exercise.toStrengthExerciseBlock(order = index + 1)
             },
@@ -363,7 +363,7 @@ internal fun StrengthPlanEditorScreenState.saveDraftPlan(
 
     return copy(
         savedPlan = toWorkoutPlan(timestamp = timestamp),
-        statusMessage = "已生成本次力量计划草稿，后续 E2.4 接入真实保存。"
+        statusMessage = "已生成本次力量计划草稿，可用于当前内存态计划预览；真实保存后续接入。"
     )
 }
 

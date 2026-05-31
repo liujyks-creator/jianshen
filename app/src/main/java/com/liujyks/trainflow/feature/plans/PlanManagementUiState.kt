@@ -75,13 +75,13 @@ internal fun buildDefaultPlanManagementState(
                 planId = "plan-timed-default",
                 timestamp = timestamp
             ).copy(
-                description = "E2.4 内存态计时计划，可用于列表、详情、复制和删除验证。"
+                description = "内存态计时计划，可用于列表、详情、复制、删除和启动执行验证。"
             ),
             buildDefaultStrengthPlanEditorState().toWorkoutPlan(
                 planId = "plan-strength-default",
                 timestamp = timestamp
             ).copy(
-                description = "E2.4 内存态力量计划，可用于列表、详情、复制和删除验证。"
+                description = "内存态力量计划，可用于列表、详情、复制、删除和启动执行验证。"
             )
         )
     )

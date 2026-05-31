@@ -173,7 +173,7 @@ private fun StrengthPlanEditorScreen(
 @Composable
 private fun StrengthPlanEditorHeader(uiState: StrengthPlanEditorScreenState) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "E2.3 力量计划编辑", color = TrainFlowAction, contentColor = TrainFlowNeutral50)
+        StatusPill(text = "力量计划编辑", color = TrainFlowAction, contentColor = TrainFlowNeutral50)
         Text(
             text = "力量计划编辑",
             style = MaterialTheme.typography.headlineLarge,
@@ -185,7 +185,7 @@ private fun StrengthPlanEditorHeader(uiState: StrengthPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "当前只生成内存态草稿；真实保存、开始本组、确认记录和 session records 留给后续 story。",
+            text = "当前生成内存态草稿；计划详情已可启动力量训练，真实保存和 session records 后续接入。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

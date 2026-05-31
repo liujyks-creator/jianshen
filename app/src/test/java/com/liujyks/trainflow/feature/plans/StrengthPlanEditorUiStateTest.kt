@@ -149,7 +149,7 @@ class StrengthPlanEditorUiStateTest {
 
         assertNull(unsaved.savedPlan)
         assertNotNull(saved.savedPlan)
-        assertTrue(requireNotNull(saved.statusMessage).contains("后续 E2.4"))
+        assertTrue(requireNotNull(saved.statusMessage).contains("真实保存"))
         assertNull(editedAfterSave.savedPlan)
         assertNull(editedAfterSave.statusMessage)
     }

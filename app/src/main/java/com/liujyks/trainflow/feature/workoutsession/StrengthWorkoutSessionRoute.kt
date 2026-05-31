@@ -3,12 +3,14 @@ package com.liujyks.trainflow.feature.workoutsession
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -164,43 +167,62 @@ private fun StrengthWorkoutSessionScreen(
     onBackToPlans: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(TrainFlowPrimary)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        StrengthSessionHeader(uiState)
-        StrengthMainPanel(uiState)
         val confirmationValidation = uiState.confirmation?.let { confirmation ->
             confirmationInput?.validateFor(confirmation)
         }
-        if (uiState.confirmation != null && confirmationInput != null && confirmationValidation != null) {
-            StrengthSetConfirmationPanel(
-                confirmation = uiState.confirmation,
-                input = confirmationInput,
-                validation = confirmationValidation,
-                onInputChange = onConfirmationInputChange
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(
+                    top = 22.dp,
+                    bottom = if (uiState.isTerminal) 22.dp else 132.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            StrengthSessionHeader(uiState)
+            StrengthMainPanel(uiState)
+            if (uiState.confirmation != null && confirmationInput != null && confirmationValidation != null) {
+                StrengthSetConfirmationPanel(
+                    confirmation = uiState.confirmation,
+                    input = confirmationInput,
+                    validation = confirmationValidation,
+                    onInputChange = onConfirmationInputChange
+                )
+            }
+            StrengthNextSetPanel(uiState)
+            StrengthExerciseAdjustmentPanel(
+                uiState = uiState,
+                showReplacementOptions = showReplacementOptions,
+                onToggleReplacementOptions = onToggleReplacementOptions,
+                onReplaceExercise = onReplaceExercise,
+                showSkipConfirmation = showSkipConfirmation,
+                onRequestSkipExercise = onRequestSkipExercise,
+                onCancelSkipExercise = onCancelSkipExercise,
+                onConfirmSkipExercise = onConfirmSkipExercise
             )
-        }
-        StrengthNextSetPanel(uiState)
-        StrengthExerciseAdjustmentPanel(
-            uiState = uiState,
-            showReplacementOptions = showReplacementOptions,
-            onToggleReplacementOptions = onToggleReplacementOptions,
-            onReplaceExercise = onReplaceExercise,
-            showSkipConfirmation = showSkipConfirmation,
-            onRequestSkipExercise = onRequestSkipExercise,
-            onCancelSkipExercise = onCancelSkipExercise,
-            onConfirmSkipExercise = onConfirmSkipExercise
-        )
-        StrengthHeartRatePanel(uiState.heartRate)
+            StrengthHeartRatePanel(uiState.heartRate)
 
-        if (uiState.isTerminal) {
-            StrengthTerminalPanel(uiState, onBackToPlans)
-        } else {
+            if (uiState.isTerminal) {
+                StrengthTerminalPanel(uiState, onBackToPlans)
+            } else {
+                StrengthSecondaryControlsPanel(
+                    uiState = uiState,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onEnd = onEnd
+                )
+                StrengthControlHistoryPanel(uiState)
+            }
+        }
+
+        if (!uiState.isTerminal) {
             StrengthSessionControls(
                 uiState = uiState,
                 confirmationValidation = confirmationValidation,
@@ -208,9 +230,7 @@ private fun StrengthWorkoutSessionScreen(
                 onCompleteSet = onCompleteSet,
                 onConfirmSet = onConfirmSet,
                 onStartNextDuringRest = onStartNextDuringRest,
-                onPause = onPause,
-                onResume = onResume,
-                onEnd = onEnd
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -294,29 +314,43 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = TrainFlowNeutral200
             )
-            Text(
-                text = uiState.primaryMetricLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = TrainFlowNeutral200
-            )
-            Text(
-                text = uiState.primaryMetricText,
-                fontSize = if (uiState.canStartSet) 30.sp else 72.sp,
-                lineHeight = if (uiState.canStartSet) 36.sp else 74.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = metricColor
-            )
-            LinearProgressIndicator(
-                progress = { uiState.progressFraction.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth(),
-                color = if (isRest) TrainFlowAccent else TrainFlowAction,
-                trackColor = Color.White.copy(alpha = 0.12f)
-            )
-            Text(
-                text = uiState.targetSummary,
-                style = MaterialTheme.typography.titleMedium,
-                color = TrainFlowNeutral50
-            )
+            if (uiState.isTerminal) {
+                Text(
+                    text = "${uiState.completedSetCount} / ${uiState.totalSetCount} 组已确认",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TrainFlowNeutral200
+                )
+                LinearProgressIndicator(
+                    progress = { uiState.progressFraction.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = TrainFlowAccent,
+                    trackColor = Color.White.copy(alpha = 0.12f)
+                )
+            } else {
+                Text(
+                    text = uiState.primaryMetricLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TrainFlowNeutral200
+                )
+                Text(
+                    text = uiState.primaryMetricText,
+                    fontSize = if (uiState.canStartSet) 30.sp else 72.sp,
+                    lineHeight = if (uiState.canStartSet) 36.sp else 74.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = metricColor
+                )
+                LinearProgressIndicator(
+                    progress = { uiState.progressFraction.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = if (isRest) TrainFlowAccent else TrainFlowAction,
+                    trackColor = Color.White.copy(alpha = 0.12f)
+                )
+                Text(
+                    text = uiState.targetSummary,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TrainFlowNeutral50
+                )
+            }
             Text(
                 text = uiState.shortCue,
                 style = MaterialTheme.typography.bodyLarge,
@@ -560,22 +594,24 @@ private fun StrengthExerciseAdjustmentPanel(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            OutlinedButton(
-                onClick = onToggleReplacementOptions,
-                enabled = uiState.canReplaceExercise,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(text = "替换动作", color = TrainFlowNeutral50)
+            if (uiState.canReplaceExercise) {
+                OutlinedButton(
+                    onClick = onToggleReplacementOptions,
+                    modifier = if (uiState.canSkipExercise) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(text = "替换动作", color = TrainFlowNeutral50)
+                }
             }
-            OutlinedButton(
-                onClick = onRequestSkipExercise,
-                enabled = uiState.canSkipExercise,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, TrainFlowError.copy(alpha = 0.55f))
-            ) {
-                Text(text = "跳过动作", color = TrainFlowError)
+            if (uiState.canSkipExercise) {
+                OutlinedButton(
+                    onClick = onRequestSkipExercise,
+                    modifier = if (uiState.canReplaceExercise) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, TrainFlowError.copy(alpha = 0.55f))
+                ) {
+                    Text(text = "跳过动作", color = TrainFlowError)
+                }
             }
         }
 
@@ -687,51 +723,90 @@ private fun StrengthSessionControls(
     onCompleteSet: () -> Unit,
     onConfirmSet: () -> Unit,
     onStartNextDuringRest: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = TrainFlowPrimary,
+        shadowElevation = 12.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            val canConfirmSet = uiState.canConfirmPlanned && confirmationValidation?.canConfirm == true
+            Button(
+                onClick = {
+                    when {
+                        uiState.canStartSet -> onStartSet()
+                        uiState.canCompleteSet -> onCompleteSet()
+                        canConfirmSet -> onConfirmSet()
+                        uiState.canStartNextDuringRest -> onStartNextDuringRest()
+                    }
+                },
+                enabled = uiState.canStartSet ||
+                    uiState.canCompleteSet ||
+                    canConfirmSet ||
+                    uiState.canStartNextDuringRest,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAction)
+            ) {
+                Text(
+                    text = when {
+                        uiState.canStartSet -> "开始本组"
+                        uiState.canCompleteSet -> "完成本组"
+                        uiState.canConfirmPlanned -> "确认本组"
+                        uiState.canStartNextDuringRest -> "提前开始本组"
+                        else -> "等待下一步"
+                    },
+                    color = TrainFlowNeutral50
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrengthSecondaryControlsPanel(
+    uiState: StrengthWorkoutSessionScreenState,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onEnd: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        val canConfirmSet = uiState.canConfirmPlanned && confirmationValidation?.canConfirm == true
-        Button(
-            onClick = {
-                when {
-                    uiState.canStartSet -> onStartSet()
-                    uiState.canCompleteSet -> onCompleteSet()
-                    canConfirmSet -> onConfirmSet()
-                    uiState.canStartNextDuringRest -> onStartNextDuringRest()
-                }
-            },
-            enabled = uiState.canStartSet ||
-                uiState.canCompleteSet ||
-                canConfirmSet ||
-                uiState.canStartNextDuringRest,
+    StrengthDarkInfoPanel {
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAction)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = when {
-                    uiState.canStartSet -> "开始本组"
-                    uiState.canCompleteSet -> "完成本组"
-                    uiState.canConfirmPlanned -> "确认本组"
-                    uiState.canStartNextDuringRest -> "提前开始本组"
-                    else -> "等待下一步"
-                },
-                color = TrainFlowNeutral50
-            )
+            OutlinedButton(
+                onClick = if (uiState.canResume) onResume else onPause,
+                enabled = uiState.canResume || uiState.canPause,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = if (uiState.canResume) "继续训练" else "暂停",
+                    color = TrainFlowNeutral50
+                )
+            }
+            TextButton(
+                onClick = onEnd,
+                enabled = uiState.canEnd,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(text = "结束训练", color = TrainFlowError)
+            }
         }
-        OutlinedButton(
-            onClick = if (uiState.canResume) onResume else onPause,
-            enabled = uiState.canResume || uiState.canPause,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Text(
-                text = if (uiState.canResume) "继续训练" else "暂停",
-                color = TrainFlowNeutral50
-            )
-        }
+    }
+}
+
+@Composable
+private fun StrengthControlHistoryPanel(uiState: StrengthWorkoutSessionScreenState) {
+    StrengthDarkInfoPanel {
         Text(
             text = uiState.historySummaryLabel,
             style = MaterialTheme.typography.bodySmall,
@@ -743,13 +818,6 @@ private fun StrengthSessionControls(
                 style = MaterialTheme.typography.bodySmall,
                 color = TrainFlowNeutral500
             )
-        }
-        TextButton(
-            onClick = onEnd,
-            enabled = uiState.canEnd,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = "结束训练", color = TrainFlowError)
         }
     }
 }

@@ -141,7 +141,7 @@ private fun PlanManagementScreen(
 @Composable
 private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "E2.4 计划管理", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        StatusPill(text = "计划管理", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
         Text(
             text = "计划",
             style = MaterialTheme.typography.headlineLarge,
@@ -149,7 +149,7 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
         )
         Text(
             text = if (uiState.isEmpty) {
-                "暂无已保存计划。后续可从计时或力量编辑页接入真实保存。"
+                "暂无已保存计划。当前演示仍使用内存态计划；真实持久化后续接入。"
             } else {
                 "${uiState.plans.size} 个内存态计划 · 可查看详情、复制和删除"
             },
@@ -327,7 +327,7 @@ private fun EmptyPlanStateCard() {
     EditorCard {
         SectionTitle(text = "空状态")
         Text(
-            text = "还没有可管理的训练计划。E2.4 保留空列表体验；真实持久化接入前，本页不会创建 session 或启动训练。",
+            text = "还没有可管理的训练计划。真实持久化接入前，本页只维护当前内存态列表。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
