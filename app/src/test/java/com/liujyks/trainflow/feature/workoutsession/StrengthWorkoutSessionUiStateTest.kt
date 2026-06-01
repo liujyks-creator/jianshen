@@ -426,6 +426,62 @@ class StrengthWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun strengthSummaryKeepsPlannedExerciseCardWhenLaterSetIsReplaced() {
+        val plan = twoSetSummaryPlan()
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 2).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        state = StrengthWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.ReplaceExercise(
+                fromExerciseId = "barbell-bench-press",
+                toExerciseId = "incline-push-up"
+            )
+        ).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 2).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())).state
+
+        val summary = requireNotNull(state.toStrengthWorkoutSessionScreenState().summary)
+        val exerciseSummary = summary.exerciseSummaries.single()
+
+        assertEquals("杠铃卧推", exerciseSummary.exerciseName)
+        assertTrue(exerciseSummary.replacementLabel.orEmpty().contains("上斜俯卧撑"))
+        assertEquals("实际动作：杠铃卧推", exerciseSummary.setItems[0].actualExerciseLabel)
+        assertEquals("实际动作：上斜俯卧撑（替换自 杠铃卧推）", exerciseSummary.setItems[1].actualExerciseLabel)
+        assertEquals("barbell-bench-press", state.strengthSetRecords[1].substitutedFromExerciseId)
+    }
+
+    @Test
+    fun skippedSummaryCountsOmittedActionGroupsInsteadOfSkippedSets() {
+        val plan = multiActionSkipSummaryPlan()
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        repeat(4) {
+            state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+        }
+
+        val summary = requireNotNull(state.toStrengthWorkoutSessionScreenState().summary)
+
+        assertTrue(summary.skippedSummary, summary.skippedSummary.contains("跳过 6 组"))
+        assertTrue(summary.skippedSummary, summary.skippedSummary.contains("杠铃卧推 2 组"))
+        assertTrue(summary.skippedSummary, summary.skippedSummary.contains("单臂哑铃划船 1 组"))
+        assertTrue(summary.skippedSummary, summary.skippedSummary.contains("哑铃杯式深蹲 2 组"))
+        assertTrue(summary.skippedSummary, summary.skippedSummary.contains("另 1 个动作分组"))
+        assertFalse(summary.skippedSummary, summary.skippedSummary.contains("等 3 组"))
+    }
+
+    @Test
     fun abandonedStrengthSummaryKeepsNeutralReasonAndProgress() {
         val plan = twoSetSummaryPlan()
         var state = StrengthWorkoutEngine.dispatch(
@@ -586,6 +642,77 @@ class StrengthWorkoutSessionUiStateTest {
                             kind = StrengthSetKind.WORKING
                         )
                     )
+                )
+            ),
+            createdAt = "2026-06-01T00:00:00Z",
+            updatedAt = "2026-06-01T00:00:00Z"
+        )
+    }
+
+    private fun multiActionSkipSummaryPlan(): WorkoutPlan {
+        fun block(
+            id: String,
+            order: Int,
+            exerciseId: String,
+            weight: Double,
+            reps: Int,
+            setCount: Int
+        ): StrengthExerciseBlock {
+            return StrengthExerciseBlock(
+                id = id,
+                order = order,
+                exerciseId = exerciseId,
+                target = StrengthExerciseTarget(
+                    weight = WeightValue(value = weight, unit = WeightUnit.KG),
+                    repTarget = RepTarget.Fixed(reps = reps),
+                    restAfterSetSec = 0
+                ),
+                sets = (1..setCount).map { setNumber ->
+                    StrengthSetPlan(
+                        id = "$id-working-$setNumber",
+                        order = setNumber,
+                        kind = StrengthSetKind.WORKING
+                    )
+                }
+            )
+        }
+
+        return WorkoutPlan(
+            id = "multi-skip-summary-plan",
+            mode = WorkoutMode.STRENGTH,
+            title = "Multi Skip Summary",
+            blocks = listOf(
+                block(
+                    id = "bench",
+                    order = 1,
+                    exerciseId = "barbell-bench-press",
+                    weight = 60.0,
+                    reps = 8,
+                    setCount = 2
+                ),
+                block(
+                    id = "row",
+                    order = 2,
+                    exerciseId = "one-arm-dumbbell-row",
+                    weight = 24.0,
+                    reps = 10,
+                    setCount = 1
+                ),
+                block(
+                    id = "goblet",
+                    order = 3,
+                    exerciseId = "dumbbell-goblet-squat",
+                    weight = 20.0,
+                    reps = 10,
+                    setCount = 2
+                ),
+                block(
+                    id = "rdl",
+                    order = 4,
+                    exerciseId = "dumbbell-romanian-deadlift",
+                    weight = 24.0,
+                    reps = 10,
+                    setCount = 1
                 )
             ),
             createdAt = "2026-06-01T00:00:00Z",

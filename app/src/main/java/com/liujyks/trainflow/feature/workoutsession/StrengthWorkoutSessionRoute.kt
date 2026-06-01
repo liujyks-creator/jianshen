@@ -1021,6 +1021,11 @@ private fun StrengthSetSummaryRow(set: StrengthWorkoutSummarySetUiState) {
             color = TrainFlowNeutral200
         )
         Text(
+            text = set.actualExerciseLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowAccent
+        )
+        Text(
             text = "重量 ${set.plannedWeightLabel} / ${set.actualWeightLabel} · 次数 ${set.plannedRepLabel} / ${set.actualRepLabel}",
             style = MaterialTheme.typography.bodySmall,
             color = TrainFlowNeutral100

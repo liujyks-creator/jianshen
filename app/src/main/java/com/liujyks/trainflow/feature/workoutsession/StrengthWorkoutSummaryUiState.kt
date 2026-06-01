@@ -49,6 +49,7 @@ internal data class StrengthWorkoutSummaryExerciseUiState(
 
 internal data class StrengthWorkoutSummarySetUiState(
     val setLabel: String,
+    val actualExerciseLabel: String,
     val plannedWeightLabel: String,
     val actualWeightLabel: String,
     val plannedRepLabel: String,
@@ -169,13 +170,14 @@ private fun StrengthWorkoutEngineState.buildExerciseSummaries(
             val firstStep = steps.first()
             val records = steps.mapNotNull { step -> recordBySetPlanId[step.setPlanId] }
             val skippedCount = steps.count { step -> step.setPlanId in skippedSetPlanIds }
-            val displayExerciseId = records.lastOrNull()?.exerciseId ?: firstStep.exerciseId
-            val originalExerciseId = records.firstNotNullOfOrNull { record -> record.substitutedFromExerciseId }
-                ?: steps.firstNotNullOfOrNull { step -> step.substitutedFromExerciseId }
-            val exerciseName = exerciseById[displayExerciseId]?.name ?: displayExerciseId
-            val replacementLabel = originalExerciseId?.let { originalId ->
-                val originalName = exerciseById[originalId]?.name ?: originalId
-                "本次由 $originalName 替换为 $exerciseName"
+            val originalExerciseId = firstStep.plannedExerciseId(records)
+            val exerciseName = exerciseById.exerciseName(originalExerciseId)
+            val replacementExerciseNames = (steps.map { step -> step.exerciseId } + records.map { record -> record.exerciseId })
+                .filterNot { exerciseId -> exerciseId == originalExerciseId }
+                .distinct()
+                .map(exerciseById::exerciseName)
+            val replacementLabel = replacementExerciseNames.takeIf { names -> names.isNotEmpty() }?.let { names ->
+                "部分组替换为 ${names.take(3).joinToString("、")}；每组保留实际动作。"
             }
             StrengthWorkoutSummaryExerciseUiState(
                 exerciseName = exerciseName,
@@ -184,17 +186,28 @@ private fun StrengthWorkoutEngineState.buildExerciseSummaries(
                 skippedLabel = skippedCount.takeIf { it > 0 }?.let { "跳过 $it 组" },
                 setItems = steps.map { step ->
                     val record = recordBySetPlanId[step.setPlanId]
-                    step.toSummarySetUiState(record)
+                    step.toSummarySetUiState(
+                        record = record,
+                        plannedExerciseId = originalExerciseId,
+                        exerciseById = exerciseById
+                    )
                 }
             )
         }
 }
 
 private fun StrengthSessionSetStep.toSummarySetUiState(
-    record: StrengthSetRecord?
+    record: StrengthSetRecord?,
+    plannedExerciseId: String,
+    exerciseById: Map<String, Exercise>
 ): StrengthWorkoutSummarySetUiState {
     return StrengthWorkoutSummarySetUiState(
         setLabel = "${setKind.summaryLabel} · 第 ${exerciseSetIndex + 1} 组",
+        actualExerciseLabel = actualExerciseLabel(
+            record = record,
+            plannedExerciseId = plannedExerciseId,
+            exerciseById = exerciseById
+        ),
         plannedWeightLabel = plannedWeight.formatWeight(),
         actualWeightLabel = record?.actualWeight.formatWeight(),
         plannedRepLabel = plannedRepTarget.formatRepTarget(),
@@ -204,6 +217,29 @@ private fun StrengthSessionSetStep.toSummarySetUiState(
         effortLabel = record?.effort?.summaryLabel ?: "未记录",
         differenceLabel = record?.differenceLabel(plannedWeight, plannedRepTarget) ?: "未确认记录"
     )
+}
+
+private fun StrengthSessionSetStep.actualExerciseLabel(
+    record: StrengthSetRecord?,
+    plannedExerciseId: String,
+    exerciseById: Map<String, Exercise>
+): String {
+    val actualExerciseId = record?.exerciseId ?: exerciseId
+    val actualExerciseName = exerciseById.exerciseName(actualExerciseId)
+    val plannedExerciseName = exerciseById.exerciseName(plannedExerciseId)
+    val substitutedFromId = record?.substitutedFromExerciseId ?: substitutedFromExerciseId
+    val substitutedFromName = exerciseById.exerciseName(substitutedFromId ?: plannedExerciseId)
+
+    return when {
+        record == null && (substitutedFromId != null || actualExerciseId != plannedExerciseId) ->
+            "实际动作：未记录；跳过时为 $actualExerciseName（替换自 $substitutedFromName）"
+        record == null ->
+            "实际动作：未记录；计划动作 $plannedExerciseName"
+        substitutedFromId != null || actualExerciseId != plannedExerciseId ->
+            "实际动作：$actualExerciseName（替换自 $substitutedFromName）"
+        else ->
+            "实际动作：$actualExerciseName"
+    }
 }
 
 private fun StrengthWorkoutEngineState.buildPlanVsActualSummary(): String {
@@ -274,16 +310,33 @@ private fun StrengthWorkoutEngineState.buildSkippedSummary(
         .filter { step -> step.setPlanId in skippedSetPlanIds }
         .groupBy { step -> step.blockId }
         .values
-        .take(3)
-        .joinToString("、") { steps ->
-            val exerciseName = exerciseById[steps.first().exerciseId]?.name ?: steps.first().exerciseId
+        .map { steps ->
+            val exerciseId = steps.first().plannedExerciseId(records = emptyList())
+            val exerciseName = exerciseById.exerciseName(exerciseId)
             "$exerciseName ${steps.size} 组"
         }
-    val more = (skippedSetPlanIds.size - 3).coerceAtLeast(0)
+    val visibleLabels = labels
+        .take(3)
+        .joinToString("、")
+    val more = labels
+        .drop(3)
+        .size
         .takeIf { it > 0 }
-        ?.let { "等 $it 组" }
+        ?.let { "，另 $it 个动作分组" }
         .orEmpty()
-    return "跳过 ${skippedSetPlanIds.size} 组：$labels$more。"
+    return "跳过 ${skippedSetPlanIds.size} 组：$visibleLabels$more。"
+}
+
+private fun StrengthSessionSetStep.plannedExerciseId(
+    records: List<StrengthSetRecord>
+): String {
+    return substitutedFromExerciseId
+        ?: records.firstNotNullOfOrNull { record -> record.substitutedFromExerciseId }
+        ?: exerciseId
+}
+
+private fun Map<String, Exercise>.exerciseName(exerciseId: String): String {
+    return this[exerciseId]?.name ?: exerciseId
 }
 
 private fun StrengthWorkoutEngineState.buildEarlyEndSummary(): String {
