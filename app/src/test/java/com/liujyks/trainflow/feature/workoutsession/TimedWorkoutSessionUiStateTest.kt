@@ -166,7 +166,11 @@ class TimedWorkoutSessionUiStateTest {
         assertTrue(summary.skippedSummary.contains("跳过 2 步"))
         assertTrue(summary.skippedSummary.contains("开合跳"))
         assertTrue(summary.skippedSummary.contains("休息"))
+        assertEquals("本次已到达完成终态，其中包含主动跳过内容。", summary.earlyEndSummary)
+        assertFalse(summary.earlyEndSummary.contains("本次按流程完成"))
         assertEquals("2 步", summary.metricItems.first { it.label == "跳过内容" }.value)
+        assertTrue(summary.metricItems.first { it.label == "完成阶段" }.helper.contains("含跳过"))
+        assertTrue(summary.metricItems.first { it.label == "轮次进度" }.helper.contains("含跳过"))
     }
 
     @Test
@@ -214,6 +218,29 @@ class TimedWorkoutSessionUiStateTest {
         assertTrue(summary.earlyEndSummary.contains("当前步骤已执行 2秒"))
         assertTrue(summary.earlyEndSummary.contains("剩余 2秒"))
         assertFalse(summary.earlyEndSummary.contains("user_requested"))
+    }
+
+    @Test
+    fun immediatelyAbandonedWorkDoesNotCreateTrainedAreaSummary() {
+        val plan = summaryPlan(rounds = 1)
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertEquals("本次未识别到动作部位", summary.trainedAreaSummary)
+        assertEquals(
+            "E5.4 将接入完整恢复建议；当前仅保留入口占位。",
+            summary.recoveryEntry.description
+        )
+        assertFalse(summary.recoveryEntry.description.contains("本次训练部位"))
     }
 
     @Test

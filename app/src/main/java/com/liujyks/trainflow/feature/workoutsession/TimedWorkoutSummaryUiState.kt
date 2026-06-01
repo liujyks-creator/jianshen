@@ -122,6 +122,7 @@ private data class SummaryValue(
 )
 
 private fun TimedWorkoutEngineState.buildCompletedPhaseSummary(): SummaryValue {
+    val hasSkippedSteps = skippedStepHistory.isNotEmpty()
     val terminalRecords = stepHistory.filter { record ->
         record.status == TimedSessionStepHistoryStatus.COMPLETED ||
             record.status == TimedSessionStepHistoryStatus.SKIPPED
@@ -143,11 +144,16 @@ private fun TimedWorkoutEngineState.buildCompletedPhaseSummary(): SummaryValue {
     }
     return SummaryValue(
         value = parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "暂无完成阶段",
-        helper = "来自 step history 的完成/跳过记录"
+        helper = if (hasSkippedSteps) {
+            "来自 step history 的完成/跳过记录，含跳过"
+        } else {
+            "来自 step history 的完成记录"
+        }
     )
 }
 
 private fun TimedWorkoutEngineState.buildRoundSummary(): SummaryValue {
+    val hasSkippedSteps = skippedStepHistory.isNotEmpty()
     val totalRounds = steps.mapNotNull { step -> step.roundCount }.maxOrNull()
         ?: return SummaryValue(value = "无循环轮次", helper = "本计划没有 timed circuit 轮次")
     val completedRounds = (1..totalRounds).count { round ->
@@ -168,7 +174,13 @@ private fun TimedWorkoutEngineState.buildRoundSummary(): SummaryValue {
 
     return SummaryValue(
         value = "$completedRounds / $totalRounds 轮",
-        helper = reachedRound?.let { "已到第 $it 轮" } ?: "尚未进入循环轮次"
+        helper = reachedRound?.let { round ->
+            if (hasSkippedSteps) {
+                "已到第 $round 轮，含跳过"
+            } else {
+                "已到第 $round 轮"
+            }
+        } ?: "尚未进入循环轮次"
     )
 }
 
@@ -199,6 +211,9 @@ private fun TimedWorkoutEngineState.buildRestExtensionSummary(): String {
 
 private fun TimedWorkoutEngineState.buildEarlyEndSummary(): String {
     if (status == SessionStatus.COMPLETED) {
+        if (skippedStepHistory.isNotEmpty()) {
+            return "本次已到达完成终态，其中包含主动跳过内容。"
+        }
         return "本次按流程完成。"
     }
 
@@ -217,7 +232,13 @@ private fun TimedWorkoutEngineState.buildTrainedAreaSummary(
     val muscleLabels = stepHistory
         .filter { record ->
             record.timedKind == TimedSessionStepKind.WORK &&
-                record.status != TimedSessionStepHistoryStatus.SKIPPED
+                (
+                    record.status == TimedSessionStepHistoryStatus.COMPLETED ||
+                        (
+                            record.status == TimedSessionStepHistoryStatus.ABANDONED &&
+                                (record.actualDurationSec ?: 0) > 0
+                            )
+                    )
         }
         .mapNotNull { record -> record.exerciseId }
         .distinct()
