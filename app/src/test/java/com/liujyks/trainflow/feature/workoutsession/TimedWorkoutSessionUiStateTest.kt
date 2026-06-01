@@ -117,6 +117,153 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun completedSummaryMapsDurationPhasesRoundsAndRecoveryPlaceholder() {
+        val plan = summaryPlan(rounds = 2, restBetweenRoundsSec = 3)
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        state = TimedWorkoutEngine.tick(
+            state,
+            seconds = state.steps.sumOf { step -> step.durationSec }
+        ).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+        val metrics = summary.metricItems.associateBy { metric -> metric.label }
+
+        assertEquals("完成复盘", summary.title)
+        assertEquals(TimedWorkoutSummaryTone.COMPLETED, summary.tone)
+        assertEquals("21秒", summary.durationLabel)
+        assertEquals("21秒", metrics.getValue("总时长").value)
+        assertEquals("动作 4 · 休息 3", metrics.getValue("完成阶段").value)
+        assertEquals("7 / 7", metrics.getValue("步骤进度").value)
+        assertEquals("2 / 2 轮", metrics.getValue("轮次进度").value)
+        assertTrue(summary.trainedAreaSummary.contains("全身"))
+        assertTrue(summary.trainedAreaSummary.contains("臀部"))
+        assertEquals("查看恢复建议", summary.recoveryEntry.title)
+        assertFalse(summary.recoveryEntry.enabled)
+        assertFalse(summary.recoveryEntry.generated)
+        assertTrue(summary.recoveryEntry.description.contains("E5.4"))
+    }
+
+    @Test
+    fun skippedSummaryListsSkippedTimedContent() {
+        val plan = summaryPlan(rounds = 1)
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+        state = TimedWorkoutEngine.tick(
+            state,
+            seconds = state.steps.sumOf { step -> step.durationSec }
+        ).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertTrue(summary.skippedSummary.contains("跳过 2 步"))
+        assertTrue(summary.skippedSummary.contains("开合跳"))
+        assertTrue(summary.skippedSummary.contains("休息"))
+        assertEquals("本次已到达完成终态，其中包含主动跳过内容。", summary.earlyEndSummary)
+        assertFalse(summary.earlyEndSummary.contains("本次按流程完成"))
+        assertEquals("2 步", summary.metricItems.first { it.label == "跳过内容" }.value)
+        assertTrue(summary.metricItems.first { it.label == "完成阶段" }.helper.contains("含跳过"))
+        assertTrue(summary.metricItems.first { it.label == "轮次进度" }.helper.contains("含跳过"))
+    }
+
+    @Test
+    fun restExtensionSummaryUsesRestExtensionHistory() {
+        val plan = reminderPlan(
+            workSec = 2,
+            restSec = 5,
+            cueSettings = CueSettings(restEnding = CountdownCue(thresholdSec = 1))
+        )
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.tick(state, seconds = 20).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertTrue(summary.restExtensionSummary.contains("累计延长 15秒"))
+        assertTrue(summary.restExtensionSummary.contains("共 1 次"))
+        assertEquals("15秒", summary.metricItems.first { it.label == "延长休息" }.value)
+    }
+
+    @Test
+    fun abandonedSummaryKeepsNeutralReasonAndProgress() {
+        val plan = summaryPlan(rounds = 1)
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertEquals("提前结束记录", summary.title)
+        assertEquals(TimedWorkoutSummaryTone.ABANDONED, summary.tone)
+        assertTrue(summary.earlyEndSummary.contains("原因：用户主动结束"))
+        assertTrue(summary.earlyEndSummary.contains("当前步骤已执行 2秒"))
+        assertTrue(summary.earlyEndSummary.contains("剩余 2秒"))
+        assertFalse(summary.earlyEndSummary.contains("user_requested"))
+    }
+
+    @Test
+    fun immediatelyAbandonedWorkDoesNotCreateTrainedAreaSummary() {
+        val plan = summaryPlan(rounds = 1)
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertEquals("本次未识别到动作部位", summary.trainedAreaSummary)
+        assertEquals(
+            "E5.4 将接入完整恢复建议；当前仅保留入口占位。",
+            summary.recoveryEntry.description
+        )
+        assertFalse(summary.recoveryEntry.description.contains("本次训练部位"))
+    }
+
+    @Test
+    fun emptySkipAndRestExtensionSummaryStayHonest() {
+        val plan = reminderPlan(
+            workSec = 3,
+            cueSettings = CueSettings(actionEnding = CountdownCue(thresholdSec = 1))
+        )
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 3).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertEquals("没有跳过内容。", summary.skippedSummary)
+        assertEquals("没有延长休息。", summary.restExtensionSummary)
+        assertFalse(summary.recoveryEntry.generated)
+    }
+
+    @Test
     fun userRequestedEarlyEndReasonIsLocalizedInTerminalSummary() {
         val plan = buildDefaultPlanManagementState().plans.first()
         val started = TimedWorkoutEngine.dispatch(
@@ -305,6 +452,40 @@ class TimedWorkoutSessionUiStateTest {
                 )
             ),
             preferences = PlanPreferences(cueSettings = cueSettings),
+            createdAt = "2026-05-30T00:00:00Z",
+            updatedAt = "2026-05-30T00:00:00Z"
+        )
+    }
+
+    private fun summaryPlan(
+        rounds: Int,
+        restBetweenRoundsSec: Int? = null
+    ): WorkoutPlan {
+        return WorkoutPlan(
+            id = "plan-summary-test",
+            mode = WorkoutMode.TIMED,
+            title = "Summary test",
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "summary-circuit",
+                    order = 1,
+                    rounds = rounds,
+                    restBetweenRoundsSec = restBetweenRoundsSec,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "jump",
+                            exerciseId = "jumping-jacks",
+                            workDurationSec = 4,
+                            restAfterSec = 2
+                        ),
+                        TimedExerciseItem(
+                            id = "squat",
+                            exerciseId = "bodyweight-squat",
+                            workDurationSec = 3
+                        )
+                    )
+                )
+            ),
             createdAt = "2026-05-30T00:00:00Z",
             updatedAt = "2026-05-30T00:00:00Z"
         )

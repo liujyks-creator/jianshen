@@ -37,7 +37,8 @@ internal data class TimedWorkoutSessionScreenState(
     val historySummaryLabel: String,
     val lastControlLabel: String,
     val terminalTitle: String? = null,
-    val terminalSummary: String? = null
+    val terminalSummary: String? = null,
+    val summary: TimedWorkoutSummaryUiState? = null
 )
 
 internal data class TimedWorkoutCountdownReminderUiState(
@@ -170,7 +171,8 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         historySummaryLabel = historySummaryLabel,
         lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
         terminalTitle = terminalTitle,
-        terminalSummary = terminalSummary
+        terminalSummary = terminalSummary,
+        summary = toTimedWorkoutSummaryUiState(exercises)
     )
 }
 
