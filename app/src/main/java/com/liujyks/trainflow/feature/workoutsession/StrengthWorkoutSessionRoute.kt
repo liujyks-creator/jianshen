@@ -838,6 +838,9 @@ private fun StrengthTerminalPanel(
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral200
         )
+        uiState.summary?.let { summary ->
+            StrengthSessionSummaryPanel(summary)
+        }
         Button(
             onClick = onBackToPlans,
             modifier = Modifier.fillMaxWidth(),
@@ -845,6 +848,217 @@ private fun StrengthTerminalPanel(
             colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
         ) {
             Text(text = "返回计划", color = TrainFlowPrimary)
+        }
+    }
+}
+
+@Composable
+private fun StrengthSessionSummaryPanel(summary: StrengthWorkoutSummaryUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = summary.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = when (summary.tone) {
+                StrengthWorkoutSummaryTone.COMPLETED -> TrainFlowAccent
+                StrengthWorkoutSummaryTone.ABANDONED -> TrainFlowNeutral200
+            }
+        )
+        StrengthSummaryMetricGrid(summary.metricItems)
+        Text(
+            text = summary.durationSemanticsNote,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        StrengthSummaryDetail(label = "计划 vs 实际", text = summary.planVsActualSummary)
+        StrengthSummaryDetail(label = "实际休息", text = summary.restSummary)
+        StrengthSummaryDetail(label = "替换动作", text = summary.replacementSummary)
+        StrengthSummaryDetail(label = "跳过内容", text = summary.skippedSummary)
+        StrengthSummaryDetail(label = "结束状态", text = summary.earlyEndSummary)
+        summary.exerciseSummaries.forEach { exercise ->
+            StrengthExerciseSummaryPanel(exercise)
+        }
+        StrengthRecoveryEntryPanel(summary.recoveryEntry)
+    }
+}
+
+@Composable
+private fun StrengthSummaryMetricGrid(items: List<StrengthWorkoutSummaryMetricUiState>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    StrengthSummaryMetricItem(
+                        item = item,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size == 1) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        color = Color.Transparent
+                    ) {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrengthSummaryMetricItem(
+    item: StrengthWorkoutSummaryMetricUiState,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = TrainFlowNeutral200
+            )
+            Text(
+                text = item.value,
+                style = MaterialTheme.typography.titleMedium,
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = item.helper,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500
+            )
+        }
+    }
+}
+
+@Composable
+private fun StrengthSummaryDetail(
+    label: String,
+    text: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = TrainFlowNeutral200
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral100
+        )
+    }
+}
+
+@Composable
+private fun StrengthExerciseSummaryPanel(exercise: StrengthWorkoutSummaryExerciseUiState) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White.copy(alpha = 0.06f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = exercise.exerciseName,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TrainFlowNeutral50
+                    )
+                    Text(
+                        text = exercise.setProgressLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TrainFlowNeutral200
+                    )
+                }
+                exercise.skippedLabel?.let { label ->
+                    StrengthSessionPill(
+                        text = label,
+                        containerColor = TrainFlowError.copy(alpha = 0.18f),
+                        contentColor = TrainFlowNeutral50
+                    )
+                }
+            }
+            exercise.replacementLabel?.let { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowAccent
+                )
+            }
+            exercise.setItems.forEach { set ->
+                StrengthSetSummaryRow(set)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrengthSetSummaryRow(set: StrengthWorkoutSummarySetUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(
+            text = set.setLabel,
+            style = MaterialTheme.typography.labelMedium,
+            color = TrainFlowNeutral200
+        )
+        Text(
+            text = "重量 ${set.plannedWeightLabel} / ${set.actualWeightLabel} · 次数 ${set.plannedRepLabel} / ${set.actualRepLabel}",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral100
+        )
+        Text(
+            text = "组耗时 ${set.activeDurationLabel} · 实际休息 ${set.restAfterLabel} · 感受 ${set.effortLabel}",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral200
+        )
+        Text(
+            text = set.differenceLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+    }
+}
+
+@Composable
+private fun StrengthRecoveryEntryPanel(entry: StrengthWorkoutRecoveryEntryUiState) {
+    OutlinedButton(
+        onClick = {},
+        enabled = entry.enabled,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = entry.title,
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = entry.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral200
+            )
         }
     }
 }

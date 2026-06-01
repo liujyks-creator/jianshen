@@ -539,6 +539,8 @@ stepsCompleted:
 
 ### Story E5.2: 力量训练总结
 
+**状态:** Implemented in `feature.workoutsession` strength summary UI state, terminal summary panel, and unit tests
+
 作为用户，  
 我想看到力量训练计划与实际差异，  
 以便回顾表现。
@@ -548,6 +550,15 @@ stepsCompleted:
 - Then 展示动作、组数、重量、次数、组耗时、实际休息。
 - Then 展示计划与实际差异。
 - Then 不自动给出加重量建议。
+
+**交付结果:**
+
+- 新增 `StrengthWorkoutSummaryUiState` 与 mapper，直接消费 `StrengthWorkoutEngineState` 的 `sessionElapsedSec`、`strengthSetRecords`、`stepHistory`、`controlHistory` 和 `earlyEnd`，不新增第二套训练结果来源。
+- completed / abandoned 终态在力量训练执行页展示轻量总结面板，覆盖动作数、已确认组/计划组、每动作组记录、planned / actual 重量与次数、组耗时、实际休息、替换动作、跳过动作/组、提前结束原因与进度。
+- 文案明确当前为引擎内存态记录，不伪装成真实 wall-clock `startedAt` / `endedAt` 或持久化 session records。
+- 恢复建议入口以禁用占位呈现，文案明确 E5.4 后续接入，不暗示已经生成完整恢复建议。
+- 新增 summary mapper 测试覆盖 completed 动作数/组数、planned vs actual 重量次数、组耗时、实际休息、replacement 标记、skipped set 摘要、abandoned 原因与进度，以及不生成自动加重量建议。
+- 本 story 未实现 E5.3 历史趋势、E5.4 完整恢复建议、真实 `WorkoutSession` 持久化、Room/DataStore repository 业务闭环、通知、真实心率设备、语音或跟练闭环。
 
 ### Story E5.3: 训练历史与基础趋势
 
@@ -777,24 +788,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E5.1 计时训练总结已在 codex/e5-1-timed-session-summary 实施，等待 Review Gate。
-E5.1 summary 消费 E3.4 history 边界，不写真实 WorkoutSession，不实现历史趋势或完整恢复建议。
+E5.2 力量训练总结已在 codex/e5-2-strength-session-summary 实施，等待 Review Gate。
+E5.2 summary 消费 E4.1-E4.4 strength records / history / replacement / skip 边界，不写真实 WorkoutSession，不实现历史趋势或完整恢复建议。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E5.1 Review Gate
+Story E5.2 Review Gate
 ```
 
-E5.1 Review Gate 建议重点确认：
+E5.2 Review Gate 建议重点确认：
 
 1. completed / abandoned 终态是否都能看到 summary。
-2. summary 是否覆盖总时长、完成阶段、轮次进度、跳过内容和休息延长情况。
-3. active elapsed 文案是否足够清楚，未伪装为真实 wall-clock `startedAt` / `endedAt`。
+2. summary 是否覆盖动作、组数、重量、次数、组耗时、实际休息和计划/实际差异。
+3. replacement / skip 是否保留原动作来源并区分跳过内容。
 4. 恢复建议入口是否保持 E5.4 占位，没有暗示完整建议已生成。
-5. 是否保持不接真实持久化、通知、声音、震动、真实心率、语音、跟练闭环或力量训练总结。
+5. 是否保持不接真实持久化、历史趋势、自动加重量建议、通知、真实心率、语音或跟练闭环。
 
 ## 8. 暂缓事项
 

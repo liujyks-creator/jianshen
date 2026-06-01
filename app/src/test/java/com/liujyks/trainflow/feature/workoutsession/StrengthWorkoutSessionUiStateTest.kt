@@ -333,6 +333,123 @@ class StrengthWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun completedStrengthSummaryShowsPlanActualSetsDurationRestAndNoAutoProgression() {
+        val plan = twoSetSummaryPlan()
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 3).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
+        state = StrengthWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.ConfirmStrengthSet(
+                StrengthSetCompletionInput(
+                    actualWeight = WeightValue(value = 60.0, unit = WeightUnit.KG),
+                    actualReps = 9,
+                    effort = SetEffort.GOOD
+                )
+            )
+        ).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 3).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 4).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
+        state = StrengthWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.ConfirmStrengthSet(
+                StrengthSetCompletionInput(
+                    actualWeight = WeightValue(value = 57.5, unit = WeightUnit.KG),
+                    actualReps = 6,
+                    effort = SetEffort.HARD
+                )
+            )
+        ).state
+
+        val summary = requireNotNull(state.toStrengthWorkoutSessionScreenState().summary)
+        val metrics = summary.metricItems.associateBy { metric -> metric.label }
+        val setRows = summary.exerciseSummaries.single().setItems
+
+        assertEquals("力量训练复盘", summary.title)
+        assertEquals(StrengthWorkoutSummaryTone.COMPLETED, summary.tone)
+        assertEquals("1 / 1", metrics.getValue("动作").value)
+        assertEquals("2 / 2", metrics.getValue("组数").value)
+        assertEquals("7秒", metrics.getValue("组耗时").value)
+        assertEquals("3秒", metrics.getValue("实际休息").value)
+        assertEquals("60 kg", setRows[0].plannedWeightLabel)
+        assertEquals("60 kg", setRows[0].actualWeightLabel)
+        assertEquals("8-10 次", setRows[0].plannedRepLabel)
+        assertEquals("9 次", setRows[0].actualRepLabel)
+        assertEquals("3秒", setRows[0].activeDurationLabel)
+        assertEquals("3秒", setRows[0].restAfterLabel)
+        assertTrue(setRows[1].differenceLabel.contains("57.5 kg"))
+        assertTrue(setRows[1].differenceLabel.contains("6 次"))
+        assertTrue(summary.planVsActualSummary.contains("重量差异 1 组"))
+        assertTrue(summary.planVsActualSummary.contains("次数差异 1 组"))
+        assertTrue(summary.planVsActualSummary.contains("不生成"))
+        assertFalse(summary.planVsActualSummary.contains("自动"))
+        assertFalse(summary.recoveryEntry.enabled)
+        assertFalse(summary.recoveryEntry.generated)
+    }
+
+    @Test
+    fun strengthSummaryMapsReplacementAndSkippedSets() {
+        val plan = replacementAndSkipPlan()
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = StrengthWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.ReplaceExercise(
+                fromExerciseId = "barbell-bench-press",
+                toExerciseId = "incline-push-up"
+            )
+        ).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 2).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+
+        val summary = requireNotNull(state.toStrengthWorkoutSessionScreenState().summary)
+
+        assertTrue(summary.replacementSummary.contains("替换 1 次"))
+        assertTrue(summary.replacementSummary.contains("->"))
+        assertTrue(summary.skippedSummary, summary.skippedSummary.contains("跳过 1 组"))
+        assertTrue(summary.earlyEndSummary.contains("包含主动跳过"))
+        assertTrue(summary.exerciseSummaries.first().replacementLabel.orEmpty().contains("替换为"))
+        assertEquals("跳过 1 组", summary.exerciseSummaries[1].skippedLabel)
+    }
+
+    @Test
+    fun abandonedStrengthSummaryKeepsNeutralReasonAndProgress() {
+        val plan = twoSetSummaryPlan()
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        state = StrengthWorkoutEngine.tick(state, seconds = 2).state
+        state = StrengthWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+
+        val summary = requireNotNull(state.toStrengthWorkoutSessionScreenState().summary)
+
+        assertEquals("提前结束记录", summary.title)
+        assertEquals(StrengthWorkoutSummaryTone.ABANDONED, summary.tone)
+        assertTrue(summary.earlyEndSummary.contains("原因：用户主动结束"))
+        assertTrue(summary.earlyEndSummary.contains("已确认 0 组"))
+        assertTrue(summary.earlyEndSummary.contains("当前步骤已执行 2秒"))
+        assertFalse(summary.earlyEndSummary.contains("user_requested"))
+    }
+
+    @Test
     fun heartRatePlaceholderStaysSecondaryAndAbstract() {
         val plan = buildDefaultPlanManagementState().plans[1]
         val started = StrengthWorkoutEngine.dispatch(
@@ -392,6 +509,87 @@ class StrengthWorkoutSessionUiStateTest {
             ),
             createdAt = "2026-05-31T00:00:00Z",
             updatedAt = "2026-05-31T00:00:00Z"
+        )
+    }
+
+    private fun twoSetSummaryPlan(): WorkoutPlan {
+        return WorkoutPlan(
+            id = "summary-strength-plan",
+            mode = WorkoutMode.STRENGTH,
+            title = "Summary Strength",
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "bench",
+                    order = 1,
+                    exerciseId = "barbell-bench-press",
+                    target = StrengthExerciseTarget(
+                        weight = WeightValue(value = 60.0, unit = WeightUnit.KG),
+                        repTarget = RepTarget.Range(minReps = 8, maxReps = 10),
+                        restAfterSetSec = 3
+                    ),
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "bench-working-1",
+                            order = 1,
+                            kind = StrengthSetKind.WORKING
+                        ),
+                        StrengthSetPlan(
+                            id = "bench-working-2",
+                            order = 2,
+                            kind = StrengthSetKind.WORKING,
+                            restAfterSec = 0
+                        )
+                    )
+                )
+            ),
+            createdAt = "2026-06-01T00:00:00Z",
+            updatedAt = "2026-06-01T00:00:00Z"
+        )
+    }
+
+    private fun replacementAndSkipPlan(): WorkoutPlan {
+        return WorkoutPlan(
+            id = "replace-skip-summary-plan",
+            mode = WorkoutMode.STRENGTH,
+            title = "Replace Skip Summary",
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "bench",
+                    order = 1,
+                    exerciseId = "barbell-bench-press",
+                    target = StrengthExerciseTarget(
+                        weight = WeightValue(value = 60.0, unit = WeightUnit.KG),
+                        repTarget = RepTarget.Fixed(reps = 8),
+                        restAfterSetSec = 0
+                    ),
+                    substitutions = listOf("incline-push-up"),
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "bench-working-1",
+                            order = 1,
+                            kind = StrengthSetKind.WORKING
+                        )
+                    )
+                ),
+                StrengthExerciseBlock(
+                    id = "row",
+                    order = 2,
+                    exerciseId = "one-arm-dumbbell-row",
+                    target = StrengthExerciseTarget(
+                        weight = WeightValue(value = 24.0, unit = WeightUnit.KG),
+                        repTarget = RepTarget.Fixed(reps = 10)
+                    ),
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "row-working-1",
+                            order = 1,
+                            kind = StrengthSetKind.WORKING
+                        )
+                    )
+                )
+            ),
+            createdAt = "2026-06-01T00:00:00Z",
+            updatedAt = "2026-06-01T00:00:00Z"
         )
     }
 }

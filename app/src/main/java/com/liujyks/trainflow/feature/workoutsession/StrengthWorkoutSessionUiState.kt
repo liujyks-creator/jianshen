@@ -53,7 +53,8 @@ internal data class StrengthWorkoutSessionScreenState(
     val canSkipExercise: Boolean,
     val substitutionSummaryLabel: String,
     val terminalTitle: String? = null,
-    val terminalSummary: String? = null
+    val terminalSummary: String? = null,
+    val summary: StrengthWorkoutSummaryUiState? = null
 )
 
 internal data class StrengthSetConfirmationUiState(
@@ -226,7 +227,8 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         canSkipExercise = canSkip,
         substitutionSummaryLabel = current.substitutionSummaryLabel(exerciseById),
         terminalTitle = terminalTitle,
-        terminalSummary = terminalSummary
+        terminalSummary = terminalSummary,
+        summary = toStrengthWorkoutSummaryUiState(exercises)
     )
 }
 
