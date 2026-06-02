@@ -107,6 +107,12 @@ internal enum class OfficialShellDestination(
         enabled = true,
         showInBottomBar = false
     ),
+    FOLLOW_ALONG_ENTRY(
+        label = "基础跟练",
+        shortLabel = "跟",
+        enabled = true,
+        showInBottomBar = false
+    ),
     TIMED_SESSION(
         label = "计时训练",
         shortLabel = "训",
@@ -167,6 +173,7 @@ internal fun OfficialShellDestination.selectedBottomDestination(): OfficialShell
     return when (this) {
         OfficialShellDestination.TIMED_PLAN_EDITOR,
         OfficialShellDestination.STRENGTH_PLAN_EDITOR,
+        OfficialShellDestination.FOLLOW_ALONG_ENTRY,
         OfficialShellDestination.TIMED_SESSION,
         OfficialShellDestination.STRENGTH_SESSION -> OfficialShellDestination.TRAINING
         OfficialShellDestination.RECOVERY -> OfficialShellDestination.RECORDS

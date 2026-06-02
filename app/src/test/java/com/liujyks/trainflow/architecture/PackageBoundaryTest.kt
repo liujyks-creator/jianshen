@@ -22,6 +22,7 @@ class PackageBoundaryTest {
             "core/media",
             "core/notifications",
             "feature/home",
+            "feature/followalong",
             "feature/plans",
             "feature/exerciselibrary",
             "feature/workoutsession",

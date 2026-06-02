@@ -614,6 +614,8 @@ stepsCompleted:
 
 ### Story E6.1: 跟练雏形计划入口
 
+**状态:** Implemented in `feature.followalong` basic entry screen, follow-along preset seed, home/shell navigation, and unit tests
+
 作为用户，  
 我想选择一个基础跟练流程，  
 以便体验动作演示和流程提示。
@@ -622,6 +624,16 @@ stepsCompleted:
 
 - Then 至少有一个基础跟练计划或可跟练计时计划。
 - Then 入口不暗示完整课程平台。
+
+**交付结果:**
+
+- 首页将“基础跟练”作为同层入口启用，文案明确是基础跟练/雏形体验，复用计时流程与动作短提示。
+- 官方 shell 新增 `FOLLOW_ALONG_ENTRY` destination，跟练入口页仍归属训练底部导航，不新增独立底部 tab。
+- 新增 `feature.followalong` boundary、UI state 和 Compose route，展示一个内存态基础跟练 preset。
+- preset 使用 `WorkoutMode.FOLLOW_ALONG`、`FollowAlongPlanMeta(preset=true)`、`TimedCircuitBlock` 和 `TimedExerciseItem`，动作只来自首批 fixture 中同时支持 `supportsFollowAlong` 与计时流程的动作。
+- 跟练选择页展示动作数、预计时长、动作短提示、媒体位说明、当前能力边界和 E6.2 跟练执行页后续接入的禁用状态。
+- 新增单元测试覆盖首页入口启用、shell destination、preset seed、`supportsFollowAlong` 过滤、空状态和边界文案。
+- 本 story 未实现完整跟练执行页、视频播放、课程平台、教练视频库、AI 纠错、音乐编排、语音教练、真实心率设备、通知调度、真实 `WorkoutSession` 持久化、Room/DataStore repository 闭环或 session records 写库。
 
 ### Story E6.2: 跟练执行页
 
@@ -811,24 +823,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E5.4 基础恢复建议已在 codex/e5-4-basic-recovery 实施，等待 Review Gate。
-E5.4 仅基于 fixture recovery 映射和内存态 session/summary 数据生成训练后放松方向，不读取 Room session records，不写入 recovery_recommendations 表。
+E6.1 跟练雏形计划入口已在 codex/e6-1-follow-along-entry 实施，等待 Review Gate。
+E6.1 采用少量预置基础跟练流程作为本 Story 默认，只做入口与选择边界，不解决 O-002 的全部范围。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E5.4 Review Gate
+Story E6.1 Review Gate
 ```
 
-E5.4 Review Gate 建议重点确认：
+E6.1 Review Gate 建议重点确认：
 
-1. 计时总结中的已完成 jumping-jacks / bodyweight-squat 是否能进入下肢放松建议。
-2. 力量总结中的已确认 barbell-bench-press / one-arm-dumbbell-row 是否能进入胸肩前侧 / 上背放松建议。
-3. 重复区域和肌群是否稳定去重，无映射或无完成/确认内容是否为空状态。
-4. 页面文案是否清楚说明不做康复治疗或医疗诊断，不出现自动训练建议、心率判断、热量判断或疾病适应性判断。
-5. 是否保持不接真实持久化、Room session records、recovery repository 闭环、通知、语音、真实心率设备或完整跟练闭环。
+1. 首页是否同层展示“基础跟练/雏形体验”入口，并能进入跟练选择页。
+2. preset 是否只使用 `supportsFollowAlong=true` 且可用于计时流程的首批动作 fixture。
+3. 页面是否展示动作数、预计时长、动作短提示、媒体位说明和诚实空状态。
+4. 页面是否没有可工作的假开始按钮，不启动完整跟练执行页。
+5. 文案是否不暗示完整课程平台、教练视频库、AI 纠错、音乐编排、语音教练、真实心率设备或通知能力已可用。
 
 ## 8. 暂缓事项
 

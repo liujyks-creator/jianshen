@@ -48,6 +48,14 @@ internal fun buildHomeScreenState(): HomeScreenState {
                 enabled = true
             ),
             HomeEntryUiState(
+                id = HomeEntryId.FOLLOW_ALONG,
+                title = "基础跟练",
+                description = "雏形体验：从首批可跟练动作进入选择页，复用计时流程与动作短提示。",
+                badge = "雏形体验",
+                status = "查看跟练入口",
+                enabled = true
+            ),
+            HomeEntryUiState(
                 id = HomeEntryId.EXERCISE_LIBRARY,
                 title = "动作库",
                 description = "浏览首批动作，查看短提示、步骤、错误和替代动作。",
@@ -57,14 +65,6 @@ internal fun buildHomeScreenState(): HomeScreenState {
             )
         ),
         futureEntries = listOf(
-            HomeEntryUiState(
-                id = HomeEntryId.FOLLOW_ALONG,
-                title = "跟练雏形",
-                description = "后续复用计时流程和动作内容，不做课程平台。",
-                badge = "后续",
-                status = "E6 前收敛边界",
-                enabled = false
-            ),
             HomeEntryUiState(
                 id = HomeEntryId.SESSION_RECORDS,
                 title = "训练记录",

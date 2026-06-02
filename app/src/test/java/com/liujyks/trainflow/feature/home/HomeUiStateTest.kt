@@ -18,35 +18,38 @@ class HomeUiStateTest {
     }
 
     @Test
-    fun keepsStrengthTrainingAndExerciseLibraryAtTheSameEntryLayer() {
+    fun keepsStrengthFollowAlongAndExerciseLibraryAtTheSameEntryLayer() {
         val state = buildHomeScreenState()
         val peerIds = state.peerEntries.map { it.id }
         val exerciseLibrary = state.peerEntries.first { it.id == HomeEntryId.EXERCISE_LIBRARY }
+        val followAlong = state.peerEntries.first { it.id == HomeEntryId.FOLLOW_ALONG }
         val strength = state.peerEntries.first { it.id == HomeEntryId.STRENGTH_TRAINING }
 
         assertEquals(
-            listOf(HomeEntryId.STRENGTH_TRAINING, HomeEntryId.EXERCISE_LIBRARY),
+            listOf(HomeEntryId.STRENGTH_TRAINING, HomeEntryId.FOLLOW_ALONG, HomeEntryId.EXERCISE_LIBRARY),
             peerIds
         )
         assertTrue(strength.enabled)
         assertEquals("编辑力量计划", strength.status)
+        assertTrue(followAlong.enabled)
+        assertEquals("雏形体验", followAlong.badge)
+        assertEquals("查看跟练入口", followAlong.status)
+        assertTrue(followAlong.description.contains("复用计时流程"))
         assertTrue(exerciseLibrary.enabled)
         assertEquals("打开动作库", exerciseLibrary.status)
     }
 
     @Test
-    fun reservesFutureCapabilitiesWithoutEnablingFakeEntrances() {
+    fun reservesRemainingFutureCapabilitiesWithoutEnablingFakeEntrances() {
         val state = buildHomeScreenState()
 
         assertEquals(
             listOf(
-                HomeEntryId.FOLLOW_ALONG,
                 HomeEntryId.SESSION_RECORDS,
                 HomeEntryId.RECOVERY
             ),
             state.futureEntries.map { it.id }
         )
         assertTrue(state.futureEntries.all { !it.enabled })
-        assertTrue(state.futureEntries.first().description.contains("不做课程平台"))
     }
 }

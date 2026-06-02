@@ -31,12 +31,29 @@ class OfficialShellStateTest {
             OfficialShellDestination.TRAINING,
             OfficialShellDestination.STRENGTH_PLAN_EDITOR.selectedBottomDestination()
         )
+        assertEquals(
+            OfficialShellDestination.TRAINING,
+            OfficialShellDestination.FOLLOW_ALONG_ENTRY.selectedBottomDestination()
+        )
 
         val timedEntries = officialShellNavigationEntries(OfficialShellDestination.TIMED_PLAN_EDITOR)
         val strengthEntries = officialShellNavigationEntries(OfficialShellDestination.STRENGTH_PLAN_EDITOR)
+        val followAlongEntries = officialShellNavigationEntries(OfficialShellDestination.FOLLOW_ALONG_ENTRY)
 
         assertTrue(requireNotNull(timedEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
         assertTrue(requireNotNull(strengthEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
+        assertTrue(requireNotNull(followAlongEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
+    }
+
+    @Test
+    fun followAlongEntryDestinationIsEnabledButNotABottomTab() {
+        val state = OfficialShellState(currentDestination = OfficialShellDestination.TRAINING)
+            .selectDestination(OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+        val bottomEntries = officialShellNavigationEntries(OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+
+        assertEquals(OfficialShellDestination.FOLLOW_ALONG_ENTRY, state.currentDestination)
+        assertFalse(bottomEntries.any { it.destination == OfficialShellDestination.FOLLOW_ALONG_ENTRY })
+        assertTrue(requireNotNull(bottomEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
     }
 
     @Test

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
+import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
@@ -85,6 +86,9 @@ fun TrainFlowApp() {
                     onOpenStrengthPlanEditor = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.STRENGTH_PLAN_EDITOR))
                     },
+                    onOpenFollowAlong = {
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.FOLLOW_ALONG_ENTRY))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
@@ -99,6 +103,10 @@ fun TrainFlowApp() {
                     onBackToHome = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
+                    modifier = Modifier.padding(innerPadding)
+                )
+
+                OfficialShellDestination.FOLLOW_ALONG_ENTRY -> FollowAlongRoute(
                     modifier = Modifier.padding(innerPadding)
                 )
 

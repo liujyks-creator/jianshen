@@ -46,6 +46,7 @@ fun HomeRoute(
     onOpenExerciseLibrary: () -> Unit,
     onOpenTimedPlanEditor: () -> Unit,
     onOpenStrengthPlanEditor: () -> Unit,
+    onOpenFollowAlong: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildHomeScreenState() }
@@ -55,6 +56,7 @@ fun HomeRoute(
         onOpenExerciseLibrary = onOpenExerciseLibrary,
         onOpenTimedPlanEditor = onOpenTimedPlanEditor,
         onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
+        onOpenFollowAlong = onOpenFollowAlong,
         modifier = modifier
     )
 }
@@ -65,6 +67,7 @@ private fun TrainFlowHomeScreen(
     onOpenExerciseLibrary: () -> Unit,
     onOpenTimedPlanEditor: () -> Unit,
     onOpenStrengthPlanEditor: () -> Unit,
+    onOpenFollowAlong: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -99,6 +102,7 @@ private fun TrainFlowHomeScreen(
                     entry = entry,
                     accent = when (entry.id) {
                         HomeEntryId.STRENGTH_TRAINING -> TrainFlowAction
+                        HomeEntryId.FOLLOW_ALONG -> TrainFlowAction
                         HomeEntryId.EXERCISE_LIBRARY -> TrainFlowAccent
                         else -> TrainFlowNeutral500
                     },
@@ -106,6 +110,8 @@ private fun TrainFlowHomeScreen(
                         onOpenExerciseLibrary
                     } else if (entry.id == HomeEntryId.STRENGTH_TRAINING) {
                         onOpenStrengthPlanEditor
+                    } else if (entry.id == HomeEntryId.FOLLOW_ALONG) {
+                        onOpenFollowAlong
                     } else {
                         null
                     }
@@ -341,7 +347,8 @@ private fun TrainFlowHomeScreenPreview() {
             uiState = buildHomeScreenState(),
             onOpenExerciseLibrary = {},
             onOpenTimedPlanEditor = {},
-            onOpenStrengthPlanEditor = {}
+            onOpenStrengthPlanEditor = {},
+            onOpenFollowAlong = {}
         )
     }
 }
