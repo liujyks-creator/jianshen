@@ -326,17 +326,22 @@ private fun List<WorkoutSession>.toActionTrend(): BasicTrendUiState {
 }
 
 private fun List<WorkoutSession>.toVolumeTrend(): BasicTrendUiState {
-    val rows = filter { session -> session.strengthSetRecords.isNotEmpty() }
+    val rows = filter { session -> session.status == SessionStatus.COMPLETED }
         .sortedByDescending { session -> session.dateKey }
-        .map { session ->
-            val sets = session.strengthSetRecords.size
-            val reps = session.strengthSetRecords.sumOf { record -> record.actualReps ?: 0 }
-            val load = session.strengthSetRecords.totalLoadKg()
+        .mapNotNull { session ->
+            val actualRecords = session.strengthSetRecords.filter { record ->
+                record.actualWeight != null && record.actualReps != null
+            }
+            if (actualRecords.isEmpty()) return@mapNotNull null
+
+            val sets = actualRecords.size
+            val reps = actualRecords.sumOf { record -> record.actualReps ?: 0 }
+            val load = actualRecords.totalLoadKg()
             BasicTrendRowUiState(
                 primary = session.dateKey,
                 secondary = session.planSnapshot.title,
                 metric = load.formatLoad(),
-                helper = "$sets 组 · $reps 次；计时训练不纳入重量容量。"
+                helper = "$sets 组 · $reps 次；仅纳入已完成力量训练中同时记录实际重量和次数的组。"
             )
         }
     return if (rows.isEmpty()) {

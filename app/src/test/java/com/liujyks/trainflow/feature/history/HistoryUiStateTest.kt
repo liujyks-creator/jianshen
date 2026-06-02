@@ -1,5 +1,13 @@
 package com.liujyks.trainflow.feature.history
 
+import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.WeightUnit
+import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.core.model.WorkoutSession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -64,11 +72,56 @@ class HistoryUiStateTest {
         val trend = buildDefaultHistoryScreenState().volumeTrend
 
         assertEquals("训练容量历史", trend.title)
-        assertEquals(2, trend.rows.size)
+        assertEquals(1, trend.rows.size)
         assertEquals("1300 kg-reps", trend.rows.first().metric)
         assertTrue(trend.rows.first().helper.contains("3 组"))
         assertTrue(trend.rows.first().helper.contains("28 次"))
-        assertTrue(trend.rows.first().helper.contains("计时训练不纳入重量容量"))
+        assertTrue(trend.rows.first().helper.contains("同时记录实际重量和次数"))
+    }
+
+    @Test
+    fun abandonedStrengthSessionDoesNotEnterVolumeTrend() {
+        val trend = buildDefaultHistoryScreenState().volumeTrend
+
+        assertEquals(listOf("2026-06-01"), trend.rows.map { row -> row.primary })
+        assertFalse(trend.rows.any { row -> row.primary == "2026-05-28" })
+    }
+
+    @Test
+    fun volumeTrendUsesOnlyRecordsWithActualWeightAndActualReps() {
+        val session = strengthSession(
+            id = "completed-with-partial-actuals",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-02T08:00:00Z",
+            records = listOf(
+                strengthSetRecord("valid", actualWeight = WeightValue(50.0, WeightUnit.KG), actualReps = 5),
+                strengthSetRecord("missing-weight", actualWeight = null, actualReps = 10),
+                strengthSetRecord("missing-reps", actualWeight = WeightValue(100.0, WeightUnit.KG), actualReps = null)
+            )
+        )
+        val trend = HistoryScreenState(sessions = listOf(session)).volumeTrend
+
+        assertEquals(1, trend.rows.size)
+        assertEquals("250 kg-reps", trend.rows.single().metric)
+        assertTrue(trend.rows.single().helper.contains("1 组"))
+        assertTrue(trend.rows.single().helper.contains("5 次"))
+    }
+
+    @Test
+    fun completedStrengthSessionWithoutSummarizableActualRecordsShowsEmptyVolumeTrend() {
+        val session = strengthSession(
+            id = "completed-without-actuals",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-02T08:00:00Z",
+            records = listOf(
+                strengthSetRecord("missing-weight", actualWeight = null, actualReps = 10),
+                strengthSetRecord("missing-reps", actualWeight = WeightValue(100.0, WeightUnit.KG), actualReps = null)
+            )
+        )
+        val trend = HistoryScreenState(sessions = listOf(session)).volumeTrend
+
+        assertTrue(trend.rows.isEmpty())
+        assertNotNull(trend.emptyMessage)
     }
 
     @Test
@@ -112,5 +165,41 @@ class HistoryUiStateTest {
         assertFalse(combinedCopy.contains("医疗"))
         assertFalse(combinedCopy.contains("诊断"))
         assertFalse(combinedCopy.contains("心率告警"))
+    }
+
+    private fun strengthSession(
+        id: String,
+        status: SessionStatus,
+        startedAt: String,
+        records: List<StrengthSetRecord>
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "测试力量记录",
+                mode = WorkoutMode.STRENGTH,
+                blocks = emptyList()
+            ),
+            status = status,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            strengthSetRecords = records
+        )
+    }
+
+    private fun strengthSetRecord(
+        id: String,
+        actualWeight: WeightValue?,
+        actualReps: Int?
+    ): StrengthSetRecord {
+        return StrengthSetRecord(
+            id = id,
+            exerciseId = "barbell-bench-press",
+            setOrder = 1,
+            setKind = StrengthSetKind.WORKING,
+            actualWeight = actualWeight,
+            actualReps = actualReps
+        )
     }
 }
