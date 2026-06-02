@@ -224,6 +224,33 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun abandonedAfterPartialWorkDoesNotGenerateRecoveryRecommendation() {
+        val plan = summaryPlan(rounds = 1)
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+
+        val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
+
+        assertEquals("本次未识别到动作部位", summary.trainedAreaSummary)
+        assertEquals(
+            "本次没有可识别的已完成动作，暂不生成恢复建议。",
+            summary.recoveryEntry.description
+        )
+        assertFalse(summary.recoveryEntry.description.contains("已根据本次完成动作生成"))
+        assertFalse(summary.recoveryEntry.enabled)
+        assertFalse(summary.recoveryEntry.generated)
+        assertEquals(null, summary.recoveryEntry.recommendation)
+    }
+
+    @Test
     fun immediatelyAbandonedWorkDoesNotCreateTrainedAreaSummary() {
         val plan = summaryPlan(rounds = 1)
         var state = TimedWorkoutEngine.dispatch(

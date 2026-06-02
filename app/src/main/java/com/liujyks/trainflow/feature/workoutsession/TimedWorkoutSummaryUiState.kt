@@ -129,13 +129,7 @@ private fun TimedWorkoutEngineState.completedRecoveryExerciseIds(): List<String>
     return stepHistory
         .filter { record ->
             record.timedKind == TimedSessionStepKind.WORK &&
-                (
-                    record.status == TimedSessionStepHistoryStatus.COMPLETED ||
-                        (
-                            record.status == TimedSessionStepHistoryStatus.ABANDONED &&
-                                (record.actualDurationSec ?: 0) > 0
-                            )
-                    )
+                record.status == TimedSessionStepHistoryStatus.COMPLETED
         }
         .mapNotNull { record -> record.exerciseId }
         .distinct()
@@ -257,13 +251,7 @@ private fun TimedWorkoutEngineState.buildTrainedAreaSummary(
     val muscleLabels = stepHistory
         .filter { record ->
             record.timedKind == TimedSessionStepKind.WORK &&
-                (
-                    record.status == TimedSessionStepHistoryStatus.COMPLETED ||
-                        (
-                            record.status == TimedSessionStepHistoryStatus.ABANDONED &&
-                                (record.actualDurationSec ?: 0) > 0
-                            )
-                    )
+                record.status == TimedSessionStepHistoryStatus.COMPLETED
         }
         .mapNotNull { record -> record.exerciseId }
         .distinct()
