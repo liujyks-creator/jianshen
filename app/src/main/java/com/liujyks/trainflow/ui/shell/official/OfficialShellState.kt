@@ -117,7 +117,7 @@ internal enum class OfficialShellDestination(
     RECORDS(
         label = "记录",
         shortLabel = "录",
-        enabled = false
+        enabled = true
     )
 }
 

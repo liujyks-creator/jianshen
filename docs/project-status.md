@@ -1,16 +1,16 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-06-01
+**状态日期:** 2026-06-02
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过、E4 UI smoke fix、E5.1 计时训练总结，以及 E5.2 力量训练总结。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过、E4 UI smoke fix、E5.1 计时训练总结、E5.2 力量训练总结，以及 E5.3 训练历史与基础趋势。
 
 项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准。`Story E1.2: 导入动作 fixture` 已将 11 个首批动作导入 Android fixture，并用 fixture 校验测试约束 ID、必填字段、能力标签、默认建议、恢复映射和替代动作边界。`Story E1.3: 动作库列表与筛选` 已基于 E1.2 fixture 落地只读 Compose 列表、训练类型/身体部位/器械/难度筛选、清除筛选、空状态和动作摘要卡片。`Story E1.4: 动作详情` 已基于 E1.2 fixture 和 E1.3 列表入口落地只读动作详情，展示短提示、设置与执行步骤、发力要点、常见错误、呼吸提示、安全说明、替代动作和恢复映射。`Story E2.1: 首页与训练入口` 已建立轻量官方 shell、训练首页、计时训练推荐默认入口、力量训练同层入口和可进入 E1.3/E1.4 的动作库入口。`Story E2.2: 计时计划编辑` 已让首页计时推荐入口进入内存态计时计划编辑页，支持计划名称、热身/拉伸时长、动作时长、动作后休息、轮数、轮间休息、动作/休息临近结束提醒阈值和提醒形式开关，并能生成符合 `WorkoutPlan` / `TimedCircuitBlock` / `TimedExerciseItem` / `CueSettings` 契约的本次草稿预览；E2.2 retro fix 已关闭计时提醒阈值边界问题。`Story E2.3: 力量计划编辑` 已让首页力量训练入口进入内存态力量计划编辑页，支持计划名称、力量动作选择、目标重量、默认 `8-12` 次区间、固定次数、正式组数、动作内热身组、组间休息和逐组目标展开编辑，并能生成符合 `WorkoutPlan` / `StrengthExerciseBlock` / `StrengthExerciseTarget` / `StrengthSetPlan` 契约的本次草稿预览。`Story E2.4: 计划列表、详情、复制与删除` 已在官方 shell 中启用“计划”入口，复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约种子化内存态计划集合，支持计划列表、详情、复制和删除确认。`Story E3.1: 计时训练执行引擎` 已在 `core.engine` 内落地纯 Kotlin 状态机，可从有效计时计划/快照展开动作、休息和轮次步骤，支持开始、暂停、继续、跳过、延长休息和提前结束命令，并产出动作开始、动作临近结束、休息开始、休息临近结束、暂停、继续和完成事件。`Story E3.2: 计时训练执行页` 已在 `feature.workoutsession` 中新增计时训练执行 UI state、Compose route 和深色执行页，从现有内存态计划详情仅启用计时计划开始入口，执行页复用 E3.1 `TimedWorkoutEngine` 展示当前动作/休息、主倒计时、轮次/步骤进度、下一步、动作短提示和辅助心率占位，并通过 `WorkoutCommand` 支持暂停、继续、跳过、延长休息和结束训练。`Story E4.1: 力量训练执行引擎` 已在 `core.engine` 内新增纯 Kotlin `StrengthWorkoutEngine`，可从有效力量计划/快照按动作和组推进准备、开始本组、完成本组、确认记录、组间休息和完成/废弃终态。`Story E4.2: 力量训练执行页` 已在 `feature.workoutsession` 中新增力量训练执行 UI state、Compose route 和深色执行页，从内存态力量计划详情启用开始入口，执行页复用 E4.1 `StrengthWorkoutEngine` 展示当前动作、本组目标、组耗时、最小确认、休息倒计时和下一组目标，并通过 `WorkoutCommand` 支持开始本组、完成本组、按计划确认、暂停/继续、休息中提前开始下一组和结束训练。`Story E4.3: 单组完成确认层` 已将 Confirm 状态升级为可编辑确认层，展示计划重量、计划次数、本组耗时、组类型、动作名和组序号，默认回填实际重量/次数，支持次数区间快捷选择与 easy / good / hard / form_breakdown 主观感受，并通过 `WorkoutCommand.ConfirmStrengthSet` 生成正式 `StrengthSetRecord`。`Story E4.4: 动作替换与跳过` 已让力量训练支持通过 `WorkoutCommand.ReplaceExercise` 替换当前动作并在 `StrengthSetRecord.substitutedFromExerciseId` 保留原动作引用，也支持通过 `WorkoutCommand.SkipStep` 跳过当前动作剩余未完成组并继续后续动作。`Story E5.1: 计时训练总结` 已在 `feature.workoutsession` 中新增计时训练 summary UI state / mapper，消费 E3.4 的 step history、control history、rest extension history 和 early-end 记录，在 completed / abandoned 终态展示总时长、完成阶段、步骤/轮次进度、跳过内容、休息延长、提前结束进度、训练部位摘要和恢复建议入口占位；`Story E5.2: 力量训练总结` 已在同一 feature 边界新增 strength summary UI state / mapper，消费 E4.1-E4.4 的 strength records、history、replacement 和 skip 边界，在 completed / abandoned 终态展示动作、组数、重量、次数、组耗时、实际休息、计划/实际差异、替换/跳过摘要和恢复建议入口占位；本阶段仍未引入真实 `WorkoutSession` 持久化、Room/DataStore repository 闭环、训练历史/趋势、完整恢复建议、通知调度、真实心率设备、语音能力或跟练闭环。
 
-`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过`、E4 UI smoke fix 和 `Story E5.1: 计时训练总结` 均已通过 Review Gate 并合入 `main`。当前阶段分支 `codex/e5-2-strength-session-summary` 基于 `main` / `origin/main` 的 `4f8b5cdaca03a67e39a7b291ec98c4a53d8adfa0` 实施 E5.2，等待 Review Gate。当前无已知 blocker。
+`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过`、E4 UI smoke fix、`Story E5.1: 计时训练总结` 和 `Story E5.2: 力量训练总结` 均已通过 Review Gate 并合入 `main`。当前阶段分支 `codex/e5-3-history-basic-trends` 基于 `main` / `origin/main` 的 `95aae6b689b6e25fe31d83959c224ca6fb4345da` 实施 E5.3，等待 Review Gate。当前无已知 blocker。
 
 ## 已有产物
 
@@ -109,10 +109,10 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 进入 `Story E5.2: 力量训练总结` Review Gate。
-2. Review Gate 重点检查 summary 是否只消费 E4.1-E4.4 的 strength records / history / replacement / skip 边界。
-3. 确认计划与实际差异、组耗时和实际休息文案清楚，未暗示真实持久化 session records。
-4. 后续如 E5.2 通过，再进入 E5.3 训练历史与基础趋势；不要提前实现 E5.4 完整恢复建议。
+1. 进入 `Story E5.3: 训练历史与基础趋势` Review Gate。
+2. Review Gate 重点检查历史页是否仅展示内存态/示例 session，不暗示真实 Room session records 已接入。
+3. 确认按日期列表、单次详情、单动作重量 / 次数历史和训练容量历史文案保守，不生成自动训练建议或医疗结论。
+4. 后续如 E5.3 通过，再进入 E5.4 基础恢复建议；不要在 Review Gate 中扩大为真实持久化闭环。
 
 ## 验证快照
 
@@ -164,6 +164,8 @@ E4 UI smoke fix 已完成并合入 `main`；`emulator-5554` UI 抽查已通过�
 E5.1 新增计时训练轻量总结；completed / abandoned 终态不再只显示轻量结束文案，而是展示 summary 面板。summary 消费 `TimedWorkoutEngine` 的 `activeElapsedSec`、`stepHistory`、`controlHistory`、`restExtensionHistory` 和 `earlyEnd`，展示总时长、完成阶段、步骤/轮次进度、跳过内容、休息延长、提前结束进度、训练部位摘要和禁用的“查看恢复建议”占位入口。总时长文案明确说明本阶段仍是 engine active elapsed，不等同真实 wall-clock startedAt / endedAt；本阶段仍不写入 Room session records、不实现历史/趋势、不实现 E5.4 完整恢复建议。
 
 E5.2 新增力量训练轻量总结；completed / abandoned 终态不再只显示力量训练结束文案，而是展示 strength summary 面板。summary 消费 `StrengthWorkoutEngine` 的 `sessionElapsedSec`、`strengthSetRecords`、`stepHistory`、`controlHistory` 和 `earlyEnd`，展示动作数量、完成组数/计划组数、每动作组摘要、planned / actual 重量与次数、组耗时、实际休息、替换动作来源、跳过动作/组摘要、提前结束原因与进度，以及禁用的“查看恢复建议”占位入口。文案明确当前为引擎内存态记录，不等同真实 wall-clock session records；本阶段仍不写入 Room session records、不实现历史列表/趋势、不实现 E5.4 完整恢复建议、不生成自动加重量建议。
+
+E5.3 新增训练历史与基础趋势首版内存态展示；官方 shell 的“记录”入口已启用并进入 `feature.history` 页面。历史页使用内存态 `WorkoutSession` seed 展示按日期分组的计时 / 力量 mixed session 列表、单次记录详情、单动作重量 / 次数历史，以及按总组数、总次数和实际重量 * 次数汇总的训练容量历史。页面和测试均明确当前不读取 Room session records，不接真实持久化业务闭环，不实现 E5.4 完整恢复建议，不生成自动加重量建议、表现判断、医疗结论、心率或热量判断。
 
 ## 新 Codex 会话提示词
 

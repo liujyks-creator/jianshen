@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
+import com.liujyks.trainflow.feature.history.HistoryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
@@ -164,16 +165,7 @@ fun TrainFlowApp() {
                     modifier = Modifier.padding(innerPadding)
                 )
 
-                OfficialShellDestination.RECORDS -> HomeRoute(
-                    onOpenExerciseLibrary = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.EXERCISE_LIBRARY))
-                    },
-                    onOpenTimedPlanEditor = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.TIMED_PLAN_EDITOR))
-                    },
-                    onOpenStrengthPlanEditor = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.STRENGTH_PLAN_EDITOR))
-                    },
+                OfficialShellDestination.RECORDS -> HistoryRoute(
                     modifier = Modifier.padding(innerPadding)
                 )
             }

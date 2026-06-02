@@ -562,6 +562,8 @@ stepsCompleted:
 
 ### Story E5.3: 训练历史与基础趋势
 
+**状态:** Implemented in `feature.history` in-memory history screen, basic trends, official shell records entry, and unit tests
+
 作为用户，  
 我想查看历史训练记录和基础趋势，  
 以便复盘和调整计划。
@@ -572,6 +574,15 @@ stepsCompleted:
 - Then 支持单动作重量/次数历史。
 - Then 支持训练容量历史。
 - Then 不使用医疗或过度结论文案。
+
+**交付结果:**
+
+- Android 侧新增 `HistoryScreenState`、历史列表 item、单次详情、基础趋势 UI state 和内存态 `WorkoutSession` seed，覆盖计时 / 力量、completed / abandoned mixed session 展示。
+- 官方 shell 的“记录”入口已启用并进入 `feature.history` Compose 页面，页面按训练日期分组展示记录列表，并支持选择单次记录查看摘要详情。
+- 基础趋势展示单动作重量 / 次数历史，以及按力量训练已确认组汇总的总组数、总次数和实际重量 * 次数训练容量历史；计时训练不被硬纳入重量容量。
+- 文案明确当前为内存态 / 示例历史，不读取 Room session records，不伪装真实持久化历史。
+- 新增 history UI state 测试和 shell/navigation state 测试，覆盖日期排序、timed / strength mixed list、单次详情选择、单动作重量 / 次数历史、训练容量历史、空状态和不生成医疗或过度结论文案。
+- 本 story 未实现真实 `WorkoutSession` 持久化、Room/DataStore repository 业务闭环、数据库读取历史列表、E5.4 完整恢复建议、自动训练建议、自动加重量建议、医疗/心率/热量判断、云同步、账号、社交或排行。
 
 ### Story E5.4: 基础恢复建议
 
@@ -788,24 +799,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E5.2 力量训练总结已在 codex/e5-2-strength-session-summary 实施，等待 Review Gate。
-E5.2 summary 消费 E4.1-E4.4 strength records / history / replacement / skip 边界，不写真实 WorkoutSession，不实现历史趋势或完整恢复建议。
+E5.3 训练历史与基础趋势已在 codex/e5-3-history-basic-trends 实施，等待 Review Gate。
+E5.3 仅展示内存态/示例 WorkoutSession 历史，不读取 Room session records，不实现真实持久化闭环或完整恢复建议。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E5.2 Review Gate
+Story E5.3 Review Gate
 ```
 
-E5.2 Review Gate 建议重点确认：
+E5.3 Review Gate 建议重点确认：
 
-1. completed / abandoned 终态是否都能看到 summary。
-2. summary 是否覆盖动作、组数、重量、次数、组耗时、实际休息和计划/实际差异。
-3. replacement / skip 是否保留原动作来源并区分跳过内容。
-4. 恢复建议入口是否保持 E5.4 占位，没有暗示完整建议已生成。
-5. 是否保持不接真实持久化、历史趋势、自动加重量建议、通知、真实心率、语音或跟练闭环。
+1. “记录”入口是否启用并进入历史页。
+2. 历史列表是否按日期展示 timed / strength completed / abandoned 记录。
+3. 单次详情是否只消费内存态 session seed，不暗示 Room 历史读取。
+4. 单动作重量 / 次数历史和训练容量历史是否可读、保守、数据不足时诚实。
+5. 是否保持不接真实持久化、E5.4 完整恢复建议、自动加重量建议、医疗/心率/热量判断、通知、语音或跟练闭环。
 
 ## 8. 暂缓事项
 

@@ -15,7 +15,7 @@ class OfficialShellStateTest {
             .associateBy { it.destination }
 
         assertTrue(requireNotNull(entries[OfficialShellDestination.PLANS]).enabled)
-        assertFalse(requireNotNull(entries[OfficialShellDestination.RECORDS]).enabled)
+        assertTrue(requireNotNull(entries[OfficialShellDestination.RECORDS]).enabled)
         assertTrue(requireNotNull(entries[OfficialShellDestination.TRAINING]).enabled)
         assertTrue(requireNotNull(entries[OfficialShellDestination.EXERCISE_LIBRARY]).enabled)
     }
@@ -75,11 +75,11 @@ class OfficialShellStateTest {
     }
 
     @Test
-    fun disabledRecordsDestinationDoesNotChangeCurrentShellDestination() {
+    fun recordsDestinationIsEnabledForHistory() {
         val state = OfficialShellState(currentDestination = OfficialShellDestination.TRAINING)
             .selectDestination(OfficialShellDestination.RECORDS)
 
-        assertEquals(OfficialShellDestination.TRAINING, state.currentDestination)
+        assertEquals(OfficialShellDestination.RECORDS, state.currentDestination)
     }
 
     @Test
