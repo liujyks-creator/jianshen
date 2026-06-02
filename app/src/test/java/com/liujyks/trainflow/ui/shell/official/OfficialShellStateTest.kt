@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendationGenerator
 import com.liujyks.trainflow.feature.plans.confirmDeletePlan
 import com.liujyks.trainflow.feature.plans.copyPlan
 import com.liujyks.trainflow.feature.plans.requestDeletePlan
@@ -80,6 +81,18 @@ class OfficialShellStateTest {
             .selectDestination(OfficialShellDestination.RECORDS)
 
         assertEquals(OfficialShellDestination.RECORDS, state.currentDestination)
+    }
+
+    @Test
+    fun recoveryDestinationSelectsRecordsBottomDestination() {
+        assertEquals(
+            OfficialShellDestination.RECORDS,
+            OfficialShellDestination.RECOVERY.selectedBottomDestination()
+        )
+
+        val entries = officialShellNavigationEntries(OfficialShellDestination.RECOVERY)
+
+        assertTrue(requireNotNull(entries.first { it.destination == OfficialShellDestination.RECORDS }).selected)
     }
 
     @Test
@@ -177,6 +190,25 @@ class OfficialShellStateTest {
 
         assertEquals(OfficialShellDestination.PLANS, finished.currentDestination)
         assertEquals(null, finished.activeStrengthSessionPlan)
+    }
+
+    @Test
+    fun openingRecoveryRecommendationUsesInMemoryDestinationAndClearsActiveSessionPlans() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val recommendation = BasicRecoveryRecommendationGenerator.fromExerciseIds(
+            sessionId = "session-plan",
+            exerciseIds = listOf("bodyweight-squat")
+        )
+        val recoveryState = initial
+            .startTimedSession(timedPlan)
+            .openRecoveryRecommendation(recommendation)
+
+        assertEquals(OfficialShellDestination.RECOVERY, recoveryState.currentDestination)
+        assertEquals(recommendation.sessionId, recoveryState.activeRecoveryRecommendation?.sessionId)
+        assertEquals(null, recoveryState.activeTimedSessionPlan)
+        assertEquals(null, recoveryState.activeStrengthSessionPlan)
+        assertTrue(recoveryState.showBottomBar)
     }
 
     @Test

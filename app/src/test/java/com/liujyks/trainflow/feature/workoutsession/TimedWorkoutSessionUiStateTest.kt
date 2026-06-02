@@ -141,9 +141,12 @@ class TimedWorkoutSessionUiStateTest {
         assertTrue(summary.trainedAreaSummary.contains("全身"))
         assertTrue(summary.trainedAreaSummary.contains("臀部"))
         assertEquals("查看恢复建议", summary.recoveryEntry.title)
-        assertFalse(summary.recoveryEntry.enabled)
-        assertFalse(summary.recoveryEntry.generated)
-        assertTrue(summary.recoveryEntry.description.contains("E5.4"))
+        assertTrue(summary.recoveryEntry.enabled)
+        assertTrue(summary.recoveryEntry.generated)
+        assertFalse(summary.recoveryEntry.description.contains("E5.4"))
+        val recovery = requireNotNull(summary.recoveryEntry.recommendation)
+        assertTrue(recovery.recommendation.areaIds.contains("lower-body-release"))
+        assertTrue(recovery.recommendation.trainedMuscleIds.contains("quads"))
     }
 
     @Test
@@ -237,10 +240,12 @@ class TimedWorkoutSessionUiStateTest {
 
         assertEquals("本次未识别到动作部位", summary.trainedAreaSummary)
         assertEquals(
-            "E5.4 将接入完整恢复建议；当前仅保留入口占位。",
+            "本次没有可识别的已完成动作，暂不生成恢复建议。",
             summary.recoveryEntry.description
         )
-        assertFalse(summary.recoveryEntry.description.contains("本次训练部位"))
+        assertFalse(summary.recoveryEntry.enabled)
+        assertFalse(summary.recoveryEntry.generated)
+        assertEquals(null, summary.recoveryEntry.recommendation)
     }
 
     @Test
@@ -261,6 +266,7 @@ class TimedWorkoutSessionUiStateTest {
         assertEquals("没有跳过内容。", summary.skippedSummary)
         assertEquals("没有延长休息。", summary.restExtensionSummary)
         assertFalse(summary.recoveryEntry.generated)
+        assertFalse(summary.recoveryEntry.description.contains("E5.4"))
     }
 
     @Test

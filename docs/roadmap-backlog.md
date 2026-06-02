@@ -586,6 +586,8 @@ stepsCompleted:
 
 ### Story E5.4: 基础恢复建议
 
+**状态:** Implemented in `core.domain.recovery`, `feature.recovery`, workout summary recovery entries, official shell recovery destination, and unit tests
+
 作为用户，  
 我想根据本次训练部位获得放松建议，  
 以便训练后知道该恢复哪里。
@@ -595,6 +597,16 @@ stepsCompleted:
 - Then 根据训练动作的肌群映射恢复区域。
 - Then 展示推荐放松区域和基础说明。
 - Then 不做康复治疗或医疗诊断表述。
+
+**交付结果:**
+
+- 新增 5 个首批恢复区域 fixture：`lower-body-release`、`posterior-chain-release`、`chest-shoulder-release`、`upper-back-release`、`core-breathing-reset`。
+- 新增 `BasicRecoveryRecommendationGenerator`，根据本次已完成计时动作或已确认力量组的动作 recovery 映射汇总训练肌群和恢复区域，并保持去重与展示顺序稳定。
+- 新增 `feature.recovery` UI state 与浅色 Compose 页面，展示主要训练部位、来源动作、推荐放松区域、基础说明和“不做康复治疗或医疗诊断”的边界文案。
+- E5.1 / E5.2 summary 的“查看恢复建议”已从禁用占位变为可用入口；未识别动作或无 completed / confirmed 内容时展示诚实空状态。
+- 官方 shell 新增内存态 `RECOVERY` destination；当前仍不读取 Room session records，不写入真实 `recovery_recommendations` 表，不实现 repository 业务闭环。
+- 新增 domain、feature recovery、workout summary 和 shell/navigation 测试，覆盖区域去重、肌群汇总、无映射空状态、非医疗文案、计时/力量两类 session。
+- 本 story 未实现自动训练建议、康复治疗建议、医疗诊断、疼痛判断、心率/热量判断、通知调度、真实心率设备、语音控制、完整跟练闭环或大规模恢复内容库。
 
 ## Epic E6: 跟练雏形与心率占位
 
@@ -799,24 +811,24 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E5.3 训练历史与基础趋势已在 codex/e5-3-history-basic-trends 实施，等待 Review Gate。
-E5.3 仅展示内存态/示例 WorkoutSession 历史，不读取 Room session records，不实现真实持久化闭环或完整恢复建议。
+E5.4 基础恢复建议已在 codex/e5-4-basic-recovery 实施，等待 Review Gate。
+E5.4 仅基于 fixture recovery 映射和内存态 session/summary 数据生成训练后放松方向，不读取 Room session records，不写入 recovery_recommendations 表。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E5.3 Review Gate
+Story E5.4 Review Gate
 ```
 
-E5.3 Review Gate 建议重点确认：
+E5.4 Review Gate 建议重点确认：
 
-1. “记录”入口是否启用并进入历史页。
-2. 历史列表是否按日期展示 timed / strength completed / abandoned 记录。
-3. 单次详情是否只消费内存态 session seed，不暗示 Room 历史读取。
-4. 单动作重量 / 次数历史和训练容量历史是否可读、保守、数据不足时诚实。
-5. 是否保持不接真实持久化、E5.4 完整恢复建议、自动加重量建议、医疗/心率/热量判断、通知、语音或跟练闭环。
+1. 计时总结中的已完成 jumping-jacks / bodyweight-squat 是否能进入下肢放松建议。
+2. 力量总结中的已确认 barbell-bench-press / one-arm-dumbbell-row 是否能进入胸肩前侧 / 上背放松建议。
+3. 重复区域和肌群是否稳定去重，无映射或无完成/确认内容是否为空状态。
+4. 页面文案是否清楚说明不做康复治疗或医疗诊断，不出现自动训练建议、心率判断、热量判断或疾病适应性判断。
+5. 是否保持不接真实持久化、Room session records、recovery repository 闭环、通知、语音、真实心率设备或完整跟练闭环。
 
 ## 8. 暂缓事项
 

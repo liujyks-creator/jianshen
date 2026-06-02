@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
 import com.liujyks.trainflow.core.model.SessionStatus
@@ -63,6 +64,7 @@ import kotlinx.coroutines.delay
 internal fun StrengthWorkoutSessionRoute(
     plan: WorkoutPlan,
     onBackToPlans: () -> Unit,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var engineState by remember(plan.id) {
@@ -141,6 +143,7 @@ internal fun StrengthWorkoutSessionRoute(
         onResume = { dispatch(WorkoutCommand.ResumeSession) },
         onEnd = { dispatch(WorkoutCommand.EndSession(reason = "user_requested")) },
         onBackToPlans = onBackToPlans,
+        onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
         modifier = modifier
     )
 }
@@ -165,6 +168,7 @@ private fun StrengthWorkoutSessionScreen(
     onResume: () -> Unit,
     onEnd: () -> Unit,
     onBackToPlans: () -> Unit,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -210,7 +214,7 @@ private fun StrengthWorkoutSessionScreen(
             StrengthHeartRatePanel(uiState.heartRate)
 
             if (uiState.isTerminal) {
-                StrengthTerminalPanel(uiState, onBackToPlans)
+                StrengthTerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
             } else {
                 StrengthSecondaryControlsPanel(
                     uiState = uiState,
@@ -825,7 +829,8 @@ private fun StrengthControlHistoryPanel(uiState: StrengthWorkoutSessionScreenSta
 @Composable
 private fun StrengthTerminalPanel(
     uiState: StrengthWorkoutSessionScreenState,
-    onBackToPlans: () -> Unit
+    onBackToPlans: () -> Unit,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
 ) {
     StrengthDarkInfoPanel {
         Text(
@@ -839,7 +844,7 @@ private fun StrengthTerminalPanel(
             color = TrainFlowNeutral200
         )
         uiState.summary?.let { summary ->
-            StrengthSessionSummaryPanel(summary)
+            StrengthSessionSummaryPanel(summary, onOpenRecoveryRecommendation)
         }
         Button(
             onClick = onBackToPlans,
@@ -853,7 +858,10 @@ private fun StrengthTerminalPanel(
 }
 
 @Composable
-private fun StrengthSessionSummaryPanel(summary: StrengthWorkoutSummaryUiState) {
+private fun StrengthSessionSummaryPanel(
+    summary: StrengthWorkoutSummaryUiState,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = summary.title,
@@ -877,7 +885,7 @@ private fun StrengthSessionSummaryPanel(summary: StrengthWorkoutSummaryUiState) 
         summary.exerciseSummaries.forEach { exercise ->
             StrengthExerciseSummaryPanel(exercise)
         }
-        StrengthRecoveryEntryPanel(summary.recoveryEntry)
+        StrengthRecoveryEntryPanel(summary.recoveryEntry, onOpenRecoveryRecommendation)
     }
 }
 
@@ -1044,9 +1052,14 @@ private fun StrengthSetSummaryRow(set: StrengthWorkoutSummarySetUiState) {
 }
 
 @Composable
-private fun StrengthRecoveryEntryPanel(entry: StrengthWorkoutRecoveryEntryUiState) {
+private fun StrengthRecoveryEntryPanel(
+    entry: StrengthWorkoutRecoveryEntryUiState,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
+) {
     OutlinedButton(
-        onClick = {},
+        onClick = {
+            entry.recommendation?.let(onOpenRecoveryRecommendation)
+        },
         enabled = entry.enabled,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp)
@@ -1109,7 +1122,8 @@ private fun StrengthWorkoutSessionRoutePreview() {
     TrainFlowTheme {
         StrengthWorkoutSessionRoute(
             plan = buildDefaultPlanManagementState().plans[1],
-            onBackToPlans = {}
+            onBackToPlans = {},
+            onOpenRecoveryRecommendation = {}
         )
     }
 }

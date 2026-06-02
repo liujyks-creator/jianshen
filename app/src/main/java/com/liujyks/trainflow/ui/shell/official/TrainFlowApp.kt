@@ -13,6 +13,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
@@ -20,9 +22,11 @@ import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
+import com.liujyks.trainflow.feature.recovery.RecoveryRoute
+import com.liujyks.trainflow.feature.recovery.emptyRecoveryScreenState
+import com.liujyks.trainflow.feature.recovery.toRecoveryScreenState
 import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
-import com.liujyks.trainflow.core.model.WorkoutPlan
 
 @Composable
 fun TrainFlowApp() {
@@ -38,11 +42,15 @@ fun TrainFlowApp() {
     var activeStrengthSessionPlan by remember {
         mutableStateOf<WorkoutPlan?>(null)
     }
+    var activeRecoveryRecommendation by remember {
+        mutableStateOf<BasicRecoveryRecommendation?>(null)
+    }
     val shellState = OfficialShellState(
         currentDestination = currentDestination,
         planManagementState = planManagementState,
         activeTimedSessionPlan = activeTimedSessionPlan,
-        activeStrengthSessionPlan = activeStrengthSessionPlan
+        activeStrengthSessionPlan = activeStrengthSessionPlan,
+        activeRecoveryRecommendation = activeRecoveryRecommendation
     )
 
     fun applyShellState(nextState: OfficialShellState) {
@@ -50,6 +58,7 @@ fun TrainFlowApp() {
         planManagementState = nextState.planManagementState
         activeTimedSessionPlan = nextState.activeTimedSessionPlan
         activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
+        activeRecoveryRecommendation = nextState.activeRecoveryRecommendation
     }
 
     Surface {
@@ -101,6 +110,9 @@ fun TrainFlowApp() {
                             onBackToPlans = {
                                 applyShellState(shellState.finishTimedSession())
                             },
+                            onOpenRecoveryRecommendation = { recommendation ->
+                                applyShellState(shellState.openRecoveryRecommendation(recommendation))
+                            },
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {
@@ -127,6 +139,9 @@ fun TrainFlowApp() {
                             plan = activePlan,
                             onBackToPlans = {
                                 applyShellState(shellState.finishStrengthSession())
+                            },
+                            onOpenRecoveryRecommendation = { recommendation ->
+                                applyShellState(shellState.openRecoveryRecommendation(recommendation))
                             },
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -166,6 +181,16 @@ fun TrainFlowApp() {
                 )
 
                 OfficialShellDestination.RECORDS -> HistoryRoute(
+                    modifier = Modifier.padding(innerPadding)
+                )
+
+                OfficialShellDestination.RECOVERY -> RecoveryRoute(
+                    uiState = shellState.activeRecoveryRecommendation
+                        ?.toRecoveryScreenState()
+                        ?: emptyRecoveryScreenState(),
+                    onBackToRecords = {
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
             }

@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -9,7 +10,8 @@ internal data class OfficialShellState(
     val currentDestination: OfficialShellDestination = OfficialShellDestination.TRAINING,
     val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState(),
     val activeTimedSessionPlan: WorkoutPlan? = null,
-    val activeStrengthSessionPlan: WorkoutPlan? = null
+    val activeStrengthSessionPlan: WorkoutPlan? = null,
+    val activeRecoveryRecommendation: BasicRecoveryRecommendation? = null
 ) {
     val showBottomBar: Boolean
         get() = !isSessionNavigationLocked
@@ -40,7 +42,8 @@ internal data class OfficialShellState(
         return copy(
             currentDestination = OfficialShellDestination.TIMED_SESSION,
             activeTimedSessionPlan = plan,
-            activeStrengthSessionPlan = null
+            activeStrengthSessionPlan = null,
+            activeRecoveryRecommendation = null
         )
     }
 
@@ -50,21 +53,33 @@ internal data class OfficialShellState(
         return copy(
             currentDestination = OfficialShellDestination.STRENGTH_SESSION,
             activeTimedSessionPlan = null,
-            activeStrengthSessionPlan = plan
+            activeStrengthSessionPlan = plan,
+            activeRecoveryRecommendation = null
+        )
+    }
+
+    fun openRecoveryRecommendation(recommendation: BasicRecoveryRecommendation): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.RECOVERY,
+            activeTimedSessionPlan = null,
+            activeStrengthSessionPlan = null,
+            activeRecoveryRecommendation = recommendation
         )
     }
 
     fun finishTimedSession(): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
-            activeTimedSessionPlan = null
+            activeTimedSessionPlan = null,
+            activeRecoveryRecommendation = null
         )
     }
 
     fun finishStrengthSession(): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
-            activeStrengthSessionPlan = null
+            activeStrengthSessionPlan = null,
+            activeRecoveryRecommendation = null
         )
     }
 }
@@ -101,6 +116,12 @@ internal enum class OfficialShellDestination(
     STRENGTH_SESSION(
         label = "力量训练",
         shortLabel = "力",
+        enabled = true,
+        showInBottomBar = false
+    ),
+    RECOVERY(
+        label = "恢复建议",
+        shortLabel = "恢",
         enabled = true,
         showInBottomBar = false
     ),
@@ -148,6 +169,7 @@ internal fun OfficialShellDestination.selectedBottomDestination(): OfficialShell
         OfficialShellDestination.STRENGTH_PLAN_EDITOR,
         OfficialShellDestination.TIMED_SESSION,
         OfficialShellDestination.STRENGTH_SESSION -> OfficialShellDestination.TRAINING
+        OfficialShellDestination.RECOVERY -> OfficialShellDestination.RECORDS
         else -> this
     }
 }

@@ -1,6 +1,8 @@
 package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendationGenerator
 import com.liujyks.trainflow.core.engine.StrengthSessionSetStep
 import com.liujyks.trainflow.core.engine.StrengthSessionStepHistoryStatus
 import com.liujyks.trainflow.core.engine.StrengthWorkoutControlHistoryType
@@ -64,7 +66,8 @@ internal data class StrengthWorkoutRecoveryEntryUiState(
     val title: String,
     val description: String,
     val enabled: Boolean,
-    val generated: Boolean
+    val generated: Boolean,
+    val recommendation: BasicRecoveryRecommendation? = null
 )
 
 internal fun StrengthWorkoutEngineState.toStrengthWorkoutSummaryUiState(
@@ -90,6 +93,11 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSummaryUiState(
     val differenceSummary = buildPlanVsActualSummary()
     val restSummary = buildRestSummary(recordedRestSec, missingRestCount)
     val trainedAreaSummary = buildTrainedAreaSummary(exerciseById)
+    val recoveryRecommendation = BasicRecoveryRecommendationGenerator.fromExerciseIds(
+        sessionId = sessionId,
+        exerciseIds = strengthSetRecords.map { record -> record.exerciseId }.distinct(),
+        exercises = exercises
+    )
 
     return StrengthWorkoutSummaryUiState(
         title = when (status) {
@@ -147,13 +155,14 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSummaryUiState(
         ),
         recoveryEntry = StrengthWorkoutRecoveryEntryUiState(
             title = "查看恢复建议",
-            description = if (trainedAreaSummary == "本次未识别到动作部位") {
-                "E5.4 将接入完整恢复建议；当前仅保留入口占位。"
+            description = if (recoveryRecommendation.hasRecommendation) {
+                "已根据已确认组动作生成基础放松方向。"
             } else {
-                "E5.4 将基于 $trainedAreaSummary 接入完整恢复建议；当前仅保留入口占位。"
+                "本次没有可识别的已确认组，暂不生成恢复建议。"
             },
-            enabled = false,
-            generated = false
+            enabled = recoveryRecommendation.hasRecommendation,
+            generated = recoveryRecommendation.hasRecommendation,
+            recommendation = recoveryRecommendation.takeIf { recommendation -> recommendation.hasRecommendation }
         )
     )
 }

@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
@@ -66,6 +67,7 @@ import kotlinx.coroutines.delay
 internal fun TimedWorkoutSessionRoute(
     plan: WorkoutPlan,
     onBackToPlans: () -> Unit,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var engineState by remember(plan.id) {
@@ -103,6 +105,7 @@ internal fun TimedWorkoutSessionRoute(
         onExtendRest = { dispatch(WorkoutCommand.ExtendRest(seconds = 15)) },
         onEnd = { dispatch(WorkoutCommand.EndSession(reason = "user_requested")) },
         onBackToPlans = onBackToPlans,
+        onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
         modifier = modifier
     )
 }
@@ -116,6 +119,7 @@ private fun TimedWorkoutSessionScreen(
     onExtendRest: () -> Unit,
     onEnd: () -> Unit,
     onBackToPlans: () -> Unit,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -134,7 +138,7 @@ private fun TimedWorkoutSessionScreen(
         HeartRatePanel(uiState.heartRate)
 
         if (uiState.isTerminal) {
-            TerminalPanel(uiState, onBackToPlans)
+            TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
         } else {
             SessionControls(
                 uiState = uiState,
@@ -375,7 +379,8 @@ private fun SessionControls(
 @Composable
 private fun TerminalPanel(
     uiState: TimedWorkoutSessionScreenState,
-    onBackToPlans: () -> Unit
+    onBackToPlans: () -> Unit,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
 ) {
     DarkInfoPanel {
         Text(
@@ -389,7 +394,7 @@ private fun TerminalPanel(
             color = TrainFlowNeutral200
         )
         uiState.summary?.let { summary ->
-            TimedSessionSummaryPanel(summary)
+            TimedSessionSummaryPanel(summary, onOpenRecoveryRecommendation)
         }
         Button(
             onClick = onBackToPlans,
@@ -403,7 +408,10 @@ private fun TerminalPanel(
 }
 
 @Composable
-private fun TimedSessionSummaryPanel(summary: TimedWorkoutSummaryUiState) {
+private fun TimedSessionSummaryPanel(
+    summary: TimedWorkoutSummaryUiState,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = summary.title,
@@ -423,7 +431,7 @@ private fun TimedSessionSummaryPanel(summary: TimedWorkoutSummaryUiState) {
         SummaryDetail(label = "休息延长", text = summary.restExtensionSummary)
         SummaryDetail(label = "结束状态", text = summary.earlyEndSummary)
         SummaryDetail(label = "训练部位", text = summary.trainedAreaSummary)
-        RecoveryEntryPanel(summary.recoveryEntry)
+        RecoveryEntryPanel(summary.recoveryEntry, onOpenRecoveryRecommendation)
     }
 }
 
@@ -512,8 +520,18 @@ private fun SummaryDetail(
 
 @Composable
 private fun RecoveryEntryPanel(entry: TimedWorkoutRecoveryEntryUiState) {
+    RecoveryEntryPanel(entry = entry, onOpenRecoveryRecommendation = {})
+}
+
+@Composable
+private fun RecoveryEntryPanel(
+    entry: TimedWorkoutRecoveryEntryUiState,
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
+) {
     OutlinedButton(
-        onClick = {},
+        onClick = {
+            entry.recommendation?.let(onOpenRecoveryRecommendation)
+        },
         enabled = entry.enabled,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp)
@@ -651,7 +669,8 @@ private fun TimedWorkoutSessionRoutePreview() {
     TrainFlowTheme {
         TimedWorkoutSessionRoute(
             plan = buildDefaultPlanManagementState().plans.first(),
-            onBackToPlans = {}
+            onBackToPlans = {},
+            onOpenRecoveryRecommendation = {}
         )
     }
 }

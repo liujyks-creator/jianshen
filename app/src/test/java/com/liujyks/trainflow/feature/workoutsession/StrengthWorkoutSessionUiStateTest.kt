@@ -390,8 +390,12 @@ class StrengthWorkoutSessionUiStateTest {
         assertTrue(summary.planVsActualSummary.contains("次数差异 1 组"))
         assertTrue(summary.planVsActualSummary.contains("不生成"))
         assertFalse(summary.planVsActualSummary.contains("自动"))
-        assertFalse(summary.recoveryEntry.enabled)
-        assertFalse(summary.recoveryEntry.generated)
+        assertTrue(summary.recoveryEntry.enabled)
+        assertTrue(summary.recoveryEntry.generated)
+        val recovery = requireNotNull(summary.recoveryEntry.recommendation)
+        assertTrue(recovery.recommendation.areaIds.contains("chest-shoulder-release"))
+        assertTrue(recovery.recommendation.trainedMuscleIds.contains("chest"))
+        assertFalse(summary.recoveryEntry.description.contains("E5.4"))
     }
 
     @Test
