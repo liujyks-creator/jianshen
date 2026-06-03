@@ -26,6 +26,7 @@ import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 import com.liujyks.trainflow.feature.recovery.RecoveryRoute
 import com.liujyks.trainflow.feature.recovery.emptyRecoveryScreenState
 import com.liujyks.trainflow.feature.recovery.toRecoveryScreenState
+import com.liujyks.trainflow.feature.workoutsession.FollowAlongWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
 
@@ -43,6 +44,9 @@ fun TrainFlowApp() {
     var activeStrengthSessionPlan by remember {
         mutableStateOf<WorkoutPlan?>(null)
     }
+    var activeFollowAlongSessionPlan by remember {
+        mutableStateOf<WorkoutPlan?>(null)
+    }
     var activeRecoveryRecommendation by remember {
         mutableStateOf<BasicRecoveryRecommendation?>(null)
     }
@@ -51,6 +55,7 @@ fun TrainFlowApp() {
         planManagementState = planManagementState,
         activeTimedSessionPlan = activeTimedSessionPlan,
         activeStrengthSessionPlan = activeStrengthSessionPlan,
+        activeFollowAlongSessionPlan = activeFollowAlongSessionPlan,
         activeRecoveryRecommendation = activeRecoveryRecommendation
     )
 
@@ -59,6 +64,7 @@ fun TrainFlowApp() {
         planManagementState = nextState.planManagementState
         activeTimedSessionPlan = nextState.activeTimedSessionPlan
         activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
+        activeFollowAlongSessionPlan = nextState.activeFollowAlongSessionPlan
         activeRecoveryRecommendation = nextState.activeRecoveryRecommendation
     }
 
@@ -107,8 +113,31 @@ fun TrainFlowApp() {
                 )
 
                 OfficialShellDestination.FOLLOW_ALONG_ENTRY -> FollowAlongRoute(
+                    onStartFollowAlong = { plan ->
+                        applyShellState(shellState.startFollowAlongSession(plan))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
+
+                OfficialShellDestination.FOLLOW_ALONG_SESSION -> {
+                    val activePlan = shellState.activeFollowAlongSessionPlan
+                    if (activePlan != null) {
+                        FollowAlongWorkoutSessionRoute(
+                            plan = activePlan,
+                            onBackToFollowAlong = {
+                                applyShellState(shellState.finishFollowAlongSession())
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    } else {
+                        FollowAlongRoute(
+                            onStartFollowAlong = { plan ->
+                                applyShellState(shellState.startFollowAlongSession(plan))
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                }
 
                 OfficialShellDestination.TIMED_SESSION -> {
                     val activePlan = shellState.activeTimedSessionPlan

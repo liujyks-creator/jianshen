@@ -11,6 +11,7 @@ internal data class OfficialShellState(
     val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState(),
     val activeTimedSessionPlan: WorkoutPlan? = null,
     val activeStrengthSessionPlan: WorkoutPlan? = null,
+    val activeFollowAlongSessionPlan: WorkoutPlan? = null,
     val activeRecoveryRecommendation: BasicRecoveryRecommendation? = null
 ) {
     val showBottomBar: Boolean
@@ -18,7 +19,11 @@ internal data class OfficialShellState(
 
     private val isSessionNavigationLocked: Boolean
         get() = (currentDestination == OfficialShellDestination.TIMED_SESSION && activeTimedSessionPlan != null) ||
-            (currentDestination == OfficialShellDestination.STRENGTH_SESSION && activeStrengthSessionPlan != null)
+            (currentDestination == OfficialShellDestination.STRENGTH_SESSION && activeStrengthSessionPlan != null) ||
+            (
+                currentDestination == OfficialShellDestination.FOLLOW_ALONG_SESSION &&
+                    activeFollowAlongSessionPlan != null
+                )
 
     fun selectDestination(destination: OfficialShellDestination): OfficialShellState {
         if (isSessionNavigationLocked && destination != currentDestination) {
@@ -43,6 +48,7 @@ internal data class OfficialShellState(
             currentDestination = OfficialShellDestination.TIMED_SESSION,
             activeTimedSessionPlan = plan,
             activeStrengthSessionPlan = null,
+            activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = null
         )
     }
@@ -54,6 +60,19 @@ internal data class OfficialShellState(
             currentDestination = OfficialShellDestination.STRENGTH_SESSION,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = plan,
+            activeFollowAlongSessionPlan = null,
+            activeRecoveryRecommendation = null
+        )
+    }
+
+    fun startFollowAlongSession(plan: WorkoutPlan): OfficialShellState {
+        if (plan.mode != WorkoutMode.FOLLOW_ALONG || plan.followAlong?.preset != true) return this
+
+        return copy(
+            currentDestination = OfficialShellDestination.FOLLOW_ALONG_SESSION,
+            activeTimedSessionPlan = null,
+            activeStrengthSessionPlan = null,
+            activeFollowAlongSessionPlan = plan,
             activeRecoveryRecommendation = null
         )
     }
@@ -63,6 +82,7 @@ internal data class OfficialShellState(
             currentDestination = OfficialShellDestination.RECOVERY,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
+            activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = recommendation
         )
     }
@@ -71,6 +91,7 @@ internal data class OfficialShellState(
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
             activeTimedSessionPlan = null,
+            activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = null
         )
     }
@@ -79,6 +100,15 @@ internal data class OfficialShellState(
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
             activeStrengthSessionPlan = null,
+            activeFollowAlongSessionPlan = null,
+            activeRecoveryRecommendation = null
+        )
+    }
+
+    fun finishFollowAlongSession(): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY,
+            activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = null
         )
     }
@@ -108,6 +138,12 @@ internal enum class OfficialShellDestination(
         showInBottomBar = false
     ),
     FOLLOW_ALONG_ENTRY(
+        label = "基础跟练",
+        shortLabel = "跟",
+        enabled = true,
+        showInBottomBar = false
+    ),
+    FOLLOW_ALONG_SESSION(
         label = "基础跟练",
         shortLabel = "跟",
         enabled = true,
@@ -174,6 +210,7 @@ internal fun OfficialShellDestination.selectedBottomDestination(): OfficialShell
         OfficialShellDestination.TIMED_PLAN_EDITOR,
         OfficialShellDestination.STRENGTH_PLAN_EDITOR,
         OfficialShellDestination.FOLLOW_ALONG_ENTRY,
+        OfficialShellDestination.FOLLOW_ALONG_SESSION,
         OfficialShellDestination.TIMED_SESSION,
         OfficialShellDestination.STRENGTH_SESSION -> OfficialShellDestination.TRAINING
         OfficialShellDestination.RECOVERY -> OfficialShellDestination.RECORDS

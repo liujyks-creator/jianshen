@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.ui.shell.official
 
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendationGenerator
+import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
 import com.liujyks.trainflow.feature.plans.confirmDeletePlan
 import com.liujyks.trainflow.feature.plans.copyPlan
 import com.liujyks.trainflow.feature.plans.requestDeletePlan
@@ -35,14 +36,24 @@ class OfficialShellStateTest {
             OfficialShellDestination.TRAINING,
             OfficialShellDestination.FOLLOW_ALONG_ENTRY.selectedBottomDestination()
         )
+        assertEquals(
+            OfficialShellDestination.TRAINING,
+            OfficialShellDestination.FOLLOW_ALONG_SESSION.selectedBottomDestination()
+        )
 
         val timedEntries = officialShellNavigationEntries(OfficialShellDestination.TIMED_PLAN_EDITOR)
         val strengthEntries = officialShellNavigationEntries(OfficialShellDestination.STRENGTH_PLAN_EDITOR)
         val followAlongEntries = officialShellNavigationEntries(OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+        val followAlongSessionEntries = officialShellNavigationEntries(OfficialShellDestination.FOLLOW_ALONG_SESSION)
 
         assertTrue(requireNotNull(timedEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
         assertTrue(requireNotNull(strengthEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
         assertTrue(requireNotNull(followAlongEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
+        assertTrue(
+            requireNotNull(
+                followAlongSessionEntries.first { it.destination == OfficialShellDestination.TRAINING }
+            ).selected
+        )
     }
 
     @Test
@@ -161,6 +172,53 @@ class OfficialShellStateTest {
         assertEquals(OfficialShellDestination.STRENGTH_SESSION, sessionState.currentDestination)
         assertEquals(strengthPlan.id, sessionState.activeStrengthSessionPlan?.id)
         assertEquals(null, sessionState.activeTimedSessionPlan)
+    }
+
+    @Test
+    fun followAlongPresetStartsFollowAlongSessionDestination() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
+        val sessionState = initial.startFollowAlongSession(preset)
+
+        assertEquals(OfficialShellDestination.FOLLOW_ALONG_SESSION, sessionState.currentDestination)
+        assertEquals(preset.id, sessionState.activeFollowAlongSessionPlan?.id)
+        assertEquals(null, sessionState.activeTimedSessionPlan)
+        assertEquals(null, sessionState.activeStrengthSessionPlan)
+    }
+
+    @Test
+    fun followAlongSessionHidesBottomBarAndRejectsBottomNavigationSelection() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
+        val sessionState = initial.startFollowAlongSession(preset)
+        val afterBottomNavigation = sessionState.selectDestination(OfficialShellDestination.PLANS)
+
+        assertFalse(sessionState.showBottomBar)
+        assertEquals(OfficialShellDestination.FOLLOW_ALONG_SESSION, afterBottomNavigation.currentDestination)
+        assertEquals(preset.id, afterBottomNavigation.activeFollowAlongSessionPlan?.id)
+    }
+
+    @Test
+    fun timedPlanDoesNotStartFollowAlongSessionDestination() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+        val timedPlan = initial.planManagementState.plans.first()
+        val sessionState = initial.startFollowAlongSession(timedPlan)
+
+        assertEquals(initial.currentDestination, sessionState.currentDestination)
+        assertEquals(null, sessionState.activeFollowAlongSessionPlan)
+    }
+
+    @Test
+    fun finishingFollowAlongSessionReturnsToFollowAlongEntryAndClearsActivePlan() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
+        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
+        val finished = initial
+            .startFollowAlongSession(preset)
+            .finishFollowAlongSession()
+
+        assertEquals(OfficialShellDestination.FOLLOW_ALONG_ENTRY, finished.currentDestination)
+        assertEquals(null, finished.activeFollowAlongSessionPlan)
+        assertTrue(finished.showBottomBar)
     }
 
     @Test

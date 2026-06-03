@@ -50,7 +50,7 @@ internal fun buildDefaultFollowAlongScreenState(
     )
 
     return FollowAlongScreenState(
-        summary = "基础跟练/雏形体验：复用计时计划结构和首批动作短提示，只做入口与选择边界。",
+        summary = "基础跟练/雏形体验：复用计时计划结构和首批动作短提示，只从内存态 preset 启动。",
         plans = plan?.let { listOf(it.toFollowAlongPlanUiState(followAlongEntries)) }.orEmpty(),
         emptyStateTitle = "暂无可跟练内容",
         emptyStateDescription = "当前动作 fixture 中没有同时支持跟练和计时流程的动作，因此不展示虚假的跟练入口。"
@@ -76,7 +76,7 @@ private fun buildBasicFollowAlongPlan(
         id = "follow-along-basic-flow",
         mode = WorkoutMode.FOLLOW_ALONG,
         title = "基础跟练：全身动作提示",
-        description = "E6.1 内存态基础跟练计划，只用于入口与选择边界验证。",
+        description = "E6.2 内存态基础跟练计划，只用于雏形执行体验验证。",
         blocks = listOf(
             TimedCircuitBlock(
                 id = "follow-along-basic-circuit",
@@ -144,11 +144,11 @@ private fun WorkoutPlan.toFollowAlongPlanUiState(
         actionRows = actionRows,
         boundaryRows = listOf(
             "只复用计时流程与首批 fixture 动作内容。",
-            "不提供完整课程平台、教练视频库、AI 纠错、音乐编排或语音教练。",
-            "跟练执行页与视频播放留给后续 Story。"
+            "不提供真实媒体播放、动作分析、音乐编排或自动口令。",
+            "后续是否支持兼容计时计划进入跟练视图，仍保留为 O-002。"
         ),
-        nextStepStatus = "跟练执行页 E6.2 接入",
-        canStartFollowAlong = false
+        nextStepStatus = "开始基础跟练",
+        canStartFollowAlong = true
     )
 }
 

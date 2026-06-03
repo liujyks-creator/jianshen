@@ -637,6 +637,8 @@ stepsCompleted:
 
 ### Story E6.2: 跟练执行页
 
+**状态:** Implemented in `feature.workoutsession` basic follow-along session route, UI state mapper, shell session destination, and unit tests
+
 作为用户，  
 我想在跟练页看到当前动作、演示位、倒计时、短提示和下一动作，  
 以便跟着流程训练。
@@ -646,6 +648,18 @@ stepsCompleted:
 - Then 跟练复用计时训练引擎。
 - Then 展示媒体位，即使首版媒体为空也不显得像坏掉。
 - Then 支持暂停、跳过、动作详情和结束。
+
+**交付结果:**
+
+- E6.1 内存态 `WorkoutMode.FOLLOW_ALONG` preset 的开始按钮已启用，进入 `FOLLOW_ALONG_SESSION` destination。
+- 官方 shell 新增跟练执行 active plan 状态；跟练执行中底部导航仍选中“训练”并锁定，结束后返回基础跟练入口。
+- 新增 `FollowAlongWorkoutSessionRoute` 与 `FollowAlongWorkoutSessionUiState`，执行页复用 `TimedWorkoutEngine.create(plan)` 和 `WorkoutCommand` 推进开始、暂停、继续、跳过和提前结束。
+- 页面展示当前动作、演示/媒体占位、倒计时、阶段进度、动作短提示、下一动作预告、低层级心率占位、控制按钮和基于 fixture 的动作详情。
+- 媒体为空时展示明确占位文案，不加载远程资源，也不伪装为加载失败。
+- completed / abandoned 终态展示“基础跟练完成 / 提前结束”的轻量总结，并明确当前仍是引擎内存态，不写入真实 session records。
+- 新增单元测试覆盖 preset 可开始、shell 启动与导航锁定、follow-along plan 复用计时引擎、UI state 映射、控制到 `WorkoutCommand` 的映射、媒体空状态和保留能力文案边界。
+- 本 story 只支持 E6.1 preset 启动；未支持任意计时计划切换为跟练视图，O-002 仍保持 Open。
+- 本 story 未实现视频播放、远程资源、真实媒体播放器、自动语音、动作分析、真实心率设备、心率告警、热量判断、通知调度、Room/DataStore repository 闭环、真实 `WorkoutSession` 持久化或 session records 写库。
 
 ### Story E6.3: 心率抽象状态展示
 
@@ -823,24 +837,25 @@ stepsCompleted:
 当前状态说明：
 
 ```text
-E6.1 跟练雏形计划入口已在 codex/e6-1-follow-along-entry 实施，等待 Review Gate。
-E6.1 采用少量预置基础跟练流程作为本 Story 默认，只做入口与选择边界，不解决 O-002 的全部范围。
+E6.1 跟练雏形计划入口已合入 main。
+E6.2 基础跟练执行页已在 codex/e6-2-follow-along-session 实施，等待 Review Gate。
+E6.2 只支持 E6.1 内存态 preset 启动，不解决 O-002 的全部范围。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E6.1 Review Gate
+Story E6.2 Review Gate
 ```
 
-E6.1 Review Gate 建议重点确认：
+E6.2 Review Gate 建议重点确认：
 
-1. 首页是否同层展示“基础跟练/雏形体验”入口，并能进入跟练选择页。
-2. preset 是否只使用 `supportsFollowAlong=true` 且可用于计时流程的首批动作 fixture。
-3. 页面是否展示动作数、预计时长、动作短提示、媒体位说明和诚实空状态。
-4. 页面是否没有可工作的假开始按钮，不启动完整跟练执行页。
-5. 文案是否不暗示完整课程平台、教练视频库、AI 纠错、音乐编排、语音教练、真实心率设备或通知能力已可用。
+1. 从“基础跟练”preset 点击开始是否进入 `FOLLOW_ALONG_SESSION`。
+2. 跟练执行页是否复用 `TimedWorkoutEngine`，且控制通过 `WorkoutCommand` 分发。
+3. 页面是否展示当前动作、演示占位、倒计时、下一动作、短提示、心率占位和动作详情。
+4. completed / abandoned 终态是否明确为基础跟练内存态总结，不伪装真实 session records。
+5. 文案是否不暗示视频播放、自动语音、动作分析、真实心率设备、心率告警、热量判断或通知能力已可用，并确认 O-002 仍保持 Open。
 
 ## 8. 暂缓事项
 

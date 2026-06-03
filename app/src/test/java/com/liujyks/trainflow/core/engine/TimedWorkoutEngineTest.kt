@@ -2,6 +2,7 @@ package com.liujyks.trainflow.core.engine
 
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
+import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
@@ -322,6 +323,49 @@ class TimedWorkoutEngineTest {
         assertEquals(1, result.state.controlHistory.count { event ->
             event.type == TimedWorkoutControlHistoryType.END_SESSION
         })
+    }
+
+    @Test
+    fun followAlongPlanUsesTimedEngineForStartTickPauseResumeSkipAndEnd() {
+        val followAlongPlan = plan(
+            blocks = listOf(
+                circuit(
+                    items = listOf(
+                        item(id = "jump", exerciseId = "jumping-jacks", workSec = 3, restSec = 2),
+                        item(id = "squat", exerciseId = "bodyweight-squat", workSec = 4)
+                    )
+                )
+            )
+        ).copy(
+            mode = WorkoutMode.FOLLOW_ALONG,
+            followAlong = FollowAlongPlanMeta(preset = true)
+        )
+
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(followAlongPlan),
+            command = WorkoutCommand.StartSession
+        )
+        assertEquals(SessionStatus.ACTIVE, result.state.status)
+        assertEquals("circuit-r1-jump-work", result.state.currentStep?.id)
+        assertTrue(result.events.any { event -> event is WorkoutEvent.TimedWorkStarted })
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 1)
+        assertEquals(2, result.state.remainingSec)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.PauseSession)
+        assertEquals(SessionStatus.PAUSED, result.state.status)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
+        assertEquals(SessionStatus.ACTIVE, result.state.status)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.SkipStep)
+        assertEquals("circuit-r1-jump-rest", result.state.currentStep?.id)
+        assertEquals(TimedSessionStepHistoryStatus.SKIPPED, result.state.skippedStepHistory.single().status)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.EndSession(reason = "user_requested"))
+        assertEquals(SessionStatus.ABANDONED, result.state.status)
+        assertEquals("user_requested", result.state.earlyEnd?.reason)
+        assertEquals(TimedWorkoutControlHistoryType.END_SESSION, result.state.controlHistory.last().type)
     }
 
     private fun singleActionPlan(

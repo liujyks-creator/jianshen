@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
@@ -35,12 +36,14 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 
 @Composable
 internal fun FollowAlongRoute(
+    onStartFollowAlong: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildDefaultFollowAlongScreenState() }
 
     FollowAlongScreen(
         uiState = uiState,
+        onStartFollowAlong = onStartFollowAlong,
         modifier = modifier
     )
 }
@@ -48,6 +51,7 @@ internal fun FollowAlongRoute(
 @Composable
 private fun FollowAlongScreen(
     uiState: FollowAlongScreenState,
+    onStartFollowAlong: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -70,7 +74,10 @@ private fun FollowAlongScreen(
             }
         } else {
             items(uiState.plans, key = { it.plan.id }) { plan ->
-                FollowAlongPlanCard(plan)
+                FollowAlongPlanCard(
+                    plan = plan,
+                    onStartFollowAlong = onStartFollowAlong
+                )
             }
         }
     }
@@ -94,7 +101,10 @@ private fun FollowAlongHeader(summary: String) {
 }
 
 @Composable
-private fun FollowAlongPlanCard(plan: FollowAlongPlanUiState) {
+private fun FollowAlongPlanCard(
+    plan: FollowAlongPlanUiState,
+    onStartFollowAlong: (WorkoutPlan) -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
@@ -138,7 +148,7 @@ private fun FollowAlongPlanCard(plan: FollowAlongPlanUiState) {
             Section(title = "当前边界", rows = plan.boundaryRows)
 
             Button(
-                onClick = {},
+                onClick = { onStartFollowAlong(plan.plan) },
                 enabled = plan.canStartFollowAlong,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
@@ -226,6 +236,9 @@ private fun StatusPill(
 @Composable
 private fun FollowAlongRoutePreview() {
     TrainFlowTheme {
-        FollowAlongScreen(uiState = buildDefaultFollowAlongScreenState())
+        FollowAlongScreen(
+            uiState = buildDefaultFollowAlongScreenState(),
+            onStartFollowAlong = {}
+        )
     }
 }

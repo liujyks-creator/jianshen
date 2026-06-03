@@ -20,8 +20,8 @@ class FollowAlongUiStateTest {
         assertEquals("基础跟练 / 雏形体验", plan.badge)
         assertTrue(plan.summary.contains("4 个动作"))
         assertTrue(plan.summary.contains("预计"))
-        assertFalse(plan.canStartFollowAlong)
-        assertEquals("跟练执行页 E6.2 接入", plan.nextStepStatus)
+        assertTrue(plan.canStartFollowAlong)
+        assertEquals("开始基础跟练", plan.nextStepStatus)
     }
 
     @Test
@@ -61,8 +61,35 @@ class FollowAlongUiStateTest {
         assertTrue(boundaryCopy.contains("基础跟练"))
         assertTrue(boundaryCopy.contains("雏形体验"))
         assertTrue(boundaryCopy.contains("首批 fixture"))
-        assertTrue(boundaryCopy.contains("不提供完整课程平台"))
-        assertTrue(boundaryCopy.contains("不提供完整课程平台、教练视频库、AI 纠错、音乐编排或语音教练"))
+        assertTrue(boundaryCopy.contains("不提供真实媒体播放"))
+        assertTrue(boundaryCopy.contains("O-002"))
+    }
+
+    @Test
+    fun copyDoesNotUseAvailabilityHintsForReservedCapabilities() {
+        val state = buildDefaultFollowAlongScreenState()
+        val plan = state.plans.single()
+        val copy = (listOf(state.summary, plan.mediaStatus, plan.nextStepStatus) + plan.boundaryRows).joinToString(" ")
+        val reservedAvailabilityHints = listOf(
+            "课程平台",
+            "教练库",
+            "AI 纠错已启用",
+            "语音教练",
+            "心率告警",
+            "热量判断"
+        )
+
+        reservedAvailabilityHints.forEach { phrase ->
+            assertFalse(copy.contains(phrase))
+        }
+    }
+
+    @Test
+    fun mediaEmptyStateIsHonestPlaceholderCopy() {
+        val plan = buildDefaultFollowAlongScreenState().plans.single()
+
+        assertTrue(plan.mediaStatus.contains("首版没有教练视频播放"))
+        assertFalse(plan.mediaStatus.contains("加载失败"))
     }
 
     @Test
