@@ -3,6 +3,7 @@ package com.liujyks.trainflow.feature.plans
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.PlanBlock
+import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
@@ -12,6 +13,14 @@ import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
+import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
+import com.liujyks.trainflow.core.notifications.PlanReminderScheduleRequest
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 internal const val DefaultPlanManagementTimestamp = "2026-05-29T00:00:00Z"
 
@@ -19,7 +28,12 @@ internal data class PlanManagementScreenState(
     val plans: List<WorkoutPlan>,
     val selectedPlanId: String? = plans.firstOrNull()?.id,
     val pendingDeletePlanId: String? = null,
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+    val notificationPermissionState: PlanReminderNotificationPermissionState =
+        PlanReminderNotificationPermissionState.resolve(
+            sdkInt = 33,
+            postNotificationsGranted = true
+        )
 ) {
     val isEmpty: Boolean = plans.isEmpty()
 
@@ -32,7 +46,7 @@ internal data class PlanManagementScreenState(
         get() = plans.firstOrNull { it.id == selectedPlanId } ?: plans.firstOrNull()
 
     val selectedDetail: PlanDetailUiState?
-        get() = selectedPlan?.toDetailState()
+        get() = selectedPlan?.toDetailState(notificationPermissionState)
 
     val pendingDeletePlanTitle: String?
         get() = plans.firstOrNull { it.id == pendingDeletePlanId }?.title
@@ -45,6 +59,7 @@ internal data class PlanListItemUiState(
     val modeBadge: String,
     val summary: String,
     val detailSummary: String,
+    val reminderSummary: String,
     val selected: Boolean
 )
 
@@ -56,9 +71,23 @@ internal data class PlanDetailUiState(
     val summary: String,
     val detailSummary: String,
     val sections: List<PlanDetailSectionUiState>,
+    val reminder: PlanReminderUiState,
     val editStatus: String,
     val startStatus: String,
     val canStartTraining: Boolean = false
+)
+
+internal data class PlanReminderUiState(
+    val summary: String,
+    val permissionMessage: String,
+    val boundaryCopy: String,
+    val enabled: Boolean,
+    val canRequestPermission: Boolean
+)
+
+internal data class PlanReminderPresetUiState(
+    val label: String,
+    val scheduleAt: String
 )
 
 internal data class PlanDetailSectionUiState(
@@ -94,6 +123,63 @@ internal fun PlanManagementScreenState.selectPlan(planId: String): PlanManagemen
         selectedPlanId = planId,
         pendingDeletePlanId = null,
         statusMessage = null
+    )
+}
+
+internal fun PlanManagementScreenState.updateNotificationPermissionState(
+    permissionState: PlanReminderNotificationPermissionState
+): PlanManagementScreenState {
+    return copy(notificationPermissionState = permissionState)
+}
+
+internal fun PlanManagementScreenState.setPlanReminder(
+    planId: String,
+    scheduleAt: String,
+    nowEpochMillis: Long = System.currentTimeMillis(),
+    timestamp: String = DefaultPlanManagementTimestamp
+): PlanManagementScreenState {
+    val plan = plans.firstOrNull { it.id == planId } ?: return this
+    val scheduleAtEpochMillis = scheduleAt.toEpochMillisOrNull()
+        ?: return copy(statusMessage = "提醒时间格式暂无法识别，请重新选择。")
+    if (scheduleAtEpochMillis <= nowEpochMillis) {
+        return copy(statusMessage = "提醒时间已过，请选择未来时间。")
+    }
+
+    val updatedPlan = plan.copy(
+        reminder = PlanReminder(enabled = true, scheduleAt = scheduleAt),
+        updatedAt = timestamp
+    )
+    val request = updatedPlan.toPlanReminderScheduleRequest(notificationPermissionState)
+    val message = if (notificationPermissionState.canPostNotifications) {
+        "已为「${plan.title}」设置 ${formatReminderSchedule(scheduleAt)} 训练提醒；普通通知可能被系统延迟。"
+    } else {
+        "已保存「${plan.title}」的提醒时间，但 Android 13+ 通知权限关闭，暂不会弹出通知。"
+    }
+
+    return copy(
+        plans = plans.replacePlan(updatedPlan),
+        selectedPlanId = planId,
+        pendingDeletePlanId = null,
+        statusMessage = messageForScheduleRequest(request, message),
+        notificationPermissionState = notificationPermissionState
+    )
+}
+
+internal fun PlanManagementScreenState.clearPlanReminder(
+    planId: String,
+    timestamp: String = DefaultPlanManagementTimestamp
+): PlanManagementScreenState {
+    val plan = plans.firstOrNull { it.id == planId } ?: return this
+    val updatedPlan = plan.copy(
+        reminder = PlanReminder(enabled = false, scheduleAt = null),
+        updatedAt = timestamp
+    )
+
+    return copy(
+        plans = plans.replacePlan(updatedPlan),
+        selectedPlanId = planId,
+        pendingDeletePlanId = null,
+        statusMessage = "已关闭「${plan.title}」的训练提醒。"
     )
 }
 
@@ -154,11 +240,14 @@ private fun WorkoutPlan.toListItem(selected: Boolean): PlanListItemUiState {
         modeBadge = mode.modeBadge(),
         summary = planSummary(),
         detailSummary = planDetailSummary(),
+        reminderSummary = planReminderSummary(),
         selected = selected
     )
 }
 
-private fun WorkoutPlan.toDetailState(): PlanDetailUiState {
+private fun WorkoutPlan.toDetailState(
+    notificationPermissionState: PlanReminderNotificationPermissionState
+): PlanDetailUiState {
     return PlanDetailUiState(
         id = id,
         title = title,
@@ -167,6 +256,7 @@ private fun WorkoutPlan.toDetailState(): PlanDetailUiState {
         summary = planSummary(),
         detailSummary = planDetailSummary(),
         sections = detailSections(),
+        reminder = toReminderUiState(notificationPermissionState),
         editStatus = "编辑回填后续接入",
         startStatus = when (mode) {
             WorkoutMode.TIMED -> "开始计时训练"
@@ -229,6 +319,29 @@ private fun WorkoutPlan.planDetailSummary(): String {
 
         WorkoutMode.FOLLOW_ALONG -> "复用计时流程和动作内容"
     }
+}
+
+private fun WorkoutPlan.planReminderSummary(): String {
+    val reminder = reminder
+    return if (reminder?.enabled == true && reminder.scheduleAt != null) {
+        "训练提醒 · ${formatReminderSchedule(reminder.scheduleAt)}"
+    } else {
+        "训练提醒未设置"
+    }
+}
+
+private fun WorkoutPlan.toReminderUiState(
+    notificationPermissionState: PlanReminderNotificationPermissionState
+): PlanReminderUiState {
+    val reminderEnabled = reminder?.enabled == true && reminder.scheduleAt != null
+    return PlanReminderUiState(
+        summary = planReminderSummary(),
+        permissionMessage = notificationPermissionState.rationale,
+        boundaryCopy = "首版只使用普通通知，允许系统延迟；不使用闹钟级强提醒、全屏提示或锁屏强打断。",
+        enabled = reminderEnabled,
+        canRequestPermission =
+            notificationPermissionState.status == PlanReminderNotificationPermissionStatus.DENIED
+    )
 }
 
 private fun WorkoutPlan.detailSections(): List<PlanDetailSectionUiState> {
@@ -340,6 +453,7 @@ private fun WorkoutPlan.copyAsNewPlan(
         id = id,
         title = title,
         blocks = blocks.duplicateForPlanCopy(id),
+        reminder = reminder?.copy(enabled = false, scheduleAt = null),
         createdAt = timestamp,
         updatedAt = timestamp
     )
@@ -416,3 +530,76 @@ private fun PlanManagementScreenState.nextCopyTitle(sourceTitle: String): String
 }
 
 private fun Int?.orZero(): Int = this ?: 0
+
+internal fun WorkoutPlan.toPlanReminderScheduleRequest(
+    permissionState: PlanReminderNotificationPermissionState
+): PlanReminderScheduleRequest {
+    return PlanReminderScheduleRequest(
+        planId = id,
+        planTitle = title,
+        scheduleAtEpochMillis = reminder?.scheduleAt?.toEpochMillisOrNull(),
+        enabled = reminder?.enabled == true,
+        permissionState = permissionState
+    )
+}
+
+internal fun buildPlanReminderPresetOptions(
+    now: Instant = Instant.now(),
+    zoneId: ZoneId = ZoneId.systemDefault()
+): List<PlanReminderPresetUiState> {
+    val localNow = now.atZone(zoneId)
+    val evening = nextLocalTime(
+        date = localNow.toLocalDate(),
+        time = LocalTime.of(20, 0),
+        now = localNow.toInstant(),
+        zoneId = zoneId
+    )
+    val morning = LocalDate.from(localNow).plusDays(1)
+        .atTime(7, 30)
+        .atZone(zoneId)
+        .toInstant()
+
+    return listOf(
+        PlanReminderPresetUiState(
+            label = "20:00",
+            scheduleAt = evening.toString()
+        ),
+        PlanReminderPresetUiState(
+            label = "明早 07:30",
+            scheduleAt = morning.toString()
+        )
+    )
+}
+
+internal fun formatReminderSchedule(scheduleAt: String): String {
+    return scheduleAt.toEpochMillisOrNull()
+        ?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(ReminderFormatter) }
+        ?: "未识别时间"
+}
+
+private fun nextLocalTime(
+    date: LocalDate,
+    time: LocalTime,
+    now: Instant,
+    zoneId: ZoneId
+): Instant {
+    val candidate = date.atTime(time).atZone(zoneId).toInstant()
+    return if (candidate > now) candidate else date.plusDays(1).atTime(time).atZone(zoneId).toInstant()
+}
+
+private fun String.toEpochMillisOrNull(): Long? {
+    return runCatching { Instant.parse(this).toEpochMilli() }.getOrNull()
+}
+
+private fun List<WorkoutPlan>.replacePlan(updatedPlan: WorkoutPlan): List<WorkoutPlan> {
+    return map { plan -> if (plan.id == updatedPlan.id) updatedPlan else plan }
+}
+
+private fun messageForScheduleRequest(
+    request: PlanReminderScheduleRequest,
+    message: String
+): String {
+    return if (request.enabled && request.scheduleAtEpochMillis != null) message else "请先选择未来的提醒时间。"
+}
+
+private val ReminderFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 HH:mm")

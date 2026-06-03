@@ -25,6 +25,8 @@ class HeartRatePermissionBoundaryTest {
         forbiddenPermissions.forEach { permission ->
             assertFalse(manifest.contains(permission))
         }
-        assertFalse(manifest.contains("<uses-permission"))
+        assertFalse(manifest.contains("android.permission.SCHEDULE_EXACT_ALARM"))
+        assertFalse(manifest.contains("android.permission.USE_EXACT_ALARM"))
+        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
     }
 }

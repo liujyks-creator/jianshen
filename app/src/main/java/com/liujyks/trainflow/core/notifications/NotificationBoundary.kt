@@ -1,9 +1,9 @@
 package com.liujyks.trainflow.core.notifications
 
 /**
- * E0.2 package boundary for plan reminders and active-workout notifications.
+ * Package boundary for plan reminders and future active-workout notifications.
  *
- * Notification scheduling and foreground notifications are deferred to later
- * stories and must consume workout events instead of owning the engine.
+ * E7.1 only implements ordinary plan reminder notifications. Ongoing workout
+ * notifications and foreground service behavior remain deferred.
  */
 internal object NotificationBoundary

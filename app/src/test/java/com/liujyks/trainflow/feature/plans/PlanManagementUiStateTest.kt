@@ -1,7 +1,11 @@
 package com.liujyks.trainflow.feature.plans
 
+import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
+import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import java.time.Instant
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -21,6 +25,7 @@ class PlanManagementUiStateTest {
         assertEquals("计时", items[0].modeBadge)
         assertTrue(items[0].summary.contains("预计"))
         assertTrue(items[0].detailSummary.contains("动作提醒"))
+        assertTrue(items[0].reminderSummary.contains("训练提醒未设置"))
         assertEquals("力量训练", items[1].modeLabel)
         assertEquals("力量", items[1].modeBadge)
         assertTrue(items[1].summary.contains("组"))
@@ -39,6 +44,7 @@ class PlanManagementUiStateTest {
         assertEquals("开始力量训练", detail.startStatus)
         assertTrue(detail.editStatus.contains("后续接入"))
         assertTrue(detail.sections.any { section -> section.title == "动作与组" })
+        assertTrue(detail.reminder.boundaryCopy.contains("普通通知"))
     }
 
     @Test
@@ -126,5 +132,110 @@ class PlanManagementUiStateTest {
         assertEquals(originalBlocks.sumOf { it.sets.size }, copiedBlocks.sumOf { it.sets.size })
         assertNotEquals(originalBlocks.first().sets.first().id, copiedBlocks.first().sets.first().id)
         assertTrue(copied.title.contains("副本"))
+    }
+
+    @Test
+    fun settingPlanReminderStoresPlanReminderAndKeepsOrdinaryNotificationCopy() {
+        val state = buildDefaultPlanManagementState()
+        val planId = state.plans.first().id
+        val scheduleAt = "2026-06-04T11:30:00Z"
+        val updated = state.setPlanReminder(
+            planId = planId,
+            scheduleAt = scheduleAt,
+            nowEpochMillis = Instant.parse("2026-06-03T11:30:00Z").toEpochMilli()
+        )
+        val plan = requireNotNull(updated.selectedPlan)
+        val detail = requireNotNull(updated.selectedDetail)
+
+        assertTrue(requireNotNull(plan.reminder).enabled)
+        assertEquals(scheduleAt, requireNotNull(plan.reminder).scheduleAt)
+        assertTrue(requireNotNull(updated.statusMessage).contains("普通通知"))
+        assertTrue(detail.reminder.enabled)
+        assertTrue(detail.reminder.boundaryCopy.contains("闹钟级强提醒、全屏提示或锁屏强打断"))
+    }
+
+    @Test
+    fun notificationPermissionDeniedShowsClearAndroid13CopyWithoutBlockingPlanState() {
+        val denied = PlanReminderNotificationPermissionState.resolve(
+            sdkInt = 33,
+            postNotificationsGranted = false
+        )
+        val state = buildDefaultPlanManagementState()
+            .updateNotificationPermissionState(denied)
+        val planId = state.plans.first().id
+        val updated = state.setPlanReminder(
+            planId = planId,
+            scheduleAt = "2026-06-04T11:30:00Z",
+            nowEpochMillis = Instant.parse("2026-06-03T11:30:00Z").toEpochMilli()
+        )
+        val detail = requireNotNull(updated.selectedDetail)
+
+        assertEquals(PlanReminderNotificationPermissionStatus.DENIED, updated.notificationPermissionState.status)
+        assertTrue(requireNotNull(updated.selectedPlan?.reminder).enabled)
+        assertTrue(requireNotNull(updated.statusMessage).contains("权限关闭"))
+        assertTrue(detail.reminder.permissionMessage.contains("Android 13+"))
+        assertTrue(detail.reminder.canRequestPermission)
+        assertTrue(detail.canStartTraining)
+    }
+
+    @Test
+    fun pastPlanReminderTimeIsRejectedWithoutChangingPlan() {
+        val state = buildDefaultPlanManagementState()
+        val planId = state.plans.first().id
+        val updated = state.setPlanReminder(
+            planId = planId,
+            scheduleAt = "2026-06-03T10:30:00Z",
+            nowEpochMillis = Instant.parse("2026-06-03T11:30:00Z").toEpochMilli()
+        )
+
+        assertNull(updated.selectedPlan?.reminder)
+        assertTrue(requireNotNull(updated.statusMessage).contains("已过"))
+    }
+
+    @Test
+    fun clearPlanReminderDisablesReminderAndSchedulerRequest() {
+        val state = buildDefaultPlanManagementState()
+        val planId = state.plans.first().id
+        val withReminder = state.setPlanReminder(
+            planId = planId,
+            scheduleAt = "2026-06-04T11:30:00Z",
+            nowEpochMillis = Instant.parse("2026-06-03T11:30:00Z").toEpochMilli()
+        )
+        val cleared = withReminder.clearPlanReminder(planId)
+        val request = requireNotNull(cleared.selectedPlan)
+            .toPlanReminderScheduleRequest(cleared.notificationPermissionState)
+
+        assertFalse(requireNotNull(cleared.selectedPlan?.reminder).enabled)
+        assertFalse(request.enabled)
+        assertTrue(requireNotNull(cleared.statusMessage).contains("已关闭"))
+    }
+
+    @Test
+    fun copiedPlanDoesNotKeepEnabledReminderSchedule() {
+        val state = buildDefaultPlanManagementState()
+        val original = state.plans.first()
+        val withReminder = state.setPlanReminder(
+            planId = original.id,
+            scheduleAt = "2026-06-04T11:30:00Z",
+            nowEpochMillis = Instant.parse("2026-06-03T11:30:00Z").toEpochMilli()
+        )
+        val copied = requireNotNull(withReminder.copyPlan(original.id).selectedPlan)
+
+        assertFalse(requireNotNull(copied.reminder).enabled)
+        assertNull(requireNotNull(copied.reminder).scheduleAt)
+    }
+
+    @Test
+    fun planReminderPresetOptionsAreFutureInstants() {
+        val now = Instant.parse("2026-06-03T11:30:00Z")
+        val options = buildPlanReminderPresetOptions(
+            now = now,
+            zoneId = ZoneId.of("Asia/Shanghai")
+        )
+
+        assertEquals(2, options.size)
+        assertTrue(options.all { Instant.parse(it.scheduleAt) > now })
+        assertTrue(options.any { it.label == "20:00" })
+        assertTrue(options.any { it.label == "明早 07:30" })
     }
 }

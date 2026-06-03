@@ -1,5 +1,9 @@
 package com.liujyks.trainflow.feature.plans
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +33,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
+import com.liujyks.trainflow.core.notifications.resolvePlanReminderPermissionState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowError
@@ -42,8 +51,6 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
-import com.liujyks.trainflow.core.model.WorkoutMode
-import com.liujyks.trainflow.core.model.WorkoutPlan
 
 @Composable
 internal fun PlanManagementRoute(
@@ -53,13 +60,45 @@ internal fun PlanManagementRoute(
     onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scheduler = remember(context) { AndroidPlanReminderScheduler(context.applicationContext) }
+    var permissionRefreshKey by remember { mutableStateOf(0) }
+    val permissionState = remember(permissionRefreshKey) {
+        context.resolvePlanReminderPermissionState()
+    }
+    val displayState = uiState.updateNotificationPermissionState(permissionState)
+    val reminderPresetOptions = remember { buildPlanReminderPresetOptions() }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        permissionRefreshKey += 1
+    }
+
     PlanManagementScreen(
-        uiState = uiState,
-        onSelectPlan = { planId -> onStateChange(uiState.selectPlan(planId)) },
-        onCopyPlan = { planId -> onStateChange(uiState.copyPlan(planId)) },
-        onRequestDeletePlan = { planId -> onStateChange(uiState.requestDeletePlan(planId)) },
-        onConfirmDeletePlan = { onStateChange(uiState.confirmDeletePlan()) },
-        onCancelDeletePlan = { onStateChange(uiState.cancelDeletePlan()) },
+        uiState = displayState,
+        reminderPresetOptions = reminderPresetOptions,
+        onSelectPlan = { planId -> onStateChange(displayState.selectPlan(planId)) },
+        onCopyPlan = { planId -> onStateChange(displayState.copyPlan(planId)) },
+        onRequestDeletePlan = { planId -> onStateChange(displayState.requestDeletePlan(planId)) },
+        onConfirmDeletePlan = { onStateChange(displayState.confirmDeletePlan()) },
+        onCancelDeletePlan = { onStateChange(displayState.cancelDeletePlan()) },
+        onSetPlanReminder = { planId, scheduleAt ->
+            val nextState = displayState.setPlanReminder(planId = planId, scheduleAt = scheduleAt)
+            nextState.plans
+                .firstOrNull { it.id == planId }
+                ?.toPlanReminderScheduleRequest(permissionState)
+                ?.let(scheduler::schedule)
+            onStateChange(nextState)
+        },
+        onClearPlanReminder = { planId ->
+            scheduler.cancel(planId)
+            onStateChange(displayState.clearPlanReminder(planId))
+        },
+        onRequestNotificationPermission = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
         onStartTimedPlan = onStartTimedPlan,
         onStartStrengthPlan = onStartStrengthPlan,
         modifier = modifier
@@ -69,11 +108,15 @@ internal fun PlanManagementRoute(
 @Composable
 private fun PlanManagementScreen(
     uiState: PlanManagementScreenState,
+    reminderPresetOptions: List<PlanReminderPresetUiState>,
     onSelectPlan: (String) -> Unit,
     onCopyPlan: (String) -> Unit,
     onRequestDeletePlan: (String) -> Unit,
     onConfirmDeletePlan: () -> Unit,
     onCancelDeletePlan: () -> Unit,
+    onSetPlanReminder: (String, String) -> Unit,
+    onClearPlanReminder: (String) -> Unit,
+    onRequestNotificationPermission: () -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
@@ -119,8 +162,12 @@ private fun PlanManagementScreen(
                     PlanDetailCard(
                         detail = detail,
                         plan = uiState.selectedPlan,
+                        reminderPresetOptions = reminderPresetOptions,
                         onCopyPlan = { onCopyPlan(detail.id) },
                         onRequestDeletePlan = { onRequestDeletePlan(detail.id) },
+                        onSetPlanReminder = { scheduleAt -> onSetPlanReminder(detail.id, scheduleAt) },
+                        onClearPlanReminder = { onClearPlanReminder(detail.id) },
+                        onRequestNotificationPermission = onRequestNotificationPermission,
                         onStartTimedPlan = onStartTimedPlan,
                         onStartStrengthPlan = onStartStrengthPlan
                     )
@@ -157,7 +204,7 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "计时与力量训练执行已接入；session records、通知、真实心率、语音和跟练仍未接入。",
+            text = "计时与力量训练执行已接入；计划提醒为普通通知，session records、活跃训练通知、真实心率和语音仍未接入。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -218,6 +265,11 @@ private fun PlanListCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Text(
+                text = item.reminderSummary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
         }
     }
 }
@@ -226,8 +278,12 @@ private fun PlanListCard(
 private fun PlanDetailCard(
     detail: PlanDetailUiState,
     plan: WorkoutPlan?,
+    reminderPresetOptions: List<PlanReminderPresetUiState>,
     onCopyPlan: () -> Unit,
     onRequestDeletePlan: () -> Unit,
+    onSetPlanReminder: (String) -> Unit,
+    onClearPlanReminder: () -> Unit,
+    onRequestNotificationPermission: () -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit
 ) {
@@ -260,6 +316,14 @@ private fun PlanDetailCard(
         detail.sections.forEach { section ->
             DetailSection(section)
         }
+
+        PlanReminderSection(
+            reminder = detail.reminder,
+            presetOptions = reminderPresetOptions,
+            onSetPlanReminder = onSetPlanReminder,
+            onClearPlanReminder = onClearPlanReminder,
+            onRequestNotificationPermission = onRequestNotificationPermission
+        )
 
         Text(
             text = detail.editStatus,
@@ -300,6 +364,69 @@ private fun PlanDetailCard(
             shape = RoundedCornerShape(8.dp)
         ) {
             Text(text = detail.startStatus)
+        }
+    }
+}
+
+@Composable
+private fun PlanReminderSection(
+    reminder: PlanReminderUiState,
+    presetOptions: List<PlanReminderPresetUiState>,
+    onSetPlanReminder: (String) -> Unit,
+    onClearPlanReminder: () -> Unit,
+    onRequestNotificationPermission: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "训练提醒",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = reminder.summary,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = reminder.permissionMessage,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (reminder.canRequestPermission) TrainFlowAction else TrainFlowNeutral700
+        )
+        Text(
+            text = reminder.boundaryCopy,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            presetOptions.forEach { option ->
+                Button(
+                    onClick = { onSetPlanReminder(option.scheduleAt) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
+                ) {
+                    Text(text = option.label)
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = onClearPlanReminder,
+                enabled = reminder.enabled,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = "关闭提醒")
+            }
+            if (reminder.canRequestPermission) {
+                OutlinedButton(
+                    onClick = onRequestNotificationPermission,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(text = "开启通知权限")
+                }
+            }
         }
     }
 }

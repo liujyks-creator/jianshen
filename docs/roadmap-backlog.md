@@ -690,6 +690,8 @@ stepsCompleted:
 
 ### Story E7.1: 训练提醒通知
 
+**状态:** Implemented in `core.notifications`, plan detail reminder UI, ordinary notification permission/channel/scheduler boundary, and unit tests
+
 作为用户，  
 我想收到训练计划提醒，  
 以便按计划开始训练。
@@ -699,6 +701,16 @@ stepsCompleted:
 - Then 可为计划设置提醒时间。
 - Then 通知权限关闭时 App 有清楚提示。
 - Then 首版不承诺闹铃级强提醒。
+
+**交付结果:**
+
+- Android 侧新增 `core.notifications` 训练计划提醒边界，覆盖 `PlanReminderScheduleRequest`、Android 13+ `POST_NOTIFICATIONS` 权限状态、普通通知 channel / content、调度策略和 Android 普通 alarm 调度适配。
+- Manifest 仅新增 `android.permission.POST_NOTIFICATIONS` 和非导出的 `PlanReminderNotificationReceiver`；未申请 `SCHEDULE_EXACT_ALARM`、`USE_EXACT_ALARM`、`FOREGROUND_SERVICE`、健康、身体传感器、蓝牙或定位权限。
+- 计划详情页在现有内存态计划流中新增训练提醒区，支持用未来时间快捷设置 `PlanReminder`、关闭提醒，并显示提醒状态。
+- Android 13+ 通知权限关闭时，计划详情展示清楚、克制文案：提醒暂不会弹出，但训练执行闭环仍可正常使用，并提供通知权限请求入口。
+- 通知 channel、通知内容和 UI 文案均明确首版是普通通知，允许系统延迟，不承诺闹钟级强提醒、全屏提示或锁屏强打断。
+- 新增单元测试覆盖权限状态映射、调度 disabled / 缺少时间 / 过去时间 / 权限关闭边界、普通通知内容、manifest 负向权限和不使用 exact alarm / foreground service。
+- 本 story 未实现 E7.2 活跃训练 ongoing notification、前台服务、后台训练可靠计时、闹钟级强提醒、真实 `WorkoutSession` 持久化、session records 写库、语音、真实心率设备、Health Connect、Wear OS、BLE、厂商 SDK 或 E7.3 训练偏好设置总页。
 
 ### Story E7.2: 活跃训练通知边界
 
@@ -851,23 +863,24 @@ stepsCompleted:
 E6.1 跟练雏形计划入口已合入 main。
 E6.2 基础跟练执行页已合入 main。
 E6.2 只支持 E6.1 内存态 preset 启动，不解决 O-002 的全部范围。
-E6.3 心率抽象状态展示已在 codex/e6-3-heart-rate-state-display 实施，等待 Review Gate。
+E6.3 心率抽象状态展示已合入 main。
+E7.1 训练提醒通知已在 codex/e7-1-training-reminder-notifications 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E6.3 Review Gate
+Story E7.1 Review Gate
 ```
 
-E6.3 Review Gate 建议重点确认：
+E7.1 Review Gate 建议重点确认：
 
-1. 计时、力量和跟练执行页是否复用同一 `HeartRateDisplayUiState` / mapper。
-2. disabled、not_connected、connecting、available、stale、error 六种状态是否都有克制文案，且 available 显示 bpm。
-3. measuredAt、sourceId 和 message 是否只作为低层级辅助信息展示。
-4. `warningLevel` 是否未驱动颜色、告警、训练规则、训练状态或主控按钮。
-5. Manifest 是否未新增健康、传感器或蓝牙相关权限，并确认未接入真实设备、心率告警、热量判断、训练强度判断或恢复建议联动。
+1. 计划详情是否能设置/关闭训练提醒，并正确写入内存态 `PlanReminder`。
+2. Android 13+ `POST_NOTIFICATIONS` 权限关闭时是否有清楚提示，且训练执行入口不被阻塞。
+3. 通知 channel、通知内容和 UI 文案是否都说明普通通知、允许系统延迟、不承诺闹钟级强提醒。
+4. Manifest 是否只新增 `POST_NOTIFICATIONS`，并确认未新增 exact alarm、foreground service、健康、传感器、蓝牙或定位权限。
+5. 是否未实现 E7.2 活跃训练 ongoing notification、前台服务、后台训练可靠计时或 E7.3 偏好设置总页。
 
 ## 8. 暂缓事项
 
