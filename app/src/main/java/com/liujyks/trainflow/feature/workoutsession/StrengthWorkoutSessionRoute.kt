@@ -692,7 +692,7 @@ private fun StrengthExerciseAdjustmentPanel(
 }
 
 @Composable
-private fun StrengthHeartRatePanel(heartRate: StrengthWorkoutHeartRateUiState) {
+private fun StrengthHeartRatePanel(heartRate: HeartRateDisplayUiState) {
     StrengthDarkInfoPanel {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -709,6 +709,13 @@ private fun StrengthHeartRatePanel(heartRate: StrengthWorkoutHeartRateUiState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = TrainFlowNeutral500
                 )
+                if (heartRate.auxiliaryText.isNotBlank()) {
+                    Text(
+                        text = heartRate.auxiliaryText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TrainFlowNeutral500
+                    )
+                }
             }
             Text(
                 text = heartRate.valueText,

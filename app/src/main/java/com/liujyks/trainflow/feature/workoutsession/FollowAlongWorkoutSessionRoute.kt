@@ -257,11 +257,18 @@ private fun FollowAlongNextAndHeartRatePanel(uiState: FollowAlongWorkoutSessionU
                     style = MaterialTheme.typography.bodySmall,
                     color = TrainFlowNeutral500
                 )
+                if (uiState.heartRate.auxiliaryText.isNotBlank()) {
+                    Text(
+                        text = uiState.heartRate.auxiliaryText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TrainFlowNeutral500
+                    )
+                }
             }
             Text(
                 text = uiState.heartRate.valueText,
                 style = MaterialTheme.typography.titleLarge,
-                color = TrainFlowNeutral200
+                color = if (uiState.heartRate.isAvailable) TrainFlowAccent else TrainFlowNeutral200
             )
         }
     }

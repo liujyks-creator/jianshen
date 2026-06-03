@@ -287,7 +287,7 @@ private fun NextStepPanel(uiState: TimedWorkoutSessionScreenState) {
 }
 
 @Composable
-private fun HeartRatePanel(heartRate: TimedWorkoutHeartRateUiState) {
+private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
     DarkInfoPanel {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -304,6 +304,13 @@ private fun HeartRatePanel(heartRate: TimedWorkoutHeartRateUiState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = TrainFlowNeutral500
                 )
+                if (heartRate.auxiliaryText.isNotBlank()) {
+                    Text(
+                        text = heartRate.auxiliaryText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TrainFlowNeutral500
+                    )
+                }
             }
             Text(
                 text = heartRate.valueText,

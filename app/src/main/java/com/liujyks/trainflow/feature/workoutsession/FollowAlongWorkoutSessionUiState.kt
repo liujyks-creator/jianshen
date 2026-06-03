@@ -27,7 +27,7 @@ internal data class FollowAlongWorkoutSessionUiState(
     val demoStatusLabel: String,
     val detailRows: List<FollowAlongWorkoutDetailRowUiState>,
     val boundaryCopy: String,
-    val heartRate: FollowAlongWorkoutHeartRateUiState,
+    val heartRate: HeartRateDisplayUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
     val isTerminal: Boolean,
@@ -43,11 +43,6 @@ internal data class FollowAlongWorkoutSessionUiState(
 internal data class FollowAlongWorkoutDetailRowUiState(
     val label: String,
     val text: String
-)
-
-internal data class FollowAlongWorkoutHeartRateUiState(
-    val valueText: String,
-    val statusText: String
 )
 
 internal enum class FollowAlongWorkoutSessionControl {
@@ -153,7 +148,7 @@ internal fun TimedWorkoutEngineState.toFollowAlongWorkoutSessionUiState(
         demoStatusLabel = "演示占位 · 无真实媒体播放",
         detailRows = detailExercise.toDetailRows(),
         boundaryCopy = "基础跟练雏形：只从 E6.1 preset 启动，复用计时引擎和动作内容；不提供真实媒体播放、动作分析、音乐编排或自动口令。",
-        heartRate = heartRateState.toFollowAlongHeartRateUiState(),
+        heartRate = heartRateState.toHeartRateDisplayUiState(),
         progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,
@@ -220,35 +215,6 @@ private fun TimedWorkoutControlHistoryEvent.toFollowAlongLabel(): String {
         TimedWorkoutControlHistoryType.SKIP_STEP -> "跳过当前步骤"
         TimedWorkoutControlHistoryType.EXTEND_REST -> "休息延长 ${seconds ?: 0} 秒"
         TimedWorkoutControlHistoryType.END_SESSION -> "提前结束"
-    }
-}
-
-private fun HeartRateState.toFollowAlongHeartRateUiState(): FollowAlongWorkoutHeartRateUiState {
-    return when (availability) {
-        HeartRateAvailability.AVAILABLE -> FollowAlongWorkoutHeartRateUiState(
-            valueText = "${bpm ?: "--"} bpm",
-            statusText = message ?: "低层级心率占位"
-        )
-        HeartRateAvailability.DISABLED -> FollowAlongWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "心率显示已关闭"
-        )
-        HeartRateAvailability.CONNECTING -> FollowAlongWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "等待心率占位"
-        )
-        HeartRateAvailability.STALE -> FollowAlongWorkoutHeartRateUiState(
-            valueText = "${bpm ?: "--"} bpm",
-            statusText = message ?: "心率数据短暂中断"
-        )
-        HeartRateAvailability.ERROR -> FollowAlongWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = message ?: "心率暂不可用"
-        )
-        HeartRateAvailability.NOT_CONNECTED -> FollowAlongWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "未连接设备，仅保留低层级占位"
-        )
     }
 }
 

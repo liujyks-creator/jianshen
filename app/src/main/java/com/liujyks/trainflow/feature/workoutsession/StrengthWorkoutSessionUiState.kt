@@ -33,7 +33,7 @@ internal data class StrengthWorkoutSessionScreenState(
     val nextSetLabel: String,
     val confirmSummary: String?,
     val confirmation: StrengthSetConfirmationUiState?,
-    val heartRate: StrengthWorkoutHeartRateUiState,
+    val heartRate: HeartRateDisplayUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
     val isTerminal: Boolean,
@@ -89,12 +89,6 @@ internal data class StrengthSetConfirmationValidation(
 internal data class StrengthSetEffortOptionUiState(
     val effort: SetEffort,
     val label: String
-)
-
-internal data class StrengthWorkoutHeartRateUiState(
-    val valueText: String,
-    val statusText: String,
-    val isAvailable: Boolean
 )
 
 internal data class StrengthExerciseReplacementOptionUiState(
@@ -201,7 +195,7 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
             "按计划确认：${draft.defaultActualWeight.formatWeight()} · ${draft.defaultActualReps?.let { "$it 次" } ?: "未设次数"}"
         },
         confirmation = confirmation,
-        heartRate = heartRateState.toStrengthUiState(),
+        heartRate = heartRateState.toHeartRateDisplayUiState(),
         progressFraction = activeNumber.toFloat() / progressBase.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,
@@ -557,41 +551,6 @@ private fun SessionStatus.toStatusLabel(): String {
         SessionStatus.PAUSED -> "暂停"
         SessionStatus.COMPLETED -> "完成"
         SessionStatus.ABANDONED -> "已结束"
-    }
-}
-
-private fun HeartRateState.toStrengthUiState(): StrengthWorkoutHeartRateUiState {
-    return when (availability) {
-        HeartRateAvailability.DISABLED -> StrengthWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "心率显示已关闭",
-            isAvailable = false
-        )
-        HeartRateAvailability.NOT_CONNECTED -> StrengthWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "未连接设备",
-            isAvailable = false
-        )
-        HeartRateAvailability.CONNECTING -> StrengthWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "等待心率",
-            isAvailable = false
-        )
-        HeartRateAvailability.AVAILABLE -> StrengthWorkoutHeartRateUiState(
-            valueText = "${bpm ?: "--"} bpm",
-            statusText = message ?: "心率可用",
-            isAvailable = bpm != null
-        )
-        HeartRateAvailability.STALE -> StrengthWorkoutHeartRateUiState(
-            valueText = "${bpm ?: "--"} bpm",
-            statusText = message ?: "数据短暂中断",
-            isAvailable = false
-        )
-        HeartRateAvailability.ERROR -> StrengthWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = message ?: "心率暂不可用",
-            isAvailable = false
-        )
     }
 }
 

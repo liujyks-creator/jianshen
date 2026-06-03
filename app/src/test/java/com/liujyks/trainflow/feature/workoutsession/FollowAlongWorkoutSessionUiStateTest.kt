@@ -34,7 +34,7 @@ class FollowAlongWorkoutSessionUiStateTest {
         assertTrue(uiState.nextActionLabel.contains("下一动作"))
         assertTrue(uiState.shortCue.isNotBlank())
         assertEquals("-- bpm", uiState.heartRate.valueText)
-        assertTrue(uiState.heartRate.statusText.contains("低层级占位"))
+        assertEquals("未连接设备", uiState.heartRate.statusText)
         assertTrue(uiState.progressFraction > 0f)
     }
 

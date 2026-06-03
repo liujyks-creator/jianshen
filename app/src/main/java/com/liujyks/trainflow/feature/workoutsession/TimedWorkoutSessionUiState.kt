@@ -22,7 +22,7 @@ internal data class TimedWorkoutSessionScreenState(
     val nextStepLabel: String,
     val shortCue: String,
     val countdownReminder: TimedWorkoutCountdownReminderUiState,
-    val heartRate: TimedWorkoutHeartRateUiState,
+    val heartRate: HeartRateDisplayUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
     val isTerminal: Boolean,
@@ -69,12 +69,6 @@ internal enum class TimedWorkoutCountdownReminderType {
     ACTION_ENDING,
     REST_ENDING
 }
-
-internal data class TimedWorkoutHeartRateUiState(
-    val valueText: String,
-    val statusText: String,
-    val isAvailable: Boolean
-)
 
 internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
     heartRateState: HeartRateState = HeartRateState(availability = HeartRateAvailability.NOT_CONNECTED),
@@ -156,7 +150,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         nextStepLabel = nextStepLabel,
         shortCue = shortCue,
         countdownReminder = countdownReminder,
-        heartRate = heartRateState.toUiState(),
+        heartRate = heartRateState.toHeartRateDisplayUiState(),
         progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,
@@ -302,41 +296,6 @@ private fun SessionStatus.toStatusLabel(): String {
         SessionStatus.PAUSED -> "暂停"
         SessionStatus.COMPLETED -> "完成"
         SessionStatus.ABANDONED -> "已结束"
-    }
-}
-
-private fun HeartRateState.toUiState(): TimedWorkoutHeartRateUiState {
-    return when (availability) {
-        HeartRateAvailability.DISABLED -> TimedWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "心率显示已关闭",
-            isAvailable = false
-        )
-        HeartRateAvailability.NOT_CONNECTED -> TimedWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "未连接设备",
-            isAvailable = false
-        )
-        HeartRateAvailability.CONNECTING -> TimedWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = "等待心率",
-            isAvailable = false
-        )
-        HeartRateAvailability.AVAILABLE -> TimedWorkoutHeartRateUiState(
-            valueText = "${bpm ?: "--"} bpm",
-            statusText = message ?: "心率可用",
-            isAvailable = bpm != null
-        )
-        HeartRateAvailability.STALE -> TimedWorkoutHeartRateUiState(
-            valueText = "${bpm ?: "--"} bpm",
-            statusText = message ?: "数据短暂中断",
-            isAvailable = false
-        )
-        HeartRateAvailability.ERROR -> TimedWorkoutHeartRateUiState(
-            valueText = "-- bpm",
-            statusText = message ?: "心率暂不可用",
-            isAvailable = false
-        )
     }
 }
 

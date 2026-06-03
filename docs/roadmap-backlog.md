@@ -663,6 +663,8 @@ stepsCompleted:
 
 ### Story E6.3: 心率抽象状态展示
 
+**状态:** Implemented in shared workout session heart-rate display mapper, abstract health providers, and unit tests
+
 作为用户，  
 我想训练页可以显示心率状态，  
 以便未来接入设备时不用改训练流程。
@@ -672,6 +674,15 @@ stepsCompleted:
 - Then 支持 disabled、not_connected、connecting、available、stale、error 状态。
 - Then 没有设备时训练闭环完整可用。
 - Then 不显示医疗级告警结论。
+
+**交付结果:**
+
+- `feature.workoutsession` 新增共享 `HeartRateDisplayUiState` / mapper，计时训练、力量训练和基础跟练执行页统一消费 `HeartRateState`。
+- 支持 disabled、not_connected、connecting、available、stale、error 六种 `HeartRateAvailability`，available 可显示 bpm。
+- measuredAt、sourceId 和 message 只进入低层级辅助文案；`warningLevel` 继续只作为模型字段保留，不驱动颜色、告警、训练规则、训练状态或主控按钮。
+- `core.health` 新增 `HeartRateProvider`、`DisabledHeartRateProvider` 和 `MockHeartRateProvider` 边界，仅输出抽象 `HeartRateState`，不接真实设备或平台 SDK。
+- 新增单元测试覆盖六种状态、三类执行页一致映射、available 的 bpm / measuredAt / sourceId / message、warningLevel 负向、主控不受心率状态影响、越界文案负向和 Manifest 权限负向检查。
+- 本 story 未接入 Health Connect、Wear OS、BLE、厂商 SDK、真实传感器、健康/身体传感器/蓝牙权限、心率告警、危险状态判断、医疗结论、热量估算、训练强度判断或恢复建议联动。
 
 ## Epic E7: 通知、声音、震动与偏好
 
@@ -838,24 +849,25 @@ stepsCompleted:
 
 ```text
 E6.1 跟练雏形计划入口已合入 main。
-E6.2 基础跟练执行页已在 codex/e6-2-follow-along-session 实施，等待 Review Gate。
+E6.2 基础跟练执行页已合入 main。
 E6.2 只支持 E6.1 内存态 preset 启动，不解决 O-002 的全部范围。
+E6.3 心率抽象状态展示已在 codex/e6-3-heart-rate-state-display 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E6.2 Review Gate
+Story E6.3 Review Gate
 ```
 
-E6.2 Review Gate 建议重点确认：
+E6.3 Review Gate 建议重点确认：
 
-1. 从“基础跟练”preset 点击开始是否进入 `FOLLOW_ALONG_SESSION`。
-2. 跟练执行页是否复用 `TimedWorkoutEngine`，且控制通过 `WorkoutCommand` 分发。
-3. 页面是否展示当前动作、演示占位、倒计时、下一动作、短提示、心率占位和动作详情。
-4. completed / abandoned 终态是否明确为基础跟练内存态总结，不伪装真实 session records。
-5. 文案是否不暗示视频播放、自动语音、动作分析、真实心率设备、心率告警、热量判断或通知能力已可用，并确认 O-002 仍保持 Open。
+1. 计时、力量和跟练执行页是否复用同一 `HeartRateDisplayUiState` / mapper。
+2. disabled、not_connected、connecting、available、stale、error 六种状态是否都有克制文案，且 available 显示 bpm。
+3. measuredAt、sourceId 和 message 是否只作为低层级辅助信息展示。
+4. `warningLevel` 是否未驱动颜色、告警、训练规则、训练状态或主控按钮。
+5. Manifest 是否未新增健康、传感器或蓝牙相关权限，并确认未接入真实设备、心率告警、热量判断、训练强度判断或恢复建议联动。
 
 ## 8. 暂缓事项
 
