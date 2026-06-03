@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,6 +49,8 @@ import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
+import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -70,6 +74,10 @@ internal fun StrengthWorkoutSessionRoute(
     var engineState by remember(plan.id) {
         mutableStateOf(StrengthWorkoutEngine.create(plan))
     }
+    val context = LocalContext.current
+    val activeWorkoutNotifications = remember(context) {
+        AndroidActiveWorkoutNotificationController(context.applicationContext)
+    }
 
     fun applyEngineResult(result: StrengthWorkoutEngineResult) {
         engineState = result.state
@@ -90,6 +98,19 @@ internal fun StrengthWorkoutSessionRoute(
     }
 
     val uiState = engineState.toStrengthWorkoutSessionScreenState()
+    val notificationState = strengthActiveWorkoutNotificationState(
+        planId = plan.id,
+        status = engineState.status,
+        uiState = uiState
+    )
+    LaunchedEffect(notificationState) {
+        activeWorkoutNotifications.update(notificationState)
+    }
+    DisposableEffect(activeWorkoutNotifications, plan.id) {
+        onDispose {
+            activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
+        }
+    }
     var confirmationInput by remember { mutableStateOf<StrengthSetConfirmationInputState?>(null) }
     LaunchedEffect(uiState.confirmation?.setKey) {
         confirmationInput = uiState.confirmation?.initialInputState()

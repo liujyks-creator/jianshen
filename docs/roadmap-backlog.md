@@ -714,6 +714,8 @@ stepsCompleted:
 
 ### Story E7.2: 活跃训练通知边界
 
+**状态:** Implemented in `core.notifications` active workout notification boundary, session route dispatch, and unit tests
+
 作为用户，  
 我想训练进行中离开 App 时仍知道训练状态，  
 以便不中断训练。
@@ -723,6 +725,15 @@ stepsCompleted:
 - Then 明确是否首版启用前台服务。
 - If 启用，Then ongoing notification 显示当前训练摘要。
 - Then 不把通知逻辑写入训练引擎。
+
+**交付结果:**
+
+- 明确首版不启用 foreground service。理由是 target 34+ 的 foreground service 需要声明匹配类型和权限；本阶段只做训练状态摘要，不适合冒用 data sync / media 类型，health 类型会牵出健康、传感器或活动识别权限，超出 MVP 禁区。
+- `core.notifications` 新增 active workout notification contract、普通 ongoing channel/content、permission-gated policy 和 Android `NotificationManager.notify/cancel` 控制器。
+- 计时训练、力量训练和基础跟练执行 route 从各自 UI state / engine status 映射活跃训练摘要；active / paused 时显示 ongoing notification，ready / completed / abandoned / route disposed 时清理。
+- 通知文案明确为普通状态提示，不承诺后台精确计时、闹铃级提醒、锁屏强打断或医疗/危险状态提醒。
+- 新增测试覆盖 active / paused 展示、permission denied 不阻塞训练、terminal 清理、三类执行页摘要映射、manifest 负向权限和不启用 foreground service / exact alarm / 健康 / 传感器 / 蓝牙 / 定位权限。
+- 本 story 未实现后台精确计时系统、foreground service、notification action 控制训练、真实 `WorkoutSession` 持久化、语音、健康/传感器/蓝牙/定位权限或 E7.3 训练偏好设置总页。
 
 ### Story E7.3: 训练偏好设置
 
@@ -864,23 +875,24 @@ E6.1 跟练雏形计划入口已合入 main。
 E6.2 基础跟练执行页已合入 main。
 E6.2 只支持 E6.1 内存态 preset 启动，不解决 O-002 的全部范围。
 E6.3 心率抽象状态展示已合入 main。
-E7.1 训练提醒通知已在 codex/e7-1-training-reminder-notifications 实施，等待 Review Gate。
+E7.1 训练提醒通知已合入 main。
+E7.2 活跃训练通知边界已在 codex/e7-2-active-workout-notification-boundary 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E7.1 Review Gate
+Story E7.2 Review Gate
 ```
 
-E7.1 Review Gate 建议重点确认：
+E7.2 Review Gate 建议重点确认：
 
-1. 计划详情是否能设置/关闭训练提醒，并正确写入内存态 `PlanReminder`。
-2. Android 13+ `POST_NOTIFICATIONS` 权限关闭时是否有清楚提示，且训练执行入口不被阻塞。
-3. 通知 channel、通知内容和 UI 文案是否都说明普通通知、允许系统延迟、不承诺闹钟级强提醒。
-4. Manifest 是否只新增 `POST_NOTIFICATIONS`，并确认未新增 exact alarm、foreground service、健康、传感器、蓝牙或定位权限。
-5. 是否未实现 E7.2 活跃训练 ongoing notification、前台服务、后台训练可靠计时或 E7.3 偏好设置总页。
+1. 是否明确首版不启用 foreground service，且理由已记录到决策日志和架构文档。
+2. 计时、力量、基础跟练执行页 active / paused 时是否会分发活跃训练状态摘要，completed / abandoned / route disposed 后是否清理通知。
+3. 通知 channel、通知内容和 UI 映射文案是否只说明普通状态提示，不承诺后台精确计时、闹铃级提醒、锁屏强打断或医疗级提醒。
+4. Manifest 是否仍只包含 `POST_NOTIFICATIONS`，并确认未新增 exact alarm、foreground service、健康、传感器、蓝牙或定位权限。
+5. 是否未实现 notification action 控制训练、真实 session records 持久化、后台可靠计时或 E7.3 训练偏好设置总页。
 
 ## 8. 暂缓事项
 

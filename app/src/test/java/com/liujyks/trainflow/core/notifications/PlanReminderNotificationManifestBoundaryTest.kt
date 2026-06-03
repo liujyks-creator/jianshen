@@ -22,6 +22,26 @@ class PlanReminderNotificationManifestBoundaryTest {
     }
 
     @Test
+    fun activeWorkoutNotificationDoesNotEnableForegroundServiceForE72() {
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        val activeContracts = File(
+            "src/main/java/com/liujyks/trainflow/core/notifications/ActiveWorkoutNotificationContracts.kt"
+        ).readText()
+        val activeAndroid = File(
+            "src/main/java/com/liujyks/trainflow/core/notifications/AndroidActiveWorkoutNotifications.kt"
+        ).readText()
+
+        assertTrue(activeContracts.contains("ActiveWorkoutNotificationState"))
+        assertTrue(activeAndroid.contains("NotificationManager"))
+        assertTrue(activeAndroid.contains("notify("))
+        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertFalse(manifest.contains("android:foregroundServiceType"))
+        assertFalse(manifest.contains("ActiveWorkoutForegroundService"))
+        assertFalse(activeAndroid.contains("startForeground"))
+        assertFalse(activeAndroid.contains("ServiceCompat.startForeground"))
+    }
+
+    @Test
     fun androidSchedulerDoesNotUseExactAlarmOrForegroundServiceBoundary() {
         val source = File(
             "src/main/java/com/liujyks/trainflow/core/notifications/AndroidPlanReminderNotifications.kt"

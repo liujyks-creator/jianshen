@@ -127,7 +127,8 @@ feature:settings
 - 计划提醒通知。
 - 活跃训练通知。
 - 前台训练服务边界。
-- 不包含训练状态机，只消费 `WorkoutEvent` 或显示 session 摘要。
+- E7.2 首版不启用 foreground service；只提供普通 ongoing active workout notification，显示 session 摘要并在 terminal / route disposed 时清理。
+- 不包含训练状态机，只消费 `WorkoutEvent`、训练 UI state 或 engine state 摘要。
 
 ### 4.8 `core:media`
 
@@ -309,8 +310,8 @@ stateDiagram-v2
 首版采用普通训练提醒，不把闹铃级强提醒作为 MVP 硬依赖。
 
 - 计划提醒：通过通知调度实现，允许系统延迟。
-- 活跃训练：训练进行中可显示 ongoing notification。
-- 后台训练：若训练离开前台仍需可靠推进，使用前台服务边界；是否首版启用取决于实现 story。
+- 活跃训练：训练进行中可显示普通 ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎。
+- 后台训练：E7.2 首版不启用 foreground service，不承诺后台精确计时；若后续要可靠后台推进，必须重新评估 foreground service 类型、权限和恢复策略。
 - 权限：清楚解释通知权限用途。
 
 ### 8.2 声音与震动
@@ -347,7 +348,7 @@ interface HeartRateProvider {
 | 权限/能力 | 首版用途 | 约束 |
 |---|---|---|
 | 通知权限 | 训练提醒、活跃训练提示 | 必须说明用途，可关闭。 |
-| 前台服务 | 训练离开前台时持续提示 | 仅在需要后台训练计时时使用。 |
+| 前台服务 | E7.2 不启用 | 后续只有在确需后台训练可靠推进且能匹配合法 foreground service 类型时再引入。 |
 | 震动 | 临近结束提醒 | 由用户偏好控制。 |
 | 健康数据 | 首版预留 | 未接入时不请求。 |
 

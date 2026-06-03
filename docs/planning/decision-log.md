@@ -43,6 +43,7 @@
 | D-024 | Accepted | E0.1 通过实现准备检查，但必须先确认 Android 工程参数。 | `docs/readiness-report.md` 是进入 Android 工程前的 readiness gate；当前允许启动 E0.1，不代表全量 MVP story 已全部无条件开工。 |
 | D-025 | Accepted | 首批动作内容切片确定为 11 个动作，优先支持计时训练默认入口，同时覆盖力量训练最小闭环。 | 详见 `docs/planning/action-content-slice.md`；E1.1 只定义内容、字段、审核标准和 fixture 输入，不实现动作库导入、训练引擎、repository 或 UI 闭环。 |
 | D-026 | Accepted | E1.2 以 `docs/planning/data-contracts.md` 为准补齐 prototype `Exercise` 的 `sourceMeta`/`extensions` 字段，并在 Android fixture 中写入 `sourceMeta`。 | `extensions` 在首批 fixture 中保持为空；训练类型支持、计时默认建议、力量默认建议和审核备注保留在 fixture-only 元数据中，不静默扩展核心 `Exercise` 契约。 |
+| D-027 | Accepted | E7.2 首版不启用 foreground service，只提供普通 ongoing active workout notification 边界。 | Android 14+ foreground service 需要匹配类型和权限；当前训练状态摘要不适合冒用 data sync / media 类型，health 类型会牵出健康、传感器或活动识别权限，超出 MVP 禁区。活跃训练通知只展示 UI/engine state 摘要，completed / abandoned / route disposed 后清理，不承诺后台精确计时。 |
 
 ## 预留能力
 

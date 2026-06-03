@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,6 +51,8 @@ import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
+import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -74,6 +77,10 @@ internal fun TimedWorkoutSessionRoute(
         mutableStateOf(TimedWorkoutEngine.create(plan))
     }
     val feedbackSink = rememberCountdownReminderFeedbackSink()
+    val context = LocalContext.current
+    val activeWorkoutNotifications = remember(context) {
+        AndroidActiveWorkoutNotificationController(context.applicationContext)
+    }
 
     fun applyEngineResult(result: TimedWorkoutEngineResult) {
         engineState = result.state
@@ -97,8 +104,23 @@ internal fun TimedWorkoutSessionRoute(
         applyEngineResult(TimedWorkoutEngine.dispatch(engineState, command))
     }
 
+    val uiState = engineState.toTimedWorkoutSessionScreenState()
+    val notificationState = timedActiveWorkoutNotificationState(
+        planId = plan.id,
+        status = engineState.status,
+        uiState = uiState
+    )
+    LaunchedEffect(notificationState) {
+        activeWorkoutNotifications.update(notificationState)
+    }
+    DisposableEffect(activeWorkoutNotifications, plan.id) {
+        onDispose {
+            activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
+        }
+    }
+
     TimedWorkoutSessionScreen(
-        uiState = engineState.toTimedWorkoutSessionScreenState(),
+        uiState = uiState,
         onPause = { dispatch(WorkoutCommand.PauseSession) },
         onResume = { dispatch(WorkoutCommand.ResumeSession) },
         onSkip = { dispatch(WorkoutCommand.SkipStep) },

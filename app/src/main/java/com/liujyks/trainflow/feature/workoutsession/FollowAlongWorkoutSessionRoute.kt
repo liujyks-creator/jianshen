@@ -22,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,8 @@ import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
+import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -60,6 +64,10 @@ internal fun FollowAlongWorkoutSessionRoute(
     var engineState by remember(plan.id) {
         mutableStateOf(TimedWorkoutEngine.create(plan))
     }
+    val context = LocalContext.current
+    val activeWorkoutNotifications = remember(context) {
+        AndroidActiveWorkoutNotificationController(context.applicationContext)
+    }
 
     fun applyEngineResult(result: TimedWorkoutEngineResult) {
         engineState = result.state
@@ -79,8 +87,23 @@ internal fun FollowAlongWorkoutSessionRoute(
         }
     }
 
+    val uiState = engineState.toFollowAlongWorkoutSessionUiState()
+    val notificationState = followAlongActiveWorkoutNotificationState(
+        planId = plan.id,
+        status = engineState.status,
+        uiState = uiState
+    )
+    LaunchedEffect(notificationState) {
+        activeWorkoutNotifications.update(notificationState)
+    }
+    DisposableEffect(activeWorkoutNotifications, plan.id) {
+        onDispose {
+            activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
+        }
+    }
+
     FollowAlongWorkoutSessionScreen(
-        uiState = engineState.toFollowAlongWorkoutSessionUiState(),
+        uiState = uiState,
         onPause = { dispatch(FollowAlongWorkoutSessionControl.PAUSE.toWorkoutCommand()) },
         onResume = { dispatch(FollowAlongWorkoutSessionControl.RESUME.toWorkoutCommand()) },
         onSkip = { dispatch(FollowAlongWorkoutSessionControl.SKIP.toWorkoutCommand()) },
