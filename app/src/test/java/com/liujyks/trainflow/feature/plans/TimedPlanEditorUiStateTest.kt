@@ -85,6 +85,43 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun changingTrainingPreferenceDefaultsDoesNotRewriteExistingTimedDraftCueSettings() {
+        val existingState = buildDefaultTimedPlanEditorState()
+            .updateActionCueThreshold(7)
+            .updateRestCueThreshold(4)
+            .updateSoundEnabled(false)
+            .updateVibrationEnabled(false)
+            .updateEmphasisAnimationEnabled(false)
+        val savedBeforePreferenceChange = requireNotNull(existingState.saveDraftPlan().savedPlan)
+        val changedDefaults = PlanEditorDefaults(
+            actionCueEnabled = false,
+            restCueEnabled = false,
+            soundEnabled = true,
+            vibrationEnabled = true,
+            emphasisAnimationEnabled = true,
+            defaultCountdownThresholdSec = 12
+        )
+        val newStateAfterPreferenceChange = buildDefaultTimedPlanEditorState(defaults = changedDefaults)
+        val existingCues = requireNotNull(existingState.toWorkoutPlan().preferences?.cueSettings)
+        val savedCues = requireNotNull(savedBeforePreferenceChange.preferences?.cueSettings)
+        val newCues = requireNotNull(newStateAfterPreferenceChange.toWorkoutPlan().preferences?.cueSettings)
+
+        assertEquals(7, existingCues.actionEnding?.thresholdSec)
+        assertEquals(4, existingCues.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(existingCues.actionEnding).soundEnabled)
+        assertFalse(requireNotNull(existingCues.restEnding).vibrationEnabled)
+        assertFalse(requireNotNull(existingCues.actionEnding).emphasisAnimationEnabled)
+        assertEquals(7, savedCues.actionEnding?.thresholdSec)
+        assertEquals(4, savedCues.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(savedCues.actionEnding).soundEnabled)
+        assertEquals(12, newCues.actionEnding?.thresholdSec)
+        assertEquals(12, newCues.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(newCues.actionEnding).enabled)
+        assertFalse(requireNotNull(newCues.restEnding).enabled)
+        assertTrue(requireNotNull(newCues.actionEnding).soundEnabled)
+    }
+
+    @Test
     fun actionCueThresholdCannotExceedShortestWorkDuration() {
         val state = buildDefaultTimedPlanEditorState()
             .updateActionCueThreshold(60)

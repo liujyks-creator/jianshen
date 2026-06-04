@@ -52,6 +52,31 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun changingTrainingPreferenceDefaultsDoesNotRewriteExistingStrengthDraftSetTimerMode() {
+        val existingState = buildDefaultStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                strengthSetTimerMode = StrengthSetTimerMode.MANUAL_START
+            )
+        ).addExercise("barbell-bench-press")
+        val savedBeforePreferenceChange = requireNotNull(existingState.saveDraftPlan().savedPlan)
+        val newStateAfterPreferenceChange = buildDefaultStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                strengthSetTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST
+            )
+        )
+        val existingBlocks = existingState.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>()
+        val savedBlocks = savedBeforePreferenceChange.blocks.filterIsInstance<StrengthExerciseBlock>()
+        val newBlocks = newStateAfterPreferenceChange.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>()
+
+        assertTrue(existingBlocks.isNotEmpty())
+        assertTrue(existingBlocks.all { it.setTimerMode == StrengthSetTimerMode.MANUAL_START })
+        assertTrue(savedBlocks.isNotEmpty())
+        assertTrue(savedBlocks.all { it.setTimerMode == StrengthSetTimerMode.MANUAL_START })
+        assertTrue(newBlocks.isNotEmpty())
+        assertTrue(newBlocks.all { it.setTimerMode == StrengthSetTimerMode.AUTO_AFTER_REST })
+    }
+
+    @Test
     fun defaultsStrengthRepTargetToEightToTwelveWhenAddingActions() {
         val state = buildDefaultStrengthPlanEditorState()
             .addExercise("barbell-bench-press")
