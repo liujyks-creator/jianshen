@@ -4,26 +4,30 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val TrainFlowLightColorScheme = lightColorScheme(
-    primary = TrainFlowPrimary,
-    onPrimary = TrainFlowNeutral50,
-    secondary = TrainFlowSecondary,
-    onSecondary = TrainFlowNeutral50,
-    tertiary = TrainFlowAction,
-    onTertiary = TrainFlowNeutral50,
-    background = TrainFlowSurfaceMuted,
-    onBackground = TrainFlowNeutral900,
-    surface = TrainFlowSurface,
-    onSurface = TrainFlowNeutral900,
-    surfaceVariant = TrainFlowNeutral100,
-    onSurfaceVariant = TrainFlowNeutral700,
-    outline = TrainFlowNeutral200
+internal fun trainFlowLightColorSchemeForSkin(skin: TrainFlowSkin) = lightColorScheme(
+    primary = skin.tokens.primary,
+    onPrimary = skin.tokens.neutral50,
+    secondary = skin.tokens.secondary,
+    onSecondary = skin.tokens.neutral50,
+    tertiary = skin.tokens.action,
+    onTertiary = skin.tokens.neutral50,
+    background = skin.tokens.surfaceMuted,
+    onBackground = skin.tokens.neutral900,
+    surface = skin.tokens.surface,
+    onSurface = skin.tokens.neutral900,
+    surfaceVariant = skin.tokens.neutral100,
+    onSurfaceVariant = skin.tokens.neutral700,
+    outline = skin.tokens.neutral200,
+    error = skin.tokens.error
 )
 
 @Composable
-fun TrainFlowTheme(content: @Composable () -> Unit) {
+fun TrainFlowTheme(
+    skin: TrainFlowSkin = SkinRegistry.defaultSkin,
+    content: @Composable () -> Unit
+) {
     MaterialTheme(
-        colorScheme = TrainFlowLightColorScheme,
+        colorScheme = trainFlowLightColorSchemeForSkin(skin),
         typography = TrainFlowTypography,
         content = content
     )

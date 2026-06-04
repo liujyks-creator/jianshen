@@ -44,6 +44,7 @@
 | D-025 | Accepted | 首批动作内容切片确定为 11 个动作，优先支持计时训练默认入口，同时覆盖力量训练最小闭环。 | 详见 `docs/planning/action-content-slice.md`；E1.1 只定义内容、字段、审核标准和 fixture 输入，不实现动作库导入、训练引擎、repository 或 UI 闭环。 |
 | D-026 | Accepted | E1.2 以 `docs/planning/data-contracts.md` 为准补齐 prototype `Exercise` 的 `sourceMeta`/`extensions` 字段，并在 Android fixture 中写入 `sourceMeta`。 | `extensions` 在首批 fixture 中保持为空；训练类型支持、计时默认建议、力量默认建议和审核备注保留在 fixture-only 元数据中，不静默扩展核心 `Exercise` 契约。 |
 | D-027 | Accepted | E7.2 首版不启用 foreground service，只提供普通 ongoing active workout notification 边界。 | Android 14+ foreground service 需要匹配类型和权限；当前训练状态摘要不适合冒用 data sync / media 类型，health 类型会牵出健康、传感器或活动识别权限，超出 MVP 禁区。活跃训练通知只展示 UI/engine state 摘要，completed / abandoned / route disposed 后清理，不承诺后台精确计时。 |
+| D-028 | Accepted | MVP 阶段支持三套内置 UI 皮肤注册与本地切换，但不做运行时插件市场、远程下载或第三方皮肤安装。 | E8.1 只建立 Official Flow、Tile Flow、Big Type 的 skin contract、registry、DataStore preference、设置入口和 theme token 映射。皮肤只能改变 UI 表现、布局倾向和 token，不能改变训练计划、训练记录、`WorkoutCommand`、`WorkoutEvent`、训练执行引擎或权限/健康边界。 |
 
 ## 预留能力
 

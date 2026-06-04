@@ -28,6 +28,7 @@ class TrainFlowPreferencesBoundaryTest {
         assertEquals("manual_start", preferences.strengthSetTimerMode)
         assertFalse(preferences.heartRateDisplayEnabled)
         assertFalse(preferences.showDisconnectedHeartRatePlaceholder)
+        assertEquals("official_flow", preferences.uiSkinId)
     }
 
     @Test
@@ -47,7 +48,8 @@ class TrainFlowPreferencesBoundaryTest {
                 soundEnabled = false,
                 vibrationEnabled = false,
                 emphasisAnimationEnabled = false,
-                strengthSetTimerMode = TrainFlowPreferences.STRENGTH_TIMER_AUTO_AFTER_REST
+                strengthSetTimerMode = TrainFlowPreferences.STRENGTH_TIMER_AUTO_AFTER_REST,
+                uiSkinId = TrainFlowPreferences.UI_SKIN_TILE_FLOW
             )
         )
 
@@ -60,6 +62,7 @@ class TrainFlowPreferencesBoundaryTest {
         assertFalse(preferences.vibrationEnabled)
         assertFalse(preferences.emphasisAnimationEnabled)
         assertEquals("auto_after_rest", preferences.strengthSetTimerMode)
+        assertEquals("tile_flow", preferences.uiSkinId)
     }
 
     @Test
@@ -74,7 +77,8 @@ class TrainFlowPreferencesBoundaryTest {
         dataSource.setTrainingFeedbackPreferences(
             TrainFlowPreferences(
                 defaultCountdownThresholdSec = 1000,
-                strengthSetTimerMode = "voice_coach"
+                strengthSetTimerMode = "voice_coach",
+                uiSkinId = "remote_market_skin"
             )
         )
 
@@ -82,6 +86,23 @@ class TrainFlowPreferencesBoundaryTest {
 
         assertEquals(TrainFlowPreferences.MAX_COUNTDOWN_THRESHOLD_SEC, preferences.defaultCountdownThresholdSec)
         assertEquals("manual_start", preferences.strengthSetTimerMode)
+        assertEquals("official_flow", preferences.uiSkinId)
+    }
+
+    @Test
+    fun dataSourcePersistsBuiltInUiSkinId() = runBlocking {
+        val dataStore = PreferenceDataStoreFactory.create(
+            produceFile = {
+                File(temporaryFolder.root, "ui-skin-preferences.preferences_pb")
+            }
+        )
+        val dataSource = TrainFlowPreferencesDataSource(dataStore)
+
+        dataSource.setUiSkinId("big_type")
+
+        val preferences = dataSource.preferences.first()
+
+        assertEquals("big_type", preferences.uiSkinId)
     }
 
     @Test

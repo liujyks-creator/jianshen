@@ -17,4 +17,5 @@ object TrainFlowPreferenceKeys {
     val heartRateDisplayEnabled = booleanPreferencesKey("heart_rate_display_enabled")
     val showDisconnectedHeartRatePlaceholder =
         booleanPreferencesKey("show_disconnected_heart_rate_placeholder")
+    val uiSkinId = stringPreferencesKey("ui_skin_id")
 }

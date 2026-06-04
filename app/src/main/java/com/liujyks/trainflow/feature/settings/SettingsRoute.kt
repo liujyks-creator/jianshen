@@ -45,6 +45,7 @@ internal fun SettingsRoute(
     onVibrationEnabledChanged: (Boolean) -> Unit,
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit,
+    onUiSkinChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -84,6 +85,13 @@ internal fun SettingsRoute(
         }
 
         item {
+            SkinPreferencesCard(
+                uiState = uiState,
+                onUiSkinChanged = onUiSkinChanged
+            )
+        }
+
+        item {
             NotificationBoundaryCard()
         }
     }
@@ -92,19 +100,19 @@ internal fun SettingsRoute(
 @Composable
 private fun SettingsHeader(uiState: TrainingPreferencesScreenState) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "E7.3 训练偏好", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        StatusPill(text = "设置与皮肤", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
         Text(
             text = "训练偏好设置",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "${uiState.countdownSummary} · ${uiState.feedbackSummary}",
+            text = "${uiState.countdownSummary} · ${uiState.feedbackSummary} · ${uiState.selectedSkinSummary}",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "这些设置作为新计划默认值；已写入计划的提醒设置不会被静默覆盖。",
+            text = "训练反馈设置作为新计划默认值；UI 皮肤只改变表现和 token，不改变训练计划、记录或命令。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -186,6 +194,46 @@ private fun StrengthPreferencesCard(
             Text(
                 text = mode.description,
                 style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+        }
+    }
+}
+
+@Composable
+private fun SkinPreferencesCard(
+    uiState: TrainingPreferencesScreenState,
+    onUiSkinChanged: (String) -> Unit
+) {
+    SettingsCard {
+        SectionTitle(text = "UI 皮肤")
+        Text(
+            text = "三套皮肤都是内置注册项。Tile Flow 与 Big Type 目前只提供轻量 token 和元数据差异。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        uiState.uiSkinOptions.forEach { skin ->
+            FilterChip(
+                selected = skin.selected,
+                onClick = { onUiSkinChanged(skin.id) },
+                label = {
+                    Text(
+                        text = if (skin.isDefault) {
+                            "${skin.displayName} · 默认"
+                        } else {
+                            skin.displayName
+                        }
+                    )
+                }
+            )
+            Text(
+                text = skin.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "${skin.targetUser} ${skin.capabilityBoundary}",
+                style = MaterialTheme.typography.bodySmall,
                 color = TrainFlowNeutral700
             )
         }
@@ -308,7 +356,8 @@ private fun SettingsRoutePreview() {
             onSoundEnabledChanged = {},
             onVibrationEnabledChanged = {},
             onEmphasisAnimationEnabledChanged = {},
-            onStrengthSetTimerModeChanged = {}
+            onStrengthSetTimerModeChanged = {},
+            onUiSkinChanged = {}
         )
     }
 }

@@ -5,8 +5,12 @@ import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.feature.plans.PlanEditorDefaults
 import com.liujyks.trainflow.feature.settings.TrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.settings.strengthSetTimerModePreferenceFromContract
+import com.liujyks.trainflow.feature.settings.uiSkinPreferenceOptionsFromRegistry
+import com.liujyks.trainflow.ui.theme.SkinRegistry
+import com.liujyks.trainflow.ui.theme.TrainFlowSkin
 
 internal fun TrainFlowPreferences.toTrainingPreferencesScreenState(): TrainingPreferencesScreenState {
+    val skin = toTrainFlowSkin()
     return TrainingPreferencesScreenState(
         defaultCountdownThresholdSec = defaultCountdownThresholdSec,
         actionCueEnabled = actionCueEnabled,
@@ -14,7 +18,9 @@ internal fun TrainFlowPreferences.toTrainingPreferencesScreenState(): TrainingPr
         soundEnabled = soundEnabled,
         vibrationEnabled = vibrationEnabled,
         emphasisAnimationEnabled = emphasisAnimationEnabled,
-        strengthSetTimerMode = strengthSetTimerModePreferenceFromContract(strengthSetTimerMode)
+        strengthSetTimerMode = strengthSetTimerModePreferenceFromContract(strengthSetTimerMode),
+        selectedUiSkinId = skin.id,
+        uiSkinOptions = uiSkinPreferenceOptionsFromRegistry(skin.id)
     )
 }
 
@@ -34,4 +40,8 @@ private fun String.toStrengthSetTimerMode(): StrengthSetTimerMode {
     return StrengthSetTimerMode.entries.firstOrNull { mode ->
         mode.contractValue == this
     } ?: StrengthSetTimerMode.MANUAL_START
+}
+
+internal fun TrainFlowPreferences.toTrainFlowSkin(): TrainFlowSkin {
+    return SkinRegistry.resolve(uiSkinId)
 }

@@ -1,5 +1,8 @@
 package com.liujyks.trainflow.feature.settings
 
+import com.liujyks.trainflow.ui.theme.SkinRegistry
+import com.liujyks.trainflow.ui.theme.TrainFlowSkin
+
 internal data class TrainingPreferencesScreenState(
     val defaultCountdownThresholdSec: Int = 5,
     val actionCueEnabled: Boolean = true,
@@ -7,7 +10,9 @@ internal data class TrainingPreferencesScreenState(
     val soundEnabled: Boolean = true,
     val vibrationEnabled: Boolean = true,
     val emphasisAnimationEnabled: Boolean = true,
-    val strengthSetTimerMode: StrengthSetTimerModePreference = StrengthSetTimerModePreference.MANUAL_START
+    val strengthSetTimerMode: StrengthSetTimerModePreference = StrengthSetTimerModePreference.MANUAL_START,
+    val selectedUiSkinId: String = SkinRegistry.defaultSkin.id,
+    val uiSkinOptions: List<UiSkinPreferenceOption> = uiSkinPreferenceOptionsFromRegistry(selectedUiSkinId)
 ) {
     val countdownSummary: String
         get() = "默认最后 ${defaultCountdownThresholdSec} 秒提醒"
@@ -22,7 +27,21 @@ internal data class TrainingPreferencesScreenState(
         ).ifEmpty {
             listOf("仅保留训练流程")
         }.joinToString(" / ")
+
+    val selectedSkinSummary: String
+        get() = uiSkinOptions.firstOrNull { option -> option.selected }?.displayName
+            ?: SkinRegistry.defaultSkin.displayName
 }
+
+internal data class UiSkinPreferenceOption(
+    val id: String,
+    val displayName: String,
+    val description: String,
+    val targetUser: String,
+    val capabilityBoundary: String,
+    val selected: Boolean,
+    val isDefault: Boolean
+)
 
 internal enum class StrengthSetTimerModePreference(
     val contractValue: String,
@@ -51,4 +70,23 @@ internal fun strengthSetTimerModePreferenceFromContract(
 
 internal fun defaultTrainingPreferencesScreenState(): TrainingPreferencesScreenState {
     return TrainingPreferencesScreenState()
+}
+
+internal fun uiSkinPreferenceOptionsFromRegistry(selectedSkinId: String): List<UiSkinPreferenceOption> {
+    val selectedSkin = SkinRegistry.resolve(selectedSkinId)
+    return SkinRegistry.skins.map { skin ->
+        skin.toUiSkinPreferenceOption(selected = skin.id == selectedSkin.id)
+    }
+}
+
+private fun TrainFlowSkin.toUiSkinPreferenceOption(selected: Boolean): UiSkinPreferenceOption {
+    return UiSkinPreferenceOption(
+        id = id,
+        displayName = displayName,
+        description = description,
+        targetUser = targetUser,
+        capabilityBoundary = capabilityBoundary,
+        selected = selected,
+        isDefault = isDefault
+    )
 }

@@ -45,7 +45,8 @@ internal fun TrainFlowApp(
     onSoundEnabledChanged: (Boolean) -> Unit = {},
     onVibrationEnabledChanged: (Boolean) -> Unit = {},
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit = {},
-    onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {}
+    onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {},
+    onUiSkinChanged: (String) -> Unit = {}
 ) {
     var currentDestination by rememberSaveable {
         mutableStateOf(OfficialShellDestination.TRAINING)
@@ -144,6 +145,7 @@ internal fun TrainFlowApp(
                     onVibrationEnabledChanged = onVibrationEnabledChanged,
                     onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged,
                     onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
+                    onUiSkinChanged = onUiSkinChanged,
                     modifier = Modifier.padding(innerPadding)
                 )
 

@@ -761,41 +761,55 @@ stepsCompleted:
 
 目标：让官方默认 UI 优雅、克制、专业，同时让开源社区可以定制主题、首页布局和按钮位置，而不破坏核心训练引擎。
 
-### Story E8.1: 建立 DESIGN.md 设计系统
+### Story E8.1: Skin contract and registry
+
+**状态:** Implemented in `ui.theme`, `core.datastore`, settings UI, app theme mapping, and unit tests
 
 作为设计维护者，  
-我想建立机器可读和人可读的设计系统，  
-以便官方 UI 和 AI coding 都有稳定风格锚点。
+我想建立内置 UI 皮肤的 contract、registry 和本地偏好边界，
+以便用户能在不改变训练语义的前提下切换官方内置视觉风格。
 
 **验收标准:**
 
-- Then 根目录存在 `DESIGN.md`。
-- Then 设计系统包含颜色、排版、间距、圆角和关键组件 token。
-- Then 明确训练执行页、力量确认层、动作库和恢复建议的设计规则。
+- Then App 有 Official Flow、Tile Flow、Big Type 三套内置皮肤 metadata。
+- Then Official Flow 是默认皮肤，并继续对应 `DESIGN.md` 官方默认方向。
+- Then 设置页可切换皮肤并持久化当前 skin id。
+- Then 非法或未知 skin id 回退到 Official Flow。
+- Then shell/theme 能消费当前皮肤状态，并至少体现轻量 token 差异。
+- Then 皮肤不能改变训练计划、训练记录、训练命令、训练事件或训练执行引擎语义。
 
-### Story E8.2: 建立官方 UI shell 边界
+**交付结果:**
+
+- `ui.theme` 新增 `BuiltInUiSkin`、`TrainFlowSkin`、`TrainFlowSkinTokens` 和 `SkinRegistry`，注册 Official Flow、Tile Flow、Big Type 三套内置皮肤，包含 skin id、显示名、描述、目标用户、能力边界、默认标记和 token。
+- `TrainFlowTheme` 现在可消费当前 `TrainFlowSkin` 并从 skin tokens 生成 Material color scheme；Tile Flow / Big Type 仅有轻量 token 差异，不承诺完整页面重排。
+- `core.datastore` 新增 `uiSkinId` 偏好，保存三套内置 skin id，并对未知或非法 id 回退到 `official_flow`。
+- 设置页新增“UI 皮肤”选择入口，展示三套内置皮肤 metadata，并通过 `MainActivity` 持久化选择；App theme 根据偏好解析当前 skin。
+- 新增单元测试覆盖 registry 元数据、默认皮肤、非法 id 回退、DataStore 保存读取、settings 选项映射、app mapper 和 theme token 映射。
+- 本 story 未实现 Tile Flow 完整磁贴页面、Big Type 完整大字执行页、运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，也未改变 `WorkoutCommand`、`WorkoutEvent`、`WorkoutPlan`、`WorkoutSession`、通知、心率、恢复建议或 `core.engine` 边界。
+
+### Story E8.2: Tile Flow 完整视觉重做
 
 作为开发者，  
-我想把官方 App shell 与核心训练逻辑分离，  
-以便后续社区 UI 可以替换页面组合而不改核心引擎。
+我想把 Tile Flow 从内置注册占位扩展为完整磁贴式视觉体验，
+以便偏好清爽信息块的用户获得更明确的页面形态。
 
 **验收标准:**
 
-- Then 架构中存在 `ui:designsystem`、`ui:theme`、`ui:shell-official` 边界。
-- Then shell 通过 feature ViewModel/use case 调用能力。
-- Then shell 不直接写入 `WorkoutSession`。
+- Then Tile Flow 有完整 token、组件和关键页面布局映射。
+- Then 训练执行页仍保留当前动作、时间/组目标、主按钮和必要控制。
+- Then 不改变训练命令、事件、计划、记录或核心引擎语义。
 
-### Story E8.3: 开源 UI 定制指南
+### Story E8.3: Big Type 完整视觉重做
 
-作为开源贡献者，  
-我想知道哪些 UI 能改、哪些核心不能改，  
-以便安全地贡献主题和布局。
+作为用户，
+我想使用大字训练皮肤，
+以便运动中更容易看清当前动作、时间、组目标和主按钮。
 
 **验收标准:**
 
-- Then 存在 `docs/ui-extension-guide.md`。
-- Then 明确可定制主题、首页、按钮位置、页面组合和训练布局。
-- Then 明确不能改变 `WorkoutCommand`、`WorkoutEvent`、训练执行引擎和数据契约。
+- Then Big Type 有完整 token、组件和关键执行页布局映射。
+- Then 训练执行页主信息更大更易扫读，心率仍保持辅助层级。
+- Then 不隐藏权限说明、通知边界、心率非医疗化或恢复建议非医疗化文案。
 
 ### Story E8.4: 社区主题和布局审查清单
 
@@ -887,23 +901,25 @@ E6.2 只支持 E6.1 内存态 preset 启动，不解决 O-002 的全部范围。
 E6.3 心率抽象状态展示已合入 main。
 E7.1 训练提醒通知已合入 main。
 E7.2 活跃训练通知边界已合入 main。
-E7.3 训练偏好设置已在 codex/e7-3-training-preferences 实施，等待 Review Gate。
+E7.3 训练偏好设置已合入 main。
+E7.3 偏好回归保护已合入 main。
+E8.1 内置 UI 皮肤 contract / registry 已在 codex/e8-1-skin-contract-registry 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E7.3 Review Gate
+Story E8.1 Review Gate
 ```
 
-E7.3 Review Gate 建议重点确认：
+E8.1 Review Gate 建议重点确认：
 
-1. DataStore 是否只保存默认偏好，不拥有训练状态机。
-2. 新建计划是否合理消费默认偏好，已保存计划显式 `CueSettings` 和 set timer mode 是否不被静默覆盖。
-3. 设置页文案是否清楚区分计划提醒通知、活跃训练普通 ongoing notification 和训练内倒计时反馈。
-4. Manifest 是否仍只包含 `POST_NOTIFICATIONS`，并确认未新增 exact alarm、foreground service、健康、传感器、蓝牙或定位权限。
-5. 是否未实现 notification action 控制训练、真实 session records 持久化、后台可靠计时、语音教练或真实心率设备接入。
+1. 三套内置皮肤 metadata 是否完整，Official Flow 是否为默认皮肤。
+2. DataStore 是否只保存当前 skin id，并对未知或非法 id 回退到 Official Flow。
+3. 设置页是否能切换皮肤并持久化，theme/shell 是否消费当前 skin 状态。
+4. Tile Flow / Big Type 是否仍只是轻量 token 和 metadata 差异，没有偷偷重做页面形态。
+5. 是否未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，且没有改变 `WorkoutCommand`、`WorkoutEvent`、训练计划、训练记录或 `core.engine` 边界。
 
 ## 8. 暂缓事项
 

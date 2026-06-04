@@ -30,7 +30,11 @@ class TrainFlowPreferencesDataSource(
                 storedPreferences[TrainFlowPreferenceKeys.heartRateDisplayEnabled] ?: false,
             showDisconnectedHeartRatePlaceholder =
                 storedPreferences[TrainFlowPreferenceKeys.showDisconnectedHeartRatePlaceholder]
-                    ?: false
+                    ?: false,
+            uiSkinId = TrainFlowPreferences.sanitizeUiSkinId(
+                storedPreferences[TrainFlowPreferenceKeys.uiSkinId]
+                    ?: TrainFlowPreferences.DEFAULT_UI_SKIN_ID
+            )
         )
     }
 
@@ -54,6 +58,8 @@ class TrainFlowPreferencesDataSource(
                 )
             storedPreferences[TrainFlowPreferenceKeys.strengthSetTimerMode] =
                 TrainFlowPreferences.sanitizeStrengthSetTimerMode(preferences.strengthSetTimerMode)
+            storedPreferences[TrainFlowPreferenceKeys.uiSkinId] =
+                TrainFlowPreferences.sanitizeUiSkinId(preferences.uiSkinId)
         }
     }
 
@@ -92,6 +98,12 @@ class TrainFlowPreferencesDataSource(
         dataStore.edit { preferences ->
             preferences[TrainFlowPreferenceKeys.strengthSetTimerMode] =
                 TrainFlowPreferences.sanitizeStrengthSetTimerMode(mode)
+        }
+    }
+
+    suspend fun setUiSkinId(skinId: String) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.uiSkinId] = TrainFlowPreferences.sanitizeUiSkinId(skinId)
         }
     }
 }

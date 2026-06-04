@@ -17,7 +17,8 @@ class TrainingPreferencesAppMapperTest {
             vibrationEnabled = false,
             emphasisAnimationEnabled = false,
             defaultCountdownThresholdSec = 11,
-            strengthSetTimerMode = "auto_after_rest"
+            strengthSetTimerMode = "auto_after_rest",
+            uiSkinId = "tile_flow"
         )
         val state = preferences.toTrainingPreferencesScreenState()
 
@@ -25,6 +26,8 @@ class TrainingPreferencesAppMapperTest {
         assertFalse(state.actionCueEnabled)
         assertFalse(state.soundEnabled)
         assertEquals(StrengthSetTimerModePreference.AUTO_AFTER_REST, state.strengthSetTimerMode)
+        assertEquals("tile_flow", state.selectedUiSkinId)
+        assertEquals("Tile Flow", state.selectedSkinSummary)
     }
 
     @Test
@@ -37,5 +40,17 @@ class TrainingPreferencesAppMapperTest {
 
         assertEquals(6, defaults.safeCountdownThresholdSec)
         assertEquals(StrengthSetTimerMode.AUTO_AFTER_REST, defaults.strengthSetTimerMode)
+    }
+
+    @Test
+    fun mapsDataStoreSkinIdToThemeSkinWithOfficialFallback() {
+        assertEquals(
+            "big_type",
+            TrainFlowPreferences(uiSkinId = "big_type").toTrainFlowSkin().id
+        )
+        assertEquals(
+            "official_flow",
+            TrainFlowPreferences(uiSkinId = "remote_skin").toTrainFlowSkin().id
+        )
     }
 }

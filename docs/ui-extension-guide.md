@@ -183,7 +183,19 @@ UI shell 可以改变入口排序，但不能让计时训练、力量训练或�
 - 是否没有直接写数据库绕过引擎。
 - 是否可读性达标。
 
-## 11. 暂不支持的插件能力
+## 11. 内置皮肤切换边界
+
+E8.1 开始，App 可以在设置页切换三套内置 UI 皮肤：
+
+1. **Official Flow**：当前 `DESIGN.md` 官方默认皮肤。
+2. **Tile Flow**：磁贴式清爽皮肤的内置注册占位，E8.1 只提供轻量 token 和元数据差异。
+3. **Big Type**：大字训练皮肤的内置注册占位，E8.1 只提供轻量 token 和元数据差异。
+
+内置皮肤切换只允许改变 UI 表现、布局倾向和 theme token。它不能改变 `WorkoutPlan`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、训练执行引擎、通知调度、权限说明、心率非医疗化文案或恢复建议非医疗化边界。
+
+未知或非法 skin id 必须回退到 Official Flow。Tile Flow 和 Big Type 的完整页面形态应作为后续独立 story 实施，不在 E8.1 中承诺。
+
+## 12. 暂不支持的插件能力
 
 MVP 阶段不做运行时插件市场，不做远程主题下载，不做用户在 App 内安装第三方 UI 包。
 

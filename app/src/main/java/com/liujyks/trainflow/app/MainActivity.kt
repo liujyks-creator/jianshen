@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
             )
             val scope = rememberCoroutineScope()
 
-            TrainFlowTheme {
+            TrainFlowTheme(skin = preferences.toTrainFlowSkin()) {
                 TrainFlowApp(
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),
                     planEditorDefaults = preferences.toPlanEditorDefaults(),
@@ -67,6 +67,11 @@ class MainActivity : ComponentActivity() {
                     onStrengthSetTimerModeChanged = { mode ->
                         scope.launch {
                             preferencesDataSource.setStrengthSetTimerMode(mode.contractValue)
+                        }
+                    },
+                    onUiSkinChanged = { skinId ->
+                        scope.launch {
+                            preferencesDataSource.setUiSkinId(skinId)
                         }
                     }
                 )
