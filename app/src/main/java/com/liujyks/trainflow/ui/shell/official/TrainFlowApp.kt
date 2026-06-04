@@ -19,6 +19,7 @@ import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
+import com.liujyks.trainflow.feature.plans.PlanEditorDefaults
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
@@ -26,12 +27,26 @@ import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 import com.liujyks.trainflow.feature.recovery.RecoveryRoute
 import com.liujyks.trainflow.feature.recovery.emptyRecoveryScreenState
 import com.liujyks.trainflow.feature.recovery.toRecoveryScreenState
+import com.liujyks.trainflow.feature.settings.SettingsRoute
+import com.liujyks.trainflow.feature.settings.StrengthSetTimerModePreference
+import com.liujyks.trainflow.feature.settings.TrainingPreferencesScreenState
+import com.liujyks.trainflow.feature.settings.defaultTrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.workoutsession.FollowAlongWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
 
 @Composable
-fun TrainFlowApp() {
+internal fun TrainFlowApp(
+    trainingPreferencesState: TrainingPreferencesScreenState = defaultTrainingPreferencesScreenState(),
+    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults(),
+    onDefaultCountdownThresholdChanged: (Int) -> Unit = {},
+    onActionCueEnabledChanged: (Boolean) -> Unit = {},
+    onRestCueEnabledChanged: (Boolean) -> Unit = {},
+    onSoundEnabledChanged: (Boolean) -> Unit = {},
+    onVibrationEnabledChanged: (Boolean) -> Unit = {},
+    onEmphasisAnimationEnabledChanged: (Boolean) -> Unit = {},
+    onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {}
+) {
     var currentDestination by rememberSaveable {
         mutableStateOf(OfficialShellDestination.TRAINING)
     }
@@ -95,6 +110,9 @@ fun TrainFlowApp() {
                     onOpenFollowAlong = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.FOLLOW_ALONG_ENTRY))
                     },
+                    onOpenSettings = {
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.SETTINGS))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
@@ -102,6 +120,7 @@ fun TrainFlowApp() {
                     onBackToHome = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
+                    planEditorDefaults = planEditorDefaults,
                     modifier = Modifier.padding(innerPadding)
                 )
 
@@ -109,6 +128,22 @@ fun TrainFlowApp() {
                     onBackToHome = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
+                    planEditorDefaults = planEditorDefaults,
+                    modifier = Modifier.padding(innerPadding)
+                )
+
+                OfficialShellDestination.SETTINGS -> SettingsRoute(
+                    uiState = trainingPreferencesState,
+                    onBackToTraining = {
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
+                    },
+                    onDefaultCountdownThresholdChanged = onDefaultCountdownThresholdChanged,
+                    onActionCueEnabledChanged = onActionCueEnabledChanged,
+                    onRestCueEnabledChanged = onRestCueEnabledChanged,
+                    onSoundEnabledChanged = onSoundEnabledChanged,
+                    onVibrationEnabledChanged = onVibrationEnabledChanged,
+                    onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged,
+                    onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
                     modifier = Modifier.padding(innerPadding)
                 )
 

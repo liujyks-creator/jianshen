@@ -22,6 +22,7 @@ internal data class StrengthPlanEditorScreenState(
     val title: String,
     val exercises: List<StrengthPlanExerciseUiState>,
     val selectableExercises: List<StrengthExerciseOptionUiState>,
+    val strengthSetTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START,
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
@@ -43,7 +44,10 @@ internal data class StrengthPlanEditorScreenState(
             title = title.trim(),
             description = "内存态力量计划草稿",
             blocks = exercises.mapIndexed { index, exercise ->
-                exercise.toStrengthExerciseBlock(order = index + 1)
+                exercise.toStrengthExerciseBlock(
+                    order = index + 1,
+                    setTimerMode = strengthSetTimerMode
+                )
             },
             createdAt = timestamp,
             updatedAt = timestamp
@@ -85,7 +89,10 @@ internal data class StrengthPlanExerciseUiState(
             return "$weight · ${repTarget.summary} · ${workingSets} 个正式组$sideSuffix"
         }
 
-    fun toStrengthExerciseBlock(order: Int): StrengthExerciseBlock {
+    fun toStrengthExerciseBlock(
+        order: Int,
+        setTimerMode: StrengthSetTimerMode
+    ): StrengthExerciseBlock {
         val plannedSide = if (perSide) ExerciseSide.ALTERNATING else null
         return StrengthExerciseBlock(
             id = "strength-block-$order-$exerciseId",
@@ -101,7 +108,7 @@ internal data class StrengthPlanExerciseUiState(
                 setTarget.toStrengthSetPlan(blockOrder = order, order = index + 1, side = plannedSide)
             },
             substitutions = substitutions,
-            setTimerMode = StrengthSetTimerMode.MANUAL_START
+            setTimerMode = setTimerMode
         )
     }
 }
@@ -171,7 +178,8 @@ internal enum class StrengthRepTargetKind {
 }
 
 internal fun buildDefaultStrengthPlanEditorState(
-    entries: List<ActionExerciseFixture> = FirstActionExerciseFixtures.entries
+    entries: List<ActionExerciseFixture> = FirstActionExerciseFixtures.entries,
+    defaults: PlanEditorDefaults = PlanEditorDefaults()
 ): StrengthPlanEditorScreenState {
     val strengthEntries = entries.strengthCapableEntries()
     val defaultEntries = buildList {
@@ -188,7 +196,8 @@ internal fun buildDefaultStrengthPlanEditorState(
     return StrengthPlanEditorScreenState(
         title = "基础力量计划",
         exercises = defaultEntries.mapIndexed { index, entry -> entry.toStrengthEditorExercise(index + 1) },
-        selectableExercises = strengthEntries.map { entry -> entry.toStrengthOption() }
+        selectableExercises = strengthEntries.map { entry -> entry.toStrengthOption() },
+        strengthSetTimerMode = defaults.strengthSetTimerMode
     )
 }
 

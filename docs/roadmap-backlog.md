@@ -737,6 +737,8 @@ stepsCompleted:
 
 ### Story E7.3: 训练偏好设置
 
+**状态:** Implemented in `core.datastore`, `feature.settings`, official shell settings entry, plan editor default mapping, and unit tests
+
 作为用户，  
 我想设置提醒秒数、声音、震动和动画开关，  
 以便训练反馈符合偏好。
@@ -746,6 +748,14 @@ stepsCompleted:
 - Then 可设置默认临近结束秒数。
 - Then 可开关动作提醒、休息提醒、声音、震动、强化动画。
 - Then 力量训练本组计时默认模式可设置。
+
+**交付结果:**
+
+- `core.datastore` 扩展训练偏好读写边界，可持久化默认临近结束秒数、动作提醒开关、休息提醒开关、声音、震动、强化动画和力量训练本组计时默认模式，并对阈值和模式做契约夹紧。
+- 首页新增“训练偏好”入口，官方 shell 新增非底部 tab 的 settings destination；设置页展示训练内倒计时反馈设置，并用克制文案区分 E7.1 计划提醒通知、E7.2 活跃训练普通 ongoing notification 和本 story 的训练内倒计时反馈。
+- 新建计时计划从偏好生成默认 `CueSettings`；新建力量计划从偏好生成默认 `StrengthSetTimerMode`。已生成计划中的显式提醒设置和 block 级组计时模式不会被全局偏好静默覆盖。
+- 新增单元测试覆盖 DataStore 保存、设置 UI state、app 层映射、计时/力量计划默认消费和 shell 入口。
+- 本 story 未实现新的通知调度、foreground service、exact alarm、notification action 控制训练、语音读秒、自动语音教练、后台可靠计时、真实 `WorkoutSession` 持久化、session records 写库、真实心率设备、Health Connect、Wear OS、BLE、厂商 SDK 或健康/传感器/蓝牙/定位权限。
 
 ## Epic E8: 设计系统、UI Shell 与开源定制边界
 
@@ -876,23 +886,24 @@ E6.2 基础跟练执行页已合入 main。
 E6.2 只支持 E6.1 内存态 preset 启动，不解决 O-002 的全部范围。
 E6.3 心率抽象状态展示已合入 main。
 E7.1 训练提醒通知已合入 main。
-E7.2 活跃训练通知边界已在 codex/e7-2-active-workout-notification-boundary 实施，等待 Review Gate。
+E7.2 活跃训练通知边界已合入 main。
+E7.3 训练偏好设置已在 codex/e7-3-training-preferences 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E7.2 Review Gate
+Story E7.3 Review Gate
 ```
 
-E7.2 Review Gate 建议重点确认：
+E7.3 Review Gate 建议重点确认：
 
-1. 是否明确首版不启用 foreground service，且理由已记录到决策日志和架构文档。
-2. 计时、力量、基础跟练执行页 active / paused 时是否会分发活跃训练状态摘要，completed / abandoned / route disposed 后是否清理通知。
-3. 通知 channel、通知内容和 UI 映射文案是否只说明普通状态提示，不承诺后台精确计时、闹铃级提醒、锁屏强打断或医疗级提醒。
+1. DataStore 是否只保存默认偏好，不拥有训练状态机。
+2. 新建计划是否合理消费默认偏好，已保存计划显式 `CueSettings` 和 set timer mode 是否不被静默覆盖。
+3. 设置页文案是否清楚区分计划提醒通知、活跃训练普通 ongoing notification 和训练内倒计时反馈。
 4. Manifest 是否仍只包含 `POST_NOTIFICATIONS`，并确认未新增 exact alarm、foreground service、健康、传感器、蓝牙或定位权限。
-5. 是否未实现 notification action 控制训练、真实 session records 持久化、后台可靠计时或 E7.3 训练偏好设置总页。
+5. 是否未实现 notification action 控制训练、真实 session records 持久化、后台可靠计时、语音教练或真实心率设备接入。
 
 ## 8. 暂缓事项
 

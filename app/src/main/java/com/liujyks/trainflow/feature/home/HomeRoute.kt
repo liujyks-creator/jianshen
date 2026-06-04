@@ -47,6 +47,7 @@ fun HomeRoute(
     onOpenTimedPlanEditor: () -> Unit,
     onOpenStrengthPlanEditor: () -> Unit,
     onOpenFollowAlong: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildHomeScreenState() }
@@ -57,6 +58,7 @@ fun HomeRoute(
         onOpenTimedPlanEditor = onOpenTimedPlanEditor,
         onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
         onOpenFollowAlong = onOpenFollowAlong,
+        onOpenSettings = onOpenSettings,
         modifier = modifier
     )
 }
@@ -68,6 +70,7 @@ private fun TrainFlowHomeScreen(
     onOpenTimedPlanEditor: () -> Unit,
     onOpenStrengthPlanEditor: () -> Unit,
     onOpenFollowAlong: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -78,7 +81,10 @@ private fun TrainFlowHomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            HomeHeader(summary = uiState.summary)
+            HomeHeader(
+                summary = uiState.summary,
+                onOpenSettings = onOpenSettings
+            )
         }
 
         item {
@@ -126,13 +132,24 @@ private fun TrainFlowHomeScreen(
 }
 
 @Composable
-private fun HomeHeader(summary: String) {
+private fun HomeHeader(
+    summary: String,
+    onOpenSettings: () -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "TrainFlow",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "TrainFlow",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            TextButton(onClick = onOpenSettings) {
+                Text(text = "训练偏好")
+            }
+        }
         Text(
             text = summary,
             style = MaterialTheme.typography.bodyLarge,
@@ -348,7 +365,8 @@ private fun TrainFlowHomeScreenPreview() {
             onOpenExerciseLibrary = {},
             onOpenTimedPlanEditor = {},
             onOpenStrengthPlanEditor = {},
-            onOpenFollowAlong = {}
+            onOpenFollowAlong = {},
+            onOpenSettings = {}
         )
     }
 }

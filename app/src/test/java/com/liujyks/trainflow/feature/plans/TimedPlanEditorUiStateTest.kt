@@ -59,6 +59,32 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun newTimedEditorConsumesTrainingPreferenceDefaults() {
+        val state = buildDefaultTimedPlanEditorState(
+            defaults = PlanEditorDefaults(
+                actionCueEnabled = false,
+                restCueEnabled = true,
+                soundEnabled = false,
+                vibrationEnabled = false,
+                emphasisAnimationEnabled = false,
+                defaultCountdownThresholdSec = 8
+            )
+        )
+        val cues = requireNotNull(state.toWorkoutPlan().preferences?.cueSettings)
+        val actionCue = requireNotNull(cues.actionEnding)
+        val restCue = requireNotNull(cues.restEnding)
+
+        assertFalse(state.actionCue.enabled)
+        assertTrue(state.restCue.enabled)
+        assertEquals(8, actionCue.thresholdSec)
+        assertEquals(8, restCue.thresholdSec)
+        assertFalse(actionCue.enabled)
+        assertFalse(actionCue.soundEnabled)
+        assertFalse(restCue.vibrationEnabled)
+        assertFalse(restCue.emphasisAnimationEnabled)
+    }
+
+    @Test
     fun actionCueThresholdCannotExceedShortestWorkDuration() {
         val state = buildDefaultTimedPlanEditorState()
             .updateActionCueThreshold(60)

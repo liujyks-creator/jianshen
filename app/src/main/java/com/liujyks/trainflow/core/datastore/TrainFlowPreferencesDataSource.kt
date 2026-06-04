@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.core.datastore
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,15 +18,80 @@ class TrainFlowPreferencesDataSource(
             emphasisAnimationEnabled =
                 storedPreferences[TrainFlowPreferenceKeys.emphasisAnimationEnabled] ?: true,
             defaultCountdownThresholdSec =
-                storedPreferences[TrainFlowPreferenceKeys.defaultCountdownThresholdSec]
-                    ?: TrainFlowPreferences.DEFAULT_COUNTDOWN_THRESHOLD_SEC,
-            strengthSetTimerMode = storedPreferences[TrainFlowPreferenceKeys.strengthSetTimerMode]
-                ?: TrainFlowPreferences.STRENGTH_TIMER_MANUAL_START,
+                TrainFlowPreferences.sanitizeCountdownThresholdSec(
+                    storedPreferences[TrainFlowPreferenceKeys.defaultCountdownThresholdSec]
+                        ?: TrainFlowPreferences.DEFAULT_COUNTDOWN_THRESHOLD_SEC
+                ),
+            strengthSetTimerMode = TrainFlowPreferences.sanitizeStrengthSetTimerMode(
+                storedPreferences[TrainFlowPreferenceKeys.strengthSetTimerMode]
+                    ?: TrainFlowPreferences.STRENGTH_TIMER_MANUAL_START
+            ),
             heartRateDisplayEnabled =
                 storedPreferences[TrainFlowPreferenceKeys.heartRateDisplayEnabled] ?: false,
             showDisconnectedHeartRatePlaceholder =
                 storedPreferences[TrainFlowPreferenceKeys.showDisconnectedHeartRatePlaceholder]
                     ?: false
         )
+    }
+
+    suspend fun setActionCueEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.actionCueEnabled] = enabled
+        }
+    }
+
+    suspend fun setTrainingFeedbackPreferences(preferences: TrainFlowPreferences) {
+        dataStore.edit { storedPreferences ->
+            storedPreferences[TrainFlowPreferenceKeys.actionCueEnabled] = preferences.actionCueEnabled
+            storedPreferences[TrainFlowPreferenceKeys.restCueEnabled] = preferences.restCueEnabled
+            storedPreferences[TrainFlowPreferenceKeys.soundEnabled] = preferences.soundEnabled
+            storedPreferences[TrainFlowPreferenceKeys.vibrationEnabled] = preferences.vibrationEnabled
+            storedPreferences[TrainFlowPreferenceKeys.emphasisAnimationEnabled] =
+                preferences.emphasisAnimationEnabled
+            storedPreferences[TrainFlowPreferenceKeys.defaultCountdownThresholdSec] =
+                TrainFlowPreferences.sanitizeCountdownThresholdSec(
+                    preferences.defaultCountdownThresholdSec
+                )
+            storedPreferences[TrainFlowPreferenceKeys.strengthSetTimerMode] =
+                TrainFlowPreferences.sanitizeStrengthSetTimerMode(preferences.strengthSetTimerMode)
+        }
+    }
+
+    suspend fun setRestCueEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.restCueEnabled] = enabled
+        }
+    }
+
+    suspend fun setSoundEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.soundEnabled] = enabled
+        }
+    }
+
+    suspend fun setVibrationEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.vibrationEnabled] = enabled
+        }
+    }
+
+    suspend fun setEmphasisAnimationEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.emphasisAnimationEnabled] = enabled
+        }
+    }
+
+    suspend fun setDefaultCountdownThresholdSec(seconds: Int) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.defaultCountdownThresholdSec] =
+                TrainFlowPreferences.sanitizeCountdownThresholdSec(seconds)
+        }
+    }
+
+    suspend fun setStrengthSetTimerMode(mode: String) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.strengthSetTimerMode] =
+                TrainFlowPreferences.sanitizeStrengthSetTimerMode(mode)
+        }
     }
 }

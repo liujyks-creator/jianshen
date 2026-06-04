@@ -45,11 +45,14 @@ import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 
 @Composable
-fun TimedPlanEditorRoute(
+internal fun TimedPlanEditorRoute(
     onBackToHome: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
 ) {
-    var uiState by remember { mutableStateOf(buildDefaultTimedPlanEditorState()) }
+    var uiState by remember {
+        mutableStateOf(buildDefaultTimedPlanEditorState(defaults = planEditorDefaults))
+    }
 
     TimedPlanEditorScreen(
         uiState = uiState,

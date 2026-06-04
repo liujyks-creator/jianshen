@@ -161,6 +161,12 @@ internal enum class OfficialShellDestination(
         enabled = true,
         showInBottomBar = false
     ),
+    SETTINGS(
+        label = "训练偏好",
+        shortLabel = "设",
+        enabled = true,
+        showInBottomBar = false
+    ),
     RECOVERY(
         label = "恢复建议",
         shortLabel = "恢",
@@ -212,7 +218,8 @@ internal fun OfficialShellDestination.selectedBottomDestination(): OfficialShell
         OfficialShellDestination.FOLLOW_ALONG_ENTRY,
         OfficialShellDestination.FOLLOW_ALONG_SESSION,
         OfficialShellDestination.TIMED_SESSION,
-        OfficialShellDestination.STRENGTH_SESSION -> OfficialShellDestination.TRAINING
+        OfficialShellDestination.STRENGTH_SESSION,
+        OfficialShellDestination.SETTINGS -> OfficialShellDestination.TRAINING
         OfficialShellDestination.RECOVERY -> OfficialShellDestination.RECORDS
         else -> this
     }

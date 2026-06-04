@@ -48,11 +48,14 @@ import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 
 @Composable
-fun StrengthPlanEditorRoute(
+internal fun StrengthPlanEditorRoute(
     onBackToHome: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
 ) {
-    var uiState by remember { mutableStateOf(buildDefaultStrengthPlanEditorState()) }
+    var uiState by remember {
+        mutableStateOf(buildDefaultStrengthPlanEditorState(defaults = planEditorDefaults))
+    }
 
     StrengthPlanEditorScreen(
         uiState = uiState,

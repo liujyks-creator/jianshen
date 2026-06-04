@@ -38,6 +38,20 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun newStrengthEditorConsumesStrengthSetTimerModePreferenceDefault() {
+        val state = buildDefaultStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                strengthSetTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST
+            )
+        ).addExercise("barbell-bench-press")
+        val blocks = state.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>()
+
+        assertEquals(StrengthSetTimerMode.AUTO_AFTER_REST, state.strengthSetTimerMode)
+        assertTrue(blocks.isNotEmpty())
+        assertTrue(blocks.all { it.setTimerMode == StrengthSetTimerMode.AUTO_AFTER_REST })
+    }
+
+    @Test
     fun defaultsStrengthRepTargetToEightToTwelveWhenAddingActions() {
         val state = buildDefaultStrengthPlanEditorState()
             .addExercise("barbell-bench-press")

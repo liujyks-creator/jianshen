@@ -7,6 +7,7 @@ import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.StretchBlock
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.WarmupBlock
@@ -17,6 +18,37 @@ internal const val DefaultTimedPlanTimestamp = "2026-05-28T00:00:00Z"
 
 private const val MinCueThresholdSec = 1
 private const val MaxCueThresholdSec = 60
+
+internal data class PlanEditorDefaults(
+    val actionCueEnabled: Boolean = true,
+    val restCueEnabled: Boolean = true,
+    val soundEnabled: Boolean = true,
+    val vibrationEnabled: Boolean = true,
+    val emphasisAnimationEnabled: Boolean = true,
+    val defaultCountdownThresholdSec: Int = CountdownCue.DEFAULT_THRESHOLD_SEC,
+    val strengthSetTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START
+) {
+    val safeCountdownThresholdSec: Int
+        get() = defaultCountdownThresholdSec.sanitizeCueThreshold()
+
+    fun actionCueDefaults(): CountdownCueUiState {
+        return countdownCueDefaults(enabled = actionCueEnabled)
+    }
+
+    fun restCueDefaults(): CountdownCueUiState {
+        return countdownCueDefaults(enabled = restCueEnabled)
+    }
+
+    private fun countdownCueDefaults(enabled: Boolean): CountdownCueUiState {
+        return CountdownCueUiState(
+            enabled = enabled,
+            thresholdSec = safeCountdownThresholdSec,
+            soundEnabled = soundEnabled,
+            vibrationEnabled = vibrationEnabled,
+            emphasisAnimationEnabled = emphasisAnimationEnabled
+        )
+    }
+}
 
 internal data class TimedPlanEditorScreenState(
     val title: String,
@@ -153,7 +185,8 @@ internal data class CountdownCueUiState(
 }
 
 internal fun buildDefaultTimedPlanEditorState(
-    entries: List<ActionExerciseFixture> = FirstActionExerciseFixtures.entries
+    entries: List<ActionExerciseFixture> = FirstActionExerciseFixtures.entries,
+    defaults: PlanEditorDefaults = PlanEditorDefaults()
 ): TimedPlanEditorScreenState {
     val timedEntries = entries.filter { it.exercise.capabilities.supportsTimedTraining }
     val defaultItems = timedEntries
@@ -167,8 +200,8 @@ internal fun buildDefaultTimedPlanEditorState(
         stretchDurationSec = 120,
         rounds = 2,
         restBetweenRoundsSec = 60,
-        actionCue = CountdownCueUiState(),
-        restCue = CountdownCueUiState(),
+        actionCue = defaults.actionCueDefaults(),
+        restCue = defaults.restCueDefaults(),
         items = defaultItems,
         selectableExercises = timedEntries.map { entry -> entry.toOption() }
     ).constrainCueSettings()

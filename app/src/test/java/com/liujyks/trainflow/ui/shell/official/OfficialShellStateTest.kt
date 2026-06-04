@@ -68,6 +68,17 @@ class OfficialShellStateTest {
     }
 
     @Test
+    fun settingsDestinationIsEnabledButNotABottomTab() {
+        val state = OfficialShellState(currentDestination = OfficialShellDestination.TRAINING)
+            .selectDestination(OfficialShellDestination.SETTINGS)
+        val bottomEntries = officialShellNavigationEntries(OfficialShellDestination.SETTINGS)
+
+        assertEquals(OfficialShellDestination.SETTINGS, state.currentDestination)
+        assertFalse(bottomEntries.any { it.destination == OfficialShellDestination.SETTINGS })
+        assertTrue(requireNotNull(bottomEntries.first { it.destination == OfficialShellDestination.TRAINING }).selected)
+    }
+
+    @Test
     fun timedSessionSelectsTrainingBottomDestination() {
         assertEquals(
             OfficialShellDestination.TRAINING,
