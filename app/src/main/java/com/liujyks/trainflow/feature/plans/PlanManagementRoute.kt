@@ -204,7 +204,7 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "计时与力量训练执行已接入；计划提醒为普通通知，session records、活跃训练通知、真实心率和语音仍未接入。",
+            text = "计划提醒已可用；活跃训练通知已接入训练执行页。首版不启用前台服务，不承诺后台精确计时。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
