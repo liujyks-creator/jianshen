@@ -188,12 +188,14 @@ UI shell 可以改变入口排序，但不能让计时训练、力量训练或�
 E8.1 开始，App 可以在设置页切换三套内置 UI 皮肤：
 
 1. **Official Flow**：当前 `DESIGN.md` 官方默认皮肤。
-2. **Tile Flow**：磁贴式清爽皮肤的内置注册占位，E8.1 只提供轻量 token 和元数据差异。
+2. **Tile Flow**：清爽、模块化的磁贴式内置皮肤；E8.2 已适配训练首页、计划列表/详情、设置页，并对计时与力量训练执行页做轻度适配。
 3. **Big Type**：大字训练皮肤的内置注册占位，E8.1 只提供轻量 token 和元数据差异。
 
 内置皮肤切换只允许改变 UI 表现、布局倾向和 theme token。它不能改变 `WorkoutPlan`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、训练执行引擎、通知调度、权限说明、心率非医疗化文案或恢复建议非医疗化边界。
 
-未知或非法 skin id 必须回退到 Official Flow。Tile Flow 和 Big Type 的完整页面形态应作为后续独立 story 实施，不在 E8.1 中承诺。
+未知或非法 skin id 必须回退到 Official Flow。Tile Flow 在 E8.2 只改变视觉、入口组合和布局倾向：训练首页可使用不同大小磁贴表达优先级，计划页可用平铺指标表达动作、轮次、时长、休息和提醒，设置页可按偏好形成分组磁贴；不得嵌套卡片，不得把训练执行页拆成大量零碎磁贴。动作库、计划编辑、跟练入口/执行、记录、恢复和总结细节当前继续沿用 Official Flow 页面组合。
+
+Tile Flow 的可复用组件与 token 应集中在 `ui.designsystem` / `ui.theme`，真实页面通过当前 skin 状态选择布局表现。Big Type 的完整页面形态仍留给 E8.3，不得在 Tile Flow story 中提前实现。
 
 ## 12. 暂不支持的插件能力
 

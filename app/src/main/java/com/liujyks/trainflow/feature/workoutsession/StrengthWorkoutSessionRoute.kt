@@ -62,6 +62,11 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.designsystem.currentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import kotlinx.coroutines.delay
 
 @Composable
@@ -192,10 +197,11 @@ private fun StrengthWorkoutSessionScreen(
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val skin = LocalTrainFlowSkin.current
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(TrainFlowPrimary)
+            .background(skin.tokens.primary)
     ) {
         val confirmationValidation = uiState.confirmation?.let { confirmation ->
             confirmationInput?.validateFor(confirmation)
@@ -204,12 +210,12 @@ private fun StrengthWorkoutSessionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = currentPageHorizontalPadding())
                 .padding(
                     top = 22.dp,
                     bottom = if (uiState.isTerminal) 22.dp else 132.dp
                 ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
         ) {
             StrengthSessionHeader(uiState)
             StrengthMainPanel(uiState)
@@ -288,27 +294,28 @@ private fun StrengthSessionHeader(uiState: StrengthWorkoutSessionScreenState) {
 
 @Composable
 private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
+    val skin = LocalTrainFlowSkin.current
     val isRest = uiState.phaseLabel == "休息"
     val isConfirm = uiState.canConfirmPlanned
     val panelColor = when {
-        isConfirm -> TrainFlowAction.copy(alpha = 0.14f)
-        isRest -> TrainFlowAccent.copy(alpha = 0.14f)
-        else -> TrainFlowSecondary
+        isConfirm -> skin.tokens.action.copy(alpha = 0.14f)
+        isRest -> skin.tokens.accent.copy(alpha = 0.14f)
+        else -> skin.tokens.secondary
     }
     val borderColor = when {
-        isConfirm -> TrainFlowAction.copy(alpha = 0.55f)
-        isRest -> TrainFlowAccent.copy(alpha = 0.5f)
+        isConfirm -> skin.tokens.action.copy(alpha = 0.55f)
+        isRest -> skin.tokens.accent.copy(alpha = 0.5f)
         else -> Color.White.copy(alpha = 0.08f)
     }
     val metricColor = when {
-        uiState.canCompleteSet || isConfirm -> TrainFlowAction
-        isRest -> TrainFlowAccent
+        uiState.canCompleteSet || isConfirm -> skin.tokens.action
+        isRest -> skin.tokens.accent
         else -> TrainFlowNeutral50
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(currentProminentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = panelColor),
         border = BorderStroke(1.dp, borderColor)
     ) {
@@ -322,8 +329,8 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
             ) {
                 StrengthSessionPill(
                     text = uiState.phaseLabel,
-                    containerColor = if (isRest) TrainFlowAccent else TrainFlowAction,
-                    contentColor = TrainFlowPrimary
+                    containerColor = if (isRest) skin.tokens.accent else skin.tokens.action,
+                    contentColor = skin.tokens.primary
                 )
                 if (uiState.setKindLabel.isNotBlank()) {
                     StrengthSessionPill(text = uiState.setKindLabel)
@@ -348,7 +355,7 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
                 LinearProgressIndicator(
                     progress = { uiState.progressFraction.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth(),
-                    color = TrainFlowAccent,
+                    color = skin.tokens.accent,
                     trackColor = Color.White.copy(alpha = 0.12f)
                 )
             } else {
@@ -367,7 +374,7 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
                 LinearProgressIndicator(
                     progress = { uiState.progressFraction.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth(),
-                    color = if (isRest) TrainFlowAccent else TrainFlowAction,
+                    color = if (isRest) skin.tokens.accent else skin.tokens.action,
                     trackColor = Color.White.copy(alpha = 0.12f)
                 )
                 Text(
@@ -394,7 +401,7 @@ private fun StrengthSetConfirmationPanel(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(currentProminentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
         border = BorderStroke(1.dp, TrainFlowAction.copy(alpha = 0.45f))
     ) {
@@ -757,16 +764,17 @@ private fun StrengthSessionControls(
     onStartNextDuringRest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val skin = LocalTrainFlowSkin.current
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = TrainFlowPrimary,
+        color = skin.tokens.primary,
         shadowElevation = 12.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             val canConfirmSet = uiState.canConfirmPlanned && confirmationValidation?.canConfirm == true
@@ -784,8 +792,8 @@ private fun StrengthSessionControls(
                     canConfirmSet ||
                     uiState.canStartNextDuringRest,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAction)
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
                 Text(
                     text = when {
@@ -860,6 +868,7 @@ private fun StrengthTerminalPanel(
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
 ) {
+    val skin = LocalTrainFlowSkin.current
     StrengthDarkInfoPanel {
         Text(
             text = uiState.terminalTitle.orEmpty(),
@@ -878,9 +887,9 @@ private fun StrengthTerminalPanel(
             onClick = onBackToPlans,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
+            colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.accent)
         ) {
-            Text(text = "返回计划", color = TrainFlowPrimary)
+            Text(text = "返回计划", color = skin.tokens.primary)
         }
     }
 }
@@ -1113,7 +1122,7 @@ private fun StrengthRecoveryEntryPanel(
 private fun StrengthDarkInfoPanel(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(currentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {

@@ -60,6 +60,7 @@ internal data class PlanListItemUiState(
     val summary: String,
     val detailSummary: String,
     val reminderSummary: String,
+    val metrics: List<PlanMetricUiState>,
     val selected: Boolean
 )
 
@@ -70,11 +71,17 @@ internal data class PlanDetailUiState(
     val modeBadge: String,
     val summary: String,
     val detailSummary: String,
+    val metrics: List<PlanMetricUiState>,
     val sections: List<PlanDetailSectionUiState>,
     val reminder: PlanReminderUiState,
     val editStatus: String,
     val startStatus: String,
     val canStartTraining: Boolean = false
+)
+
+internal data class PlanMetricUiState(
+    val label: String,
+    val value: String
 )
 
 internal data class PlanReminderUiState(
@@ -241,6 +248,7 @@ private fun WorkoutPlan.toListItem(selected: Boolean): PlanListItemUiState {
         summary = planSummary(),
         detailSummary = planDetailSummary(),
         reminderSummary = planReminderSummary(),
+        metrics = planMetrics(),
         selected = selected
     )
 }
@@ -255,6 +263,7 @@ private fun WorkoutPlan.toDetailState(
         modeBadge = mode.modeBadge(),
         summary = planSummary(),
         detailSummary = planDetailSummary(),
+        metrics = planMetrics(),
         sections = detailSections(),
         reminder = toReminderUiState(notificationPermissionState),
         editStatus = "编辑回填后续接入",
@@ -265,6 +274,55 @@ private fun WorkoutPlan.toDetailState(
         },
         canStartTraining = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH
     )
+}
+
+private fun WorkoutPlan.planMetrics(): List<PlanMetricUiState> {
+    val reminderValue = if (reminder?.enabled == true && reminder.scheduleAt != null) {
+        "已设置"
+    } else {
+        "未设置"
+    }
+    return when (mode) {
+        WorkoutMode.TIMED -> {
+            val circuits = blocks.filterIsInstance<TimedCircuitBlock>()
+            val restValues = circuits.flatMap { block ->
+                block.items.mapNotNull { it.restAfterSec } + listOfNotNull(block.restBetweenRoundsSec)
+            } + blocks.filterIsInstance<RestBlock>().map { it.durationSec }
+            listOf(
+                PlanMetricUiState("动作", "${circuits.sumOf { it.items.size }} 个"),
+                PlanMetricUiState("轮次", "${circuits.sumOf { it.rounds }} 轮"),
+                PlanMetricUiState("时长", estimatedTimedDurationSec().formatDuration()),
+                PlanMetricUiState("休息", restValues.distinct().toMetricDuration()),
+                PlanMetricUiState("提醒", reminderValue)
+            )
+        }
+
+        WorkoutMode.STRENGTH -> {
+            val strengthBlocks = blocks.filterIsInstance<StrengthExerciseBlock>()
+            val restValues = strengthBlocks.flatMap { block ->
+                listOfNotNull(block.target?.restAfterSetSec) + block.sets.mapNotNull { it.restAfterSec }
+            }.distinct()
+            listOf(
+                PlanMetricUiState("动作", "${strengthBlocks.size} 个"),
+                PlanMetricUiState("组数", "${strengthBlocks.sumOf { it.sets.size }} 组"),
+                PlanMetricUiState("休息", restValues.toMetricDuration()),
+                PlanMetricUiState("提醒", reminderValue)
+            )
+        }
+
+        WorkoutMode.FOLLOW_ALONG -> listOf(
+            PlanMetricUiState("模式", "跟练雏形"),
+            PlanMetricUiState("提醒", reminderValue)
+        )
+    }
+}
+
+private fun List<Int>.toMetricDuration(): String {
+    return when (size) {
+        0 -> "未设置"
+        1 -> first().formatDuration()
+        else -> "按步骤"
+    }
 }
 
 private fun WorkoutMode.modeLabel(): String {

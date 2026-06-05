@@ -3,6 +3,10 @@ package com.liujyks.trainflow.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+
+val LocalTrainFlowSkin = staticCompositionLocalOf { SkinRegistry.defaultSkin }
 
 internal fun trainFlowLightColorSchemeForSkin(skin: TrainFlowSkin) = lightColorScheme(
     primary = skin.tokens.primary,
@@ -26,9 +30,11 @@ fun TrainFlowTheme(
     skin: TrainFlowSkin = SkinRegistry.defaultSkin,
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = trainFlowLightColorSchemeForSkin(skin),
-        typography = TrainFlowTypography,
-        content = content
-    )
+    CompositionLocalProvider(LocalTrainFlowSkin provides skin) {
+        MaterialTheme(
+            colorScheme = trainFlowLightColorSchemeForSkin(skin),
+            typography = TrainFlowTypography,
+            content = content
+        )
+    }
 }

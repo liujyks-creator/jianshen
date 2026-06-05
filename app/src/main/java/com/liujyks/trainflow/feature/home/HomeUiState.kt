@@ -4,6 +4,7 @@ internal data class HomeScreenState(
     val summary: String,
     val primaryEntry: HomeEntryUiState,
     val peerEntries: List<HomeEntryUiState>,
+    val quickEntries: List<HomeEntryUiState>,
     val futureEntries: List<HomeEntryUiState>
 )
 
@@ -22,6 +23,9 @@ internal enum class HomeEntryId {
     STRENGTH_TRAINING,
     EXERCISE_LIBRARY,
     FOLLOW_ALONG,
+    RECENT_PLAN,
+    TRAINING_PREFERENCES,
+    REMINDER_STATUS,
     SESSION_RECORDS,
     RECOVERY
 }
@@ -61,6 +65,48 @@ internal fun buildHomeScreenState(): HomeScreenState {
                 description = "浏览首批动作，查看短提示、步骤、错误和替代动作。",
                 badge = "已可浏览",
                 status = "打开动作库",
+                enabled = true
+            )
+        ),
+        quickEntries = listOf(
+            HomeEntryUiState(
+                id = HomeEntryId.EXERCISE_LIBRARY,
+                title = "动作库",
+                description = "浏览首批动作与训练提示。",
+                badge = "11 个动作",
+                status = "打开动作库",
+                enabled = true
+            ),
+            HomeEntryUiState(
+                id = HomeEntryId.RECENT_PLAN,
+                title = "最近计划",
+                description = "查看计时与力量计划详情。",
+                badge = "2 个计划",
+                status = "打开计划",
+                enabled = true
+            ),
+            HomeEntryUiState(
+                id = HomeEntryId.TRAINING_PREFERENCES,
+                title = "训练偏好",
+                description = "设置倒计时反馈与皮肤。",
+                badge = "可调整",
+                status = "打开设置",
+                enabled = true
+            ),
+            HomeEntryUiState(
+                id = HomeEntryId.REMINDER_STATUS,
+                title = "提醒状态",
+                description = "训练内反馈与普通通知边界。",
+                badge = "普通通知",
+                status = "查看设置",
+                enabled = true
+            ),
+            HomeEntryUiState(
+                id = HomeEntryId.SESSION_RECORDS,
+                title = "训练记录",
+                description = "查看内存态记录与基础趋势。",
+                badge = "记录",
+                status = "打开记录",
                 enabled = true
             )
         ),

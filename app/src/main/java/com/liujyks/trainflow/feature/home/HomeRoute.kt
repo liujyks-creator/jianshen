@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +41,11 @@ import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.designsystem.TileFlowCard
+import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isTileFlow
 
 @Composable
 fun HomeRoute(
@@ -48,6 +54,8 @@ fun HomeRoute(
     onOpenStrengthPlanEditor: () -> Unit,
     onOpenFollowAlong: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPlans: () -> Unit,
+    onOpenRecords: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildHomeScreenState() }
@@ -59,6 +67,8 @@ fun HomeRoute(
         onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
         onOpenFollowAlong = onOpenFollowAlong,
         onOpenSettings = onOpenSettings,
+        onOpenPlans = onOpenPlans,
+        onOpenRecords = onOpenRecords,
         modifier = modifier
     )
 }
@@ -71,8 +81,25 @@ private fun TrainFlowHomeScreen(
     onOpenStrengthPlanEditor: () -> Unit,
     onOpenFollowAlong: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPlans: () -> Unit,
+    onOpenRecords: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (LocalTrainFlowSkin.current.isTileFlow) {
+        TileFlowHomeScreen(
+            uiState = uiState,
+            onOpenExerciseLibrary = onOpenExerciseLibrary,
+            onOpenTimedPlanEditor = onOpenTimedPlanEditor,
+            onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
+            onOpenFollowAlong = onOpenFollowAlong,
+            onOpenSettings = onOpenSettings,
+            onOpenPlans = onOpenPlans,
+            onOpenRecords = onOpenRecords,
+            modifier = modifier
+        )
+        return
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -128,6 +155,215 @@ private fun TrainFlowHomeScreen(
         item {
             FutureBoundaryPanel(entries = uiState.futureEntries)
         }
+    }
+}
+
+@Composable
+private fun TileFlowHomeScreen(
+    uiState: HomeScreenState,
+    onOpenExerciseLibrary: () -> Unit,
+    onOpenTimedPlanEditor: () -> Unit,
+    onOpenStrengthPlanEditor: () -> Unit,
+    onOpenFollowAlong: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenPlans: () -> Unit,
+    onOpenRecords: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val skin = LocalTrainFlowSkin.current
+    val strength = uiState.peerEntries.first { it.id == HomeEntryId.STRENGTH_TRAINING }
+    val followAlong = uiState.peerEntries.first { it.id == HomeEntryId.FOLLOW_ALONG }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = currentPageHorizontalPadding(), vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
+    ) {
+        item {
+            HomeHeader(
+                summary = "今天从一块清晰的训练磁贴开始。",
+                onOpenSettings = onOpenSettings
+            )
+        }
+        item {
+            TileFlowPrimaryEntry(
+                entry = uiState.primaryEntry,
+                onClick = onOpenTimedPlanEditor
+            )
+        }
+        item {
+            Text(
+                text = "选择训练方式",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(currentSectionSpacing())
+            ) {
+                TileFlowEntry(
+                    entry = strength,
+                    containerColor = skin.tokens.action.copy(alpha = 0.12f),
+                    borderColor = skin.tokens.action.copy(alpha = 0.24f),
+                    onClick = onOpenStrengthPlanEditor,
+                    modifier = Modifier.weight(1f)
+                )
+                TileFlowEntry(
+                    entry = followAlong,
+                    containerColor = skin.tokens.accent.copy(alpha = 0.12f),
+                    borderColor = skin.tokens.accent.copy(alpha = 0.24f),
+                    onClick = onOpenFollowAlong,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        item {
+            Text(
+                text = "训练工作区",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        uiState.quickEntries.chunked(2).forEach { entries ->
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(currentSectionSpacing())
+                ) {
+                    entries.forEach { entry ->
+                        TileFlowQuickEntry(
+                            entry = entry,
+                            onClick = when (entry.id) {
+                                HomeEntryId.EXERCISE_LIBRARY -> onOpenExerciseLibrary
+                                HomeEntryId.RECENT_PLAN -> onOpenPlans
+                                HomeEntryId.TRAINING_PREFERENCES,
+                                HomeEntryId.REMINDER_STATUS -> onOpenSettings
+                                HomeEntryId.SESSION_RECORDS -> onOpenRecords
+                                else -> ({})
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (entries.size == 1) {
+                        Box(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+        item {
+            FutureBoundaryPanel(
+                entries = uiState.futureEntries.filterNot { entry ->
+                    entry.id == HomeEntryId.SESSION_RECORDS
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TileFlowPrimaryEntry(
+    entry: HomeEntryUiState,
+    onClick: () -> Unit
+) {
+    val skin = LocalTrainFlowSkin.current
+    TileFlowCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = skin.tokens.primary,
+        borderColor = skin.tokens.primary,
+        prominent = true,
+        onClick = onClick
+    ) {
+        StatusPill(text = entry.badge, color = skin.tokens.accent, contentColor = skin.tokens.primary)
+        Text(
+            text = "开始计时训练",
+            style = MaterialTheme.typography.headlineMedium,
+            color = skin.tokens.neutral50
+        )
+        Text(
+            text = entry.description,
+            style = MaterialTheme.typography.bodyLarge,
+            color = skin.tokens.neutral50.copy(alpha = 0.82f)
+        )
+        Button(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = skin.tokens.accent,
+                contentColor = skin.tokens.primary
+            )
+        ) {
+            Text(text = entry.status, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun TileFlowEntry(
+    entry: HomeEntryUiState,
+    containerColor: Color,
+    borderColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    TileFlowCard(
+        modifier = modifier.heightIn(min = 164.dp),
+        containerColor = containerColor,
+        borderColor = borderColor,
+        onClick = onClick
+    ) {
+        Text(
+            text = entry.badge,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = entry.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = entry.description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = entry.status,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun TileFlowQuickEntry(
+    entry: HomeEntryUiState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    TileFlowCard(
+        modifier = modifier.heightIn(min = 126.dp),
+        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+        onClick = onClick
+    ) {
+        Text(
+            text = entry.badge,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = entry.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = entry.description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -271,11 +507,14 @@ private fun HomeEntryCard(
 
 @Composable
 private fun FutureBoundaryPanel(entries: List<HomeEntryUiState>) {
+    val skin = LocalTrainFlowSkin.current
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(
+            if (skin.isTileFlow) skin.tokens.cardCornerDp.dp else 10.dp
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, TrainFlowNeutral100)
+        border = BorderStroke(1.dp, if (skin.isTileFlow) skin.tokens.neutral100 else TrainFlowNeutral100)
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -366,7 +605,9 @@ private fun TrainFlowHomeScreenPreview() {
             onOpenTimedPlanEditor = {},
             onOpenStrengthPlanEditor = {},
             onOpenFollowAlong = {},
-            onOpenSettings = {}
+            onOpenSettings = {},
+            onOpenPlans = {},
+            onOpenRecords = {}
         )
     }
 }

@@ -49,6 +49,25 @@ class SkinRegistryTest {
     }
 
     @Test
+    fun tileFlowDefinesACompleteTileLayoutPolicyWhileBigTypeRemainsAPlaceholder() {
+        val official = SkinRegistry.resolve("official_flow")
+        val tile = SkinRegistry.resolve("tile_flow")
+        val bigType = SkinRegistry.resolve("big_type")
+
+        assertTrue(tile.isTileFlow)
+        assertEquals(16, tile.tokens.pageHorizontalPaddingDp)
+        assertEquals(12, tile.tokens.sectionSpacingDp)
+        assertEquals(18, tile.tokens.cardCornerDp)
+        assertEquals(22, tile.tokens.prominentCardCornerDp)
+        assertTrue(tile.description.contains("磁贴"))
+        assertTrue(tile.capabilityBoundary.contains("不改变训练流程"))
+
+        assertFalse(official.isTileFlow)
+        assertFalse(bigType.isTileFlow)
+        assertTrue(bigType.description.contains("占位"))
+    }
+
+    @Test
     fun themeColorSchemeConsumesCurrentSkinTokens() {
         val bigType = SkinRegistry.resolve("big_type")
         val colorScheme = trainFlowLightColorSchemeForSkin(bigType)

@@ -52,4 +52,21 @@ class HomeUiStateTest {
         )
         assertTrue(state.futureEntries.all { !it.enabled })
     }
+
+    @Test
+    fun tileFlowQuickWorkspaceKeepsRealPlansSettingsRemindersAndRecordsDiscoverable() {
+        val state = buildHomeScreenState()
+
+        assertEquals(
+            listOf(
+                HomeEntryId.EXERCISE_LIBRARY,
+                HomeEntryId.RECENT_PLAN,
+                HomeEntryId.TRAINING_PREFERENCES,
+                HomeEntryId.REMINDER_STATUS,
+                HomeEntryId.SESSION_RECORDS
+            ),
+            state.quickEntries.map { it.id }
+        )
+        assertTrue(state.quickEntries.all { it.enabled })
+    }
 }

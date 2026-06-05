@@ -64,6 +64,11 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.designsystem.currentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import kotlinx.coroutines.delay
 
 @Composable
@@ -144,13 +149,14 @@ private fun TimedWorkoutSessionScreen(
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val skin = LocalTrainFlowSkin.current
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(TrainFlowPrimary)
+            .background(skin.tokens.primary)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = currentPageHorizontalPadding(), vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
         SessionHeader(uiState)
         MainCountdownPanel(uiState)
@@ -201,24 +207,25 @@ private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
 
 @Composable
 private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
+    val skin = LocalTrainFlowSkin.current
     val reminder = uiState.countdownReminder
     val reminderActive = reminder.isActive && reminder.emphasisAnimationEnabled
     val panelColor = if (reminderActive) {
-        TrainFlowAction.copy(alpha = 0.18f)
+        skin.tokens.action.copy(alpha = 0.18f)
     } else {
-        TrainFlowSecondary
+        skin.tokens.secondary
     }
     val borderColor = if (reminderActive) {
-        TrainFlowAction.copy(alpha = 0.7f)
+        skin.tokens.action.copy(alpha = 0.7f)
     } else {
         Color.White.copy(alpha = 0.08f)
     }
-    val timerColor = if (reminderActive) TrainFlowAction else TrainFlowNeutral50
-    val progressColor = if (reminderActive) TrainFlowAction else TrainFlowAccent
+    val timerColor = if (reminderActive) skin.tokens.action else skin.tokens.neutral50
+    val progressColor = if (reminderActive) skin.tokens.action else skin.tokens.accent
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(currentProminentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = panelColor),
         border = BorderStroke(1.dp, borderColor)
     ) {
@@ -229,12 +236,12 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
             SessionPill(
                 text = if (reminder.isActive) reminder.type.label else uiState.phaseLabel,
                 containerColor = when {
-                    reminder.isActive && reminder.type == TimedWorkoutCountdownReminderType.ACTION_ENDING -> TrainFlowAction
-                    reminder.isActive -> TrainFlowAccent
-                    uiState.phaseLabel == "休息" -> TrainFlowAccent
-                    else -> TrainFlowAction
+                    reminder.isActive && reminder.type == TimedWorkoutCountdownReminderType.ACTION_ENDING -> skin.tokens.action
+                    reminder.isActive -> skin.tokens.accent
+                    uiState.phaseLabel == "休息" -> skin.tokens.accent
+                    else -> skin.tokens.action
                 },
-                contentColor = TrainFlowPrimary
+                contentColor = skin.tokens.primary
             )
             Text(
                 text = uiState.currentTitle,
@@ -352,13 +359,14 @@ private fun SessionControls(
     onExtendRest: () -> Unit,
     onEnd: () -> Unit
 ) {
+    val skin = LocalTrainFlowSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Button(
             onClick = if (uiState.canResume) onResume else onPause,
             enabled = uiState.canResume || uiState.canPause,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAction)
+            shape = RoundedCornerShape(currentCardCorner()),
+            colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
         ) {
             Text(
                 text = if (uiState.canResume) "继续训练" else "暂停",
@@ -411,6 +419,7 @@ private fun TerminalPanel(
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
 ) {
+    val skin = LocalTrainFlowSkin.current
     DarkInfoPanel {
         Text(
             text = uiState.terminalTitle.orEmpty(),
@@ -429,9 +438,9 @@ private fun TerminalPanel(
             onClick = onBackToPlans,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
+            colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.accent)
         ) {
-            Text(text = "返回计划", color = TrainFlowPrimary)
+            Text(text = "返回计划", color = skin.tokens.primary)
         }
     }
 }
@@ -586,7 +595,7 @@ private fun RecoveryEntryPanel(
 private fun DarkInfoPanel(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(currentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {

@@ -26,10 +26,16 @@ class PlanManagementUiStateTest {
         assertTrue(items[0].summary.contains("预计"))
         assertTrue(items[0].detailSummary.contains("动作提醒"))
         assertTrue(items[0].reminderSummary.contains("训练提醒未设置"))
+        assertTrue(items[0].metrics.any { it.label == "时长" })
+        assertTrue(items[0].metrics.any { it.label == "轮次" })
+        assertTrue(items[0].metrics.any { it.label == "休息" })
+        assertTrue(items[0].metrics.any { it.label == "提醒" && it.value == "未设置" })
         assertEquals("力量训练", items[1].modeLabel)
         assertEquals("力量", items[1].modeBadge)
         assertTrue(items[1].summary.contains("组"))
         assertTrue(items[1].detailSummary.contains("计划值预填"))
+        assertTrue(items[1].metrics.any { it.label == "组数" })
+        assertTrue(items[1].metrics.any { it.label == "休息" })
     }
 
     @Test

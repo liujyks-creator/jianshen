@@ -114,6 +114,12 @@ internal fun TrainFlowApp(
                     onOpenSettings = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.SETTINGS))
                     },
+                    onOpenPlans = {
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.PLANS))
+                    },
+                    onOpenRecords = {
+                        applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 

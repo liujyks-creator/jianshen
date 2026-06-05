@@ -33,6 +33,11 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.designsystem.currentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isTileFlow
 
 @Composable
 internal fun SettingsRoute(
@@ -48,12 +53,13 @@ internal fun SettingsRoute(
     onUiSkinChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val skin = LocalTrainFlowSkin.current
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(TrainFlowSurfaceMuted)
-            .padding(horizontal = 20.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(if (skin.isTileFlow) MaterialTheme.colorScheme.background else TrainFlowSurfaceMuted)
+            .padding(horizontal = currentPageHorizontalPadding(), vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
         item {
             TextButton(onClick = onBackToTraining) {
@@ -99,8 +105,9 @@ internal fun SettingsRoute(
 
 @Composable
 private fun SettingsHeader(uiState: TrainingPreferencesScreenState) {
+    val skin = LocalTrainFlowSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "设置与皮肤", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        StatusPill(text = "设置与皮肤", color = skin.tokens.accent, contentColor = skin.tokens.primary)
         Text(
             text = "训练偏好设置",
             style = MaterialTheme.typography.headlineLarge,
@@ -129,7 +136,7 @@ private fun CountdownPreferencesCard(
     onVibrationEnabledChanged: (Boolean) -> Unit,
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit
 ) {
-    SettingsCard {
+    SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.accent) {
         SectionTitle(text = "训练内倒计时反馈")
         NumberField(
             label = "默认临近结束秒数",
@@ -175,7 +182,7 @@ private fun StrengthPreferencesCard(
     uiState: TrainingPreferencesScreenState,
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit
 ) {
-    SettingsCard {
+    SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.action) {
         SectionTitle(text = "力量训练默认")
         Text(
             text = "本组计时默认模式",
@@ -205,10 +212,10 @@ private fun SkinPreferencesCard(
     uiState: TrainingPreferencesScreenState,
     onUiSkinChanged: (String) -> Unit
 ) {
-    SettingsCard {
+    SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.accent) {
         SectionTitle(text = "UI 皮肤")
         Text(
-            text = "三套皮肤都是内置注册项。Tile Flow 与 Big Type 目前只提供轻量 token 和元数据差异。",
+            text = "三套皮肤都是内置注册项。Tile Flow 已适配关键页面；Big Type 仍保持后续视觉重做占位。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -300,12 +307,26 @@ private fun ToggleRow(
 }
 
 @Composable
-private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+private fun SettingsCard(
+    tileAccent: Color? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val skin = LocalTrainFlowSkin.current
+    val containerColor = if (skin.isTileFlow && tileAccent != null) {
+        tileAccent.copy(alpha = 0.07f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val borderColor = if (skin.isTileFlow && tileAccent != null) {
+        tileAccent.copy(alpha = 0.22f)
+    } else {
+        TrainFlowNeutral100
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, TrainFlowNeutral100)
+        shape = RoundedCornerShape(currentCardCorner()),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor)
     ) {
         Column(
             modifier = Modifier.padding(18.dp),

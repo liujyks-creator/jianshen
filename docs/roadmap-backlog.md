@@ -789,6 +789,8 @@ stepsCompleted:
 
 ### Story E8.2: Tile Flow 完整视觉重做
 
+**状态:** Implemented in `ui.theme`, `ui.designsystem`, home/plans/settings, workout execution routes, and unit tests
+
 作为开发者，  
 我想把 Tile Flow 从内置注册占位扩展为完整磁贴式视觉体验，
 以便偏好清爽信息块的用户获得更明确的页面形态。
@@ -798,6 +800,16 @@ stepsCompleted:
 - Then Tile Flow 有完整 token、组件和关键页面布局映射。
 - Then 训练执行页仍保留当前动作、时间/组目标、主按钮和必要控制。
 - Then 不改变训练命令、事件、计划、记录或核心引擎语义。
+
+**交付结果:**
+
+- `TrainFlowTheme` 通过 composition local 向真实 Compose 页面提供当前 skin；Tile Flow token 扩展页面横向留白、分组间距、普通磁贴和主磁贴圆角，`ui.designsystem` 新增可复用磁贴与指标条组件。
+- Tile Flow 训练首页使用最大计时训练主磁贴、并列力量/跟练次级磁贴，以及动作库、最近计划、训练偏好、提醒状态和记录工作区；所有启用入口仍指向现有真实页面。
+- Tile Flow 计划列表与详情使用磁贴和指标条表达动作数、轮次、时长、休息和提醒状态；设置页使用统一磁贴分组展示训练反馈、力量默认、UI 皮肤和通知边界。
+- 计时与力量训练执行页只做轻度 Tile Flow 适配，消费当前皮肤的深色容器、间距、圆角和动作色；当前动作、主倒计时/组目标、主按钮、必要控制和心率辅助层级不变。
+- Official Flow 保持原有页面组合、默认尺寸与颜色；Big Type 继续保持 E8.1 占位状态。动作库、计划编辑、跟练入口/执行、记录、恢复和总结细节继续沿用 Official Flow 页面组合。
+- 新增单元测试覆盖 Tile Flow 布局 token、Big Type 占位、首页工作区入口和计划指标映射。
+- 本 story 未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，也未改变 `WorkoutCommand`、`WorkoutEvent`、`WorkoutPlan`、`WorkoutSession`、通知、权限、心率、恢复建议或 `core.engine` 边界。
 
 ### Story E8.3: Big Type 完整视觉重做
 
@@ -905,23 +917,24 @@ E7.1 训练提醒通知已合入 main。
 E7.2 活跃训练通知边界已合入 main。
 E7.3 训练偏好设置已合入 main。
 E7.3 偏好回归保护已合入 main。
-E8.1 内置 UI 皮肤 contract / registry 已在 codex/e8-1-skin-contract-registry 实施，等待 Review Gate。
+E8.1 内置 UI 皮肤 contract / registry 已合入 main。
+E8.2 Tile Flow 关键页面磁贴式皮肤已在 codex/e8-2-tile-flow-skin 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E8.1 Review Gate
+Story E8.2 Review Gate
 ```
 
-E8.1 Review Gate 建议重点确认：
+E8.2 Review Gate 建议重点确认：
 
-1. 三套内置皮肤 metadata 是否完整，Official Flow 是否为默认皮肤。
-2. DataStore 是否只保存当前 skin id，并对未知或非法 id 回退到 Official Flow。
-3. 设置页是否能切换皮肤并持久化，theme/shell 是否消费当前 skin 状态。
-4. Tile Flow / Big Type 是否仍只是轻量 token 和 metadata 差异，没有偷偷重做页面形态。
-5. 是否未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，且没有改变 `WorkoutCommand`、`WorkoutEvent`、训练计划、训练记录或 `core.engine` 边界。
+1. Tile Flow 与 Official Flow 在训练首页、计划列表/详情、设置页和两类训练执行页上是否有明确但克制的视觉区别。
+2. Tile Flow 是否保持计时训练默认推荐、力量训练同层可达、真实工作区入口可点击，并避免嵌套卡片。
+3. 训练执行页是否仍以当前动作、倒计时/组目标和主按钮为最高层级，心率继续为辅助信息。
+4. Official Flow 是否无视觉与行为回归，Big Type 是否继续保持占位状态。
+5. 是否未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，且没有改变 `WorkoutCommand`、`WorkoutEvent`、训练计划、训练记录、权限或 `core.engine` 边界。
 
 ## 8. 暂缓事项
 

@@ -51,6 +51,13 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.designsystem.TileFlowMetric
+import com.liujyks.trainflow.ui.designsystem.TileFlowMetricStrip
+import com.liujyks.trainflow.ui.designsystem.currentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isTileFlow
 
 @Composable
 internal fun PlanManagementRoute(
@@ -121,12 +128,13 @@ private fun PlanManagementScreen(
     onStartStrengthPlan: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val skin = LocalTrainFlowSkin.current
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(TrainFlowSurfaceMuted)
-            .padding(horizontal = 20.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(if (skin.isTileFlow) MaterialTheme.colorScheme.background else TrainFlowSurfaceMuted)
+            .padding(horizontal = currentPageHorizontalPadding(), vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
         item {
             PlanManagementHeader(uiState)
@@ -187,8 +195,9 @@ private fun PlanManagementScreen(
 
 @Composable
 private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
+    val skin = LocalTrainFlowSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "计划管理", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        StatusPill(text = "计划管理", color = skin.tokens.accent, contentColor = skin.tokens.primary)
         Text(
             text = "计划",
             style = MaterialTheme.typography.headlineLarge,
@@ -216,14 +225,21 @@ private fun PlanListCard(
     item: PlanListItemUiState,
     onSelectPlan: () -> Unit
 ) {
+    val skin = LocalTrainFlowSkin.current
     Card(
         onClick = onSelectPlan,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(currentCardCorner()),
+        colors = CardDefaults.cardColors(
+            containerColor = if (skin.isTileFlow && item.selected) {
+                skin.tokens.accent.copy(alpha = 0.08f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
         border = BorderStroke(
             width = 1.dp,
-            color = if (item.selected) TrainFlowAccent else TrainFlowNeutral100
+            color = if (item.selected) skin.tokens.accent else skin.tokens.neutral100
         )
     ) {
         Column(
@@ -260,16 +276,24 @@ private fun PlanListCard(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = item.detailSummary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = item.reminderSummary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TrainFlowNeutral700
-            )
+            if (skin.isTileFlow) {
+                TileFlowMetricStrip(
+                    item.metrics
+                        .filterNot { metric -> metric.label == "时长" }
+                        .toTileFlowMetrics()
+                )
+            } else {
+                Text(
+                    text = item.detailSummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = item.reminderSummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TrainFlowNeutral700
+                )
+            }
         }
     }
 }
@@ -287,6 +311,7 @@ private fun PlanDetailCard(
     onStartTimedPlan: (WorkoutPlan) -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit
 ) {
+    val skin = LocalTrainFlowSkin.current
     EditorCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -311,6 +336,10 @@ private fun PlanDetailCard(
                 text = detail.modeBadge,
                 color = if (detail.modeBadge == "力量") TrainFlowAction else TrainFlowAccent
             )
+        }
+
+        if (skin.isTileFlow) {
+            TileFlowMetricStrip(detail.metrics.toTileFlowMetrics())
         }
 
         detail.sections.forEach { section ->
@@ -463,11 +492,12 @@ private fun EmptyPlanStateCard() {
 
 @Composable
 private fun StatusMessageCard(message: String) {
+    val skin = LocalTrainFlowSkin.current
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(currentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, TrainFlowAccent)
+        border = BorderStroke(1.dp, skin.tokens.accent)
     ) {
         Text(
             text = message,
@@ -507,11 +537,12 @@ private fun DeletePlanDialog(
 
 @Composable
 private fun EditorCard(content: @Composable ColumnScope.() -> Unit) {
+    val skin = LocalTrainFlowSkin.current
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(currentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, TrainFlowNeutral100)
+        border = BorderStroke(1.dp, skin.tokens.neutral100)
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -519,6 +550,10 @@ private fun EditorCard(content: @Composable ColumnScope.() -> Unit) {
             content = content
         )
     }
+}
+
+private fun List<PlanMetricUiState>.toTileFlowMetrics(): List<TileFlowMetric> {
+    return map { metric -> TileFlowMetric(label = metric.label, value = metric.value) }
 }
 
 @Composable

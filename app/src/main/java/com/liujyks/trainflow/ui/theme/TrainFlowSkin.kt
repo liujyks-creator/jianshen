@@ -35,9 +35,15 @@ data class TrainFlowSkinTokens(
     val neutral700: Color,
     val neutral900: Color,
     val error: Color,
+    val pageHorizontalPaddingDp: Int,
+    val sectionSpacingDp: Int,
     val cardCornerDp: Int,
+    val prominentCardCornerDp: Int,
     val timerScale: Float
 )
+
+val TrainFlowSkin.isTileFlow: Boolean
+    get() = builtInSkin == BuiltInUiSkin.TILE_FLOW
 
 object SkinRegistry {
     val defaultSkin: TrainFlowSkin = TrainFlowSkin(
@@ -62,7 +68,10 @@ object SkinRegistry {
             neutral700 = TrainFlowNeutral700,
             neutral900 = TrainFlowNeutral900,
             error = TrainFlowError,
+            pageHorizontalPaddingDp = 20,
+            sectionSpacingDp = 16,
             cardCornerDp = 10,
+            prominentCardCornerDp = 14,
             timerScale = 1.0f
         )
     )
@@ -72,25 +81,28 @@ object SkinRegistry {
         TrainFlowSkin(
             builtInSkin = BuiltInUiSkin.TILE_FLOW,
             displayName = "Tile Flow",
-            description = "磁贴式清爽皮肤的内置注册占位，本阶段仅提供轻量 token 差异。",
+            description = "清爽、模块化的磁贴式皮肤，用不同大小与轻量色彩区分训练入口优先级。",
             targetUser = "偏好更明快卡片和信息块的居家训练用户。",
-            capabilityBoundary = "E8.1 不重做页面结构；后续 E8.2 才评估完整磁贴布局。",
+            capabilityBoundary = "只改变页面表现与布局倾向，不改变训练流程、数据、权限或核心引擎语义。",
             tokens = TrainFlowSkinTokens(
                 primary = Color(0xFF10233A),
                 secondary = Color(0xFF173654),
-                accent = Color(0xFF1CA7A8),
-                action = Color(0xFFE85D3F),
+                accent = Color(0xFF35B7A5),
+                action = Color(0xFFFF7357),
                 focus = Color(0xFF4E8EFF),
                 surface = Color(0xFFFFFFFF),
-                surfaceMuted = Color(0xFFF1F6F8),
+                surfaceMuted = Color(0xFFF2F6F4),
                 neutral50 = Color(0xFFFBFCFD),
-                neutral100 = Color(0xFFE5EDF1),
-                neutral200 = Color(0xFFCCD9E0),
+                neutral100 = Color(0xFFE4EFEA),
+                neutral200 = Color(0xFFC8DCD4),
                 neutral500 = Color(0xFF5F7280),
                 neutral700 = Color(0xFF314554),
                 neutral900 = Color(0xFF10202C),
                 error = TrainFlowError,
-                cardCornerDp = 6,
+                pageHorizontalPaddingDp = 16,
+                sectionSpacingDp = 12,
+                cardCornerDp = 18,
+                prominentCardCornerDp = 22,
                 timerScale = 1.0f
             )
         ),
@@ -115,7 +127,10 @@ object SkinRegistry {
                 neutral700 = Color(0xFF2E3942),
                 neutral900 = Color(0xFF0E1418),
                 error = TrainFlowError,
+                pageHorizontalPaddingDp = 20,
+                sectionSpacingDp = 16,
                 cardCornerDp = 12,
+                prominentCardCornerDp = 14,
                 timerScale = 1.16f
             )
         )
