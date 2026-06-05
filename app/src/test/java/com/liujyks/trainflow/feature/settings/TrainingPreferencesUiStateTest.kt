@@ -55,5 +55,8 @@ class TrainingPreferencesUiStateTest {
         assertEquals("Big Type", bigTypeOptions.single { it.selected }.displayName)
         assertEquals("Official Flow", fallbackOptions.single { it.selected }.displayName)
         assertTrue(bigTypeOptions.all { option -> option.capabilityBoundary.isNotBlank() })
+        val bigType = bigTypeOptions.single { it.id == "big_type" }
+        assertTrue(bigType.description.contains("远距离可读"))
+        assertTrue(bigType.capabilityBoundary.contains("信息密集页沿用现有组合"))
     }
 }

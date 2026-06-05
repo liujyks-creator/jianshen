@@ -19,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
-import com.liujyks.trainflow.ui.theme.isTileFlow
 
 internal data class TileFlowMetric(
     val label: String,
@@ -27,27 +26,23 @@ internal data class TileFlowMetric(
 )
 
 @Composable
-internal fun currentPageHorizontalPadding(default: Dp = 20.dp): Dp {
-    val skin = LocalTrainFlowSkin.current
-    return if (skin.isTileFlow) skin.tokens.pageHorizontalPaddingDp.dp else default
+internal fun currentPageHorizontalPadding(): Dp {
+    return LocalTrainFlowSkin.current.tokens.pageHorizontalPaddingDp.dp
 }
 
 @Composable
-internal fun currentSectionSpacing(default: Dp = 16.dp): Dp {
-    val skin = LocalTrainFlowSkin.current
-    return if (skin.isTileFlow) skin.tokens.sectionSpacingDp.dp else default
+internal fun currentSectionSpacing(): Dp {
+    return LocalTrainFlowSkin.current.tokens.sectionSpacingDp.dp
 }
 
 @Composable
-internal fun currentCardCorner(default: Dp = 10.dp): Dp {
-    val skin = LocalTrainFlowSkin.current
-    return if (skin.isTileFlow) skin.tokens.cardCornerDp.dp else default
+internal fun currentCardCorner(): Dp {
+    return LocalTrainFlowSkin.current.tokens.cardCornerDp.dp
 }
 
 @Composable
-internal fun currentProminentCardCorner(default: Dp = 14.dp): Dp {
-    val skin = LocalTrainFlowSkin.current
-    return if (skin.isTileFlow) skin.tokens.prominentCardCornerDp.dp else default
+internal fun currentProminentCardCorner(): Dp {
+    return LocalTrainFlowSkin.current.tokens.prominentCardCornerDp.dp
 }
 
 @Composable

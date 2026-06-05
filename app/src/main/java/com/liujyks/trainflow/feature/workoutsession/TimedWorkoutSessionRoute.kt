@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,6 +73,7 @@ import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
 import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isBigType
 import kotlinx.coroutines.delay
 
 @Composable
@@ -164,8 +166,12 @@ private fun TimedWorkoutSessionScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = currentPageHorizontalPadding())
                 .padding(
-                    top = 22.dp,
-                    bottom = if (uiState.isTerminal) 22.dp else 160.dp
+                    top = if (skin.isBigType) 14.dp else 22.dp,
+                    bottom = if (uiState.isTerminal) {
+                        22.dp
+                    } else {
+                        skin.tokens.executionControlReserveDp.dp
+                    }
                 ),
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
         ) {
@@ -178,7 +184,7 @@ private fun TimedWorkoutSessionScreen(
 
             if (uiState.isTerminal) {
                 TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
-            } else {
+            } else if (!skin.isBigType) {
                 TimedControlHistoryPanel(uiState)
             }
         }
@@ -199,6 +205,7 @@ private fun TimedWorkoutSessionScreen(
 
 @Composable
 private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
+    val skin = LocalTrainFlowSkin.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
@@ -209,7 +216,15 @@ private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
         ) {
             Text(
                 text = uiState.planTitle,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (skin.isBigType) {
+                    MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 31.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 color = TrainFlowNeutral50
             )
             Text(
@@ -247,8 +262,8 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
         border = BorderStroke(1.dp, borderColor)
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(skin.tokens.executionPanelPaddingDp.dp),
+            verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 12.dp else 16.dp)
         ) {
             SessionPill(
                 text = if (reminder.isActive) reminder.type.label else uiState.phaseLabel,
@@ -262,13 +277,21 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
             )
             Text(
                 text = uiState.currentTitle,
-                style = MaterialTheme.typography.headlineMedium,
+                style = if (skin.isBigType) {
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 36.sp,
+                        lineHeight = 41.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                } else {
+                    MaterialTheme.typography.headlineMedium
+                },
                 color = TrainFlowNeutral50
             )
             Text(
                 text = uiState.timerText,
-                fontSize = 72.sp,
-                lineHeight = 74.sp,
+                fontSize = (72f * skin.tokens.timerScale).sp,
+                lineHeight = (74f * skin.tokens.timerScale).sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = timerColor
             )
@@ -281,11 +304,13 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
             if (reminder.isActive) {
                 ReminderStatusPanel(reminder)
             }
-            Text(
-                text = uiState.shortCue,
-                style = MaterialTheme.typography.bodyLarge,
-                color = TrainFlowNeutral100
-            )
+            if (!skin.isBigType) {
+                Text(
+                    text = uiState.shortCue,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TrainFlowNeutral100
+                )
+            }
         }
     }
 }
@@ -318,22 +343,30 @@ private fun ReminderStatusPanel(reminder: TimedWorkoutCountdownReminderUiState) 
 
 @Composable
 private fun NextStepPanel(uiState: TimedWorkoutSessionScreenState) {
+    val isBigType = LocalTrainFlowSkin.current.isBigType
     DarkInfoPanel {
         Text(
             text = uiState.nextStepLabel,
-            style = MaterialTheme.typography.titleMedium,
+            style = if (isBigType) {
+                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            } else {
+                MaterialTheme.typography.titleMedium
+            },
             color = TrainFlowNeutral50
         )
-        Text(
-            text = "保持节奏，当前阶段结束后会自动进入下一步。",
-            style = MaterialTheme.typography.bodySmall,
-            color = TrainFlowNeutral200
-        )
+        if (!isBigType) {
+            Text(
+                text = "保持节奏，当前阶段结束后会自动进入下一步。",
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral200
+            )
+        }
     }
 }
 
 @Composable
 private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
+    val isBigType = LocalTrainFlowSkin.current.isBigType
     DarkInfoPanel {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -350,7 +383,7 @@ private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = TrainFlowNeutral500
                 )
-                if (heartRate.auxiliaryText.isNotBlank()) {
+                if (!isBigType && heartRate.auxiliaryText.isNotBlank()) {
                     Text(
                         text = heartRate.auxiliaryText,
                         style = MaterialTheme.typography.labelSmall,
@@ -360,7 +393,11 @@ private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
             }
             Text(
                 text = heartRate.valueText,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (isBigType) {
+                    MaterialTheme.typography.titleMedium
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 color = if (heartRate.isAvailable) TrainFlowAccent else TrainFlowNeutral200
             )
         }
@@ -393,12 +430,22 @@ private fun TimedSessionControls(
             Button(
                 onClick = if (uiState.canResume) onResume else onPause,
                 enabled = uiState.canResume || uiState.canPause,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (skin.isBigType) {
+                            Modifier.heightIn(min = skin.tokens.trainingButtonHeightDp.dp)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 shape = RoundedCornerShape(currentCardCorner()),
                 colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
                 Text(
                     text = if (uiState.canResume) "继续训练" else "暂停",
+                    fontSize = if (skin.isBigType) 20.sp else 14.sp,
+                    fontWeight = FontWeight.Bold,
                     color = TrainFlowNeutral50
                 )
             }
@@ -406,25 +453,61 @@ private fun TimedSessionControls(
                 OutlinedButton(
                     onClick = onSkip,
                     enabled = uiState.canSkip,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            if (skin.isBigType) {
+                                Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                            } else {
+                                Modifier
+                            }
+                        ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(text = "跳过", color = TrainFlowNeutral50)
+                    Text(
+                        text = "跳过",
+                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                        color = TrainFlowNeutral50
+                    )
                 }
                 OutlinedButton(
                     onClick = onExtendRest,
                     enabled = uiState.canExtendRest,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            if (skin.isBigType) {
+                                Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                            } else {
+                                Modifier
+                            }
+                        ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(text = "+15秒", color = TrainFlowNeutral50)
+                    Text(
+                        text = "+15秒",
+                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                        color = TrainFlowNeutral50
+                    )
                 }
                 TextButton(
                     onClick = onEnd,
                     enabled = uiState.canEnd,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            if (skin.isBigType) {
+                                Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
-                    Text(text = "结束", color = TrainFlowError)
+                    Text(
+                        text = if (skin.isBigType) "结束训练" else "结束",
+                        fontSize = if (skin.isBigType) 16.sp else 14.sp,
+                        color = TrainFlowError
+                    )
                 }
             }
         }

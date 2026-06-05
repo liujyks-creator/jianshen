@@ -31,7 +31,6 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
-import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
@@ -53,11 +52,10 @@ internal fun SettingsRoute(
     onUiSkinChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val skin = LocalTrainFlowSkin.current
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(if (skin.isTileFlow) MaterialTheme.colorScheme.background else TrainFlowSurfaceMuted)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = currentPageHorizontalPadding(), vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
@@ -215,7 +213,7 @@ private fun SkinPreferencesCard(
     SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.accent) {
         SectionTitle(text = "UI 皮肤")
         Text(
-            text = "三套皮肤都是内置注册项。Tile Flow 已适配关键页面；Big Type 仍保持后续视觉重做占位。",
+            text = "三套皮肤都是内置注册项。Big Type 重点放大训练首页与执行主信息，计划编辑、动作详情和历史等信息密集页面继续沿用现有布局。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

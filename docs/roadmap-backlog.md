@@ -813,6 +813,8 @@ stepsCompleted:
 
 ### Story E8.3: Big Type 完整视觉重做
 
+**状态:** Implemented in `ui.theme`, home/settings, timed/strength workout execution routes, and unit tests
+
 作为用户，
 我想使用大字训练皮肤，
 以便运动中更容易看清当前动作、时间、组目标和主按钮。
@@ -822,6 +824,16 @@ stepsCompleted:
 - Then Big Type 有完整 token、组件和关键执行页布局映射。
 - Then 训练执行页主信息更大更易扫读，心率仍保持辅助层级。
 - Then 不隐藏权限说明、通知边界、心率非医疗化或恢复建议非医疗化文案。
+
+**交付结果:**
+
+- `TrainFlowSkinTokens` 扩展关键字体、计时器、按钮高度、执行面板内边距和固定控制区预留 token；Big Type metadata 不再是占位，明确面向远距离可读、少信息、大按钮和高对比训练体验。
+- Big Type 训练首页使用最大计时训练入口、同层力量/跟练大入口和精简工具入口；设置页更新 Big Type 实际覆盖范围说明。
+- Big Type 计时执行页放大当前动作与倒计时，减少次级说明，并继续使用固定底部控制区保证暂停/继续、跳过、`+15秒` 和结束训练即时可见。
+- Big Type 力量执行页放大当前动作、本组目标、组耗时/休息倒计时和主按钮，并把开始/完成/确认本组、暂停/继续和结束训练统一放入固定底部控制区；确认层使用单列实际重量/次数输入和高对比深色输入 token。
+- 计划编辑、动作详情、计划管理、跟练入口/执行、记录、恢复和总结细节继续沿用 Official/Tile 现有页面组合；Official Flow 与 Tile Flow 保持原有页面组合、尺寸与行为。
+- 新增单元测试覆盖 Big Type 完整布局 token、metadata、Official/Tile 布局 token 回归和 settings 选项映射；720x1280 与常规尺寸模拟器检查确认两类执行页主控制即时可见。
+- 本 story 未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，也未改变 `WorkoutCommand`、`WorkoutEvent`、`WorkoutPlan`、`WorkoutSession`、通知、权限、心率、恢复建议或 `core.engine` 边界。
 
 ### Story E8.4: 社区主题和布局审查清单
 
@@ -918,22 +930,23 @@ E7.2 活跃训练通知边界已合入 main。
 E7.3 训练偏好设置已合入 main。
 E7.3 偏好回归保护已合入 main。
 E8.1 内置 UI 皮肤 contract / registry 已合入 main。
-E8.2 Tile Flow 关键页面磁贴式皮肤已在 codex/e8-2-tile-flow-skin 实施，等待 Review Gate。
+E8.2 Tile Flow 关键页面磁贴式皮肤已合入 main。
+E8.3 Big Type 大字训练皮肤已在 codex/e8-3-big-type-skin 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E8.2 Review Gate
+Story E8.3 Review Gate
 ```
 
-E8.2 Review Gate 建议重点确认：
+E8.3 Review Gate 建议重点确认：
 
-1. Tile Flow 与 Official Flow 在训练首页、计划列表/详情、设置页和两类训练执行页上是否有明确但克制的视觉区别。
-2. Tile Flow 是否保持计时训练默认推荐、力量训练同层可达、真实工作区入口可点击，并避免嵌套卡片。
-3. 训练执行页是否仍以当前动作、倒计时/组目标和主按钮为最高层级，心率继续为辅助信息。
-4. Official Flow 是否无视觉与行为回归，Big Type 是否继续保持占位状态。
+1. Big Type 与 Official Flow / Tile Flow 在训练首页和两类执行页上是否有明确的大字、少信息、大按钮和高对比区别。
+2. 720x1280 下计时执行页的暂停/继续、跳过、`+15秒`、结束训练，以及力量执行页的开始/完成/确认本组、暂停/继续、结束训练是否即时可见。
+3. 当前动作、倒计时/本组目标、下一步和主按钮是否层级明确，心率是否继续保持辅助层级，力量确认层输入是否无溢出且可用。
+4. Official Flow 与 Tile Flow 是否无视觉与行为回归，信息密集页面是否继续沿用现有组合。
 5. 是否未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，且没有改变 `WorkoutCommand`、`WorkoutEvent`、训练计划、训练记录、权限或 `core.engine` 边界。
 
 ## 8. 暂缓事项

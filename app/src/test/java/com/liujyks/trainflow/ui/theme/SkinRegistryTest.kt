@@ -49,7 +49,7 @@ class SkinRegistryTest {
     }
 
     @Test
-    fun tileFlowDefinesACompleteTileLayoutPolicyWhileBigTypeRemainsAPlaceholder() {
+    fun tileFlowAndBigTypeDefineDistinctCompleteLayoutPolicies() {
         val official = SkinRegistry.resolve("official_flow")
         val tile = SkinRegistry.resolve("tile_flow")
         val bigType = SkinRegistry.resolve("big_type")
@@ -64,7 +64,20 @@ class SkinRegistryTest {
 
         assertFalse(official.isTileFlow)
         assertFalse(bigType.isTileFlow)
-        assertTrue(bigType.description.contains("占位"))
+        assertTrue(bigType.isBigType)
+        assertTrue(bigType.description.contains("固定底部控制"))
+        assertTrue(bigType.capabilityBoundary.contains("信息密集页沿用现有组合"))
+        assertEquals(16, bigType.tokens.pageHorizontalPaddingDp)
+        assertEquals(12, bigType.tokens.sectionSpacingDp)
+        assertEquals(64, bigType.tokens.trainingButtonHeightDp)
+        assertEquals(52, bigType.tokens.secondaryButtonHeightDp)
+        assertEquals(188, bigType.tokens.executionControlReserveDp)
+        assertTrue(bigType.tokens.fontScale > official.tokens.fontScale)
+        assertTrue(bigType.tokens.timerScale > official.tokens.timerScale)
+        assertEquals(48, official.tokens.trainingButtonHeightDp)
+        assertEquals(48, tile.tokens.trainingButtonHeightDp)
+        assertEquals(160, official.tokens.executionControlReserveDp)
+        assertEquals(160, tile.tokens.executionControlReserveDp)
     }
 
     @Test
@@ -75,7 +88,7 @@ class SkinRegistryTest {
         assertEquals(bigType.tokens.primary, colorScheme.primary)
         assertEquals(bigType.tokens.action, colorScheme.tertiary)
         assertEquals(bigType.tokens.surfaceMuted, colorScheme.background)
-        assertEquals(Color(0xFF0E1418), colorScheme.onBackground)
+        assertEquals(Color(0xFF080D10), colorScheme.onBackground)
         assertFalse(bigType.isDefault)
     }
 }

@@ -39,11 +39,19 @@ data class TrainFlowSkinTokens(
     val sectionSpacingDp: Int,
     val cardCornerDp: Int,
     val prominentCardCornerDp: Int,
-    val timerScale: Float
+    val fontScale: Float,
+    val timerScale: Float,
+    val trainingButtonHeightDp: Int,
+    val secondaryButtonHeightDp: Int,
+    val executionPanelPaddingDp: Int,
+    val executionControlReserveDp: Int
 )
 
 val TrainFlowSkin.isTileFlow: Boolean
     get() = builtInSkin == BuiltInUiSkin.TILE_FLOW
+
+val TrainFlowSkin.isBigType: Boolean
+    get() = builtInSkin == BuiltInUiSkin.BIG_TYPE
 
 object SkinRegistry {
     val defaultSkin: TrainFlowSkin = TrainFlowSkin(
@@ -72,7 +80,12 @@ object SkinRegistry {
             sectionSpacingDp = 16,
             cardCornerDp = 10,
             prominentCardCornerDp = 14,
-            timerScale = 1.0f
+            fontScale = 1.0f,
+            timerScale = 1.0f,
+            trainingButtonHeightDp = 48,
+            secondaryButtonHeightDp = 48,
+            executionPanelPaddingDp = 22,
+            executionControlReserveDp = 160
         )
     )
 
@@ -103,35 +116,45 @@ object SkinRegistry {
                 sectionSpacingDp = 12,
                 cardCornerDp = 18,
                 prominentCardCornerDp = 22,
-                timerScale = 1.0f
+                fontScale = 1.0f,
+                timerScale = 1.0f,
+                trainingButtonHeightDp = 48,
+                secondaryButtonHeightDp = 48,
+                executionPanelPaddingDp = 22,
+                executionControlReserveDp = 160
             )
         ),
         TrainFlowSkin(
             builtInSkin = BuiltInUiSkin.BIG_TYPE,
             displayName = "Big Type",
-            description = "大字训练皮肤的内置注册占位，本阶段仅放大关键排版倾向。",
-            targetUser = "需要运动中更高可读性和更少视觉噪声的用户。",
-            capabilityBoundary = "E8.1 不重排执行页；后续 E8.3 才实现完整大字训练形态。",
+            description = "远距离可读的大字训练皮肤，突出当前动作、主时间、本组目标和固定底部控制。",
+            targetUser = "需要运动中少信息、大按钮、高对比和更强扫读层级的用户。",
+            capabilityBoundary = "只重排首页与关键训练执行表现；信息密集页沿用现有组合，不改变训练流程、数据、权限或核心引擎语义。",
             tokens = TrainFlowSkinTokens(
-                primary = Color(0xFF10161A),
-                secondary = Color(0xFF1F2A30),
-                accent = Color(0xFF36B87F),
-                action = Color(0xFFE15D49),
-                focus = Color(0xFF5599F2),
+                primary = Color(0xFF070B0D),
+                secondary = Color(0xFF151D21),
+                accent = Color(0xFF5EE0A5),
+                action = Color(0xFFC94432),
+                focus = Color(0xFF78B5FF),
                 surface = Color(0xFFFFFFFF),
-                surfaceMuted = Color(0xFFF7F8F9),
-                neutral50 = TrainFlowNeutral50,
-                neutral100 = Color(0xFFE8ECEF),
-                neutral200 = Color(0xFFD0D8DD),
-                neutral500 = Color(0xFF5B6670),
-                neutral700 = Color(0xFF2E3942),
-                neutral900 = Color(0xFF0E1418),
+                surfaceMuted = Color(0xFFF4F6F7),
+                neutral50 = Color(0xFFFFFFFF),
+                neutral100 = Color(0xFFE9EEF0),
+                neutral200 = Color(0xFFCCD6DA),
+                neutral500 = Color(0xFF63727A),
+                neutral700 = Color(0xFF28343A),
+                neutral900 = Color(0xFF080D10),
                 error = TrainFlowError,
-                pageHorizontalPaddingDp = 20,
-                sectionSpacingDp = 16,
-                cardCornerDp = 12,
-                prominentCardCornerDp = 14,
-                timerScale = 1.16f
+                pageHorizontalPaddingDp = 16,
+                sectionSpacingDp = 12,
+                cardCornerDp = 8,
+                prominentCardCornerDp = 10,
+                fontScale = 1.2f,
+                timerScale = 1.34f,
+                trainingButtonHeightDp = 64,
+                secondaryButtonHeightDp = 52,
+                executionPanelPaddingDp = 18,
+                executionControlReserveDp = 188
             )
         )
     )

@@ -20,6 +20,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
@@ -42,9 +44,12 @@ import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.designsystem.TileFlowCard
+import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isBigType
 import com.liujyks.trainflow.ui.theme.isTileFlow
 
 @Composable
@@ -95,6 +100,18 @@ private fun TrainFlowHomeScreen(
             onOpenSettings = onOpenSettings,
             onOpenPlans = onOpenPlans,
             onOpenRecords = onOpenRecords,
+            modifier = modifier
+        )
+        return
+    }
+    if (LocalTrainFlowSkin.current.isBigType) {
+        BigTypeHomeScreen(
+            uiState = uiState,
+            onOpenExerciseLibrary = onOpenExerciseLibrary,
+            onOpenTimedPlanEditor = onOpenTimedPlanEditor,
+            onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
+            onOpenFollowAlong = onOpenFollowAlong,
+            onOpenSettings = onOpenSettings,
             modifier = modifier
         )
         return
@@ -154,6 +171,233 @@ private fun TrainFlowHomeScreen(
 
         item {
             FutureBoundaryPanel(entries = uiState.futureEntries)
+        }
+    }
+}
+
+@Composable
+private fun BigTypeHomeScreen(
+    uiState: HomeScreenState,
+    onOpenExerciseLibrary: () -> Unit,
+    onOpenTimedPlanEditor: () -> Unit,
+    onOpenStrengthPlanEditor: () -> Unit,
+    onOpenFollowAlong: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strength = uiState.peerEntries.first { it.id == HomeEntryId.STRENGTH_TRAINING }
+    val followAlong = uiState.peerEntries.first { it.id == HomeEntryId.FOLLOW_ALONG }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = currentPageHorizontalPadding(), vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
+    ) {
+        item {
+            BigTypeHomeHeader(onOpenSettings = onOpenSettings)
+        }
+        item {
+            BigTypePrimaryEntry(
+                entry = uiState.primaryEntry,
+                onClick = onOpenTimedPlanEditor
+            )
+        }
+        item {
+            Text(
+                text = "其他训练",
+                fontSize = 22.sp,
+                lineHeight = 27.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        item {
+            BigTypeSecondaryEntry(
+                entry = strength,
+                accent = LocalTrainFlowSkin.current.tokens.action,
+                actionLabel = "进入力量训练",
+                onClick = onOpenStrengthPlanEditor
+            )
+        }
+        item {
+            BigTypeSecondaryEntry(
+                entry = followAlong,
+                accent = LocalTrainFlowSkin.current.tokens.accent,
+                actionLabel = "进入基础跟练",
+                onClick = onOpenFollowAlong
+            )
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onOpenExerciseLibrary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(currentCardCorner())
+                ) {
+                    Text(text = "动作库", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(currentCardCorner())
+                ) {
+                    Text(text = "训练设置", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BigTypeHomeHeader(onOpenSettings: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "TrainFlow",
+                fontSize = 34.sp,
+                lineHeight = 38.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            TextButton(onClick = onOpenSettings) {
+                Text(text = "设置", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(
+            text = "选一种训练，直接开始。",
+            fontSize = 20.sp,
+            lineHeight = 26.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun BigTypePrimaryEntry(
+    entry: HomeEntryUiState,
+    onClick: () -> Unit
+) {
+    val skin = LocalTrainFlowSkin.current
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(currentProminentCardCorner()),
+        colors = CardDefaults.cardColors(containerColor = skin.tokens.primary),
+        border = BorderStroke(2.dp, skin.tokens.accent.copy(alpha = 0.65f))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "推荐开始",
+                fontSize = 18.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = skin.tokens.accent
+            )
+            Text(
+                text = entry.title,
+                fontSize = 38.sp,
+                lineHeight = 42.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = skin.tokens.neutral50
+            )
+            Text(
+                text = "按动作时间、休息和轮次推进",
+                fontSize = 20.sp,
+                lineHeight = 26.sp,
+                color = skin.tokens.neutral100
+            )
+            Button(
+                onClick = onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = skin.tokens.trainingButtonHeightDp.dp),
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = skin.tokens.accent,
+                    contentColor = skin.tokens.primary
+                )
+            ) {
+                Text(text = "开始计时训练", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BigTypeSecondaryEntry(
+    entry: HomeEntryUiState,
+    accent: Color,
+    actionLabel: String,
+    onClick: () -> Unit
+) {
+    val skin = LocalTrainFlowSkin.current
+    val buttonContentColor = if (accent == skin.tokens.accent) {
+        skin.tokens.primary
+    } else {
+        skin.tokens.neutral50
+    }
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(currentCardCorner()),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(2.dp, accent.copy(alpha = 0.65f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = entry.title,
+                fontSize = 28.sp,
+                lineHeight = 34.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (entry.id == HomeEntryId.STRENGTH_TRAINING) {
+                    "重量、次数、组数和休息"
+                } else {
+                    "跟随动作提示与计时流程"
+                },
+                fontSize = 18.sp,
+                lineHeight = 24.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp),
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor = buttonContentColor
+                )
+            ) {
+                Text(
+                    text = actionLabel,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = buttonContentColor
+                )
+            }
         }
     }
 }

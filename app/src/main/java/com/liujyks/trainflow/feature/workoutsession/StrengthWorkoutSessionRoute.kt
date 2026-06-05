@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +25,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -67,6 +69,7 @@ import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
 import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isBigType
 import kotlinx.coroutines.delay
 
 @Composable
@@ -212,8 +215,14 @@ private fun StrengthWorkoutSessionScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = currentPageHorizontalPadding())
                 .padding(
-                    top = 22.dp,
-                    bottom = if (uiState.isTerminal) 22.dp else 132.dp
+                    top = if (skin.isBigType) 14.dp else 22.dp,
+                    bottom = if (uiState.isTerminal) {
+                        22.dp
+                    } else if (skin.isBigType) {
+                        skin.tokens.executionControlReserveDp.dp
+                    } else {
+                        132.dp
+                    }
                 ),
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
         ) {
@@ -242,7 +251,7 @@ private fun StrengthWorkoutSessionScreen(
 
             if (uiState.isTerminal) {
                 StrengthTerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
-            } else {
+            } else if (!skin.isBigType) {
                 StrengthSecondaryControlsPanel(
                     uiState = uiState,
                     onPause = onPause,
@@ -261,6 +270,9 @@ private fun StrengthWorkoutSessionScreen(
                 onCompleteSet = onCompleteSet,
                 onConfirmSet = onConfirmSet,
                 onStartNextDuringRest = onStartNextDuringRest,
+                onPause = onPause,
+                onResume = onResume,
+                onEnd = onEnd,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -269,6 +281,7 @@ private fun StrengthWorkoutSessionScreen(
 
 @Composable
 private fun StrengthSessionHeader(uiState: StrengthWorkoutSessionScreenState) {
+    val skin = LocalTrainFlowSkin.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
@@ -279,7 +292,15 @@ private fun StrengthSessionHeader(uiState: StrengthWorkoutSessionScreenState) {
         ) {
             Text(
                 text = uiState.planTitle,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (skin.isBigType) {
+                    MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 31.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 color = TrainFlowNeutral50
             )
             Text(
@@ -320,8 +341,8 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
         border = BorderStroke(1.dp, borderColor)
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(skin.tokens.executionPanelPaddingDp.dp),
+            verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 12.dp else 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -338,7 +359,15 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
             }
             Text(
                 text = uiState.currentExerciseName,
-                style = MaterialTheme.typography.headlineMedium,
+                style = if (skin.isBigType) {
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 34.sp,
+                        lineHeight = 40.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                } else {
+                    MaterialTheme.typography.headlineMedium
+                },
                 color = TrainFlowNeutral50
             )
             Text(
@@ -366,8 +395,16 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
                 )
                 Text(
                     text = uiState.primaryMetricText,
-                    fontSize = if (uiState.canStartSet) 30.sp else 72.sp,
-                    lineHeight = if (uiState.canStartSet) 36.sp else 74.sp,
+                    fontSize = if (uiState.canStartSet) {
+                        (30f * skin.tokens.fontScale).sp
+                    } else {
+                        (72f * skin.tokens.timerScale).sp
+                    },
+                    lineHeight = if (uiState.canStartSet) {
+                        (36f * skin.tokens.fontScale).sp
+                    } else {
+                        (74f * skin.tokens.timerScale).sp
+                    },
                     fontWeight = FontWeight.ExtraBold,
                     color = metricColor
                 )
@@ -377,17 +414,29 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
                     color = if (isRest) skin.tokens.accent else skin.tokens.action,
                     trackColor = Color.White.copy(alpha = 0.12f)
                 )
+                if (!skin.isBigType || !uiState.canStartSet) {
+                    Text(
+                        text = uiState.targetSummary,
+                        style = if (skin.isBigType) {
+                            MaterialTheme.typography.titleLarge.copy(
+                                fontSize = 24.sp,
+                                lineHeight = 29.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            MaterialTheme.typography.titleMedium
+                        },
+                        color = TrainFlowNeutral50
+                    )
+                }
+            }
+            if (!skin.isBigType) {
                 Text(
-                    text = uiState.targetSummary,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TrainFlowNeutral50
+                    text = uiState.shortCue,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TrainFlowNeutral100
                 )
             }
-            Text(
-                text = uiState.shortCue,
-                style = MaterialTheme.typography.bodyLarge,
-                color = TrainFlowNeutral100
-            )
         }
     }
 }
@@ -452,35 +501,40 @@ private fun StrengthSetConfirmationPanel(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = input.actualWeightInput,
-                    onValueChange = { value ->
-                        onInputChange(input.copy(actualWeightInput = value))
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = confirmation.weightUnit != null,
-                    singleLine = true,
-                    label = { Text("实际重量") },
-                    suffix = { Text(confirmation.weightUnit?.contractValue.orEmpty()) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    textStyle = MaterialTheme.typography.titleMedium.copy(color = TrainFlowNeutral50)
-                )
-                OutlinedTextField(
-                    value = input.actualRepsInput,
-                    onValueChange = { value ->
-                        onInputChange(input.copy(actualRepsInput = value))
-                    },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    label = { Text("实际次数") },
-                    suffix = { Text("次") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    textStyle = MaterialTheme.typography.titleMedium.copy(color = TrainFlowNeutral50)
-                )
+            if (LocalTrainFlowSkin.current.isBigType) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StrengthActualWeightField(
+                        confirmation = confirmation,
+                        input = input,
+                        onInputChange = onInputChange,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    StrengthActualRepsField(
+                        input = input,
+                        onInputChange = onInputChange,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StrengthActualWeightField(
+                        confirmation = confirmation,
+                        input = input,
+                        onInputChange = onInputChange,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StrengthActualRepsField(
+                        input = input,
+                        onInputChange = onInputChange,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             if (confirmation.repQuickOptions.isNotEmpty()) {
@@ -546,6 +600,75 @@ private fun StrengthSetConfirmationPanel(
 }
 
 @Composable
+private fun StrengthActualWeightField(
+    confirmation: StrengthSetConfirmationUiState,
+    input: StrengthSetConfirmationInputState,
+    onInputChange: (StrengthSetConfirmationInputState) -> Unit,
+    modifier: Modifier
+) {
+    val skin = LocalTrainFlowSkin.current
+    OutlinedTextField(
+        value = input.actualWeightInput,
+        onValueChange = { value ->
+            onInputChange(input.copy(actualWeightInput = value))
+        },
+        modifier = modifier,
+        enabled = confirmation.weightUnit != null,
+        singleLine = true,
+        label = { Text("实际重量") },
+        suffix = { Text(confirmation.weightUnit?.contractValue.orEmpty()) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        textStyle = MaterialTheme.typography.titleMedium.copy(color = TrainFlowNeutral50),
+        colors = if (skin.isBigType) {
+            bigTypeConfirmationFieldColors()
+        } else {
+            OutlinedTextFieldDefaults.colors()
+        }
+    )
+}
+
+@Composable
+private fun StrengthActualRepsField(
+    input: StrengthSetConfirmationInputState,
+    onInputChange: (StrengthSetConfirmationInputState) -> Unit,
+    modifier: Modifier
+) {
+    val skin = LocalTrainFlowSkin.current
+    OutlinedTextField(
+        value = input.actualRepsInput,
+        onValueChange = { value ->
+            onInputChange(input.copy(actualRepsInput = value))
+        },
+        modifier = modifier,
+        singleLine = true,
+        label = { Text("实际次数") },
+        suffix = { Text("次") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        textStyle = MaterialTheme.typography.titleMedium.copy(color = TrainFlowNeutral50),
+        colors = if (skin.isBigType) {
+            bigTypeConfirmationFieldColors()
+        } else {
+            OutlinedTextFieldDefaults.colors()
+        }
+    )
+}
+
+@Composable
+private fun bigTypeConfirmationFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = TrainFlowNeutral50,
+    unfocusedTextColor = TrainFlowNeutral50,
+    focusedLabelColor = TrainFlowNeutral200,
+    unfocusedLabelColor = TrainFlowNeutral200,
+    focusedBorderColor = LocalTrainFlowSkin.current.tokens.accent,
+    unfocusedBorderColor = TrainFlowNeutral200,
+    focusedSuffixColor = TrainFlowNeutral200,
+    unfocusedSuffixColor = TrainFlowNeutral200,
+    disabledLabelColor = TrainFlowNeutral500,
+    disabledBorderColor = TrainFlowNeutral500,
+    disabledSuffixColor = TrainFlowNeutral500
+)
+
+@Composable
 private fun StrengthConfirmationFact(
     label: String,
     value: String,
@@ -572,17 +695,24 @@ private fun StrengthConfirmationFact(
 private fun StrengthNextSetPanel(uiState: StrengthWorkoutSessionScreenState) {
     if (uiState.isTerminal) return
 
+    val isBigType = LocalTrainFlowSkin.current.isBigType
     StrengthDarkInfoPanel {
         Text(
             text = uiState.nextSetLabel,
-            style = MaterialTheme.typography.titleMedium,
+            style = if (isBigType) {
+                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            } else {
+                MaterialTheme.typography.titleMedium
+            },
             color = TrainFlowNeutral50
         )
-        Text(
-            text = "力量训练按动作和组推进，休息结束后回到下一组准备。",
-            style = MaterialTheme.typography.bodySmall,
-            color = TrainFlowNeutral200
-        )
+        if (!isBigType) {
+            Text(
+                text = "力量训练按动作和组推进，休息结束后回到下一组准备。",
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral200
+            )
+        }
     }
 }
 
@@ -721,6 +851,7 @@ private fun StrengthExerciseAdjustmentPanel(
 
 @Composable
 private fun StrengthHeartRatePanel(heartRate: HeartRateDisplayUiState) {
+    val isBigType = LocalTrainFlowSkin.current.isBigType
     StrengthDarkInfoPanel {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -737,7 +868,7 @@ private fun StrengthHeartRatePanel(heartRate: HeartRateDisplayUiState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = TrainFlowNeutral500
                 )
-                if (heartRate.auxiliaryText.isNotBlank()) {
+                if (!isBigType && heartRate.auxiliaryText.isNotBlank()) {
                     Text(
                         text = heartRate.auxiliaryText,
                         style = MaterialTheme.typography.labelSmall,
@@ -747,7 +878,11 @@ private fun StrengthHeartRatePanel(heartRate: HeartRateDisplayUiState) {
             }
             Text(
                 text = heartRate.valueText,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (isBigType) {
+                    MaterialTheme.typography.titleMedium
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 color = if (heartRate.isAvailable) TrainFlowAccent else TrainFlowNeutral200
             )
         }
@@ -762,6 +897,9 @@ private fun StrengthSessionControls(
     onCompleteSet: () -> Unit,
     onConfirmSet: () -> Unit,
     onStartNextDuringRest: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onEnd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -791,7 +929,15 @@ private fun StrengthSessionControls(
                     uiState.canCompleteSet ||
                     canConfirmSet ||
                     uiState.canStartNextDuringRest,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (skin.isBigType) {
+                            Modifier.heightIn(min = skin.tokens.trainingButtonHeightDp.dp)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 shape = RoundedCornerShape(currentCardCorner()),
                 colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
@@ -803,8 +949,46 @@ private fun StrengthSessionControls(
                         uiState.canStartNextDuringRest -> "提前开始本组"
                         else -> "等待下一步"
                     },
+                    fontSize = if (skin.isBigType) 20.sp else 14.sp,
+                    fontWeight = FontWeight.Bold,
                     color = TrainFlowNeutral50
                 )
+            }
+            if (skin.isBigType) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = if (uiState.canResume) onResume else onPause,
+                        enabled = uiState.canResume || uiState.canPause,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp),
+                        shape = RoundedCornerShape(currentCardCorner())
+                    ) {
+                        Text(
+                            text = if (uiState.canResume) "继续训练" else "暂停",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TrainFlowNeutral50
+                        )
+                    }
+                    TextButton(
+                        onClick = onEnd,
+                        enabled = uiState.canEnd,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                    ) {
+                        Text(
+                            text = "结束训练",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TrainFlowError
+                        )
+                    }
+                }
             }
         }
     }
