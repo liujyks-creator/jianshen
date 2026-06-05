@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -45,10 +46,8 @@ import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowError
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
-import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.designsystem.TileFlowMetric
@@ -57,6 +56,7 @@ import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.TrainFlowSkin
 import com.liujyks.trainflow.ui.theme.isTileFlow
 
 @Composable
@@ -266,8 +266,9 @@ private fun PlanListCard(
                     )
                 }
                 ModePill(
+                    mode = item.mode,
                     text = item.modeBadge,
-                    color = if (item.modeBadge == "力量") TrainFlowAction else TrainFlowAccent
+                    skin = skin
                 )
             }
             Text(
@@ -333,8 +334,9 @@ private fun PlanDetailCard(
                 )
             }
             ModePill(
+                mode = detail.mode,
                 text = detail.modeBadge,
-                color = if (detail.modeBadge == "力量") TrainFlowAction else TrainFlowAccent
+                skin = skin
             )
         }
 
@@ -568,17 +570,69 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun ModePill(
     text: String,
-    color: Color
+    mode: WorkoutMode,
+    skin: TrainFlowSkin
 ) {
+    val colors = modePillColors(mode = mode, skin = skin)
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = color
+        color = colors.containerColor
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             style = MaterialTheme.typography.labelLarge,
-            color = if (text == "力量") TrainFlowNeutral50 else TrainFlowPrimary
+            color = colors.contentColor
+        )
+    }
+}
+
+internal data class ModePillColors(
+    val containerColor: Color,
+    val contentColor: Color
+)
+
+internal fun modePillColors(
+    mode: WorkoutMode,
+    skin: TrainFlowSkin
+): ModePillColors {
+    val containerColor = when (mode) {
+        WorkoutMode.TIMED -> skin.tokens.accent
+        WorkoutMode.STRENGTH -> skin.tokens.action
+        WorkoutMode.FOLLOW_ALONG -> skin.tokens.secondary
+    }
+    return ModePillColors(
+        containerColor = containerColor,
+        contentColor = mostReadableModePillContentColor(
+            containerColor = containerColor,
+            skin = skin
+        )
+    )
+}
+
+internal fun modePillContrastRatio(
+    contentColor: Color,
+    containerColor: Color
+): Float {
+    val contentLuminance = contentColor.luminance()
+    val containerLuminance = containerColor.luminance()
+    val lighter = maxOf(contentLuminance, containerLuminance)
+    val darker = minOf(contentLuminance, containerLuminance)
+    return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+private fun mostReadableModePillContentColor(
+    containerColor: Color,
+    skin: TrainFlowSkin
+): Color {
+    return listOf(
+        skin.tokens.primary,
+        skin.tokens.neutral50,
+        skin.tokens.neutral900
+    ).maxBy { contentColor ->
+        modePillContrastRatio(
+            contentColor = contentColor,
+            containerColor = containerColor
         )
     }
 }

@@ -1,9 +1,11 @@
 package com.liujyks.trainflow.feature.plans
 
+import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.ui.theme.SkinRegistry
 import java.time.Instant
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -21,6 +23,7 @@ class PlanManagementUiStateTest {
         val items = state.listItems
 
         assertEquals(2, items.size)
+        assertEquals(WorkoutMode.TIMED, items[0].mode)
         assertEquals("计时训练", items[0].modeLabel)
         assertEquals("计时", items[0].modeBadge)
         assertTrue(items[0].summary.contains("预计"))
@@ -30,12 +33,30 @@ class PlanManagementUiStateTest {
         assertTrue(items[0].metrics.any { it.label == "轮次" })
         assertTrue(items[0].metrics.any { it.label == "休息" })
         assertTrue(items[0].metrics.any { it.label == "提醒" && it.value == "未设置" })
+        assertEquals(WorkoutMode.STRENGTH, items[1].mode)
         assertEquals("力量训练", items[1].modeLabel)
         assertEquals("力量", items[1].modeBadge)
         assertTrue(items[1].summary.contains("组"))
         assertTrue(items[1].detailSummary.contains("计划值预填"))
         assertTrue(items[1].metrics.any { it.label == "组数" })
         assertTrue(items[1].metrics.any { it.label == "休息" })
+    }
+
+    @Test
+    fun modePillColorsMeetReadableContrastForBuiltInSkins() {
+        SkinRegistry.skins.forEach { skin ->
+            WorkoutMode.entries.forEach { mode ->
+                val colors = modePillColors(mode = mode, skin = skin)
+
+                assertTrue(
+                    "${skin.id} ${mode.name} mode pill contrast should meet WCAG AA",
+                    modePillContrastRatio(
+                        contentColor = colors.contentColor,
+                        containerColor = colors.containerColor
+                    ) >= 4.5f
+                )
+            }
+        }
     }
 
     @Test

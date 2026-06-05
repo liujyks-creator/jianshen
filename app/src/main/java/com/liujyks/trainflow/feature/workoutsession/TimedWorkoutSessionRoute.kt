@@ -7,11 +7,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -31,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -150,31 +153,45 @@ private fun TimedWorkoutSessionScreen(
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(skin.tokens.primary)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = currentPageHorizontalPadding(), vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
-        SessionHeader(uiState)
-        MainCountdownPanel(uiState)
-        if (uiState.shouldShowNextStepPanel) {
-            NextStepPanel(uiState)
-        }
-        HeartRatePanel(uiState.heartRate)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = currentPageHorizontalPadding())
+                .padding(
+                    top = 22.dp,
+                    bottom = if (uiState.isTerminal) 22.dp else 160.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
+        ) {
+            SessionHeader(uiState)
+            MainCountdownPanel(uiState)
+            if (uiState.shouldShowNextStepPanel) {
+                NextStepPanel(uiState)
+            }
+            HeartRatePanel(uiState.heartRate)
 
-        if (uiState.isTerminal) {
-            TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
-        } else {
-            SessionControls(
+            if (uiState.isTerminal) {
+                TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
+            } else {
+                TimedControlHistoryPanel(uiState)
+            }
+        }
+
+        if (!uiState.isTerminal) {
+            TimedSessionControls(
                 uiState = uiState,
                 onPause = onPause,
                 onResume = onResume,
                 onSkip = onSkip,
                 onExtendRest = onExtendRest,
-                onEnd = onEnd
+                onEnd = onEnd,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -351,46 +368,72 @@ private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
 }
 
 @Composable
-private fun SessionControls(
+private fun TimedSessionControls(
     uiState: TimedWorkoutSessionScreenState,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
-    onEnd: () -> Unit
+    onEnd: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(
-            onClick = if (uiState.canResume) onResume else onPause,
-            enabled = uiState.canResume || uiState.canPause,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(currentCardCorner()),
-            colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = skin.tokens.primary,
+        shadowElevation = 12.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = if (uiState.canResume) "继续训练" else "暂停",
-                color = TrainFlowNeutral50
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(
-                onClick = onSkip,
-                enabled = uiState.canSkip,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp)
+            Button(
+                onClick = if (uiState.canResume) onResume else onPause,
+                enabled = uiState.canResume || uiState.canPause,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
-                Text(text = "跳过", color = TrainFlowNeutral50)
+                Text(
+                    text = if (uiState.canResume) "继续训练" else "暂停",
+                    color = TrainFlowNeutral50
+                )
             }
-            OutlinedButton(
-                onClick = onExtendRest,
-                enabled = uiState.canExtendRest,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(text = "+15秒", color = TrainFlowNeutral50)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onSkip,
+                    enabled = uiState.canSkip,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(text = "跳过", color = TrainFlowNeutral50)
+                }
+                OutlinedButton(
+                    onClick = onExtendRest,
+                    enabled = uiState.canExtendRest,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(text = "+15秒", color = TrainFlowNeutral50)
+                }
+                TextButton(
+                    onClick = onEnd,
+                    enabled = uiState.canEnd,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = "结束", color = TrainFlowError)
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TimedControlHistoryPanel(uiState: TimedWorkoutSessionScreenState) {
+    DarkInfoPanel {
         Text(
             text = uiState.historySummaryLabel,
             style = MaterialTheme.typography.bodySmall,
@@ -402,13 +445,6 @@ private fun SessionControls(
                 style = MaterialTheme.typography.bodySmall,
                 color = TrainFlowNeutral500
             )
-        }
-        TextButton(
-            onClick = onEnd,
-            enabled = uiState.canEnd,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = "结束训练", color = TrainFlowError)
         }
     }
 }

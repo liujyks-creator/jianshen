@@ -55,6 +55,7 @@ internal data class PlanManagementScreenState(
 internal data class PlanListItemUiState(
     val id: String,
     val title: String,
+    val mode: WorkoutMode,
     val modeLabel: String,
     val modeBadge: String,
     val summary: String,
@@ -67,6 +68,7 @@ internal data class PlanListItemUiState(
 internal data class PlanDetailUiState(
     val id: String,
     val title: String,
+    val mode: WorkoutMode,
     val modeLabel: String,
     val modeBadge: String,
     val summary: String,
@@ -243,6 +245,7 @@ private fun WorkoutPlan.toListItem(selected: Boolean): PlanListItemUiState {
     return PlanListItemUiState(
         id = id,
         title = title,
+        mode = mode,
         modeLabel = mode.modeLabel(),
         modeBadge = mode.modeBadge(),
         summary = planSummary(),
@@ -259,6 +262,7 @@ private fun WorkoutPlan.toDetailState(
     return PlanDetailUiState(
         id = id,
         title = title,
+        mode = mode,
         modeLabel = mode.modeLabel(),
         modeBadge = mode.modeBadge(),
         summary = planSummary(),
