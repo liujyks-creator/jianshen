@@ -22,7 +22,9 @@ class RecoveryUiStateTest {
             listOf("胸肩前侧放松", "上背放松"),
             uiState.areaItems.map { item -> item.name }
         )
-        assertTrue(uiState.nonMedicalNotice.contains("不做康复治疗或医疗诊断"))
+        assertTrue(uiState.nonMedicalNotice.contains("基础放松映射"))
+        assertTrue(uiState.nonMedicalNotice.contains("不是医疗诊断"))
+        assertTrue(uiState.nonMedicalNotice.contains("康复治疗"))
     }
 
     @Test

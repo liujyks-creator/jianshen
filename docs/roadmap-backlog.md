@@ -888,6 +888,8 @@ stepsCompleted:
 
 ### Story E9.2: 权限与隐私文案
 
+**状态:** Implemented in permission/privacy copy contract, settings/plans/workout/recovery copy, readiness checklist, and unit tests
+
 作为用户，  
 我想理解通知、震动、心率占位和健康数据边界，  
 以便放心使用。
@@ -897,6 +899,21 @@ stepsCompleted:
 - Then 通知权限用途清楚。
 - Then 心率和热量不被描述为医疗结论。
 - Then 未接入设备时不请求健康数据权限。
+
+**交付结果:**
+
+- `core.model.PermissionPrivacyCopy` 统一当前用户测试前的权限与隐私边界文案，覆盖通知权限、活跃训练通知、心率、恢复建议、音频提示、语音和数据。
+- 设置页新增“权限与隐私”说明区，保持短说明，不引入长篇法律文本。
+- 计划提醒文案明确通知用于计划提醒和训练中状态提示，关闭通知后训练仍可正常使用，只是不弹通知；普通通知可能被系统延迟，不承诺闹钟级强提醒。
+- 活跃训练通知文案明确只是训练状态摘要，不是 foreground service，不保证后台可靠计时或进程死亡恢复。
+- 计时训练、力量训练和基础跟练执行页的心率展示补充抽象占位边界：当前未接入真实设备、手环、手表或健康数据，不做医疗告警、危险判断或训练强度判断。
+- 恢复建议页和生成器文案明确当前基于训练动作 / 部位做基础放松映射，不是医疗诊断、康复治疗或疼痛处理建议。
+- 音频提示文案明确只是短促训练提示音，目标是不降低、暂停或打断其他 App 音乐 / 视频，但不同设备和 Android 版本表现仍需用户测试回看。
+- 文案明确当前只保留训练命令 / 事件边界，未实现语音控制、语音读秒或自动语音教练；当前多数计划、历史和恢复仍是内存态、fixture 或基础展示边界，不代表云同步、账号体系或真实长期记录已完成。
+- 新增 `docs/testing/permission-privacy-readiness-checklist.md`，用于 E9.2 Review Gate 和用户测试前 smoke。
+- 新增 / 更新单元测试覆盖文案 contract、设置页权限隐私区、计划提醒普通通知边界、active workout notification 非 foreground service / 非后台可靠计时边界、心率非设备/非医疗边界、恢复非医疗边界和音频提示设备差异边界。
+- Manifest 仍仅包含 `POST_NOTIFICATIONS`；未新增健康、身体传感器、蓝牙、定位、foreground service 或 exact alarm 权限。
+- 本 story 未实现 Health Connect、Wear OS、BLE、厂商 SDK、真实心率设备、语音控制、语音读秒、自动语音教练、foreground service、后台可靠计时、notification action 控制训练、真实 `WorkoutSession` 持久化、Room repository 业务闭环、云同步或账号体系。
 
 ### Story E9.3: MVP 验收清单
 
@@ -955,24 +972,25 @@ E8.1 内置 UI 皮肤 contract / registry 已合入 main。
 E8.2 Tile Flow 关键页面磁贴式皮肤已合入 main。
 E8.3 Big Type 大字训练皮肤已合入 main。
 E8.4 UI skin review checklist 和用户测试前 UI readiness 已合入 main。
-E9.1 训练状态恢复与回归测试基线已在 codex/e9-1-training-state-recovery-regression 实施，等待 Review Gate。
+E9.1 训练状态恢复与回归测试基线已合入 main。
+E9.2 权限与隐私文案已在 codex/e9-2-permission-privacy-copy 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E9.1 Review Gate / E9.2 权限与隐私文案
+Story E9.2 Review Gate / E9.3 MVP 验收清单
 ```
 
-E9.1 Review Gate 建议重点确认：
+E9.2 Review Gate 建议重点确认：
 
-1. `docs/testing/training-state-recovery-checklist.md` 是否足够指导暂停后返回、后台再前台、Activity 重建、进程杀死边界和 terminal state 回归。
-2. 计时训练暂停/继续/跳过/`+15秒`/结束，力量训练开始/完成/确认/暂停/结束是否都有关键测试保护。
-3. 三套 skin 的 720x1280 小屏主控制、固定控制 token、mode pill 对比度和训练语义隔离是否满足用户测试前要求。
-4. 普通 ongoing notification 是否仍被表达为状态摘要，而不是后台可靠计时或 foreground service。
-5. 最后 N 秒提醒覆盖范围和提示音不 ducking / 不打断其他 App 音频是否作为用户测试观察项保留。
-6. 是否未实现真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、exact alarm、notification action、语音、真实心率设备或医疗化能力。
+1. `docs/testing/permission-privacy-readiness-checklist.md` 是否足够指导设置页、计划提醒、活跃训练通知、心率占位、恢复建议、音频提示、语音和数据边界 smoke。
+2. 设置页“权限与隐私”文案是否清楚但不吓人，且三套 skin 下不被隐藏或遮挡。
+3. 通知权限文案是否说明计划提醒和训练中状态提示用途、关闭后训练仍可用、普通通知可能延迟且不是闹钟级强提醒。
+4. 活跃训练通知是否仍被表达为状态摘要，而不是 foreground service、后台可靠计时、进程死亡恢复或 notification action 控制训练。
+5. 心率、恢复建议、音频提示、语音和数据文案是否没有医疗化、真实设备、所有设备一致、语音教练、云同步或真实长期记录承诺。
+6. Manifest 是否仍未新增健康、传感器、蓝牙、定位、foreground service 或 exact alarm 权限。
 
 ## 8. 暂缓事项
 

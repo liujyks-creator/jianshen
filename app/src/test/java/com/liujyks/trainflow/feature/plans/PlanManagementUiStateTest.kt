@@ -177,8 +177,11 @@ class PlanManagementUiStateTest {
         assertTrue(requireNotNull(plan.reminder).enabled)
         assertEquals(scheduleAt, requireNotNull(plan.reminder).scheduleAt)
         assertTrue(requireNotNull(updated.statusMessage).contains("普通通知"))
+        assertTrue(requireNotNull(updated.statusMessage).contains("不是闹钟级强提醒"))
         assertTrue(detail.reminder.enabled)
-        assertTrue(detail.reminder.boundaryCopy.contains("闹钟级强提醒、全屏提示或锁屏强打断"))
+        assertTrue(detail.reminder.boundaryCopy.contains("关闭后训练仍可正常使用"))
+        assertTrue(detail.reminder.boundaryCopy.contains("系统延迟"))
+        assertFalse(detail.reminder.boundaryCopy.contains("锁屏强打断"))
     }
 
     @Test
@@ -200,6 +203,7 @@ class PlanManagementUiStateTest {
         assertEquals(PlanReminderNotificationPermissionStatus.DENIED, updated.notificationPermissionState.status)
         assertTrue(requireNotNull(updated.selectedPlan?.reminder).enabled)
         assertTrue(requireNotNull(updated.statusMessage).contains("权限关闭"))
+        assertTrue(requireNotNull(updated.statusMessage).contains("训练仍可正常使用"))
         assertTrue(detail.reminder.permissionMessage.contains("Android 13+"))
         assertTrue(detail.reminder.canRequestPermission)
         assertTrue(detail.canStartTraining)

@@ -1,5 +1,7 @@
 package com.liujyks.trainflow.feature.settings
 
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
+import com.liujyks.trainflow.core.model.PermissionPrivacySection
 import com.liujyks.trainflow.ui.theme.SkinRegistry
 import com.liujyks.trainflow.ui.theme.TrainFlowSkin
 
@@ -12,7 +14,8 @@ internal data class TrainingPreferencesScreenState(
     val emphasisAnimationEnabled: Boolean = true,
     val strengthSetTimerMode: StrengthSetTimerModePreference = StrengthSetTimerModePreference.MANUAL_START,
     val selectedUiSkinId: String = SkinRegistry.defaultSkin.id,
-    val uiSkinOptions: List<UiSkinPreferenceOption> = uiSkinPreferenceOptionsFromRegistry(selectedUiSkinId)
+    val uiSkinOptions: List<UiSkinPreferenceOption> = uiSkinPreferenceOptionsFromRegistry(selectedUiSkinId),
+    val permissionPrivacySections: List<PermissionPrivacySection> = PermissionPrivacyCopy.sections
 ) {
     val countdownSummary: String
         get() = "默认最后 ${defaultCountdownThresholdSec} 秒提醒"

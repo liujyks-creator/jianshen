@@ -70,7 +70,9 @@ class BasicRecoveryRecommendationGeneratorTest {
             exerciseIds = listOf("barbell-bench-press")
         )
 
-        assertTrue(recommendation.nonMedicalBoundaryText.contains("不做康复治疗或医疗诊断"))
+        assertTrue(recommendation.nonMedicalBoundaryText.contains("基础放松映射"))
+        assertTrue(recommendation.nonMedicalBoundaryText.contains("不是医疗诊断"))
+        assertTrue(recommendation.nonMedicalBoundaryText.contains("康复治疗"))
         assertFalse(recommendation.nonMedicalBoundaryText.contains("心率"))
         assertFalse(recommendation.nonMedicalBoundaryText.contains("热量"))
         assertFalse(recommendation.nonMedicalBoundaryText.contains("疾病"))

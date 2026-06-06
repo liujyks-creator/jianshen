@@ -35,6 +35,7 @@ class FollowAlongWorkoutSessionUiStateTest {
         assertTrue(uiState.shortCue.isNotBlank())
         assertEquals("-- bpm", uiState.heartRate.valueText)
         assertEquals("未连接设备", uiState.heartRate.statusText)
+        assertTrue(uiState.heartRate.boundaryText.contains("未接入真实设备"))
         assertTrue(uiState.progressFraction > 0f)
     }
 

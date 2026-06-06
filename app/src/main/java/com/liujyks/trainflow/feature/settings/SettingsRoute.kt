@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.liujyks.trainflow.core.model.PermissionPrivacySection
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
@@ -96,7 +97,7 @@ internal fun SettingsRoute(
         }
 
         item {
-            NotificationBoundaryCard()
+            PermissionPrivacyCard(uiState.permissionPrivacySections)
         }
     }
 }
@@ -168,7 +169,7 @@ private fun CountdownPreferencesCard(
             onCheckedChange = onEmphasisAnimationEnabledChanged
         )
         Text(
-            text = "当前不包含语音读秒、自动语音教练或后台可靠计时保障。",
+            text = "音频只是短促提示音；当前不包含语音读秒、自动语音教练或后台可靠计时保障。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -246,16 +247,31 @@ private fun SkinPreferencesCard(
 }
 
 @Composable
-private fun NotificationBoundaryCard() {
+private fun PermissionPrivacyCard(sections: List<PermissionPrivacySection>) {
     SettingsCard {
-        SectionTitle(text = "通知边界说明")
+        SectionTitle(text = "权限与隐私")
         Text(
-            text = "计划提醒通知由 E7.1 提供，活跃训练普通 ongoing 状态提示由 E7.2 提供。",
+            text = "用户测试前请按这些边界理解当前能力。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        sections.forEach { section ->
+            BoundaryTextRow(section)
+        }
+    }
+}
+
+@Composable
+private fun BoundaryTextRow(section: PermissionPrivacySection) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "本页只保存训练内倒计时反馈默认值，不新增闹钟级强提醒、前台服务或通知操作控制训练。",
+            text = section.title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = section.body,
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

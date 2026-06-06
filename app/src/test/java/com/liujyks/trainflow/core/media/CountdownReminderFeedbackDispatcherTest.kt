@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.core.media
 
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.WorkoutEvent
@@ -86,5 +87,14 @@ class CountdownReminderFeedbackDispatcherTest {
                 cue = CountdownCue()
             )
         )
+    }
+
+    @Test
+    fun audioPromptBoundaryDoesNotPromiseIdenticalDeviceBehavior() {
+        assertTrue(PermissionPrivacyCopy.AUDIO_PROMPT.contains("短促训练提示音"))
+        assertTrue(PermissionPrivacyCopy.AUDIO_PROMPT.contains("不降低、暂停或打断"))
+        assertTrue(PermissionPrivacyCopy.AUDIO_PROMPT.contains("用户测试回看"))
+        assertFalse(PermissionPrivacyCopy.AUDIO_PROMPT.contains("所有设备"))
+        assertFalse(PermissionPrivacyCopy.AUDIO_PROMPT.contains("完全一致"))
     }
 }

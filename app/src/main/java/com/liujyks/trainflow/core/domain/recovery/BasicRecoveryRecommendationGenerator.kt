@@ -3,6 +3,7 @@ package com.liujyks.trainflow.core.domain.recovery
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.data.fixture.RecoveryAreaFixtures
 import com.liujyks.trainflow.core.model.Exercise
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 import com.liujyks.trainflow.core.model.RecoveryArea
 import com.liujyks.trainflow.core.model.RecoveryRecommendation
 
@@ -57,7 +58,7 @@ object BasicRecoveryRecommendationGenerator {
     }
 }
 
-const val NON_MEDICAL_BOUNDARY_TEXT: String = "本建议仅提供训练后放松方向，不做康复治疗或医疗诊断。"
+val NON_MEDICAL_BOUNDARY_TEXT: String = PermissionPrivacyCopy.RECOVERY
 
 private fun <T> List<T>.orderedDistinct(): List<T> {
     val seen = LinkedHashSet<T>()

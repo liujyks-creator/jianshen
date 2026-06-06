@@ -26,6 +26,8 @@ class PlanReminderNotificationContractsTest {
         assertEquals(PlanReminderNotificationPermissionStatus.DENIED, denied.status)
         assertFalse(denied.canPostNotifications)
         assertTrue(denied.rationale.contains("Android 13+"))
+        assertTrue(denied.rationale.contains("训练仍可正常使用"))
+        assertTrue(denied.rationale.contains("训练中状态通知"))
         assertEquals(PlanReminderNotificationPermissionStatus.NOT_REQUIRED, notRequired.status)
         assertTrue(notRequired.canPostNotifications)
     }
@@ -85,6 +87,7 @@ class PlanReminderNotificationContractsTest {
     fun channelCopyIsOrdinaryNotificationNotStrongAlarm() {
         assertTrue(PlanReminderNotificationChannelDescription.contains("普通通知"))
         assertTrue(PlanReminderNotificationChannelDescription.contains("系统延迟"))
+        assertTrue(PlanReminderNotificationChannelDescription.contains("训练仍可正常使用"))
         assertFalse(PlanReminderNotificationChannelDescription.contains("精确闹钟"))
         assertFalse(PlanReminderNotificationChannelDescription.contains("全屏"))
     }

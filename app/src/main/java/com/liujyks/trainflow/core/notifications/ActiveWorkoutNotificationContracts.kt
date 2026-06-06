@@ -1,12 +1,13 @@
 package com.liujyks.trainflow.core.notifications
 
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutMode
 
 internal const val ActiveWorkoutNotificationChannelId = "trainflow_active_workout"
 internal const val ActiveWorkoutNotificationChannelName = "训练进行中"
 internal const val ActiveWorkoutNotificationChannelDescription =
-    "训练进行中显示当前状态摘要。普通 ongoing 通知不承诺后台精确计时或闹铃级提醒。"
+    PermissionPrivacyCopy.ACTIVE_WORKOUT_NOTIFICATION
 internal const val ActiveWorkoutNotificationId = 7_200
 
 internal data class ActiveWorkoutNotificationState(
@@ -69,7 +70,7 @@ internal object ActiveWorkoutNotificationContentFactory {
         }
         val text = "${state.primaryText.trim().ifBlank { state.phaseLabel }} · ${state.timerText}"
         val progressLine = state.progressText.trim().ifBlank { state.phaseLabel }
-        val secondary = state.secondaryText.trim().ifBlank { "普通状态提示，不保证后台精确计时。" }
+        val secondary = state.secondaryText.trim().ifBlank { "普通状态提示，不保证后台可靠计时。" }
 
         return ActiveWorkoutNotificationContent(
             channelId = ActiveWorkoutNotificationChannelId,
@@ -79,7 +80,7 @@ internal object ActiveWorkoutNotificationContentFactory {
             title = title,
             text = text,
             subText = "普通状态提示",
-            bigText = "$safePlanTitle · ${state.phaseLabel}\n$text\n$progressLine\n$secondary\n普通状态提示，不保证后台精确计时。",
+            bigText = "$safePlanTitle · ${state.phaseLabel}\n$text\n$progressLine\n$secondary\n普通状态提示，不是 foreground service，不保证后台可靠计时。",
             ongoing = state.status == SessionStatus.ACTIVE || state.status == SessionStatus.PAUSED
         )
     }
@@ -99,7 +100,7 @@ internal object ActiveWorkoutNotificationPolicy {
         if (!permissionState.canPostNotifications) {
             return ActiveWorkoutNotificationUpdateResult.Ignored(
                 reason = ActiveWorkoutNotificationIgnoredReason.NOTIFICATION_PERMISSION_DENIED,
-                message = "通知权限关闭，训练仍可正常执行；活跃训练状态通知暂不会显示。"
+                message = "通知权限关闭，训练仍可正常执行；计划提醒和活跃训练状态通知暂不会显示。"
             )
         }
 

@@ -6,11 +6,11 @@
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过、E4 UI smoke fix、E5.1 计时训练总结、E5.2 力量训练总结、E5.3 训练历史与基础趋势、E5.4 基础恢复建议、E6.1 跟练雏形计划入口、E6.2 基础跟练执行页、E6.3 心率抽象状态展示、E7.1 训练提醒通知、E7.2 活跃训练通知边界、E7.3 训练偏好设置、E8.1 内置 UI 皮肤 contract / registry、E8.2 Tile Flow 关键页面磁贴式皮肤、E8.3 Big Type 大字训练皮肤、E8.4 UI skin review checklist 与用户测试前 UI readiness，以及 E9.1 训练状态恢复与关键回归测试基线。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过、E4 UI smoke fix、E5.1 计时训练总结、E5.2 力量训练总结、E5.3 训练历史与基础趋势、E5.4 基础恢复建议、E6.1 跟练雏形计划入口、E6.2 基础跟练执行页、E6.3 心率抽象状态展示、E7.1 训练提醒通知、E7.2 活跃训练通知边界、E7.3 训练偏好设置、E8.1 内置 UI 皮肤 contract / registry、E8.2 Tile Flow 关键页面磁贴式皮肤、E8.3 Big Type 大字训练皮肤、E8.4 UI skin review checklist 与用户测试前 UI readiness、E9.1 训练状态恢复与关键回归测试基线，以及 E9.2 权限与隐私文案收口。
 
 项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准。`Story E1.2: 导入动作 fixture` 已将 11 个首批动作导入 Android fixture，并用 fixture 校验测试约束 ID、必填字段、能力标签、默认建议、恢复映射和替代动作边界。`Story E1.3: 动作库列表与筛选` 已基于 E1.2 fixture 落地只读 Compose 列表、训练类型/身体部位/器械/难度筛选、清除筛选、空状态和动作摘要卡片。`Story E1.4: 动作详情` 已基于 E1.2 fixture 和 E1.3 列表入口落地只读动作详情，展示短提示、设置与执行步骤、发力要点、常见错误、呼吸提示、安全说明、替代动作和恢复映射。`Story E2.1: 首页与训练入口` 已建立轻量官方 shell、训练首页、计时训练推荐默认入口、力量训练同层入口和可进入 E1.3/E1.4 的动作库入口。`Story E2.2: 计时计划编辑` 已让首页计时推荐入口进入内存态计时计划编辑页，支持计划名称、热身/拉伸时长、动作时长、动作后休息、轮数、轮间休息、动作/休息临近结束提醒阈值和提醒形式开关，并能生成符合 `WorkoutPlan` / `TimedCircuitBlock` / `TimedExerciseItem` / `CueSettings` 契约的本次草稿预览；E2.2 retro fix 已关闭计时提醒阈值边界问题。`Story E2.3: 力量计划编辑` 已让首页力量训练入口进入内存态力量计划编辑页，支持计划名称、力量动作选择、目标重量、默认 `8-12` 次区间、固定次数、正式组数、动作内热身组、组间休息和逐组目标展开编辑，并能生成符合 `WorkoutPlan` / `StrengthExerciseBlock` / `StrengthExerciseTarget` / `StrengthSetPlan` 契约的本次草稿预览。`Story E2.4: 计划列表、详情、复制与删除` 已在官方 shell 中启用“计划”入口，复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约种子化内存态计划集合，支持计划列表、详情、复制和删除确认。`Story E3.1: 计时训练执行引擎` 已在 `core.engine` 内落地纯 Kotlin 状态机，可从有效计时计划/快照展开动作、休息和轮次步骤，支持开始、暂停、继续、跳过、延长休息和提前结束命令，并产出动作开始、动作临近结束、休息开始、休息临近结束、暂停、继续和完成事件。`Story E3.2: 计时训练执行页` 已在 `feature.workoutsession` 中新增计时训练执行 UI state、Compose route 和深色执行页，从现有内存态计划详情仅启用计时计划开始入口，执行页复用 E3.1 `TimedWorkoutEngine` 展示当前动作/休息、主倒计时、轮次/步骤进度、下一步、动作短提示和辅助心率占位，并通过 `WorkoutCommand` 支持暂停、继续、跳过、延长休息和结束训练。`Story E4.1: 力量训练执行引擎` 已在 `core.engine` 内新增纯 Kotlin `StrengthWorkoutEngine`，可从有效力量计划/快照按动作和组推进准备、开始本组、完成本组、确认记录、组间休息和完成/废弃终态。`Story E4.2: 力量训练执行页` 已在 `feature.workoutsession` 中新增力量训练执行 UI state、Compose route 和深色执行页，从内存态力量计划详情启用开始入口，执行页复用 E4.1 `StrengthWorkoutEngine` 展示当前动作、本组目标、组耗时、最小确认、休息倒计时和下一组目标，并通过 `WorkoutCommand` 支持开始本组、完成本组、按计划确认、暂停/继续、休息中提前开始下一组和结束训练。`Story E4.3: 单组完成确认层` 已将 Confirm 状态升级为可编辑确认层，展示计划重量、计划次数、本组耗时、组类型、动作名和组序号，默认回填实际重量/次数，支持次数区间快捷选择与 easy / good / hard / form_breakdown 主观感受，并通过 `WorkoutCommand.ConfirmStrengthSet` 生成正式 `StrengthSetRecord`。`Story E4.4: 动作替换与跳过` 已让力量训练支持通过 `WorkoutCommand.ReplaceExercise` 替换当前动作并在 `StrengthSetRecord.substitutedFromExerciseId` 保留原动作引用，也支持通过 `WorkoutCommand.SkipStep` 跳过当前动作剩余未完成组并继续后续动作。`Story E5.1: 计时训练总结` 已在 `feature.workoutsession` 中新增计时训练 summary UI state / mapper，消费 E3.4 的 step history、control history、rest extension history 和 early-end 记录，在 completed / abandoned 终态展示总时长、完成阶段、步骤/轮次进度、跳过内容、休息延长、提前结束进度、训练部位摘要和恢复建议入口；`Story E5.2: 力量训练总结` 已在同一 feature 边界新增 strength summary UI state / mapper，消费 E4.1-E4.4 的 strength records、history、replacement 和 skip 边界，在 completed / abandoned 终态展示动作、组数、重量、次数、组耗时、实际休息、计划/实际差异、替换/跳过摘要和恢复建议入口；`Story E5.3: 训练历史与基础趋势` 已启用内存态历史和基础趋势；`Story E5.4: 基础恢复建议` 已启用训练后恢复建议入口；`Story E6.1: 跟练雏形计划入口` 已启用基础跟练入口和选择页，展示一个只使用 supportsFollowAlong 动作的内存态 preset；`Story E6.2: 跟练执行页` 已让 preset 进入基础跟练执行页；`Story E6.3: 心率抽象状态展示` 已统一三类执行页的低层级心率状态展示，`Story E7.1: 训练提醒通知` 已建立计划提醒普通通知边界。当前仍未引入真实 `WorkoutSession` 持久化、Room/DataStore repository 闭环、前台服务、后台训练可靠计时、真实心率设备、语音能力、视频播放或任意计时计划切换为跟练视图。
 
-`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过`、E4 UI smoke fix、`Story E5.1: 计时训练总结`、`Story E5.2: 力量训练总结`、`Story E5.3: 训练历史与基础趋势`、`Story E5.4: 基础恢复建议`、`Story E6.1: 跟练雏形计划入口`、`Story E6.2: 跟练执行页`、`Story E6.3: 心率抽象状态展示`、`Story E7.1: 训练提醒通知`、`Story E7.2: 活跃训练通知边界`、`Story E7.3: 训练偏好设置`、`Story E8.1: Skin contract and registry`、`Story E8.2: Tile Flow 完整视觉重做`、`Story E8.3: Big Type 完整视觉重做` 和 `Story E8.4: UI skin review checklist` 均已通过 Review Gate 并合入 `main`。当前阶段分支 `codex/e9-1-training-state-recovery-regression` 基于 `main` / `origin/main` 的 `f7588280760b2aa97b8350cf657bbb106c267478` 实施 E9.1：新增训练状态恢复与回归测试清单，补充计时/力量引擎恢复边界、小屏固定控制、skin 语义隔离、mode pill 对比度和音频不 ducking 边界测试。当前仍不实现真实 `WorkoutSession` 持久化、Room repository 闭环、foreground service、后台可靠计时或进程死亡恢复。
+`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过`、E4 UI smoke fix、`Story E5.1: 计时训练总结`、`Story E5.2: 力量训练总结`、`Story E5.3: 训练历史与基础趋势`、`Story E5.4: 基础恢复建议`、`Story E6.1: 跟练雏形计划入口`、`Story E6.2: 跟练执行页`、`Story E6.3: 心率抽象状态展示`、`Story E7.1: 训练提醒通知`、`Story E7.2: 活跃训练通知边界`、`Story E7.3: 训练偏好设置`、`Story E8.1: Skin contract and registry`、`Story E8.2: Tile Flow 完整视觉重做`、`Story E8.3: Big Type 完整视觉重做`、`Story E8.4: UI skin review checklist` 和 `Story E9.1: 训练状态恢复与回归测试` 均已通过 Review Gate 并合入 `main`。当前阶段分支 `codex/e9-2-permission-privacy-copy` 基于 `main` / `origin/main` 的 `2996887e75ee413f1d103d7ae3046e60a017fa74` 实施 E9.2：收口权限、隐私和能力边界文案，新增用户测试前权限隐私检查清单和文案回归测试。当前仍不实现真实 `WorkoutSession` 持久化、Room repository 闭环、foreground service、后台可靠计时、真实心率设备、语音或进程死亡恢复。
 
 ## 已有产物
 
@@ -30,7 +30,8 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 10. `docs/ui-extension-guide.md`
 11. `docs/testing/ui-skin-readiness-checklist.md`
 12. `docs/testing/training-state-recovery-checklist.md`
-13. `docs/planning/action-content-slice.md`
+13. `docs/testing/permission-privacy-readiness-checklist.md`
+14. `docs/planning/action-content-slice.md`
 
 根目录还包含 story 工作流提示模板：
 
@@ -52,6 +53,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 - 官方默认 UI 设计系统 token、组件语义和训练执行页设计规则。
 - 开源社区定制 UI shell、主题、首页布局和按钮位置的边界。
 - 三套内置 UI 皮肤审查、E9 用户测试前 UI readiness 和社区主题/layout 贡献检查清单。
+- 权限、隐私、普通通知、心率占位、恢复建议、音频提示、语音预留和内存态数据边界检查清单。
 
 ### 前端原型
 
@@ -115,9 +117,9 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 完成 `codex/e9-1-training-state-recovery-regression` 分支 Review Gate。
-2. 对照 `docs/testing/training-state-recovery-checklist.md` 做用户测试前 smoke：暂停后返回、后台再前台、三套 skin 小屏主控制、通知权限关闭、音频共存和非医疗化边界。
-3. E9.2 进入权限与隐私文案收口；E9.3 统一做 MVP 最终验收清单。
+1. 完成 `codex/e9-2-permission-privacy-copy` 分支 Review Gate。
+2. 对照 `docs/testing/permission-privacy-readiness-checklist.md` 做用户测试前权限隐私 smoke：设置页说明、计划提醒权限关闭提示、活跃训练通知、心率占位、恢复建议和三套 skin 可读性。
+3. E9.3 统一做 MVP 最终验收清单。
 
 ## 验证快照
 
@@ -195,6 +197,8 @@ E8.3 新增 Big Type 大字训练皮肤；`TrainFlowSkinTokens` 扩展关键字�
 E8.4 新增 UI skin review checklist 与用户测试前 UI readiness；`docs/testing/ui-skin-readiness-checklist.md` 明确 Official Flow、Tile Flow、Big Type 三套内置皮肤审查标准、训练执行页固定主控制、720x1280 小屏检查、通知权限不可隐藏、心率非医疗化、恢复建议非医疗化、普通通知边界、E9 用户测试回看事项和社区 UI 定制要求。`docs/ui-extension-guide.md` 已补充 E8.4 review gate 与禁止范围，`docs/roadmap-backlog.md` 已记录 E8.4 交付结果和下一步 Review Gate / E9 用户测试准备。新增轻量 registry/readiness 测试覆盖三套内置 skin、Official Flow 默认、mode pill 对比度、metadata 完整性和未知 skin 回退。当前仍不实现运行时插件市场、远程皮肤下载、第三方皮肤安装、动态代码加载、第四套皮肤、通知/foreground service/exact alarm、语音、真实心率设备或 session records 持久化，也不改变训练计划、记录、命令、事件、权限、心率、恢复建议或 `core.engine` 边界。
 
 E9.1 新增训练状态恢复与关键回归测试基线；`docs/testing/training-state-recovery-checklist.md` 明确暂停后返回、后台再前台、屏幕旋转或 Activity 重建、进程被系统杀死后的当前边界、completed / abandoned 终态防污染、三套 skin 小屏固定控制、最后 N 秒提醒覆盖回看、音频不 ducking、普通通知边界、心率非医疗化和恢复建议非医疗化。新增回归测试覆盖计时训练暂停/后台 tick/继续/休息延长/终态命令污染，力量训练确认草案/休息暂停/继续/终态 records 防污染，执行页主控制可达性，三套 skin 不改变训练 UI state 语义、固定控制 token 和 mode pill 对比度，以及倒计时提示音不请求 audio focus / ducking。当前仍不实现真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、后台可靠计时、exact alarm、notification action 控制训练、真实心率设备、语音或进程死亡恢复。
+
+E9.2 新增权限与隐私文案收口；`core.model.PermissionPrivacyCopy` 统一通知权限、活跃训练通知、心率、恢复建议、音频提示、语音和数据边界文案，设置页新增“权限与隐私”说明区，计划提醒、active workout notification、三类训练页心率占位和恢复建议页均对齐当前能力边界。`docs/testing/permission-privacy-readiness-checklist.md` 记录用户测试前检查项。新增文案测试覆盖普通通知用途、通知关闭后训练仍可用、普通通知可能延迟、active notification 不是 foreground service、心率未接真实设备且非医疗判断、恢复建议非诊断/康复/疼痛处理、音频提示不承诺所有设备一致、语音未实现、数据仍多为内存态/fixture/基础展示。当前仍不新增权限，不实现 Health Connect、Wear OS、BLE、真实心率设备、语音控制、语音读秒、自动语音教练、foreground service、后台可靠计时、notification action 控制训练、真实 session records 持久化、云同步或账号体系。
 
 ## 新 Codex 会话提示词
 

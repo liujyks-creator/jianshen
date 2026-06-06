@@ -20,7 +20,8 @@ class ActiveWorkoutNotificationContractsTest {
         assertTrue(content.text.contains("开合跳"))
         assertTrue(content.text.contains("02:10"))
         assertTrue(content.bigText.contains("普通状态提示"))
-        assertTrue(content.bigText.contains("不保证后台精确计时"))
+        assertTrue(content.bigText.contains("不是 foreground service"))
+        assertTrue(content.bigText.contains("不保证后台可靠计时"))
         assertTrue(content.ongoing)
         assertFalse(content.bigText.contains("闹铃级"))
         assertFalse(content.bigText.contains("强提醒"))
@@ -83,13 +84,15 @@ class ActiveWorkoutNotificationContractsTest {
         val ignored = result as ActiveWorkoutNotificationUpdateResult.Ignored
         assertEquals(ActiveWorkoutNotificationIgnoredReason.NOTIFICATION_PERMISSION_DENIED, ignored.reason)
         assertTrue(ignored.message.contains("训练仍可正常执行"))
+        assertTrue(ignored.message.contains("计划提醒"))
     }
 
     @Test
     fun activeWorkoutChannelCopyDoesNotPromiseForegroundServiceOrAlarmBehavior() {
         assertTrue(ActiveWorkoutNotificationChannelDescription.contains("状态摘要"))
-        assertTrue(ActiveWorkoutNotificationChannelDescription.contains("不承诺后台精确计时"))
-        assertFalse(ActiveWorkoutNotificationChannelDescription.contains("前台服务"))
+        assertTrue(ActiveWorkoutNotificationChannelDescription.contains("不是 foreground service"))
+        assertTrue(ActiveWorkoutNotificationChannelDescription.contains("不保证后台可靠计时"))
+        assertFalse(ActiveWorkoutNotificationChannelDescription.contains("前台服务已启用"))
         assertFalse(ActiveWorkoutNotificationChannelDescription.contains("闹钟级"))
         assertFalse(ActiveWorkoutNotificationChannelDescription.contains("全屏"))
     }

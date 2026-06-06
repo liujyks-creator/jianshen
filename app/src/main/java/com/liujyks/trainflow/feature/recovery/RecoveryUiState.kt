@@ -32,7 +32,7 @@ internal fun BasicRecoveryRecommendation.toRecoveryScreenState(): RecoveryScreen
     return RecoveryScreenState(
         title = "恢复建议",
         sessionLabel = "本次训练 · ${sessionId}",
-        sourceNote = "当前建议来自本次训练动作的 fixture recovery 映射和内存态 session/summary 数据；不读取 Room session records，不写入 recovery_recommendations 表。",
+        sourceNote = "当前建议来自本次训练动作的 fixture recovery 映射和内存态 session / summary 数据；不读取 Room session records，不写入 recovery_recommendations 表。",
         trainedMuscleSummary = recommendation.trainedMuscleIds
             .map { muscleId -> muscleId.muscleLabel() }
             .takeIf { labels -> labels.isNotEmpty() }

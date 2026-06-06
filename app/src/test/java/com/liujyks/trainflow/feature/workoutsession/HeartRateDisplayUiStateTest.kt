@@ -39,6 +39,8 @@ class HeartRateDisplayUiStateTest {
         assertEquals("118 bpm", states.getValue(HeartRateAvailability.STALE).valueText)
         assertEquals("数据暂时中断", states.getValue(HeartRateAvailability.STALE).statusText)
         assertEquals("心率状态暂不可用", states.getValue(HeartRateAvailability.ERROR).statusText)
+        assertTrue(states.getValue(HeartRateAvailability.NOT_CONNECTED).boundaryText.contains("未接入真实设备"))
+        assertTrue(states.getValue(HeartRateAvailability.NOT_CONNECTED).boundaryText.contains("不做医疗告警"))
         assertTrue(states.getValue(HeartRateAvailability.AVAILABLE).isAvailable)
         assertFalse(states.getValue(HeartRateAvailability.STALE).isAvailable)
     }
@@ -73,7 +75,7 @@ class HeartRateDisplayUiStateTest {
             bpm = 130,
             warningLevel = HeartRateWarningLevel.HIGH
         ).toHeartRateDisplayUiState()
-        val forbiddenWords = listOf("医疗", "危险", "异常", "过高", "告警", "热量", "强度判断")
+        val forbiddenWords = listOf("危险心率", "异常心率", "过高", "热量", "强度建议")
 
         assertEquals("演示心率状态", attention.statusText)
         assertEquals(attention, high)

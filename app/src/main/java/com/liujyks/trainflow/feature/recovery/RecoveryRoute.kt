@@ -185,7 +185,7 @@ private fun RecoveryNoticeCard(uiState: RecoveryScreenState) {
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "不基于设备数据、身体异常判断或表现结论生成建议，也不会反向修改训练计划或动作库内容。",
+            text = "不基于健康设备、手表、手环、心率或热量生成判断，也不会反向修改训练计划或动作库内容。",
             style = MaterialTheme.typography.bodySmall,
             color = TrainFlowNeutral500
         )

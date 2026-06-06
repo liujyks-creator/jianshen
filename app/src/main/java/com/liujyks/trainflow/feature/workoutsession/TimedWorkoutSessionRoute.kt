@@ -390,6 +390,13 @@ private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
                         color = TrainFlowNeutral500
                     )
                 }
+                if (!isBigType) {
+                    Text(
+                        text = heartRate.boundaryText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TrainFlowNeutral500
+                    )
+                }
             }
             Text(
                 text = heartRate.valueText,

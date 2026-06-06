@@ -213,7 +213,7 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "计划提醒已可用；活跃训练通知已接入训练执行页。首版不启用前台服务，不承诺后台精确计时。",
+            text = "计划提醒和活跃训练通知都只是普通通知；通知关闭后训练仍可正常使用，不承诺闹钟级强提醒或后台可靠计时。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

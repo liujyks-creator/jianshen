@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.plans
 
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.model.CooldownBlock
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.RestBlock
@@ -160,9 +161,9 @@ internal fun PlanManagementScreenState.setPlanReminder(
     )
     val request = updatedPlan.toPlanReminderScheduleRequest(notificationPermissionState)
     val message = if (notificationPermissionState.canPostNotifications) {
-        "已为「${plan.title}」设置 ${formatReminderSchedule(scheduleAt)} 训练提醒；普通通知可能被系统延迟。"
+        "已为「${plan.title}」设置 ${formatReminderSchedule(scheduleAt)} 训练提醒；普通通知可能被系统延迟，不是闹钟级强提醒。"
     } else {
-        "已保存「${plan.title}」的提醒时间，但 Android 13+ 通知权限关闭，暂不会弹出通知。"
+        "已保存「${plan.title}」的提醒时间，但 Android 13+ 通知权限关闭，训练仍可正常使用，暂不会弹出通知。"
     }
 
     return copy(
@@ -399,7 +400,7 @@ private fun WorkoutPlan.toReminderUiState(
     return PlanReminderUiState(
         summary = planReminderSummary(),
         permissionMessage = notificationPermissionState.rationale,
-        boundaryCopy = "首版只使用普通通知，允许系统延迟；不使用闹钟级强提醒、全屏提示或锁屏强打断。",
+        boundaryCopy = PermissionPrivacyCopy.NOTIFICATION_PERMISSION,
         enabled = reminderEnabled,
         canRequestPermission =
             notificationPermissionState.status == PlanReminderNotificationPermissionStatus.DENIED

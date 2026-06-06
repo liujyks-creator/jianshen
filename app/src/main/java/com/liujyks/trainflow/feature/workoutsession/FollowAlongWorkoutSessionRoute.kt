@@ -287,6 +287,11 @@ private fun FollowAlongNextAndHeartRatePanel(uiState: FollowAlongWorkoutSessionU
                         color = TrainFlowNeutral500
                     )
                 }
+                Text(
+                    text = uiState.heartRate.boundaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TrainFlowNeutral500
+                )
             }
             Text(
                 text = uiState.heartRate.valueText,

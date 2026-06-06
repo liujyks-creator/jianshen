@@ -1,11 +1,12 @@
 package com.liujyks.trainflow.core.notifications
 
 import android.os.Build
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 
 internal const val PlanReminderNotificationChannelId = "trainflow_plan_reminders"
 internal const val PlanReminderNotificationChannelName = "训练提醒"
 internal const val PlanReminderNotificationChannelDescription =
-    "用于提醒你按计划开始训练。普通通知可能被系统延迟，不作为闹钟级强提醒。"
+    PermissionPrivacyCopy.NOTIFICATION_PERMISSION
 
 internal data class PlanReminderNotificationPermissionState(
     val status: PlanReminderNotificationPermissionStatus,
@@ -27,12 +28,12 @@ internal data class PlanReminderNotificationPermissionState(
             } else if (postNotificationsGranted) {
                 PlanReminderNotificationPermissionState(
                     status = PlanReminderNotificationPermissionStatus.GRANTED,
-                    rationale = "通知权限已开启，可接收训练计划提醒。"
+                    rationale = "通知权限已开启，可接收计划提醒和训练中状态提示。"
                 )
             } else {
                 PlanReminderNotificationPermissionState(
                     status = PlanReminderNotificationPermissionStatus.DENIED,
-                    rationale = "Android 13+ 通知权限关闭，计划提醒暂不会弹出；训练执行仍可正常使用。"
+                    rationale = "Android 13+ 通知权限关闭，训练仍可正常使用；计划提醒和训练中状态通知暂不会弹出。"
                 )
             }
         }

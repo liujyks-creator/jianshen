@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.feature.settings
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -20,6 +21,9 @@ class TrainingPreferencesUiStateTest {
         assertEquals("official_flow", state.selectedUiSkinId)
         assertEquals("Official Flow", state.selectedSkinSummary)
         assertEquals(3, state.uiSkinOptions.size)
+        assertEquals(7, state.permissionPrivacySections.size)
+        assertTrue(state.permissionPrivacySections.any { section -> section.title == "通知权限" })
+        assertTrue(state.permissionPrivacySections.any { section -> section.title == "心率" })
     }
 
     @Test
@@ -45,6 +49,23 @@ class TrainingPreferencesUiStateTest {
         )
 
         assertEquals("仅保留训练流程", state.feedbackSummary)
+    }
+
+    @Test
+    fun permissionPrivacyCopyStatesBoundariesWithoutUnavailableClaims() {
+        val copy = defaultTrainingPreferencesScreenState()
+            .permissionPrivacySections
+            .joinToString(" ") { section -> "${section.title} ${section.body}" }
+
+        assertTrue(copy.contains("关闭后训练仍可正常使用"))
+        assertTrue(copy.contains("普通通知可能被系统延迟"))
+        assertTrue(copy.contains("不是 foreground service"))
+        assertTrue(copy.contains("未接入真实设备"))
+        assertTrue(copy.contains("未实现语音控制"))
+        assertFalse(copy.contains("后台可靠计时已完成"))
+        assertFalse(copy.contains("Health Connect 已接入"))
+        assertFalse(copy.contains("语音教练已启用"))
+        assertFalse(copy.contains("医疗诊断结果"))
     }
 
     @Test

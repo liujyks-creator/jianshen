@@ -2,11 +2,13 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.model.HeartRateAvailability
 import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 
 internal data class HeartRateDisplayUiState(
     val valueText: String,
     val statusText: String,
     val auxiliaryText: String,
+    val boundaryText: String = PermissionPrivacyCopy.HEART_RATE,
     val isAvailable: Boolean
 )
 
