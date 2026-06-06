@@ -837,6 +837,8 @@ stepsCompleted:
 
 ### Story E8.4: 社区主题和布局审查清单
 
+**状态:** Implemented in UI skin review checklist documentation and registry/readiness tests
+
 作为维护者，  
 我想有一份 UI 贡献审查清单，  
 以便保证社区 UI 不牺牲可读性、权限说明和训练稳定性。
@@ -845,6 +847,14 @@ stepsCompleted:
 
 - Then 审查清单覆盖训练可读性、对比度、主按钮、心率表述、未实现能力和引擎边界。
 - Then 主题贡献必须说明目标用户、token 映射和训练执行页表现。
+
+**交付结果:**
+
+- 新增 `docs/testing/ui-skin-readiness-checklist.md`，作为三套内置 UI 皮肤、E9 用户测试前 UI readiness 和社区主题/layout 贡献的可执行审查清单。
+- `docs/ui-extension-guide.md` 已补充 E8.4 review gate，覆盖 Official Flow、Tile Flow、Big Type 的审查要点、训练执行页固定主控制、720x1280 小屏、权限说明、心率非医疗化、恢复建议非医疗化和普通通知边界。
+- 社区 UI 定制边界已明确：可以改 theme、shell、布局和组件外观；不得改 `WorkoutCommand`、`WorkoutEvent`、`WorkoutPlan`、`WorkoutSession`、训练执行引擎、权限/健康边界或力量确认语义。
+- E9 用户测试回看事项已纳入清单：热身、动作、动作后休息、轮间休息、放松/拉伸是否都应支持最后 N 秒提醒；训练提示音不得降低、暂停或打断其他 App 音乐/视频，也不主动执行 ducking。
+- 继续禁止运行时插件市场、远程皮肤下载、第三方皮肤安装和动态代码加载；本 story 未新增第四套皮肤，未重做三套内置皮肤，未改变核心训练、通知、权限、心率、恢复建议或 `core.engine` 边界。
 
 ## Epic E9: MVP 验收与发布准备
 
@@ -931,22 +941,23 @@ E7.3 训练偏好设置已合入 main。
 E7.3 偏好回归保护已合入 main。
 E8.1 内置 UI 皮肤 contract / registry 已合入 main。
 E8.2 Tile Flow 关键页面磁贴式皮肤已合入 main。
-E8.3 Big Type 大字训练皮肤已在 codex/e8-3-big-type-skin 实施，等待 Review Gate。
+E8.3 Big Type 大字训练皮肤已合入 main。
+E8.4 UI skin review checklist 和用户测试前 UI readiness 已在 codex/e8-4-ui-skin-review-checklist 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E8.3 Review Gate
+Story E8.4 Review Gate / E9 用户测试准备
 ```
 
-E8.3 Review Gate 建议重点确认：
+E8.4 Review Gate 建议重点确认：
 
-1. Big Type 与 Official Flow / Tile Flow 在训练首页和两类执行页上是否有明确的大字、少信息、大按钮和高对比区别。
-2. 720x1280 下计时执行页的暂停/继续、跳过、`+15秒`、结束训练，以及力量执行页的开始/完成/确认本组、暂停/继续、结束训练是否即时可见。
-3. 当前动作、倒计时/本组目标、下一步和主按钮是否层级明确，心率是否继续保持辅助层级，力量确认层输入是否无溢出且可用。
-4. Official Flow 与 Tile Flow 是否无视觉与行为回归，信息密集页面是否继续沿用现有组合。
+1. `docs/testing/ui-skin-readiness-checklist.md` 是否足够指导三套内置皮肤审查、E9 用户测试前 UI readiness 和社区主题/layout 贡献。
+2. 720x1280 小屏主控制、计时页暂停/继续/跳过/`+15秒`/结束、力量页开始/完成/确认/暂停/结束是否都被纳入验收。
+3. 通知权限说明、普通通知边界、心率非医疗化、恢复建议非医疗化和未实现能力禁区是否清楚。
+4. E9 用户测试回看事项是否完整覆盖最后 N 秒提醒范围和提示音不 ducking / 不打断其他 App 音频。
 5. 是否未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，且没有改变 `WorkoutCommand`、`WorkoutEvent`、训练计划、训练记录、权限或 `core.engine` 边界。
 
 ## 8. 暂缓事项

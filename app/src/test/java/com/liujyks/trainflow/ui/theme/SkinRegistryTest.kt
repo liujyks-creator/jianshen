@@ -19,6 +19,14 @@ class SkinRegistryTest {
             listOf("official_flow", "tile_flow", "big_type"),
             skins.map { skin -> skin.id }
         )
+        assertEquals(
+            BuiltInUiSkin.entries.map { skin -> skin.id },
+            skins.map { skin -> skin.id }
+        )
+        assertEquals(
+            listOf("official_flow"),
+            skins.filter { skin -> skin.isDefault }.map { skin -> skin.id }
+        )
     }
 
     @Test
@@ -27,7 +35,10 @@ class SkinRegistryTest {
             assertTrue(skin.displayName.isNotBlank())
             assertTrue(skin.description.isNotBlank())
             assertTrue(skin.targetUser.isNotBlank())
-            assertTrue(skin.capabilityBoundary.contains("不") || skin.capabilityBoundary.contains("E8.1"))
+            assertTrue(skin.description.length >= 16)
+            assertTrue(skin.targetUser.length >= 12)
+            assertTrue(skin.capabilityBoundary.contains("不改变"))
+            assertTrue(skin.capabilityBoundary.contains("训练"))
         }
     }
 
