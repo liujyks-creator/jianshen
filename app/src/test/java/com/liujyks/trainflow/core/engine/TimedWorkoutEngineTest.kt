@@ -326,6 +326,62 @@ class TimedWorkoutEngineTest {
     }
 
     @Test
+    fun e91RecoveryRegressionKeepsPausedBackgroundTickResumeRestExtensionAndTerminalBoundaryStable() {
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(singleActionPlan(workSec = 4, restSec = 5)),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 1)
+        assertEquals(3, result.state.remainingSec)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.PauseSession)
+        val pausedState = result.state
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 99)
+        assertEquals(pausedState, result.state)
+        assertTrue(result.events.isEmpty())
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
+        result = TimedWorkoutEngine.tick(result.state, seconds = 3)
+        assertEquals(SessionStepKind.TIMED_REST, result.state.currentSessionStep?.kind)
+        assertEquals(5, result.state.remainingSec)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ExtendRest(seconds = 15))
+        assertEquals(20, result.state.remainingSec)
+        assertEquals(15, result.state.extendedRestSec)
+
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.EndSession(reason = "user_requested"))
+        val terminalState = result.state
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 99)
+        assertEquals(terminalState, result.state)
+
+        listOf(
+            WorkoutCommand.ResumeSession,
+            WorkoutCommand.SkipStep,
+            WorkoutCommand.ExtendRest(seconds = 15),
+            WorkoutCommand.EndSession(reason = "late")
+        ).forEach { command ->
+            result = TimedWorkoutEngine.dispatch(result.state, command)
+        }
+
+        assertEquals(terminalState, result.state)
+        assertEquals(
+            listOf(
+                TimedWorkoutControlHistoryType.START_SESSION,
+                TimedWorkoutControlHistoryType.PAUSE_SESSION,
+                TimedWorkoutControlHistoryType.RESUME_SESSION,
+                TimedWorkoutControlHistoryType.EXTEND_REST,
+                TimedWorkoutControlHistoryType.END_SESSION
+            ),
+            result.state.controlHistory.map { event -> event.type }
+        )
+        assertEquals(1, result.state.restExtensionHistory.size)
+        assertEquals(SessionStatus.ABANDONED, result.state.status)
+    }
+
+    @Test
     fun followAlongPlanUsesTimedEngineForStartTickPauseResumeSkipAndEnd() {
         val followAlongPlan = plan(
             blocks = listOf(

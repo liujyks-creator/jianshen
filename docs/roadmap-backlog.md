@@ -862,6 +862,8 @@ stepsCompleted:
 
 ### Story E9.1: 训练状态恢复与回归测试
 
+**状态:** Implemented as training recovery checklist and regression test baseline
+
 作为开发者，  
 我想验证训练中暂停、后台、返回和异常退出恢复，  
 以便减少真实训练中断风险。
@@ -873,6 +875,16 @@ stepsCompleted:
 - Then 后台或重建后的恢复策略已验证。
 - Then 用户测试后回看计时训练临近结束提醒是否覆盖所有可设时长阶段，包括热身、动作、动作后休息、轮间休息和最后放松/拉伸；若当前只覆盖动作与休息，应记录为回归或后续修复项。
 - Then 用户测试时验证训练提示音不会请求导致其他 App 音乐或视频被降低、暂停或打断的 audio focus，也不会主动执行 ducking；不同 Android 版本或设备上的异常应记录为后续音频适配问题。
+
+**交付结果:**
+
+- 新增 `docs/testing/training-state-recovery-checklist.md`，明确暂停后返回、后台再前台、屏幕旋转或 Activity 重建、进程被杀后的当前边界、completed / abandoned 终态防污染、三套 skin 小屏主控制、最后 N 秒提醒覆盖回看、音频共存、普通通知、心率和恢复建议非医疗化边界。
+- 计时训练新增 E9.1 回归测试，覆盖暂停后后台 tick 不推进、继续后原步骤恢复、休息延长只影响当前休息、提前结束进入 abandoned、terminal state 后 tick 和 late commands 不污染 history。
+- 力量训练新增 E9.1 回归测试，覆盖确认草案暂停/继续、休息暂停/继续、实际记录稳定、提前结束进入 abandoned、terminal state 后 late commands 不污染 `StrengthSetRecord`。
+- 执行页新增回归测试，覆盖计时页暂停/继续、跳过、`+15秒`、结束训练控制可达，力量页开始/完成/确认、暂停/继续、结束训练控制可达，三套 skin 固定控制 token、mode pill 对比度和训练 UI state 语义不随 skin 切换改变。
+- 新增音频边界测试，确保倒计时短提示不请求 audio focus、不使用 ducking，不主动降低、暂停或打断其他 App 音乐/视频。
+- 明确当前仍不支持进程被系统杀死后的训练步骤恢复，也不把普通 ongoing notification 写成后台可靠计时。
+- 本 story 未实现真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、exact alarm、notification action 控制训练、语音、真实心率设备、Health Connect、Wear OS、BLE 或厂商 SDK。
 
 ### Story E9.2: 权限与隐私文案
 
@@ -942,23 +954,25 @@ E7.3 偏好回归保护已合入 main。
 E8.1 内置 UI 皮肤 contract / registry 已合入 main。
 E8.2 Tile Flow 关键页面磁贴式皮肤已合入 main。
 E8.3 Big Type 大字训练皮肤已合入 main。
-E8.4 UI skin review checklist 和用户测试前 UI readiness 已在 codex/e8-4-ui-skin-review-checklist 实施，等待 Review Gate。
+E8.4 UI skin review checklist 和用户测试前 UI readiness 已合入 main。
+E9.1 训练状态恢复与回归测试基线已在 codex/e9-1-training-state-recovery-regression 实施，等待 Review Gate。
 当前无已知 blocker。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E8.4 Review Gate / E9 用户测试准备
+Story E9.1 Review Gate / E9.2 权限与隐私文案
 ```
 
-E8.4 Review Gate 建议重点确认：
+E9.1 Review Gate 建议重点确认：
 
-1. `docs/testing/ui-skin-readiness-checklist.md` 是否足够指导三套内置皮肤审查、E9 用户测试前 UI readiness 和社区主题/layout 贡献。
-2. 720x1280 小屏主控制、计时页暂停/继续/跳过/`+15秒`/结束、力量页开始/完成/确认/暂停/结束是否都被纳入验收。
-3. 通知权限说明、普通通知边界、心率非医疗化、恢复建议非医疗化和未实现能力禁区是否清楚。
-4. E9 用户测试回看事项是否完整覆盖最后 N 秒提醒范围和提示音不 ducking / 不打断其他 App 音频。
-5. 是否未实现运行时插件市场、远程主题下载、第三方皮肤安装、动态代码加载，且没有改变 `WorkoutCommand`、`WorkoutEvent`、训练计划、训练记录、权限或 `core.engine` 边界。
+1. `docs/testing/training-state-recovery-checklist.md` 是否足够指导暂停后返回、后台再前台、Activity 重建、进程杀死边界和 terminal state 回归。
+2. 计时训练暂停/继续/跳过/`+15秒`/结束，力量训练开始/完成/确认/暂停/结束是否都有关键测试保护。
+3. 三套 skin 的 720x1280 小屏主控制、固定控制 token、mode pill 对比度和训练语义隔离是否满足用户测试前要求。
+4. 普通 ongoing notification 是否仍被表达为状态摘要，而不是后台可靠计时或 foreground service。
+5. 最后 N 秒提醒覆盖范围和提示音不 ducking / 不打断其他 App 音频是否作为用户测试观察项保留。
+6. 是否未实现真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、exact alarm、notification action、语音、真实心率设备或医疗化能力。
 
 ## 8. 暂缓事项
 

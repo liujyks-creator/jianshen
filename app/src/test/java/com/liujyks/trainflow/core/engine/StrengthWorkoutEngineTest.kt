@@ -549,6 +549,68 @@ class StrengthWorkoutEngineTest {
     }
 
     @Test
+    fun e91RecoveryRegressionKeepsConfirmDraftRestPauseResumeAndTerminalRecordsStable() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(twoSetPlan(restAfterFirstSetSec = 6)),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 4)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
+        assertEquals(SessionStepKind.STRENGTH_CONFIRM_SET, result.state.currentSessionStep?.kind)
+        assertEquals(4, result.state.pendingDraft?.activeDurationSec)
+        assertTrue(result.state.strengthSetRecords.isEmpty())
+
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.PauseSession)
+        val pausedConfirmState = result.state
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 99)
+        assertEquals(pausedConfirmState, result.state)
+
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(
+                StrengthSetCompletionInput(effort = SetEffort.GOOD)
+            )
+        )
+        assertEquals(SessionStepKind.STRENGTH_REST, result.state.currentSessionStep?.kind)
+        assertEquals(1, result.state.strengthSetRecords.size)
+        assertEquals(6, result.state.restRemainingSec)
+
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 2)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.PauseSession)
+        val pausedRestState = result.state
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 99)
+        assertEquals(pausedRestState, result.state)
+
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.EndSession(reason = "user_requested"))
+        val terminalState = result.state
+
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 99)
+        assertEquals(terminalState, result.state)
+
+        listOf(
+            WorkoutCommand.StartStrengthSet(),
+            WorkoutCommand.CompleteStrengthSet(),
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput(actualReps = 99)),
+            WorkoutCommand.SkipStep,
+            WorkoutCommand.EndSession(reason = "late")
+        ).forEach { command ->
+            result = StrengthWorkoutEngine.dispatch(result.state, command)
+        }
+
+        assertEquals(terminalState, result.state)
+        assertEquals(1, result.state.strengthSetRecords.size)
+        assertEquals(4, result.state.strengthSetRecords.single().activeDurationSec)
+        assertEquals(1, result.state.controlHistory.count { event ->
+            event.type == StrengthWorkoutControlHistoryType.END_SESSION
+        })
+        assertEquals(SessionStatus.ABANDONED, result.state.status)
+    }
+
+    @Test
     fun emptyStrengthSnapshotCompletesOnStart() {
         val result = StrengthWorkoutEngine.dispatch(
             state = StrengthWorkoutEngine.create(
