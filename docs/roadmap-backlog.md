@@ -917,6 +917,8 @@ stepsCompleted:
 
 ### Story E9.3: MVP 验收清单
 
+**状态:** Implemented as MVP acceptance checklist, user-test issue template, and lightweight acceptance evidence tests
+
 作为产品负责人，  
 我想逐条验收 MVP 功能，  
 以便判断是否进入试用。
@@ -926,6 +928,15 @@ stepsCompleted:
 - Then PRD 10.1 到 10.4 的验收标准逐项有结果。
 - Then 首版非目标没有被静默实现或暗示。
 - Then 已知问题分级记录。
+
+**交付结果:**
+
+- 新增 `docs/testing/mvp-acceptance-checklist.md`，逐项记录计时训练、基础跟练、力量训练、数字输入、记录/数据分析、心率、通知/声音/隐私、UI skin、状态恢复和 MVP 非目标的 Pass / Partial / Deferred / Out of Scope / Risk / Bug 结论。
+- 新增 `docs/testing/user-test-issue-template.md`，用于用户测试记录 P0/P1/P2/P3 和 Product Decision 问题。
+- 新增轻量验收证据测试，确认计时/力量计划编辑页的 `立即开始（E3 接入）` / `开始力量训练（E4 接入）` 仍为禁用状态，并记录计划编辑整数输入无法表达临时空值的当前 Bug。
+- 记录用户反馈：计时训练后续可能应更接近纯间歇计时器；基础跟练后续应承担动作选择、动作编排和推荐；动作选择应进入独立页面；记录页后续需要总统计、图表、平均心率趋势和计划调整证据。
+- 明确 E10/E11/E12 后续方向：E10 训练模式边界重构与统一动作选择页，E11 心率设备/健康数据策略，E12 数据分析趋势。
+- 本 story 未实现 E10 训练模式重构、统一动作选择页、完整跟练编排、真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、后台可靠计时、真实心率设备、Health Connect / Wear OS / BLE、语音或完整数据分析图表。
 
 ## 5. FR 覆盖映射
 
@@ -973,24 +984,25 @@ E8.2 Tile Flow 关键页面磁贴式皮肤已合入 main。
 E8.3 Big Type 大字训练皮肤已合入 main。
 E8.4 UI skin review checklist 和用户测试前 UI readiness 已合入 main。
 E9.1 训练状态恢复与回归测试基线已合入 main。
-E9.2 权限与隐私文案已在 codex/e9-2-permission-privacy-copy 实施，等待 Review Gate。
-当前无已知 blocker。
+E9.2 权限与隐私文案已合入 main。
+E9.3 MVP 验收清单已在 codex/e9-3-mvp-acceptance-checklist 实施，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
+当前无 P0 blocker；P1 为计划编辑整数输入无法临时清空。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E9.2 Review Gate / E9.3 MVP 验收清单
+Story E9.3 Review Gate / 用户测试 APK 小范围试用
 ```
 
-E9.2 Review Gate 建议重点确认：
+E9.3 Review Gate 建议重点确认：
 
-1. `docs/testing/permission-privacy-readiness-checklist.md` 是否足够指导设置页、计划提醒、活跃训练通知、心率占位、恢复建议、音频提示、语音和数据边界 smoke。
-2. 设置页“权限与隐私”文案是否清楚但不吓人，且三套 skin 下不被隐藏或遮挡。
-3. 通知权限文案是否说明计划提醒和训练中状态提示用途、关闭后训练仍可用、普通通知可能延迟且不是闹钟级强提醒。
-4. 活跃训练通知是否仍被表达为状态摘要，而不是 foreground service、后台可靠计时、进程死亡恢复或 notification action 控制训练。
-5. 心率、恢复建议、音频提示、语音和数据文案是否没有医疗化、真实设备、所有设备一致、语音教练、云同步或真实长期记录承诺。
-6. Manifest 是否仍未新增健康、传感器、蓝牙、定位、foreground service 或 exact alarm 权限。
+1. `docs/testing/mvp-acceptance-checklist.md` 是否诚实区分 Pass、Partial、Deferred、Out of Scope、Risk 和 Bug。
+2. 计划编辑整数输入无法临时清空是否需要用户测试前修复，还是作为 P1 已知问题进入测试。
+3. 编辑页 `立即开始（E3 接入）` / `开始力量训练（E4 接入）` 灰色按钮是否接受当前解释：从计划详情页启动训练。
+4. 计时训练纯间歇计时器、跟练动作编排和统一动作选择页是否按 Product Decision 归入 E10。
+5. 记录页总统计、图表、平均心率趋势和计划调整证据是否按 E12 后续方向处理。
+6. 用户测试 APK 是否验证通过、SHA-256 已记录，且 `.local/` 产物未提交。
 
 ## 8. 暂缓事项
 
