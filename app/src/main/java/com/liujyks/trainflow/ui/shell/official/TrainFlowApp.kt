@@ -127,6 +127,9 @@ internal fun TrainFlowApp(
                     onBackToHome = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
+                    onStartTimedPlan = { plan ->
+                        applyShellState(shellState.startTimedSession(plan))
+                    },
                     planEditorDefaults = planEditorDefaults,
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -134,6 +137,9 @@ internal fun TrainFlowApp(
                 OfficialShellDestination.STRENGTH_PLAN_EDITOR -> StrengthPlanEditorRoute(
                     onBackToHome = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
+                    },
+                    onStartStrengthPlan = { plan ->
+                        applyShellState(shellState.startStrengthSession(plan))
                     },
                     planEditorDefaults = planEditorDefaults,
                     modifier = Modifier.padding(innerPadding)

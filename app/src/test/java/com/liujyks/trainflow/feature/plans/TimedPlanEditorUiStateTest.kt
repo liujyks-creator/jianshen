@@ -216,6 +216,65 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun integerDurationFieldsCanBeTemporarilyBlankAndThenReentered() {
+        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
+        val blankWarmup = buildDefaultTimedPlanEditorState().updateWarmupDurationText("")
+        val blankWork = buildDefaultTimedPlanEditorState().updateItemWorkDurationText(firstItemId, "")
+        val blankRest = buildDefaultTimedPlanEditorState().updateItemRestAfterText(firstItemId, "")
+        val blankRounds = buildDefaultTimedPlanEditorState().updateRoundsText("")
+        val blankRoundRest = buildDefaultTimedPlanEditorState().updateRestBetweenRoundsText("")
+        val blankStretch = buildDefaultTimedPlanEditorState().updateStretchDurationText("")
+
+        assertEquals("", blankWarmup.warmupDurationText)
+        assertFalse(blankWarmup.canSave)
+        assertTrue(requireNotNull(blankWarmup.validationMessage).contains("热身秒数"))
+        assertFalse(blankWork.canStartTraining)
+        assertTrue(requireNotNull(blankWork.validationMessage).contains("动作秒数"))
+        assertFalse(blankRest.canStartTraining)
+        assertTrue(requireNotNull(blankRest.validationMessage).contains("动作后休息秒数"))
+        assertFalse(blankRounds.canSave)
+        assertTrue(requireNotNull(blankRounds.validationMessage).contains("轮数"))
+        assertFalse(blankRoundRest.canSave)
+        assertTrue(requireNotNull(blankRoundRest.validationMessage).contains("轮间休息秒数"))
+        assertFalse(blankStretch.canSave)
+        assertTrue(requireNotNull(blankStretch.validationMessage).contains("拉伸秒数"))
+
+        val reentered = blankWarmup
+            .updateWarmupDurationText("95")
+            .updateItemWorkDurationText(firstItemId, "35")
+            .updateItemRestAfterText(firstItemId, "20")
+            .updateRoundsText("3")
+            .updateRestBetweenRoundsText("45")
+            .updateStretchDurationText("60")
+
+        assertTrue(reentered.canSave)
+        assertTrue(reentered.canStartTraining)
+        assertEquals(95, reentered.warmupDurationSec)
+        assertEquals(35, reentered.items.first().workDurationSec)
+        assertEquals(20, reentered.items.first().restAfterSec)
+        assertEquals(3, reentered.rounds)
+        assertEquals(45, reentered.restBetweenRoundsSec)
+        assertEquals(60, reentered.stretchDurationSec)
+    }
+
+    @Test
+    fun timedEditorStartUsesCurrentValidDraftPlan() {
+        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
+        val state = buildDefaultTimedPlanEditorState()
+            .updateTitle("立即开始计时")
+            .updateWarmupDurationText("30")
+            .updateItemWorkDurationText(firstItemId, "40")
+
+        val plan = state.toWorkoutPlan(planId = "plan-timed-editor-start")
+        val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
+
+        assertTrue(state.canStartTraining)
+        assertEquals("plan-timed-editor-start", plan.id)
+        assertEquals("立即开始计时", plan.title)
+        assertEquals(40, circuit.items.first().workDurationSec)
+    }
+
+    @Test
     fun addAndRemoveTimedExercisesStayWithinFixtureCapabilities() {
         val initial = buildDefaultTimedPlanEditorState()
         val added = initial.addExercise("standing-quad-stretch")

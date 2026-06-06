@@ -1,11 +1,11 @@
-# TrainFlow E9.3 MVP 验收清单与细测记录
+# TrainFlow E9.4 User Test Fix Pack 1 验收清单与细测记录
 
-**状态:** E9.3 用户测试前总验收
+**状态:** E9.4 用户测试修复包 1
 **日期:** 2026-06-07
-**分支:** `codex/e9-3-mvp-acceptance-checklist`
-**基线:** `b87e24c` / `main` / E9.2 已合入
+**分支:** `codex/e9-4-user-test-fix-pack-1`
+**基线:** `3557a63` / `main` / E9.3 已合入
 
-本文档只记录 MVP 用户测试前的能力状态、细测结果、风险分级和后续计划。不在 E9.3 实现 E10 训练模式重构、真实 session 持久化、后台可靠计时、真实心率设备、语音教练、统一动作选择页或完整跟练编排。
+本文档记录 MVP 用户测试前的能力状态、细测结果、风险分级和 E9.4 修复结果。不在 E9.4 实现 E10 训练模式重构、真实 session 持久化、后台可靠计时、真实心率设备、语音教练、统一动作选择页、完整跟练编排或历史记录真实清理。
 
 ## 1. 总结论
 
@@ -13,10 +13,10 @@
 
 - **Pass:** 计时训练执行闭环、力量训练执行闭环、动作库 fixture / 详情、基础跟练 preset、三套 UI skin registry、权限/隐私边界、普通通知边界、心率抽象占位、基础历史/趋势和恢复建议均有实现或测试保护。
 - **Partial:** 计划编辑、计划列表、历史、恢复、跟练和提醒多为内存态、fixture 或基础展示；仍不代表真实长期记录和 Room repository 业务闭环完成。
-- **Bug:** 计划编辑页整数数字输入无法清空为临时空值，清空后旧数字会回填。重量小数字段和力量确认层实际重量/次数已有更明确的空值或校验路径。
+- **Pass:** E9.4 已修复计划编辑页数字输入临时清空和编辑页立即开始：计时/力量编辑页的数字草稿可为空，空值时保存/开始禁用并显示原因；有效草稿可直接进入对应执行页。
 - **Risk:** 计时训练当前仍要求动作编排；用户反馈倾向于后续把计时训练重构为更接近纯间歇计时器。
 - **Product Decision:** 基础跟练后续应承担动作选择、动作推荐、排序和内容展示；动作选择后续应进入独立动作选择页面。这些归入 E10，不在 E9.3 修改。
-- **Deferred:** 真实 `WorkoutSession` 持久化、总统计图表、计划级多次趋势、后台可靠计时、进程死亡恢复、真实心率设备、Health Connect / Wear OS / BLE、语音控制和完整课程平台均不进入 MVP 当前实现。
+- **Deferred:** 真实 `WorkoutSession` 持久化、总统计图表、计划级多次趋势、历史记录全部清除 / 按计划清除 / 按日期清除、后台可靠计时、进程死亡恢复、真实心率设备、Health Connect / Wear OS / BLE、语音控制和完整课程平台均不进入 MVP 当前实现。
 
 ## 2. 状态标记
 
@@ -37,12 +37,12 @@
 |---|---|---|
 | 创建计时训练计划 | Partial | 编辑页可生成内存态 `WorkoutPlan` 草稿；真实保存和编辑回填仍未接 repository。 |
 | 当前是否要求添加动作 | Risk | 当前计时计划默认包含动作，添加动作也在编辑页内完成；用户反馈后续应更接近纯间歇计时器。 |
-| 动作时间、休息时间、轮数、轮间休息 | Pass | 合同映射和 UI state 测试覆盖；整数输入清空另见 Bug。 |
+| 动作时间、休息时间、轮数、轮间休息 | Pass | 合同映射和 UI state 测试覆盖；E9.4 已支持临时清空并在空值时禁用保存/开始。 |
 | 热身和放松设置 | Partial | 支持全局秒数 block；最后 N 秒提醒覆盖需继续回看。 |
 | 临近结束提醒 | Partial | 动作与休息提醒已实现；热身、放松、轮间休息覆盖作为用户测试风险项。 |
 | 暂停/继续/跳过/+15秒/结束 | Pass | 计时执行页和引擎测试覆盖。 |
 | 总倒计时与当前阶段倒计时 | Pass | 执行 UI state 覆盖当前阶段、主倒计时和进度。 |
-| 立即开始按钮状态 | Bug | 计时编辑页 `立即开始（E3 接入）` 仍为灰色禁用；计划详情页已有 `开始计时训练` 可启动。 |
+| 立即开始按钮状态 | Pass | E9.4 已接通计时编辑页 `立即开始`，有效草稿会进入计时训练执行页；无效草稿保持禁用并显示原因。 |
 
 ### B. 基础跟练
 
@@ -65,7 +65,7 @@
 | 动作顺序编排 | Partial | 默认顺序按加入顺序，未提供完整拖拽/独立排序页。 |
 | 目标重量、次数、组数、休息 | Pass | 合同映射和测试覆盖。 |
 | 热身组、逐组目标 | Pass | UI state 支持热身组与逐组目标展开。 |
-| 开始力量训练按钮状态 | Bug | 力量编辑页 `开始力量训练（E4 接入）` 仍为灰色禁用；计划详情页已有 `开始力量训练` 可启动。 |
+| 开始力量训练按钮状态 | Pass | E9.4 已接通力量编辑页 `开始力量训练`，有效草稿会进入力量训练执行页；无效草稿保持禁用并显示原因。 |
 | 开始本组、完成本组、确认实际重量/次数/感受 | Pass | 引擎与 UI state 测试覆盖，计划值会预填实际记录。 |
 | 替换动作、跳过动作 | Pass | E4.4 引擎与 UI state 覆盖，记录替换来源和跳过摘要。 |
 
@@ -73,18 +73,15 @@
 
 | 字段 | 状态 | 结论 |
 |---|---|---|
-| 时间输入清空 | Bug | 计时编辑页整数 `NumberField` 由 `Int` 控制，空字符串不会更新 state，旧值回填。 |
-| 重量输入清空 | Pass | 力量计划重量 `DecimalField` 支持清空为 `null`；力量确认层实际重量清空后给出明确校验。 |
-| 次数输入清空 | Bug | 力量计划次数整数输入无法表达临时空值；确认层实际次数清空后有明确校验。 |
-| 组数输入清空 | Bug | 力量计划组数整数输入无法表达临时空值。 |
-| 轮数输入清空 | Bug | 计时计划轮数整数输入无法表达临时空值。 |
-| 清空后继续输入 | Risk | 计划编辑整数输入需要全选覆盖或逐位修改；无法先清空再输入。 |
-| 非法输入提示 | Partial | 计划编辑整数输入会过滤非数字但无错误提示；确认层有“实际重量不能为空 / 次数至少为 1”等提示。 |
+| 时间输入清空 | Pass | E9.4 计时编辑页热身、动作秒数、动作后休息、轮间休息和拉伸均以 raw text 草稿支持临时为空。 |
+| 重量输入清空 | Pass | E9.4 力量计划重量以 raw text 草稿支持临时为空；带重量动作为空时禁用保存/开始并提示重量不能为空。 |
+| 次数输入清空 | Pass | E9.4 力量计划次数区间、固定次数和逐组次数均支持临时为空，空值时禁用保存/开始并显示原因。 |
+| 组数输入清空 | Pass | E9.4 力量计划正式组数和热身组数均支持临时为空，空值时禁用保存/开始并显示原因。 |
+| 轮数输入清空 | Pass | E9.4 计时计划轮数支持临时为空，空值时禁用保存/开始并显示原因。 |
+| 清空后继续输入 | Pass | E9.4 UI state 测试覆盖清空后继续输入有效数字并恢复保存/开始。 |
+| 非法输入提示 | Pass | 计划编辑页保存/开始区域展示第一条明确校验原因；力量确认层原有空值校验未回退。 |
 
-**复现步骤:** 打开计时计划编辑页，选中“轮数”或“动作秒数”，删除全部数字。
-**预期:** 输入框可临时为空，用户可继续输入新数字，保存时再校验。
-**实际:** 因字段由 `Int` 的 `value.toString()` 控制，空输入不会派发更新，旧数字立刻回填。
-**建议修法:** 后续把计划编辑数字字段改为字符串草稿 state，保存/预览时再统一解析、夹紧并展示错误。
+**E9.4 修复结果:** 计划编辑数字输入已改为 raw text 草稿 state，空字符串会留在输入框中；保存/立即开始时再要求合法数字，并在预览区展示明确原因。
 
 ### E. 记录与数据分析
 
@@ -96,6 +93,7 @@
 | 总统计 | Deferred | 尚无完整总统计面板。 |
 | 图表 | Deferred | 当前为文字/行式基础趋势，不含图表。 |
 | 计划级多次趋势 | Deferred | 需要真实 session records 和计划快照持久化后实现。 |
+| 记录清理 | Deferred | 后续需要支持全部清除、按训练计划清除、按日期清除；当前历史仍多为内存态 / fixture / 基础展示，本轮不实现假删除。 |
 | 用户反馈 | Product Decision | 后续 E12 需要总统计、图表、平均心率趋势和计划调整证据。 |
 
 ### F. 心率
@@ -155,9 +153,9 @@
 
 | ID | 分级 | 类型 | 问题 | 复现/证据 | 建议 |
 |---|---|---|---|---|---|
-| E9.3-BUG-001 | P1 | Bug | 计划编辑页整数输入无法清空，旧值回填 | `MvpAcceptanceChecklistEvidenceTest.integerNumberFieldParsingCannotRepresentBlankDraftInput`；计时/力量编辑 `NumberField` 使用 `Int` 控制 | 后续修为字符串草稿 state + 保存时校验 |
-| E9.3-BUG-002 | P2 | Bug | 计时编辑页 `立即开始（E3 接入）` 灰色不可点 | `TimedPlanEditorRoute` 按钮 `enabled = false` | 用户测试引导从计划详情启动；后续统一编辑页启动路径 |
-| E9.3-BUG-003 | P2 | Bug | 力量编辑页 `开始力量训练（E4 接入）` 灰色不可点 | `StrengthPlanEditorRoute` 按钮 `enabled = false` | 用户测试引导从计划详情启动；后续统一编辑页启动路径 |
+| E9.3-BUG-001 | P1 | Fixed in E9.4 | 计划编辑页整数输入无法清空，旧值回填 | `TimedPlanEditorUiStateTest.integerDurationFieldsCanBeTemporarilyBlankAndThenReentered`、`StrengthPlanEditorUiStateTest.strengthNumericFieldsCanBeTemporarilyBlankAndThenReentered` | 已改为 raw text 草稿 state + 保存/开始校验 |
+| E9.3-BUG-002 | P2 | Fixed in E9.4 | 计时编辑页 `立即开始（E3 接入）` 灰色不可点 | `MvpAcceptanceChecklistEvidenceTest.editorStartButtonsAreConnectedInPlanEditorRoutes`、`OfficialShellStateTest.timedEditorDraftStartsTimedSessionDestination` | 有效草稿直接进入计时训练执行页 |
+| E9.3-BUG-003 | P2 | Fixed in E9.4 | 力量编辑页 `开始力量训练（E4 接入）` 灰色不可点 | `MvpAcceptanceChecklistEvidenceTest.editorStartButtonsAreConnectedInPlanEditorRoutes`、`OfficialShellStateTest.strengthEditorDraftStartsStrengthSessionDestination` | 有效草稿直接进入力量训练执行页 |
 | E9.3-PD-001 | Product Decision | Product Decision | 计时训练是否应改为纯间歇计时器 | 用户反馈；当前计时训练强依赖动作 | E10 重构训练模式边界 |
 | E9.3-PD-002 | Product Decision | Product Decision | 基础跟练是否应承担动作选择、推荐和排序 | 用户反馈；当前只支持 preset | E10 设计跟练编排 |
 | E9.3-PD-003 | Product Decision | Product Decision | 动作选择是否独立成页面 | 用户反馈；当前嵌在入口/编辑页 chip | E10 统一动作选择页 |
@@ -165,6 +163,7 @@
 | E9.3-RISK-002 | P2 | Risk | 提示音与其他 App 音频共存需真机验证 | 单元测试确认不请求 audio focus / ducking，但设备差异未知 | 用户测试记录设备、Android 版本和音频 App |
 | E9.3-RISK-003 | P2 | Risk | 记录页缺总统计、图表和计划级趋势 | 当前仅基础历史/趋势 | E12 数据分析趋势 |
 | E9.3-RISK-004 | P2 | Risk | Activity 重建和进程死亡恢复不完整 | E9.1 已明确边界 | 后续持久化与后台策略 story |
+| E9.4-DEFER-001 | P2 | Deferred | 历史记录清理需要全部清除、按训练计划清除、按日期清除 | 当前历史记录仍多为内存态 / fixture / 基础展示 | 后续在真实 session records / repository 闭环后实现 |
 
 ## 5. 用户测试前告知
 
@@ -186,14 +185,13 @@
 | `app:check --no-daemon --console=plain` | Pass | 2026-06-07 执行通过。 |
 | `git diff --check HEAD` | Pass | 提交前执行通过。 |
 | `git diff --cached --check` | Pass | stage 后执行通过。 |
-| 模拟器 smoke | Pass | `TrainFlow_Pixel_API_36`，720x1280 / density 320；覆盖首页、计时编辑页、计划详情启动、计时执行页、力量计划详情、力量会话开始/完成/确认记录；截图和 UI XML 在 `.local/verification/e9-3/`。 |
-| 用户测试 APK | Pass | `.local/deliverables/TrainFlow-mvp-user-test-debug.apk`；构建时间 `2026-06-07T02:04:32.2488537+08:00`；SHA-256 `0BD2AD7D0A90344F283E6DFC1762F7E1906F37DB62C978DEEF98E35CD6AF89AB`；commit hash 以最终提交为准。 |
+| 模拟器 smoke | Not run | E9.4 本轮未执行模拟器 smoke；行为由 UI state / shell tests、assemble、lint 和 check 覆盖。 |
+| 用户测试 APK | Pass | `.local/deliverables/TrainFlow-e9.4-fix-pack-1-debug.apk`；构建时间 `2026-06-07T03:38:25.8690520+08:00`；SHA-256 `8E8F07E45B1F0D56B1AC07AB5AA2736FD87E8417B2EC0819395C5422D14F4997`；commit hash 以最终提交为准。 |
 
 ## 7. 后续建议
 
-1. Review Gate：先审本清单的问题分级和用户测试边界是否够清楚。
-2. 修 P0/P1：当前无 P0；P1 是计划编辑整数输入清空问题。
-3. 用户测试：带着上方告知范围发 debug APK。
-4. E10：训练模式边界重构，重点处理纯计时器、跟练编排和统一动作选择页。
-5. E11：心率设备策略，评估 Health Connect、Wear OS、BLE 和非医疗化提示。
-6. E12：数据分析趋势，补总统计、图表、计划级趋势、平均心率趋势和计划调整证据。
+1. Review Gate：先审 E9.4 修复是否满足用户测试前 P1/P2 收口。
+2. 用户测试：带着上方告知范围发 debug APK。
+3. E10：训练模式边界重构，重点处理纯计时器、跟练编排和统一动作选择页。
+4. E11：心率设备策略，评估 Health Connect、Wear OS、BLE 和非医疗化提示。
+5. E12：数据分析趋势，补总统计、图表、计划级趋势、平均心率趋势、计划调整证据和记录清理能力。

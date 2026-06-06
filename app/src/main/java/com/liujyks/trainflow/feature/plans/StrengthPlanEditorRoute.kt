@@ -26,7 +26,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +37,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
@@ -50,6 +50,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 @Composable
 internal fun StrengthPlanEditorRoute(
     onBackToHome: () -> Unit,
+    onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier,
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
 ) {
@@ -61,26 +62,36 @@ internal fun StrengthPlanEditorRoute(
         uiState = uiState,
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
-        onTargetWeightChanged = { itemId, kg -> uiState = uiState.updateTargetWeight(itemId, kg) },
-        onRepRangeChanged = { itemId, minReps, maxReps ->
-            uiState = uiState.updateRepRange(itemId, minReps, maxReps)
+        onTargetWeightChanged = { itemId, input -> uiState = uiState.updateTargetWeightText(itemId, input) },
+        onRepRangeChanged = { itemId, minRepsInput, maxRepsInput ->
+            uiState = uiState.updateRepRangeText(itemId, minRepsInput, maxRepsInput)
         },
-        onFixedRepsChanged = { itemId, reps -> uiState = uiState.updateFixedReps(itemId, reps) },
-        onWorkingSetsChanged = { itemId, sets -> uiState = uiState.updateWorkingSets(itemId, sets) },
-        onWarmupSetsChanged = { itemId, sets -> uiState = uiState.updateWarmupSets(itemId, sets) },
-        onRestAfterSetChanged = { itemId, seconds -> uiState = uiState.updateRestAfterSet(itemId, seconds) },
+        onFixedRepsChanged = { itemId, input -> uiState = uiState.updateFixedRepsText(itemId, input) },
+        onWorkingSetsChanged = { itemId, input -> uiState = uiState.updateWorkingSetsText(itemId, input) },
+        onWarmupSetsChanged = { itemId, input -> uiState = uiState.updateWarmupSetsText(itemId, input) },
+        onRestAfterSetChanged = { itemId, input -> uiState = uiState.updateRestAfterSetText(itemId, input) },
         onSetTargetsExpandedChanged = { itemId, expanded ->
             uiState = uiState.setSetTargetsExpanded(itemId, expanded)
         },
-        onSetTargetWeightChanged = { itemId, setId, kg ->
-            uiState = uiState.updateSetTargetWeight(itemId, setId, kg)
+        onSetTargetWeightChanged = { itemId, setId, input ->
+            uiState = uiState.updateSetTargetWeightText(itemId, setId, input)
         },
-        onSetFixedRepsChanged = { itemId, setId, reps ->
-            uiState = uiState.updateSetFixedReps(itemId, setId, reps)
+        onSetFixedRepsChanged = { itemId, setId, input ->
+            uiState = uiState.updateSetFixedRepsText(itemId, setId, input)
         },
         onAddExercise = { exerciseId -> uiState = uiState.addExercise(exerciseId) },
         onRemoveExercise = { itemId -> uiState = uiState.removeExercise(itemId) },
         onSaveDraft = { uiState = uiState.saveDraftPlan() },
+        onStartStrengthPlan = {
+            if (uiState.canStartTraining) {
+                onStartStrengthPlan(
+                    uiState.toWorkoutPlan(
+                        planId = "plan-strength-editor-start",
+                        timestamp = DefaultStrengthPlanTimestamp
+                    )
+                )
+            }
+        },
         modifier = modifier
     )
 }
@@ -90,18 +101,19 @@ private fun StrengthPlanEditorScreen(
     uiState: StrengthPlanEditorScreenState,
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
-    onTargetWeightChanged: (String, Double?) -> Unit,
-    onRepRangeChanged: (String, Int, Int) -> Unit,
-    onFixedRepsChanged: (String, Int) -> Unit,
-    onWorkingSetsChanged: (String, Int) -> Unit,
-    onWarmupSetsChanged: (String, Int) -> Unit,
-    onRestAfterSetChanged: (String, Int) -> Unit,
+    onTargetWeightChanged: (String, String) -> Unit,
+    onRepRangeChanged: (String, String, String) -> Unit,
+    onFixedRepsChanged: (String, String) -> Unit,
+    onWorkingSetsChanged: (String, String) -> Unit,
+    onWarmupSetsChanged: (String, String) -> Unit,
+    onRestAfterSetChanged: (String, String) -> Unit,
     onSetTargetsExpandedChanged: (String, Boolean) -> Unit,
-    onSetTargetWeightChanged: (String, String, Double?) -> Unit,
-    onSetFixedRepsChanged: (String, String, Int) -> Unit,
+    onSetTargetWeightChanged: (String, String, String) -> Unit,
+    onSetFixedRepsChanged: (String, String, String) -> Unit,
     onAddExercise: (String) -> Unit,
     onRemoveExercise: (String) -> Unit,
     onSaveDraft: () -> Unit,
+    onStartStrengthPlan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -167,7 +179,8 @@ private fun StrengthPlanEditorScreen(
         item {
             StrengthSaveAndPreviewCard(
                 uiState = uiState,
-                onSaveDraft = onSaveDraft
+                onSaveDraft = onSaveDraft,
+                onStartStrengthPlan = onStartStrengthPlan
             )
         }
     }
@@ -216,15 +229,15 @@ private fun StrengthPlanBasicsCard(
 private fun StrengthExerciseEditorCard(
     exercise: StrengthPlanExerciseUiState,
     canRemove: Boolean,
-    onTargetWeightChanged: (Double?) -> Unit,
-    onRepRangeChanged: (Int, Int) -> Unit,
-    onFixedRepsChanged: (Int) -> Unit,
-    onWorkingSetsChanged: (Int) -> Unit,
-    onWarmupSetsChanged: (Int) -> Unit,
-    onRestAfterSetChanged: (Int) -> Unit,
+    onTargetWeightChanged: (String) -> Unit,
+    onRepRangeChanged: (String, String) -> Unit,
+    onFixedRepsChanged: (String) -> Unit,
+    onWorkingSetsChanged: (String) -> Unit,
+    onWarmupSetsChanged: (String) -> Unit,
+    onRestAfterSetChanged: (String) -> Unit,
     onSetTargetsExpandedChanged: (Boolean) -> Unit,
-    onSetTargetWeightChanged: (String, Double?) -> Unit,
-    onSetFixedRepsChanged: (String, Int) -> Unit,
+    onSetTargetWeightChanged: (String, String) -> Unit,
+    onSetFixedRepsChanged: (String, String) -> Unit,
     onRemove: () -> Unit
 ) {
     EditorCard {
@@ -263,13 +276,13 @@ private fun StrengthExerciseEditorCard(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DecimalField(
                 label = "计划重量 kg",
-                value = exercise.targetWeightKg,
+                value = exercise.targetWeightText,
                 onValueChanged = onTargetWeightChanged,
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "正式组数",
-                value = exercise.workingSets,
+                value = exercise.workingSetsText,
                 onValueChanged = onWorkingSetsChanged,
                 modifier = Modifier.weight(1f)
             )
@@ -284,13 +297,13 @@ private fun StrengthExerciseEditorCard(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(
                 label = "热身组数",
-                value = exercise.warmupSets,
+                value = exercise.warmupSetsText,
                 onValueChanged = onWarmupSetsChanged,
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "组间休息秒数",
-                value = exercise.restAfterSetSec,
+                value = exercise.restAfterSetText,
                 onValueChanged = onRestAfterSetChanged,
                 modifier = Modifier.weight(1f)
             )
@@ -325,18 +338,18 @@ private fun StrengthExerciseEditorCard(
 @Composable
 private fun StrengthRepTargetFields(
     repTarget: StrengthRepTargetUiState,
-    onRepRangeChanged: (Int, Int) -> Unit,
-    onFixedRepsChanged: (Int) -> Unit
+    onRepRangeChanged: (String, String) -> Unit,
+    onFixedRepsChanged: (String) -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
             selected = repTarget.kind == StrengthRepTargetKind.RANGE,
-            onClick = { onRepRangeChanged(repTarget.minReps, repTarget.maxReps) },
+            onClick = { onRepRangeChanged(repTarget.minRepsText, repTarget.maxRepsText) },
             label = { Text("次数区间") }
         )
         FilterChip(
             selected = repTarget.kind == StrengthRepTargetKind.FIXED,
-            onClick = { onFixedRepsChanged(repTarget.fixedReps) },
+            onClick = { onFixedRepsChanged(repTarget.fixedRepsText) },
             label = { Text("固定次数") }
         )
     }
@@ -345,21 +358,21 @@ private fun StrengthRepTargetFields(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(
                 label = "最少次数",
-                value = repTarget.minReps,
-                onValueChanged = { onRepRangeChanged(it, repTarget.maxReps) },
+                value = repTarget.minRepsText,
+                onValueChanged = { onRepRangeChanged(it, repTarget.maxRepsText) },
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "最多次数",
-                value = repTarget.maxReps,
-                onValueChanged = { onRepRangeChanged(repTarget.minReps, it) },
+                value = repTarget.maxRepsText,
+                onValueChanged = { onRepRangeChanged(repTarget.minRepsText, it) },
                 modifier = Modifier.weight(1f)
             )
         }
     } else {
         NumberField(
             label = "固定次数",
-            value = repTarget.fixedReps,
+            value = repTarget.fixedRepsText,
             onValueChanged = onFixedRepsChanged,
             modifier = Modifier.fillMaxWidth()
         )
@@ -369,8 +382,8 @@ private fun StrengthRepTargetFields(
 @Composable
 private fun StrengthSetTargetRow(
     setTarget: StrengthSetTargetUiState,
-    onWeightChanged: (Double?) -> Unit,
-    onFixedRepsChanged: (Int) -> Unit
+    onWeightChanged: (String) -> Unit,
+    onFixedRepsChanged: (String) -> Unit
 ) {
     val kindLabel = when (setTarget.kind) {
         StrengthSetKind.WARMUP -> "热身"
@@ -388,16 +401,13 @@ private fun StrengthSetTargetRow(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DecimalField(
                 label = "本组重量 kg",
-                value = setTarget.targetWeightKg,
+                value = setTarget.targetWeightText,
                 onValueChanged = onWeightChanged,
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "本组次数",
-                value = when (val target = setTarget.repTarget.toRepTarget()) {
-                    is com.liujyks.trainflow.core.model.RepTarget.Fixed -> target.reps
-                    is com.liujyks.trainflow.core.model.RepTarget.Range -> target.maxReps
-                },
+                value = setTarget.repTarget.fixedRepsText,
                 onValueChanged = onFixedRepsChanged,
                 modifier = Modifier.weight(1f)
             )
@@ -445,7 +455,8 @@ private fun AddStrengthExerciseCard(
 @Composable
 private fun StrengthSaveAndPreviewCard(
     uiState: StrengthPlanEditorScreenState,
-    onSaveDraft: () -> Unit
+    onSaveDraft: () -> Unit,
+    onStartStrengthPlan: () -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "草稿预览")
@@ -460,6 +471,13 @@ private fun StrengthSaveAndPreviewCard(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = TrainFlowNeutral700
+            )
+        }
+        uiState.validationMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
             )
         }
 
@@ -488,12 +506,12 @@ private fun StrengthSaveAndPreviewCard(
                 Text(text = "保存草稿")
             }
             Button(
-                onClick = {},
-                enabled = false,
+                onClick = onStartStrengthPlan,
+                enabled = uiState.canStartTraining,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "开始力量训练（E4 接入）")
+                Text(text = "开始力量训练")
             }
         }
     }
@@ -502,16 +520,14 @@ private fun StrengthSaveAndPreviewCard(
 @Composable
 private fun NumberField(
     label: String,
-    value: Int,
-    onValueChanged: (Int) -> Unit,
+    value: String,
+    onValueChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
-        value = value.toString(),
+        value = value,
         onValueChange = { input ->
-            input.filter { it.isDigit() }
-                .toIntOrNull()
-                ?.let(onValueChanged)
+            onValueChanged(input.sanitizeIntegerInput())
         },
         modifier = modifier,
         label = { Text(label) },
@@ -522,28 +538,14 @@ private fun NumberField(
 @Composable
 private fun DecimalField(
     label: String,
-    value: Double?,
-    onValueChanged: (Double?) -> Unit,
+    value: String,
+    onValueChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var textValue by remember { mutableStateOf(value.formatWeightInput()) }
-    var lastUserParsedValue by remember { mutableStateOf(value) }
-
-    LaunchedEffect(value) {
-        if (value != lastUserParsedValue) {
-            textValue = value.formatWeightInput()
-            lastUserParsedValue = value
-        }
-    }
-
     OutlinedTextField(
-        value = textValue,
+        value = value,
         onValueChange = { input ->
-            val cleaned = input.sanitizeDecimalInput()
-            val parsedValue = cleaned.toDoubleOrNull()
-            textValue = cleaned
-            lastUserParsedValue = parsedValue
-            onValueChanged(parsedValue)
+            onValueChanged(input.sanitizeDecimalInput())
         },
         modifier = modifier,
         label = { Text(label) },

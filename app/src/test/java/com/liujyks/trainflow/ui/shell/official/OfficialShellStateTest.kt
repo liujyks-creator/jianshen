@@ -2,6 +2,8 @@ package com.liujyks.trainflow.ui.shell.official
 
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendationGenerator
 import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
+import com.liujyks.trainflow.feature.plans.buildDefaultStrengthPlanEditorState
+import com.liujyks.trainflow.feature.plans.buildDefaultTimedPlanEditorState
 import com.liujyks.trainflow.feature.plans.confirmDeletePlan
 import com.liujyks.trainflow.feature.plans.copyPlan
 import com.liujyks.trainflow.feature.plans.requestDeletePlan
@@ -145,6 +147,18 @@ class OfficialShellStateTest {
     }
 
     @Test
+    fun timedEditorDraftStartsTimedSessionDestination() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR)
+        val editorPlan = buildDefaultTimedPlanEditorState()
+            .toWorkoutPlan(planId = "plan-timed-editor-start")
+        val sessionState = initial.startTimedSession(editorPlan)
+
+        assertEquals(OfficialShellDestination.TIMED_SESSION, sessionState.currentDestination)
+        assertEquals("plan-timed-editor-start", sessionState.activeTimedSessionPlan?.id)
+        assertEquals(null, sessionState.activeStrengthSessionPlan)
+    }
+
+    @Test
     fun activeTimedSessionHidesBottomBar() {
         val initial = OfficialShellState()
         val timedPlan = initial.planManagementState.plans.first()
@@ -182,6 +196,18 @@ class OfficialShellStateTest {
 
         assertEquals(OfficialShellDestination.STRENGTH_SESSION, sessionState.currentDestination)
         assertEquals(strengthPlan.id, sessionState.activeStrengthSessionPlan?.id)
+        assertEquals(null, sessionState.activeTimedSessionPlan)
+    }
+
+    @Test
+    fun strengthEditorDraftStartsStrengthSessionDestination() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR)
+        val editorPlan = buildDefaultStrengthPlanEditorState()
+            .toWorkoutPlan(planId = "plan-strength-editor-start")
+        val sessionState = initial.startStrengthSession(editorPlan)
+
+        assertEquals(OfficialShellDestination.STRENGTH_SESSION, sessionState.currentDestination)
+        assertEquals("plan-strength-editor-start", sessionState.activeStrengthSessionPlan?.id)
         assertEquals(null, sessionState.activeTimedSessionPlan)
     }
 

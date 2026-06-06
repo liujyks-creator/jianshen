@@ -53,9 +53,13 @@ internal data class PlanEditorDefaults(
 internal data class TimedPlanEditorScreenState(
     val title: String,
     val warmupDurationSec: Int,
+    val warmupDurationRawText: String? = null,
     val stretchDurationSec: Int,
+    val stretchDurationRawText: String? = null,
     val rounds: Int,
+    val roundsRawText: String? = null,
     val restBetweenRoundsSec: Int,
+    val restBetweenRoundsRawText: String? = null,
     val actionCue: CountdownCueUiState,
     val restCue: CountdownCueUiState,
     val items: List<TimedPlanEditorItemUiState>,
@@ -63,7 +67,25 @@ internal data class TimedPlanEditorScreenState(
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
-    val canSave: Boolean = title.isNotBlank() && items.isNotEmpty()
+    val warmupDurationText: String
+        get() = warmupDurationRawText ?: warmupDurationSec.toString()
+
+    val stretchDurationText: String
+        get() = stretchDurationRawText ?: stretchDurationSec.toString()
+
+    val roundsText: String
+        get() = roundsRawText ?: rounds.toString()
+
+    val restBetweenRoundsText: String
+        get() = restBetweenRoundsRawText ?: restBetweenRoundsSec.toString()
+
+    val validationMessage: String?
+        get() = validateTimedDraft()
+
+    val canSave: Boolean = validationMessage == null
+
+    val canStartTraining: Boolean
+        get() = canSave
 
     val estimatedDurationSec: Int
         get() {
@@ -144,9 +166,17 @@ internal data class TimedPlanEditorItemUiState(
     val shortCue: String,
     val side: ExerciseSide?,
     val workDurationSec: Int,
+    val workDurationRawText: String? = null,
     val restAfterSec: Int,
+    val restAfterRawText: String? = null,
     val autoAdvance: Boolean = true
 ) {
+    val workDurationText: String
+        get() = workDurationRawText ?: workDurationSec.toString()
+
+    val restAfterText: String
+        get() = restAfterRawText ?: restAfterSec.toString()
+
     fun toTimedExerciseItem(order: Int): TimedExerciseItem {
         return TimedExerciseItem(
             id = "timed-item-$order",
@@ -168,10 +198,14 @@ internal data class TimedExerciseOptionUiState(
 internal data class CountdownCueUiState(
     val enabled: Boolean = true,
     val thresholdSec: Int = CountdownCue.DEFAULT_THRESHOLD_SEC,
+    val thresholdRawText: String? = null,
     val soundEnabled: Boolean = true,
     val vibrationEnabled: Boolean = true,
     val emphasisAnimationEnabled: Boolean = true
 ) {
+    val thresholdText: String
+        get() = thresholdRawText ?: thresholdSec.toString()
+
     fun toCountdownCue(): CountdownCue {
         return CountdownCue(
             enabled = enabled,
@@ -212,33 +246,129 @@ internal fun TimedPlanEditorScreenState.updateTitle(value: String): TimedPlanEdi
 }
 
 internal fun TimedPlanEditorScreenState.updateWarmupDuration(seconds: Int): TimedPlanEditorScreenState {
-    return copy(warmupDurationSec = seconds.sanitizeDuration(), savedPlan = null, statusMessage = null)
+    val sanitized = seconds.sanitizeDuration()
+    return copy(
+        warmupDurationSec = sanitized,
+        warmupDurationRawText = sanitized.toString(),
+        savedPlan = null,
+        statusMessage = null
+    )
 }
 
 internal fun TimedPlanEditorScreenState.updateStretchDuration(seconds: Int): TimedPlanEditorScreenState {
-    return copy(stretchDurationSec = seconds.sanitizeDuration(), savedPlan = null, statusMessage = null)
+    val sanitized = seconds.sanitizeDuration()
+    return copy(
+        stretchDurationSec = sanitized,
+        stretchDurationRawText = sanitized.toString(),
+        savedPlan = null,
+        statusMessage = null
+    )
 }
 
 internal fun TimedPlanEditorScreenState.updateRounds(value: Int): TimedPlanEditorScreenState {
-    return copy(rounds = value.coerceIn(1, 12), savedPlan = null, statusMessage = null)
+    val sanitized = value.coerceIn(1, 12)
+    return copy(
+        rounds = sanitized,
+        roundsRawText = sanitized.toString(),
+        savedPlan = null,
+        statusMessage = null
+    )
 }
 
 internal fun TimedPlanEditorScreenState.updateRestBetweenRounds(seconds: Int): TimedPlanEditorScreenState {
-    return copy(restBetweenRoundsSec = seconds.sanitizeDuration(), savedPlan = null, statusMessage = null)
+    val sanitized = seconds.sanitizeDuration()
+    return copy(
+        restBetweenRoundsSec = sanitized,
+        restBetweenRoundsRawText = sanitized.toString(),
+        savedPlan = null,
+        statusMessage = null
+    )
         .constrainCueSettings()
 }
 
-internal fun TimedPlanEditorScreenState.updateActionCueThreshold(seconds: Int): TimedPlanEditorScreenState {
+internal fun TimedPlanEditorScreenState.updateWarmupDurationText(input: String): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeDuration()
     return copy(
-        actionCue = actionCue.copy(thresholdSec = seconds.sanitizeCueThreshold()),
+        warmupDurationSec = parsed ?: warmupDurationSec,
+        warmupDurationRawText = cleaned,
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
+internal fun TimedPlanEditorScreenState.updateStretchDurationText(input: String): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeDuration()
+    return copy(
+        stretchDurationSec = parsed ?: stretchDurationSec,
+        stretchDurationRawText = cleaned,
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
+internal fun TimedPlanEditorScreenState.updateRoundsText(input: String): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.coerceIn(1, 12)
+    return copy(
+        rounds = parsed ?: rounds,
+        roundsRawText = cleaned,
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
+internal fun TimedPlanEditorScreenState.updateRestBetweenRoundsText(input: String): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeDuration()
+    return copy(
+        restBetweenRoundsSec = parsed ?: restBetweenRoundsSec,
+        restBetweenRoundsRawText = cleaned,
+        savedPlan = null,
+        statusMessage = null
+    ).constrainCueSettings()
+}
+
+internal fun TimedPlanEditorScreenState.updateActionCueThreshold(seconds: Int): TimedPlanEditorScreenState {
+    val sanitized = seconds.sanitizeCueThreshold()
+    return copy(
+        actionCue = actionCue.copy(thresholdSec = sanitized, thresholdRawText = sanitized.toString()),
         savedPlan = null,
         statusMessage = null
     ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateRestCueThreshold(seconds: Int): TimedPlanEditorScreenState {
+    val sanitized = seconds.sanitizeCueThreshold()
     return copy(
-        restCue = restCue.copy(thresholdSec = seconds.sanitizeCueThreshold()),
+        restCue = restCue.copy(thresholdSec = sanitized, thresholdRawText = sanitized.toString()),
+        savedPlan = null,
+        statusMessage = null
+    ).constrainCueSettings()
+}
+
+internal fun TimedPlanEditorScreenState.updateActionCueThresholdText(input: String): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeCueThreshold()
+    return copy(
+        actionCue = actionCue.copy(
+            thresholdSec = parsed ?: actionCue.thresholdSec,
+            thresholdRawText = cleaned
+        ),
+        savedPlan = null,
+        statusMessage = null
+    ).constrainCueSettings()
+}
+
+internal fun TimedPlanEditorScreenState.updateRestCueThresholdText(input: String): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeCueThreshold()
+    return copy(
+        restCue = restCue.copy(
+            thresholdSec = parsed ?: restCue.thresholdSec,
+            thresholdRawText = cleaned
+        ),
         savedPlan = null,
         statusMessage = null
     ).constrainCueSettings()
@@ -287,7 +417,12 @@ internal fun TimedPlanEditorScreenState.updateItemWorkDuration(
 ): TimedPlanEditorScreenState {
     return copy(
         items = items.map { item ->
-            if (item.id == itemId) item.copy(workDurationSec = seconds.sanitizeDuration(min = 5)) else item
+            if (item.id == itemId) {
+                val sanitized = seconds.sanitizeDuration(min = 5)
+                item.copy(workDurationSec = sanitized, workDurationRawText = sanitized.toString())
+            } else {
+                item
+            }
         },
         savedPlan = null,
         statusMessage = null
@@ -300,7 +435,56 @@ internal fun TimedPlanEditorScreenState.updateItemRestAfter(
 ): TimedPlanEditorScreenState {
     return copy(
         items = items.map { item ->
-            if (item.id == itemId) item.copy(restAfterSec = seconds.sanitizeDuration()) else item
+            if (item.id == itemId) {
+                val sanitized = seconds.sanitizeDuration()
+                item.copy(restAfterSec = sanitized, restAfterRawText = sanitized.toString())
+            } else {
+                item
+            }
+        },
+        savedPlan = null,
+        statusMessage = null
+    ).constrainCueSettings()
+}
+
+internal fun TimedPlanEditorScreenState.updateItemWorkDurationText(
+    itemId: String,
+    input: String
+): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeDuration(min = 5)
+    return copy(
+        items = items.map { item ->
+            if (item.id == itemId) {
+                item.copy(
+                    workDurationSec = parsed ?: item.workDurationSec,
+                    workDurationRawText = cleaned
+                )
+            } else {
+                item
+            }
+        },
+        savedPlan = null,
+        statusMessage = null
+    ).constrainCueSettings()
+}
+
+internal fun TimedPlanEditorScreenState.updateItemRestAfterText(
+    itemId: String,
+    input: String
+): TimedPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeDuration()
+    return copy(
+        items = items.map { item ->
+            if (item.id == itemId) {
+                item.copy(
+                    restAfterSec = parsed ?: item.restAfterSec,
+                    restAfterRawText = cleaned
+                )
+            } else {
+                item
+            }
         },
         savedPlan = null,
         statusMessage = null
@@ -334,7 +518,9 @@ internal fun TimedPlanEditorScreenState.removeItem(itemId: String): TimedPlanEdi
 internal fun TimedPlanEditorScreenState.saveDraftPlan(
     timestamp: String = DefaultTimedPlanTimestamp
 ): TimedPlanEditorScreenState {
-    if (!canSave) return copy(statusMessage = "请至少保留一个动作并填写计划名称。")
+    if (!canSave) {
+        return copy(statusMessage = validationMessage ?: "请至少保留一个动作并填写计划名称。")
+    }
 
     return copy(
         savedPlan = toWorkoutPlan(timestamp = timestamp),
@@ -389,6 +575,24 @@ private fun TimedPlanEditorScreenState.constrainCueSettings(): TimedPlanEditorSc
     )
 }
 
+private fun TimedPlanEditorScreenState.validateTimedDraft(): String? {
+    if (title.isBlank()) return "请填写计划名称。"
+    if (items.isEmpty()) return "请至少保留一个动作。"
+    validateIntegerText("热身秒数", warmupDurationText, min = 0, max = 3600)?.let { return it }
+    validateIntegerText("拉伸秒数", stretchDurationText, min = 0, max = 3600)?.let { return it }
+    validateIntegerText("轮数", roundsText, min = 1, max = 12)?.let { return it }
+    validateIntegerText("轮间休息秒数", restBetweenRoundsText, min = 0, max = 3600)?.let { return it }
+    validateIntegerText("动作提醒阈值秒数", actionCue.thresholdText, min = 1, max = 60)?.let { return it }
+    validateIntegerText("休息提醒阈值秒数", restCue.thresholdText, min = 1, max = 60)?.let { return it }
+    items.forEach { item ->
+        validateIntegerText("${item.exerciseName} 动作秒数", item.workDurationText, min = 5, max = 3600)
+            ?.let { return it }
+        validateIntegerText("${item.exerciseName} 动作后休息秒数", item.restAfterText, min = 0, max = 3600)
+            ?.let { return it }
+    }
+    return null
+}
+
 private fun TimedPlanEditorScreenState.minWorkDurationSec(): Int? {
     return items.minOfOrNull { item -> item.workDurationSec }
 }
@@ -404,12 +608,18 @@ private fun TimedPlanEditorScreenState.hasPositiveRestDuration(): Boolean {
 }
 
 private fun CountdownCueUiState.constrainToDuration(durationSec: Int?): CountdownCueUiState {
+    if (thresholdRawText != null && thresholdRawText.isEmpty()) return this
+
     val maxThresholdSec = durationSec
         ?.coerceAtLeast(MinCueThresholdSec)
         ?.coerceAtMost(MaxCueThresholdSec)
         ?: MaxCueThresholdSec
 
-    return copy(thresholdSec = thresholdSec.coerceIn(MinCueThresholdSec, maxThresholdSec))
+    val constrainedThresholdSec = thresholdSec.coerceIn(MinCueThresholdSec, maxThresholdSec)
+    return copy(
+        thresholdSec = constrainedThresholdSec,
+        thresholdRawText = thresholdRawText?.let { constrainedThresholdSec.toString() }
+    )
 }
 
 private fun CountdownCueUiState.constrainToRestDuration(durationSec: Int?): CountdownCueUiState {
@@ -421,3 +631,18 @@ private fun CountdownCueUiState.constrainToRestDuration(durationSec: Int?): Coun
 }
 
 private fun Int.sanitizeCueThreshold(): Int = coerceIn(MinCueThresholdSec, MaxCueThresholdSec)
+
+internal fun String.sanitizeIntegerInput(): String {
+    return filter { it.isDigit() }
+}
+
+internal fun validateIntegerText(
+    label: String,
+    text: String,
+    min: Int,
+    max: Int
+): String? {
+    if (text.isBlank()) return "$label 不能为空。"
+    val parsed = text.toIntOrNull() ?: return "$label 请输入 $min-$max 之间的整数。"
+    return if (parsed in min..max) null else "$label 请输入 $min-$max 之间的整数。"
+}

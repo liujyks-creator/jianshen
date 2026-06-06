@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
@@ -47,6 +48,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 @Composable
 internal fun TimedPlanEditorRoute(
     onBackToHome: () -> Unit,
+    onStartTimedPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier,
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
 ) {
@@ -58,26 +60,36 @@ internal fun TimedPlanEditorRoute(
         uiState = uiState,
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
-        onWarmupDurationChanged = { uiState = uiState.updateWarmupDuration(it) },
-        onStretchDurationChanged = { uiState = uiState.updateStretchDuration(it) },
-        onRoundsChanged = { uiState = uiState.updateRounds(it) },
-        onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRounds(it) },
-        onActionCueThresholdChanged = { uiState = uiState.updateActionCueThreshold(it) },
-        onRestCueThresholdChanged = { uiState = uiState.updateRestCueThreshold(it) },
+        onWarmupDurationChanged = { uiState = uiState.updateWarmupDurationText(it) },
+        onStretchDurationChanged = { uiState = uiState.updateStretchDurationText(it) },
+        onRoundsChanged = { uiState = uiState.updateRoundsText(it) },
+        onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRoundsText(it) },
+        onActionCueThresholdChanged = { uiState = uiState.updateActionCueThresholdText(it) },
+        onRestCueThresholdChanged = { uiState = uiState.updateRestCueThresholdText(it) },
         onActionCueEnabledChanged = { uiState = uiState.updateActionCueEnabled(it) },
         onRestCueEnabledChanged = { uiState = uiState.updateRestCueEnabled(it) },
         onSoundEnabledChanged = { uiState = uiState.updateSoundEnabled(it) },
         onVibrationEnabledChanged = { uiState = uiState.updateVibrationEnabled(it) },
         onEmphasisAnimationEnabledChanged = { uiState = uiState.updateEmphasisAnimationEnabled(it) },
         onItemWorkDurationChanged = { itemId, seconds ->
-            uiState = uiState.updateItemWorkDuration(itemId, seconds)
+            uiState = uiState.updateItemWorkDurationText(itemId, seconds)
         },
         onItemRestAfterChanged = { itemId, seconds ->
-            uiState = uiState.updateItemRestAfter(itemId, seconds)
+            uiState = uiState.updateItemRestAfterText(itemId, seconds)
         },
         onAddExercise = { exerciseId -> uiState = uiState.addExercise(exerciseId) },
         onRemoveItem = { itemId -> uiState = uiState.removeItem(itemId) },
         onSaveDraft = { uiState = uiState.saveDraftPlan() },
+        onStartTimedPlan = {
+            if (uiState.canStartTraining) {
+                onStartTimedPlan(
+                    uiState.toWorkoutPlan(
+                        planId = "plan-timed-editor-start",
+                        timestamp = DefaultTimedPlanTimestamp
+                    )
+                )
+            }
+        },
         modifier = modifier
     )
 }
@@ -87,22 +99,23 @@ private fun TimedPlanEditorScreen(
     uiState: TimedPlanEditorScreenState,
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
-    onWarmupDurationChanged: (Int) -> Unit,
-    onStretchDurationChanged: (Int) -> Unit,
-    onRoundsChanged: (Int) -> Unit,
-    onRestBetweenRoundsChanged: (Int) -> Unit,
-    onActionCueThresholdChanged: (Int) -> Unit,
-    onRestCueThresholdChanged: (Int) -> Unit,
+    onWarmupDurationChanged: (String) -> Unit,
+    onStretchDurationChanged: (String) -> Unit,
+    onRoundsChanged: (String) -> Unit,
+    onRestBetweenRoundsChanged: (String) -> Unit,
+    onActionCueThresholdChanged: (String) -> Unit,
+    onRestCueThresholdChanged: (String) -> Unit,
     onActionCueEnabledChanged: (Boolean) -> Unit,
     onRestCueEnabledChanged: (Boolean) -> Unit,
     onSoundEnabledChanged: (Boolean) -> Unit,
     onVibrationEnabledChanged: (Boolean) -> Unit,
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
-    onItemWorkDurationChanged: (String, Int) -> Unit,
-    onItemRestAfterChanged: (String, Int) -> Unit,
+    onItemWorkDurationChanged: (String, String) -> Unit,
+    onItemRestAfterChanged: (String, String) -> Unit,
     onAddExercise: (String) -> Unit,
     onRemoveItem: (String) -> Unit,
     onSaveDraft: () -> Unit,
+    onStartTimedPlan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -176,7 +189,8 @@ private fun TimedPlanEditorScreen(
         item {
             SaveAndPreviewCard(
                 uiState = uiState,
-                onSaveDraft = onSaveDraft
+                onSaveDraft = onSaveDraft,
+                onStartTimedPlan = onStartTimedPlan
             )
         }
     }
@@ -208,8 +222,8 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
 private fun PlanBasicsCard(
     uiState: TimedPlanEditorScreenState,
     onTitleChanged: (String) -> Unit,
-    onWarmupDurationChanged: (Int) -> Unit,
-    onStretchDurationChanged: (Int) -> Unit
+    onWarmupDurationChanged: (String) -> Unit,
+    onStretchDurationChanged: (String) -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "基础信息")
@@ -223,13 +237,13 @@ private fun PlanBasicsCard(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(
                 label = "热身秒数",
-                value = uiState.warmupDurationSec,
+                value = uiState.warmupDurationText,
                 onValueChanged = onWarmupDurationChanged,
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "拉伸秒数",
-                value = uiState.stretchDurationSec,
+                value = uiState.stretchDurationText,
                 onValueChanged = onStretchDurationChanged,
                 modifier = Modifier.weight(1f)
             )
@@ -240,21 +254,21 @@ private fun PlanBasicsCard(
 @Composable
 private fun CircuitSettingsCard(
     uiState: TimedPlanEditorScreenState,
-    onRoundsChanged: (Int) -> Unit,
-    onRestBetweenRoundsChanged: (Int) -> Unit
+    onRoundsChanged: (String) -> Unit,
+    onRestBetweenRoundsChanged: (String) -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "轮次与轮间休息")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(
                 label = "轮数",
-                value = uiState.rounds,
+                value = uiState.roundsText,
                 onValueChanged = onRoundsChanged,
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "轮间休息秒数",
-                value = uiState.restBetweenRoundsSec,
+                value = uiState.restBetweenRoundsText,
                 onValueChanged = onRestBetweenRoundsChanged,
                 modifier = Modifier.weight(1f)
             )
@@ -266,8 +280,8 @@ private fun CircuitSettingsCard(
 private fun TimedExerciseEditorCard(
     item: TimedPlanEditorItemUiState,
     canRemove: Boolean,
-    onWorkDurationChanged: (Int) -> Unit,
-    onRestAfterChanged: (Int) -> Unit,
+    onWorkDurationChanged: (String) -> Unit,
+    onRestAfterChanged: (String) -> Unit,
     onRemove: () -> Unit
 ) {
     EditorCard {
@@ -300,13 +314,13 @@ private fun TimedExerciseEditorCard(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(
                 label = "动作秒数",
-                value = item.workDurationSec,
+                value = item.workDurationText,
                 onValueChanged = onWorkDurationChanged,
                 modifier = Modifier.weight(1f)
             )
             NumberField(
                 label = "动作后休息秒数",
-                value = item.restAfterSec,
+                value = item.restAfterText,
                 onValueChanged = onRestAfterChanged,
                 modifier = Modifier.weight(1f)
             )
@@ -354,8 +368,8 @@ private fun AddTimedExerciseCard(
 @Composable
 private fun CueSettingsCard(
     uiState: TimedPlanEditorScreenState,
-    onActionCueThresholdChanged: (Int) -> Unit,
-    onRestCueThresholdChanged: (Int) -> Unit,
+    onActionCueThresholdChanged: (String) -> Unit,
+    onRestCueThresholdChanged: (String) -> Unit,
     onActionCueEnabledChanged: (Boolean) -> Unit,
     onRestCueEnabledChanged: (Boolean) -> Unit,
     onSoundEnabledChanged: (Boolean) -> Unit,
@@ -371,7 +385,7 @@ private fun CueSettingsCard(
         )
         NumberField(
             label = "动作提醒阈值秒数",
-            value = uiState.actionCue.thresholdSec,
+            value = uiState.actionCue.thresholdText,
             onValueChanged = onActionCueThresholdChanged,
             modifier = Modifier.fillMaxWidth()
         )
@@ -382,7 +396,7 @@ private fun CueSettingsCard(
         )
         NumberField(
             label = "休息提醒阈值秒数",
-            value = uiState.restCue.thresholdSec,
+            value = uiState.restCue.thresholdText,
             onValueChanged = onRestCueThresholdChanged,
             modifier = Modifier.fillMaxWidth()
         )
@@ -412,7 +426,8 @@ private fun CueSettingsCard(
 @Composable
 private fun SaveAndPreviewCard(
     uiState: TimedPlanEditorScreenState,
-    onSaveDraft: () -> Unit
+    onSaveDraft: () -> Unit,
+    onStartTimedPlan: () -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "草稿预览")
@@ -427,6 +442,13 @@ private fun SaveAndPreviewCard(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = TrainFlowNeutral700
+            )
+        }
+        uiState.validationMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
             )
         }
 
@@ -455,12 +477,12 @@ private fun SaveAndPreviewCard(
                 Text(text = "保存草稿")
             }
             Button(
-                onClick = {},
-                enabled = false,
+                onClick = onStartTimedPlan,
+                enabled = uiState.canStartTraining,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "立即开始（E3 接入）")
+                Text(text = "立即开始")
             }
         }
     }
@@ -469,16 +491,14 @@ private fun SaveAndPreviewCard(
 @Composable
 private fun NumberField(
     label: String,
-    value: Int,
-    onValueChanged: (Int) -> Unit,
+    value: String,
+    onValueChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
-        value = value.toString(),
+        value = value,
         onValueChange = { input ->
-            input.filter { it.isDigit() }
-                .toIntOrNull()
-                ?.let(onValueChanged)
+            onValueChanged(input.sanitizeIntegerInput())
         },
         modifier = modifier,
         label = { Text(label) },

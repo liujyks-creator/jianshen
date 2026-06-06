@@ -26,7 +26,13 @@ internal data class StrengthPlanEditorScreenState(
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
-    val canSave: Boolean = title.isNotBlank() && exercises.isNotEmpty() && exercises.all { it.totalSets > 0 }
+    val validationMessage: String?
+        get() = validateStrengthDraft()
+
+    val canSave: Boolean = validationMessage == null
+
+    val canStartTraining: Boolean
+        get() = canSave
 
     val totalSets: Int
         get() = exercises.sumOf { it.totalSets }
@@ -69,11 +75,16 @@ internal data class StrengthPlanExerciseUiState(
     val exerciseId: String,
     val exerciseName: String,
     val shortCue: String,
+    val requiresWeightInput: Boolean,
     val targetWeightKg: Double?,
+    val targetWeightRawText: String? = null,
     val repTarget: StrengthRepTargetUiState,
     val workingSets: Int,
+    val workingSetsRawText: String? = null,
     val warmupSets: Int,
+    val warmupSetsRawText: String? = null,
     val restAfterSetSec: Int,
+    val restAfterSetRawText: String? = null,
     val perSide: Boolean,
     val substitutions: List<String>,
     val expandedSetTargets: Boolean,
@@ -81,6 +92,18 @@ internal data class StrengthPlanExerciseUiState(
 ) {
     val totalSets: Int
         get() = warmupSets + workingSets
+
+    val targetWeightText: String
+        get() = targetWeightRawText ?: targetWeightKg.formatWeightInput()
+
+    val workingSetsText: String
+        get() = workingSetsRawText ?: workingSets.toString()
+
+    val warmupSetsText: String
+        get() = warmupSetsRawText ?: warmupSets.toString()
+
+    val restAfterSetText: String
+        get() = restAfterSetRawText ?: restAfterSetSec.toString()
 
     val targetSummary: String
         get() {
@@ -118,9 +141,13 @@ internal data class StrengthSetTargetUiState(
     val order: Int,
     val kind: StrengthSetKind,
     val targetWeightKg: Double?,
+    val targetWeightRawText: String? = null,
     val repTarget: StrengthRepTargetUiState,
     val restAfterSec: Int
 ) {
+    val targetWeightText: String
+        get() = targetWeightRawText ?: targetWeightKg.formatWeightInput()
+
     val label: String
         get() = when (kind) {
             StrengthSetKind.WARMUP -> "热身组 $order"
@@ -151,9 +178,21 @@ internal data class StrengthExerciseOptionUiState(
 internal data class StrengthRepTargetUiState(
     val kind: StrengthRepTargetKind = StrengthRepTargetKind.RANGE,
     val minReps: Int = RepTarget.Range.DEFAULT_MIN_REPS,
+    val minRepsRawText: String? = null,
     val maxReps: Int = RepTarget.Range.DEFAULT_MAX_REPS,
-    val fixedReps: Int = RepTarget.Range.DEFAULT_MAX_REPS
+    val maxRepsRawText: String? = null,
+    val fixedReps: Int = RepTarget.Range.DEFAULT_MAX_REPS,
+    val fixedRepsRawText: String? = null
 ) {
+    val minRepsText: String
+        get() = minRepsRawText ?: minReps.toString()
+
+    val maxRepsText: String
+        get() = maxRepsRawText ?: maxReps.toString()
+
+    val fixedRepsText: String
+        get() = fixedRepsRawText ?: fixedReps.toString()
+
     val summary: String
         get() = when (kind) {
             StrengthRepTargetKind.RANGE -> "$minReps-$maxReps 次"
@@ -209,11 +248,36 @@ internal fun StrengthPlanEditorScreenState.updateTargetWeight(
     exerciseItemId: String,
     kg: Double?
 ): StrengthPlanEditorScreenState {
+    val sanitizedWeight = kg.sanitizeWeightOrNull()
     return updateExercise(exerciseItemId) { exercise ->
         exercise.copy(
-            targetWeightKg = kg.sanitizeWeightOrNull(),
+            targetWeightKg = sanitizedWeight,
+            targetWeightRawText = sanitizedWeight.formatWeightInput(),
             setTargets = exercise.setTargets.map { setTarget ->
-                setTarget.copy(targetWeightKg = kg.sanitizeWeightOrNull())
+                setTarget.copy(
+                    targetWeightKg = sanitizedWeight,
+                    targetWeightRawText = sanitizedWeight.formatWeightInput()
+                )
+            }
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateTargetWeightText(
+    exerciseItemId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeDecimalInput()
+    val parsedWeight = cleaned.toDoubleOrNull().sanitizeWeightOrNull()
+    return updateExercise(exerciseItemId) { exercise ->
+        exercise.copy(
+            targetWeightKg = parsedWeight,
+            targetWeightRawText = cleaned,
+            setTargets = exercise.setTargets.map { setTarget ->
+                setTarget.copy(
+                    targetWeightKg = parsedWeight,
+                    targetWeightRawText = cleaned
+                )
             }
         )
     }
@@ -225,7 +289,29 @@ internal fun StrengthPlanEditorScreenState.updateWorkingSets(
 ): StrengthPlanEditorScreenState {
     return updateExercise(exerciseItemId) { exercise ->
         val updated = exercise.copy(workingSets = sets.sanitizeSetCount(min = 1))
-        updated.copy(setTargets = updated.defaultSetTargets())
+        updated.copy(
+            workingSetsRawText = updated.workingSets.toString(),
+            setTargets = updated.defaultSetTargets()
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateWorkingSetsText(
+    exerciseItemId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeSetCount(min = 1)
+    return updateExercise(exerciseItemId) { exercise ->
+        val updated = exercise.copy(
+            workingSets = parsed ?: exercise.workingSets,
+            workingSetsRawText = cleaned
+        )
+        if (parsed != null) {
+            updated.copy(setTargets = updated.defaultSetTargets())
+        } else {
+            updated
+        }
     }
 }
 
@@ -235,7 +321,29 @@ internal fun StrengthPlanEditorScreenState.updateWarmupSets(
 ): StrengthPlanEditorScreenState {
     return updateExercise(exerciseItemId) { exercise ->
         val updated = exercise.copy(warmupSets = sets.sanitizeSetCount(min = 0, max = 4))
-        updated.copy(setTargets = updated.defaultSetTargets())
+        updated.copy(
+            warmupSetsRawText = updated.warmupSets.toString(),
+            setTargets = updated.defaultSetTargets()
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateWarmupSetsText(
+    exerciseItemId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeSetCount(min = 0, max = 4)
+    return updateExercise(exerciseItemId) { exercise ->
+        val updated = exercise.copy(
+            warmupSets = parsed ?: exercise.warmupSets,
+            warmupSetsRawText = cleaned
+        )
+        if (parsed != null) {
+            updated.copy(setTargets = updated.defaultSetTargets())
+        } else {
+            updated
+        }
     }
 }
 
@@ -247,7 +355,27 @@ internal fun StrengthPlanEditorScreenState.updateRestAfterSet(
         val rest = seconds.sanitizeStrengthDuration()
         exercise.copy(
             restAfterSetSec = rest,
+            restAfterSetRawText = rest.toString(),
             setTargets = exercise.setTargets.map { it.copy(restAfterSec = rest) }
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateRestAfterSetText(
+    exerciseItemId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeStrengthDuration()
+    return updateExercise(exerciseItemId) { exercise ->
+        exercise.copy(
+            restAfterSetSec = parsed ?: exercise.restAfterSetSec,
+            restAfterSetRawText = cleaned,
+            setTargets = if (parsed != null) {
+                exercise.setTargets.map { it.copy(restAfterSec = parsed) }
+            } else {
+                exercise.setTargets
+            }
         )
     }
 }
@@ -263,7 +391,35 @@ internal fun StrengthPlanEditorScreenState.updateRepRange(
         val reps = exercise.repTarget.copy(
             kind = StrengthRepTargetKind.RANGE,
             minReps = sanitizedMin,
-            maxReps = sanitizedMax
+            minRepsRawText = sanitizedMin.toString(),
+            maxReps = sanitizedMax,
+            maxRepsRawText = sanitizedMax.toString()
+        )
+        exercise.copy(
+            repTarget = reps,
+            setTargets = exercise.setTargets.map { it.copy(repTarget = reps) }
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateRepRangeText(
+    exerciseItemId: String,
+    minRepsInput: String,
+    maxRepsInput: String
+): StrengthPlanEditorScreenState {
+    val cleanedMin = minRepsInput.sanitizeIntegerInput()
+    val cleanedMax = maxRepsInput.sanitizeIntegerInput()
+    val parsedMin = cleanedMin.toIntOrNull()?.sanitizeReps()
+    val parsedMax = cleanedMax.toIntOrNull()?.sanitizeReps()
+    return updateExercise(exerciseItemId) { exercise ->
+        val min = parsedMin ?: exercise.repTarget.minReps
+        val max = (parsedMax ?: exercise.repTarget.maxReps).coerceAtLeast(min)
+        val reps = exercise.repTarget.copy(
+            kind = StrengthRepTargetKind.RANGE,
+            minReps = min,
+            minRepsRawText = cleanedMin,
+            maxReps = max,
+            maxRepsRawText = cleanedMax
         )
         exercise.copy(
             repTarget = reps,
@@ -279,7 +435,27 @@ internal fun StrengthPlanEditorScreenState.updateFixedReps(
     return updateExercise(exerciseItemId) { exercise ->
         val fixed = exercise.repTarget.copy(
             kind = StrengthRepTargetKind.FIXED,
-            fixedReps = reps.sanitizeReps()
+            fixedReps = reps.sanitizeReps(),
+            fixedRepsRawText = reps.sanitizeReps().toString()
+        )
+        exercise.copy(
+            repTarget = fixed,
+            setTargets = exercise.setTargets.map { it.copy(repTarget = fixed) }
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateFixedRepsText(
+    exerciseItemId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeReps()
+    return updateExercise(exerciseItemId) { exercise ->
+        val fixed = exercise.repTarget.copy(
+            kind = StrengthRepTargetKind.FIXED,
+            fixedReps = parsed ?: exercise.repTarget.fixedReps,
+            fixedRepsRawText = cleaned
         )
         exercise.copy(
             repTarget = fixed,
@@ -298,7 +474,35 @@ internal fun StrengthPlanEditorScreenState.updateSetTargetWeight(
             expandedSetTargets = true,
             setTargets = exercise.setTargets.map { setTarget ->
                 if (setTarget.id == setId) {
-                    setTarget.copy(targetWeightKg = kg.sanitizeWeightOrNull())
+                    val sanitizedWeight = kg.sanitizeWeightOrNull()
+                    setTarget.copy(
+                        targetWeightKg = sanitizedWeight,
+                        targetWeightRawText = sanitizedWeight.formatWeightInput()
+                    )
+                } else {
+                    setTarget
+                }
+            }
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateSetTargetWeightText(
+    exerciseItemId: String,
+    setId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeDecimalInput()
+    val parsedWeight = cleaned.toDoubleOrNull().sanitizeWeightOrNull()
+    return updateExercise(exerciseItemId) { exercise ->
+        exercise.copy(
+            expandedSetTargets = true,
+            setTargets = exercise.setTargets.map { setTarget ->
+                if (setTarget.id == setId) {
+                    setTarget.copy(
+                        targetWeightKg = parsedWeight,
+                        targetWeightRawText = cleaned
+                    )
                 } else {
                     setTarget
                 }
@@ -320,7 +524,35 @@ internal fun StrengthPlanEditorScreenState.updateSetFixedReps(
                     setTarget.copy(
                         repTarget = setTarget.repTarget.copy(
                             kind = StrengthRepTargetKind.FIXED,
-                            fixedReps = reps.sanitizeReps()
+                            fixedReps = reps.sanitizeReps(),
+                            fixedRepsRawText = reps.sanitizeReps().toString()
+                        )
+                    )
+                } else {
+                    setTarget
+                }
+            }
+        )
+    }
+}
+
+internal fun StrengthPlanEditorScreenState.updateSetFixedRepsText(
+    exerciseItemId: String,
+    setId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeReps()
+    return updateExercise(exerciseItemId) { exercise ->
+        exercise.copy(
+            expandedSetTargets = true,
+            setTargets = exercise.setTargets.map { setTarget ->
+                if (setTarget.id == setId) {
+                    setTarget.copy(
+                        repTarget = setTarget.repTarget.copy(
+                            kind = StrengthRepTargetKind.FIXED,
+                            fixedReps = parsed ?: setTarget.repTarget.fixedReps,
+                            fixedRepsRawText = cleaned
                         )
                     )
                 } else {
@@ -368,7 +600,9 @@ internal fun StrengthPlanEditorScreenState.removeExercise(exerciseItemId: String
 internal fun StrengthPlanEditorScreenState.saveDraftPlan(
     timestamp: String = DefaultStrengthPlanTimestamp
 ): StrengthPlanEditorScreenState {
-    if (!canSave) return copy(statusMessage = "请至少保留一个动作、一个计划组，并填写计划名称。")
+    if (!canSave) {
+        return copy(statusMessage = validationMessage ?: "请至少保留一个动作、一个计划组，并填写计划名称。")
+    }
 
     return copy(
         savedPlan = toWorkoutPlan(timestamp = timestamp),
@@ -408,6 +642,7 @@ private fun ActionExerciseFixture.toStrengthEditorExercise(order: Int): Strength
         exerciseId = exercise.id,
         exerciseName = exercise.name,
         shortCue = exercise.instructions.shortCue,
+        requiresWeightInput = exercise.capabilities.supportsWeight,
         targetWeightKg = targetWeightKg,
         repTarget = repTarget,
         workingSets = default.sets,
@@ -440,6 +675,7 @@ private fun StrengthPlanExerciseUiState.defaultSetTargets(): List<StrengthSetTar
             order = order,
             kind = StrengthSetKind.WARMUP,
             targetWeightKg = targetWeightKg?.times(0.5)?.takeIf { it > 0.0 },
+            targetWeightRawText = targetWeightKg?.times(0.5)?.takeIf { it > 0.0 }.formatWeightInput(),
             repTarget = StrengthRepTargetUiState(kind = StrengthRepTargetKind.FIXED, fixedReps = 10),
             restAfterSec = restAfterSetSec.coerceAtMost(60)
         )
@@ -450,6 +686,7 @@ private fun StrengthPlanExerciseUiState.defaultSetTargets(): List<StrengthSetTar
             order = order,
             kind = StrengthSetKind.WORKING,
             targetWeightKg = targetWeightKg,
+            targetWeightRawText = targetWeightKg.formatWeightInput(),
             repTarget = repTarget,
             restAfterSec = restAfterSetSec
         )
@@ -481,3 +718,65 @@ private fun Int.sanitizeSetCount(min: Int, max: Int = 12): Int = coerceIn(min, m
 private fun Int.sanitizeStrengthDuration(): Int = coerceIn(0, 3600)
 
 private fun Int.sanitizeReps(): Int = coerceIn(1, 200)
+
+private fun StrengthPlanEditorScreenState.validateStrengthDraft(): String? {
+    if (title.isBlank()) return "请填写计划名称。"
+    if (exercises.isEmpty()) return "请至少保留一个力量动作。"
+    exercises.forEach { exercise ->
+        validateWeightText(
+            label = "${exercise.exerciseName} 计划重量",
+            text = exercise.targetWeightText,
+            required = exercise.requiresWeightInput
+        )?.let { return it }
+        validateRepTarget(exercise.exerciseName, exercise.repTarget)?.let { return it }
+        validateIntegerText("${exercise.exerciseName} 正式组数", exercise.workingSetsText, min = 1, max = 12)
+            ?.let { return it }
+        validateIntegerText("${exercise.exerciseName} 热身组数", exercise.warmupSetsText, min = 0, max = 4)
+            ?.let { return it }
+        validateIntegerText("${exercise.exerciseName} 组间休息秒数", exercise.restAfterSetText, min = 0, max = 3600)
+            ?.let { return it }
+        if (exercise.expandedSetTargets) {
+            exercise.setTargets.forEach { setTarget ->
+                validateWeightText(
+                    label = "${exercise.exerciseName} ${setTarget.label} 重量",
+                    text = setTarget.targetWeightText,
+                    required = exercise.requiresWeightInput
+                )?.let { return it }
+                validateIntegerText(
+                    label = "${exercise.exerciseName} ${setTarget.label} 次数",
+                    text = setTarget.repTarget.fixedRepsText,
+                    min = 1,
+                    max = 200
+                )?.let { return it }
+            }
+        }
+    }
+    return null
+}
+
+private fun validateRepTarget(
+    exerciseName: String,
+    repTarget: StrengthRepTargetUiState
+): String? {
+    return when (repTarget.kind) {
+        StrengthRepTargetKind.RANGE -> {
+            validateIntegerText("$exerciseName 最少次数", repTarget.minRepsText, min = 1, max = 200)
+                ?: validateIntegerText("$exerciseName 最多次数", repTarget.maxRepsText, min = 1, max = 200)
+                ?: if (repTarget.minReps > repTarget.maxReps) "$exerciseName 次数区间需要从小到大。" else null
+        }
+
+        StrengthRepTargetKind.FIXED -> {
+            validateIntegerText("$exerciseName 固定次数", repTarget.fixedRepsText, min = 1, max = 200)
+        }
+    }
+}
+
+private fun validateWeightText(
+    label: String,
+    text: String,
+    required: Boolean
+): String? {
+    if (text.isBlank()) return if (required) "$label 不能为空。" else null
+    val parsed = text.toDoubleOrNull() ?: return "$label 请输入有效数字。"
+    return if (parsed > 0.0 && parsed <= 1000.0) null else "$label 请输入 0-1000kg 之间的正数。"
+}

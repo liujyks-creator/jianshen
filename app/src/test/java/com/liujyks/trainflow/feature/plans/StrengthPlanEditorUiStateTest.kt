@@ -153,6 +153,92 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun strengthNumericFieldsCanBeTemporarilyBlankAndThenReentered() {
+        val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val blankWeight = buildDefaultStrengthPlanEditorState().updateTargetWeightText(exercise.id, "")
+        val blankMinReps = buildDefaultStrengthPlanEditorState().updateRepRangeText(
+            exercise.id,
+            minRepsInput = "",
+            maxRepsInput = exercise.repTarget.maxRepsText
+        )
+        val blankWorkingSets = buildDefaultStrengthPlanEditorState().updateWorkingSetsText(exercise.id, "")
+        val blankRest = buildDefaultStrengthPlanEditorState().updateRestAfterSetText(exercise.id, "")
+
+        assertEquals("", blankWeight.exercises.first().targetWeightText)
+        assertFalse(blankWeight.canSave)
+        assertTrue(requireNotNull(blankWeight.validationMessage).contains("计划重量"))
+        assertFalse(blankMinReps.canStartTraining)
+        assertTrue(requireNotNull(blankMinReps.validationMessage).contains("最少次数"))
+        assertFalse(blankWorkingSets.canSave)
+        assertTrue(requireNotNull(blankWorkingSets.validationMessage).contains("正式组数"))
+        assertFalse(blankRest.canSave)
+        assertTrue(requireNotNull(blankRest.validationMessage).contains("组间休息秒数"))
+
+        val reentered = blankWeight
+            .updateTargetWeightText(exercise.id, "32.5")
+            .updateRepRangeText(exercise.id, minRepsInput = "6", maxRepsInput = "10")
+            .updateWorkingSetsText(exercise.id, "4")
+            .updateWarmupSetsText(exercise.id, "1")
+            .updateRestAfterSetText(exercise.id, "120")
+        val edited = reentered.exercises.first()
+
+        assertTrue(reentered.canSave)
+        assertTrue(reentered.canStartTraining)
+        assertEquals(32.5, edited.targetWeightKg ?: 0.0, 0.0)
+        assertEquals(6, edited.repTarget.minReps)
+        assertEquals(10, edited.repTarget.maxReps)
+        assertEquals(4, edited.workingSets)
+        assertEquals(1, edited.warmupSets)
+        assertEquals(120, edited.restAfterSetSec)
+    }
+
+    @Test
+    fun fixedAndPerSetStrengthInputsCanBeTemporarilyBlank() {
+        val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val setId = exercise.setTargets.first().id
+        val blankFixedReps = buildDefaultStrengthPlanEditorState()
+            .updateFixedRepsText(exercise.id, "")
+        val blankSetWeight = buildDefaultStrengthPlanEditorState()
+            .setSetTargetsExpanded(exercise.id, true)
+            .updateSetTargetWeightText(exercise.id, setId, "")
+        val blankSetReps = buildDefaultStrengthPlanEditorState()
+            .setSetTargetsExpanded(exercise.id, true)
+            .updateSetFixedRepsText(exercise.id, setId, "")
+
+        assertFalse(blankFixedReps.canSave)
+        assertTrue(requireNotNull(blankFixedReps.validationMessage).contains("固定次数"))
+        assertFalse(blankSetWeight.canSave)
+        assertTrue(requireNotNull(blankSetWeight.validationMessage).contains("重量"))
+        assertFalse(blankSetReps.canSave)
+        assertTrue(requireNotNull(blankSetReps.validationMessage).contains("次数"))
+
+        val reentered = blankSetWeight
+            .updateSetTargetWeightText(exercise.id, setId, "18")
+            .updateSetFixedRepsText(exercise.id, setId, "9")
+
+        assertTrue(reentered.canSave)
+        assertEquals(18.0, reentered.exercises.first().setTargets.first().targetWeightKg ?: 0.0, 0.0)
+        assertEquals(9, reentered.exercises.first().setTargets.first().repTarget.fixedReps)
+    }
+
+    @Test
+    fun strengthEditorStartUsesCurrentValidDraftPlan() {
+        val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val state = buildDefaultStrengthPlanEditorState()
+            .updateTitle("立即开始力量")
+            .updateTargetWeightText(exercise.id, "45")
+            .updateWorkingSetsText(exercise.id, "2")
+        val plan = state.toWorkoutPlan(planId = "plan-strength-editor-start")
+        val block = plan.blocks.filterIsInstance<StrengthExerciseBlock>().first()
+
+        assertTrue(state.canStartTraining)
+        assertEquals("plan-strength-editor-start", plan.id)
+        assertEquals("立即开始力量", plan.title)
+        assertEquals(45.0, requireNotNull(block.target?.weight).value, 0.0)
+        assertEquals(2, block.sets.size)
+    }
+
+    @Test
     fun decimalWeightInputKeepsTrailingDecimalDraftsParseable() {
         assertEquals("20.", "20.".sanitizeDecimalInput())
         assertEquals(20.0, "20.".sanitizeDecimalInput().toDoubleOrNull())

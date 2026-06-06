@@ -933,10 +933,37 @@ stepsCompleted:
 
 - 新增 `docs/testing/mvp-acceptance-checklist.md`，逐项记录计时训练、基础跟练、力量训练、数字输入、记录/数据分析、心率、通知/声音/隐私、UI skin、状态恢复和 MVP 非目标的 Pass / Partial / Deferred / Out of Scope / Risk / Bug 结论。
 - 新增 `docs/testing/user-test-issue-template.md`，用于用户测试记录 P0/P1/P2/P3 和 Product Decision 问题。
-- 新增轻量验收证据测试，确认计时/力量计划编辑页的 `立即开始（E3 接入）` / `开始力量训练（E4 接入）` 仍为禁用状态，并记录计划编辑整数输入无法表达临时空值的当前 Bug。
+- 新增轻量验收证据测试，在 E9.3 当时记录计时/力量计划编辑页的 `立即开始（E3 接入）` / `开始力量训练（E4 接入）` 禁用状态，并记录计划编辑整数输入无法表达临时空值的当前 Bug；E9.4 已将这些测试更新为修复证据。
 - 记录用户反馈：计时训练后续可能应更接近纯间歇计时器；基础跟练后续应承担动作选择、动作编排和推荐；动作选择应进入独立页面；记录页后续需要总统计、图表、平均心率趋势和计划调整证据。
 - 明确 E10/E11/E12 后续方向：E10 训练模式边界重构与统一动作选择页，E11 心率设备/健康数据策略，E12 数据分析趋势。
 - 本 story 未实现 E10 训练模式重构、统一动作选择页、完整跟练编排、真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、后台可靠计时、真实心率设备、Health Connect / Wear OS / BLE、语音或完整数据分析图表。
+
+### Story E9.4: User Test Fix Pack 1
+
+**状态:** Implemented in plan editor input state, editor start actions, documentation, and regression tests
+
+作为用户测试准备者，
+我想修复计划编辑页数字输入清空和编辑页开始按钮问题，
+以便用户测试 APK 不带 P1/P2 已知可修缺陷。
+
+**验收标准:**
+
+- Then 计时计划编辑页的热身时间、动作时间、休息时间、轮数、轮间休息和放松时间允许临时清空。
+- Then 力量计划编辑页的重量、次数、组数和休息秒数允许临时清空。
+- Then 空值或非法值时保存 / 开始按钮禁用，并显示明确原因。
+- Then 计时编辑页有效草稿可直接进入计时训练执行页，继续复用 `TimedWorkoutEngine` / `WorkoutCommand`。
+- Then 力量编辑页有效草稿可直接进入力量训练执行页，继续复用 `StrengthWorkoutEngine` / `WorkoutCommand`。
+- Then 历史记录清理的全部清除、按计划清除、按日期清除只登记为后续能力，不实现假删除。
+
+**交付结果:**
+
+- 计时计划编辑 state 增加 raw text 草稿输入，覆盖热身、拉伸、轮数、轮间休息、动作秒数、动作后休息和提醒阈值；空字符串可停留在输入框，保存 / 开始时统一校验。
+- 力量计划编辑 state 增加 raw text 草稿输入，覆盖计划重量、次数区间、固定次数、正式组数、热身组数、组间休息、逐组重量和逐组次数；带重量动作清空重量时会禁用保存 / 开始并提示。
+- 计时编辑页 `立即开始` 现在将当前有效草稿转换为 `WorkoutPlan` 并交给官方 shell 的 `startTimedSession`，由计时执行 route 继续通过 `TimedWorkoutEngine` 和 `WorkoutCommand` 推进。
+- 力量编辑页 `开始力量训练` 现在将当前有效草稿转换为 `WorkoutPlan` 并交给官方 shell 的 `startStrengthSession`，由力量执行 route 继续通过 `StrengthWorkoutEngine` 和 `WorkoutCommand` 推进。
+- 更新 E9.3 验收证据测试为 E9.4 修复证据，并新增 / 更新计时编辑、力量编辑和官方 shell 状态测试。
+- `docs/testing/mvp-acceptance-checklist.md` 已记录 E9.4 修复结果，并将历史记录清理能力登记为 E12 / 持久化闭环后的后续项。
+- 本 story 未实现真实 `WorkoutSession` 持久化、Room repository 业务闭环、历史记录真实删除、foreground service、后台可靠计时、真实心率设备、语音、完整跟练编排、总统计 / 图表或 E10 训练模式重构。
 
 ## 5. FR 覆盖映射
 
@@ -964,7 +991,7 @@ stepsCompleted:
 7. E6.1 到 E6.3：跟练雏形与心率占位。
 8. E7.1 到 E7.3：提醒、声音、震动、偏好。
 9. E8.1 到 E8.4：设计系统、UI shell 和开源定制边界。
-10. E9.1 到 E9.3：硬化与验收。
+10. E9.1 到 E9.4：硬化、验收与用户测试修复包。
 
 ## 7. 下一轮建议
 
@@ -985,23 +1012,24 @@ E8.3 Big Type 大字训练皮肤已合入 main。
 E8.4 UI skin review checklist 和用户测试前 UI readiness 已合入 main。
 E9.1 训练状态恢复与回归测试基线已合入 main。
 E9.2 权限与隐私文案已合入 main。
-E9.3 MVP 验收清单已在 codex/e9-3-mvp-acceptance-checklist 实施，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
-当前无 P0 blocker；P1 为计划编辑整数输入无法临时清空。
+E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
+E9.4 User Test Fix Pack 1 已在 codex/e9-4-user-test-fix-pack-1 实施，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
+当前无 P0/P1 blocker；E10/E11/E12 后续方向仍保持。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E9.3 Review Gate / 用户测试 APK 小范围试用
+Story E9.4 Review Gate / 用户测试 APK 小范围试用
 ```
 
-E9.3 Review Gate 建议重点确认：
+E9.4 Review Gate 建议重点确认：
 
-1. `docs/testing/mvp-acceptance-checklist.md` 是否诚实区分 Pass、Partial、Deferred、Out of Scope、Risk 和 Bug。
-2. 计划编辑整数输入无法临时清空是否需要用户测试前修复，还是作为 P1 已知问题进入测试。
-3. 编辑页 `立即开始（E3 接入）` / `开始力量训练（E4 接入）` 灰色按钮是否接受当前解释：从计划详情页启动训练。
+1. 计划编辑页数字输入 raw text 校验是否覆盖用户测试反馈中的计时 / 力量字段。
+2. 编辑页 `立即开始` / `开始力量训练` 是否从有效草稿进入对应执行页，且仍通过训练引擎和 `WorkoutCommand` 推进。
+3. 空值或非法输入时保存 / 开始禁用和原因提示是否足够清楚。
 4. 计时训练纯间歇计时器、跟练动作编排和统一动作选择页是否按 Product Decision 归入 E10。
-5. 记录页总统计、图表、平均心率趋势和计划调整证据是否按 E12 后续方向处理。
+5. 记录页总统计、图表、平均心率趋势、计划调整证据和记录清理是否按 E12 / 持久化闭环后续方向处理。
 6. 用户测试 APK 是否验证通过、SHA-256 已记录，且 `.local/` 产物未提交。
 
 ## 8. 暂缓事项

@@ -1,13 +1,14 @@
 package com.liujyks.trainflow.feature.plans
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MvpAcceptanceChecklistEvidenceTest {
     @Test
-    fun editorStartButtonsRemainDisabledInPlanEditorRoutes() {
+    fun editorStartButtonsAreConnectedInPlanEditorRoutes() {
         val timedRoute = sourceFile(
             "src/main/java/com/liujyks/trainflow/feature/plans/TimedPlanEditorRoute.kt"
         )
@@ -15,14 +16,18 @@ class MvpAcceptanceChecklistEvidenceTest {
             "src/main/java/com/liujyks/trainflow/feature/plans/StrengthPlanEditorRoute.kt"
         )
 
-        assertTrue(timedRoute.contains("enabled = false"))
-        assertTrue(timedRoute.contains("立即开始（E3 接入）"))
-        assertTrue(strengthRoute.contains("enabled = false"))
-        assertTrue(strengthRoute.contains("开始力量训练（E4 接入）"))
+        assertTrue(timedRoute.contains("onStartTimedPlan"))
+        assertTrue(timedRoute.contains("enabled = uiState.canStartTraining"))
+        assertTrue(timedRoute.contains("立即开始"))
+        assertFalse(timedRoute.contains("立即开始（E3 接入）"))
+        assertTrue(strengthRoute.contains("onStartStrengthPlan"))
+        assertTrue(strengthRoute.contains("enabled = uiState.canStartTraining"))
+        assertTrue(strengthRoute.contains("开始力量训练"))
+        assertFalse(strengthRoute.contains("开始力量训练（E4 接入）"))
     }
 
     @Test
-    fun integerNumberFieldParsingCannotRepresentBlankDraftInput() {
+    fun integerNumberFieldParsingCanRepresentBlankDraftInput() {
         val timedRoute = sourceFile(
             "src/main/java/com/liujyks/trainflow/feature/plans/TimedPlanEditorRoute.kt"
         )
@@ -30,23 +35,22 @@ class MvpAcceptanceChecklistEvidenceTest {
             "src/main/java/com/liujyks/trainflow/feature/plans/StrengthPlanEditorRoute.kt"
         )
 
-        assertTrue(timedRoute.contains("value = value.toString()"))
-        assertTrue(strengthRoute.contains("value = value.toString()"))
-        assertFalse(currentIntegerNumberFieldWouldDispatchUpdate(""))
-        assertFalse(currentIntegerNumberFieldWouldDispatchUpdate("abc"))
-        assertTrue(currentIntegerNumberFieldWouldDispatchUpdate("0"))
-        assertTrue(currentIntegerNumberFieldWouldDispatchUpdate("15"))
+        assertTrue(timedRoute.contains("value = value"))
+        assertTrue(strengthRoute.contains("value = value"))
+        assertTrue("".sanitizeIntegerInput().isEmpty())
+        assertTrue("abc".sanitizeIntegerInput().isEmpty())
+        assertEquals("0", "0".sanitizeIntegerInput())
+        assertEquals("15", "15".sanitizeIntegerInput())
+        assertFalse(buildDefaultTimedPlanEditorState().updateRoundsText("").canSave)
+        assertFalse(buildDefaultStrengthPlanEditorState()
+            .updateWorkingSetsText(buildDefaultStrengthPlanEditorState().exercises.first().id, "")
+            .canSave)
     }
 
     @Test
     fun decimalWeightInputAllowsClearingToEmptyDraft() {
         assertTrue("".sanitizeDecimalInput().isEmpty())
         assertTrue(null.formatWeightInput().isEmpty())
-        assertFalse(currentIntegerNumberFieldWouldDispatchUpdate(""))
-    }
-
-    private fun currentIntegerNumberFieldWouldDispatchUpdate(input: String): Boolean {
-        return input.filter { it.isDigit() }.toIntOrNull() != null
     }
 
     private fun sourceFile(path: String): String = File(path).readText()
