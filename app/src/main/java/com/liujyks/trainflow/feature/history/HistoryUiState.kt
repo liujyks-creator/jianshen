@@ -18,7 +18,8 @@ import com.liujyks.trainflow.core.model.WorkoutSession
 
 internal data class HistoryScreenState(
     val sessions: List<WorkoutSession>,
-    val selectedSessionId: String? = sessions.firstOrNull()?.id
+    val selectedSessionId: String? = sessions.firstOrNull()?.id,
+    val recordSource: HistoryRecordSource = HistoryRecordSource.PERSISTED
 ) {
     val isEmpty: Boolean = sessions.isEmpty()
 
@@ -36,7 +37,7 @@ internal data class HistoryScreenState(
             }
 
     val selectedDetail: HistorySessionDetailUiState?
-        get() = selectedSession?.toDetailState()
+        get() = selectedSession?.toDetailState(recordSource)
 
     val actionTrend: BasicTrendUiState
         get() = sessions.toActionTrend()
@@ -48,10 +49,34 @@ internal data class HistoryScreenState(
         get() = "暂无训练历史"
 
     val emptyStateDescription: String
-        get() = "当前仅展示本次内存态或示例记录；真实历史保存将在后续接入。"
+        get() = "完成一次计时、力量或基础跟练训练后，本地记录会出现在这里。"
+
+    val sourcePillLabel: String
+        get() = when (recordSource) {
+            HistoryRecordSource.PERSISTED -> "本地真实记录"
+            HistoryRecordSource.EXAMPLE -> "示例记录"
+        }
+
+    val headerDescription: String
+        get() = if (isEmpty) {
+            emptyStateDescription
+        } else {
+            "${sessions.size} 条本地记录 · 支持按日期、详情和基础趋势查看"
+        }
+
+    val boundaryNote: String
+        get() = when (recordSource) {
+            HistoryRecordSource.PERSISTED -> "当前读取本地 Room session records；仍不生成自动训练建议、医疗结论或心率判断。"
+            HistoryRecordSource.EXAMPLE -> "当前为 preview / 测试示例记录；生产记录页优先读取本地 Room session records。"
+        }
 
     private val selectedSession: WorkoutSession?
         get() = sessions.firstOrNull { session -> session.id == selectedSessionId } ?: sessions.firstOrNull()
+}
+
+internal enum class HistoryRecordSource {
+    PERSISTED,
+    EXAMPLE
 }
 
 internal data class HistoryDateGroupUiState(
@@ -100,7 +125,14 @@ internal data class BasicTrendRowUiState(
 )
 
 internal fun buildDefaultHistoryScreenState(): HistoryScreenState {
-    return HistoryScreenState(sessions = defaultHistorySessions())
+    return HistoryScreenState(
+        sessions = defaultHistorySessions(),
+        recordSource = HistoryRecordSource.EXAMPLE
+    )
+}
+
+internal fun buildHistoryScreenState(sessions: List<WorkoutSession>): HistoryScreenState {
+    return HistoryScreenState(sessions = sessions)
 }
 
 internal fun HistoryScreenState.selectSession(sessionId: String): HistoryScreenState {
@@ -223,7 +255,7 @@ private fun WorkoutSession.toListItem(selected: Boolean): HistorySessionListItem
     )
 }
 
-private fun WorkoutSession.toDetailState(): HistorySessionDetailUiState {
+private fun WorkoutSession.toDetailState(source: HistoryRecordSource): HistorySessionDetailUiState {
     val summaryRows = when (mode) {
         WorkoutMode.TIMED -> timedDetailRows()
         WorkoutMode.STRENGTH -> strengthDetailRows()
@@ -239,7 +271,10 @@ private fun WorkoutSession.toDetailState(): HistorySessionDetailUiState {
         id = id,
         title = planSnapshot.title,
         subtitle = "${dateKey} · ${mode.modeLabel} · ${status.statusLabel}",
-        sourceNote = "当前详情来自内存态 session seed，不读取 Room session records；计划快照只用于展示当时结构。",
+        sourceNote = when (source) {
+            HistoryRecordSource.PERSISTED -> "当前详情来自本地 session record；计划快照只用于展示当时结构。"
+            HistoryRecordSource.EXAMPLE -> "当前详情来自 preview / 测试示例记录；生产记录页优先读取本地 session records。"
+        },
         rows = summaryRows
     )
 }
@@ -483,6 +518,7 @@ private val SessionStatus.statusLabel: String
     }
 
 private fun WorkoutSession.durationSec(): Int {
+    totalElapsedSec?.let { elapsed -> return elapsed.coerceAtLeast(0) }
     return when (mode) {
         WorkoutMode.TIMED -> stepHistory.sumOf { record -> record.actualDurationSec ?: 0 }
         WorkoutMode.STRENGTH -> strengthSetRecords.sumOf { record ->

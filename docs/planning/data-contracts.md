@@ -531,7 +531,9 @@ interface WorkoutSession {
   status: SessionStatus;
   startedAt?: string;
   endedAt?: string;
-  pausedDurationSec?: number;
+  totalElapsedSec?: number;
+  effectiveElapsedSec?: number;
+  pausedElapsedSec?: number;
   currentStep?: SessionStep;
   stepHistory: SessionStepRecord[];
   strengthSetRecords?: StrengthSetRecord[];
@@ -561,6 +563,13 @@ interface SessionFeedback {
 ```
 
 计划快照很重要：用户后来改计划，不应污染历史训练记录。
+
+E10.4 约定：
+
+- `totalElapsedSec` 表示本次训练从开始到结束的总耗时口径，包含暂停。
+- `effectiveElapsedSec` 表示训练执行有效推进时间，不包含暂停。
+- `pausedElapsedSec` 单独保存暂停累计时间；计时训练来自 `TimedWorkoutEngineState.pausedElapsedSec`，力量训练暂停时不推进组耗时或休息倒计时。
+- 计时、力量和基础跟练在 completed / abandoned 终态都可以写入本地真实 `WorkoutSession`；统计图表、趋势分析、删除清理和心率数据仍留给后续 story。
 
 ### 9.2 执行步骤
 

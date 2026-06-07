@@ -311,7 +311,9 @@ export interface WorkoutSession {
   status: SessionStatus
   startedAt?: string
   endedAt?: string
-  pausedDurationSec?: number
+  totalElapsedSec?: number
+  effectiveElapsedSec?: number
+  pausedElapsedSec?: number
   currentStep?: SessionStep
   stepHistory: SessionStepRecord[]
   strengthSetRecords?: StrengthSetRecord[]

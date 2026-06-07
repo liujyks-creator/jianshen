@@ -59,6 +59,7 @@ import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
@@ -78,6 +79,7 @@ import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import com.liujyks.trainflow.ui.theme.isBigType
+import java.time.Instant
 import kotlinx.coroutines.delay
 
 @Composable
@@ -85,10 +87,14 @@ internal fun TimedWorkoutSessionRoute(
     plan: WorkoutPlan,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var engineState by remember(plan.id) {
-        mutableStateOf(TimedWorkoutEngine.create(plan))
+    val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
+    val sessionStartedAt = remember(sessionId) { Instant.now() }
+    var recordedSessionId by remember(sessionId) { mutableStateOf<String?>(null) }
+    var engineState by remember(plan.id, sessionId) {
+        mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
     }
     val feedbackSink = rememberCountdownReminderFeedbackSink()
     val context = LocalContext.current
@@ -126,6 +132,18 @@ internal fun TimedWorkoutSessionRoute(
     )
     LaunchedEffect(notificationState) {
         activeWorkoutNotifications.update(notificationState)
+    }
+    LaunchedEffect(engineState.status, engineState.sessionId) {
+        if (engineState.isTerminal && recordedSessionId != engineState.sessionId) {
+            onRecordWorkoutSession(
+                engineState.toWorkoutSessionRecord(
+                    plan = plan,
+                    startedAt = sessionStartedAt,
+                    endedAt = Instant.now()
+                )
+            )
+            recordedSessionId = engineState.sessionId
+        }
     }
     DisposableEffect(activeWorkoutNotifications, plan.id) {
         onDispose {

@@ -565,7 +565,9 @@ class StrengthWorkoutEngineTest {
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.PauseSession)
         val pausedConfirmState = result.state
         result = StrengthWorkoutEngine.tick(result.state, seconds = 99)
-        assertEquals(pausedConfirmState, result.state)
+        assertEquals(pausedConfirmState.copy(pausedElapsedSec = 99), result.state)
+        assertEquals(4, result.state.pendingDraft?.activeDurationSec)
+        assertEquals(4, result.state.sessionElapsedSec)
 
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
         result = StrengthWorkoutEngine.dispatch(
@@ -582,7 +584,9 @@ class StrengthWorkoutEngineTest {
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.PauseSession)
         val pausedRestState = result.state
         result = StrengthWorkoutEngine.tick(result.state, seconds = 99)
-        assertEquals(pausedRestState, result.state)
+        assertEquals(pausedRestState.copy(pausedElapsedSec = 198), result.state)
+        assertEquals(4, result.state.restRemainingSec)
+        assertEquals(2, result.state.restElapsedSec)
 
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.EndSession(reason = "user_requested"))

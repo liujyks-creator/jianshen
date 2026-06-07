@@ -104,7 +104,7 @@ internal fun buildHomeScreenState(): HomeScreenState {
             HomeEntryUiState(
                 id = HomeEntryId.SESSION_RECORDS,
                 title = "训练记录",
-                description = "查看内存态记录与基础趋势。",
+                description = "查看本地训练记录与基础趋势。",
                 badge = "记录",
                 status = "打开记录",
                 enabled = true
@@ -113,18 +113,18 @@ internal fun buildHomeScreenState(): HomeScreenState {
         futureEntries = listOf(
             HomeEntryUiState(
                 id = HomeEntryId.SESSION_RECORDS,
-                title = "训练记录",
-                description = "训练完成后沉淀 session records 和基础趋势。",
+                title = "记录分析",
+                description = "总统计、图表、计划趋势和历史清理仍留到后续。",
                 badge = "后续",
-                status = "E5 接入真实记录",
+                status = "E12 统计分析",
                 enabled = false
             ),
             HomeEntryUiState(
                 id = HomeEntryId.RECOVERY,
                 title = "恢复建议",
-                description = "由训练部位映射基础放松区域，不做医疗判断。",
+                description = "记录页外的长期恢复回顾与分析仍留到后续。",
                 badge = "后续",
-                status = "E5 接入训练后建议",
+                status = "后续扩展",
                 enabled = false
             )
         )

@@ -201,7 +201,7 @@ private fun StrengthPlanEditorHeader(uiState: StrengthPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "可直接开始当前草稿，也可保存后进入计划详情；真实保存和完整记录后续接入。",
+            text = "可直接开始当前草稿，也可保存后进入计划详情；真实计划保存后续接入。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

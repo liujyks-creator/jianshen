@@ -81,7 +81,15 @@ object StrengthWorkoutEngine {
         state: StrengthWorkoutEngineState,
         seconds: Int = 1
     ): StrengthWorkoutEngineResult {
-        if (seconds <= 0 || state.status != SessionStatus.ACTIVE || state.currentStepKind == null) {
+        if (seconds <= 0 || state.currentStepKind == null) {
+            return StrengthWorkoutEngineResult(state = state)
+        }
+        if (state.status == SessionStatus.PAUSED) {
+            return StrengthWorkoutEngineResult(
+                state = state.copy(pausedElapsedSec = state.pausedElapsedSec + seconds)
+            )
+        }
+        if (state.status != SessionStatus.ACTIVE) {
             return StrengthWorkoutEngineResult(state = state)
         }
 
@@ -839,6 +847,7 @@ data class StrengthWorkoutEngineState(
     val restRemainingSec: Int = 0,
     val restElapsedSec: Int = 0,
     val sessionElapsedSec: Int = 0,
+    val pausedElapsedSec: Int = 0,
     val completedSetCount: Int = 0,
     val pendingDraft: StrengthSetDraft? = null,
     val strengthSetRecords: List<StrengthSetRecord> = emptyList(),

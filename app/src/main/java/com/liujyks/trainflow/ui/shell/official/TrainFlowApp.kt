@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
+import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
@@ -37,8 +38,10 @@ import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
 
 @Composable
 internal fun TrainFlowApp(
+    workoutSessions: List<WorkoutSession> = emptyList(),
     trainingPreferencesState: TrainingPreferencesScreenState = defaultTrainingPreferencesScreenState(),
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults(),
+    onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
     onDefaultCountdownThresholdChanged: (Int) -> Unit = {},
     onActionCueEnabledChanged: (Boolean) -> Unit = {},
     onRestCueEnabledChanged: (Boolean) -> Unit = {},
@@ -176,6 +179,7 @@ internal fun TrainFlowApp(
                             onBackToFollowAlong = {
                                 applyShellState(shellState.finishFollowAlongSession())
                             },
+                            onRecordWorkoutSession = onRecordWorkoutSession,
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {
@@ -199,6 +203,7 @@ internal fun TrainFlowApp(
                             onOpenRecoveryRecommendation = { recommendation ->
                                 applyShellState(shellState.openRecoveryRecommendation(recommendation))
                             },
+                            onRecordWorkoutSession = onRecordWorkoutSession,
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {
@@ -229,6 +234,7 @@ internal fun TrainFlowApp(
                             onOpenRecoveryRecommendation = { recommendation ->
                                 applyShellState(shellState.openRecoveryRecommendation(recommendation))
                             },
+                            onRecordWorkoutSession = onRecordWorkoutSession,
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {
@@ -267,6 +273,7 @@ internal fun TrainFlowApp(
                 )
 
                 OfficialShellDestination.RECORDS -> HistoryRoute(
+                    sessions = workoutSessions,
                     modifier = Modifier.padding(innerPadding)
                 )
 

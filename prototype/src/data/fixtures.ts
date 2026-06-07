@@ -497,6 +497,9 @@ export const strengthSession: WorkoutSession = {
   status: 'completed',
   startedAt: '2026-05-19T11:00:00Z',
   endedAt: '2026-05-19T11:52:00Z',
+  totalElapsedSec: 3120,
+  effectiveElapsedSec: 3120,
+  pausedElapsedSec: 0,
   planSnapshot: {
     title: strengthPlan.title,
     mode: strengthPlan.mode,
@@ -547,6 +550,9 @@ export const timedSession: WorkoutSession = {
   status: 'completed',
   startedAt: '2026-05-20T10:00:00Z',
   endedAt: '2026-05-20T10:18:00Z',
+  totalElapsedSec: 1080,
+  effectiveElapsedSec: 1080,
+  pausedElapsedSec: 0,
   planSnapshot: {
     title: timedPlan.title,
     mode: timedPlan.mode,

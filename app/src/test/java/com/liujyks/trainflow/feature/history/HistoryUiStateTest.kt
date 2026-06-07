@@ -53,7 +53,26 @@ class HistoryUiStateTest {
         assertEquals("history-timed-2026-05-30", detail.id)
         assertTrue(detail.subtitle.contains("计时训练"))
         assertTrue(detail.rows.any { row -> row.label == "完成步骤" })
-        assertTrue(detail.sourceNote.contains("内存态 session seed"))
+        assertTrue(detail.sourceNote.contains("示例记录"))
+    }
+
+    @Test
+    fun realSessionsShowTodayRecordWithoutFixtureOverride() {
+        val todaySession = strengthSession(
+            id = "real-strength-2026-06-07",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-07T10:00:00Z",
+            records = listOf(
+                strengthSetRecord("confirmed", actualWeight = WeightValue(50.0, WeightUnit.KG), actualReps = 8)
+            )
+        )
+        val state = buildHistoryScreenState(sessions = listOf(todaySession))
+
+        assertEquals("本地真实记录", state.sourcePillLabel)
+        assertEquals(listOf("2026-06-07"), state.dateGroups.map { group -> group.dateLabel })
+        assertEquals(listOf("real-strength-2026-06-07"), state.dateGroups.single().items.map { item -> item.id })
+        assertFalse(state.dateGroups.single().items.any { item -> item.id.startsWith("history-") })
+        assertTrue(requireNotNull(state.selectedDetail).sourceNote.contains("本地 session record"))
     }
 
     @Test
@@ -130,7 +149,7 @@ class HistoryUiStateTest {
 
         assertTrue(state.isEmpty)
         assertEquals("暂无训练历史", state.emptyStateTitle)
-        assertTrue(state.emptyStateDescription.contains("真实历史保存将在后续接入"))
+        assertTrue(state.emptyStateDescription.contains("完成一次计时"))
         assertNotNull(state.actionTrend.emptyMessage)
         assertNotNull(state.volumeTrend.emptyMessage)
     }
@@ -158,6 +177,7 @@ class HistoryUiStateTest {
             state.volumeTrend.rows.forEach { row ->
                 append(row.helper)
             }
+            append(state.boundaryNote)
         }
 
         assertFalse(combinedCopy.contains("你变强了"))
@@ -165,6 +185,7 @@ class HistoryUiStateTest {
         assertFalse(combinedCopy.contains("医疗"))
         assertFalse(combinedCopy.contains("诊断"))
         assertFalse(combinedCopy.contains("心率告警"))
+        assertFalse(combinedCopy.contains("E5 接入真实记录"))
     }
 
     private fun strengthSession(

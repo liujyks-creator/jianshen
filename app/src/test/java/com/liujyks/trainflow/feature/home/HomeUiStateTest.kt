@@ -51,6 +51,7 @@ class HomeUiStateTest {
             state.futureEntries.map { it.id }
         )
         assertTrue(state.futureEntries.all { !it.enabled })
+        assertFalse(state.futureEntries.joinToString { entry -> entry.status }.contains("E5 接入"))
     }
 
     @Test

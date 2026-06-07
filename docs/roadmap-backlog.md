@@ -1072,6 +1072,8 @@ stepsCompleted:
 
 ### Story E10.4: 训练记录闭环前置
 
+**状态:** Implemented in `codex/e10-4-session-record-write-through`
+
 作为用户，
 我想完成训练后在记录页看到本次真实训练，
 以便记录和后续统计不是 fixture 或内存态假数据。
@@ -1082,12 +1084,14 @@ stepsCompleted:
 - Then 记录包含计划快照、实际执行结果、开始/结束时间。
 - Then 计时训练记录区分本次总耗时、有效训练时间和暂停总时长。
 - Then 记录页显示今天刚完成的训练。
-- Then 在真实持久化前不实现假删除、假统计或假趋势。
+- Then 真实记录源优先于示例 fixture；生产记录页不再用内存态 seed 伪装真实记录。
+- Then E10.4 不实现假删除、假统计或假趋势。
 
 **边界:**
 
 - 可与 E12 真实统计前置项协调。
-- 不在 E10.4 中实现完整图表、趋势分析、心率设备或语音能力。
+- 本阶段已接入最小 Room repository / DAO / mapper，保存 completed 与 abandoned session、计时步骤摘要、力量已确认组记录，以及 total / effective / paused 秒数。
+- 不在 E10.4 中实现完整图表、趋势分析、历史记录清理、心率设备、Health Connect / Wear OS / BLE、语音、foreground service、exact alarm 或 notification action。
 
 ### Story E10.x: 后续力量训练新版 UI 设计
 
@@ -1248,22 +1252,23 @@ E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、心率、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
-E10.3 已完成力量 / 跟练执行页主操作可达性修复；当前无 P0/P1 blocker，后续方向为 Review Gate、E10.4、E11、E12 和 E13。
+E10.3 已完成力量 / 跟练执行页主操作可达性修复。
+E10.4 已完成训练记录闭环前置，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录；当前无 P0/P1 blocker，后续方向为 Review Gate、E11、E12 和 E13。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E10.4: 训练记录闭环前置
+Story E10.4 Review Gate，随后进入 E11 / E12 / E13
 ```
 
-E10.4 开始前建议重点确认：
+E10.4 Review Gate 建议重点确认：
 
-1. 完成训练后真实 `WorkoutSession` 写入如何区分计划快照、实际执行、开始 / 结束时间、有效训练时间和暂停总时长。
-2. 记录页如何从真实持久化数据展示今天刚完成的训练，同时不再用 fixture 或内存态暗示真实长期记录。
-3. 计时、力量和基础跟练的 completed / abandoned 终态如何统一写入记录，且 terminal 状态后不污染进度。
-4. 历史记录清理和统计图表继续留给 E12 或持久化闭环后的 story，不在 E10.4 做假删除或假趋势。
-5. 不在 E10.4 中接入心率设备、语音、foreground service、notification action、完整统计图表或医疗判断。
+1. 完成训练后真实 `WorkoutSession` 写入是否正确区分计划快照、实际执行、开始 / 结束时间、有效训练时间和暂停总时长。
+2. 记录页是否从真实持久化数据展示今天刚完成的训练，同时不再用 fixture 或内存态暗示真实长期记录。
+3. 计时、力量和基础跟练的 completed / abandoned 终态是否统一写入记录，且 terminal 状态后不污染进度。
+4. 历史记录清理和统计图表继续留给 E12 或持久化闭环后的 story，本阶段不做假删除或假趋势。
+5. 本阶段未接入心率设备、语音、foreground service、notification action、完整统计图表或医疗判断。
 
 ## 8. 暂缓事项
 

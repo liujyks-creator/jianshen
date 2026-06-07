@@ -84,7 +84,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSummaryUiState(
             else -> TimedWorkoutSummaryTone.ABANDONED
         },
         durationLabel = activeElapsedSec.formatSummaryDuration(),
-        durationSemanticsNote = "当前为引擎 active elapsed，不等同真实 wall-clock startedAt / endedAt；本阶段不写入持久化会话。",
+        durationSemanticsNote = "当前为引擎 active elapsed，并在终态写入本地 session；不等同真实 wall-clock startedAt / endedAt。",
         metricItems = listOf(
             TimedWorkoutSummaryMetricUiState(
                 label = "总时长",

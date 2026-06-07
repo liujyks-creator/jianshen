@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
 import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
@@ -25,15 +27,25 @@ class MainActivity : ComponentActivity() {
             val preferencesDataSource = remember(context) {
                 TrainFlowPreferencesDataSource(context.trainFlowPreferencesDataStore)
             }
+            val workoutSessionRepository = remember(context) {
+                WorkoutSessionRepository(TrainFlowDatabase.create(context.applicationContext))
+            }
             val preferences by preferencesDataSource.preferences.collectAsState(
                 initial = TrainFlowPreferences()
+            )
+            val workoutSessions by workoutSessionRepository.sessions.collectAsState(
+                initial = emptyList()
             )
             val scope = rememberCoroutineScope()
 
             TrainFlowTheme(skin = preferences.toTrainFlowSkin()) {
                 TrainFlowApp(
+                    workoutSessions = workoutSessions,
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),
                     planEditorDefaults = preferences.toPlanEditorDefaults(),
+                    onRecordWorkoutSession = { session ->
+                        workoutSessionRepository.upsertSession(session)
+                    },
                     onDefaultCountdownThresholdChanged = { seconds ->
                         scope.launch {
                             preferencesDataSource.setDefaultCountdownThresholdSec(seconds)

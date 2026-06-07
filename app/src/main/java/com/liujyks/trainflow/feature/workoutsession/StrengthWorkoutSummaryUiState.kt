@@ -110,7 +110,7 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSummaryUiState(
             else -> StrengthWorkoutSummaryTone.ABANDONED
         },
         durationLabel = sessionElapsedSec.formatSummaryDuration(),
-        durationSemanticsNote = "当前为引擎 session elapsed / active set elapsed 记录，不等同真实 wall-clock startedAt / endedAt；本阶段不写入持久化会话。",
+        durationSemanticsNote = "当前为引擎 session elapsed / active set elapsed，并在终态写入本地 session；不等同真实 wall-clock startedAt / endedAt。",
         metricItems = listOf(
             StrengthWorkoutSummaryMetricUiState(
                 label = "动作",

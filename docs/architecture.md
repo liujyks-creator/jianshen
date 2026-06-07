@@ -218,9 +218,9 @@ WorkoutEngine
 |---|---|---|
 | `exercises` | 标准动作库 | `id`、`name`、`category`、`equipment`、`difficulty`、`capabilities_json`、`content_status` |
 | `workout_plans` | 用户训练计划 | `id`、`mode`、`title`、`blocks_json`、`reminder_json`、`preferences_json`、`created_at`、`updated_at` |
-| `workout_sessions` | 训练会话 | `id`、`plan_id`、`mode`、`status`、`plan_snapshot_json`、`started_at`、`ended_at` |
-| `session_step_records` | 执行步骤记录 | `id`、`session_id`、`kind`、`exercise_id`、`started_at`、`ended_at`、`skipped` |
-| `strength_set_records` | 力量组记录 | `id`、`session_id`、`exercise_id`、`set_order`、`planned_json`、`actual_json`、`effort` |
+| `workout_sessions` | 训练会话 | `id`、`plan_id`、`mode`、`status`、`plan_snapshot_json`、`started_at`、`ended_at`、`total_elapsed_sec`、`effective_elapsed_sec`、`paused_elapsed_sec` |
+| `session_step_records` | 执行步骤记录 | `id`、`session_id`、`step_id`、`kind`、`exercise_id`、`started_at`、`ended_at`、`skipped`、`actual_duration_sec`、`planned_duration_sec` |
+| `strength_set_records` | 力量组记录 | `id`、`session_id`、`exercise_id`、`source_set_plan_id`、`set_order`、`planned_json`、`actual_json`、`active_duration_sec`、`actual_rest_after_sec`、`effort` |
 | `recovery_areas` | 恢复区域 | `id`、`name`、`body_region`、`summary` |
 | `recovery_recommendations` | 训练恢复建议 | `id`、`session_id`、`trained_muscle_ids_json`、`area_ids_json` |
 
@@ -230,6 +230,7 @@ WorkoutEngine
 - 会话保存 `WorkoutPlanSnapshot`。
 - 后续编辑计划不影响历史会话。
 - 力量组记录保存计划值与实际值，不能只保存差异。
+- E10.4 起，计时、力量和基础跟练 completed / abandoned 终态通过 repository 写入本地 Room session records；记录页从该真实本地源读取。E10.4 只前置记录闭环，不实现统计图表、历史删除、云同步、心率设备或语音能力。
 
 ## 7. 训练执行引擎
 

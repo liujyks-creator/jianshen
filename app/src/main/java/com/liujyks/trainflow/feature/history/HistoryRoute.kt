@@ -36,13 +36,15 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.core.model.WorkoutSession
 
 @Composable
 internal fun HistoryRoute(
+    sessions: List<WorkoutSession> = emptyList(),
     modifier: Modifier = Modifier
 ) {
-    var uiState by remember {
-        mutableStateOf(buildDefaultHistoryScreenState())
+    var uiState by remember(sessions) {
+        mutableStateOf(buildHistoryScreenState(sessions))
     }
 
     HistoryScreen(
@@ -116,23 +118,19 @@ private fun HistoryScreen(
 @Composable
 private fun HistoryHeader(uiState: HistoryScreenState) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "内存态记录", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        StatusPill(text = uiState.sourcePillLabel, color = TrainFlowAccent, contentColor = TrainFlowPrimary)
         Text(
             text = "记录",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = if (uiState.isEmpty) {
-                uiState.emptyStateDescription
-            } else {
-                "${uiState.sessions.size} 条示例历史 · 支持按日期、详情和基础趋势查看"
-            },
+            text = uiState.headerDescription,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "当前不读取 Room session records，不生成自动训练建议、医疗结论或心率判断。",
+            text = uiState.boundaryNote,
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -396,6 +394,10 @@ private fun StatusPill(
 @Composable
 private fun HistoryRoutePreview() {
     TrainFlowTheme {
-        HistoryRoute()
+        HistoryScreen(
+            uiState = buildDefaultHistoryScreenState(),
+            onSelectSession = {},
+            modifier = Modifier
+        )
     }
 }

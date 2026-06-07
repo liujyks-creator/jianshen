@@ -1,0 +1,192 @@
+package com.liujyks.trainflow.core.data
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SessionStepKind
+import com.liujyks.trainflow.core.model.SessionStepRecord
+import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.WeightUnit
+import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.core.model.WorkoutSession
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
+class WorkoutSessionRepositoryTest {
+    private lateinit var database: TrainFlowDatabase
+    private lateinit var repository: WorkoutSessionRepository
+
+    @Before
+    fun createDatabase() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(
+            context,
+            TrainFlowDatabase::class.java
+        ).allowMainThreadQueries().build()
+        repository = WorkoutSessionRepository(database)
+    }
+
+    @After
+    fun closeDatabase() {
+        database.close()
+    }
+
+    @Test
+    fun completedTimedSessionWritesAndReadsElapsedBreakdown() = runBlocking {
+        repository.upsertSession(
+            timedSession(
+                id = "timed-completed",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 75,
+                effectiveElapsedSec = 60,
+                pausedElapsedSec = 15
+            )
+        )
+
+        val sessions = repository.getSessions()
+
+        assertEquals(1, sessions.size)
+        val session = sessions.single()
+        assertEquals("timed-completed", session.id)
+        assertEquals(SessionStatus.COMPLETED, session.status)
+        assertEquals(75, session.totalElapsedSec)
+        assertEquals(60, session.effectiveElapsedSec)
+        assertEquals(15, session.pausedElapsedSec)
+        assertEquals(2, session.stepHistory.size)
+        assertEquals(2, database.workoutSessionDao().stepRecordCount())
+    }
+
+    @Test
+    fun strengthSessionPersistsOnlyConfirmedActualRecords() = runBlocking {
+        repository.upsertSession(
+            strengthSession(
+                id = "strength-completed",
+                status = SessionStatus.COMPLETED,
+                records = listOf(
+                    StrengthSetRecord(
+                        id = "confirmed-set",
+                        exerciseId = "barbell-bench-press",
+                        sourceSetPlanId = "bench-working-1",
+                        setOrder = 1,
+                        setKind = StrengthSetKind.WORKING,
+                        plannedWeight = WeightValue(60.0, WeightUnit.KG),
+                        plannedRepTarget = RepTarget.Range(8, 12),
+                        actualWeight = WeightValue(62.5, WeightUnit.KG),
+                        actualReps = 8,
+                        activeDurationSec = 41,
+                        actualRestAfterSec = 90
+                    )
+                )
+            )
+        )
+
+        val session = repository.getSessions().single()
+        val record = session.strengthSetRecords.single()
+
+        assertEquals(SessionStatus.COMPLETED, session.status)
+        assertEquals("confirmed-set", record.id)
+        assertEquals(62.5, requireNotNull(record.actualWeight).value, 0.0)
+        assertEquals(8, record.actualReps)
+        assertEquals(41, record.activeDurationSec)
+        assertEquals(90, record.actualRestAfterSec)
+        assertEquals(1, database.workoutSessionDao().strengthSetRecordCount())
+    }
+
+    @Test
+    fun abandonedSessionStatusRoundTripsWithoutBeingPromotedToCompleted() = runBlocking {
+        repository.upsertSession(
+            timedSession(
+                id = "timed-abandoned",
+                status = SessionStatus.ABANDONED,
+                totalElapsedSec = 25,
+                effectiveElapsedSec = 20,
+                pausedElapsedSec = 5
+            )
+        )
+
+        val session = repository.getSessions().single()
+
+        assertEquals(SessionStatus.ABANDONED, session.status)
+        assertNotNull(session.endedAt)
+    }
+
+    private fun timedSession(
+        id: String,
+        status: SessionStatus,
+        totalElapsedSec: Int,
+        effectiveElapsedSec: Int,
+        pausedElapsedSec: Int
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            planId = "plan-timed",
+            mode = WorkoutMode.TIMED,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "测试计时",
+                mode = WorkoutMode.TIMED,
+                blocks = emptyList()
+            ),
+            status = status,
+            startedAt = "2026-06-07T10:00:00Z",
+            endedAt = "2026-06-07T10:01:15Z",
+            totalElapsedSec = totalElapsedSec,
+            effectiveElapsedSec = effectiveElapsedSec,
+            pausedElapsedSec = pausedElapsedSec,
+            stepHistory = listOf(
+                SessionStepRecord(
+                    stepId = "warmup",
+                    kind = SessionStepKind.TIMED_WORK,
+                    startedAt = "2026-06-07T10:00:00Z",
+                    endedAt = "2026-06-07T10:00:30Z",
+                    actualDurationSec = 30
+                ),
+                SessionStepRecord(
+                    stepId = "rest",
+                    kind = SessionStepKind.TIMED_REST,
+                    startedAt = "2026-06-07T10:00:30Z",
+                    endedAt = "2026-06-07T10:01:00Z",
+                    actualDurationSec = 30
+                )
+            )
+        )
+    }
+
+    private fun strengthSession(
+        id: String,
+        status: SessionStatus,
+        records: List<StrengthSetRecord>
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            planId = "plan-strength",
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "测试力量",
+                mode = WorkoutMode.STRENGTH,
+                blocks = emptyList()
+            ),
+            status = status,
+            startedAt = "2026-06-07T11:00:00Z",
+            endedAt = "2026-06-07T11:08:00Z",
+            totalElapsedSec = 480,
+            effectiveElapsedSec = 450,
+            pausedElapsedSec = 30,
+            strengthSetRecords = records
+        )
+    }
+}
