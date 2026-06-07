@@ -3,11 +3,13 @@ package com.liujyks.trainflow.feature.workoutsession
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
+import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.HeartRateAvailability
 import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
@@ -72,6 +74,42 @@ class TimedWorkoutSessionUiStateTest {
         assertFalse(uiState.canPause)
         assertFalse(uiState.canSkip)
         assertTrue(uiState.shortCue.contains("冻结"))
+    }
+
+    @Test
+    fun routeClockTicksPausedStateAndUiShowsPausedElapsedWithoutAdvancingActiveTime() {
+        val plan = buildDefaultPlanManagementState().plans.first()
+        val started = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val paused = TimedWorkoutEngine.dispatch(started, WorkoutCommand.PauseSession).state
+
+        assertTrue(paused.shouldTickTimedRouteClock())
+
+        val pausedAfterWallClock = TimedWorkoutEngine.tick(paused, seconds = 30).state
+        val uiState = pausedAfterWallClock.toTimedWorkoutSessionScreenState()
+
+        assertEquals(paused.remainingSec, pausedAfterWallClock.remainingSec)
+        assertEquals(paused.activeElapsedSec, pausedAfterWallClock.activeElapsedSec)
+        assertEquals(30, uiState.pausedTotalSec)
+        assertEquals("30秒", uiState.pausedDurationLabel)
+        assertTrue(uiState.historySummaryLabel.contains("累计 30秒"))
+    }
+
+    @Test
+    fun routeClockDoesNotTickTerminalState() {
+        val plan = buildDefaultPlanManagementState().plans.first()
+        val started = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val completed = TimedWorkoutEngine.tick(
+            started,
+            seconds = started.steps.sumOf { step -> step.durationSec }
+        ).state
+
+        assertFalse(completed.shouldTickTimedRouteClock())
     }
 
     @Test
@@ -292,7 +330,7 @@ class TimedWorkoutSessionUiStateTest {
 
         assertEquals("没有跳过内容。", summary.skippedSummary)
         assertEquals("没有延长休息。", summary.restExtensionSummary)
-        assertFalse(summary.recoveryEntry.generated)
+        assertTrue(summary.recoveryEntry.generated)
         assertFalse(summary.recoveryEntry.description.contains("E5.4"))
     }
 
@@ -428,6 +466,45 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun actionBasedTimedItemPrefersExerciseNameAndShortCueOverDefaultStageType() {
+        val state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(
+                reminderPlan(
+                    workSec = 20,
+                    cueSettings = CueSettings(actionEnding = CountdownCue(thresholdSec = 5))
+                )
+            ),
+            WorkoutCommand.StartSession
+        ).state
+
+        val uiState = state.toTimedWorkoutSessionScreenState()
+
+        assertEquals("开合跳", uiState.currentTitle)
+        assertEquals("轻落地，手脚同步打开。", uiState.shortCue)
+        assertFalse(uiState.shortCue.contains("工作阶段"))
+        assertFalse(uiState.currentTitle.contains("jumping-jacks"))
+    }
+
+    @Test
+    fun followAlongNullableActionItemKeepsActionSemanticWhenExerciseIdExists() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(followAlongCompatibilityPlan()),
+            WorkoutCommand.StartSession
+        ).state
+
+        var uiState = state.toTimedWorkoutSessionScreenState()
+
+        assertEquals("开合跳", uiState.currentTitle)
+        assertEquals("轻落地，手脚同步打开。", uiState.shortCue)
+
+        state = TimedWorkoutEngine.tick(state, seconds = 5).state
+        uiState = state.toTimedWorkoutSessionScreenState()
+
+        assertEquals("节奏保持", uiState.currentTitle)
+        assertTrue(uiState.shortCue.contains("自定义阶段"))
+    }
+
+    @Test
     fun disabledAndTooLargeThresholdsDoNotCreateReminderState() {
         var disabledState = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(
@@ -477,7 +554,7 @@ class TimedWorkoutSessionUiStateTest {
                     items = listOf(
                         TimedExerciseItem(
                             id = "jump",
-                            exerciseId = "jumping-jack",
+                            exerciseId = "jumping-jacks",
                             workDurationSec = workSec,
                             restAfterSec = restSec
                         )
@@ -519,6 +596,40 @@ class TimedWorkoutSessionUiStateTest {
                     )
                 )
             ),
+            createdAt = "2026-05-30T00:00:00Z",
+            updatedAt = "2026-05-30T00:00:00Z"
+        )
+    }
+
+    private fun followAlongCompatibilityPlan(): WorkoutPlan {
+        return WorkoutPlan(
+            id = "plan-follow-along-compat",
+            mode = WorkoutMode.FOLLOW_ALONG,
+            title = "Follow along compat",
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "follow-circuit",
+                    order = 1,
+                    rounds = 1,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "jump",
+                            exerciseId = "jumping-jacks",
+                            workDurationSec = 5,
+                            autoAdvance = true
+                        ),
+                        TimedExerciseItem(
+                            id = "hold",
+                            exerciseId = null,
+                            labelOverride = "节奏保持",
+                            stageType = TimedStageType.CUSTOM,
+                            workDurationSec = 5,
+                            autoAdvance = true
+                        )
+                    )
+                )
+            ),
+            followAlong = FollowAlongPlanMeta(preset = true),
             createdAt = "2026-05-30T00:00:00Z",
             updatedAt = "2026-05-30T00:00:00Z"
         )

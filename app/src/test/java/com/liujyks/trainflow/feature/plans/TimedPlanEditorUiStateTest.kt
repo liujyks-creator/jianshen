@@ -9,6 +9,7 @@ import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -157,18 +158,42 @@ class TimedPlanEditorUiStateTest {
     fun stageAddCopyDeleteAndFallbackSortWork() {
         val initial = buildDefaultTimedPlanEditorState()
         val added = initial.addStage(TimedStageType.REST)
-        val copied = added.copyStage(added.stages.first().id)
-        val copiedId = copied.stages[1].id
+        val workId = added.stages.first { stage -> stage.stageType == TimedStageType.WORK }.id
+        val copied = added.copyStage(workId)
+        val copiedId = copied.stages[2].id
         val movedDown = copied.moveStageDown(copiedId)
         val movedUp = movedDown.moveStageUp(copiedId)
         val removed = movedUp.removeStage(copiedId)
 
         assertEquals(initial.stages.size + 1, added.stages.size)
         assertEquals(added.stages.size + 1, copied.stages.size)
-        assertTrue(copied.stages[1].name.contains("副本"))
-        assertEquals(copiedId, movedDown.stages[2].id)
-        assertEquals(copiedId, movedUp.stages[1].id)
+        assertTrue(copied.stages[2].name.contains("副本"))
+        assertEquals(copiedId, movedDown.stages[3].id)
+        assertEquals(copiedId, movedUp.stages[2].id)
         assertEquals(movedUp.stages.size - 1, removed.stages.size)
+    }
+
+    @Test
+    fun addDeleteAddUsesStableNonReusedStageIds() {
+        val firstAdded = buildDefaultTimedPlanEditorState().addStage(TimedStageType.WORK)
+        val firstAddedId = firstAdded.stages.first { stage -> stage.id.startsWith("stage-added-") }.id
+        val removed = firstAdded.removeStage(firstAddedId)
+        val secondAdded = removed.addStage(TimedStageType.WORK)
+        val secondAddedId = secondAdded.stages.last { stage -> stage.id.startsWith("stage-added-") }.id
+
+        assertNotEquals(firstAddedId, secondAddedId)
+        assertEquals(secondAdded.stages.size, secondAdded.stages.map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun copyStageUsesUniqueIdsAcrossRepeatedCopies() {
+        val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
+        val copiedTwice = buildDefaultTimedPlanEditorState()
+            .copyStage(workId)
+            .copyStage(workId)
+
+        assertEquals(copiedTwice.stages.size, copiedTwice.stages.map { it.id }.toSet().size)
+        assertEquals(2, copiedTwice.stages.count { stage -> stage.id.startsWith("$workId-copy-") })
     }
 
     @Test
@@ -204,6 +229,36 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun moveStageKeepsWarmupAndCooldownAsFixedBoundaries() {
+        val state = buildDefaultTimedPlanEditorState()
+        val initialStageIds = state.stages.map { it.id }
+
+        assertEquals(initialStageIds, state.moveStage(fromIndex = 0, toIndex = 2).stages.map { it.id })
+        assertEquals(initialStageIds, state.moveStage(fromIndex = 4, toIndex = 2).stages.map { it.id })
+        assertFalse(state.canMoveStageDown("stage-warmup"))
+        assertFalse(state.canMoveStageUp("stage-cooldown"))
+    }
+
+    @Test
+    fun addingBoundaryStagesKeepsEditorOrderAlignedWithExecutionOrder() {
+        val state = buildDefaultTimedPlanEditorState()
+            .addStage(TimedStageType.COOLDOWN)
+            .addStage(TimedStageType.WARMUP)
+            .addStage(TimedStageType.WORK)
+
+        assertEquals(TimedStageType.WARMUP, state.stages[0].stageType)
+        assertEquals(TimedStageType.WARMUP, state.stages[1].stageType)
+        assertEquals(TimedStageType.COOLDOWN, state.stages[state.stages.lastIndex - 1].stageType)
+        assertEquals(TimedStageType.COOLDOWN, state.stages.last().stageType)
+        assertEquals(
+            state.stages.filterNot { stage ->
+                stage.stageType == TimedStageType.WARMUP || stage.stageType == TimedStageType.COOLDOWN
+            }.map { it.id },
+            state.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single().items.map { it.id }
+        )
+    }
+
+    @Test
     fun moveStageKeepsStageFieldsAssociatedAfterReorder() {
         val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
         val state = buildDefaultTimedPlanEditorState()
@@ -211,8 +266,8 @@ class TimedPlanEditorUiStateTest {
             .updateStageDuration(workId, 55)
             .updateStageType(workId, TimedStageType.CUSTOM)
             .updateStageColor(workId, "#123456")
-        val moved = state.moveStage(fromIndex = 1, toIndex = 4)
-        val movedStage = moved.stages[4]
+        val moved = state.moveStage(fromIndex = 1, toIndex = 3)
+        val movedStage = moved.stages[3]
         val circuit = moved.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single()
 
         assertEquals(workId, movedStage.id)
@@ -225,6 +280,24 @@ class TimedPlanEditorUiStateTest {
         assertEquals(55, circuit.items.last().workDurationSec)
         assertEquals("#123456", circuit.items.last().colorHex)
         assertEquals(TimedStageType.CUSTOM.defaultIconKey, circuit.items.last().iconKey)
+    }
+
+    @Test
+    fun updateStageColorAndTypeKeepIconColorAndPlanMapping() {
+        val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
+        val state = buildDefaultTimedPlanEditorState()
+            .updateStageColor(workId, "#8B6CFF")
+            .updateStageType(workId, TimedStageType.CUSTOM)
+        val stage = state.stages.first { it.id == workId }
+        val item = state.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single()
+            .items
+            .first { it.id == workId }
+
+        assertEquals(TimedStageType.CUSTOM, stage.stageType)
+        assertEquals(TimedStageType.CUSTOM.defaultIconKey, stage.iconKey)
+        assertEquals(TimedStageType.CUSTOM.defaultColorHex, stage.colorHex)
+        assertEquals(TimedStageType.CUSTOM.defaultIconKey, item.iconKey)
+        assertEquals(TimedStageType.CUSTOM.defaultColorHex, item.colorHex)
     }
 
     @Test

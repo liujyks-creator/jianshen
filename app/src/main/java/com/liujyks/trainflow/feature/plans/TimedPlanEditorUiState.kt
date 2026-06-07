@@ -59,6 +59,7 @@ internal data class TimedPlanEditorScreenState(
     val restCue: CountdownCueUiState,
     val stages: List<TimedPlanEditorStageUiState>,
     val themeColorHex: String = "#2FBF8F",
+    val nextStageSequence: Int = 1,
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
@@ -95,7 +96,7 @@ internal data class TimedPlanEditorScreenState(
         planId: String = "plan-timed-draft",
         timestamp: String = DefaultTimedPlanTimestamp
     ): WorkoutPlan {
-        val cueSafeState = constrainCueSettings()
+        val cueSafeState = constrainCueSettings().normalizeFixedBoundaryStages()
         val blocks = cueSafeState.toPlanBlocks()
 
         return WorkoutPlan(
@@ -186,6 +187,17 @@ internal val TimedStageTypeOptions: List<TimedStageTypeOptionUiState> = TimedSta
         colorHex = type.defaultColorHex
     )
 }
+
+internal val TimedStageColorOptions: List<String> = listOf(
+    "#F2B84B",
+    "#F26B4F",
+    "#2FBF8F",
+    "#65A9FF",
+    "#8B6CFF",
+    "#E45DA7",
+    "#18A6A6",
+    "#A8B3BE"
+)
 
 internal fun buildDefaultTimedPlanEditorState(
     defaults: PlanEditorDefaults = PlanEditorDefaults()
@@ -427,7 +439,8 @@ internal fun TimedPlanEditorScreenState.updateStageType(
         },
         savedPlan = null,
         statusMessage = null
-    ).constrainCueSettings()
+    ).normalizeFixedBoundaryStages()
+        .constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateStageColor(
@@ -445,14 +458,17 @@ internal fun TimedPlanEditorScreenState.updateStageColor(
 internal fun TimedPlanEditorScreenState.addStage(
     stageType: TimedStageType = TimedStageType.WORK
 ): TimedPlanEditorScreenState {
-    val nextIndex = stages.size + 1
+    val (newStageId, nextSequence) = nextGeneratedStageId(prefix = "stage-added")
+    val newStage = TimedPlanEditorStageUiState(
+        id = newStageId,
+        name = stageType.displayName,
+        stageType = stageType,
+        durationSec = if (stageType == TimedStageType.REST) 20 else 45
+    )
+    val insertIndex = stages.insertIndexForNewStage(stageType)
     return copy(
-        stages = stages + TimedPlanEditorStageUiState(
-            id = "stage-added-$nextIndex",
-            name = stageType.displayName,
-            stageType = stageType,
-            durationSec = if (stageType == TimedStageType.REST) 20 else 45
-        ),
+        stages = stages.take(insertIndex) + newStage + stages.drop(insertIndex),
+        nextStageSequence = nextSequence,
         savedPlan = null,
         statusMessage = null
     ).constrainCueSettings()
@@ -462,12 +478,14 @@ internal fun TimedPlanEditorScreenState.copyStage(stageId: String): TimedPlanEdi
     val index = stages.indexOfFirst { stage -> stage.id == stageId }
     if (index < 0) return this
     val source = stages[index]
+    val (copiedId, nextSequence) = nextGeneratedStageId(prefix = "${source.id}-copy")
     val copied = source.copy(
-        id = "${source.id}-copy-${stages.count { it.id.startsWith("${source.id}-copy") } + 1}",
+        id = copiedId,
         name = "${source.name} 副本"
     )
     return copy(
         stages = stages.take(index + 1) + copied + stages.drop(index + 1),
+        nextStageSequence = nextSequence,
         savedPlan = null,
         statusMessage = null
     ).constrainCueSettings()
@@ -497,14 +515,29 @@ internal fun TimedPlanEditorScreenState.moveStage(
     toIndex: Int
 ): TimedPlanEditorScreenState {
     if (fromIndex !in stages.indices || toIndex !in stages.indices || fromIndex == toIndex) return this
+    val movedStages = stages.toMutableList().also { list ->
+        val stage = list.removeAt(fromIndex)
+        list.add(toIndex, stage)
+    }
+    if (!movedStages.hasValidFixedBoundaryOrder()) return this
+
     return copy(
-        stages = stages.toMutableList().also { list ->
-            val stage = list.removeAt(fromIndex)
-            list.add(toIndex, stage)
-        },
+        stages = movedStages,
         savedPlan = null,
         statusMessage = null
     )
+}
+
+internal fun TimedPlanEditorScreenState.canMoveStageUp(stageId: String): Boolean {
+    val index = stages.indexOfFirst { stage -> stage.id == stageId }
+    return index > 0 && stages.withMovedStage(index, index - 1)?.hasValidFixedBoundaryOrder() == true
+}
+
+internal fun TimedPlanEditorScreenState.canMoveStageDown(stageId: String): Boolean {
+    val index = stages.indexOfFirst { stage -> stage.id == stageId }
+    return index >= 0 &&
+        index < stages.lastIndex &&
+        stages.withMovedStage(index, index + 1)?.hasValidFixedBoundaryOrder() == true
 }
 
 internal fun TimedPlanEditorScreenState.saveDraftPlan(
@@ -531,11 +564,12 @@ internal fun Int.formatDuration(): String {
 }
 
 private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
-    val repeatedStages = stages.filterNot { stage ->
+    val orderedStages = stages.normalizedFixedBoundaryOrder()
+    val repeatedStages = orderedStages.filterNot { stage ->
         stage.stageType == TimedStageType.WARMUP || stage.stageType == TimedStageType.COOLDOWN
     }
     val blocks = mutableListOf<PlanBlock>()
-    stages.forEach { stage ->
+    orderedStages.forEach { stage ->
         when (stage.stageType) {
             TimedStageType.WARMUP -> blocks += WarmupBlock(
                 id = stage.id,
@@ -560,7 +594,7 @@ private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
             }
         )
     }
-    stages.forEach { stage ->
+    orderedStages.forEach { stage ->
         if (stage.stageType == TimedStageType.COOLDOWN) {
             blocks += CooldownBlock(
                 id = stage.id,
@@ -571,6 +605,77 @@ private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
         }
     }
     return blocks
+}
+
+private fun TimedPlanEditorScreenState.nextGeneratedStageId(prefix: String): Pair<String, Int> {
+    val existingIds = stages.map { stage -> stage.id }.toSet()
+    var candidate = nextStageSequence.coerceAtLeast(1)
+    var id = "$prefix-$candidate"
+    while (id in existingIds) {
+        candidate += 1
+        id = "$prefix-$candidate"
+    }
+    return id to candidate + 1
+}
+
+private fun List<TimedPlanEditorStageUiState>.insertIndexForNewStage(
+    stageType: TimedStageType
+): Int {
+    return when (stageType) {
+        TimedStageType.WARMUP -> indexOfFirst { stage -> stage.stageType != TimedStageType.WARMUP }
+            .let { index -> if (index < 0) size else index }
+        TimedStageType.COOLDOWN -> size
+        TimedStageType.WORK,
+        TimedStageType.REST,
+        TimedStageType.CUSTOM -> indexOfFirst { stage -> stage.stageType == TimedStageType.COOLDOWN }
+            .let { index -> if (index < 0) size else index }
+    }
+}
+
+private fun TimedPlanEditorScreenState.normalizeFixedBoundaryStages(): TimedPlanEditorScreenState {
+    val normalized = stages.normalizedFixedBoundaryOrder()
+    return if (normalized == stages) this else copy(stages = normalized)
+}
+
+private fun List<TimedPlanEditorStageUiState>.normalizedFixedBoundaryOrder(): List<TimedPlanEditorStageUiState> {
+    return filter { stage -> stage.stageType == TimedStageType.WARMUP } +
+        filter { stage ->
+            stage.stageType != TimedStageType.WARMUP && stage.stageType != TimedStageType.COOLDOWN
+        } +
+        filter { stage -> stage.stageType == TimedStageType.COOLDOWN }
+}
+
+private fun List<TimedPlanEditorStageUiState>.withMovedStage(
+    fromIndex: Int,
+    toIndex: Int
+): List<TimedPlanEditorStageUiState>? {
+    if (fromIndex !in indices || toIndex !in indices || fromIndex == toIndex) return null
+    return toMutableList().also { list ->
+        val stage = list.removeAt(fromIndex)
+        list.add(toIndex, stage)
+    }
+}
+
+private fun List<TimedPlanEditorStageUiState>.hasValidFixedBoundaryOrder(): Boolean {
+    var seenMiddleStage = false
+    var seenCooldownStage = false
+    for (stage in this) {
+        when (stage.stageType) {
+            TimedStageType.WARMUP -> {
+                if (seenMiddleStage || seenCooldownStage) return false
+            }
+            TimedStageType.COOLDOWN -> {
+                seenCooldownStage = true
+            }
+            TimedStageType.WORK,
+            TimedStageType.REST,
+            TimedStageType.CUSTOM -> {
+                if (seenCooldownStage) return false
+                seenMiddleStage = true
+            }
+        }
+    }
+    return true
 }
 
 private fun Int.sanitizeDuration(min: Int = 0): Int = coerceIn(min, 3600)

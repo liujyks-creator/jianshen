@@ -120,11 +120,11 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         current.kind == TimedSessionStepKind.REST -> next?.let {
             "调整呼吸，准备 ${it.displayTitle(exerciseById)}。"
         } ?: "调整呼吸，准备结束训练。"
+        current.exerciseId != null -> exerciseById[current.exerciseId]?.instructions?.shortCue
+            ?: current.blockFallbackCue()
         else -> current.stageType?.let { stageType ->
             "${stageType.displayName}阶段，保持当前节奏。"
-        } ?: current.exerciseId
-            ?.let { exerciseById[it]?.instructions?.shortCue }
-            ?: current.blockFallbackCue()
+        } ?: current.blockFallbackCue()
     }
     val totalSteps = steps.size.coerceAtLeast(1)
     val totalPlannedDurationSec = steps.sumOf { step -> step.durationSec }.coerceAtLeast(1)
@@ -277,8 +277,9 @@ private fun TimedSessionStep.displayTitle(exerciseById: Map<String, Exercise>): 
         return "休息 ${durationSec.formatShortDuration()}"
     }
 
-    return title.takeIf { it.isNotBlank() } ?: exerciseId
-        ?.let { id -> exerciseById[id]?.name }
+    return exerciseId
+        ?.let { id -> exerciseById[id]?.name ?: title.takeIf { it.isNotBlank() } ?: id }
+        ?: title.takeIf { it.isNotBlank() }
         ?: blockFallbackTitle()
 }
 

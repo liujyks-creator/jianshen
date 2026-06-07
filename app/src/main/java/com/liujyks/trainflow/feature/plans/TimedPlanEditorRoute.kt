@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.plans
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -84,6 +85,7 @@ internal fun TimedPlanEditorRoute(
         onStageNameChanged = { stageId, name -> uiState = uiState.updateStageName(stageId, name) },
         onStageDurationChanged = { stageId, seconds -> uiState = uiState.updateStageDurationText(stageId, seconds) },
         onStageTypeChanged = { stageId, type -> uiState = uiState.updateStageType(stageId, type) },
+        onStageColorChanged = { stageId, colorHex -> uiState = uiState.updateStageColor(stageId, colorHex) },
         onCopyStage = { stageId -> uiState = uiState.copyStage(stageId) },
         onRemoveStage = { stageId -> uiState = uiState.removeStage(stageId) },
         onMoveStageUp = { stageId -> uiState = uiState.moveStageUp(stageId) },
@@ -122,6 +124,7 @@ private fun TimedPlanEditorScreen(
     onStageNameChanged: (String, String) -> Unit,
     onStageDurationChanged: (String, String) -> Unit,
     onStageTypeChanged: (String, TimedStageType) -> Unit,
+    onStageColorChanged: (String, String) -> Unit,
     onCopyStage: (String) -> Unit,
     onRemoveStage: (String) -> Unit,
     onMoveStageUp: (String) -> Unit,
@@ -196,10 +199,13 @@ private fun TimedPlanEditorScreen(
                 onNameChanged = { name -> onStageNameChanged(stage.id, name) },
                 onDurationChanged = { seconds -> onStageDurationChanged(stage.id, seconds) },
                 onStageTypeChanged = { type -> onStageTypeChanged(stage.id, type) },
+                onStageColorChanged = { colorHex -> onStageColorChanged(stage.id, colorHex) },
                 onCopy = { onCopyStage(stage.id) },
                 onRemove = { onRemoveStage(stage.id) },
                 onMoveUp = { onMoveStageUp(stage.id) },
                 onMoveDown = { onMoveStageDown(stage.id) },
+                canMoveUp = uiState.canMoveStageUp(stage.id),
+                canMoveDown = uiState.canMoveStageDown(stage.id),
                 isDragging = draggedStageId == stage.id,
                 dragOffsetY = if (draggedStageId == stage.id) draggedStageOffsetY else 0f,
                 onDragStarted = { cardHeightPx ->
@@ -258,7 +264,7 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "热身、工作、休息、放松和自定义阶段直接编排；计时训练不再选择动作库动作。",
+            text = "热身固定在开头，放松固定在最后；中间的工作、休息和自定义阶段可排序。计时训练不再选择动作库动作。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -320,10 +326,13 @@ private fun TimedStageEditorCard(
     onNameChanged: (String) -> Unit,
     onDurationChanged: (String) -> Unit,
     onStageTypeChanged: (TimedStageType) -> Unit,
+    onStageColorChanged: (String) -> Unit,
     onCopy: () -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     isDragging: Boolean,
     dragOffsetY: Float,
     onDragStarted: (Int) -> Unit,
@@ -382,8 +391,8 @@ private fun TimedStageEditorCard(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = onMoveUp, enabled = index > 0) { Text("上移") }
-            TextButton(onClick = onMoveDown, enabled = index < totalCount - 1) { Text("下移") }
+            TextButton(onClick = onMoveUp, enabled = canMoveUp) { Text("上移") }
+            TextButton(onClick = onMoveDown, enabled = canMoveDown) { Text("下移") }
         }
 
         OutlinedTextField(
@@ -408,6 +417,23 @@ private fun TimedStageEditorCard(
                     selected = stage.stageType == option.stageType,
                     onClick = { onStageTypeChanged(option.stageType) },
                     label = { Text(option.label) }
+                )
+            }
+        }
+        Text(
+            text = "阶段类型会同步图标；热身 / 放松是固定边界阶段。",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral700
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TimedStageColorOptions.forEach { colorHex ->
+                StageColorSwatchButton(
+                    colorHex = colorHex,
+                    selected = stage.colorHex.equals(colorHex, ignoreCase = true),
+                    onClick = { onStageColorChanged(colorHex) }
                 )
             }
         }
@@ -437,6 +463,34 @@ private fun StageSwatch(colorHex: String) {
 }
 
 @Composable
+private fun StageColorSwatchButton(
+    colorHex: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = colorHex.toComposeColor(),
+        border = BorderStroke(
+            width = if (selected) 3.dp else 1.dp,
+            color = if (selected) TrainFlowPrimary else TrainFlowNeutral100
+        ),
+        modifier = Modifier
+            .sizeIn(minWidth = 44.dp, minHeight = 44.dp)
+            .semantics { contentDescription = "阶段颜色 $colorHex" }
+            .clickable(onClick = onClick)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = if (selected) "✓" else "",
+                style = MaterialTheme.typography.labelLarge,
+                color = TrainFlowPrimary
+            )
+        }
+    }
+}
+
+@Composable
 private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
     EditorCard {
         SectionTitle(text = "添加阶段")
@@ -453,7 +507,7 @@ private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
             }
         }
         Text(
-            text = "长按阶段卡右侧“拖动”手柄可拖拽排序；上移 / 下移保留为备用排序路径。",
+            text = "长按阶段卡右侧“拖动”手柄可拖拽排序；热身固定在开头，放松固定在最后，上移 / 下移保留为备用排序路径。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

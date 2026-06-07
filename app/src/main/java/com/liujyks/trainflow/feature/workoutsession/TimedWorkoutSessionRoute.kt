@@ -108,7 +108,7 @@ internal fun TimedWorkoutSessionRoute(
         applyEngineResult(TimedWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession))
         while (true) {
             delay(1000)
-            if (engineState.status == SessionStatus.ACTIVE) {
+            if (engineState.shouldTickTimedRouteClock()) {
                 applyEngineResult(TimedWorkoutEngine.tick(engineState))
             }
         }
@@ -308,6 +308,10 @@ private fun MainCountdownPanel(
             }
         }
     }
+}
+
+internal fun TimedWorkoutEngineState.shouldTickTimedRouteClock(): Boolean {
+    return status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
 }
 
 @Composable
