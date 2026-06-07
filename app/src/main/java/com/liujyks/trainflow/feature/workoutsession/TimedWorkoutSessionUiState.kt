@@ -18,6 +18,10 @@ internal data class TimedWorkoutSessionScreenState(
     val phaseLabel: String,
     val currentTitle: String,
     val timerText: String,
+    val totalRemainingText: String,
+    val stageIconKey: String,
+    val stageColorHex: String?,
+    val stageProgressFraction: Float,
     val progressLabel: String,
     val nextStepLabel: String,
     val shortCue: String,
@@ -34,6 +38,8 @@ internal data class TimedWorkoutSessionScreenState(
     val canEnd: Boolean,
     val skippedStepCount: Int,
     val extendedRestTotalSec: Int,
+    val pausedTotalSec: Int,
+    val pausedDurationLabel: String,
     val historySummaryLabel: String,
     val lastControlLabel: String,
     val terminalTitle: String? = null,
@@ -89,15 +95,14 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         status == SessionStatus.COMPLETED -> "已完成"
         status == SessionStatus.ABANDONED -> "已结束"
         current == null -> "准备"
-        current.kind == TimedSessionStepKind.REST -> "休息"
+        current.kind == TimedSessionStepKind.REST -> current.stageType?.displayName ?: "休息"
         current.sessionStepKind == SessionStepKind.STRETCH -> "拉伸"
-        else -> "动作"
+        else -> current.stageType?.displayName ?: "阶段"
     }
     val currentTitle = when {
         status == SessionStatus.COMPLETED -> "训练完成"
         status == SessionStatus.ABANDONED -> "训练已结束"
         current == null -> "准备开始"
-        current.kind == TimedSessionStepKind.REST -> "休息"
         else -> current.displayTitle(exerciseById)
     }
     val nextStepLabel = when {
@@ -115,11 +120,20 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         current.kind == TimedSessionStepKind.REST -> next?.let {
             "调整呼吸，准备 ${it.displayTitle(exerciseById)}。"
         } ?: "调整呼吸，准备结束训练。"
-        else -> current.exerciseId
+        else -> current.stageType?.let { stageType ->
+            "${stageType.displayName}阶段，保持当前节奏。"
+        } ?: current.exerciseId
             ?.let { exerciseById[it]?.instructions?.shortCue }
             ?: current.blockFallbackCue()
     }
     val totalSteps = steps.size.coerceAtLeast(1)
+    val totalPlannedDurationSec = steps.sumOf { step -> step.durationSec }.coerceAtLeast(1)
+    val totalRemainingSec = when {
+        status == SessionStatus.COMPLETED -> 0
+        status == SessionStatus.ABANDONED -> remainingSec
+        currentStepIndex < 0 -> totalPlannedDurationSec
+        else -> remainingSec + steps.drop(currentStepIndex + 1).sumOf { step -> step.durationSec }
+    }
     val activeStepNumber = when {
         currentStepIndex >= 0 -> (currentStepIndex + 1).coerceAtMost(steps.size)
         else -> 0
@@ -131,6 +145,9 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         else -> null
     }
     val historySummaryLabel = buildHistorySummaryLabel()
+    val stageProgressFraction = current?.let { step ->
+        if (step.durationSec <= 0) 0f else (step.durationSec - remainingSec).toFloat() / step.durationSec.toFloat()
+    } ?: 0f
     val terminalSummary = when (status) {
         SessionStatus.COMPLETED -> "已完成 $completedStepCount / ${steps.size} 步。$historySummaryLabel"
         SessionStatus.ABANDONED -> {
@@ -146,12 +163,19 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         phaseLabel = phaseLabel,
         currentTitle = currentTitle,
         timerText = remainingSec.formatTimer(),
+        totalRemainingText = totalRemainingSec.formatTimer(),
+        stageIconKey = current?.iconKey ?: current?.stageType?.defaultIconKey ?: "timer",
+        stageColorHex = current?.colorHex ?: current?.stageType?.defaultColorHex,
+        stageProgressFraction = stageProgressFraction.coerceIn(0f, 1f),
         progressLabel = progressLabel,
         nextStepLabel = nextStepLabel,
         shortCue = shortCue,
         countdownReminder = countdownReminder,
         heartRate = heartRateState.toHeartRateDisplayUiState(),
-        progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
+        progressFraction = when (status) {
+            SessionStatus.COMPLETED -> 1f
+            else -> (activeElapsedSec.toFloat() / totalPlannedDurationSec.toFloat()).coerceIn(0f, 1f)
+        },
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,
         shouldShowNextStepPanel = !isTerminal,
@@ -162,6 +186,8 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED,
         skippedStepCount = skippedStepHistory.size,
         extendedRestTotalSec = extendedRestSec,
+        pausedTotalSec = pausedElapsedSec,
+        pausedDurationLabel = pausedElapsedSec.formatShortDuration(),
         historySummaryLabel = historySummaryLabel,
         lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
         terminalTitle = terminalTitle,
@@ -184,7 +210,7 @@ private fun TimedWorkoutEngineState.buildHistorySummaryLabel(): String {
     val pauseCount = controlHistory.count { event ->
         event.type == TimedWorkoutControlHistoryType.PAUSE_SESSION
     }
-    return "跳过 ${skippedStepHistory.size} 步，休息延长 ${extendedRestSec} 秒，暂停 $pauseCount 次。"
+    return "跳过 ${skippedStepHistory.size} 步，休息延长 ${extendedRestSec} 秒，暂停 $pauseCount 次，累计 ${pausedElapsedSec.formatShortDuration()}。"
 }
 
 private fun TimedWorkoutControlHistoryEvent.toLabel(): String {
@@ -220,7 +246,7 @@ private fun TimedSessionStep?.toCountdownReminder(
     }
     val message = when (type) {
         TimedWorkoutCountdownReminderType.ACTION_ENDING ->
-            "动作即将结束，还剩 ${remainingSec} 秒。"
+            "阶段即将结束，还剩 ${remainingSec} 秒。"
         TimedWorkoutCountdownReminderType.REST_ENDING -> {
             val nextTitle = next?.displayTitle(exerciseById) ?: "下一步"
             "休息即将结束，准备 ${nextTitle}，还剩 ${remainingSec} 秒。"
@@ -251,7 +277,7 @@ private fun TimedSessionStep.displayTitle(exerciseById: Map<String, Exercise>): 
         return "休息 ${durationSec.formatShortDuration()}"
     }
 
-    return exerciseId
+    return title.takeIf { it.isNotBlank() } ?: exerciseId
         ?.let { id -> exerciseById[id]?.name }
         ?: blockFallbackTitle()
 }

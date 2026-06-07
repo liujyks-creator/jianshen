@@ -155,7 +155,7 @@ private fun WorkoutPlan.toFollowAlongPlanUiState(
 internal fun WorkoutPlan.followAlongActionExerciseIds(): List<String> {
     return blocks
         .filterIsInstance<TimedCircuitBlock>()
-        .flatMap { block -> block.items.map { item -> item.exerciseId } }
+        .flatMap { block -> block.items.mapNotNull { item -> item.exerciseId } }
 }
 
 private fun WorkoutPlan.estimatedTimedDurationSec(): Int {

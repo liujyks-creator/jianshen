@@ -4,10 +4,14 @@ import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.PlanPreferences
+import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.WarmupBlock
+import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -19,6 +23,49 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimedWorkoutEngineTest {
+    @Test
+    fun pureIntervalStagesAdvanceWithoutExerciseLibraryActions() {
+        val plan = plan(
+            blocks = listOf(
+                WarmupBlock(id = "warmup", order = 1, title = "热身", durationSec = 3),
+                circuit(
+                    rounds = 1,
+                    items = listOf(
+                        stage(id = "work", name = "训练", type = TimedStageType.WORK, sec = 4),
+                        stage(id = "rest", name = "休息", type = TimedStageType.REST, sec = 2),
+                        stage(id = "custom", name = "核心保持", type = TimedStageType.CUSTOM, sec = 3)
+                    )
+                ),
+                CooldownBlock(id = "cooldown", order = 3, title = "放松", durationSec = 2)
+            )
+        )
+        var result = TimedWorkoutEngine.dispatch(TimedWorkoutEngine.create(plan), WorkoutCommand.StartSession)
+
+        assertEquals("warmup-work", result.state.currentStep?.id)
+        assertEquals("热身", result.state.currentStep?.title)
+        assertEquals(null, result.state.currentStep?.exerciseId)
+        assertEquals(TimedStageType.WARMUP, result.state.currentStep?.stageType)
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 3)
+        assertEquals("circuit-r1-work-work", result.state.currentStep?.id)
+        assertEquals("训练", result.state.currentStep?.title)
+        assertEquals(null, result.state.currentStep?.exerciseId)
+        assertEquals(TimedStageType.WORK, result.state.currentStep?.stageType)
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 4)
+        assertEquals("circuit-r1-rest-rest", result.state.currentStep?.id)
+        assertEquals(TimedSessionStepKind.REST, result.state.currentStep?.kind)
+        assertEquals("休息", result.state.currentStep?.title)
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 5)
+        assertEquals("cooldown-work", result.state.currentStep?.id)
+        assertEquals(TimedStageType.COOLDOWN, result.state.currentStep?.stageType)
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 2)
+        assertEquals(SessionStatus.COMPLETED, result.state.status)
+        assertEquals(14, result.state.activeElapsedSec)
+    }
+
     @Test
     fun validTimedSnapshotAdvancesThroughActionsRestsRoundsAndCompletes() {
         val snapshot = plan(
@@ -79,6 +126,8 @@ class TimedWorkoutEngineTest {
         result = TimedWorkoutEngine.tick(result.state, seconds = 10)
         assertEquals(SessionStatus.PAUSED, result.state.status)
         assertEquals(3, result.state.remainingSec)
+        assertEquals(2, result.state.activeElapsedSec)
+        assertEquals(10, result.state.pausedElapsedSec)
         assertTrue(result.events.isEmpty())
 
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
@@ -96,6 +145,7 @@ class TimedWorkoutEngineTest {
             result.state.controlHistory.map { event -> event.type }
         )
         assertEquals(5, result.state.stepHistory.single().actualDurationSec)
+        assertEquals(10, result.state.pausedElapsedSec)
         assertEquals(TimedSessionStepHistoryStatus.COMPLETED, result.state.stepHistory.single().status)
     }
 
@@ -339,7 +389,7 @@ class TimedWorkoutEngineTest {
         val pausedState = result.state
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 99)
-        assertEquals(pausedState, result.state)
+        assertEquals(pausedState.copy(pausedElapsedSec = 99), result.state)
         assertTrue(result.events.isEmpty())
 
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ResumeSession)
@@ -449,7 +499,7 @@ class TimedWorkoutEngineTest {
     }
 
     private fun plan(
-        blocks: List<TimedCircuitBlock>,
+        blocks: List<PlanBlock>,
         preferences: PlanPreferences? = null
     ): WorkoutPlan {
         return WorkoutPlan(
@@ -490,6 +540,21 @@ class TimedWorkoutEngineTest {
             workDurationSec = workSec,
             restAfterSec = restSec,
             cueSettings = cueSettings
+        )
+    }
+
+    private fun stage(
+        id: String,
+        name: String,
+        type: TimedStageType,
+        sec: Int
+    ): TimedExerciseItem {
+        return TimedExerciseItem(
+            id = id,
+            exerciseId = null,
+            labelOverride = name,
+            stageType = type,
+            workDurationSec = sec
         )
     }
 

@@ -12,6 +12,7 @@ import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
@@ -75,7 +76,15 @@ object TimedWorkoutEngine {
         state: TimedWorkoutEngineState,
         seconds: Int = 1
     ): TimedWorkoutEngineResult {
-        if (seconds <= 0 || state.status != SessionStatus.ACTIVE || state.currentStep == null) {
+        if (seconds <= 0) {
+            return TimedWorkoutEngineResult(state = state)
+        }
+        if (state.status == SessionStatus.PAUSED) {
+            return TimedWorkoutEngineResult(
+                state = state.copy(pausedElapsedSec = state.pausedElapsedSec + seconds)
+            )
+        }
+        if (state.status != SessionStatus.ACTIVE || state.currentStep == null) {
             return TimedWorkoutEngineResult(state = state)
         }
 
@@ -459,6 +468,7 @@ object TimedWorkoutEngine {
             is WarmupBlock -> timedBlockSteps(
                 blockId = id,
                 blockKind = kind,
+                blockTitle = title,
                 durationSec = durationSec,
                 items = items,
                 globalCues = globalCues
@@ -466,6 +476,7 @@ object TimedWorkoutEngine {
             is StretchBlock -> timedBlockSteps(
                 blockId = id,
                 blockKind = kind,
+                blockTitle = title,
                 durationSec = durationSec,
                 items = items,
                 globalCues = globalCues
@@ -473,6 +484,7 @@ object TimedWorkoutEngine {
             is CooldownBlock -> timedBlockSteps(
                 blockId = id,
                 blockKind = kind,
+                blockTitle = title,
                 durationSec = durationSec,
                 items = items,
                 globalCues = globalCues
@@ -493,6 +505,7 @@ object TimedWorkoutEngine {
     private fun timedBlockSteps(
         blockId: String,
         blockKind: PlanBlockKind,
+        blockTitle: String?,
         durationSec: Int?,
         items: List<TimedExerciseItem>,
         globalCues: CueSettings?
@@ -517,6 +530,7 @@ object TimedWorkoutEngine {
                 blockId = blockId,
                 blockKind = blockKind,
                 item = null,
+                titleOverride = blockTitle,
                 durationSec = duration,
                 round = null,
                 roundCount = null,
@@ -568,6 +582,21 @@ object TimedWorkoutEngine {
         roundCount: Int?,
         globalCues: CueSettings?
     ): List<TimedSessionStep> {
+        if (stageType == TimedStageType.REST) {
+            return listOfNotNull(
+                restStep(
+                    id = "$idPrefix-rest",
+                    blockId = blockId,
+                    itemId = id,
+                    title = labelOverride ?: stageType.displayName,
+                    durationSec = workDurationSec,
+                    round = round,
+                    roundCount = roundCount,
+                    cue = cueSettings?.restEnding ?: globalCues?.restEnding
+                )
+            )
+        }
+
         return listOfNotNull(
             workStep(
                 id = "$idPrefix-work",
@@ -596,6 +625,7 @@ object TimedWorkoutEngine {
         blockId: String,
         blockKind: PlanBlockKind,
         item: TimedExerciseItem?,
+        titleOverride: String? = null,
         durationSec: Int,
         round: Int?,
         roundCount: Int?,
@@ -617,10 +647,17 @@ object TimedWorkoutEngine {
             blockId = blockId,
             itemId = item?.id,
             exerciseId = item?.exerciseId,
-            title = item?.labelOverride ?: item?.exerciseId ?: blockKind.defaultStepTitle(),
+            title = titleOverride
+                ?: item?.labelOverride
+                ?: item?.exerciseId
+                ?: item?.stageType?.displayName
+                ?: blockKind.defaultStepTitle(),
             durationSec = durationSec,
             round = round,
             roundCount = roundCount,
+            stageType = item?.stageType ?: blockKind.defaultStageType(),
+            iconKey = item?.iconKey,
+            colorHex = item?.colorHex,
             endingCue = effectiveCue,
             endingCueThresholdSec = effectiveCue?.thresholdSec
         )
@@ -630,6 +667,7 @@ object TimedWorkoutEngine {
         id: String,
         blockId: String,
         itemId: String? = null,
+        title: String = "Rest",
         durationSec: Int?,
         round: Int? = null,
         roundCount: Int? = null,
@@ -647,10 +685,11 @@ object TimedWorkoutEngine {
             sessionStepKind = SessionStepKind.TIMED_REST,
             blockId = blockId,
             itemId = itemId,
-            title = "Rest",
+            title = title,
             durationSec = duration,
             round = round,
             roundCount = roundCount,
+            stageType = TimedStageType.REST,
             endingCue = effectiveCue,
             endingCueThresholdSec = effectiveCue?.thresholdSec
         )
@@ -671,6 +710,14 @@ object TimedWorkoutEngine {
             else -> "Timed work"
         }
     }
+
+    private fun PlanBlockKind.defaultStageType(): TimedStageType {
+        return when (this) {
+            PlanBlockKind.WARMUP -> TimedStageType.WARMUP
+            PlanBlockKind.STRETCH, PlanBlockKind.COOLDOWN -> TimedStageType.COOLDOWN
+            else -> TimedStageType.WORK
+        }
+    }
 }
 
 data class TimedWorkoutEngineResult(
@@ -689,6 +736,7 @@ data class TimedWorkoutEngineState(
     val skippedStepIds: List<String> = emptyList(),
     val extendedRestSec: Int = 0,
     val activeElapsedSec: Int = 0,
+    val pausedElapsedSec: Int = 0,
     val stepHistory: List<TimedSessionStepHistoryRecord> = emptyList(),
     val controlHistory: List<TimedWorkoutControlHistoryEvent> = emptyList(),
     val restExtensionHistory: List<TimedRestExtensionHistoryRecord> = emptyList(),
@@ -731,6 +779,9 @@ data class TimedSessionStep(
     val durationSec: Int,
     val round: Int? = null,
     val roundCount: Int? = null,
+    val stageType: TimedStageType? = null,
+    val iconKey: String? = null,
+    val colorHex: String? = null,
     val endingCue: CountdownCue? = null,
     val endingCueThresholdSec: Int? = null
 )

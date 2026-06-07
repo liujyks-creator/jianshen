@@ -997,6 +997,8 @@ stepsCompleted:
 
 ### Story E10.2: 计时训练编辑页与执行页重做
 
+**状态:** Implemented in Android timed interval editor, engine, session dial UI, contract docs, and regression tests
+
 作为用户，
 我想把计时训练当作纯间歇计时器编辑和执行，
 以便快速创建热身、工作、休息、放松和自定义阶段。
@@ -1024,6 +1026,17 @@ stepsCompleted:
 - 不实现语音、TTS 或音频资源。
 - 不新增统计图表。
 - 不重写 strength / follow-along engine。
+
+**交付结果:**
+
+- 计时训练编辑页已从动作编排式入口改为纯阶段编辑：阶段包含名称、时间、类型、图标 key 和颜色；支持添加、复制、删除、上移和下移排序。
+- 拖拽排序未在首版实现，已在页面与 E10 文档中记录为后续增强，未展示假拖拽。
+- `TimedExerciseItem.exerciseId` 已改为可选，并新增 `TimedStageType`、`iconKey`、`colorHex` 以复用 `WorkoutPlan` / `TimedCircuitBlock` 表达纯 interval stage；跟练仍可继续用动作库 `exerciseId`。
+- `TimedWorkoutEngine` 已支持纯阶段展开，`stageType=rest` 会生成真实休息步骤；暂停 tick 不推进有效训练时间，并通过 `pausedElapsedSec` 累计暂停时长。
+- 计时训练执行页已改为大圆盘主视觉：顶部显示总剩余时间，中心显示阶段图标 key、阶段名和阶段倒计时，圆环显示整体进度与当前阶段进度，点击圆盘可暂停 / 继续；底部保留跳过、`+15秒` 和结束训练。
+- 最后 N 秒继续复用现有 `WorkoutEvent` / `CountdownCue` / 声音震动动画边界，不新增语音、TTS 或音频资源。
+- 新增 / 更新单元测试覆盖纯阶段计划、阶段增删复制排序、临时空输入、总时长、阶段顺序推进、暂停累计、恢复推进、终态防污染和 UI state 映射。
+- 本阶段仍不实现真实 `WorkoutSession` 持久化、Room repository 闭环、历史真实写入 / 删除、心率设备、Health Connect / Wear OS / BLE、foreground service、exact alarm、notification action、语音、TTS、音频资源、统计图表、跟练 / 力量 UI 重做。
 
 ### Story E10.3: 力量/跟练执行页主操作可达性修复
 
@@ -1222,23 +1235,22 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、心率、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-当前无 P0/P1 blocker；E10.2/E10.3/E11/E12/E13 后续方向已拆分。
+E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现；当前无 P0/P1 blocker，后续方向为 Review Gate、E10.3、E10.4、E11、E12 和 E13。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E10.2: 计时训练编辑页与执行页重做
+Story E10.3: 力量/跟练执行页主操作可达性修复
 ```
 
-E10.2 开始前建议重点确认：
+E10.3 开始前建议重点确认：
 
-1. 现有 Android `WorkoutPlan` / `PlanBlock` 是否先用现有结构映射纯阶段计时器，还是另起契约 story 后再改。
-2. 计时训练编辑页如何从动作列表迁移为阶段列表，并支持添加、复制、删除和拖动排序。
-3. 大圆盘执行页如何符合 `DESIGN.md` 与三套 skin 边界，而不是逐像素照搬外部参考。
-4. 暂停总时长、有效训练时间和本次总耗时先落在 engine state、session summary 还是持久化前置 story。
-5. 最后 N 秒动画/声音提醒与固定阶段词 cue 的预留边界，避免提前实现 E13 音频资源或 TTS。
-6. 不在 E10.2 中实现真实记录持久化、心率设备、语音、统计图表或 Room repository 闭环。
+1. 力量训练的开始本组、完成本组、确认本组、暂停 / 继续和结束训练如何在 720x1280 小屏即时可达。
+2. 跟练训练的暂停 / 继续、跳过 / 下一步和结束训练如何固定可达，同时不完整重做跟练 UI。
+3. 结束训练二次确认如何保持即时可达但避免误触。
+4. 心率、提示、下一步和动作说明如何保持辅助层级。
+5. 不在 E10.3 中重写力量 / 跟练引擎，不改变力量记录确认语义，不新增真实记录持久化、心率设备、语音或统计图表。
 
 ## 8. 暂缓事项
 

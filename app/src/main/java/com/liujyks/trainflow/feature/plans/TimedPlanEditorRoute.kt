@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -20,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -36,10 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
@@ -60,8 +61,6 @@ internal fun TimedPlanEditorRoute(
         uiState = uiState,
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
-        onWarmupDurationChanged = { uiState = uiState.updateWarmupDurationText(it) },
-        onStretchDurationChanged = { uiState = uiState.updateStretchDurationText(it) },
         onRoundsChanged = { uiState = uiState.updateRoundsText(it) },
         onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRoundsText(it) },
         onActionCueThresholdChanged = { uiState = uiState.updateActionCueThresholdText(it) },
@@ -71,14 +70,14 @@ internal fun TimedPlanEditorRoute(
         onSoundEnabledChanged = { uiState = uiState.updateSoundEnabled(it) },
         onVibrationEnabledChanged = { uiState = uiState.updateVibrationEnabled(it) },
         onEmphasisAnimationEnabledChanged = { uiState = uiState.updateEmphasisAnimationEnabled(it) },
-        onItemWorkDurationChanged = { itemId, seconds ->
-            uiState = uiState.updateItemWorkDurationText(itemId, seconds)
-        },
-        onItemRestAfterChanged = { itemId, seconds ->
-            uiState = uiState.updateItemRestAfterText(itemId, seconds)
-        },
-        onAddExercise = { exerciseId -> uiState = uiState.addExercise(exerciseId) },
-        onRemoveItem = { itemId -> uiState = uiState.removeItem(itemId) },
+        onStageNameChanged = { stageId, name -> uiState = uiState.updateStageName(stageId, name) },
+        onStageDurationChanged = { stageId, seconds -> uiState = uiState.updateStageDurationText(stageId, seconds) },
+        onStageTypeChanged = { stageId, type -> uiState = uiState.updateStageType(stageId, type) },
+        onCopyStage = { stageId -> uiState = uiState.copyStage(stageId) },
+        onRemoveStage = { stageId -> uiState = uiState.removeStage(stageId) },
+        onMoveStageUp = { stageId -> uiState = uiState.moveStageUp(stageId) },
+        onMoveStageDown = { stageId -> uiState = uiState.moveStageDown(stageId) },
+        onAddStage = { type -> uiState = uiState.addStage(type) },
         onSaveDraft = { uiState = uiState.saveDraftPlan() },
         onStartTimedPlan = {
             if (uiState.canStartTraining) {
@@ -99,8 +98,6 @@ private fun TimedPlanEditorScreen(
     uiState: TimedPlanEditorScreenState,
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
-    onWarmupDurationChanged: (String) -> Unit,
-    onStretchDurationChanged: (String) -> Unit,
     onRoundsChanged: (String) -> Unit,
     onRestBetweenRoundsChanged: (String) -> Unit,
     onActionCueThresholdChanged: (String) -> Unit,
@@ -110,10 +107,14 @@ private fun TimedPlanEditorScreen(
     onSoundEnabledChanged: (Boolean) -> Unit,
     onVibrationEnabledChanged: (Boolean) -> Unit,
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
-    onItemWorkDurationChanged: (String, String) -> Unit,
-    onItemRestAfterChanged: (String, String) -> Unit,
-    onAddExercise: (String) -> Unit,
-    onRemoveItem: (String) -> Unit,
+    onStageNameChanged: (String, String) -> Unit,
+    onStageDurationChanged: (String, String) -> Unit,
+    onStageTypeChanged: (String, TimedStageType) -> Unit,
+    onCopyStage: (String) -> Unit,
+    onRemoveStage: (String) -> Unit,
+    onMoveStageUp: (String) -> Unit,
+    onMoveStageDown: (String) -> Unit,
+    onAddStage: (TimedStageType) -> Unit,
     onSaveDraft: () -> Unit,
     onStartTimedPlan: () -> Unit,
     modifier: Modifier = Modifier
@@ -136,12 +137,7 @@ private fun TimedPlanEditorScreen(
         }
 
         item {
-            PlanBasicsCard(
-                uiState = uiState,
-                onTitleChanged = onTitleChanged,
-                onWarmupDurationChanged = onWarmupDurationChanged,
-                onStretchDurationChanged = onStretchDurationChanged
-            )
+            PlanBasicsCard(uiState = uiState, onTitleChanged = onTitleChanged)
         }
 
         item {
@@ -153,24 +149,26 @@ private fun TimedPlanEditorScreen(
         }
 
         item {
-            SectionTitle(text = "动作编排")
+            SectionTitle(text = "阶段编排")
         }
 
-        items(uiState.items, key = { it.id }) { item ->
-            TimedExerciseEditorCard(
-                item = item,
-                canRemove = uiState.items.size > 1,
-                onWorkDurationChanged = { seconds -> onItemWorkDurationChanged(item.id, seconds) },
-                onRestAfterChanged = { seconds -> onItemRestAfterChanged(item.id, seconds) },
-                onRemove = { onRemoveItem(item.id) }
+        itemsIndexed(uiState.stages, key = { _, stage -> stage.id }) { index, stage ->
+            TimedStageEditorCard(
+                stage = stage,
+                index = index,
+                totalCount = uiState.stages.size,
+                onNameChanged = { name -> onStageNameChanged(stage.id, name) },
+                onDurationChanged = { seconds -> onStageDurationChanged(stage.id, seconds) },
+                onStageTypeChanged = { type -> onStageTypeChanged(stage.id, type) },
+                onCopy = { onCopyStage(stage.id) },
+                onRemove = { onRemoveStage(stage.id) },
+                onMoveUp = { onMoveStageUp(stage.id) },
+                onMoveDown = { onMoveStageDown(stage.id) }
             )
         }
 
         item {
-            AddTimedExerciseCard(
-                uiState = uiState,
-                onAddExercise = onAddExercise
-            )
+            AddTimedStageCard(onAddStage = onAddStage)
         }
 
         item {
@@ -199,9 +197,9 @@ private fun TimedPlanEditorScreen(
 @Composable
 private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "E2.2 计时计划编辑", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+        StatusPill(text = "E10.2 纯间歇计时", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
         Text(
-            text = "计时计划编辑",
+            text = "计时训练编辑",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -211,7 +209,7 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "可直接开始当前草稿，也可保存后进入计划详情；真实保存和完整记录后续接入。",
+            text = "热身、工作、休息、放松和自定义阶段直接编排；计时训练不再选择动作库动作。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -221,9 +219,7 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
 @Composable
 private fun PlanBasicsCard(
     uiState: TimedPlanEditorScreenState,
-    onTitleChanged: (String) -> Unit,
-    onWarmupDurationChanged: (String) -> Unit,
-    onStretchDurationChanged: (String) -> Unit
+    onTitleChanged: (String) -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "基础信息")
@@ -234,20 +230,11 @@ private fun PlanBasicsCard(
             label = { Text("计划名称") },
             singleLine = true
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            NumberField(
-                label = "热身秒数",
-                value = uiState.warmupDurationText,
-                onValueChanged = onWarmupDurationChanged,
-                modifier = Modifier.weight(1f)
-            )
-            NumberField(
-                label = "拉伸秒数",
-                value = uiState.stretchDurationText,
-                onValueChanged = onStretchDurationChanged,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        Text(
+            text = "主题色 ${uiState.themeColorHex}，阶段颜色可在阶段卡中选择。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
     }
 }
 
@@ -277,12 +264,17 @@ private fun CircuitSettingsCard(
 }
 
 @Composable
-private fun TimedExerciseEditorCard(
-    item: TimedPlanEditorItemUiState,
-    canRemove: Boolean,
-    onWorkDurationChanged: (String) -> Unit,
-    onRestAfterChanged: (String) -> Unit,
-    onRemove: () -> Unit
+private fun TimedStageEditorCard(
+    stage: TimedPlanEditorStageUiState,
+    index: Int,
+    totalCount: Int,
+    onNameChanged: (String) -> Unit,
+    onDurationChanged: (String) -> Unit,
+    onStageTypeChanged: (TimedStageType) -> Unit,
+    onCopy: () -> Unit,
+    onRemove: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
 ) {
     EditorCard {
         Row(
@@ -291,77 +283,99 @@ private fun TimedExerciseEditorCard(
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StageSwatch(stage.colorHex)
+                    Text(
+                        text = "${index + 1}. ${stage.typeLabel}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
                 Text(
-                    text = item.exerciseName,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = item.shortCue,
+                    text = "图标 ${stage.iconKey} · ${stage.durationSec.formatDuration()}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (canRemove) {
-                TextButton(onClick = onRemove) {
-                    Text(text = "移除")
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onMoveUp, enabled = index > 0) { Text("上移") }
+                TextButton(onClick = onMoveDown, enabled = index < totalCount - 1) { Text("下移") }
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            NumberField(
-                label = "动作秒数",
-                value = item.workDurationText,
-                onValueChanged = onWorkDurationChanged,
-                modifier = Modifier.weight(1f)
-            )
-            NumberField(
-                label = "动作后休息秒数",
-                value = item.restAfterText,
-                onValueChanged = onRestAfterChanged,
-                modifier = Modifier.weight(1f)
-            )
+        OutlinedTextField(
+            value = stage.name,
+            onValueChange = onNameChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("阶段名称") },
+            singleLine = true
+        )
+        NumberField(
+            label = "阶段秒数",
+            value = stage.durationText,
+            onValueChanged = onDurationChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TimedStageTypeOptions.forEach { option ->
+                FilterChip(
+                    selected = stage.stageType == option.stageType,
+                    onClick = { onStageTypeChanged(option.stageType) },
+                    label = { Text(option.label) }
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
+                Text("复制")
+            }
+            OutlinedButton(onClick = onRemove, enabled = totalCount > 1, modifier = Modifier.weight(1f)) {
+                Text("删除")
+            }
         }
     }
 }
 
 @Composable
-private fun AddTimedExerciseCard(
-    uiState: TimedPlanEditorScreenState,
-    onAddExercise: (String) -> Unit
-) {
-    val selectedIds = uiState.items.map { it.exerciseId }.toSet()
-    val remainingOptions = uiState.selectableExercises.filterNot { it.exerciseId in selectedIds }
+private fun StageSwatch(colorHex: String) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = colorHex.toComposeColor(),
+        modifier = Modifier.padding(top = 2.dp)
+    ) {
+        Text(
+            text = "  ",
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
+        )
+    }
+}
 
+@Composable
+private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
     EditorCard {
-        SectionTitle(text = "添加动作")
-        if (remainingOptions.isEmpty()) {
-            Text(
-                text = "首批可用于计时训练的动作都已加入。后续动作库扩展会继续复用同一契约。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                remainingOptions.forEach { option ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { onAddExercise(option.exerciseId) },
-                        label = {
-                            Text("${option.exerciseName} · ${option.defaultSummary}")
-                        }
-                    )
-                }
+        SectionTitle(text = "添加阶段")
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TimedStageTypeOptions.forEach { option ->
+                FilterChip(
+                    selected = false,
+                    onClick = { onAddStage(option.stageType) },
+                    label = { Text("+ ${option.label}") }
+                )
             }
         }
+        Text(
+            text = "拖拽排序留作后续增强；当前使用明确的上移 / 下移按钮完成排序。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
     }
 }
 
@@ -379,12 +393,12 @@ private fun CueSettingsCard(
     EditorCard {
         SectionTitle(text = "临近结束提醒")
         ToggleRow(
-            title = "动作临近结束提醒",
+            title = "阶段临近结束提醒",
             checked = uiState.actionCue.enabled,
             onCheckedChange = onActionCueEnabledChanged
         )
         NumberField(
-            label = "动作提醒阈值秒数",
+            label = "阶段提醒阈值秒数",
             value = uiState.actionCue.thresholdText,
             onValueChanged = onActionCueThresholdChanged,
             modifier = Modifier.fillMaxWidth()
@@ -400,23 +414,15 @@ private fun CueSettingsCard(
             onValueChanged = onRestCueThresholdChanged,
             modifier = Modifier.fillMaxWidth()
         )
+        ToggleRow("声音", uiState.actionCue.soundEnabled && uiState.restCue.soundEnabled, onSoundEnabledChanged)
+        ToggleRow("震动", uiState.actionCue.vibrationEnabled && uiState.restCue.vibrationEnabled, onVibrationEnabledChanged)
         ToggleRow(
-            title = "声音",
-            checked = uiState.actionCue.soundEnabled && uiState.restCue.soundEnabled,
-            onCheckedChange = onSoundEnabledChanged
-        )
-        ToggleRow(
-            title = "震动",
-            checked = uiState.actionCue.vibrationEnabled && uiState.restCue.vibrationEnabled,
-            onCheckedChange = onVibrationEnabledChanged
-        )
-        ToggleRow(
-            title = "强化动画",
-            checked = uiState.actionCue.emphasisAnimationEnabled && uiState.restCue.emphasisAnimationEnabled,
-            onCheckedChange = onEmphasisAnimationEnabledChanged
+            "强化动画",
+            uiState.actionCue.emphasisAnimationEnabled && uiState.restCue.emphasisAnimationEnabled,
+            onEmphasisAnimationEnabledChanged
         )
         Text(
-            text = "语音读秒仅保留契约字段，当前不会展示或触发语音能力。",
+            text = "固定阶段词 cue 仅保留边界；当前不实现语音、TTS 或音频资源。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -438,29 +444,21 @@ private fun SaveAndPreviewCard(
             color = MaterialTheme.colorScheme.onSurface
         )
         uiState.statusMessage?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TrainFlowNeutral700
-            )
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = TrainFlowNeutral700)
         }
         uiState.validationMessage?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
-            )
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
 
         uiState.savedPlan?.let { plan ->
-            val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
+            val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().singleOrNull()
             Text(
-                text = "WorkoutPlan: ${plan.mode.contractValue} · ${plan.blocks.size} 个 block · ${circuit.items.size} 个 timed step",
+                text = "WorkoutPlan: ${plan.mode.contractValue} · ${plan.blocks.size} 个 block · ${circuit?.items?.size ?: 0} 个 interval stage",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "动作提醒 ${plan.preferences?.cueSettings?.actionEnding?.thresholdSec} 秒；休息提醒 ${plan.preferences?.cueSettings?.restEnding?.thresholdSec} 秒。",
+                text = "阶段提醒 ${plan.preferences?.cueSettings?.actionEnding?.thresholdSec} 秒；休息提醒 ${plan.preferences?.cueSettings?.restEnding?.thresholdSec} 秒。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -497,9 +495,7 @@ private fun NumberField(
 ) {
     OutlinedTextField(
         value = value,
-        onValueChange = { input ->
-            onValueChanged(input.sanitizeIntegerInput())
-        },
+        onValueChange = { input -> onValueChanged(input.sanitizeIntegerInput()) },
         modifier = modifier,
         label = { Text(label) },
         singleLine = true
@@ -521,10 +517,7 @@ private fun ToggleRow(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -559,10 +552,7 @@ private fun StatusPill(
     color: Color,
     contentColor: Color
 ) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = color
-    ) {
+    Surface(shape = RoundedCornerShape(999.dp), color = color) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -570,6 +560,11 @@ private fun StatusPill(
             color = contentColor
         )
     }
+}
+
+private fun String.toComposeColor(): Color {
+    return runCatching { Color(android.graphics.Color.parseColor(this)) }
+        .getOrElse { TrainFlowAccent }
 }
 
 @Preview(showBackground = true)

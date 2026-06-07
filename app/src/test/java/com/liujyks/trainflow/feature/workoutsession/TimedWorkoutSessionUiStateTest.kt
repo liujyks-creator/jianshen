@@ -28,7 +28,7 @@ class TimedWorkoutSessionUiStateTest {
         val uiState = started.toTimedWorkoutSessionScreenState()
 
         assertEquals(plan.title, uiState.planTitle)
-        assertEquals("动作", uiState.phaseLabel)
+        assertEquals("热身", uiState.phaseLabel)
         assertEquals("03:00", uiState.timerText)
         assertTrue(uiState.currentTitle.isNotBlank())
         assertTrue(uiState.nextStepLabel.startsWith("下一步"))
@@ -357,7 +357,7 @@ class TimedWorkoutSessionUiStateTest {
         assertEquals(1, uiState.skippedStepCount)
         assertEquals(15, uiState.extendedRestTotalSec)
         assertEquals("跳过当前步骤", uiState.lastControlLabel)
-        assertEquals("跳过 1 步，休息延长 15 秒，暂停 0 次。", uiState.historySummaryLabel)
+        assertEquals("跳过 1 步，休息延长 15 秒，暂停 0 次，累计 0秒。", uiState.historySummaryLabel)
     }
 
     @Test
@@ -386,11 +386,11 @@ class TimedWorkoutSessionUiStateTest {
 
         assertEquals(TimedWorkoutCountdownReminderType.ACTION_ENDING, uiState.countdownReminder.type)
         assertEquals(3, uiState.countdownReminder.remainingSec)
-        assertTrue(uiState.countdownReminder.message.contains("动作即将结束"))
+        assertTrue(uiState.countdownReminder.message.contains("阶段即将结束"))
         assertFalse(uiState.countdownReminder.soundEnabled)
         assertTrue(uiState.countdownReminder.vibrationEnabled)
         assertFalse(uiState.countdownReminder.emphasisAnimationEnabled)
-        assertTrue(uiState.shortCue.contains("动作即将结束"))
+        assertTrue(uiState.shortCue.contains("阶段即将结束"))
     }
 
     @Test

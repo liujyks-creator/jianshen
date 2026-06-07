@@ -35,9 +35,9 @@ class MvpAcceptanceChecklistEvidenceTest {
             "src/main/java/com/liujyks/trainflow/feature/plans/StrengthPlanEditorRoute.kt"
         )
 
-        assertTrue(timedRoute.contains("可直接开始当前草稿，也可保存后进入计划详情"))
+        assertTrue(timedRoute.contains("计时训练不再选择动作库动作"))
         assertTrue(strengthRoute.contains("可直接开始当前草稿，也可保存后进入计划详情"))
-        assertTrue(timedRoute.contains("真实保存和完整记录后续接入"))
+        assertTrue(timedRoute.contains("拖拽排序留作后续增强"))
         assertTrue(strengthRoute.contains("真实保存和完整记录后续接入"))
         assertFalse(timedRoute.contains("训练执行引擎、真实保存和记录闭环留给后续 story"))
         assertFalse(strengthRoute.contains("计划详情已可启动力量训练，真实保存和 session records 后续接入"))

@@ -89,14 +89,30 @@ data class TimedCircuitBlock(
 
 data class TimedExerciseItem(
     val id: String,
-    val exerciseId: String,
+    val exerciseId: String? = null,
     val labelOverride: String? = null,
     val side: ExerciseSide? = null,
+    val stageType: TimedStageType = TimedStageType.WORK,
+    val iconKey: String = stageType.defaultIconKey,
+    val colorHex: String = stageType.defaultColorHex,
     val workDurationSec: Int,
     val restAfterSec: Int? = null,
     val cueSettings: CueSettings? = null,
     val autoAdvance: Boolean = false
 )
+
+enum class TimedStageType(
+    val contractValue: String,
+    val displayName: String,
+    val defaultIconKey: String,
+    val defaultColorHex: String
+) {
+    WARMUP("warmup", "热身", "warmup", "#F2B84B"),
+    WORK("work", "工作", "work", "#F26B4F"),
+    REST("rest", "休息", "rest", "#2FBF8F"),
+    COOLDOWN("cooldown", "放松", "cooldown", "#65A9FF"),
+    CUSTOM("custom", "自定义", "custom", "#A8B3BE")
+}
 
 data class CueSettings(
     val actionEnding: CountdownCue? = null,

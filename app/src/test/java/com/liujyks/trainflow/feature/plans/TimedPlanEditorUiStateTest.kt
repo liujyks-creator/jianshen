@@ -1,10 +1,10 @@
 package com.liujyks.trainflow.feature.plans
 
+import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.CountdownCue
-import com.liujyks.trainflow.core.model.ExerciseSide
-import com.liujyks.trainflow.core.model.PlanBlockKind
-import com.liujyks.trainflow.core.model.StretchBlock
+import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
 import org.junit.Assert.assertEquals
@@ -16,25 +16,25 @@ import org.junit.Test
 
 class TimedPlanEditorUiStateTest {
     @Test
-    fun defaultEditorCreatesUsableTimedPlanDraft() {
+    fun defaultEditorCreatesPureIntervalPlanWithoutExerciseLibraryDependency() {
         val state = buildDefaultTimedPlanEditorState()
         val plan = state.toWorkoutPlan()
         val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
 
         assertTrue(state.canSave)
-        assertEquals("全身计时循环", plan.title)
+        assertTrue(state.canStartTraining)
+        assertEquals("纯间歇计时器", plan.title)
         assertEquals(WorkoutMode.TIMED, plan.mode)
-        assertEquals(3, plan.blocks.size)
-        assertTrue(plan.blocks[0] is WarmupBlock)
-        assertEquals(PlanBlockKind.TIMED_CIRCUIT, circuit.kind)
-        assertEquals(2, circuit.rounds)
+        assertTrue(plan.blocks.first() is WarmupBlock)
+        assertTrue(plan.blocks.last() is CooldownBlock)
+        assertEquals(3, circuit.rounds)
         assertEquals(60, circuit.restBetweenRoundsSec)
         assertEquals(3, circuit.items.size)
-        assertEquals("jumping-jacks", circuit.items.first().exerciseId)
-        assertEquals(30, circuit.items.first().workDurationSec)
-        assertEquals(15, circuit.items.first().restAfterSec)
-        assertTrue(circuit.items.all { it.autoAdvance })
-        assertTrue(plan.blocks[2] is StretchBlock)
+        assertTrue(circuit.items.all { item -> item.exerciseId == null })
+        assertEquals(listOf(TimedStageType.WORK, TimedStageType.REST, TimedStageType.CUSTOM), circuit.items.map { it.stageType })
+        assertEquals("训练", circuit.items.first().labelOverride)
+        assertEquals(45, circuit.items.first().workDurationSec)
+        assertEquals(null, circuit.items.first().restAfterSec)
     }
 
     @Test
@@ -71,17 +71,15 @@ class TimedPlanEditorUiStateTest {
             )
         )
         val cues = requireNotNull(state.toWorkoutPlan().preferences?.cueSettings)
-        val actionCue = requireNotNull(cues.actionEnding)
-        val restCue = requireNotNull(cues.restEnding)
 
         assertFalse(state.actionCue.enabled)
         assertTrue(state.restCue.enabled)
-        assertEquals(8, actionCue.thresholdSec)
-        assertEquals(8, restCue.thresholdSec)
-        assertFalse(actionCue.enabled)
-        assertFalse(actionCue.soundEnabled)
-        assertFalse(restCue.vibrationEnabled)
-        assertFalse(restCue.emphasisAnimationEnabled)
+        assertEquals(8, cues.actionEnding?.thresholdSec)
+        assertEquals(8, cues.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(cues.actionEnding).enabled)
+        assertFalse(requireNotNull(cues.actionEnding).soundEnabled)
+        assertFalse(requireNotNull(cues.restEnding).vibrationEnabled)
+        assertFalse(requireNotNull(cues.restEnding).emphasisAnimationEnabled)
     }
 
     @Test
@@ -102,49 +100,32 @@ class TimedPlanEditorUiStateTest {
             defaultCountdownThresholdSec = 12
         )
         val newStateAfterPreferenceChange = buildDefaultTimedPlanEditorState(defaults = changedDefaults)
-        val existingCues = requireNotNull(existingState.toWorkoutPlan().preferences?.cueSettings)
-        val savedCues = requireNotNull(savedBeforePreferenceChange.preferences?.cueSettings)
-        val newCues = requireNotNull(newStateAfterPreferenceChange.toWorkoutPlan().preferences?.cueSettings)
 
-        assertEquals(7, existingCues.actionEnding?.thresholdSec)
-        assertEquals(4, existingCues.restEnding?.thresholdSec)
-        assertFalse(requireNotNull(existingCues.actionEnding).soundEnabled)
-        assertFalse(requireNotNull(existingCues.restEnding).vibrationEnabled)
-        assertFalse(requireNotNull(existingCues.actionEnding).emphasisAnimationEnabled)
-        assertEquals(7, savedCues.actionEnding?.thresholdSec)
-        assertEquals(4, savedCues.restEnding?.thresholdSec)
-        assertFalse(requireNotNull(savedCues.actionEnding).soundEnabled)
-        assertEquals(12, newCues.actionEnding?.thresholdSec)
-        assertEquals(12, newCues.restEnding?.thresholdSec)
-        assertFalse(requireNotNull(newCues.actionEnding).enabled)
-        assertFalse(requireNotNull(newCues.restEnding).enabled)
-        assertTrue(requireNotNull(newCues.actionEnding).soundEnabled)
+        assertEquals(7, existingState.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
+        assertEquals(4, existingState.toWorkoutPlan().preferences?.cueSettings?.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(savedBeforePreferenceChange.preferences?.cueSettings?.actionEnding).soundEnabled)
+        assertEquals(12, newStateAfterPreferenceChange.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
+        assertFalse(requireNotNull(newStateAfterPreferenceChange.toWorkoutPlan().preferences?.cueSettings?.actionEnding).enabled)
     }
 
     @Test
-    fun actionCueThresholdCannotExceedShortestWorkDuration() {
+    fun cueThresholdsClampToShortestStageAndRestDuration() {
         val state = buildDefaultTimedPlanEditorState()
             .updateActionCueThreshold(60)
-
-        assertEquals(30, state.actionCue.thresholdSec)
-        assertEquals(30, state.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
-    }
-
-    @Test
-    fun restCueThresholdCannotExceedShortestPositiveRestDuration() {
-        val state = buildDefaultTimedPlanEditorState()
             .updateRestCueThreshold(60)
 
+        assertEquals(30, state.actionCue.thresholdSec)
         assertEquals(15, state.restCue.thresholdSec)
+        assertEquals(30, state.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
         assertEquals(15, state.toWorkoutPlan().preferences?.cueSettings?.restEnding?.thresholdSec)
     }
 
     @Test
     fun zeroRestStateDisablesRestCueAndOmitsRestEndingCue() {
+        val restId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.REST }.id
         val state = buildDefaultTimedPlanEditorState()
-            .updateRestCueThreshold(5)
             .updateRestBetweenRounds(0)
-            .withoutItemRests()
+            .updateStageType(restId, TimedStageType.WORK)
             .updateRestCueEnabled(true)
 
         assertFalse(state.restCue.enabled)
@@ -152,118 +133,84 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
-    fun updateItemWorkDurationReclampsActionCueThreshold() {
-        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
+    fun stageEditsUpdateContractMapping() {
+        val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
         val state = buildDefaultTimedPlanEditorState()
-            .updateActionCueThreshold(20)
-            .updateItemWorkDuration(firstItemId, 5)
-
-        assertEquals(5, state.actionCue.thresholdSec)
-        assertEquals(5, state.toWorkoutPlan().preferences?.cueSettings?.actionEnding?.thresholdSec)
-    }
-
-    @Test
-    fun updateItemRestAfterAndRoundRestReclampRestCueThreshold() {
-        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
-        val afterItemRestChange = buildDefaultTimedPlanEditorState()
-            .updateRestCueThreshold(20)
-            .updateItemRestAfter(firstItemId, 10)
-        val afterRoundRestChange = afterItemRestChange.updateRestBetweenRounds(8)
-
-        assertEquals(10, afterItemRestChange.restCue.thresholdSec)
-        assertEquals(8, afterRoundRestChange.restCue.thresholdSec)
-        assertEquals(8, afterRoundRestChange.toWorkoutPlan().preferences?.cueSettings?.restEnding?.thresholdSec)
-    }
-
-    @Test
-    fun toWorkoutPlanClampsCueSettingsEvenWhenStateWasBuiltDirectly() {
-        val invalidState = buildDefaultTimedPlanEditorState().copy(
-            restBetweenRoundsSec = 0,
-            actionCue = CountdownCueUiState(thresholdSec = 60),
-            restCue = CountdownCueUiState(enabled = true, thresholdSec = 60),
-            items = buildDefaultTimedPlanEditorState().items.map { item ->
-                item.copy(workDurationSec = 5, restAfterSec = 0)
-            }
-        )
-        val cues = requireNotNull(invalidState.toWorkoutPlan().preferences?.cueSettings)
-
-        assertEquals(5, cues.actionEnding?.thresholdSec)
-        assertNull(cues.restEnding)
-    }
-
-    @Test
-    fun fieldEditsUpdateRoundsRestDurationsAndContractMapping() {
-        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
-        val state = buildDefaultTimedPlanEditorState()
-            .updateTitle("核心燃脂")
-            .updateWarmupDuration(90)
-            .updateStretchDuration(0)
+            .updateTitle("核心间歇")
             .updateRounds(4)
             .updateRestBetweenRounds(45)
-            .updateItemWorkDuration(firstItemId, 50)
-            .updateItemRestAfter(firstItemId, 10)
+            .updateStageName(workId, "冲刺")
+            .updateStageDuration(workId, 50)
+            .updateStageType(workId, TimedStageType.CUSTOM)
         val plan = state.toWorkoutPlan()
         val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
 
-        assertEquals("核心燃脂", plan.title)
-        assertEquals(2, plan.blocks.size)
-        assertEquals(90, (plan.blocks.first() as WarmupBlock).durationSec)
+        assertEquals("核心间歇", plan.title)
         assertEquals(4, circuit.rounds)
         assertEquals(45, circuit.restBetweenRoundsSec)
+        assertEquals("冲刺", circuit.items.first().labelOverride)
+        assertEquals(TimedStageType.CUSTOM, circuit.items.first().stageType)
         assertEquals(50, circuit.items.first().workDurationSec)
-        assertEquals(10, circuit.items.first().restAfterSec)
-        assertEquals(CountdownCue.DEFAULT_THRESHOLD_SEC, plan.preferences?.cueSettings?.actionEnding?.thresholdSec)
     }
 
     @Test
-    fun integerDurationFieldsCanBeTemporarilyBlankAndThenReentered() {
-        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
-        val blankWarmup = buildDefaultTimedPlanEditorState().updateWarmupDurationText("")
-        val blankWork = buildDefaultTimedPlanEditorState().updateItemWorkDurationText(firstItemId, "")
-        val blankRest = buildDefaultTimedPlanEditorState().updateItemRestAfterText(firstItemId, "")
+    fun stageAddCopyDeleteAndSortWorkWithoutFakeDrag() {
+        val initial = buildDefaultTimedPlanEditorState()
+        val added = initial.addStage(TimedStageType.REST)
+        val copied = added.copyStage(added.stages.first().id)
+        val copiedId = copied.stages[1].id
+        val movedDown = copied.moveStageDown(copiedId)
+        val movedUp = movedDown.moveStageUp(copiedId)
+        val removed = movedUp.removeStage(copiedId)
+
+        assertEquals(initial.stages.size + 1, added.stages.size)
+        assertEquals(added.stages.size + 1, copied.stages.size)
+        assertTrue(copied.stages[1].name.contains("副本"))
+        assertEquals(copiedId, movedDown.stages[2].id)
+        assertEquals(copiedId, movedUp.stages[1].id)
+        assertEquals(movedUp.stages.size - 1, removed.stages.size)
+    }
+
+    @Test
+    fun integerFieldsCanBeTemporarilyBlankAndThenReentered() {
+        val firstStageId = buildDefaultTimedPlanEditorState().stages.first().id
+        val blankStage = buildDefaultTimedPlanEditorState().updateStageDurationText(firstStageId, "")
         val blankRounds = buildDefaultTimedPlanEditorState().updateRoundsText("")
         val blankRoundRest = buildDefaultTimedPlanEditorState().updateRestBetweenRoundsText("")
-        val blankStretch = buildDefaultTimedPlanEditorState().updateStretchDurationText("")
 
-        assertEquals("", blankWarmup.warmupDurationText)
-        assertFalse(blankWarmup.canSave)
-        assertTrue(requireNotNull(blankWarmup.validationMessage).contains("热身秒数"))
-        assertFalse(blankWork.canStartTraining)
-        assertTrue(requireNotNull(blankWork.validationMessage).contains("动作秒数"))
-        assertFalse(blankRest.canStartTraining)
-        assertTrue(requireNotNull(blankRest.validationMessage).contains("动作后休息秒数"))
+        assertEquals("", blankStage.stages.first().durationText)
+        assertFalse(blankStage.canStartTraining)
+        assertTrue(requireNotNull(blankStage.validationMessage).contains("阶段秒数"))
         assertFalse(blankRounds.canSave)
         assertTrue(requireNotNull(blankRounds.validationMessage).contains("轮数"))
         assertFalse(blankRoundRest.canSave)
         assertTrue(requireNotNull(blankRoundRest.validationMessage).contains("轮间休息秒数"))
-        assertFalse(blankStretch.canSave)
-        assertTrue(requireNotNull(blankStretch.validationMessage).contains("拉伸秒数"))
 
-        val reentered = blankWarmup
-            .updateWarmupDurationText("95")
-            .updateItemWorkDurationText(firstItemId, "35")
-            .updateItemRestAfterText(firstItemId, "20")
+        val reentered = blankStage
+            .updateStageDurationText(firstStageId, "95")
             .updateRoundsText("3")
             .updateRestBetweenRoundsText("45")
-            .updateStretchDurationText("60")
 
         assertTrue(reentered.canSave)
         assertTrue(reentered.canStartTraining)
-        assertEquals(95, reentered.warmupDurationSec)
-        assertEquals(35, reentered.items.first().workDurationSec)
-        assertEquals(20, reentered.items.first().restAfterSec)
+        assertEquals(95, reentered.stages.first().durationSec)
         assertEquals(3, reentered.rounds)
         assertEquals(45, reentered.restBetweenRoundsSec)
-        assertEquals(60, reentered.stretchDurationSec)
     }
 
     @Test
-    fun timedEditorStartUsesCurrentValidDraftPlan() {
-        val firstItemId = buildDefaultTimedPlanEditorState().items.first().id
+    fun estimatedDurationIncludesWarmupStagesRoundsRoundRestAndCooldown() {
+        val state = buildDefaultTimedPlanEditorState()
+
+        assertEquals(180 + (45 + 15 + 30) * 3 + 60 * 2 + 120, state.estimatedDurationSec)
+    }
+
+    @Test
+    fun timedEditorStartUsesCurrentValidPureIntervalDraftPlan() {
+        val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
         val state = buildDefaultTimedPlanEditorState()
             .updateTitle("立即开始计时")
-            .updateWarmupDurationText("30")
-            .updateItemWorkDurationText(firstItemId, "40")
+            .updateStageDurationText(workId, "40")
 
         val plan = state.toWorkoutPlan(planId = "plan-timed-editor-start")
         val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
@@ -272,35 +219,7 @@ class TimedPlanEditorUiStateTest {
         assertEquals("plan-timed-editor-start", plan.id)
         assertEquals("立即开始计时", plan.title)
         assertEquals(40, circuit.items.first().workDurationSec)
-    }
-
-    @Test
-    fun addAndRemoveTimedExercisesStayWithinFixtureCapabilities() {
-        val initial = buildDefaultTimedPlanEditorState()
-        val added = initial.addExercise("standing-quad-stretch")
-        val addedAgain = added.addExercise("standing-quad-stretch")
-        val removed = added.removeItem(added.items.first().id)
-        val ignoredStrengthOnly = removed.addExercise("barbell-bench-press")
-
-        assertEquals(initial.items.size + 1, added.items.size)
-        assertEquals(added.items.size, addedAgain.items.size)
-        assertTrue(added.items.any { it.exerciseId == "standing-quad-stretch" })
-        assertEquals(added.items.size - 1, removed.items.size)
-        assertEquals(removed.items.size, ignoredStrengthOnly.items.size)
-        assertFalse(ignoredStrengthOnly.items.any { it.exerciseId == "barbell-bench-press" })
-    }
-
-    @Test
-    fun addingStandingQuadStretchMapsTimedDefaultToAlternatingSide() {
-        val state = buildDefaultTimedPlanEditorState()
-            .addExercise("standing-quad-stretch")
-        val plan = state.toWorkoutPlan()
-        val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().single()
-        val quadStretch = circuit.items.single { it.exerciseId == "standing-quad-stretch" }
-
-        assertEquals(ExerciseSide.ALTERNATING, quadStretch.side)
-        assertEquals(30, quadStretch.workDurationSec)
-        assertEquals(5, quadStretch.restAfterSec)
+        assertTrue(circuit.items.all { it.exerciseId == null })
     }
 
     @Test
@@ -316,9 +235,18 @@ class TimedPlanEditorUiStateTest {
         assertNull(editedAfterSave.statusMessage)
     }
 
-    private fun TimedPlanEditorScreenState.withoutItemRests(): TimedPlanEditorScreenState {
-        return items.fold(this) { state, item ->
-            state.updateItemRestAfter(item.id, 0)
-        }
+    @Test
+    fun toWorkoutPlanClampsCueSettingsEvenWhenStateWasBuiltDirectly() {
+        val invalidState = buildDefaultTimedPlanEditorState().copy(
+            actionCue = CountdownCueUiState(thresholdSec = 60),
+            restCue = CountdownCueUiState(enabled = true, thresholdSec = 60),
+            stages = buildDefaultTimedPlanEditorState().stages.map { stage ->
+                stage.copy(durationSec = 5)
+            }
+        )
+        val cues = requireNotNull(invalidState.toWorkoutPlan().preferences?.cueSettings)
+
+        assertEquals(5, cues.actionEnding?.thresholdSec)
+        assertEquals(5, cues.restEnding?.thresholdSec)
     }
 }

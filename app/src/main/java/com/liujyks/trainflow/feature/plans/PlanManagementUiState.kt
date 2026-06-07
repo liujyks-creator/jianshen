@@ -294,7 +294,7 @@ private fun WorkoutPlan.planMetrics(): List<PlanMetricUiState> {
                 block.items.mapNotNull { it.restAfterSec } + listOfNotNull(block.restBetweenRoundsSec)
             } + blocks.filterIsInstance<RestBlock>().map { it.durationSec }
             listOf(
-                PlanMetricUiState("动作", "${circuits.sumOf { it.items.size }} 个"),
+                PlanMetricUiState("阶段", "${circuits.sumOf { it.items.size }} 个"),
                 PlanMetricUiState("轮次", "${circuits.sumOf { it.rounds }} 轮"),
                 PlanMetricUiState("时长", estimatedTimedDurationSec().formatDuration()),
                 PlanMetricUiState("休息", restValues.distinct().toMetricDuration()),
@@ -351,7 +351,7 @@ private fun WorkoutPlan.planSummary(): String {
         WorkoutMode.TIMED -> {
             val circuitCount = blocks.filterIsInstance<TimedCircuitBlock>().sumOf { it.items.size }
             val rounds = blocks.filterIsInstance<TimedCircuitBlock>().sumOf { it.rounds }
-            "$circuitCount 个动作 · $rounds 轮 · 预计 ${estimatedTimedDurationSec().formatDuration()}"
+            "$circuitCount 个阶段 · $rounds 轮 · 预计 ${estimatedTimedDurationSec().formatDuration()}"
         }
 
         WorkoutMode.STRENGTH -> {
@@ -367,7 +367,7 @@ private fun WorkoutPlan.planDetailSummary(): String {
     return when (mode) {
         WorkoutMode.TIMED -> {
             val cue = preferences?.cueSettings
-            val actionCue = cue?.actionEnding?.thresholdSec?.let { "动作提醒 ${it}秒" } ?: "动作提醒未设"
+            val actionCue = cue?.actionEnding?.thresholdSec?.let { "阶段提醒 ${it}秒" } ?: "阶段提醒未设"
             val restCue = cue?.restEnding?.thresholdSec?.let { "休息提醒 ${it}秒" } ?: "休息提醒关闭"
             "$actionCue · $restCue"
         }
@@ -425,8 +425,8 @@ private fun WorkoutPlan.timedDetailSections(): List<PlanDetailSectionUiState> {
         when (block) {
             is WarmupBlock -> "热身 · ${block.durationSec?.formatDuration() ?: "按动作"}"
             is TimedCircuitBlock -> {
-                val exerciseNames = block.items.joinToString("、") { item -> item.exerciseLabel() }
-                "正式训练 · ${block.rounds} 轮 · $exerciseNames"
+                val stageNames = block.items.joinToString("、") { item -> item.exerciseLabel() }
+                "间歇阶段 · ${block.rounds} 轮 · $stageNames"
             }
 
             is StretchBlock -> "拉伸 · ${block.durationSec?.formatDuration() ?: "按动作"}"
@@ -492,7 +492,7 @@ private fun List<TimedExerciseItem>.sumTimedItemsOnce(): Int {
 }
 
 private fun TimedExerciseItem.exerciseLabel(): String {
-    return exerciseName(exerciseId)
+    return labelOverride ?: exerciseId?.let(::exerciseName) ?: stageType.displayName
 }
 
 private fun StrengthExerciseBlock.exerciseLabel(): String {

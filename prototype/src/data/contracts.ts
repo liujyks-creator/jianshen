@@ -6,6 +6,8 @@ export type ExerciseRole = 'warmup' | 'main' | 'stretch' | 'recovery'
 
 export type ExerciseSide = 'both' | 'left' | 'right' | 'alternating'
 
+export type TimedStageType = 'warmup' | 'work' | 'rest' | 'cooldown' | 'custom'
+
 export type EquipmentKind =
   | 'bodyweight'
   | 'dumbbell'
@@ -155,9 +157,12 @@ export interface TimedCircuitBlock extends PlanBlockBase {
 
 export interface TimedExerciseItem {
   id: string
-  exerciseId: string
+  exerciseId?: string
   labelOverride?: string
   side?: ExerciseSide
+  stageType?: TimedStageType
+  iconKey?: string
+  colorHex?: string
   workDurationSec: number
   restAfterSec?: number
   cueSettings?: CueSettings
@@ -306,6 +311,7 @@ export interface WorkoutSession {
   status: SessionStatus
   startedAt?: string
   endedAt?: string
+  pausedDurationSec?: number
   currentStep?: SessionStep
   stepHistory: SessionStepRecord[]
   strengthSetRecords?: StrengthSetRecord[]

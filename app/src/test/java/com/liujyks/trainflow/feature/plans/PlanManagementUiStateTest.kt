@@ -27,7 +27,7 @@ class PlanManagementUiStateTest {
         assertEquals("计时训练", items[0].modeLabel)
         assertEquals("计时", items[0].modeBadge)
         assertTrue(items[0].summary.contains("预计"))
-        assertTrue(items[0].detailSummary.contains("动作提醒"))
+        assertTrue(items[0].detailSummary.contains("阶段提醒"))
         assertTrue(items[0].reminderSummary.contains("训练提醒未设置"))
         assertTrue(items[0].metrics.any { it.label == "时长" })
         assertTrue(items[0].metrics.any { it.label == "轮次" })
@@ -95,7 +95,7 @@ class PlanManagementUiStateTest {
 
         assertEquals(3, copiedState.plans.size)
         assertNotEquals(original.id, copied.id)
-        assertEquals("全身计时循环 副本", copied.title)
+        assertEquals("纯间歇计时器 副本", copied.title)
         assertEquals(original.mode, copied.mode)
         assertEquals(originalCircuit.items.size, copiedCircuit.items.size)
         assertNotEquals(originalCircuit.id, copiedCircuit.id)

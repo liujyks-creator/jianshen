@@ -2,8 +2,10 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,12 +18,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -37,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -176,7 +180,10 @@ private fun TimedWorkoutSessionScreen(
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
         ) {
             SessionHeader(uiState)
-            MainCountdownPanel(uiState)
+            MainCountdownPanel(
+                uiState = uiState,
+                onPrimaryToggle = if (uiState.canResume) onResume else onPause
+            )
             if (uiState.shouldShowNextStepPanel) {
                 NextStepPanel(uiState)
             }
@@ -238,7 +245,10 @@ private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
 }
 
 @Composable
-private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
+private fun MainCountdownPanel(
+    uiState: TimedWorkoutSessionScreenState,
+    onPrimaryToggle: () -> Unit
+) {
     val skin = LocalTrainFlowSkin.current
     val reminder = uiState.countdownReminder
     val reminderActive = reminder.isActive && reminder.emphasisAnimationEnabled
@@ -253,7 +263,7 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
         Color.White.copy(alpha = 0.08f)
     }
     val timerColor = if (reminderActive) skin.tokens.action else skin.tokens.neutral50
-    val progressColor = if (reminderActive) skin.tokens.action else skin.tokens.accent
+    val progressColor = if (reminderActive) skin.tokens.action else uiState.stageColorHex.toDialColor(skin.tokens.accent)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -265,15 +275,97 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
             modifier = Modifier.padding(skin.tokens.executionPanelPaddingDp.dp),
             verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 12.dp else 16.dp)
         ) {
-            SessionPill(
-                text = if (reminder.isActive) reminder.type.label else uiState.phaseLabel,
-                containerColor = when {
-                    reminder.isActive && reminder.type == TimedWorkoutCountdownReminderType.ACTION_ENDING -> skin.tokens.action
-                    reminder.isActive -> skin.tokens.accent
-                    uiState.phaseLabel == "休息" -> skin.tokens.accent
-                    else -> skin.tokens.action
-                },
-                contentColor = skin.tokens.primary
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                SessionPill(
+                    text = if (reminder.isActive) reminder.type.label else uiState.phaseLabel,
+                    containerColor = progressColor,
+                    contentColor = skin.tokens.primary
+                )
+                Text(
+                    text = "总剩余 ${uiState.totalRemainingText}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TrainFlowNeutral200
+                )
+            }
+            StageDial(
+                uiState = uiState,
+                progressColor = progressColor,
+                timerColor = timerColor,
+                onPrimaryToggle = onPrimaryToggle
+            )
+            if (reminder.isActive) {
+                ReminderStatusPanel(reminder)
+            }
+            if (!skin.isBigType) {
+                Text(
+                    text = uiState.shortCue,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TrainFlowNeutral100
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StageDial(
+    uiState: TimedWorkoutSessionScreenState,
+    progressColor: Color,
+    timerColor: Color,
+    onPrimaryToggle: () -> Unit
+) {
+    val skin = LocalTrainFlowSkin.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (skin.isBigType) 360.dp else 320.dp)
+            .clickable(enabled = uiState.canPause || uiState.canResume) {
+                onPrimaryToggle()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier
+                .size(if (skin.isBigType) 330.dp else 292.dp)
+        ) {
+            val stroke = if (skin.isBigType) 24.dp.toPx() else 20.dp.toPx()
+            val inset = stroke / 2f
+            val arcSize = size.copy(width = size.width - stroke, height = size.height - stroke)
+            drawCircle(
+                color = Color.White.copy(alpha = 0.08f),
+                radius = size.minDimension / 2f - inset,
+                style = Stroke(width = stroke)
+            )
+            drawArc(
+                color = progressColor.copy(alpha = 0.38f),
+                startAngle = -90f,
+                sweepAngle = 360f * uiState.progressFraction.coerceIn(0f, 1f),
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = progressColor,
+                startAngle = -90f,
+                sweepAngle = 360f * uiState.stageProgressFraction.coerceIn(0f, 1f),
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(inset + stroke, inset + stroke),
+                size = arcSize.copy(width = arcSize.width - stroke * 2f, height = arcSize.height - stroke * 2f),
+                style = Stroke(width = stroke * 0.72f, cap = StrokeCap.Round)
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = uiState.stageIconKey,
+                style = MaterialTheme.typography.labelLarge,
+                color = TrainFlowNeutral200
             )
             Text(
                 text = uiState.currentTitle,
@@ -295,22 +387,11 @@ private fun MainCountdownPanel(uiState: TimedWorkoutSessionScreenState) {
                 fontWeight = FontWeight.ExtraBold,
                 color = timerColor
             )
-            LinearProgressIndicator(
-                progress = { uiState.progressFraction.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth(),
-                color = progressColor,
-                trackColor = Color.White.copy(alpha = 0.12f)
+            Text(
+                text = if (uiState.canResume) "点击圆盘继续" else "点击圆盘暂停",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral200
             )
-            if (reminder.isActive) {
-                ReminderStatusPanel(reminder)
-            }
-            if (!skin.isBigType) {
-                Text(
-                    text = uiState.shortCue,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TrainFlowNeutral100
-                )
-            }
         }
     }
 }
@@ -450,7 +531,7 @@ private fun TimedSessionControls(
                 colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
                 Text(
-                    text = if (uiState.canResume) "继续训练" else "暂停",
+                    text = if (uiState.canResume) "继续训练" else "暂停训练",
                     fontSize = if (skin.isBigType) 20.sp else 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = TrainFlowNeutral50
@@ -808,7 +889,7 @@ private fun TimedWorkoutEngineState.endingCueFor(event: WorkoutEvent) = when (ev
 
 private val TimedWorkoutCountdownReminderType.label: String
     get() = when (this) {
-        TimedWorkoutCountdownReminderType.ACTION_ENDING -> "动作提醒"
+        TimedWorkoutCountdownReminderType.ACTION_ENDING -> "阶段提醒"
         TimedWorkoutCountdownReminderType.REST_ENDING -> "休息提醒"
         TimedWorkoutCountdownReminderType.NONE -> ""
     }
@@ -826,6 +907,12 @@ private val TimedWorkoutCountdownReminderUiState.feedbackLabel: String
             "已启用：${enabled.joinToString("、")}"
         }
     }
+
+private fun String?.toDialColor(fallback: Color): Color {
+    val value = this ?: return fallback
+    return runCatching { Color(android.graphics.Color.parseColor(value)) }
+        .getOrElse { fallback }
+}
 
 @Preview(showBackground = true)
 @Composable

@@ -91,6 +91,8 @@ type ExerciseRole = "warmup" | "main" | "stretch" | "recovery";
 
 type ExerciseSide = "both" | "left" | "right" | "alternating";
 
+type TimedStageType = "warmup" | "work" | "rest" | "cooldown" | "custom";
+
 type EquipmentKind =
   | "bodyweight"
   | "dumbbell"
@@ -302,7 +304,7 @@ interface RestBlock extends PlanBlockBase {
 
 ## 6. 计时训练计划
 
-> E10.1 迁移备注：用户测试后已接受“计时训练回归纯间歇计时器”的产品方向，计时训练后续不再绑定动作库，也不再通过动作选择、动作详情或动作推荐构成计划。当前本节仍记录 E0-E9 已实现基线中的 `TimedCircuitBlock` / `TimedExerciseItem` 语义；E10.2 若修改生产模型或原型 contract，应另起契约/实现 story，显式更新 `WorkoutPlan` / `PlanBlock` 映射和迁移策略，不在 E10.1 中静默改变模型语义。
+> E10.2 迁移备注：Android 生产实现已把计时训练改为纯间歇计时器体验。`TimedCircuitBlock` 继续作为最小兼容容器表达轮数、轮间休息和阶段序列；`TimedExerciseItem` 现在可以表示纯阶段，`exerciseId` 变为可选。计时训练不再要求动作库动作，也不进入动作选择、动作详情或动作推荐。跟练雏形仍可继续用 `exerciseId` 引用动作库动作，力量训练不受影响。
 
 ### 6.1 计时训练结构
 
@@ -318,15 +320,26 @@ interface TimedCircuitBlock extends PlanBlockBase {
 
 interface TimedExerciseItem {
   id: string;
-  exerciseId: string;
+  exerciseId?: string;
   labelOverride?: string;
   side?: ExerciseSide;
+  stageType?: TimedStageType;
+  iconKey?: string;
+  colorHex?: string;
   workDurationSec: number;
   restAfterSec?: number;
   cueSettings?: CueSettings;
   autoAdvance?: boolean;
 }
 ```
+
+E10.2 约定：
+
+- 纯计时阶段使用 `labelOverride` 作为阶段名称。
+- `stageType` 表达热身、工作、休息、放松或自定义；阶段图标和颜色只表达阶段状态，不表达动作教学。
+- `stageType: "rest"` 的 item 在执行引擎中展开为休息步骤，而不是动作库动作。
+- 热身和放松可以继续用 `WarmupBlock` / `CooldownBlock` 表达不参与循环的阶段；工作、休息和自定义阶段放入 `TimedCircuitBlock.items` 后按 `rounds` 重复。
+- 拖拽排序是后续增强；E10.2 首版使用明确的上移 / 下移排序按钮。
 
 ### 6.2 计时提醒设置
 
@@ -515,6 +528,7 @@ interface WorkoutSession {
   status: SessionStatus;
   startedAt?: string;
   endedAt?: string;
+  pausedDurationSec?: number;
   currentStep?: SessionStep;
   stepHistory: SessionStepRecord[];
   strengthSetRecords?: StrengthSetRecord[];
