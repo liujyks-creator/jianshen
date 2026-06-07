@@ -296,6 +296,7 @@ export interface SessionFeedback {
 }
 
 export interface WorkoutPlanSnapshot {
+  planId?: string
   title: string
   mode: WorkoutMode
   blocks: PlanBlock[]

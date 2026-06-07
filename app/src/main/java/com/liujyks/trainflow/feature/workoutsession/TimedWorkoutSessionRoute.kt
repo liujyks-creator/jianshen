@@ -92,7 +92,7 @@ internal fun TimedWorkoutSessionRoute(
 ) {
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
     val sessionStartedAt = remember(sessionId) { Instant.now() }
-    var recordedSessionId by remember(sessionId) { mutableStateOf<String?>(null) }
+    var recordWriteState by remember(sessionId) { mutableStateOf(TerminalWorkoutSessionRecordWriteState()) }
     var engineState by remember(plan.id, sessionId) {
         mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
     }
@@ -134,15 +134,15 @@ internal fun TimedWorkoutSessionRoute(
         activeWorkoutNotifications.update(notificationState)
     }
     LaunchedEffect(engineState.status, engineState.sessionId) {
-        if (engineState.isTerminal && recordedSessionId != engineState.sessionId) {
-            onRecordWorkoutSession(
-                engineState.toWorkoutSessionRecord(
+        if (engineState.isTerminal) {
+            recordWriteState = recordWriteState.recordTerminalSessionOnce(
+                session = engineState.toWorkoutSessionRecord(
                     plan = plan,
                     startedAt = sessionStartedAt,
                     endedAt = Instant.now()
-                )
+                ),
+                onRecordWorkoutSession = onRecordWorkoutSession
             )
-            recordedSessionId = engineState.sessionId
         }
     }
     DisposableEffect(activeWorkoutNotifications, plan.id) {

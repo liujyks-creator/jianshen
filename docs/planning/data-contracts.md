@@ -548,6 +548,7 @@ type SessionStatus =
   | "abandoned";
 
 interface WorkoutPlanSnapshot {
+  planId?: string;
   title: string;
   mode: WorkoutMode;
   blocks: PlanBlock[];
@@ -566,10 +567,13 @@ interface SessionFeedback {
 
 E10.4 约定：
 
-- `totalElapsedSec` 表示本次训练从开始到结束的总耗时口径，包含暂停。
-- `effectiveElapsedSec` 表示训练执行有效推进时间，不包含暂停。
+- `WorkoutSession.planId` 继续作为查询字段保存计划 ID；`WorkoutPlanSnapshot.planId` 也可保存同一计划 ID，方便历史记录只看快照时仍能识别来源。
+- 本地 Room 的 `plan_snapshot_json` 必须保存 MVP 所需的完整计划快照，而不是只保存标题和模式。至少保留 title、mode、blocks、计时阶段/轮次/休息结构、力量动作/计划组/目标/休息结构、preferences/cueSettings、heartRateDisplay 和 followAlong 元数据；读回后 `planSnapshot.blocks` 不应为空，除非原计划本来为空。
+- `totalElapsedSec` 表示本次训练从 `startedAt` 到 `endedAt` 的 wall-clock 总耗时，包含准备、确认、休息、正式组和暂停。
+- `effectiveElapsedSec` 表示训练执行的有效推进时间，不包含暂停。计时训练使用引擎 active elapsed；力量训练当前使用引擎 `sessionElapsedSec`，包含正式组与休息推进，不把 prepare / confirm 停留时间计入 effective。
 - `pausedElapsedSec` 单独保存暂停累计时间；计时训练来自 `TimedWorkoutEngineState.pausedElapsedSec`，力量训练暂停时不推进组耗时或休息倒计时。
-- 计时、力量和基础跟练在 completed / abandoned 终态都可以写入本地真实 `WorkoutSession`；统计图表、趋势分析、删除清理和心率数据仍留给后续 story。
+- 计时、力量和基础跟练在 completed / abandoned 终态都可以写入本地真实 `WorkoutSession`；终态写入使用一次性 guard 和异常吞并边界，避免重组重复插入或 Room 异常直接 crash UI。
+- E10.4 仍只是本地 Room MVP 记录闭环；统计图表、趋势分析、删除清理、心率数据、云同步、账号体系和后台可靠计时仍留给后续 story。
 
 ### 9.2 执行步骤
 

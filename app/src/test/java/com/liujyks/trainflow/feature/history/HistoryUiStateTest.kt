@@ -1,8 +1,12 @@
 package com.liujyks.trainflow.feature.history
 
 import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthExerciseTarget
 import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -73,6 +77,25 @@ class HistoryUiStateTest {
         assertEquals(listOf("real-strength-2026-06-07"), state.dateGroups.single().items.map { item -> item.id })
         assertFalse(state.dateGroups.single().items.any { item -> item.id.startsWith("history-") })
         assertTrue(requireNotNull(state.selectedDetail).sourceNote.contains("本地 session record"))
+    }
+
+    @Test
+    fun strengthDetailUsesRestoredPlanSnapshotForPlannedSetCount() {
+        val session = strengthSession(
+            id = "real-strength-restored-snapshot",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-07T10:00:00Z",
+            records = listOf(
+                strengthSetRecord("confirmed", actualWeight = WeightValue(50.0, WeightUnit.KG), actualReps = 8)
+            ),
+            plannedSetCount = 2
+        )
+
+        val detail = HistoryScreenState(sessions = listOf(session)).selectedDetail.let(::requireNotNull)
+        val plannedCountRow = detail.rows.single { row -> row.label == "确认组数" }
+
+        assertEquals("1 / 2", plannedCountRow.value)
+        assertFalse(plannedCountRow.value.endsWith("/ 0"))
     }
 
     @Test
@@ -192,7 +215,8 @@ class HistoryUiStateTest {
         id: String,
         status: SessionStatus,
         startedAt: String,
-        records: List<StrengthSetRecord>
+        records: List<StrengthSetRecord>,
+        plannedSetCount: Int = 0
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
@@ -200,7 +224,28 @@ class HistoryUiStateTest {
             planSnapshot = WorkoutPlanSnapshot(
                 title = "测试力量记录",
                 mode = WorkoutMode.STRENGTH,
-                blocks = emptyList()
+                blocks = if (plannedSetCount == 0) {
+                    emptyList()
+                } else {
+                    listOf(
+                        StrengthExerciseBlock(
+                            id = "bench",
+                            order = 1,
+                            exerciseId = "barbell-bench-press",
+                            target = StrengthExerciseTarget(
+                                weight = WeightValue(50.0, WeightUnit.KG),
+                                repTarget = RepTarget.Range(8, 12)
+                            ),
+                            sets = (1..plannedSetCount).map { index ->
+                                StrengthSetPlan(
+                                    id = "bench-working-$index",
+                                    order = index,
+                                    kind = StrengthSetKind.WORKING
+                                )
+                            }
+                        )
+                    )
+                }
             ),
             status = status,
             startedAt = startedAt,

@@ -17,7 +17,6 @@ import com.liujyks.trainflow.core.model.StrengthSetRecord
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
-import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.core.model.WorkoutSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -143,25 +142,6 @@ private fun StrengthSetRecordEntity.toDomain(): StrengthSetRecord {
     )
 }
 
-private fun WorkoutPlanSnapshot.toStorageJson(): String {
-    return """{"title":"${title.escapeJson()}","mode":"${mode.contractValue.escapeJson()}"}"""
-}
-
-private fun String.toPlanSnapshot(fallbackMode: WorkoutMode): WorkoutPlanSnapshot {
-    val title = jsonValue("title")?.unescapeJson()?.ifBlank { null } ?: "未命名训练"
-    val mode = jsonValue("mode")?.let(::workoutModeFrom) ?: fallbackMode
-    return WorkoutPlanSnapshot(
-        title = title,
-        mode = mode,
-        blocks = emptyList()
-    )
-}
-
-private fun String.jsonValue(name: String): String? {
-    val pattern = Regex(""""${Regex.escape(name)}"\s*:\s*"((?:\\.|[^"])*)"""")
-    return pattern.find(this)?.groupValues?.getOrNull(1)
-}
-
 private data class PlannedSetStorage(
     val weight: WeightValue?,
     val repTarget: RepTarget?
@@ -272,27 +252,4 @@ private fun setEffortFrom(value: String): SetEffort {
 
 private fun weightUnitFrom(value: String): WeightUnit? {
     return WeightUnit.entries.firstOrNull { unit -> unit.contractValue == value }
-}
-
-private fun String.escapeJson(): String {
-    return buildString {
-        this@escapeJson.forEach { char ->
-            when (char) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(char)
-            }
-        }
-    }
-}
-
-private fun String.unescapeJson(): String {
-    return replace("\\\"", "\"")
-        .replace("\\\\", "\\")
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
 }

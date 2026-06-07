@@ -28,6 +28,7 @@ object StrengthWorkoutEngine {
     ): StrengthWorkoutEngineState {
         return create(
             planSnapshot = WorkoutPlanSnapshot(
+                planId = plan.id,
                 title = plan.title,
                 mode = plan.mode,
                 blocks = plan.blocks,

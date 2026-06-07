@@ -8,6 +8,7 @@ import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.core.model.WorkoutSession
+import java.time.Duration
 import java.time.Instant
 
 internal fun TimedWorkoutEngineState.toWorkoutSessionRecord(
@@ -23,7 +24,12 @@ internal fun TimedWorkoutEngineState.toWorkoutSessionRecord(
         status = status,
         startedAt = startedAt.toString(),
         endedAt = endedAt.toString(),
-        totalElapsedSec = activeElapsedSec + pausedElapsedSec,
+        totalElapsedSec = totalElapsedSec(
+            startedAt = startedAt,
+            endedAt = endedAt,
+            effectiveElapsedSec = activeElapsedSec,
+            pausedElapsedSec = pausedElapsedSec
+        ),
         effectiveElapsedSec = activeElapsedSec,
         pausedElapsedSec = pausedElapsedSec,
         currentStep = currentSessionStep,
@@ -56,7 +62,12 @@ internal fun StrengthWorkoutEngineState.toWorkoutSessionRecord(
         status = status,
         startedAt = startedAt.toString(),
         endedAt = endedAt.toString(),
-        totalElapsedSec = sessionElapsedSec + pausedElapsedSec,
+        totalElapsedSec = totalElapsedSec(
+            startedAt = startedAt,
+            endedAt = endedAt,
+            effectiveElapsedSec = sessionElapsedSec,
+            pausedElapsedSec = pausedElapsedSec
+        ),
         effectiveElapsedSec = sessionElapsedSec,
         pausedElapsedSec = pausedElapsedSec,
         currentStep = currentSessionStep,
@@ -79,10 +90,25 @@ internal fun StrengthWorkoutEngineState.toWorkoutSessionRecord(
 
 private fun WorkoutPlan.toSnapshot(): WorkoutPlanSnapshot {
     return WorkoutPlanSnapshot(
+        planId = id,
         title = title,
         mode = mode,
         blocks = blocks,
         preferences = preferences,
         followAlong = followAlong
     )
+}
+
+private fun totalElapsedSec(
+    startedAt: Instant,
+    endedAt: Instant,
+    effectiveElapsedSec: Int,
+    pausedElapsedSec: Int
+): Int {
+    val wallClockSec = Duration.between(startedAt, endedAt)
+        .seconds
+        .coerceAtLeast(0)
+        .coerceAtMost(Int.MAX_VALUE.toLong())
+        .toInt()
+    return wallClockSec.coerceAtLeast(effectiveElapsedSec + pausedElapsedSec)
 }

@@ -210,13 +210,16 @@ E10.2 已确认未实现：
 范围：
 
 - 完成训练后生成真实 `WorkoutSession` 记录。
-- 区分计划快照、实际执行、暂停时长、有效训练时间和总耗时。
+- 保存完整 MVP 计划快照 blocks，至少覆盖计时阶段/轮次/休息结构、力量动作/计划组/目标/休息结构、preferences/cueSettings 和 followAlong 元数据；历史详情用恢复后的 snapshot 计算计划步骤/组数。
+- 区分计划快照、实际执行、暂停时长、有效训练时间和总耗时。`totalElapsedSec` 使用 startedAt 到 endedAt 的 wall-clock 总耗时，力量 prepare / confirm 停留只进入 total；`effectiveElapsedSec` 不包含暂停，力量当前只包含正式组与休息推进；`pausedElapsedSec` 单独记录暂停累计。
 - 让记录页显示本次完成的真实训练。
+- completed / abandoned 终态写库使用一次性 guard 和异常吞并边界，避免 route 重组重复插入或 Room 异常直接打断 UI。
 
 边界：
 
 - 可与 E12 真实统计前置项协调。
 - 在真实持久化前不做假删除或假长期趋势。
+- 当前仍是本地 Room MVP，不承诺云同步、统计图表、历史清理或后台可靠计时。
 
 ### E11 手动心率输入与设备接口保留
 

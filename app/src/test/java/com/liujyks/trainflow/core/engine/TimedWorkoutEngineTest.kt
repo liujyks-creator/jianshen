@@ -560,6 +560,7 @@ class TimedWorkoutEngineTest {
 
     private fun WorkoutPlan.toSnapshot(): WorkoutPlanSnapshot {
         return WorkoutPlanSnapshot(
+            planId = id,
             title = title,
             mode = mode,
             blocks = blocks,

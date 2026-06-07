@@ -1090,7 +1090,10 @@ stepsCompleted:
 **边界:**
 
 - 可与 E12 真实统计前置项协调。
-- 本阶段已接入最小 Room repository / DAO / mapper，保存 completed 与 abandoned session、计时步骤摘要、力量已确认组记录，以及 total / effective / paused 秒数。
+- 本阶段已接入最小 Room repository / DAO / mapper，保存 completed 与 abandoned session、完整 MVP 计划快照 blocks、计时步骤摘要、力量已确认组记录，以及 total / effective / paused 秒数。
+- 计划快照写库必须保留计时阶段/轮次/休息结构、力量动作/计划组/目标/休息结构、preferences/cueSettings 和 followAlong 元数据；历史详情的计划步骤/组数从恢复后的 snapshot 计算，不再依赖空 blocks。
+- `totalElapsedSec` 使用 startedAt 到 endedAt 的 wall-clock 总耗时，包含准备、确认、休息、正式组和暂停；`effectiveElapsedSec` 不包含暂停，力量训练当前不把 prepare / confirm 停留时间计入 effective；`pausedElapsedSec` 单独记录暂停累计。
+- completed / abandoned 终态写库仍是本地 Room MVP，使用一次性 guard 和异常吞并边界避免重复插入或 Room 异常打断 UI；这不是云同步、统计图表、历史清理或后台可靠计时承诺。
 - 不在 E10.4 中实现完整图表、趋势分析、历史记录清理、心率设备、Health Connect / Wear OS / BLE、语音、foreground service、exact alarm 或 notification action。
 
 ### Story E10.x: 后续力量训练新版 UI 设计

@@ -26,6 +26,7 @@ enum class SessionStatus(val contractValue: String) {
 }
 
 data class WorkoutPlanSnapshot(
+    val planId: String? = null,
     val title: String,
     val mode: WorkoutMode,
     val blocks: List<PlanBlock>,

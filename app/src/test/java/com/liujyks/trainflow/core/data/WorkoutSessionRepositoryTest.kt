@@ -4,12 +4,21 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.model.CountdownCue
+import com.liujyks.trainflow.core.model.CueSettings
+import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SessionStepRecord
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthExerciseTarget
 import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -72,6 +81,36 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun timedPlanSnapshotBlocksRoundTripThroughRoomJson() = runBlocking {
+        repository.upsertSession(
+            timedSession(
+                id = "timed-snapshot",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 75,
+                effectiveElapsedSec = 60,
+                pausedElapsedSec = 15
+            )
+        )
+
+        val snapshot = repository.getSessions().single().planSnapshot
+        val block = snapshot.blocks.single() as TimedCircuitBlock
+        val item = block.items.single()
+
+        assertEquals("plan-timed", snapshot.planId)
+        assertEquals(WorkoutMode.TIMED, snapshot.mode)
+        assertEquals("interval-main", block.id)
+        assertEquals(2, block.rounds)
+        assertEquals(30, block.restBetweenRoundsSec)
+        assertEquals("work-stage", item.id)
+        assertEquals(TimedStageType.WORK, item.stageType)
+        assertEquals("work", item.iconKey)
+        assertEquals("#F26B4F", item.colorHex)
+        assertEquals(30, item.workDurationSec)
+        assertEquals(10, item.restAfterSec)
+        assertEquals(4, snapshot.preferences?.cueSettings?.actionEnding?.thresholdSec)
+    }
+
+    @Test
     fun strengthSessionPersistsOnlyConfirmedActualRecords() = runBlocking {
         repository.upsertSession(
             strengthSession(
@@ -108,6 +147,41 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun strengthPlanSnapshotBlocksRoundTripThroughRoomJson() = runBlocking {
+        repository.upsertSession(
+            strengthSession(
+                id = "strength-snapshot",
+                status = SessionStatus.COMPLETED,
+                records = listOf(
+                    StrengthSetRecord(
+                        id = "confirmed-set",
+                        exerciseId = "barbell-bench-press",
+                        sourceSetPlanId = "bench-working-1",
+                        setOrder = 1,
+                        setKind = StrengthSetKind.WORKING,
+                        actualWeight = WeightValue(60.0, WeightUnit.KG),
+                        actualReps = 8
+                    )
+                )
+            )
+        )
+
+        val snapshot = repository.getSessions().single().planSnapshot
+        val block = snapshot.blocks.single() as StrengthExerciseBlock
+        val firstSet = block.sets.first()
+
+        assertEquals("plan-strength", snapshot.planId)
+        assertEquals("barbell-bench-press", block.exerciseId)
+        assertEquals(WeightValue(60.0, WeightUnit.KG), block.target?.weight)
+        assertEquals(RepTarget.Range(8, 12), block.target?.repTarget)
+        assertEquals(2, block.sets.size)
+        assertEquals("bench-working-1", firstSet.id)
+        assertEquals(StrengthSetKind.WORKING, firstSet.kind)
+        assertEquals(90, firstSet.restAfterSec)
+        assertEquals(listOf("incline-push-up"), block.substitutions)
+    }
+
+    @Test
     fun abandonedSessionStatusRoundTripsWithoutBeingPromotedToCompleted() = runBlocking {
         repository.upsertSession(
             timedSession(
@@ -137,9 +211,34 @@ class WorkoutSessionRepositoryTest {
             planId = "plan-timed",
             mode = WorkoutMode.TIMED,
             planSnapshot = WorkoutPlanSnapshot(
+                planId = "plan-timed",
                 title = "测试计时",
                 mode = WorkoutMode.TIMED,
-                blocks = emptyList()
+                blocks = listOf(
+                    TimedCircuitBlock(
+                        id = "interval-main",
+                        order = 1,
+                        rounds = 2,
+                        restBetweenRoundsSec = 30,
+                        items = listOf(
+                            TimedExerciseItem(
+                                id = "work-stage",
+                                stageType = TimedStageType.WORK,
+                                iconKey = "work",
+                                colorHex = "#F26B4F",
+                                workDurationSec = 30,
+                                restAfterSec = 10,
+                                autoAdvance = true
+                            )
+                        )
+                    )
+                ),
+                preferences = PlanPreferences(
+                    cueSettings = CueSettings(
+                        actionEnding = CountdownCue(thresholdSec = 4),
+                        restEnding = CountdownCue(thresholdSec = 3)
+                    )
+                )
             ),
             status = status,
             startedAt = "2026-06-07T10:00:00Z",
@@ -176,9 +275,36 @@ class WorkoutSessionRepositoryTest {
             planId = "plan-strength",
             mode = WorkoutMode.STRENGTH,
             planSnapshot = WorkoutPlanSnapshot(
+                planId = "plan-strength",
                 title = "测试力量",
                 mode = WorkoutMode.STRENGTH,
-                blocks = emptyList()
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "bench",
+                        order = 1,
+                        exerciseId = "barbell-bench-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(60.0, WeightUnit.KG),
+                            repTarget = RepTarget.Range(8, 12),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = "bench-working-1",
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                restAfterSec = 90
+                            ),
+                            StrengthSetPlan(
+                                id = "bench-working-2",
+                                order = 2,
+                                kind = StrengthSetKind.WORKING,
+                                restAfterSec = 0
+                            )
+                        ),
+                        substitutions = listOf("incline-push-up")
+                    )
+                )
             ),
             status = status,
             startedAt = "2026-06-07T11:00:00Z",
