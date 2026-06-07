@@ -45,6 +45,10 @@
 | D-026 | Accepted | E1.2 以 `docs/planning/data-contracts.md` 为准补齐 prototype `Exercise` 的 `sourceMeta`/`extensions` 字段，并在 Android fixture 中写入 `sourceMeta`。 | `extensions` 在首批 fixture 中保持为空；训练类型支持、计时默认建议、力量默认建议和审核备注保留在 fixture-only 元数据中，不静默扩展核心 `Exercise` 契约。 |
 | D-027 | Accepted | E7.2 首版不启用 foreground service，只提供普通 ongoing active workout notification 边界。 | Android 14+ foreground service 需要匹配类型和权限；当前训练状态摘要不适合冒用 data sync / media 类型，health 类型会牵出健康、传感器或活动识别权限，超出 MVP 禁区。活跃训练通知只展示 UI/engine state 摘要，completed / abandoned / route disposed 后清理，不承诺后台精确计时。 |
 | D-028 | Accepted | MVP 阶段支持三套内置 UI 皮肤注册与本地切换，但不做运行时插件市场、远程下载或第三方皮肤安装。 | E8.1 只建立 Official Flow、Tile Flow、Big Type 的 skin contract、registry、DataStore preference、设置入口和 theme token 映射。皮肤只能改变 UI 表现、布局倾向和 token，不能改变训练计划、训练记录、`WorkoutCommand`、`WorkoutEvent`、训练执行引擎或权限/健康边界。 |
+| D-029 | Accepted | 计时训练回归纯间歇计时器，不再绑定动作库。 | 计时训练由热身、工作、休息、放松和自定义阶段组成；阶段支持名称、时间、图标和颜色。阶段图标表达阶段类型或状态，不提供动作内容指导。计时训练不进入动作选择页，不做动作选择、动作详情或动作推荐。 |
+| D-030 | Accepted | 计时训练执行页以后以大圆盘作为核心视觉和主控制区。 | 顶部可显示总剩余时间但不抢主层级；中心显示当前阶段图标、阶段名称或编号和当前阶段倒计时；圆环表达整体进度、当前阶段进度和轮次/阶段位置；点击中心圆盘暂停/继续，并记录暂停时长。 |
+| D-031 | Accepted | 三类训练执行页都必须遵守主操作即时可达原则。 | 看到时间或动画的位置，就是可以控制训练节奏的位置。暂停/继续、结束、跳过/下一步、开始本组、确认本组不能藏到滚动后；结束训练可即时可达但必须二次确认；心率、说明、提示和下一步信息保持辅助层级。 |
+| D-032 | Accepted | 跟练和力量训练后续使用统一动作选择页，计时训练不使用。 | 统一动作选择页承担搜索、分类、推荐、动作详情预览、多选和已选顺序管理。跟练用它选择动作并形成热身、动作、休息、轮次、放松结构；力量用它选择动作后回到力量编辑页设置重量、次数、组数和休息。 |
 
 ## 预留能力
 
@@ -57,17 +61,18 @@
 | R-005 | Reserved | AI 实时动作纠错 | 仅保留后续分析扩展点。 |
 | R-006 | Reserved | 完整音乐节拍编排 | 仅保留计时与跟练扩展点。 |
 | R-007 | Reserved | 基于实时心率的告警和热量修正 | 保留抽象状态和平台边界，不让设备接入阻塞训练闭环。 |
+| R-008 | Reserved | 固定阶段语音 cue | 后续可为计时阶段开始预留 `warm up`、`work`、`rest`、`cool down` 等固定词。第一版不做用户任意文本 TTS 或自动语音教练。 |
 
 ## 待决策项
 
 | ID | 状态 | 问题 | 影响 |
 |---|---|---|---|
 | O-001 | Accepted | 首批导入哪些动作，内容深度到哪里？ | 已按 D-025 收敛为 11 个动作与内容审核标准；E1.2 基于 `docs/planning/action-content-slice.md` 导入 fixture。 |
-| O-002 | Open | 跟练首版只支持预置流程，还是允许兼容的计时计划切换为跟练视图？ | 影响计划元数据、导航和编辑规则。 |
-| O-003 | Open | 首版是否播放语音读秒，还是只保留语音接口？ | 影响音频素材、设置和测试。 |
+| O-002 | Accepted | 跟练首版只支持预置流程，还是允许兼容的计时计划切换为跟练视图？ | E10.1 后计时训练回归纯间歇计时器；跟练后续不再依赖“计时计划切换为跟练视图”，而是通过统一动作选择页选择动作，再形成热身、动作、休息、轮次、放松结构。 |
+| O-003 | Accepted | 首版是否播放语音读秒，还是只保留语音接口？ | E10.1 收敛为后续只预留固定阶段词 cue；第一版不做用户任意文本 TTS、自动语音教练或语音读秒大范围能力。 |
 | O-004 | Accepted | 训练日程提醒是否要强于普通通知？ | 已按 D-019 收敛为普通通知基线；强提醒暂不进入 MVP。 |
 | O-005 | Accepted | Android 具体架构和模块拆分是什么？ | 已按 D-016、D-017、D-018 和 `docs/architecture.md` 收敛。 |
-| O-006 | Open | 后续健康数据与可穿戴设备的接入策略是什么？ | 影响权限、适配层、可靠性承诺和支持设备范围。 |
+| O-006 | Open | 后续健康数据与可穿戴设备的接入策略是什么？ | E10.1 将手动心率输入归入 E11，并保留真实设备接口；Health Connect、Wear OS、BLE 或厂商 SDK 仍需在 E11 或独立设备阶段继续决策。 |
 | O-007 | Accepted | E1.2 如何处理 `sourceMeta`/`extensions` 与 prototype contract 的差异？ | 已按 D-026 收敛：prototype contract 补齐字段，fixture 写入来源信息，扩展与默认建议不进入核心动作模型。 |
 
 ## 来源文档
@@ -84,5 +89,6 @@
 8. `DESIGN.md`
 9. `docs/ui-extension-guide.md`
 10. `docs/planning/action-content-slice.md`
+11. `docs/planning/e10-training-mode-interaction-plan.md`
 
 当来源文档改变了已接受的产品或架构方向时，同步更新本决策日志。

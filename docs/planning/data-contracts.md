@@ -302,6 +302,8 @@ interface RestBlock extends PlanBlockBase {
 
 ## 6. 计时训练计划
 
+> E10.1 迁移备注：用户测试后已接受“计时训练回归纯间歇计时器”的产品方向，计时训练后续不再绑定动作库，也不再通过动作选择、动作详情或动作推荐构成计划。当前本节仍记录 E0-E9 已实现基线中的 `TimedCircuitBlock` / `TimedExerciseItem` 语义；E10.2 若修改生产模型或原型 contract，应另起契约/实现 story，显式更新 `WorkoutPlan` / `PlanBlock` 映射和迁移策略，不在 E10.1 中静默改变模型语义。
+
 ### 6.1 计时训练结构
 
 计时训练主结构建议使用 `TimedCircuitBlock`：
