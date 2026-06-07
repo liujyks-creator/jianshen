@@ -2,14 +2,17 @@ package com.liujyks.trainflow.feature.plans
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -31,11 +34,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutPlan
@@ -45,6 +55,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import kotlin.math.roundToInt
 
 @Composable
 internal fun TimedPlanEditorRoute(
@@ -77,6 +88,7 @@ internal fun TimedPlanEditorRoute(
         onRemoveStage = { stageId -> uiState = uiState.removeStage(stageId) },
         onMoveStageUp = { stageId -> uiState = uiState.moveStageUp(stageId) },
         onMoveStageDown = { stageId -> uiState = uiState.moveStageDown(stageId) },
+        onMoveStage = { fromIndex, toIndex -> uiState = uiState.moveStage(fromIndex, toIndex) },
         onAddStage = { type -> uiState = uiState.addStage(type) },
         onSaveDraft = { uiState = uiState.saveDraftPlan() },
         onStartTimedPlan = {
@@ -114,11 +126,35 @@ private fun TimedPlanEditorScreen(
     onRemoveStage: (String) -> Unit,
     onMoveStageUp: (String) -> Unit,
     onMoveStageDown: (String) -> Unit,
+    onMoveStage: (Int, Int) -> Unit,
     onAddStage: (TimedStageType) -> Unit,
     onSaveDraft: () -> Unit,
     onStartTimedPlan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var draggedStageId by remember { mutableStateOf<String?>(null) }
+    var draggedStageStartIndex by remember { mutableStateOf<Int?>(null) }
+    var draggedStageOffsetY by remember { mutableStateOf(0f) }
+    var draggedStageHeightPx by remember { mutableStateOf(1) }
+
+    fun resetStageDrag() {
+        draggedStageId = null
+        draggedStageStartIndex = null
+        draggedStageOffsetY = 0f
+        draggedStageHeightPx = 1
+    }
+
+    fun finishStageDrag() {
+        val fromIndex = draggedStageStartIndex
+        val stageId = draggedStageId
+        if (fromIndex != null && stageId != null && uiState.stages.getOrNull(fromIndex)?.id == stageId) {
+            val offsetRows = (draggedStageOffsetY / draggedStageHeightPx.coerceAtLeast(1)).roundToInt()
+            val toIndex = (fromIndex + offsetRows).coerceIn(uiState.stages.indices)
+            onMoveStage(fromIndex, toIndex)
+        }
+        resetStageDrag()
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -163,7 +199,20 @@ private fun TimedPlanEditorScreen(
                 onCopy = { onCopyStage(stage.id) },
                 onRemove = { onRemoveStage(stage.id) },
                 onMoveUp = { onMoveStageUp(stage.id) },
-                onMoveDown = { onMoveStageDown(stage.id) }
+                onMoveDown = { onMoveStageDown(stage.id) },
+                isDragging = draggedStageId == stage.id,
+                dragOffsetY = if (draggedStageId == stage.id) draggedStageOffsetY else 0f,
+                onDragStarted = { cardHeightPx ->
+                    draggedStageId = stage.id
+                    draggedStageStartIndex = uiState.stages.indexOfFirst { currentStage ->
+                        currentStage.id == stage.id
+                    }
+                    draggedStageOffsetY = 0f
+                    draggedStageHeightPx = cardHeightPx.coerceAtLeast(1)
+                },
+                onDragChanged = { draggedStageOffsetY += it },
+                onDragStopped = ::finishStageDrag,
+                onDragCanceled = ::resetStageDrag
             )
         }
 
@@ -274,9 +323,32 @@ private fun TimedStageEditorCard(
     onCopy: () -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveDown: () -> Unit,
+    isDragging: Boolean,
+    dragOffsetY: Float,
+    onDragStarted: (Int) -> Unit,
+    onDragChanged: (Float) -> Unit,
+    onDragStopped: () -> Unit,
+    onDragCanceled: () -> Unit
 ) {
-    EditorCard {
+    var cardHeightPx by remember(stage.id) { mutableStateOf(1) }
+    val dragModifier = if (isDragging) {
+        Modifier
+            .zIndex(1f)
+            .graphicsLayer {
+                translationY = dragOffsetY
+                alpha = 0.92f
+                shadowElevation = 14f
+            }
+    } else {
+        Modifier
+    }
+
+    EditorCard(
+        modifier = Modifier
+            .onSizeChanged { size -> cardHeightPx = size.height }
+            .then(dragModifier)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -299,10 +371,19 @@ private fun TimedStageEditorCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onMoveUp, enabled = index > 0) { Text("上移") }
-                TextButton(onClick = onMoveDown, enabled = index < totalCount - 1) { Text("下移") }
-            }
+            StageDragHandle(
+                enabled = totalCount > 1,
+                isDragging = isDragging,
+                onDragStarted = { onDragStarted(cardHeightPx) },
+                onDragChanged = onDragChanged,
+                onDragStopped = onDragStopped,
+                onDragCanceled = onDragCanceled
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = onMoveUp, enabled = index > 0) { Text("上移") }
+            TextButton(onClick = onMoveDown, enabled = index < totalCount - 1) { Text("下移") }
         }
 
         OutlinedTextField(
@@ -372,7 +453,7 @@ private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
             }
         }
         Text(
-            text = "拖拽排序留作后续增强；当前使用明确的上移 / 下移按钮完成排序。",
+            text = "长按阶段卡右侧“拖动”手柄可拖拽排序；上移 / 下移保留为备用排序路径。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -522,9 +603,75 @@ private fun ToggleRow(
 }
 
 @Composable
-private fun EditorCard(content: @Composable ColumnScope.() -> Unit) {
+private fun StageDragHandle(
+    enabled: Boolean,
+    isDragging: Boolean,
+    onDragStarted: () -> Unit,
+    onDragChanged: (Float) -> Unit,
+    onDragStopped: () -> Unit,
+    onDragCanceled: () -> Unit
+) {
+    val containerColor = if (isDragging) {
+        TrainFlowNeutral100
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    Surface(
+        modifier = Modifier
+            .sizeIn(minWidth = 56.dp, minHeight = 48.dp)
+            .semantics { contentDescription = "阶段拖拽排序手柄" }
+            .stageDragHandleGestures(
+                enabled = enabled,
+                onDragStarted = onDragStarted,
+                onDragChanged = onDragChanged,
+                onDragStopped = onDragStopped,
+                onDragCanceled = onDragCanceled
+            ),
+        shape = RoundedCornerShape(8.dp),
+        color = containerColor,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 11.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "拖动",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (enabled) TrainFlowNeutral700 else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun Modifier.stageDragHandleGestures(
+    enabled: Boolean,
+    onDragStarted: () -> Unit,
+    onDragChanged: (Float) -> Unit,
+    onDragStopped: () -> Unit,
+    onDragCanceled: () -> Unit
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(Unit) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { onDragStarted() },
+            onDragEnd = onDragStopped,
+            onDragCancel = onDragCanceled,
+            onDrag = { change, dragAmount ->
+                change.consume()
+                onDragChanged(dragAmount.y)
+            }
+        )
+    }
+}
+
+@Composable
+private fun EditorCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, TrainFlowNeutral100)

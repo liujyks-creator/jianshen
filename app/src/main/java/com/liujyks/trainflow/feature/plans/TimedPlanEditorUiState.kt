@@ -133,9 +133,9 @@ internal data class TimedPlanEditorStageUiState(
     val typeLabel: String
         get() = stageType.displayName
 
-    fun toTimedExerciseItem(order: Int): TimedExerciseItem {
+    fun toTimedExerciseItem(): TimedExerciseItem {
         return TimedExerciseItem(
-            id = "timed-stage-$order",
+            id = id,
             exerciseId = null,
             labelOverride = name.trim().ifBlank { stageType.displayName },
             stageType = stageType,
@@ -484,24 +484,23 @@ internal fun TimedPlanEditorScreenState.removeStage(stageId: String): TimedPlanE
 
 internal fun TimedPlanEditorScreenState.moveStageUp(stageId: String): TimedPlanEditorScreenState {
     val index = stages.indexOfFirst { stage -> stage.id == stageId }
-    if (index <= 0) return this
-    return copy(
-        stages = stages.toMutableList().also { list ->
-            val stage = list.removeAt(index)
-            list.add(index - 1, stage)
-        },
-        savedPlan = null,
-        statusMessage = null
-    )
+    return moveStage(fromIndex = index, toIndex = index - 1)
 }
 
 internal fun TimedPlanEditorScreenState.moveStageDown(stageId: String): TimedPlanEditorScreenState {
     val index = stages.indexOfFirst { stage -> stage.id == stageId }
-    if (index < 0 || index >= stages.lastIndex) return this
+    return moveStage(fromIndex = index, toIndex = index + 1)
+}
+
+internal fun TimedPlanEditorScreenState.moveStage(
+    fromIndex: Int,
+    toIndex: Int
+): TimedPlanEditorScreenState {
+    if (fromIndex !in stages.indices || toIndex !in stages.indices || fromIndex == toIndex) return this
     return copy(
         stages = stages.toMutableList().also { list ->
-            val stage = list.removeAt(index)
-            list.add(index + 1, stage)
+            val stage = list.removeAt(fromIndex)
+            list.add(toIndex, stage)
         },
         savedPlan = null,
         statusMessage = null
@@ -556,8 +555,8 @@ private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
             title = "间歇阶段",
             rounds = rounds,
             restBetweenRoundsSec = restBetweenRoundsSec.takeIf { it > 0 },
-            items = repeatedStages.mapIndexed { index, stage ->
-                stage.toTimedExerciseItem(order = index + 1)
+            items = repeatedStages.map { stage ->
+                stage.toTimedExerciseItem()
             }
         )
     }

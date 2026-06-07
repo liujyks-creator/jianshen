@@ -154,7 +154,7 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
-    fun stageAddCopyDeleteAndSortWorkWithoutFakeDrag() {
+    fun stageAddCopyDeleteAndFallbackSortWork() {
         val initial = buildDefaultTimedPlanEditorState()
         val added = initial.addStage(TimedStageType.REST)
         val copied = added.copyStage(added.stages.first().id)
@@ -169,6 +169,62 @@ class TimedPlanEditorUiStateTest {
         assertEquals(copiedId, movedDown.stages[2].id)
         assertEquals(copiedId, movedUp.stages[1].id)
         assertEquals(movedUp.stages.size - 1, removed.stages.size)
+    }
+
+    @Test
+    fun moveStageMovesFromTopToLowerIndex() {
+        val state = buildDefaultTimedPlanEditorState()
+        val moved = state.moveStage(fromIndex = 1, toIndex = 3)
+
+        assertEquals(
+            listOf("stage-warmup", "stage-rest", "stage-custom", "stage-work", "stage-cooldown"),
+            moved.stages.map { it.id }
+        )
+    }
+
+    @Test
+    fun moveStageMovesFromBottomToUpperIndex() {
+        val state = buildDefaultTimedPlanEditorState()
+        val moved = state.moveStage(fromIndex = 3, toIndex = 1)
+
+        assertEquals(
+            listOf("stage-warmup", "stage-custom", "stage-work", "stage-rest", "stage-cooldown"),
+            moved.stages.map { it.id }
+        )
+    }
+
+    @Test
+    fun moveStageIgnoresOutOfRangeIndexesWithoutChangingList() {
+        val state = buildDefaultTimedPlanEditorState()
+        val initialStageIds = state.stages.map { it.id }
+
+        assertEquals(initialStageIds, state.moveStage(fromIndex = -1, toIndex = 2).stages.map { it.id })
+        assertEquals(initialStageIds, state.moveStage(fromIndex = 2, toIndex = -1).stages.map { it.id })
+        assertEquals(initialStageIds, state.moveStage(fromIndex = 0, toIndex = state.stages.size).stages.map { it.id })
+    }
+
+    @Test
+    fun moveStageKeepsStageFieldsAssociatedAfterReorder() {
+        val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
+        val state = buildDefaultTimedPlanEditorState()
+            .updateStageName(workId, "冲刺")
+            .updateStageDuration(workId, 55)
+            .updateStageType(workId, TimedStageType.CUSTOM)
+            .updateStageColor(workId, "#123456")
+        val moved = state.moveStage(fromIndex = 1, toIndex = 4)
+        val movedStage = moved.stages[4]
+        val circuit = moved.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single()
+
+        assertEquals(workId, movedStage.id)
+        assertEquals("冲刺", movedStage.name)
+        assertEquals(55, movedStage.durationSec)
+        assertEquals("#123456", movedStage.colorHex)
+        assertEquals(TimedStageType.CUSTOM.defaultIconKey, movedStage.iconKey)
+        assertEquals(workId, circuit.items.last().id)
+        assertEquals("冲刺", circuit.items.last().labelOverride)
+        assertEquals(55, circuit.items.last().workDurationSec)
+        assertEquals("#123456", circuit.items.last().colorHex)
+        assertEquals(TimedStageType.CUSTOM.defaultIconKey, circuit.items.last().iconKey)
     }
 
     @Test
