@@ -44,6 +44,9 @@ internal data class StrengthPlanEditorScreenState(
         planId: String = "plan-strength-draft",
         timestamp: String = DefaultStrengthPlanTimestamp
     ): WorkoutPlan {
+        require(canSave) {
+            validationMessage ?: "力量计划草稿仍有未通过校验的输入。"
+        }
         return WorkoutPlan(
             id = planId,
             mode = WorkoutMode.STRENGTH,
@@ -203,7 +206,7 @@ internal data class StrengthRepTargetUiState(
         return when (kind) {
             StrengthRepTargetKind.RANGE -> RepTarget.Range(
                 minReps = minReps,
-                maxReps = maxReps.coerceAtLeast(minReps)
+                maxReps = maxReps
             )
 
             StrengthRepTargetKind.FIXED -> RepTarget.Fixed(reps = fixedReps)
@@ -413,7 +416,7 @@ internal fun StrengthPlanEditorScreenState.updateRepRangeText(
     val parsedMax = cleanedMax.toIntOrNull()?.sanitizeReps()
     return updateExercise(exerciseItemId) { exercise ->
         val min = parsedMin ?: exercise.repTarget.minReps
-        val max = (parsedMax ?: exercise.repTarget.maxReps).coerceAtLeast(min)
+        val max = parsedMax ?: exercise.repTarget.maxReps
         val reps = exercise.repTarget.copy(
             kind = StrengthRepTargetKind.RANGE,
             minReps = min,
@@ -742,11 +745,9 @@ private fun StrengthPlanEditorScreenState.validateStrengthDraft(): String? {
                     text = setTarget.targetWeightText,
                     required = exercise.requiresWeightInput
                 )?.let { return it }
-                validateIntegerText(
-                    label = "${exercise.exerciseName} ${setTarget.label} 次数",
-                    text = setTarget.repTarget.fixedRepsText,
-                    min = 1,
-                    max = 200
+                validateRepTarget(
+                    exerciseName = "${exercise.exerciseName} ${setTarget.label}",
+                    repTarget = setTarget.repTarget
                 )?.let { return it }
             }
         }
@@ -760,9 +761,17 @@ private fun validateRepTarget(
 ): String? {
     return when (repTarget.kind) {
         StrengthRepTargetKind.RANGE -> {
-            validateIntegerText("$exerciseName 最少次数", repTarget.minRepsText, min = 1, max = 200)
-                ?: validateIntegerText("$exerciseName 最多次数", repTarget.maxRepsText, min = 1, max = 200)
-                ?: if (repTarget.minReps > repTarget.maxReps) "$exerciseName 次数区间需要从小到大。" else null
+            val minText = repTarget.minRepsText
+            val maxText = repTarget.maxRepsText
+            val parsedMin = minText.toIntOrNull()
+            val parsedMax = maxText.toIntOrNull()
+            validateIntegerText("$exerciseName 最少次数", minText, min = 1, max = 200)
+                ?: validateIntegerText("$exerciseName 最大次数", maxText, min = 1, max = 200)
+                ?: if (parsedMin != null && parsedMax != null && parsedMax < parsedMin) {
+                    "$exerciseName 最大次数不能小于最小次数。"
+                } else {
+                    null
+                }
         }
 
         StrengthRepTargetKind.FIXED -> {

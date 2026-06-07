@@ -211,7 +211,7 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "当前只生成内存态草稿；训练执行引擎、真实保存和记录闭环留给后续 story。",
+            text = "可直接开始当前草稿，也可保存后进入计划详情；真实保存和完整记录后续接入。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )

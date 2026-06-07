@@ -193,6 +193,64 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun visibleRepRangeWithMaxBelowMinDisablesSaveAndStartUntilCorrected() {
+        val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val invalid = buildDefaultStrengthPlanEditorState()
+            .updateRepRangeText(exercise.id, minRepsInput = "12", maxRepsInput = "8")
+        val invalidExercise = invalid.exercises.first()
+        val failedSave = invalid.saveDraftPlan()
+
+        assertEquals("12", invalidExercise.repTarget.minRepsText)
+        assertEquals("8", invalidExercise.repTarget.maxRepsText)
+        assertEquals(12, invalidExercise.repTarget.minReps)
+        assertEquals(8, invalidExercise.repTarget.maxReps)
+        assertFalse(invalid.canSave)
+        assertFalse(invalid.canStartTraining)
+        assertTrue(requireNotNull(invalid.validationMessage).contains("最大次数不能小于最小次数"))
+        assertNull(failedSave.savedPlan)
+        assertTrue(requireNotNull(failedSave.statusMessage).contains("最大次数不能小于最小次数"))
+
+        try {
+            invalid.toWorkoutPlan()
+            throw AssertionError("Invalid visible rep range should not map to a WorkoutPlan.")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(requireNotNull(expected.message).contains("最大次数不能小于最小次数"))
+        }
+
+        val correctedToEqual = invalid.updateRepRangeText(exercise.id, minRepsInput = "12", maxRepsInput = "12")
+        val correctedToRange = invalid.updateRepRangeText(exercise.id, minRepsInput = "12", maxRepsInput = "15")
+        val equalRange = requireNotNull(
+            correctedToEqual.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>().first().target?.repTarget
+        ) as RepTarget.Range
+        val widerRange = requireNotNull(
+            correctedToRange.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>().first().target?.repTarget
+        ) as RepTarget.Range
+
+        assertTrue(correctedToEqual.canSave)
+        assertTrue(correctedToEqual.canStartTraining)
+        assertEquals(12, equalRange.minReps)
+        assertEquals(12, equalRange.maxReps)
+        assertTrue(correctedToRange.canSave)
+        assertTrue(correctedToRange.canStartTraining)
+        assertEquals(12, widerRange.minReps)
+        assertEquals(15, widerRange.maxReps)
+    }
+
+    @Test
+    fun fixedRepsModeIgnoresStaleInvalidRangeText() {
+        val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val fixed = buildDefaultStrengthPlanEditorState()
+            .updateRepRangeText(exercise.id, minRepsInput = "12", maxRepsInput = "8")
+            .updateFixedRepsText(exercise.id, "10")
+        val block = fixed.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>().first()
+        val reps = requireNotNull(block.target?.repTarget) as RepTarget.Fixed
+
+        assertTrue(fixed.canSave)
+        assertTrue(fixed.canStartTraining)
+        assertEquals(10, reps.reps)
+    }
+
+    @Test
     fun fixedAndPerSetStrengthInputsCanBeTemporarilyBlank() {
         val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
         val setId = exercise.setTargets.first().id

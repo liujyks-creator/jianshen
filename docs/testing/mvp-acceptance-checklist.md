@@ -75,7 +75,7 @@
 |---|---|---|
 | 时间输入清空 | Pass | E9.4 计时编辑页热身、动作秒数、动作后休息、轮间休息和拉伸均以 raw text 草稿支持临时为空。 |
 | 重量输入清空 | Pass | E9.4 力量计划重量以 raw text 草稿支持临时为空；带重量动作为空时禁用保存/开始并提示重量不能为空。 |
-| 次数输入清空 | Pass | E9.4 力量计划次数区间、固定次数和逐组次数均支持临时为空，空值时禁用保存/开始并显示原因。 |
+| 次数输入清空和区间顺序 | Pass | E9.4 力量计划次数区间、固定次数和逐组次数均支持临时为空；Review Gate 修复已覆盖可见区间 `12-8` 禁用保存/开始并提示最大次数不能小于最小次数。 |
 | 组数输入清空 | Pass | E9.4 力量计划正式组数和热身组数均支持临时为空，空值时禁用保存/开始并显示原因。 |
 | 轮数输入清空 | Pass | E9.4 计时计划轮数支持临时为空，空值时禁用保存/开始并显示原因。 |
 | 清空后继续输入 | Pass | E9.4 UI state 测试覆盖清空后继续输入有效数字并恢复保存/开始。 |
@@ -156,6 +156,8 @@
 | E9.3-BUG-001 | P1 | Fixed in E9.4 | 计划编辑页整数输入无法清空，旧值回填 | `TimedPlanEditorUiStateTest.integerDurationFieldsCanBeTemporarilyBlankAndThenReentered`、`StrengthPlanEditorUiStateTest.strengthNumericFieldsCanBeTemporarilyBlankAndThenReentered` | 已改为 raw text 草稿 state + 保存/开始校验 |
 | E9.3-BUG-002 | P2 | Fixed in E9.4 | 计时编辑页 `立即开始（E3 接入）` 灰色不可点 | `MvpAcceptanceChecklistEvidenceTest.editorStartButtonsAreConnectedInPlanEditorRoutes`、`OfficialShellStateTest.timedEditorDraftStartsTimedSessionDestination` | 有效草稿直接进入计时训练执行页 |
 | E9.3-BUG-003 | P2 | Fixed in E9.4 | 力量编辑页 `开始力量训练（E4 接入）` 灰色不可点 | `MvpAcceptanceChecklistEvidenceTest.editorStartButtonsAreConnectedInPlanEditorRoutes`、`OfficialShellStateTest.strengthEditorDraftStartsStrengthSessionDestination` | 有效草稿直接进入力量训练执行页 |
+| E9.4-REVIEW-001 | P1 | Fixed in E9.4 Review Gate | 力量次数区间可见 `min=12/max=8` 时仍可能保存/开始 | `StrengthPlanEditorUiStateTest.visibleRepRangeWithMaxBelowMinDisablesSaveAndStartUntilCorrected` | 不再在输入中静默修正；按可见 raw text 校验并阻止无效草稿映射 |
+| E9.4-REVIEW-002 | P2 | Fixed in E9.4 Review Gate | 编辑页文案仍暗示执行接入是后续状态 | `MvpAcceptanceChecklistEvidenceTest.editorHeaderCopyMatchesCurrentStartAndSaveState` | 计时/力量编辑页均说明可直接开始当前草稿，也可保存后进入计划详情 |
 | E9.3-PD-001 | Product Decision | Product Decision | 计时训练是否应改为纯间歇计时器 | 用户反馈；当前计时训练强依赖动作 | E10 重构训练模式边界 |
 | E9.3-PD-002 | Product Decision | Product Decision | 基础跟练是否应承担动作选择、推荐和排序 | 用户反馈；当前只支持 preset | E10 设计跟练编排 |
 | E9.3-PD-003 | Product Decision | Product Decision | 动作选择是否独立成页面 | 用户反馈；当前嵌在入口/编辑页 chip | E10 统一动作选择页 |
