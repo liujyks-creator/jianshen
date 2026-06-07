@@ -66,6 +66,17 @@ class StrengthWorkoutSessionUiStateTest {
         assertTrue(uiState.canCompleteSet)
         assertFalse(uiState.canStartSet)
         assertTrue(uiState.shortCue.isNotBlank())
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.COMPLETE_STRENGTH_SET &&
+                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
+                control.enabled
+        })
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.PAUSE_SESSION &&
+                control.placement == WorkoutImmediateControlPlacement.RHYTHM_SURFACE &&
+                control.enabled
+        })
+        assertTrue(uiState.endRequiresConfirmation)
     }
 
     @Test
@@ -101,6 +112,16 @@ class StrengthWorkoutSessionUiStateTest {
             confirmation.effortOptions.map { option -> option.label }
         )
         assertTrue(confirmation.canConfirm)
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.CONFIRM_STRENGTH_SET &&
+                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
+                control.enabled
+        })
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.END_SESSION &&
+                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
+                control.enabled
+        })
     }
 
     @Test

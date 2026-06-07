@@ -36,6 +36,8 @@ internal data class FollowAlongWorkoutSessionUiState(
     val canSkip: Boolean,
     val canEnd: Boolean,
     val lastControlLabel: String,
+    val immediateControls: List<WorkoutImmediateControlUiState>,
+    val endRequiresConfirmation: Boolean,
     val terminalTitle: String? = null,
     val terminalSummary: String? = null
 )
@@ -134,6 +136,11 @@ internal fun TimedWorkoutEngineState.toFollowAlongWorkoutSessionUiState(
         else -> null
     }
 
+    val canPause = status == SessionStatus.ACTIVE
+    val canResume = status == SessionStatus.PAUSED
+    val canSkip = status == SessionStatus.ACTIVE && current != null
+    val canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
+
     return FollowAlongWorkoutSessionUiState(
         planTitle = planTitle,
         statusLabel = status.toFollowAlongStatusLabel(),
@@ -152,14 +159,71 @@ internal fun TimedWorkoutEngineState.toFollowAlongWorkoutSessionUiState(
         progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,
-        canPause = status == SessionStatus.ACTIVE,
-        canResume = status == SessionStatus.PAUSED,
-        canSkip = status == SessionStatus.ACTIVE && current != null,
-        canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED,
+        canPause = canPause,
+        canResume = canResume,
+        canSkip = canSkip,
+        canEnd = canEnd,
         lastControlLabel = controlHistory.lastOrNull()?.toFollowAlongLabel().orEmpty(),
+        immediateControls = buildFollowAlongImmediateControls(
+            canPause = canPause,
+            canResume = canResume,
+            canSkip = canSkip,
+            canEnd = canEnd
+        ),
+        endRequiresConfirmation = canEnd,
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary
     )
+}
+
+private fun buildFollowAlongImmediateControls(
+    canPause: Boolean,
+    canResume: Boolean,
+    canSkip: Boolean,
+    canEnd: Boolean
+): List<WorkoutImmediateControlUiState> {
+    return buildList {
+        add(
+            WorkoutImmediateControlUiState(
+                role = if (canResume) {
+                    WorkoutImmediateControlRole.RESUME_SESSION
+                } else {
+                    WorkoutImmediateControlRole.PAUSE_SESSION
+                },
+                label = if (canResume) "继续训练" else "暂停训练",
+                enabled = canResume || canPause,
+                placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+            )
+        )
+        add(
+            WorkoutImmediateControlUiState(
+                role = if (canResume) {
+                    WorkoutImmediateControlRole.RESUME_SESSION
+                } else {
+                    WorkoutImmediateControlRole.PAUSE_SESSION
+                },
+                label = if (canResume) "继续训练" else "暂停训练",
+                enabled = canResume || canPause,
+                placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+            )
+        )
+        add(
+            WorkoutImmediateControlUiState(
+                role = WorkoutImmediateControlRole.SKIP_STEP,
+                label = "跳过 / 下一步",
+                enabled = canSkip,
+                placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+            )
+        )
+        add(
+            WorkoutImmediateControlUiState(
+                role = WorkoutImmediateControlRole.END_SESSION,
+                label = "结束训练",
+                enabled = canEnd,
+                placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+            )
+        )
+    }
 }
 
 private fun TimedWorkoutEngineState.nextActionStep(): TimedSessionStep? {

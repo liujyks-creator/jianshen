@@ -61,12 +61,38 @@ class TrainingExecutionRegressionUiStateTest {
         assertTrue(prepare.canStartSet)
         assertTrue(prepare.canPause)
         assertTrue(prepare.canEnd)
+        assertImmediateControl(
+            controls = prepare.immediateControls,
+            role = WorkoutImmediateControlRole.START_STRENGTH_SET,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertImmediateControl(
+            controls = prepare.immediateControls,
+            role = WorkoutImmediateControlRole.PAUSE_SESSION,
+            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+        )
+        assertImmediateControl(
+            controls = prepare.immediateControls,
+            role = WorkoutImmediateControlRole.END_SESSION,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertTrue(prepare.endRequiresConfirmation)
 
         state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
         val active = state.toStrengthWorkoutSessionScreenState()
         assertTrue(active.canCompleteSet)
         assertTrue(active.canPause)
         assertTrue(active.canEnd)
+        assertImmediateControl(
+            controls = active.immediateControls,
+            role = WorkoutImmediateControlRole.COMPLETE_STRENGTH_SET,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertImmediateControl(
+            controls = active.immediateControls,
+            role = WorkoutImmediateControlRole.PAUSE_SESSION,
+            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+        )
 
         state = StrengthWorkoutEngine.tick(state, seconds = 5).state
         state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
@@ -76,6 +102,17 @@ class TrainingExecutionRegressionUiStateTest {
         assertTrue(requireNotNull(confirm.confirmation).canConfirm)
         assertTrue(confirm.canPause)
         assertTrue(confirm.canEnd)
+        assertImmediateControl(
+            controls = confirm.immediateControls,
+            role = WorkoutImmediateControlRole.CONFIRM_STRENGTH_SET,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertImmediateControl(
+            controls = confirm.immediateControls,
+            role = WorkoutImmediateControlRole.END_SESSION,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertTrue(confirm.endRequiresConfirmation)
 
         state = StrengthWorkoutEngine.dispatch(
             state,
@@ -85,6 +122,89 @@ class TrainingExecutionRegressionUiStateTest {
         assertTrue(rest.canStartNextDuringRest)
         assertTrue(rest.canPause)
         assertTrue(rest.canEnd)
+        assertImmediateControl(
+            controls = rest.immediateControls,
+            role = WorkoutImmediateControlRole.START_NEXT_STRENGTH_SET,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertImmediateControl(
+            controls = rest.immediateControls,
+            role = WorkoutImmediateControlRole.PAUSE_SESSION,
+            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+        )
+    }
+
+    @Test
+    fun followAlongExecutionKeepsPauseSkipAndEndImmediatelyReachable() {
+        val plan = com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState()
+            .plans
+            .single()
+            .plan
+        val state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val active = state.toFollowAlongWorkoutSessionUiState()
+
+        assertTrue(active.canPause)
+        assertTrue(active.canSkip)
+        assertTrue(active.canEnd)
+        assertImmediateControl(
+            controls = active.immediateControls,
+            role = WorkoutImmediateControlRole.PAUSE_SESSION,
+            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+        )
+        assertImmediateControl(
+            controls = active.immediateControls,
+            role = WorkoutImmediateControlRole.PAUSE_SESSION,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertImmediateControl(
+            controls = active.immediateControls,
+            role = WorkoutImmediateControlRole.SKIP_STEP,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertImmediateControl(
+            controls = active.immediateControls,
+            role = WorkoutImmediateControlRole.END_SESSION,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertTrue(active.endRequiresConfirmation)
+
+        val paused = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession)
+            .state
+            .toFollowAlongWorkoutSessionUiState()
+        assertImmediateControl(
+            controls = paused.immediateControls,
+            role = WorkoutImmediateControlRole.RESUME_SESSION,
+            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+        )
+        assertImmediateControl(
+            controls = paused.immediateControls,
+            role = WorkoutImmediateControlRole.RESUME_SESSION,
+            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+        )
+        assertTrue(paused.endRequiresConfirmation)
+    }
+
+    @Test
+    fun endWorkoutConfirmationRequiresExplicitConfirmBeforeEndCommand() {
+        var confirmation = WorkoutEndConfirmationUiState()
+
+        confirmation = confirmation.request(canEnd = true)
+        assertTrue(confirmation.visible)
+
+        confirmation = confirmation.cancel()
+        assertFalse(confirmation.visible)
+        assertEquals(null, confirmation.confirm(canEnd = true).command)
+
+        confirmation = confirmation.request(canEnd = false)
+        assertFalse(confirmation.visible)
+
+        confirmation = confirmation.request(canEnd = true)
+        val result = confirmation.confirm(canEnd = true)
+        assertFalse(result.nextState.visible)
+        assertEquals(WorkoutCommand.EndSession(reason = "user_requested"), result.command)
     }
 
     @Test
@@ -172,8 +292,24 @@ class TrainingExecutionRegressionUiStateTest {
             canPause,
             canResume,
             canEnd,
+            immediateControls.map { control -> control.role to control.placement },
             heartRate.statusText,
             heartRate.valueText
+        )
+    }
+
+    private fun assertImmediateControl(
+        controls: List<WorkoutImmediateControlUiState>,
+        role: WorkoutImmediateControlRole,
+        placement: WorkoutImmediateControlPlacement
+    ) {
+        assertTrue(
+            "Expected enabled $role at $placement in $controls",
+            controls.any { control ->
+                control.role == role &&
+                    control.placement == placement &&
+                    control.enabled
+            }
         )
     }
 }

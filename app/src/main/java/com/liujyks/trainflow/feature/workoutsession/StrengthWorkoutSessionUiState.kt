@@ -52,6 +52,8 @@ internal data class StrengthWorkoutSessionScreenState(
     val canReplaceExercise: Boolean,
     val canSkipExercise: Boolean,
     val substitutionSummaryLabel: String,
+    val immediateControls: List<WorkoutImmediateControlUiState>,
+    val endRequiresConfirmation: Boolean,
     val terminalTitle: String? = null,
     val terminalSummary: String? = null,
     val summary: StrengthWorkoutSummaryUiState? = null
@@ -175,6 +177,20 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         stepKind in skippableStrengthUiSteps &&
         current != null
 
+    val canStartSet = status == SessionStatus.ACTIVE &&
+        stepKind == SessionStepKind.STRENGTH_PREPARE_SET
+    val canCompleteSet = status == SessionStatus.ACTIVE &&
+        stepKind == SessionStepKind.STRENGTH_ACTIVE_SET
+    val canConfirmPlanned = status == SessionStatus.ACTIVE &&
+        stepKind == SessionStepKind.STRENGTH_CONFIRM_SET &&
+        pendingDraft != null
+    val canStartNextDuringRest = status == SessionStatus.ACTIVE &&
+        stepKind == SessionStepKind.STRENGTH_REST &&
+        next != null
+    val canPause = status == SessionStatus.ACTIVE && stepKind != null
+    val canResume = status == SessionStatus.PAUSED && stepKind != null
+    val canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
+
     return StrengthWorkoutSessionScreenState(
         planTitle = planTitle,
         statusLabel = status.toStatusLabel(),
@@ -199,19 +215,13 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         progressFraction = activeNumber.toFloat() / progressBase.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,
-        canStartSet = status == SessionStatus.ACTIVE &&
-            stepKind == SessionStepKind.STRENGTH_PREPARE_SET,
-        canCompleteSet = status == SessionStatus.ACTIVE &&
-            stepKind == SessionStepKind.STRENGTH_ACTIVE_SET,
-        canConfirmPlanned = status == SessionStatus.ACTIVE &&
-            stepKind == SessionStepKind.STRENGTH_CONFIRM_SET &&
-            pendingDraft != null,
-        canStartNextDuringRest = status == SessionStatus.ACTIVE &&
-            stepKind == SessionStepKind.STRENGTH_REST &&
-            next != null,
-        canPause = status == SessionStatus.ACTIVE && stepKind != null,
-        canResume = status == SessionStatus.PAUSED && stepKind != null,
-        canEnd = status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED,
+        canStartSet = canStartSet,
+        canCompleteSet = canCompleteSet,
+        canConfirmPlanned = canConfirmPlanned,
+        canStartNextDuringRest = canStartNextDuringRest,
+        canPause = canPause,
+        canResume = canResume,
+        canEnd = canEnd,
         completedSetCount = completedSetCount,
         totalSetCount = totalSets,
         historySummaryLabel = historySummaryLabel,
@@ -220,10 +230,90 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         canReplaceExercise = canReplace,
         canSkipExercise = canSkip,
         substitutionSummaryLabel = current.substitutionSummaryLabel(exerciseById),
+        immediateControls = buildStrengthImmediateControls(
+            canStartSet = canStartSet,
+            canCompleteSet = canCompleteSet,
+            canConfirmPlanned = canConfirmPlanned,
+            canStartNextDuringRest = canStartNextDuringRest,
+            canPause = canPause,
+            canResume = canResume,
+            canEnd = canEnd
+        ),
+        endRequiresConfirmation = canEnd,
         terminalTitle = terminalTitle,
         terminalSummary = terminalSummary,
         summary = toStrengthWorkoutSummaryUiState(exercises)
     )
+}
+
+private fun buildStrengthImmediateControls(
+    canStartSet: Boolean,
+    canCompleteSet: Boolean,
+    canConfirmPlanned: Boolean,
+    canStartNextDuringRest: Boolean,
+    canPause: Boolean,
+    canResume: Boolean,
+    canEnd: Boolean
+): List<WorkoutImmediateControlUiState> {
+    val primaryRole = when {
+        canStartSet -> WorkoutImmediateControlRole.START_STRENGTH_SET
+        canCompleteSet -> WorkoutImmediateControlRole.COMPLETE_STRENGTH_SET
+        canConfirmPlanned -> WorkoutImmediateControlRole.CONFIRM_STRENGTH_SET
+        canStartNextDuringRest -> WorkoutImmediateControlRole.START_NEXT_STRENGTH_SET
+        else -> null
+    }
+    val primaryLabel = when (primaryRole) {
+        WorkoutImmediateControlRole.START_STRENGTH_SET -> "开始本组"
+        WorkoutImmediateControlRole.COMPLETE_STRENGTH_SET -> "完成本组"
+        WorkoutImmediateControlRole.CONFIRM_STRENGTH_SET -> "确认本组"
+        WorkoutImmediateControlRole.START_NEXT_STRENGTH_SET -> "提前开始本组"
+        else -> null
+    }
+
+    return buildList {
+        if (primaryRole != null && primaryLabel != null) {
+            add(
+                WorkoutImmediateControlUiState(
+                    role = primaryRole,
+                    label = primaryLabel,
+                    enabled = true,
+                    placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+                )
+            )
+        }
+        add(
+            WorkoutImmediateControlUiState(
+                role = if (canResume) {
+                    WorkoutImmediateControlRole.RESUME_SESSION
+                } else {
+                    WorkoutImmediateControlRole.PAUSE_SESSION
+                },
+                label = if (canResume) "继续训练" else "暂停训练",
+                enabled = canResume || canPause,
+                placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
+            )
+        )
+        add(
+            WorkoutImmediateControlUiState(
+                role = if (canResume) {
+                    WorkoutImmediateControlRole.RESUME_SESSION
+                } else {
+                    WorkoutImmediateControlRole.PAUSE_SESSION
+                },
+                label = if (canResume) "继续训练" else "暂停训练",
+                enabled = canResume || canPause,
+                placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+            )
+        )
+        add(
+            WorkoutImmediateControlUiState(
+                role = WorkoutImmediateControlRole.END_SESSION,
+                label = "结束训练",
+                enabled = canEnd,
+                placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
+            )
+        )
+    }
 }
 
 internal fun StrengthWorkoutEngineState.currentReplaceExerciseCommand(

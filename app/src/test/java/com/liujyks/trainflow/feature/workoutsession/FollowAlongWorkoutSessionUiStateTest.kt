@@ -37,6 +37,22 @@ class FollowAlongWorkoutSessionUiStateTest {
         assertEquals("未连接设备", uiState.heartRate.statusText)
         assertTrue(uiState.heartRate.boundaryText.contains("未接入真实设备"))
         assertTrue(uiState.progressFraction > 0f)
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.PAUSE_SESSION &&
+                control.placement == WorkoutImmediateControlPlacement.RHYTHM_SURFACE &&
+                control.enabled
+        })
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.SKIP_STEP &&
+                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
+                control.enabled
+        })
+        assertTrue(uiState.immediateControls.any { control ->
+            control.role == WorkoutImmediateControlRole.END_SESSION &&
+                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
+                control.enabled
+        })
+        assertTrue(uiState.endRequiresConfirmation)
     }
 
     @Test

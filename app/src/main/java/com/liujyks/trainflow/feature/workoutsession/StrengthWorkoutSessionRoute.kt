@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -128,9 +129,13 @@ internal fun StrengthWorkoutSessionRoute(
     }
     var showReplacementOptions by remember { mutableStateOf(false) }
     var showSkipConfirmation by remember { mutableStateOf(false) }
+    var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
     LaunchedEffect(uiState.canReplaceExercise, uiState.canSkipExercise, uiState.currentExerciseName) {
         if (!uiState.canReplaceExercise) showReplacementOptions = false
         if (!uiState.canSkipExercise) showSkipConfirmation = false
+    }
+    LaunchedEffect(uiState.canEnd) {
+        if (!uiState.canEnd) endConfirmation = endConfirmation.cancel()
     }
 
     StrengthWorkoutSessionScreen(
@@ -170,7 +175,14 @@ internal fun StrengthWorkoutSessionRoute(
         onStartNextDuringRest = { dispatch(WorkoutCommand.StartStrengthSet()) },
         onPause = { dispatch(WorkoutCommand.PauseSession) },
         onResume = { dispatch(WorkoutCommand.ResumeSession) },
-        onEnd = { dispatch(WorkoutCommand.EndSession(reason = "user_requested")) },
+        showEndConfirmation = endConfirmation.visible,
+        onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
+        onCancelEnd = { endConfirmation = endConfirmation.cancel() },
+        onConfirmEnd = {
+            val result = endConfirmation.confirm(uiState.canEnd)
+            endConfirmation = result.nextState
+            result.command?.let(::dispatch)
+        },
         onBackToPlans = onBackToPlans,
         onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
         modifier = modifier
@@ -195,7 +207,10 @@ private fun StrengthWorkoutSessionScreen(
     onStartNextDuringRest: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
-    onEnd: () -> Unit,
+    showEndConfirmation: Boolean,
+    onRequestEnd: () -> Unit,
+    onCancelEnd: () -> Unit,
+    onConfirmEnd: () -> Unit,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
@@ -218,16 +233,17 @@ private fun StrengthWorkoutSessionScreen(
                     top = if (skin.isBigType) 14.dp else 22.dp,
                     bottom = if (uiState.isTerminal) {
                         22.dp
-                    } else if (skin.isBigType) {
-                        skin.tokens.executionControlReserveDp.dp
                     } else {
-                        132.dp
+                        skin.tokens.executionControlReserveDp.dp
                     }
                 ),
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
         ) {
             StrengthSessionHeader(uiState)
-            StrengthMainPanel(uiState)
+            StrengthMainPanel(
+                uiState = uiState,
+                onPrimaryToggle = if (uiState.canResume) onResume else onPause
+            )
             if (uiState.confirmation != null && confirmationInput != null && confirmationValidation != null) {
                 StrengthSetConfirmationPanel(
                     confirmation = uiState.confirmation,
@@ -256,7 +272,7 @@ private fun StrengthWorkoutSessionScreen(
                     uiState = uiState,
                     onPause = onPause,
                     onResume = onResume,
-                    onEnd = onEnd
+                    onEnd = onRequestEnd
                 )
                 StrengthControlHistoryPanel(uiState)
             }
@@ -272,8 +288,16 @@ private fun StrengthWorkoutSessionScreen(
                 onStartNextDuringRest = onStartNextDuringRest,
                 onPause = onPause,
                 onResume = onResume,
-                onEnd = onEnd,
+                onEnd = onRequestEnd,
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+        if (showEndConfirmation) {
+            WorkoutEndConfirmationDialog(
+                title = "结束本次力量训练？",
+                text = "已确认的组记录会保留，未完成内容会作为提前结束处理。",
+                onCancel = onCancelEnd,
+                onConfirm = onConfirmEnd
             )
         }
     }
@@ -314,7 +338,10 @@ private fun StrengthSessionHeader(uiState: StrengthWorkoutSessionScreenState) {
 }
 
 @Composable
-private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
+private fun StrengthMainPanel(
+    uiState: StrengthWorkoutSessionScreenState,
+    onPrimaryToggle: () -> Unit
+) {
     val skin = LocalTrainFlowSkin.current
     val isRest = uiState.phaseLabel == "休息"
     val isConfirm = uiState.canConfirmPlanned
@@ -335,7 +362,11 @@ private fun StrengthMainPanel(uiState: StrengthWorkoutSessionScreenState) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = uiState.canPause || uiState.canResume) {
+                onPrimaryToggle()
+            },
         shape = RoundedCornerShape(currentProminentCardCorner()),
         colors = CardDefaults.cardColors(containerColor = panelColor),
         border = BorderStroke(1.dp, borderColor)
@@ -961,40 +992,38 @@ private fun StrengthSessionControls(
                     color = TrainFlowNeutral50
                 )
             }
-            if (skin.isBigType) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = if (uiState.canResume) onResume else onPause,
+                    enabled = uiState.canResume || uiState.canPause,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp),
+                    shape = RoundedCornerShape(currentCardCorner())
                 ) {
-                    OutlinedButton(
-                        onClick = if (uiState.canResume) onResume else onPause,
-                        enabled = uiState.canResume || uiState.canPause,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp),
-                        shape = RoundedCornerShape(currentCardCorner())
-                    ) {
-                        Text(
-                            text = if (uiState.canResume) "继续训练" else "暂停",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TrainFlowNeutral50
-                        )
-                    }
-                    TextButton(
-                        onClick = onEnd,
-                        enabled = uiState.canEnd,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
-                    ) {
-                        Text(
-                            text = "结束训练",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TrainFlowError
-                        )
-                    }
+                    Text(
+                        text = if (uiState.canResume) "继续训练" else "暂停训练",
+                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TrainFlowNeutral50
+                    )
+                }
+                TextButton(
+                    onClick = onEnd,
+                    enabled = uiState.canEnd,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                ) {
+                    Text(
+                        text = "结束训练",
+                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TrainFlowError
+                    )
                 }
             }
         }

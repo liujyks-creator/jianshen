@@ -2,11 +2,15 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +58,10 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.designsystem.currentCardCorner
+import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isBigType
 import kotlinx.coroutines.delay
 
 @Composable
@@ -101,13 +110,24 @@ internal fun FollowAlongWorkoutSessionRoute(
             activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
         }
     }
+    var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
+    LaunchedEffect(uiState.canEnd) {
+        if (!uiState.canEnd) endConfirmation = endConfirmation.cancel()
+    }
 
     FollowAlongWorkoutSessionScreen(
         uiState = uiState,
         onPause = { dispatch(FollowAlongWorkoutSessionControl.PAUSE.toWorkoutCommand()) },
         onResume = { dispatch(FollowAlongWorkoutSessionControl.RESUME.toWorkoutCommand()) },
         onSkip = { dispatch(FollowAlongWorkoutSessionControl.SKIP.toWorkoutCommand()) },
-        onEnd = { dispatch(FollowAlongWorkoutSessionControl.END.toWorkoutCommand()) },
+        showEndConfirmation = endConfirmation.visible,
+        onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
+        onCancelEnd = { endConfirmation = endConfirmation.cancel() },
+        onConfirmEnd = {
+            val result = endConfirmation.confirm(uiState.canEnd)
+            endConfirmation = result.nextState
+            result.command?.let(::dispatch)
+        },
         onBackToFollowAlong = onBackToFollowAlong,
         modifier = modifier
     )
@@ -119,34 +139,67 @@ private fun FollowAlongWorkoutSessionScreen(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onSkip: () -> Unit,
-    onEnd: () -> Unit,
+    showEndConfirmation: Boolean,
+    onRequestEnd: () -> Unit,
+    onCancelEnd: () -> Unit,
+    onConfirmEnd: () -> Unit,
     onBackToFollowAlong: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    val skin = LocalTrainFlowSkin.current
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(TrainFlowPrimary)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .background(skin.tokens.primary)
     ) {
-        FollowAlongSessionHeader(uiState)
-        FollowAlongMediaPanel(uiState)
-        FollowAlongCountdownPanel(uiState)
-        FollowAlongNextAndHeartRatePanel(uiState)
-        FollowAlongDetailPanel(uiState.detailRows)
-        FollowAlongBoundaryPanel(uiState.boundaryCopy)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = currentPageHorizontalPadding())
+                .padding(
+                    top = if (skin.isBigType) 14.dp else 22.dp,
+                    bottom = if (uiState.isTerminal) 22.dp else skin.tokens.executionControlReserveDp.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            FollowAlongSessionHeader(uiState)
+            FollowAlongMediaPanel(uiState)
+            FollowAlongCountdownPanel(
+                uiState = uiState,
+                onPrimaryToggle = if (uiState.canResume) onResume else onPause
+            )
+            FollowAlongNextAndHeartRatePanel(uiState)
+            FollowAlongDetailPanel(uiState.detailRows)
+            FollowAlongBoundaryPanel(uiState.boundaryCopy)
 
-        if (uiState.isTerminal) {
-            FollowAlongTerminalPanel(uiState, onBackToFollowAlong)
-        } else {
+            if (uiState.isTerminal) {
+                FollowAlongTerminalPanel(uiState, onBackToFollowAlong)
+            } else if (uiState.lastControlLabel.isNotBlank()) {
+                Text(
+                    text = uiState.lastControlLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral500
+                )
+            }
+        }
+
+        if (!uiState.isTerminal) {
             FollowAlongControls(
                 uiState = uiState,
                 onPause = onPause,
                 onResume = onResume,
                 onSkip = onSkip,
-                onEnd = onEnd
+                onEnd = onRequestEnd,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+        if (showEndConfirmation) {
+            WorkoutEndConfirmationDialog(
+                title = "结束本次基础跟练？",
+                text = "训练会提前结束，并保留当前内存态进度用于本次总结。",
+                onCancel = onCancelEnd,
+                onConfirm = onConfirmEnd
             )
         }
     }
@@ -214,9 +267,16 @@ private fun FollowAlongMediaPanel(uiState: FollowAlongWorkoutSessionUiState) {
 }
 
 @Composable
-private fun FollowAlongCountdownPanel(uiState: FollowAlongWorkoutSessionUiState) {
+private fun FollowAlongCountdownPanel(
+    uiState: FollowAlongWorkoutSessionUiState,
+    onPrimaryToggle: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = uiState.canPause || uiState.canResume) {
+                onPrimaryToggle()
+            },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
@@ -349,42 +409,71 @@ private fun FollowAlongControls(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onSkip: () -> Unit,
-    onEnd: () -> Unit
+    onEnd: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(
-            onClick = if (uiState.canResume) onResume else onPause,
-            enabled = uiState.canResume || uiState.canPause,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAction)
+    val skin = LocalTrainFlowSkin.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = skin.tokens.primary,
+        shadowElevation = 12.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = if (uiState.canResume) "继续" else "暂停",
-                color = TrainFlowNeutral50
-            )
-        }
-        OutlinedButton(
-            onClick = onSkip,
-            enabled = uiState.canSkip,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Text(text = "跳过当前步骤", color = TrainFlowNeutral50)
-        }
-        if (uiState.lastControlLabel.isNotBlank()) {
-            Text(
-                text = uiState.lastControlLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = TrainFlowNeutral500
-            )
-        }
-        TextButton(
-            onClick = onEnd,
-            enabled = uiState.canEnd,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = "提前结束", color = TrainFlowError)
+            Button(
+                onClick = if (uiState.canResume) onResume else onPause,
+                enabled = uiState.canResume || uiState.canPause,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = if (skin.isBigType) skin.tokens.trainingButtonHeightDp.dp else 48.dp),
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
+            ) {
+                Text(
+                    text = if (uiState.canResume) "继续训练" else "暂停训练",
+                    fontSize = if (skin.isBigType) 20.sp else 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TrainFlowNeutral50
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onSkip,
+                    enabled = uiState.canSkip,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp),
+                    shape = RoundedCornerShape(currentCardCorner())
+                ) {
+                    Text(
+                        text = "跳过 / 下一步",
+                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                        color = TrainFlowNeutral50
+                    )
+                }
+                TextButton(
+                    onClick = onEnd,
+                    enabled = uiState.canEnd,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                ) {
+                    Text(
+                        text = "结束训练",
+                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TrainFlowError
+                    )
+                }
+            }
         }
     }
 }
