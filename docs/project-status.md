@@ -1,16 +1,16 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-06-07
+**状态日期:** 2026-06-09
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
 
-TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过、E4 UI smoke fix、E5.1 计时训练总结、E5.2 力量训练总结、E5.3 训练历史与基础趋势、E5.4 基础恢复建议、E6.1 跟练雏形计划入口、E6.2 基础跟练执行页、E6.3 心率抽象状态展示、E7.1 训练提醒通知、E7.2 活跃训练通知边界、E7.3 训练偏好设置、E8.1 内置 UI 皮肤 contract / registry、E8.2 Tile Flow 关键页面磁贴式皮肤、E8.3 Big Type 大字训练皮肤、E8.4 UI skin review checklist 与用户测试前 UI readiness、E9.1 训练状态恢复与关键回归测试基线、E9.2 权限与隐私文案收口、E9.3 MVP 验收清单与用户测试问题模板、E9.4 用户测试修复包 1、E10.1 训练模式边界与执行页交互原则记录、E10.2 计时训练纯间歇编辑页与大圆盘执行页首版实现、E10.3 力量/跟练执行页主操作可达性修复，以及 E10.4 训练记录闭环前置。
+TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案、Android 首版架构草案、MVP roadmap/backlog 草案、实现准备检查报告、官方设计系统草案、开源 UI 定制边界草案、一个 React/Vite 前端原型，以及 E0.1 Android 生产工程骨架、E0.2 Android 模块/包边界、E0.3 核心 Kotlin 模型映射、E0.4 Room/DataStore 持久化基础骨架、E1.1 首批动作内容切片、E1.2 首批动作 fixture、E1.3 只读动作库列表与筛选、E1.4 只读动作详情、E2.1 Android 首页与训练入口、E2.2 计时计划编辑基础、E2.3 力量计划编辑基础、E2.4 计划列表/详情/复制/删除基础、E3.1 计时训练执行引擎、E3.2 计时训练执行页、E3.3 临近结束提醒、E3.4 暂停/跳过/延长休息/提前结束控制历史边界、E4.1 力量训练执行引擎、E4.2 力量训练执行页、E4.3 单组完成确认层、E4.4 动作替换与跳过、E4 UI smoke fix、E5.1 计时训练总结、E5.2 力量训练总结、E5.3 训练历史与基础趋势、E5.4 基础恢复建议、E6.1 跟练雏形计划入口、E6.2 基础跟练执行页、E6.3 心率抽象状态展示、E7.1 训练提醒通知、E7.2 活跃训练通知边界、E7.3 训练偏好设置、E8.1 内置 UI 皮肤 contract / registry、E8.2 Tile Flow 关键页面磁贴式皮肤、E8.3 Big Type 大字训练皮肤、E8.4 UI skin review checklist 与用户测试前 UI readiness、E9.1 训练状态恢复与关键回归测试基线、E9.2 权限与隐私文案收口、E9.3 MVP 验收清单与用户测试问题模板、E9.4 用户测试修复包 1、E10.1 训练模式边界与执行页交互原则记录、E10.2 计时训练纯间歇编辑页与大圆盘执行页首版实现、E10.3 力量/跟练执行页主操作可达性修复、E10.4 训练记录闭环前置，以及 E10.5 Timer Dial 设计工作流与重构范围记录。
 
 项目已经从早期头脑风暴进入 Android 工程脚手架和 MVP story 实施阶段。`Story E0.1: 创建 Android 生产工程` 已按默认工程参数落地：包名 `com.liujyks.trainflow`、Gradle Kotlin DSL、Jetpack Compose + Material 3、单 `app` module 起步。`Story E0.2: 建立模块与包边界` 已在单 `app` module 内收敛核心/feature/UI/platform package 边界，并用轻量架构测试约束明显的反向依赖；物理 Gradle module 拆分继续留到代码体量需要时再做。`Story E0.3: 映射核心 Kotlin 模型` 已在 `core.model` 包内落地 `Exercise`、`WorkoutPlan`、`PlanBlock`、`WorkoutSession`、`WorkoutCommand`、`WorkoutEvent`、`HeartRateState` 和恢复建议相关契约。`Story E0.4: 建立 Room 与 DataStore 基础` 已在 `core.database` 与 `core.datastore` 包内落地最小可编译持久化骨架、Room schema 导出和 smoke test。`Story E1.1: 定义首批动作内容切片` 已收敛 11 个首批动作、必填字段、训练类型适配、指导内容边界、恢复/替代映射草案和审核标准。`Story E1.2: 导入动作 fixture` 已将 11 个首批动作导入 Android fixture，并用 fixture 校验测试约束 ID、必填字段、能力标签、默认建议、恢复映射和替代动作边界。`Story E1.3: 动作库列表与筛选` 已基于 E1.2 fixture 落地只读 Compose 列表、训练类型/身体部位/器械/难度筛选、清除筛选、空状态和动作摘要卡片。`Story E1.4: 动作详情` 已基于 E1.2 fixture 和 E1.3 列表入口落地只读动作详情，展示短提示、设置与执行步骤、发力要点、常见错误、呼吸提示、安全说明、替代动作和恢复映射。`Story E2.1: 首页与训练入口` 已建立轻量官方 shell、训练首页、计时训练推荐默认入口、力量训练同层入口和可进入 E1.3/E1.4 的动作库入口。`Story E2.2: 计时计划编辑` 已让首页计时推荐入口进入内存态计时计划编辑页，支持计划名称、热身/拉伸时长、动作时长、动作后休息、轮数、轮间休息、动作/休息临近结束提醒阈值和提醒形式开关，并能生成符合 `WorkoutPlan` / `TimedCircuitBlock` / `TimedExerciseItem` / `CueSettings` 契约的本次草稿预览；E2.2 retro fix 已关闭计时提醒阈值边界问题。`Story E2.3: 力量计划编辑` 已让首页力量训练入口进入内存态力量计划编辑页，支持计划名称、力量动作选择、目标重量、默认 `8-12` 次区间、固定次数、正式组数、动作内热身组、组间休息和逐组目标展开编辑，并能生成符合 `WorkoutPlan` / `StrengthExerciseBlock` / `StrengthExerciseTarget` / `StrengthSetPlan` 契约的本次草稿预览。`Story E2.4: 计划列表、详情、复制与删除` 已在官方 shell 中启用“计划”入口，复用 E2.2/E2.3 的 `WorkoutPlan` 草稿契约种子化内存态计划集合，支持计划列表、详情、复制和删除确认。`Story E3.1: 计时训练执行引擎` 已在 `core.engine` 内落地纯 Kotlin 状态机，可从有效计时计划/快照展开动作、休息和轮次步骤，支持开始、暂停、继续、跳过、延长休息和提前结束命令，并产出动作开始、动作临近结束、休息开始、休息临近结束、暂停、继续和完成事件。`Story E3.2: 计时训练执行页` 已在 `feature.workoutsession` 中新增计时训练执行 UI state、Compose route 和深色执行页，从现有内存态计划详情仅启用计时计划开始入口，执行页复用 E3.1 `TimedWorkoutEngine` 展示当前动作/休息、主倒计时、轮次/步骤进度、下一步、动作短提示和辅助心率占位，并通过 `WorkoutCommand` 支持暂停、继续、跳过、延长休息和结束训练。`Story E4.1: 力量训练执行引擎` 已在 `core.engine` 内新增纯 Kotlin `StrengthWorkoutEngine`，可从有效力量计划/快照按动作和组推进准备、开始本组、完成本组、确认记录、组间休息和完成/废弃终态。`Story E4.2: 力量训练执行页` 已在 `feature.workoutsession` 中新增力量训练执行 UI state、Compose route 和深色执行页，从内存态力量计划详情启用开始入口，执行页复用 E4.1 `StrengthWorkoutEngine` 展示当前动作、本组目标、组耗时、最小确认、休息倒计时和下一组目标，并通过 `WorkoutCommand` 支持开始本组、完成本组、按计划确认、暂停/继续、休息中提前开始下一组和结束训练。`Story E4.3: 单组完成确认层` 已将 Confirm 状态升级为可编辑确认层，展示计划重量、计划次数、本组耗时、组类型、动作名和组序号，默认回填实际重量/次数，支持次数区间快捷选择与 easy / good / hard / form_breakdown 主观感受，并通过 `WorkoutCommand.ConfirmStrengthSet` 生成正式 `StrengthSetRecord`。`Story E4.4: 动作替换与跳过` 已让力量训练支持通过 `WorkoutCommand.ReplaceExercise` 替换当前动作并在 `StrengthSetRecord.substitutedFromExerciseId` 保留原动作引用，也支持通过 `WorkoutCommand.SkipStep` 跳过当前动作剩余未完成组并继续后续动作。`Story E5.1: 计时训练总结` 已在 `feature.workoutsession` 中新增计时训练 summary UI state / mapper，消费 E3.4 的 step history、control history、rest extension history 和 early-end 记录，在 completed / abandoned 终态展示总时长、完成阶段、步骤/轮次进度、跳过内容、休息延长、提前结束进度、训练部位摘要和恢复建议入口；`Story E5.2: 力量训练总结` 已在同一 feature 边界新增 strength summary UI state / mapper，消费 E4.1-E4.4 的 strength records、history、replacement 和 skip 边界，在 completed / abandoned 终态展示动作、组数、重量、次数、组耗时、实际休息、计划/实际差异、替换/跳过摘要和恢复建议入口；`Story E5.3: 训练历史与基础趋势` 已启用内存态历史和基础趋势；`Story E5.4: 基础恢复建议` 已启用训练后恢复建议入口；`Story E6.1: 跟练雏形计划入口` 已启用基础跟练入口和选择页，展示一个只使用 supportsFollowAlong 动作的内存态 preset；`Story E6.2: 跟练执行页` 已让 preset 进入基础跟练执行页；`Story E6.3: 心率抽象状态展示` 已统一三类执行页的低层级心率状态展示，`Story E7.1: 训练提醒通知` 已建立计划提醒普通通知边界。E10.4 已引入最小真实 `WorkoutSession` 本地写入和记录页读取闭环；当前仍未引入前台服务、后台训练可靠计时、真实心率设备、语音能力、视频播放、历史记录删除、统计图表或任意计时计划切换为跟练视图。
 
-`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过`、E4 UI smoke fix、`Story E5.1: 计时训练总结`、`Story E5.2: 力量训练总结`、`Story E5.3: 训练历史与基础趋势`、`Story E5.4: 基础恢复建议`、`Story E6.1: 跟练雏形计划入口`、`Story E6.2: 跟练执行页`、`Story E6.3: 心率抽象状态展示`、`Story E7.1: 训练提醒通知`、`Story E7.2: 活跃训练通知边界`、`Story E7.3: 训练偏好设置`、`Story E8.1: Skin contract and registry`、`Story E8.2: Tile Flow 完整视觉重做`、`Story E8.3: Big Type 完整视觉重做`、`Story E8.4: UI skin review checklist`、`Story E9.1: 训练状态恢复与回归测试`、`Story E9.2: 权限与隐私文案`、`Story E9.3: MVP 验收清单`、E9.4 用户测试修复包 1、E10.1 训练模式边界记录、E10.2 计时训练纯间歇编辑页与大圆盘执行页、E10.3 力量 / 跟练执行页主操作可达性修复均已合入 `main`。当前阶段分支 `codex/e10-4-session-record-write-through` 基于 `main` / `origin/main` 的 `4362bd1ada4ea1457c5e1c0ed5baf4c27e0a8c50` 实施 E10.4：训练记录闭环前置，不新增心率设备、语音、TTS、音频资源、foreground service、notification action、历史清理或统计图表。
+`Story E4.1: 力量训练执行引擎`、`Story E4.2: 力量训练执行页`、`Story E4.3: 单组完成确认层`、`Story E4.4: 动作替换与跳过`、E4 UI smoke fix、`Story E5.1: 计时训练总结`、`Story E5.2: 力量训练总结`、`Story E5.3: 训练历史与基础趋势`、`Story E5.4: 基础恢复建议`、`Story E6.1: 跟练雏形计划入口`、`Story E6.2: 跟练执行页`、`Story E6.3: 心率抽象状态展示`、`Story E7.1: 训练提醒通知`、`Story E7.2: 活跃训练通知边界`、`Story E7.3: 训练偏好设置`、`Story E8.1: Skin contract and registry`、`Story E8.2: Tile Flow 完整视觉重做`、`Story E8.3: Big Type 完整视觉重做`、`Story E8.4: UI skin review checklist`、`Story E9.1: 训练状态恢复与回归测试`、`Story E9.2: 权限与隐私文案`、`Story E9.3: MVP 验收清单`、E9.4 用户测试修复包 1、E10.1 训练模式边界记录、E10.2 计时训练纯间歇编辑页与大圆盘执行页、E10.3 力量 / 跟练执行页主操作可达性修复、E10.4 训练记录闭环前置均已合入 `main`。当前阶段分支 `codex/e10-5-timer-dial-design-workflow` 基于 `main` / `origin/main` 的 `234bbb4934fab44d3a1f46f62095761bd9935b28` 记录 E10.5：Timer Dial 圆盘视觉语言的工具路线、视觉规格、动效规格和后续拆分；本阶段只改文档，不新增心率设备、语音、TTS、音频资源、foreground service、notification action、历史清理、统计图表、Room/session repository 改动、生产 Kotlin、Gradle 或 prototype 改动。
 
 ## 已有产物
 
@@ -35,6 +35,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 15. `docs/testing/user-test-issue-template.md`
 16. `docs/planning/action-content-slice.md`
 17. `docs/planning/e10-training-mode-interaction-plan.md`
+18. `docs/planning/timer-dial-design-workflow.md`
 
 根目录还包含 story 工作流提示模板：
 
@@ -58,7 +59,7 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 - 三套内置 UI 皮肤审查、E9 用户测试前 UI readiness 和社区主题/layout 贡献检查清单。
 - 权限、隐私、普通通知、心率占位、恢复建议、音频提示、语音预留和内存态数据边界检查清单。
 - MVP 用户测试前总验收结论、问题分级、数字输入清空复现、编辑页开始按钮状态、E10/E11/E12 后续方向和用户测试 issue 模板。
-- E10.1 用户测试后训练模式边界、计时训练纯间歇计时器方向、大圆盘执行页原则、统一动作选择页决策、执行页主操作即时可达原则，以及 E10.2/E10.3/E10.4/E11/E12/E13 后续拆分。
+- E10.1 用户测试后训练模式边界、计时训练纯间歇计时器方向、大圆盘执行页原则、统一动作选择页决策、执行页主操作即时可达原则，以及 E10.2/E10.3/E10.4/E10.5/E10.6/E10.7/E10.8/E11/E12/E13 后续拆分。
 
 ### 前端原型
 
@@ -125,9 +126,9 @@ TrainFlow 已经具备首版产品基线、UX 基线、初始数据契约草案�
 
 除非用户改变方向，建议按以下顺序推进：
 
-1. 完成 `codex/e10-4-session-record-write-through` 分支 Review Gate。
-2. 后续按 E11/E12/E13 依次处理手动心率输入、真实统计图表和声音/女声 cue。
-3. 历史记录清理继续留给 E12 或持久化闭环后的独立 story。
+1. 完成 `codex/e10-5-timer-dial-design-workflow` 分支 Review Gate。
+2. 后续进入 E10.6 Timer Dial Figma / static visual variants，再进入 E10.7 Compose prototype 与 E10.8 production integration / animation polish。
+3. E11 手动心率、E12 统计图表 / 历史趋势和 E13 声音 / 女声 cue 继续保持独立阶段，不混入 Timer Dial 视觉重构。
 
 ## 验证快照
 
@@ -217,6 +218,8 @@ E10.2 新增计时训练纯间歇编辑页与大圆盘执行页首版实现；`f
 E10.3 新增力量 / 跟练执行页主操作可达性修复；`feature.workoutsession` 为力量和基础跟练补充即时控制 metadata 与结束训练二次确认 UI state。力量执行页保留现有深色执行页和确认层，不做新版力量 UI 重做；开始本组、完成本组、确认本组、休息中提前开始本组、暂停 / 继续和结束训练进入固定底部控制区，当前动作 / 组计时 / 休息倒计时主面板也可作为暂停 / 继续入口。跟练执行页改为可滚动内容 + 固定底部控制区，暂停 / 继续、跳过 / 下一步和结束训练无需滚动到底部查找，倒计时区域也可暂停 / 继续。两类执行页的结束训练都先打开二次确认，确认后才分发 `WorkoutCommand.EndSession(reason = "user_requested")`；取消不会结束训练。新增回归测试覆盖力量 active/rest/confirm、跟练 active/paused、三套 skin 的 control metadata 保留和结束确认 reducer。当前仍不实现真实 `WorkoutSession` 持久化、Room repository 闭环、历史真实写入或删除、心率设备、Health Connect / Wear OS / BLE、foreground service、exact alarm、notification action、语音、TTS、音频资源、统计图表、完整跟练平台或力量新版 UI。
 
 E10.4 新增训练记录闭环前置；`core.data.WorkoutSessionRepository` 通过 Room DAO / mapper 写入和读取本地真实 `WorkoutSession`，`workout_sessions` 记录 plan id、完整 MVP plan snapshot blocks、mode、status、startedAt / endedAt、total / effective / paused 秒数，`session_step_records` 保存计时 / 跟练步骤摘要，`strength_set_records` 保存力量训练已确认组的计划值、实际值、组耗时、实际休息和替换来源。E10.4 Review Gate 修复后，plan snapshot JSON 不再只保存 title / mode，读回后历史详情可从恢复后的 blocks 计算计划步骤/计划组数；力量训练 `totalElapsedSec` 采用 startedAt 到 endedAt 的 wall-clock 总耗时并包含 prepare / confirm 停留，`effectiveElapsedSec` 不包含暂停且当前不把 prepare / confirm 计入有效推进，`pausedElapsedSec` 单独保存暂停累计。计时、力量和基础跟练执行 route 在 completed / abandoned 终态首次出现时写入本地记录，并使用一次性 guard 与异常吞并边界避免重复插入或 Room 异常打断 UI；记录页生产入口改为读取 Room session records，示例 fixture 仅保留给 preview / 测试，不再覆盖真实记录。首页旧的 E5 记录 / 建议边界提示已清理。当前仍不实现历史记录清理、统计图表、趋势分析、云同步、账号体系、后台可靠计时、心率设备、Health Connect / Wear OS / BLE、foreground service、exact alarm、notification action、语音、TTS、音频资源、完整跟练平台或力量新版 UI。
+
+E10.5 新增 Timer Dial 设计工作流与重构范围；`docs/planning/timer-dial-design-workflow.md` 明确 E10.4 已完成并合入 `main`，TrainFlow 已具备本地真实 session record write-through，E10.5 不再处理 Room / session repository / 记录闭环。外部 APK / 截图只用于观察和学习 UI / 交互，不复制代码、资源、图标、字体、音频或专有动画资产，目标是 TrainFlow 自己的圆盘语言。工具路线收敛为 Figma 静态界面与规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现；Rive / Lottie 只适合小图标或装饰动效，不用于核心计时进度。Timer Dial 规格包括顶部总剩余时间、外圈本轮或当前运动结构、内圈总进度、中心圆当前阶段与暂停 / 继续、底部重置 / 跳过 / 结束图标操作；动效包括阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒，且必须来自 engine state。后续拆为 E10.6 Figma / static visual variants、E10.7 Compose prototype、E10.8 production integration and animation polish；E12 统计图表 / 历史趋势与 E13 声音 / 女声 cue 保持独立。当前仍不实现生产 Kotlin、Gradle、prototype、统计图表、心率设备、语音 / TTS、音频资源、foreground service、exact alarm、notification action 或第四套 skin。
 
 ## 新 Codex 会话提示词
 

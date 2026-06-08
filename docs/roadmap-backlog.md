@@ -985,14 +985,14 @@ stepsCompleted:
 
 - Then 决策日志记录计时训练回归纯间歇计时器，不再绑定动作库。
 - Then UX 文档记录计时训练大圆盘执行页原则、阶段模型和主操作可达原则。
-- Then roadmap/backlog 拆出 E10.2、E10.3、E10.4、E11、E12、E13。
+- Then roadmap/backlog 拆出 E10.2、E10.3、E10.4、E10.5、E10.6、E10.7、E10.8、E11、E12、E13。
 - Then 用户测试反馈按后续阶段分流。
 - Then 不实现 E10.2 UI，不改训练引擎，不新增真实记录持久化、心率设备、语音或统计图表。
 
 **交付结果:**
 
 - 新增 E10 训练模式交互计划，记录计时训练纯间歇计时器边界、阶段名称/时间/图标/颜色、阶段增删复制拖动排序、计划主题色、大圆盘执行页、暂停时长记录、固定阶段 cue 预留、统一执行页主操作原则和跟练/力量统一动作选择页。
-- 用户反馈已分流：记录未真实闭环与历史清理进入 E10.4/E12，手动心率输入进入 E11，真实设备进入 E11 或独立阶段，统计图表和趋势进入 E12，声音/女声 cue/音频共存进入 E13。
+- 用户反馈已分流：记录未真实闭环与历史清理进入 E10.4/E12，Timer Dial 圆盘视觉语言进入 E10.5-E10.8，手动心率输入进入 E11，真实设备进入 E11 或独立阶段，统计图表和趋势进入 E12，声音/女声 cue/音频共存进入 E13。
 - 本 story 未实现任何生产 UI、训练引擎、持久化、手动心率、真实设备、语音、TTS、音频资源、foreground service、notification action 或统计图表。
 
 ### Story E10.2: 计时训练编辑页与执行页重做
@@ -1072,7 +1072,7 @@ stepsCompleted:
 
 ### Story E10.4: 训练记录闭环前置
 
-**状态:** Implemented in `codex/e10-4-session-record-write-through`
+**状态:** Done and merged to `main`
 
 作为用户，
 我想完成训练后在记录页看到本次真实训练，
@@ -1095,6 +1095,91 @@ stepsCompleted:
 - `totalElapsedSec` 使用 startedAt 到 endedAt 的 wall-clock 总耗时，包含准备、确认、休息、正式组和暂停；`effectiveElapsedSec` 不包含暂停，力量训练当前不把 prepare / confirm 停留时间计入 effective；`pausedElapsedSec` 单独记录暂停累计。
 - completed / abandoned 终态写库仍是本地 Room MVP，使用一次性 guard 和异常吞并边界避免重复插入或 Room 异常打断 UI；这不是云同步、统计图表、历史清理或后台可靠计时承诺。
 - 不在 E10.4 中实现完整图表、趋势分析、历史记录清理、心率设备、Health Connect / Wear OS / BLE、语音、foreground service、exact alarm 或 notification action。
+
+**交付结果:**
+
+- E10.4 已完成 Review Gate PASS 并 fast-forward 合入 `main`。
+- 本地真实 `WorkoutSession` write-through 已具备，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可以写入 Room session records。
+- 记录页生产入口读取真实本地记录；示例 fixture 仅保留给 preview / 测试。
+- E10.5 以后不再处理记录闭环，不改 Room、DAO、session repository 或记录页数据源。
+
+### Story E10.5: Timer Dial 设计工作流与重构范围
+
+**状态:** Documented in `docs/planning/timer-dial-design-workflow.md`
+
+作为产品负责人和设计负责人，
+我想明确 Timer Dial 圆盘视觉语言重构的工具路线、设计边界、视觉规格、动效规格和后续实现拆分，
+以便后续 E10.6/E10.7/E10.8 只做清晰的设计与实现验证，不把记录、统计、心率或声音能力混入本阶段。
+
+**验收标准:**
+
+- Then 文档记录 E10.4 已完成并合入 `main`，TrainFlow 已具备本地真实 session record write-through。
+- Then E10.5 不再处理记录闭环，不改 Room/session repository。
+- Then 文档明确外部 APK / 截图只用于观察和学习 UI / 交互，不复制代码、资源、图标、字体、音频或专有动画资产。
+- Then 文档明确目标是 TrainFlow 自己的 Timer Dial 圆盘语言。
+- Then 文档明确工具路线：Figma 做静态界面和规格，HTML / Canvas 可选验证动画，Jetpack Compose Canvas 是最终 Android 生产实现方式，Rive / Lottie 只用于小图标或装饰动效，APK 观察只做研究记录。
+- Then 文档明确 Timer Dial 规格：顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆当前阶段与暂停 / 继续、底部少量图标操作。
+- Then 文档明确动效规格：阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒，并且全部来自 engine state。
+- Then 文档明确黑红高对比只是参考方向，不新增第四套 skin。
+- Then roadmap/backlog 拆出 E10.6、E10.7、E10.8，并保持 E12 统计图表和 E13 声音 / 女声 cue 独立。
+
+**禁止范围:**
+
+- 不解析或复制 APK 代码 / 资源。
+- 不提交 APK、截图、录屏、反编译输出、日志或本地临时文件。
+- 不写生产 Kotlin。
+- 不改 Gradle。
+- 不改 prototype。
+- 不改 Room/session record。
+- 不做手动心率、统计图表、语音 / TTS、真实设备、foreground service、exact alarm 或 notification action。
+- 不新增第四套 skin。
+
+**交付结果:**
+
+- 新增 `docs/planning/timer-dial-design-workflow.md`，作为 E10.5 主文档。
+- 决策日志记录 E10.5 docs-only 范围、工具路线和外部参考边界。
+- E10 规划、UX、DESIGN 和项目状态同步 Timer Dial 视觉语言、动效和后续拆分。
+
+### Story E10.6: Timer Dial Figma / static visual variants
+
+作为设计负责人，
+我想在 Figma 中输出 Timer Dial 静态视觉方案和规格，
+以便先比较风格、颜色、弧线厚度、中心圆和操作层级，再进入 Compose 原型。
+
+**验收标准:**
+
+- Then 至少输出 Official Flow 方向的 Timer Dial 静态规格。
+- Then 可探索黑红高对比、赛博霓虹、Tile Flow 和 Big Type 适配，但不新增第四套 skin。
+- Then 规格覆盖顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆、底部图标操作、暂停态和最后 N 秒提醒状态。
+- Then 不实现 Android 生产 UI，不改 Kotlin / Gradle / prototype。
+
+### Story E10.7: Timer Dial Compose prototype
+
+作为 Android 开发者，
+我想用 Jetpack Compose Canvas 验证 Timer Dial 圆盘绘制、状态映射和关键动效，
+以便生产集成前确认 engine state 驱动的进度、暂停和阶段切换都可靠。
+
+**验收标准:**
+
+- Then Compose Canvas 可表达外圈阶段弧线、内圈总进度、中心阶段和点击暂停 / 继续。
+- Then 阶段弧线和总进度只来自计时训练 UI state / engine state，不使用视觉假进度。
+- Then 覆盖 work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒动效。
+- Then 不改 Room/session repository，不做统计图表、声音、语音或真实设备接入。
+
+### Story E10.8: Timer Dial production integration and animation polish
+
+作为计时训练用户，
+我想在生产计时执行页使用完整 Timer Dial 圆盘语言，
+以便运动中更直观地看到阶段结构、当前进度、总进度和主控制。
+
+**验收标准:**
+
+- Then 生产计时训练执行页使用通过 E10.6/E10.7 验证的 Timer Dial。
+- Then Official Flow、Tile Flow 和 Big Type 都有明确适配，不新增第四套 skin。
+- Then 暂停 / 继续、跳过 / 下一阶段、重置或结束操作保持即时可达，结束训练仍需二次确认。
+- Then 动效继续由 engine state / `WorkoutEvent` / UI state 驱动。
+- Then 小屏可读性、主控制可达性和终态不污染进度有回归验证。
+- Then 不混入 E12 统计图表、E13 声音 / 女声 cue、心率设备或后台可靠计时。
 
 ### Story E10.x: 后续力量训练新版 UI 设计
 
@@ -1213,7 +1298,7 @@ stepsCompleted:
 | FR-070 到 FR-081 | E5.1, E5.2, E5.3, E5.4 |
 | UI 定制与设计系统 | E8.1, E8.2, E8.3, E8.4 |
 | 用户测试后训练模式边界 | E10.1, E10.2, E10.3 |
-| 真实记录、统计、心率和音频后续 | E10.4, E11, E12, E13 |
+| Timer Dial 设计与真实记录、统计、心率和音频后续 | E10.4, E10.5, E10.6, E10.7, E10.8, E11, E12, E13 |
 
 ## 6. 推荐实施顺序
 
@@ -1227,10 +1312,11 @@ stepsCompleted:
 8. E7.1 到 E7.3：提醒、声音、震动、偏好。
 9. E8.1 到 E8.4：设计系统、UI shell 和开源定制边界。
 10. E9.1 到 E9.4：硬化、验收与用户测试修复包。
-11. E10.1 到 E10.4：训练模式边界、计时训练重做、执行页主操作可达性和记录闭环前置。
-12. E11：手动心率输入与真实设备接口策略。
-13. E12：真实记录、总统计、图表、趋势分析和历史记录清理。
-14. E13：声音提醒、固定女声 cue 和音频共存。
+11. E10.1 到 E10.5：训练模式边界、计时训练重做、执行页主操作可达性、记录闭环前置和 Timer Dial 设计工作流。
+12. E10.6 到 E10.8：Timer Dial 静态视觉方案、Compose 原型和生产集成 / 动画 polish。
+13. E11：手动心率输入与真实设备接口策略。
+14. E12：真实记录、总统计、图表、趋势分析和历史记录清理。
+15. E13：声音提醒、固定女声 cue 和音频共存。
 
 ## 7. 下一轮建议
 
@@ -1256,22 +1342,23 @@ E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临�
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、心率、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
-E10.4 已完成训练记录闭环前置，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录；当前无 P0/P1 blocker，后续方向为 Review Gate、E11、E12 和 E13。
+E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
+E10.5 已记录 Timer Dial 设计工作流与重构范围：外部 APK / 截图只做 UI / 交互研究，不复制代码、资源或资产；工具路线为 Figma 静态规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现，Rive / Lottie 仅用于小图标或装饰动效；Timer Dial 规格包含顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆当前阶段和底部少量图标操作；后续拆为 E10.6 / E10.7 / E10.8，E12 统计和 E13 声音保持独立。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E10.4 Review Gate，随后进入 E11 / E12 / E13
+Story E10.6 Timer Dial Figma / static visual variants，随后进入 E10.7 / E10.8；E11 / E12 / E13 仍保持独立阶段
 ```
 
-E10.4 Review Gate 建议重点确认：
+E10.6 建议重点确认：
 
-1. 完成训练后真实 `WorkoutSession` 写入是否正确区分计划快照、实际执行、开始 / 结束时间、有效训练时间和暂停总时长。
-2. 记录页是否从真实持久化数据展示今天刚完成的训练，同时不再用 fixture 或内存态暗示真实长期记录。
-3. 计时、力量和基础跟练的 completed / abandoned 终态是否统一写入记录，且 terminal 状态后不污染进度。
-4. 历史记录清理和统计图表继续留给 E12 或持久化闭环后的 story，本阶段不做假删除或假趋势。
-5. 本阶段未接入心率设备、语音、foreground service、notification action、完整统计图表或医疗判断。
+1. Timer Dial 的顶部、外圈、内圈、中心圆和底部图标操作是否形成 TrainFlow 自己的视觉语言。
+2. 黑红高对比、赛博霓虹、Official Flow、Tile Flow 和 Big Type 适配是否只是风格方案，不新增第四套 skin。
+3. 阶段颜色、弧线粗细、暂停态、阶段切换和最后 N 秒提醒是否有静态规格。
+4. 外部 APK / 截图只作为研究输入，不复制代码、资源、图标、字体、音频或专有动画。
+5. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.6。
 
 ## 8. 暂缓事项
 
