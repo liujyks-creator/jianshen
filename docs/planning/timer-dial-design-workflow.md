@@ -141,12 +141,16 @@ E10.5 只做规划和设计范围收口：
 
 目标：输出 Timer Dial 静态视觉方案和规格。
 
+状态：E10.6 已记录到 `docs/planning/timer-dial-static-visual-variants.md`，仍为 docs-only design specification，不实现 Android、不写 Kotlin、不改 Gradle、不改 prototype。
+
 范围：
 
 - Figma 静态页面。
 - Official Flow、Tile Flow、Big Type 的适配说明。
 - 黑红高对比、赛博霓虹和 TrainFlow Official Flow 方向的对比。
 - 颜色、弧线厚度、中心圆、图标、底部操作和暂停态规格。
+- 执行页 active work、active rest、warmup / cooldown、paused、resume transition、stage transition、last-N-seconds cue、completed、abandoned、end confirmation 和 720x1280 小屏状态帧。
+- 计时编辑页 header、阶段列表、阶段行 / 阶段卡、添加、复制、删除、颜色 / 图标 picker、快捷时长、时长细调、展开 / 收起、拖动排序、上移 / 下移、保存 / 取消和小屏底部操作状态帧。
 
 不实现 Android 生产 UI。
 

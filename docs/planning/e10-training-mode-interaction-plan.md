@@ -1,8 +1,8 @@
 # E10 训练模式边界与执行页交互计划
 
-**状态:** E10.1 决策记录；E10.2、E10.3、E10.4 已落地；E10.5 记录 Timer Dial 设计工作流
+**状态:** E10.1 决策记录；E10.2、E10.3、E10.4 已落地；E10.5 记录 Timer Dial 设计工作流；E10.6 记录静态视觉帧规格
 **日期:** 2026-06-09
-**范围:** 产品边界、执行页交互原则、后续 story 拆分、用户测试反馈分流、E10.2 / E10.3 / E10.4 实现结果、E10.5 Timer Dial 视觉语言重构范围
+**范围:** 产品边界、执行页交互原则、后续 story 拆分、用户测试反馈分流、E10.2 / E10.3 / E10.4 实现结果、E10.5 Timer Dial 视觉语言重构范围、E10.6 Timer Dial 静态规格范围
 **仍不包含:** 生产 Timer Dial UI、心率设备、语音、TTS、音频资源、统计图表、力量 / 跟练完整新版 UI
 
 ## 1. E10.1 结论
@@ -276,6 +276,55 @@ E10.2 已确认未实现：
 - E10.8 Timer Dial production integration and animation polish。
 - E13 声音 / 女声 cue 与视觉提醒联动。
 - E12 统计图表 / 历史趋势，不混入 E10.5。
+
+### E10.6 Timer Dial Figma / static visual variants
+
+目标：输出 Timer Dial 静态视觉方案和规格，先让 Official Flow 的执行页和计时编辑页关键状态可评审，再把 Tile Flow / Big Type 作为适配规则交给 E10.7 / E10.8。
+
+状态：E10.6 已记录到 `docs/planning/timer-dial-static-visual-variants.md`，仍为 docs-only design specification，不实现 Android，不写 Kotlin，不改 Gradle，不改 prototype，不开始 E10.7。
+
+执行页静态帧：
+
+- active work。
+- active rest。
+- warmup / cooldown。
+- paused。
+- resume transition。
+- stage transition。
+- last-N-seconds cue。
+- completed。
+- abandoned。
+- end confirmation。
+- 720x1280 小屏状态。
+
+计时编辑页静态帧：
+
+- 编辑页 header。
+- 阶段列表。
+- 阶段行 / 阶段卡两种方案。
+- 添加阶段 sheet。
+- 复制阶段。
+- 删除确认。
+- 颜色选择 picker。
+- 图标选择 picker。
+- 快捷时长选择。
+- 时长细调，stepper / input 必须存在，滑块只能作为辅助。
+- 展开 / 收起。
+- 拖动排序。
+- 上移 / 下移替代路径。
+- 保存 / 取消反馈。
+- 小屏底部操作不遮挡编辑内容。
+
+规格边界：
+
+- 顶部总剩余时间低于中心倒计时层级。
+- 外圈表达本轮 / 当前运动结构，work / rest / warmup / cooldown 颜色区分，work 粗弧、rest 细弧。
+- 当前阶段弧线、内圈总进度、暂停、完成、废弃和最后 N 秒提醒都必须来自 `TimedWorkoutEngine` / UI state / `WorkoutEvent`。
+- 中心圆显示阶段图标、编号 / 名称、倒计时，并承担暂停 / 继续主交互。
+- 底部只保留少量图标操作；结束训练必须二次确认。
+- 不复制 APK 代码、XML、资源、图标、字体、音频、动画参数、命名或逐像素视觉。
+- 不使用健身姿势动画或动作教学 animated SVG。
+- 不新增第四套 skin，不混入 E11 / E12 / E13。
 
 ### E11 手动心率输入与设备接口保留
 

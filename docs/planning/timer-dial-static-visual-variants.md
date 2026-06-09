@@ -1,0 +1,300 @@
+# E10.6 Timer Dial Figma / Static Visual Variants
+
+**状态:** E10.6 docs-only design specification
+**日期:** 2026-06-10
+**范围:** Timer Dial 静态视觉帧、Figma 输出建议、计时编辑页关键状态帧、三套内置 skin 适配说明、后续 E10.7 handoff
+**不包含:** Android 实现、Kotlin、Gradle、prototype、E10.7 Compose prototype、E10.8 production integration、E11 心率、E12 统计、E13 声音 / 女声 cue、第四套 skin
+
+## Findings
+
+1. E10.4 已完成本地真实 `WorkoutSession` write-through；E10.6 不处理 Room、DAO、session repository、记录页数据源或历史清理。
+2. E10.5 已把 Timer Dial 路线收敛为 Figma 静态规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现；E10.6 只完成第一段静态规格。
+3. 外部 APK 解析 / 反编译参考目录的只读宽扫描只用于确认信息架构、编辑页分层和 UI 微交互方向；本规格不复制 APK 代码、XML、资源、动画参数、图标、字体、音频、命名或逐像素视觉。
+4. Timer Dial 不是新训练模式。它是计时训练纯间歇执行页的视觉语言，必须继续由 `TimedWorkoutEngine`、计时 UI state、`WorkoutCommand` 和 `WorkoutEvent` 驱动。
+5. E10.6 的静态帧必须先覆盖 Official Flow。Tile Flow 和 Big Type 只做适配规则，不新增第四套 skin，也不把计时执行页拆成碎片化 dashboard。
+
+## E10.6 Design Scope
+
+E10.6 的设计输出建议放在 Figma 一个独立 page 中，命名为 `E10.6 Timer Dial Static Variants`。推荐 frame 分组：
+
+1. `01 Findings And Constraints`：一页约束摘要，标明 engine-state-only、no copied assets、no E11/E12/E13。
+2. `02 Execution / Official Flow`：执行页状态帧，Official Flow 为主线。
+3. `03 Execution / Skin Adaptation`：Tile Flow、Big Type 适配帧。
+4. `04 Editing / Timer Plan`：计时编辑页关键状态帧。
+5. `05 Components And Tokens`：圆盘层级、弧线厚度、颜色语义、图标语义、底部图标按钮状态。
+6. `06 Accessibility / Small Screen`：720x1280 小屏、触控、对比度、TalkBack 标签和 reduce-motion 标注。
+
+静态设计必须表达状态，不假装已经实现动画。所有进度数值、阶段结构、暂停、完成和废弃终态都应标注来源：`TimedWorkoutEngineState`、计时 session UI state 或 `WorkoutEvent`。
+
+### Visual Tokens
+
+Official Flow 建议以 `DESIGN.md` token 为基础：
+
+| 语义 | 建议颜色 | 用途 |
+|---|---|---|
+| Page background | `#0F1720` | 训练执行页深色背景。 |
+| Dial secondary surface | `#17212B` | 圆盘底轨、中心圆、暂停态遮罩底色。 |
+| Work | `#F26B4F` | 工作阶段主弧线、最后 N 秒强调。 |
+| Rest | `#65A9FF` | 休息阶段细弧线、休息状态图标。 |
+| Warmup | `#2FBF8F` | 热身阶段、进入训练前准备状态。 |
+| Cooldown | `#367FD6` | 放松 / cooldown 阶段。 |
+| Custom | `#D9921E` | 自定义阶段，需配图标 / 标签避免只靠颜色。 |
+| Completed | `#2EAD72` | 完成终态。 |
+| Abandoned / danger | `#D84B4B` | 结束确认和废弃终态。 |
+
+圆盘规格建议：
+
+- 主视口按 360dp 宽设计时，Timer Dial 外径建议 280-304dp；720x1280 小屏按 360x640dp 等效检查时外径可降到 248-264dp。
+- 外圈 `work` 弧线 16-20dp；`rest` 弧线 8-10dp；`warmup` / `cooldown` 10-12dp；自定义阶段 10-14dp，按阶段类型图标辅助识别。
+- 外圈段间 gap 2-4 度，避免阶段粘连；当前阶段可用更高亮度、轻微外发光或端点强调表达焦点，但不得遮挡其他阶段结构。
+- 内圈总进度 5-7dp，低于当前阶段弧线层级；active 推进，paused 冻结，completed / abandoned 停止。
+- 中心圆直径建议为外径的 58%-64%；中心倒计时使用 `timerL` 语义，Official Flow 常规帧约 64-72sp，小屏压到 52-60sp。
+
+## Timer Dial Static Frames
+
+执行页状态帧至少输出以下 11 组。每组建议同时标注：状态来源、当前阶段、剩余秒数、总进度 fraction、当前阶段 fraction、可用命令。
+
+### 1. Active Work
+
+- 顶部总剩余时间放在页面顶端，使用 caption / label 层级，例如 `总剩余 18:42`，不大于中心倒计时的 30%-36%。
+- 外圈显示本轮结构，当前 `work` 段为粗弧且高亮推进；已完成段弱化但仍可辨认。
+- 内圈显示整次训练总进度，使用细弧，不与当前阶段争抢。
+- 中心圆显示阶段图标、阶段编号或名称、主倒计时和暂停入口。例如：`WORK 03`、`深蹲节奏` 或用户命名阶段、`00:28`。
+- 底部保留少量图标操作：重置、跳过 / 下一阶段、结束。结束图标必须进入二次确认。
+
+### 2. Active Rest
+
+- 顶部总剩余时间层级保持不变。
+- 当前 `rest` 段使用细弧和休息色，避免休息与 work 同权。
+- 中心显示休息图标、`REST` / 用户命名休息阶段、倒计时和可点击继续 / 暂停区域。
+- 下一阶段预告可放在中心圆下方或圆盘下缘的辅助文本，不进入主字号。
+- 底部可保留跳过 / 下一阶段；重置和结束仍可达但不抢主层级。
+
+### 3. Warmup / Cooldown
+
+- `warmup` 使用准备感颜色，视觉强度低于 work 但高于底轨。
+- `cooldown` 使用冷却 / 收束感颜色，不使用 completed 绿色，避免误读为训练已完成。
+- 中心图标应表达阶段类型，不使用动作教学图、姿势动画或外部素材。
+- 顶部总剩余时间仍是辅助；中心倒计时保持主信息。
+
+### 4. Paused
+
+- active 弧线和内圈总进度冻结在暂停瞬间的位置。
+- 中心圆切换为暂停态：显示暂停图标 / `已暂停` / 当前剩余时间，继续入口明确。
+- 背景和弧线可整体降低饱和度；不要让暂停态看起来仍在推进。
+- 底部跳过 / 结束可用；重置和结束仍需防误触层级，结束保留二次确认。
+
+### 5. Resume Transition
+
+- 静态帧表达从 paused 恢复到 active 的中间状态：中心显示继续图标或 `继续中`，当前阶段弧线焦点恢复到原位置。
+- 规格中只定义语义：恢复后从暂停冻结点继续，不补跑暂停期间的视觉进度。
+- 该帧是 E10.7 动效参考，不指定 APK 或第三方 easing、duration、关键帧。
+
+### 6. Stage Transition
+
+- 输出 `rest -> work`、`work -> rest` 或 `warmup -> work` 的焦点迁移帧。
+- 上一阶段弧线停止并弱化，下一阶段弧线获得焦点；中心圆同步切换图标、名称和倒计时。
+- 阶段切换必须由 `WorkoutEvent` / UI state 触发，不使用独立动画时钟改写训练状态。
+
+### 7. Last-N-Seconds Cue
+
+- 最后 N 秒提醒可强调中心数字、当前阶段弧线端点或轻微脉冲环。
+- 强调层不得遮挡中心暂停 / 继续，也不得遮挡底部结束、跳过等主控制。
+- Work 和 rest 的最后 N 秒要分别可辨：work 可使用 action 强调，rest 可使用 rest 色增强加数字强调。
+- 若用户关闭强化动画，静态规格应保留非动画状态：颜色 / 字重 / 数字大小变化即可。
+
+### 8. Completed
+
+- 圆盘停止推进，内圈总进度显示完成状态。
+- 中心显示完成图标、`已完成`、总时长或有效训练时间摘要，但不进入 E12 图表 / 趋势。
+- 底部操作替换为查看总结 / 返回等后续导航建议；不再显示可推进训练的跳过按钮。
+- completed 不能继续消费 tick 造成进度变化。
+
+### 9. Abandoned
+
+- 圆盘停止推进，保留废弃发生时的进度快照。
+- 中心显示 `已结束` / `已放弃` 和简要状态，不伪装为完成。
+- 使用 error / danger 语义但避免全屏医疗化警报。
+- 底部可建议返回总结或记录，但不展示继续推进控件。
+
+### 10. End Confirmation
+
+- 结束训练必须二次确认。
+- 推荐用底部 sheet 或紧凑 dialog：标题 `结束本次训练？`，正文说明将保存已完成进度或记录为提前结束，主危险按钮为确认结束，次按钮为继续训练。
+- Sheet 不应完全遮挡中心倒计时；背景可冻结并弱化，用户能确认自己正在结束哪一段训练。
+- 取消确认后回到原 active / paused 状态，不发送 `EndSession`。
+
+### 11. 720x1280 Small Screen State
+
+- 以 720x1280 px 或等效 360x640dp frame 检查 Official Flow active work、active rest、paused、end confirmation。
+- 顶部总剩余时间、中心倒计时、中心暂停 / 继续、底部重置、跳过 / 下一阶段、结束都必须首屏可见。
+- 小屏下可减少下一阶段预告、说明文字和装饰 glow；不得压缩触控目标低于 48dp。
+- 最后 N 秒提醒不得把底部操作挤出或覆盖。
+
+## Editing Flow Static Frames
+
+计时编辑页关键状态帧至少覆盖以下 15 组。编辑页可以信息更丰富，但必须保持三段式扫描：左侧身份标识，中间名称 / 时间 / 摘要，右侧操作。
+
+### 1. Editing Header
+
+- Header 展示计划名称、预计总时长、阶段数量和保存状态。
+- 主操作为保存 / 立即开始；取消或返回是次操作。
+- 若草稿无效，保存 / 开始禁用并给出短原因，不用长说明占满首屏。
+
+### 2. Stage List
+
+- 列表清楚区分热身、工作、休息、放松、自定义阶段。
+- 列表顶部可显示总时长和轮次 / 阶段结构摘要。
+- 阶段颜色和图标用于识别，不引入动作教学素材。
+
+### 3. Stage Row And Stage Card Variants
+
+- 阶段行方案：左侧为色块 / 图标 / 类型，中央为阶段名、时间、提醒摘要，右侧为拖动手柄、更多操作或编辑入口。
+- 阶段卡方案：适合 Tile Flow 或宽松编辑；仍保持左中右区域，不让复制、删除、拖动混在同一区域。
+- 选择态、编辑态、拖动态、错误态要分别有明确边界。
+
+### 4. Add Stage Sheet
+
+- Sheet 提供阶段类型、名称、时长、颜色和图标。
+- 默认提供常用类型：work、rest、warmup、cooldown、custom。
+- 添加后插入位置应可见；热身 / 放松固定边界需要在 UI 上明确。
+
+### 5. Duplicate Stage
+
+- 复制操作从阶段行右侧更多菜单或图标进入。
+- 新阶段名称可自动加 `副本` 或编号，但不复制外部命名规则。
+- 复制后给出短反馈，并保持用户在列表上下文中。
+
+### 6. Delete Confirmation
+
+- 删除需要确认，尤其当阶段有自定义名称、颜色或时长时。
+- 危险按钮使用 error 语义；取消按钮优先保持安全路径。
+- 删除热身 / 放松固定阶段时，如后续仍允许，应展示边界说明；当前建议固定阶段只允许调整时长 / 收起，不建议直接删除。
+
+### 7. Color Picker
+
+- 使用色块 / 网格 + 当前选择反馈。
+- 每个色块应有名称或 TalkBack 标签，例如 `工作橙`、`休息蓝`。
+- 当前选择用边框、勾选图标和标签共同表达，不只靠颜色。
+
+### 8. Icon Picker
+
+- 图标选择只表达阶段类型或状态：热身、工作、休息、放松、自定义、轮次、节奏等。
+- 不使用健身姿势动画、动作教学 animated SVG、外部 APK 图标或专有图形。
+- 当前选择用边框、勾选和名称表达。
+
+### 9. Quick Duration Choices
+
+- 提供常用快捷时长，例如 10s、20s、30s、45s、60s、90s、120s。
+- 快捷值是辅助输入，不替代细调。
+- 选择后更新时长 input，并同步预计总时长。
+
+### 10. Duration Fine Tune
+
+- 必须提供 stepper 和 / 或 input；滑块只能作为辅助，不作为唯一输入。
+- Stepper 建议支持小步 5s / 大步 15s 或 30s；具体实现留给 E10.7/E10.8。
+- 输入清空状态要可表达，保存 / 开始禁用并显示短原因，沿用 E9.4 数字输入边界。
+
+### 11. Expand / Collapse
+
+- 阶段行默认显示名称、时间、类型和摘要。
+- 展开后显示颜色、图标、提醒、复制 / 删除、上移 / 下移等高级操作。
+- 收起后保留修改结果摘要，避免用户忘记隐藏设置。
+
+### 12. Drag Sorting
+
+- 拖动只从明确手柄触发。
+- 拖动态显示浮起、目标插入位置和不可拖动边界。
+- 输入框、颜色 / 图标入口、复制、删除和行空白区域不触发拖动。
+
+### 13. Non-Drag Sorting Alternative
+
+- 每个可排序阶段提供上移 / 下移路径，服务小屏、辅助功能和不习惯拖拽的用户。
+- 上移 / 下移禁用态要明确，例如第一项不能上移、最后可排序项不能下移。
+- 热身固定开头、放松固定结尾时，边界应在禁用态说明。
+
+### 14. Save / Cancel Feedback
+
+- 保存成功使用 success 语义短反馈。
+- 保存失败使用 error 语义和具体可修复原因。
+- 取消编辑前如有未保存修改，应确认；无修改可直接返回。
+
+### 15. Small Screen Bottom Actions
+
+- 720x1280 小屏下，底部保存 / 开始操作不能遮挡正在编辑的阶段内容。
+- 若使用固定底部栏，列表底部应有足够 padding，最后一行完全可滚动到固定栏上方。
+- Sheet 打开时应遵守安全区，不遮挡关键 input、stepper 或确认按钮。
+
+## Interaction Animation Spec
+
+本节只定义设计语义，不实现动画。E10.7 / E10.8 应使用 TrainFlow 自己的 Compose / Material 动效实现，不复制 APK 动画参数、duration、easing、关键帧或路径。
+
+1. Center tap pause / resume：点击中心圆后发送 `PauseSession` 或 `ResumeSession`；paused 静态帧冻结弧线，resume 从冻结点继续。
+2. Dial active progress：active 时当前阶段弧线和内圈总进度按 engine / UI state 推进；paused、completed、abandoned 不推进。
+3. Stage focus migration：阶段切换由 `WorkoutEvent` 或 UI state 差异触发；上一阶段停住，下一阶段获得焦点。
+4. Work / rest change：work 切 rest 时粗弧转为细弧和休息色；rest 切 work 时恢复粗弧和 action 色。变化应清晰但不整页闪烁。
+5. Last-N-seconds cue：根据用户 cue settings 表达数字强调、弧线增强或轻微脉冲；提醒不得遮挡主控制，不引入声音或女声 cue。
+6. Bottom icon buttons：pressed、disabled、focus、danger confirm 状态要有静态规格；结束按钮不能在一次点击后直接结束。
+7. Editing add / expand / sort / picker / delete：添加 sheet、展开 / 收起、拖动排序、颜色 / 图标选择和删除确认都应有反馈状态，但只作为 E10.7/E10.8 的设计 handoff。
+8. Reduce motion：用户关闭强化动画时，保留状态色、字号和静态强调，不做脉冲或强闪烁。
+
+## Official Flow / Tile Flow / Big Type Adaptation
+
+### Official Flow
+
+- Official Flow 是 E10.6 必须完成的主方案。
+- 使用 `DESIGN.md` 的深色训练执行面板、冷静底色、action work 色和 accent / focus 辅助色。
+- 页面应安静、可扫读、控件少；当前阶段、倒计时和中心暂停 / 继续是最高层级。
+
+### Tile Flow
+
+- Tile Flow 可把 Timer Dial 放入更模块化的训练工作区，但执行页不能碎片化。
+- 圆盘仍是单一主磁贴或全屏主区域；下一阶段、总剩余和少量指标可以作为辅助磁贴，但不得高于中心倒计时。
+- 阶段列表编辑页可以使用阶段卡方案，但不能卡片嵌套卡片，也不能让拖动、编辑、删除区域混乱。
+
+### Big Type
+
+- Big Type 优先远距离可读：中心倒计时更大，阶段名称更短，辅助信息更少。
+- 外圈可简化非当前阶段标签，只保留颜色 / 粗细 / 段位结构。
+- 底部图标按钮触控目标应更大，建议 56dp 或以上；文字标签可只在必要时显示。
+- 720x1280 小屏下 Big Type 仍必须保留中心暂停 / 继续、跳过 / 下一阶段和结束确认路径。
+
+## Accessibility And Small Screen Checks
+
+1. 对比度：中心倒计时、顶部总剩余、底部图标和确认按钮必须满足 WCAG AA；非文本图形元素至少满足 3:1。
+2. 触控：中心圆、底部图标按钮、编辑页拖动手柄、stepper、picker 色块和确认按钮不小于 48dp。
+3. 非颜色表达：阶段类型必须同时用颜色、图标和文本 / 可访问标签表达；work / rest 不能只靠红蓝区分。
+4. TalkBack：中心圆标签应读出当前状态，例如 `工作阶段，剩余 28 秒，双击暂停`；paused 时读 `已暂停，双击继续`。
+5. 最后 N 秒：强化提醒不能闪烁过强，不能遮挡主控；reduce-motion 下使用静态强调。
+6. 小屏：720x1280 检查 active work、active rest、paused、last-N cue、end confirmation、编辑页底部操作和 picker sheet。
+7. 误触：结束训练必须二次确认；重置若会清空本次进度，也应确认或延后到 E10.7 明确命令边界。
+
+## Do Not Use / Legal Boundary
+
+1. 不复制 APK 代码、XML、资源、图标、字体、音频、SVG/PNG、animated SVG、动画 XML、easing、duration、关键帧、路径、控件命名、资源命名或逐像素视觉。
+2. 不提交 APK、截图、录屏、反编译输出、日志或临时研究产物。
+3. 不使用健身姿势动画或动作教学 animated SVG；阶段图标只表达阶段类型或状态。
+4. 不新增第四套 skin。黑红高对比、赛博霓虹只能作为三套内置 skin 的视觉探索或 mood 参考。
+5. 不混入 E11 心率、E12 统计图表 / 趋势、E13 声音 / 女声 cue / 音频资源。
+6. 不允许 Timer Dial 使用视觉假进度、独立计时器或绕过 `TimedWorkoutEngine` 的状态。
+
+## Suggested E10.7 Handoff Notes
+
+E10.7 Compose prototype 可以从以下输入开始，但本轮不实现：
+
+1. 建立 `TimerDialUiState` 或等价 mapper，字段至少包含：phase type、phase name、icon key、color hex、current phase progress、total progress、remaining seconds、total remaining seconds、status、last-N cue state、available commands。
+2. Compose Canvas 绘制外圈阶段结构、当前阶段推进弧和内圈总进度；所有 fraction 来自 UI state。
+3. 中心圆点击只分发 `WorkoutCommand.PauseSession` / `ResumeSession`，不直接修改计时。
+4. 阶段切换和 last-N cue 消费 `WorkoutEvent` / UI state；不引入声音、TTS、女声 cue 或音频素材。
+5. 对 Official Flow 先实现可运行 prototype，再验证 Tile Flow / Big Type token 和布局适配。
+6. 回归检查包含 720x1280、小屏 TalkBack 标签、终态停止推进、结束二次确认、paused 冻结、completed / abandoned 防污染。
+
+## Verification Notes
+
+E10.6 只改 Markdown / 设计文档。验证要求：
+
+1. 运行 `git diff --check`。
+2. 运行 `git diff --name-status`。
+3. 确认 diff 只包含 Markdown / 设计文档。
+4. 不运行 Gradle 或 npm，除非误改代码。
+5. 确认未 stage、commit、移动 APK 或参考解析产物。

@@ -1142,6 +1142,8 @@ stepsCompleted:
 
 ### Story E10.6: Timer Dial Figma / static visual variants
 
+**状态:** Documented in `docs/planning/timer-dial-static-visual-variants.md`
+
 作为设计负责人，
 我想在 Figma 中输出 Timer Dial 静态视觉方案和规格，
 以便先比较风格、颜色、弧线厚度、中心圆和操作层级，再进入 Compose 原型。
@@ -1149,9 +1151,28 @@ stepsCompleted:
 **验收标准:**
 
 - Then 至少输出 Official Flow 方向的 Timer Dial 静态规格。
+- Then 执行页静态帧覆盖 active work、active rest、warmup / cooldown、paused、resume transition、stage transition、last-N-seconds cue、completed、abandoned、end confirmation 和 720x1280 小屏状态。
+- Then 计时编辑页静态帧覆盖 header、阶段列表、阶段行 / 阶段卡、添加阶段 sheet、复制阶段、删除确认、颜色 / 图标 picker、快捷时长、时长细调、展开 / 收起、拖动排序、上移 / 下移、保存 / 取消反馈和小屏底部操作。
 - Then 可探索黑红高对比、赛博霓虹、Tile Flow 和 Big Type 适配，但不新增第四套 skin。
-- Then 规格覆盖顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆、底部图标操作、暂停态和最后 N 秒提醒状态。
+- Then 规格覆盖顶部总剩余时间、外圈阶段结构、work / rest / warmup / cooldown 颜色区分、work 粗弧、rest 细弧、当前阶段弧线状态、内圈总进度、中心圆、底部图标操作、暂停态和最后 N 秒提醒状态。
+- Then Timer Dial 进度必须绑定 `TimedWorkoutEngine` / UI state / `WorkoutEvent`，不允许视觉假进度。
+- Then 结束训练仍需二次确认，最后 N 秒提醒不得遮挡主控制。
 - Then 不实现 Android 生产 UI，不改 Kotlin / Gradle / prototype。
+
+**禁止范围:**
+
+- 不复制 APK 代码、XML、资源、图标、字体、音频、SVG/PNG、animated SVG、动画 XML、easing、duration、关键帧、路径、控件命名、资源命名或逐像素视觉。
+- 不使用健身姿势动画或动作教学 animated SVG。
+- 不新增第四套 skin。
+- 不混入 E11 心率、E12 统计、E13 声音 / 女声 cue。
+- 不启动 E10.7 Compose prototype。
+
+**交付结果:**
+
+- 新增 `docs/planning/timer-dial-static-visual-variants.md` 作为 E10.6 主文档。
+- 文档按 Findings、E10.6 Design Scope、Timer Dial Static Frames、Editing Flow Static Frames、Interaction Animation Spec、Official Flow / Tile Flow / Big Type Adaptation、Accessibility And Small Screen Checks、Do Not Use / Legal Boundary、Suggested E10.7 Handoff Notes 和 Verification Notes 输出。
+- 明确 Figma page / frame 分组建议、Official Flow 视觉 token、圆盘弧线厚度、执行页 11 组状态帧、计时编辑页 15 组状态帧、互动动画语义、三套内置 skin 适配、小屏 / 无障碍检查和法律边界。
+- 决策日志记录 E10.6 静态规格必须先于 Compose 原型，并保持 engine-state-only 进度边界。
 
 ### Story E10.7: Timer Dial Compose prototype
 
@@ -1344,21 +1365,22 @@ E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现�
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
 E10.5 已记录 Timer Dial 设计工作流与重构范围：外部 APK / 截图只做 UI / 交互研究，不复制代码、资源或资产；工具路线为 Figma 静态规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现，Rive / Lottie 仅用于小图标或装饰动效；Timer Dial 规格包含顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆当前阶段和底部少量图标操作；后续拆为 E10.6 / E10.7 / E10.8，E12 统计和 E13 声音保持独立。
+E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/planning/timer-dial-static-visual-variants.md`，覆盖 Official Flow 执行页状态帧、计时编辑页关键状态帧、Tile Flow / Big Type 适配、互动动画语义、小屏 / 无障碍检查、法律边界和 E10.7 handoff。E10.6 只改 Markdown / 设计文档，不实现 Android、不写 Kotlin、不改 Gradle、不改 prototype、不复制 APK 资产或动效参数、不新增第四套 skin、不混入 E11/E12/E13。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E10.6 Timer Dial Figma / static visual variants，随后进入 E10.7 / E10.8；E11 / E12 / E13 仍保持独立阶段
+Story E10.7 Timer Dial Compose prototype，随后进入 E10.8 production integration / animation polish；E11 / E12 / E13 仍保持独立阶段
 ```
 
-E10.6 建议重点确认：
+E10.7 建议重点确认：
 
-1. Timer Dial 的顶部、外圈、内圈、中心圆和底部图标操作是否形成 TrainFlow 自己的视觉语言。
-2. 黑红高对比、赛博霓虹、Official Flow、Tile Flow 和 Big Type 适配是否只是风格方案，不新增第四套 skin。
-3. 阶段颜色、弧线粗细、暂停态、阶段切换和最后 N 秒提醒是否有静态规格。
-4. 外部 APK / 截图只作为研究输入，不复制代码、资源、图标、字体、音频或专有动画。
-5. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.6。
+1. Compose Canvas 是否按 E10.6 规格表达外圈阶段结构、当前阶段弧线和内圈总进度。
+2. 圆盘进度、暂停冻结、阶段切换、completed / abandoned 停止和最后 N 秒提醒是否只来自 `TimedWorkoutEngine` / UI state / `WorkoutEvent`。
+3. 中心圆暂停 / 继续、底部跳过 / 下一阶段和结束二次确认是否继续通过 `WorkoutCommand` 分发。
+4. Official Flow 优先验证后，Tile Flow 和 Big Type 是否只做内置 skin 适配，不新增第四套 skin。
+5. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.7。
 
 ## 8. 暂缓事项
 

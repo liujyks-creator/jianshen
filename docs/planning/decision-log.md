@@ -52,6 +52,7 @@
 | D-033 | Accepted | E10.5 是 Timer Dial 圆盘视觉语言的 docs-only 规划 story，不再处理 E10.4 记录闭环。 | E10.4 已完成并合入 `main`，本地真实 `WorkoutSession` write-through 已具备。E10.5 不改 Room、DAO、session repository、记录页数据源、生产 Kotlin、Gradle 或 prototype。 |
 | D-034 | Accepted | Timer Dial 重构采用“Figma 静态规格 / 可选 HTML Canvas 动效验证 / Jetpack Compose Canvas 生产实现”的路线。 | Figma 用于静态界面、风格方案、颜色、组件和布局规格；HTML / Canvas 只可选用于快速验证圆盘动画和阶段弧线节奏；Android 最终用 Compose Canvas，并且核心进度必须实时绑定 engine state。Rive / Lottie 只适合小图标或装饰动效，不用于核心计时进度。 |
 | D-035 | Accepted | 外部 APK / 截图只能作为 Timer Dial 研究素材，目标是 TrainFlow 自己的圆盘语言。 | 可以观察 UI / 交互和节奏，但不得解析或复制代码、资源、图标、字体、音频、专有动画资产或逐像素视觉；APK、截图、录屏、反编译输出和研究临时产物不得提交。黑红高对比只是参考方向，不新增第四套 skin。 |
+| D-036 | Accepted | E10.6 先输出 Timer Dial 静态视觉帧和计时编辑页关键状态规格，再进入 Compose 原型。 | E10.6 至少覆盖 Official Flow 的执行页状态帧和计时编辑页状态帧，并说明 Tile Flow / Big Type 适配；所有进度、暂停、完成、废弃和最后 N 秒提醒都必须绑定 `TimedWorkoutEngine` / UI state / `WorkoutEvent`，不得使用视觉假进度。本阶段不写 Kotlin、不改 Gradle、不改 prototype、不新增第四套 skin，也不混入 E11/E12/E13。 |
 
 ## 预留能力
 
@@ -94,5 +95,6 @@
 10. `docs/planning/action-content-slice.md`
 11. `docs/planning/e10-training-mode-interaction-plan.md`
 12. `docs/planning/timer-dial-design-workflow.md`
+13. `docs/planning/timer-dial-static-visual-variants.md`
 
 当来源文档改变了已接受的产品或架构方向时，同步更新本决策日志。
