@@ -50,6 +50,92 @@ Official Flow 建议以 `DESIGN.md` token 为基础：
 - 内圈总进度 5-7dp，低于当前阶段弧线层级；active 推进，paused 冻结，completed / abandoned 停止。
 - 中心圆直径建议为外径的 58%-64%；中心倒计时使用 `timerL` 语义，Official Flow 常规帧约 64-72sp，小屏压到 52-60sp。
 
+## Style Variant Directions
+
+E10.6 静态帧需要让评审者能比较 Timer Dial 在不同视觉方向下的可读性、训练现场感和 TrainFlow 品牌一致性。以下方向都只用于 Timer Dial 视觉变体研究，不新增第四套 skin，不改变 Official Flow、Tile Flow、Big Type 三套内置 skin 的产品边界，也不复制 APK 代码、XML、资源、图标、字体、音频、布局 XML、动画参数或逐像素视觉。
+
+### Black / Red High Contrast Reference
+
+黑红高对比方向来自用户偏好的黑红圆盘 mood，但它只能作为情绪、对比度和运动现场感参考。设计输出必须重构为 TrainFlow 自己的 Timer Dial 语言，不复用 APK 资源、图标、字体、音频、布局 XML、命名、动画参数或逐像素结构。
+
+颜色规则：
+
+- 使用深色页面背景和深色圆盘底轨，保证训练时环境干扰低。
+- `work` arc 使用高亮红或红橙强调色，作为当前工作阶段的最高视觉焦点。
+- `rest` arc 使用低饱和或偏冷色，避免休息阶段与工作阶段同权。
+- 中心文字使用白色或浅色，倒计时优先，阶段名 / 状态为次级。
+
+弧线层级：
+
+- 外圈 `work` 使用粗弧表达训练强度和当前推进。
+- 外圈 `rest` 使用细弧表达恢复，不抢中心倒计时。
+- 内圈总进度保持低干扰，只表达整次训练进展，不制造第二个主焦点。
+
+最后 5 秒可以使用红色强调、轻微闪烁、中心圆呼吸或端点增强，但必须绑定真实 last-N cue state；不得用独立动画假装进度，也不得在 paused、completed 或 abandoned 后继续变化。本方向是 TrainFlow Timer Dial 的风格探索，不是新增第四套 skin。
+
+静态帧差异点：
+
+| 状态 | 输出要求 |
+|---|---|
+| Warmup | 深色背景保持一致；热身弧线低于 work 强度，可用绿色 / 青绿色或低饱和准备色；中心文字浅色且不使用红色警示。 |
+| Work | 当前 work 粗红弧为主焦点；中心大数字白色 / 浅色；已完成弧线弱化但仍可识别阶段结构。 |
+| Rest | 当前 rest 细弧使用冷色或低饱和色；红色 work 只作为已完成 / 下一阶段结构，不抢休息倒计时。 |
+| Paused | 所有弧线冻结并降低饱和度；中心显示 `已暂停` / 继续入口；红色强调停止脉冲。 |
+| Final 5 seconds | 当前 work 可加强红色、端点或中心圆呼吸；rest 最后 5 秒只做克制提醒；两者都不得遮挡底部操作或伪造进度。 |
+
+### Cyber Neon Exploration
+
+赛博霓虹方向可以探索深色底加霓虹青、紫、红等高对比弧线，用于评估 Timer Dial 是否能在更强风格下仍保持训练读数清楚。它不新增 skin，只作为 Official Flow、Tile Flow、Big Type 中 Timer Dial 的视觉变体研究。
+
+视觉规则：
+
+- 页面底色保持深色，弧线可使用霓虹青 / 紫 / 红等高对比色区分 work、rest、warmup 和 cue。
+- 当前弧线可以有 glow / halo 语言，但必须克制，不能影响倒计时、阶段名称、总剩余时间或底部操作读数。
+- 中心圆保持信息清晰，数字优先；阶段名、状态、下一阶段预告都必须服从中心倒计时层级。
+- 最后 5 秒可以用霓虹边缘脉冲、端点 halo 或短暂颜色强化，但必须可在 reduce-motion 下退化为静态颜色 / 字重变化。
+
+静态帧差异点：
+
+| 状态 | 输出要求 |
+|---|---|
+| Warmup | 可使用青绿或青色细 glow 表达准备感；glow 不覆盖中心圆边界或顶部总剩余时间。 |
+| Work | 当前 work 弧线最亮，可用红 / 紫红 neon；粗弧和端点焦点清楚，但中心倒计时仍是最高层级。 |
+| Rest | Rest 使用青 / 蓝紫等冷色细弧；halo 更弱，避免把休息误读为高强度 work。 |
+| Paused | Neon glow 收敛或熄灭到低亮度；弧线位置冻结；中心暂停状态必须比装饰 halo 更清楚。 |
+| Final 5 seconds | 使用边缘脉冲或短暂颜色强化表达 cue；不得全屏闪烁，不得遮挡暂停 / 继续、跳过或结束确认路径。 |
+
+### TrainFlow Official Flow Integration
+
+Official Flow 融合方向用于说明如何把圆盘语言落回现有 `DESIGN.md` 和 TrainFlow 官方默认体验。它应使用现有 token、较克制色彩、更少 glow、更清晰文本层级，并保持训练场景优先，不做营销化 hero、装饰化仪表盘或大面积品牌展示。
+
+融合规则：
+
+- 使用 `DESIGN.md` 已定义的深色训练背景、action work 色、rest / accent 辅助色、error / success 语义色和现有字号层级。
+- Glow 只作为当前阶段焦点的轻量辅助；默认帧应能在无 glow 情况下读清楚。
+- 文本层级按中心倒计时、当前阶段、总剩余 / 下一阶段、底部操作排序，不能让品牌文案或装饰信息进入主层级。
+- 需要和 Tile Flow / Big Type 适配边界兼容：Tile Flow 可把圆盘作为主磁贴或主区域，Big Type 可放大中心数字并减少辅助信息，但两者都不改变 engine state、命令和事件语义。
+
+静态帧差异点：
+
+| 状态 | 输出要求 |
+|---|---|
+| Warmup | 使用准备色和较克制弧线强度；中心阶段名和倒计时清楚，不引入动作教学素材。 |
+| Work | 使用 Official Flow action 色作为当前粗弧；内圈总进度低干扰；底部图标操作保持可达。 |
+| Rest | 使用 rest / accent 辅助色和细弧；中心文案明确休息状态，下一阶段预告为辅助层级。 |
+| Paused | 背景和弧线降饱和，中心继续入口明确；所有进度冻结，避免误读为仍在训练。 |
+| Final 5 seconds | 使用颜色、字重、端点或轻微中心圆强调；默认不依赖强 glow，reduce-motion 下仍有清晰静态差异。 |
+
+### Frame Output Requirements
+
+E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast Reference、Cyber Neon Exploration、TrainFlow Official Flow Integration。每个方向至少输出或标注 warmup、work、rest、paused、final 5 seconds 的静态帧要求或差异点；可以用单独 frames，也可以在同一状态 frame 旁用 variant notes 标明差异，但必须足够让设计评审判断颜色、弧线粗细、中心文字、最后 5 秒 cue 和小屏可读性。
+
+所有方向都必须遵守：
+
+1. E10.6 只输出 Markdown / Figma 静态规格；E10.7 才进入 Compose prototype 和动效验证。
+2. 不新增第四套 skin；黑红高对比和赛博霓虹只作为 Official / Tile / Big Type 中 Timer Dial 的视觉变体研究。
+3. 不复制 APK 资源、代码、XML、图标、字体、音频、布局 XML、命名、动画参数或逐像素视觉。
+4. Warmup / work / rest / paused / final 5 seconds 的进度、冻结、强调和 cue 都必须绑定 `TimedWorkoutEngine` / UI state / `WorkoutEvent`，不得使用视觉假进度。
+
 ## Timer Dial Static Frames
 
 执行页状态帧至少输出以下 11 组。每组建议同时标注：状态来源、当前阶段、剩余秒数、总进度 fraction、当前阶段 fraction、可用命令。
