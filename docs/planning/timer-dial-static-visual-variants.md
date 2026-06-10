@@ -366,7 +366,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 
 ## Suggested E10.7 Handoff Notes
 
-E10.7 Compose prototype 可以从以下输入开始，但本轮不实现：
+E10.7 Compose prototype 已按以下输入实现为 Android prototype complete；后续生产收口进入 E10.8：
 
 1. 建立 `TimerDialUiState` 或等价 mapper，字段至少包含：phase type、phase name、icon key、color hex、current phase progress、total progress、remaining seconds、total remaining seconds、status、last-N cue state、available commands。
 2. Compose Canvas 绘制外圈阶段结构、当前阶段推进弧和内圈总进度；所有 fraction 来自 UI state。
@@ -375,12 +375,19 @@ E10.7 Compose prototype 可以从以下输入开始，但本轮不实现：
 5. 对 Official Flow 先实现可运行 prototype，再验证 Tile Flow / Big Type token 和布局适配。
 6. 回归检查包含 720x1280、小屏 TalkBack 标签、终态停止推进、结束二次确认、paused 冻结、completed / abandoned 防污染。
 
+E10.7 implementation note:
+
+- Prototype 文件位于 Android `feature.workoutsession`：`TimerDialUiState.kt`、`TimerDialTokens.kt`、`TimerDial.kt` 和 `TimerDialPreview.kt`。
+- 三类 visual variant 已作为 Timer Dial prototype tokens 实现：Black / Red High Contrast、Cyber Neon、TrainFlow Official Flow Integration；它们不是新增 UI skin。
+- 计时执行页已低风险消费该 prototype，但 E10.8 仍负责最终 production integration、animation polish、三套内置 skin 适配和完整视觉 smoke。
+- E10.7 未实现声音、TTS、女声 cue、统计图表、心率设备、Room/session repository 改动、foreground service、exact alarm 或 notification action。
+
 ## Verification Notes
 
-E10.6 只改 Markdown / 设计文档。验证要求：
+E10.6 只改 Markdown / 设计文档。E10.7 进入 Android prototype 后，验证要求扩展为：
 
 1. 运行 `git diff --check`。
 2. 运行 `git diff --name-status`。
-3. 确认 diff 只包含 Markdown / 设计文档。
-4. 不运行 Gradle 或 npm，除非误改代码。
-5. 确认未 stage、commit、移动 APK 或参考解析产物。
+3. 运行 Android unit test / assemble / lint / check，确认 Timer Dial state mapping 和 existing session flow 不回退。
+4. 如可运行 emulator，截图放 `.local/verification/e10-7/` 且不提交；不可运行时说明原因。
+5. 确认未 stage、commit、移动 APK、截图、录屏、反编译输出或参考解析产物。

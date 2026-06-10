@@ -1176,6 +1176,8 @@ stepsCompleted:
 
 ### Story E10.7: Timer Dial Compose prototype
 
+**状态:** Implemented prototype in Android Compose
+
 作为 Android 开发者，
 我想用 Jetpack Compose Canvas 验证 Timer Dial 圆盘绘制、状态映射和关键动效，
 以便生产集成前确认 engine state 驱动的进度、暂停和阶段切换都可靠。
@@ -1186,6 +1188,16 @@ stepsCompleted:
 - Then 阶段弧线和总进度只来自计时训练 UI state / engine state，不使用视觉假进度。
 - Then 覆盖 work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒动效。
 - Then 不改 Room/session repository，不做统计图表、声音、语音或真实设备接入。
+
+**交付结果:**
+
+- 在 `feature.workoutsession` 中新增 `TimerDialUiState`、`TimerDialTokens`、`TimerDial` Compose Canvas 组件和 `TimerDialPreview` demo。
+- 现有计时执行页低风险接入 prototype 组件：中心点击仍只调用既有 pause / resume route callback，训练控制继续通过 `WorkoutCommand` 和 `TimedWorkoutEngine` 推进。
+- `TimerDialUiState` 显式包含 total remaining、total progress、current stage progress、stage type / label / index / remaining、paused、final countdown、stage segments 和 visual variant；progress 在 UI state 层 clamp 到 `0f..1f`。
+- 外圈按真实 engine steps 绘制阶段结构，work 粗弧、rest 细弧，warmup / cooldown / custom 使用差异化语义；内圈表达整次训练总进度；中心圆使用自绘阶段符号、阶段编号 / 名称 / 倒计时和 paused / final countdown 状态。
+- 三类 prototype visual variant 已实现：黑红高对比、赛博霓虹、TrainFlow Official Flow 融合；它们不是新增第四套 skin，也不改变 Official Flow / Tile Flow / Big Type registry。
+- 新增单元测试覆盖 progress clamp、total / stage progress mapping、work/rest stroke semantics、visual variant token 数量、final countdown flag 和 paused state mapping。
+- 本阶段未改 Room/session repository、训练记录业务逻辑、workout engine 语义、声音 / TTS / 女声 cue、统计图表、心率设备、foreground service、exact alarm、notification action 或前端 prototype。E10.8 仍负责最终 production integration and animation polish。
 
 ### Story E10.8: Timer Dial production integration and animation polish
 
@@ -1366,21 +1378,22 @@ E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
 E10.5 已记录 Timer Dial 设计工作流与重构范围：外部 APK / 截图只做 UI / 交互研究，不复制代码、资源或资产；工具路线为 Figma 静态规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现，Rive / Lottie 仅用于小图标或装饰动效；Timer Dial 规格包含顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆当前阶段和底部少量图标操作；后续拆为 E10.6 / E10.7 / E10.8，E12 统计和 E13 声音保持独立。
 E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/planning/timer-dial-static-visual-variants.md`，覆盖 Official Flow 执行页状态帧、计时编辑页关键状态帧、Tile Flow / Big Type 适配、互动动画语义、小屏 / 无障碍检查、法律边界和 E10.7 handoff。E10.6 只改 Markdown / 设计文档，不实现 Android、不写 Kotlin、不改 Gradle、不改 prototype、不复制 APK 资产或动效参数、不新增第四套 skin、不混入 E11/E12/E13。
+E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 ```
 
 下一轮建议进入：
 
 ```text
-Story E10.7 Timer Dial Compose prototype，随后进入 E10.8 production integration / animation polish；E11 / E12 / E13 仍保持独立阶段
+Story E10.8 Timer Dial production integration / animation polish；E11 / E12 / E13 仍保持独立阶段
 ```
 
-E10.7 建议重点确认：
+E10.8 建议重点确认：
 
-1. Compose Canvas 是否按 E10.6 规格表达外圈阶段结构、当前阶段弧线和内圈总进度。
-2. 圆盘进度、暂停冻结、阶段切换、completed / abandoned 停止和最后 N 秒提醒是否只来自 `TimedWorkoutEngine` / UI state / `WorkoutEvent`。
+1. 是否把 E10.7 prototype 稳定纳入计时训练生产执行页，并补齐小屏、TalkBack、reduce-motion 和三套内置 skin 的 polish。
+2. 圆盘进度、暂停冻结、阶段切换、completed / abandoned 停止和最后 N 秒提醒是否继续只来自 `TimedWorkoutEngine` / UI state / `WorkoutEvent`。
 3. 中心圆暂停 / 继续、底部跳过 / 下一阶段和结束二次确认是否继续通过 `WorkoutCommand` 分发。
-4. Official Flow 优先验证后，Tile Flow 和 Big Type 是否只做内置 skin 适配，不新增第四套 skin。
-5. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.7。
+4. Official Flow、Tile Flow 和 Big Type 是否只做内置 skin 适配，不新增第四套 skin。
+5. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.8。
 
 ## 8. 暂缓事项
 

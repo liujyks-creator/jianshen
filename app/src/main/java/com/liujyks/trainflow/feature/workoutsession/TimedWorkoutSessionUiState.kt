@@ -44,7 +44,8 @@ internal data class TimedWorkoutSessionScreenState(
     val lastControlLabel: String,
     val terminalTitle: String? = null,
     val terminalSummary: String? = null,
-    val summary: TimedWorkoutSummaryUiState? = null
+    val summary: TimedWorkoutSummaryUiState? = null,
+    val timerDial: TimerDialUiState = TimerDialUiState.Empty
 )
 
 internal data class TimedWorkoutCountdownReminderUiState(
@@ -157,7 +158,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         else -> null
     }
 
-    return TimedWorkoutSessionScreenState(
+    val screenState = TimedWorkoutSessionScreenState(
         planTitle = planTitle,
         statusLabel = statusLabel,
         phaseLabel = phaseLabel,
@@ -194,6 +195,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         terminalSummary = terminalSummary,
         summary = toTimedWorkoutSummaryUiState(exercises)
     )
+    return screenState.copy(timerDial = toTimerDialUiState(screenState))
 }
 
 private fun String?.toEarlyEndReasonSummary(): String {

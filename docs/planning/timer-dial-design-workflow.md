@@ -158,14 +158,18 @@ E10.5 只做规划和设计范围收口：
 
 目标：用 Jetpack Compose Canvas 做可运行原型，验证圆盘绘制、点击控制和状态映射。
 
+状态：E10.7 已实现 prototype complete。Android `feature.workoutsession` 中新增 `TimerDialUiState`、`TimerDialTokens`、`TimerDial` Canvas 组件和 `TimerDialPreview` demo；计时执行页以低风险方式消费该 prototype，中心点击仍映射既有 pause / resume callback，不改变 `TimedWorkoutEngine` 或 `WorkoutCommand` 语义。
+
 范围：
 
 - Compose Canvas 圆盘。
 - 外圈阶段弧线和内圈总进度。
 - engine state / UI state 映射。
 - 暂停、继续、阶段切换和最后 N 秒动效验证。
+- 三类 prototype visual variant：黑红高对比、赛博霓虹、TrainFlow Official Flow 融合。它们不是新增第四套 skin。
+- 单元测试覆盖 progress clamp、total / stage progress mapping、work/rest stroke semantics、visual variant token 数量、final countdown flag 和 paused state mapping。
 
-不改 Room/session repository，不做统计图表、声音、语音或真实设备接入。
+不改 Room/session repository，不做统计图表、声音、语音或真实设备接入。本阶段不是 E10.8 production integration；最终小屏、TalkBack、reduce-motion、三套内置 skin polish 和生产行为收口仍在 E10.8。
 
 ### E10.8 Timer Dial production integration and animation polish
 

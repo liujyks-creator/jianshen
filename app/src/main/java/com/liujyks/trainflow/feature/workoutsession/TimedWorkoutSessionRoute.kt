@@ -2,10 +2,8 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import android.media.AudioManager
 import android.media.ToneGenerator
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,8 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -280,7 +275,6 @@ private fun MainCountdownPanel(
     } else {
         Color.White.copy(alpha = 0.08f)
     }
-    val timerColor = if (reminderActive) skin.tokens.action else skin.tokens.neutral50
     val progressColor = if (reminderActive) skin.tokens.action else uiState.stageColorHex.toDialColor(skin.tokens.accent)
 
     Card(
@@ -308,11 +302,9 @@ private fun MainCountdownPanel(
                     color = TrainFlowNeutral200
                 )
             }
-            StageDial(
-                uiState = uiState,
-                progressColor = progressColor,
-                timerColor = timerColor,
-                onPrimaryToggle = onPrimaryToggle
+            TimerDial(
+                state = uiState.timerDial,
+                onTogglePause = onPrimaryToggle
             )
             if (reminder.isActive) {
                 ReminderStatusPanel(reminder)
@@ -330,92 +322,6 @@ private fun MainCountdownPanel(
 
 internal fun TimedWorkoutEngineState.shouldTickTimedRouteClock(): Boolean {
     return status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
-}
-
-@Composable
-private fun StageDial(
-    uiState: TimedWorkoutSessionScreenState,
-    progressColor: Color,
-    timerColor: Color,
-    onPrimaryToggle: () -> Unit
-) {
-    val skin = LocalTrainFlowSkin.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = if (skin.isBigType) 360.dp else 320.dp)
-            .clickable(enabled = uiState.canPause || uiState.canResume) {
-                onPrimaryToggle()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(
-            modifier = Modifier
-                .size(if (skin.isBigType) 330.dp else 292.dp)
-        ) {
-            val stroke = if (skin.isBigType) 24.dp.toPx() else 20.dp.toPx()
-            val inset = stroke / 2f
-            val arcSize = size.copy(width = size.width - stroke, height = size.height - stroke)
-            drawCircle(
-                color = Color.White.copy(alpha = 0.08f),
-                radius = size.minDimension / 2f - inset,
-                style = Stroke(width = stroke)
-            )
-            drawArc(
-                color = progressColor.copy(alpha = 0.38f),
-                startAngle = -90f,
-                sweepAngle = 360f * uiState.progressFraction.coerceIn(0f, 1f),
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = progressColor,
-                startAngle = -90f,
-                sweepAngle = 360f * uiState.stageProgressFraction.coerceIn(0f, 1f),
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(inset + stroke, inset + stroke),
-                size = arcSize.copy(width = arcSize.width - stroke * 2f, height = arcSize.height - stroke * 2f),
-                style = Stroke(width = stroke * 0.72f, cap = StrokeCap.Round)
-            )
-        }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = uiState.stageIconKey,
-                style = MaterialTheme.typography.labelLarge,
-                color = TrainFlowNeutral200
-            )
-            Text(
-                text = uiState.currentTitle,
-                style = if (skin.isBigType) {
-                    MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = 36.sp,
-                        lineHeight = 41.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                } else {
-                    MaterialTheme.typography.headlineMedium
-                },
-                color = TrainFlowNeutral50
-            )
-            Text(
-                text = uiState.timerText,
-                fontSize = (72f * skin.tokens.timerScale).sp,
-                lineHeight = (74f * skin.tokens.timerScale).sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = timerColor
-            )
-            Text(
-                text = if (uiState.canResume) "点击圆盘继续" else "点击圆盘暂停",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TrainFlowNeutral200
-            )
-        }
-    }
 }
 
 @Composable
