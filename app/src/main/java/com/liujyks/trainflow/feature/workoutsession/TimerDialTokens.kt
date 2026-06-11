@@ -2,12 +2,20 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import androidx.compose.ui.graphics.Color
 import com.liujyks.trainflow.ui.theme.TrainFlowSkin
+import com.liujyks.trainflow.ui.theme.isBigType
 
 internal enum class TimerDialVisualVariant {
     BLACK_RED_HIGH_CONTRAST,
     CYBER_NEON,
     OFFICIAL_FLOW
 }
+
+internal val ProductionTimerDialVisualVariant = TimerDialVisualVariant.OFFICIAL_FLOW
+
+internal val PreviewOnlyTimerDialVisualVariants = setOf(
+    TimerDialVisualVariant.BLACK_RED_HIGH_CONTRAST,
+    TimerDialVisualVariant.CYBER_NEON
+)
 
 internal enum class TimerDialStageType {
     WARMUP,
@@ -108,5 +116,52 @@ internal fun TimerDialStageType.strokeWidthDp(): Float {
         TimerDialStageType.WARMUP,
         TimerDialStageType.COOLDOWN -> 12f
         TimerDialStageType.CUSTOM -> 11f
+    }
+}
+
+internal fun TimerDialStageSegmentUiState.strokeWidthDp(): Float {
+    return when {
+        isCurrent -> 18f
+        stageType == TimerDialStageType.REST -> 8f
+        else -> 10f
+    }
+}
+
+internal data class TimerDialLayoutSpec(
+    val dialSizeDp: Int,
+    val centerSizeDp: Int,
+    val minHeightDp: Int,
+    val outerMaxStrokeDp: Float = 20f,
+    val innerStrokeDp: Float = 6f,
+    val innerInsetDp: Float = 42f
+) {
+    val outerInsetDp: Float = outerMaxStrokeDp / 2f
+    val outerDiameterDp: Float = dialSizeDp - outerMaxStrokeDp
+    val innerDiameterDp: Float = dialSizeDp - innerInsetDp * 2f
+    val centerClearanceDp: Float = innerDiameterDp - centerSizeDp
+
+    fun keepsDialInsideBounds(): Boolean {
+        return dialSizeDp <= minHeightDp &&
+            outerDiameterDp > innerDiameterDp &&
+            innerDiameterDp > centerSizeDp &&
+            centerClearanceDp >= 16f
+    }
+}
+
+internal fun TrainFlowSkin.timerDialLayoutSpec(): TimerDialLayoutSpec {
+    return if (isBigType) {
+        TimerDialLayoutSpec(
+            dialSizeDp = 284,
+            centerSizeDp = 196,
+            minHeightDp = 312,
+            innerInsetDp = 28f
+        )
+    } else {
+        TimerDialLayoutSpec(
+            dialSizeDp = 250,
+            centerSizeDp = 172,
+            minHeightDp = 276,
+            innerInsetDp = 24f
+        )
     }
 }

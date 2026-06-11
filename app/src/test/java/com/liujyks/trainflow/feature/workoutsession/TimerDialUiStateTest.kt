@@ -40,8 +40,38 @@ class TimerDialUiStateTest {
         assertEquals(0f, state.currentStageProgress, 0.0001f)
         assertEquals(0, state.totalRemainingSec)
         assertEquals(0, state.currentStageRemainingSec)
+        assertEquals("00:00", state.totalRemainingText)
+        assertEquals("00:00", state.currentStageTimeText)
         assertEquals(0, state.stageSegments.single().durationSec)
         assertEquals(0f, state.stageSegments.single().progress, 0.0001f)
+    }
+
+    @Test
+    fun productionDefaultVariantIsOfficialFlow() {
+        val dial = TimerDialUiState.Empty
+
+        assertEquals(TimerDialVisualVariant.OFFICIAL_FLOW, ProductionTimerDialVisualVariant)
+        assertEquals(ProductionTimerDialVisualVariant, dial.visualVariant)
+        assertFalse(ProductionTimerDialVisualVariant in PreviewOnlyTimerDialVisualVariants)
+    }
+
+    @Test
+    fun screenStateMapsProductionTimerDialDefaults() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val screenState = state.toTimedWorkoutSessionScreenState()
+        val dial = screenState.timerDial
+
+        assertEquals(ProductionTimerDialVisualVariant, dial.visualVariant)
+        assertEquals(screenState.currentTitle, dial.currentStageLabel)
+        assertEquals(screenState.timerText, dial.currentStageTimeText)
+        assertEquals(screenState.totalRemainingText, dial.totalRemainingText)
+        assertEquals("双击暂停", dial.centerActionLabel)
+        assertTrue(dial.canTogglePause)
     }
 
     @Test
@@ -79,22 +109,70 @@ class TimerDialUiStateTest {
         assertEquals(1f, dial.stageSegments.first().progress, 0.0001f)
         assertTrue(dial.stageSegments.last().isCurrent)
         assertEquals(1f / 6f, dial.currentStageProgress, 0.0001f)
-        assertTrue(TimerDialStageType.WORK.strokeWidthDp() > TimerDialStageType.REST.strokeWidthDp())
-        assertTrue(TimerDialStageType.WARMUP.strokeWidthDp() > TimerDialStageType.REST.strokeWidthDp())
+        assertTrue(dial.stageSegments.last().strokeWidthDp() > dial.stageSegments.first().strokeWidthDp())
+    }
+
+    @Test
+    fun outerSegmentsOnlyMapCurrentWorkRestCycle() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(twoCycleTimerDialPlan()),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        var dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(2, dial.stageSegments.size)
+        assertEquals(TimerDialStageType.WORK, dial.stageSegments.first().stageType)
+        assertEquals(TimerDialStageType.REST, dial.stageSegments.last().stageType)
+        assertTrue(dial.stageSegments.first().isCurrent)
+        assertEquals(0.5f, dial.stageSegments.first().progress, 0.0001f)
+        assertEquals(0f, dial.stageSegments.last().progress, 0.0001f)
+        assertTrue(dial.stageSegments.first().strokeWidthDp() > dial.stageSegments.last().strokeWidthDp())
+
+        state = TimedWorkoutEngine.tick(state, seconds = 3).state
+        dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(2, dial.stageSegments.size)
+        assertEquals(TimerDialStageType.WORK, dial.stageSegments.first().stageType)
+        assertEquals(TimerDialStageType.REST, dial.stageSegments.last().stageType)
+        assertEquals(TimerDialStageType.REST, dial.currentStageType)
+        assertEquals(1f, dial.stageSegments.first().progress, 0.0001f)
+        assertEquals(0.5f, dial.stageSegments.last().progress, 0.0001f)
+        assertTrue(dial.stageSegments.last().isCurrent)
+        assertTrue(dial.stageSegments.last().strokeWidthDp() > dial.stageSegments.first().strokeWidthDp())
     }
 
     @Test
     fun visualVariantsStayLimitedToThreePrototypeDirections() {
         val variants = TimerDialVisualVariant.entries
+        val skinIds = SkinRegistry.skins.map { skin -> skin.id }.toSet()
 
         assertEquals(3, variants.size)
         assertTrue(TimerDialVisualVariant.BLACK_RED_HIGH_CONTRAST in variants)
         assertTrue(TimerDialVisualVariant.CYBER_NEON in variants)
         assertTrue(TimerDialVisualVariant.OFFICIAL_FLOW in variants)
+        assertEquals(
+            setOf(TimerDialVisualVariant.BLACK_RED_HIGH_CONTRAST, TimerDialVisualVariant.CYBER_NEON),
+            PreviewOnlyTimerDialVisualVariants
+        )
+        assertFalse("black/red preview must not be a global skin", "black_red_high_contrast" in skinIds)
+        assertFalse("cyber neon preview must not be a global skin", "cyber_neon" in skinIds)
         variants.forEach { variant ->
             val tokens = variant.tokens(SkinRegistry.defaultSkin)
             assertTrue(tokens.work != tokens.rest)
             assertTrue(tokens.textPrimary != tokens.pageBackground)
+        }
+    }
+
+    @Test
+    fun layoutSpecsKeepRingsAndCenterSeparatedForBuiltInSkins() {
+        SkinRegistry.skins.forEach { skin ->
+            val spec = skin.timerDialLayoutSpec()
+
+            assertTrue("${skin.id} dial should stay within its minimum height", spec.keepsDialInsideBounds())
+            assertTrue("${skin.id} inner ring should not overlap center", spec.centerClearanceDp >= 16f)
+            assertTrue("${skin.id} outer ring should leave a visible inner ring", spec.outerDiameterDp > spec.innerDiameterDp)
         }
     }
 
@@ -121,6 +199,32 @@ class TimerDialUiStateTest {
 
         assertTrue(dial.isPaused)
         assertFalse(dial.isFinalCountdown)
+    }
+
+    @Test
+    fun finalCountdownVisualFlagRespectsEmphasisAnimationSetting() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(
+                timerDialPlan(
+                    workSec = 8,
+                    restSec = 4,
+                    cueSettings = CueSettings(
+                        actionEnding = CountdownCue(
+                            thresholdSec = 5,
+                            emphasisAnimationEnabled = false
+                        )
+                    )
+                )
+            ),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 3).state
+        val screenState = state.toTimedWorkoutSessionScreenState()
+
+        assertTrue(screenState.countdownReminder.isActive)
+        assertFalse(screenState.countdownReminder.emphasisAnimationEnabled)
+        assertFalse(screenState.timerDial.isFinalCountdown)
     }
 
     @Test
@@ -175,6 +279,39 @@ class TimerDialUiStateTest {
                 )
             ),
             preferences = cueSettings?.let { PlanPreferences(cueSettings = it) },
+            createdAt = "2026-06-10T00:00:00Z",
+            updatedAt = "2026-06-10T00:00:00Z"
+        )
+    }
+
+    private fun twoCycleTimerDialPlan(): WorkoutPlan {
+        return WorkoutPlan(
+            id = "timer-dial-two-cycle-test",
+            mode = WorkoutMode.TIMED,
+            title = "Timer Dial Two Cycle Test",
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "timer-dial-two-cycle",
+                    order = 1,
+                    rounds = 1,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "work-1",
+                            labelOverride = "Work 1",
+                            stageType = TimedStageType.WORK,
+                            workDurationSec = 4,
+                            restAfterSec = 2
+                        ),
+                        TimedExerciseItem(
+                            id = "work-2",
+                            labelOverride = "Work 2",
+                            stageType = TimedStageType.WORK,
+                            workDurationSec = 5,
+                            restAfterSec = 3
+                        )
+                    )
+                )
+            ),
             createdAt = "2026-06-10T00:00:00Z",
             updatedAt = "2026-06-10T00:00:00Z"
         )

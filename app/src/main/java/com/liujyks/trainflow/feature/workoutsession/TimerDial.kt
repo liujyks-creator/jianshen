@@ -47,14 +47,16 @@ internal fun TimerDial(
     val safeState = state.clamped()
     val skin = LocalTrainFlowSkin.current
     val tokens = safeState.visualVariant.tokens(skin)
+    val layoutSpec = skin.timerDialLayoutSpec()
+    val progressAnimationMillis = if (safeState.isPaused || !safeState.canTogglePause) 0 else 320
     val animatedTotalProgress by animateFloatAsState(
         targetValue = safeState.totalProgress,
-        animationSpec = tween(durationMillis = 360),
+        animationSpec = tween(durationMillis = progressAnimationMillis),
         label = "TimerDialTotalProgress"
     )
     val animatedStageProgress by animateFloatAsState(
         targetValue = safeState.currentStageProgress,
-        animationSpec = tween(durationMillis = 260),
+        animationSpec = tween(durationMillis = progressAnimationMillis.coerceAtMost(240)),
         label = "TimerDialStageProgress"
     )
     val finalPulse by animateFloatAsState(
@@ -62,8 +64,11 @@ internal fun TimerDial(
         animationSpec = tween(durationMillis = 220),
         label = "TimerDialFinalPulse"
     )
-    val dialSize = if (skin.isBigType) 330.dp else 300.dp
-    val centerSize = if (skin.isBigType) 208.dp else 184.dp
+    val dialSize = layoutSpec.dialSizeDp.dp
+    val centerSize = layoutSpec.centerSizeDp.dp
+    val centerPadding = if (skin.isBigType) 10.dp else 8.dp
+    val timerFontSize = if (skin.isBigType) 40.sp else 34.sp
+    val timerLineHeight = if (skin.isBigType) 42.sp else 36.sp
     val contentDescription = buildString {
         append(safeState.currentStageLabel)
         append("，剩余 ")
@@ -77,23 +82,19 @@ internal fun TimerDial(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = if (skin.isBigType) 360.dp else 328.dp)
+            .heightIn(min = layoutSpec.minHeightDp.dp)
             .semantics {
                 this.contentDescription = contentDescription
-                role = Role.Button
-            }
-            .clickable(enabled = safeState.canTogglePause) {
-                onTogglePause()
             },
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(dialSize)) {
-            val outerMaxStroke = 20.dp.toPx()
-            val innerStroke = 6.dp.toPx()
+            val outerMaxStroke = layoutSpec.outerMaxStrokeDp.dp.toPx()
+            val innerStroke = layoutSpec.innerStrokeDp.dp.toPx()
             val outerInset = outerMaxStroke / 2f
             val outerSize = Size(size.width - outerMaxStroke, size.height - outerMaxStroke)
             val outerTopLeft = Offset(outerInset, outerInset)
-            val innerInset = outerMaxStroke + 22.dp.toPx()
+            val innerInset = layoutSpec.innerInsetDp.dp.toPx()
             val innerSize = Size(size.width - innerInset * 2f, size.height - innerInset * 2f)
             val innerTopLeft = Offset(innerInset, innerInset)
             val totalDuration = safeState.stageSegments.sumOf { segment -> segment.durationSec }
@@ -110,7 +111,7 @@ internal fun TimerDial(
                 } else {
                     segment.progress
                 }
-                val strokeWidth = segment.stageType.strokeWidthDp().dp.toPx()
+                val strokeWidth = segment.strokeWidthDp().dp.toPx()
                 val activeAlpha = if (segment.isCurrent) 1f else 0.48f
 
                 drawArc(
@@ -178,7 +179,15 @@ internal fun TimerDial(
         }
 
         Surface(
-            modifier = Modifier.size(centerSize),
+            modifier = Modifier
+                .size(centerSize)
+                .semantics {
+                    this.contentDescription = contentDescription
+                    role = Role.Button
+                }
+                .clickable(enabled = safeState.canTogglePause) {
+                    onTogglePause()
+                },
             shape = CircleShape,
             color = if (safeState.isPaused) tokens.pausedOverlay else tokens.centerSurface,
             border = BorderStroke(
@@ -187,14 +196,14 @@ internal fun TimerDial(
             )
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+                modifier = Modifier.padding(horizontal = centerPadding, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 TimerDialStageGlyph(
                     stageType = safeState.currentStageType,
                     color = tokens.colorFor(safeState.currentStageType),
-                    size = if (skin.isBigType) 34.dp else 30.dp
+                    size = if (skin.isBigType) 28.dp else 24.dp
                 )
                 Text(
                     text = if (safeState.currentStageIndex > 0) {
@@ -202,13 +211,13 @@ internal fun TimerDial(
                     } else {
                         "准备"
                     },
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 5.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = tokens.textSecondary
                 )
                 Text(
                     text = safeState.currentStageLabel,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
@@ -219,17 +228,13 @@ internal fun TimerDial(
                 )
                 Text(
                     text = safeState.currentStageTimeText,
-                    modifier = Modifier.padding(top = 5.dp),
-                    fontSize = if (skin.isBigType) 70.sp else 58.sp,
-                    lineHeight = if (skin.isBigType) 72.sp else 60.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                    fontSize = timerFontSize,
+                    lineHeight = timerLineHeight,
                     fontWeight = FontWeight.ExtraBold,
-                    color = if (safeState.isFinalCountdown) tokens.finalCountdown else tokens.textPrimary
-                )
-                Text(
-                    text = if (safeState.isPaused) "已暂停" else safeState.centerActionLabel,
-                    modifier = Modifier.padding(top = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = tokens.textSecondary
+                    color = if (safeState.isFinalCountdown) tokens.finalCountdown else tokens.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip
                 )
             }
         }

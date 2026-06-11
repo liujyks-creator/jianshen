@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,11 +36,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -120,11 +128,15 @@ internal fun TimedWorkoutSessionRoute(
     }
 
     val uiState = engineState.toTimedWorkoutSessionScreenState()
+    var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
     val notificationState = timedActiveWorkoutNotificationState(
         planId = plan.id,
         status = engineState.status,
         uiState = uiState
     )
+    LaunchedEffect(uiState.canEnd) {
+        if (!uiState.canEnd) endConfirmation = endConfirmation.cancel()
+    }
     LaunchedEffect(notificationState) {
         activeWorkoutNotifications.update(notificationState)
     }
@@ -152,7 +164,14 @@ internal fun TimedWorkoutSessionRoute(
         onResume = { dispatch(WorkoutCommand.ResumeSession) },
         onSkip = { dispatch(WorkoutCommand.SkipStep) },
         onExtendRest = { dispatch(WorkoutCommand.ExtendRest(seconds = 15)) },
-        onEnd = { dispatch(WorkoutCommand.EndSession(reason = "user_requested")) },
+        showEndConfirmation = endConfirmation.visible,
+        onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
+        onCancelEnd = { endConfirmation = endConfirmation.cancel() },
+        onConfirmEnd = {
+            val result = endConfirmation.confirm(uiState.canEnd)
+            endConfirmation = result.nextState
+            result.command?.let(::dispatch)
+        },
         onBackToPlans = onBackToPlans,
         onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
         modifier = modifier
@@ -166,7 +185,10 @@ private fun TimedWorkoutSessionScreen(
     onResume: () -> Unit,
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
-    onEnd: () -> Unit,
+    showEndConfirmation: Boolean,
+    onRequestEnd: () -> Unit,
+    onCancelEnd: () -> Unit,
+    onConfirmEnd: () -> Unit,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     modifier: Modifier = Modifier
@@ -187,7 +209,7 @@ private fun TimedWorkoutSessionScreen(
                     bottom = if (uiState.isTerminal) {
                         22.dp
                     } else {
-                        skin.tokens.executionControlReserveDp.dp
+                        if (skin.isBigType) 128.dp else 108.dp
                     }
                 ),
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
@@ -212,12 +234,18 @@ private fun TimedWorkoutSessionScreen(
         if (!uiState.isTerminal) {
             TimedSessionControls(
                 uiState = uiState,
-                onPause = onPause,
-                onResume = onResume,
                 onSkip = onSkip,
                 onExtendRest = onExtendRest,
-                onEnd = onEnd,
+                onEnd = onRequestEnd,
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+        if (showEndConfirmation) {
+            WorkoutEndConfirmationDialog(
+                title = "结束本次计时训练？",
+                text = "训练会提前结束，已完成的阶段会保留在本次总结和本地记录中。",
+                onCancel = onCancelEnd,
+                onConfirm = onConfirmEnd
             )
         }
     }
@@ -226,34 +254,25 @@ private fun TimedWorkoutSessionScreen(
 @Composable
 private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
     val skin = LocalTrainFlowSkin.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = uiState.planTitle,
-                style = if (skin.isBigType) {
-                    MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 26.sp,
-                        lineHeight = 31.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                } else {
-                    MaterialTheme.typography.titleLarge
-                },
-                color = TrainFlowNeutral50
-            )
-            Text(
-                text = uiState.progressLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TrainFlowNeutral200
-            )
-        }
-        SessionPill(text = uiState.statusLabel)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "总剩余",
+            style = MaterialTheme.typography.labelLarge,
+            color = TrainFlowNeutral200
+        )
+        Text(
+            text = uiState.totalRemainingText,
+            style = if (skin.isBigType) {
+                MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = 40.sp,
+                    lineHeight = 44.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            } else {
+                MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold)
+            },
+            color = TrainFlowNeutral50
+        )
     }
 }
 
@@ -275,8 +294,6 @@ private fun MainCountdownPanel(
     } else {
         Color.White.copy(alpha = 0.08f)
     }
-    val progressColor = if (reminderActive) skin.tokens.action else uiState.stageColorHex.toDialColor(skin.tokens.accent)
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(currentProminentCardCorner()),
@@ -287,34 +304,12 @@ private fun MainCountdownPanel(
             modifier = Modifier.padding(skin.tokens.executionPanelPaddingDp.dp),
             verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 12.dp else 16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SessionPill(
-                    text = if (reminder.isActive) reminder.type.label else uiState.phaseLabel,
-                    containerColor = progressColor,
-                    contentColor = skin.tokens.primary
-                )
-                Text(
-                    text = "总剩余 ${uiState.totalRemainingText}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TrainFlowNeutral200
-                )
-            }
             TimerDial(
                 state = uiState.timerDial,
                 onTogglePause = onPrimaryToggle
             )
             if (reminder.isActive) {
                 ReminderStatusPanel(reminder)
-            }
-            if (!skin.isBigType) {
-                Text(
-                    text = uiState.shortCue,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TrainFlowNeutral100
-                )
             }
         }
     }
@@ -423,8 +418,6 @@ private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
 @Composable
 private fun TimedSessionControls(
     uiState: TimedWorkoutSessionScreenState,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
     onEnd: () -> Unit,
@@ -440,33 +433,13 @@ private fun TimedSessionControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(
-                onClick = if (uiState.canResume) onResume else onPause,
-                enabled = uiState.canResume || uiState.canPause,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (skin.isBigType) {
-                            Modifier.heightIn(min = skin.tokens.trainingButtonHeightDp.dp)
-                        } else {
-                            Modifier
-                        }
-                    ),
-                shape = RoundedCornerShape(currentCardCorner()),
-                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
-            ) {
-                Text(
-                    text = if (uiState.canResume) "继续训练" else "暂停训练",
-                    fontSize = if (skin.isBigType) 20.sp else 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TrainFlowNeutral50
-                )
-            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
+                TimedIconControlButton(
+                    icon = TimedControlIcon.SKIP,
+                    contentDescription = "跳过当前阶段",
                     onClick = onSkip,
                     enabled = uiState.canSkip,
                     modifier = Modifier
@@ -479,13 +452,7 @@ private fun TimedSessionControls(
                             }
                         ),
                     shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "跳过",
-                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                        color = TrainFlowNeutral50
-                    )
-                }
+                )
                 OutlinedButton(
                     onClick = onExtendRest,
                     enabled = uiState.canExtendRest,
@@ -503,10 +470,12 @@ private fun TimedSessionControls(
                     Text(
                         text = "+15秒",
                         fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                        color = TrainFlowNeutral50
+                        color = if (uiState.canExtendRest) TrainFlowNeutral50 else TrainFlowNeutral500
                     )
                 }
-                TextButton(
+                TimedIconControlButton(
+                    icon = TimedControlIcon.END,
+                    contentDescription = "结束训练",
                     onClick = onEnd,
                     enabled = uiState.canEnd,
                     modifier = Modifier
@@ -518,16 +487,99 @@ private fun TimedSessionControls(
                                 Modifier
                             }
                         )
-                ) {
-                    Text(
-                        text = if (skin.isBigType) "结束训练" else "结束",
-                        fontSize = if (skin.isBigType) 16.sp else 14.sp,
-                        color = TrainFlowError
-                    )
-                }
+                )
             }
         }
     }
+}
+
+@Composable
+private fun TimedIconControlButton(
+    icon: TimedControlIcon,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape = RoundedCornerShape(8.dp)
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.semantics {
+            this.contentDescription = contentDescription
+            role = Role.Button
+        },
+        shape = shape
+    ) {
+        TimedControlGlyph(
+            icon = icon,
+            color = if (enabled) {
+                when (icon) {
+                    TimedControlIcon.END -> TrainFlowError
+                    else -> TrainFlowNeutral50
+                }
+            } else {
+                TrainFlowNeutral500
+            }
+        )
+    }
+}
+
+@Composable
+private fun TimedControlGlyph(
+    icon: TimedControlIcon,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(28.dp)) {
+        val stroke = 3.dp.toPx()
+        when (icon) {
+            TimedControlIcon.SKIP -> {
+                val first = Path().apply {
+                    moveTo(size.width * 0.18f, size.height * 0.22f)
+                    lineTo(size.width * 0.50f, size.height * 0.50f)
+                    lineTo(size.width * 0.18f, size.height * 0.78f)
+                    close()
+                }
+                val second = Path().apply {
+                    moveTo(size.width * 0.48f, size.height * 0.22f)
+                    lineTo(size.width * 0.78f, size.height * 0.50f)
+                    lineTo(size.width * 0.48f, size.height * 0.78f)
+                    close()
+                }
+                drawPath(first, color)
+                drawPath(second, color)
+                drawLine(
+                    color = color,
+                    start = Offset(size.width * 0.84f, size.height * 0.22f),
+                    end = Offset(size.width * 0.84f, size.height * 0.78f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
+            TimedControlIcon.END -> {
+                drawLine(
+                    color = color,
+                    start = Offset(size.width * 0.24f, size.height * 0.24f),
+                    end = Offset(size.width * 0.76f, size.height * 0.76f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.width * 0.76f, size.height * 0.24f),
+                    end = Offset(size.width * 0.24f, size.height * 0.76f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+}
+
+private enum class TimedControlIcon {
+    SKIP,
+    END
 }
 
 @Composable
@@ -835,12 +887,6 @@ private val TimedWorkoutCountdownReminderUiState.feedbackLabel: String
             "已启用：${enabled.joinToString("、")}"
         }
     }
-
-private fun String?.toDialColor(fallback: Color): Color {
-    val value = this ?: return fallback
-    return runCatching { Color(android.graphics.Color.parseColor(value)) }
-        .getOrElse { fallback }
-}
 
 @Preview(showBackground = true)
 @Composable

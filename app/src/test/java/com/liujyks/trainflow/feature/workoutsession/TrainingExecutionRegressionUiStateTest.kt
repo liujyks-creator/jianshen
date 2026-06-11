@@ -208,6 +208,19 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun timedRouteWiresEndControlThroughConfirmationDialog() {
+        val source = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(source.contains("WorkoutEndConfirmationUiState"))
+        assertTrue(source.contains("WorkoutEndConfirmationDialog"))
+        assertTrue(source.contains("onRequestEnd"))
+        assertTrue(source.contains("result.command?.let(::dispatch)"))
+        assertFalse(source.contains("onEnd = { dispatch(WorkoutCommand.EndSession"))
+    }
+
+    @Test
     fun builtInSkinSwitchingKeepsTrainingSemanticStateAndControlContract() {
         val plans = buildDefaultPlanManagementState().plans
         val timedState = TimedWorkoutEngine.dispatch(

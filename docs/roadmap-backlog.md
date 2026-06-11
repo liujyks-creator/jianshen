@@ -1118,7 +1118,7 @@ stepsCompleted:
 - Then 文档明确外部 APK / 截图只用于观察和学习 UI / 交互，不复制代码、资源、图标、字体、音频或专有动画资产。
 - Then 文档明确目标是 TrainFlow 自己的 Timer Dial 圆盘语言。
 - Then 文档明确工具路线：Figma 做静态界面和规格，HTML / Canvas 可选验证动画，Jetpack Compose Canvas 是最终 Android 生产实现方式，Rive / Lottie 只用于小图标或装饰动效，APK 观察只做研究记录。
-- Then 文档明确 Timer Dial 规格：顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆当前阶段与暂停 / 继续、底部少量图标操作。
+- Then 文档明确 Timer Dial 规格：顶部总剩余时间、外圈当前运动+休息周期、内圈总进度、中心圆当前阶段与暂停 / 继续、底部少量图标操作。
 - Then 文档明确动效规格：阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒，并且全部来自 engine state。
 - Then 文档明确黑红高对比只是参考方向，不新增第四套 skin。
 - Then roadmap/backlog 拆出 E10.6、E10.7、E10.8，并保持 E12 统计图表和 E13 声音 / 女声 cue 独立。
@@ -1154,7 +1154,7 @@ stepsCompleted:
 - Then 执行页静态帧覆盖 active work、active rest、warmup / cooldown、paused、resume transition、stage transition、last-N-seconds cue、completed、abandoned、end confirmation 和 720x1280 小屏状态。
 - Then 计时编辑页静态帧覆盖 header、阶段列表、阶段行 / 阶段卡、添加阶段 sheet、复制阶段、删除确认、颜色 / 图标 picker、快捷时长、时长细调、展开 / 收起、拖动排序、上移 / 下移、保存 / 取消反馈和小屏底部操作。
 - Then 可探索黑红高对比、赛博霓虹、Tile Flow 和 Big Type 适配，但不新增第四套 skin。
-- Then 规格覆盖顶部总剩余时间、外圈阶段结构、work / rest / warmup / cooldown 颜色区分、work 粗弧、rest 细弧、当前阶段弧线状态、内圈总进度、中心圆、底部图标操作、暂停态和最后 N 秒提醒状态。
+- Then 规格覆盖顶部总剩余时间、外圈当前运动+休息周期、work / rest / warmup / cooldown 颜色区分、当前阶段粗弧、非当前阶段细弧、当前阶段弧线状态、内圈总进度、中心圆、底部图标操作、暂停态和最后 N 秒提醒状态。
 - Then Timer Dial 进度必须绑定 `TimedWorkoutEngine` / UI state / `WorkoutEvent`，不允许视觉假进度。
 - Then 结束训练仍需二次确认，最后 N 秒提醒不得遮挡主控制。
 - Then 不实现 Android 生产 UI，不改 Kotlin / Gradle / prototype。
@@ -1197,9 +1197,11 @@ stepsCompleted:
 - 外圈按真实 engine steps 绘制阶段结构，work 粗弧、rest 细弧，warmup / cooldown / custom 使用差异化语义；内圈表达整次训练总进度；中心圆使用自绘阶段符号、阶段编号 / 名称 / 倒计时和 paused / final countdown 状态。
 - 三类 prototype visual variant 已实现：黑红高对比、赛博霓虹、TrainFlow Official Flow 融合；它们不是新增第四套 skin，也不改变 Official Flow / Tile Flow / Big Type registry。
 - 新增单元测试覆盖 progress clamp、total / stage progress mapping、work/rest stroke semantics、visual variant token 数量、final countdown flag 和 paused state mapping。
-- 本阶段未改 Room/session repository、训练记录业务逻辑、workout engine 语义、声音 / TTS / 女声 cue、统计图表、心率设备、foreground service、exact alarm、notification action 或前端 prototype。E10.8 仍负责最终 production integration and animation polish。
+- 本阶段未改 Room/session repository、训练记录业务逻辑、workout engine 语义、声音 / TTS / 女声 cue、统计图表、心率设备、foreground service、exact alarm、notification action 或前端 prototype。E10.8 已接续完成 production integration and animation polish，等待 review。
 
 ### Story E10.8: Timer Dial production integration and animation polish
+
+**状态:** Implemented in Android production timer route, pending review
 
 作为计时训练用户，
 我想在生产计时执行页使用完整 Timer Dial 圆盘语言，
@@ -1213,6 +1215,16 @@ stepsCompleted:
 - Then 动效继续由 engine state / `WorkoutEvent` / UI state 驱动。
 - Then 小屏可读性、主控制可达性和终态不污染进度有回归验证。
 - Then 不混入 E12 统计图表、E13 声音 / 女声 cue、心率设备或后台可靠计时。
+
+**交付结果:**
+
+- 生产计时训练执行页默认使用 Official Flow Timer Dial；Black / Red High Contrast 与 Cyber Neon 仅保留为 preview/demo visual variants，不进入 Official Flow / Tile Flow / Big Type skin registry。
+- Timer Dial 外圈从整次训练全部阶段收窄为当前一次运动+休息周期；work active 时 work 粗弧填充、rest 细弧，rest active 时 rest 粗弧填充、已经过的 work 细弧；内圈继续表达整次训练总进度。
+- 顶部精简为总剩余时间；圆盘卡移除重复阶段标签、计划标题、步骤和进行中状态；中心圆显示当前阶段倒计时并承担暂停 / 继续点击。
+- 底部跳过和结束改为图标按钮，结束训练接入二次确认；`+15秒` 只在 active rest 可用，用于延长当前休息 15 秒，不修改原计划。
+- 新增/更新单元测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、current segment stroke semantics、final countdown 偏好开关和 timed route end confirmation。
+- 已运行 `app:testDebugUnitTest`、`app:assembleDebug`、`app:lintDebug`、`app:check`、`git diff --check HEAD` 和 `git diff --cached --check`。720x1280 emulator visual smoke 覆盖 active、paused、rest + `+15秒`；最后 N 秒截图窗口本轮未稳定捕获，单元测试已覆盖提醒 flag。
+- 本阶段未改 Room/session repository、训练引擎语义、记录统计、心率设备、foreground service、exact alarm、notification action、声音 / TTS / 女声 cue、前端 prototype 或第四套 skin。
 
 ### Story E10.x: 后续力量训练新版 UI 设计
 
@@ -1376,24 +1388,26 @@ E10.1 已记录训练模式边界与执行页交互原则：计时训练回归�
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
-E10.5 已记录 Timer Dial 设计工作流与重构范围：外部 APK / 截图只做 UI / 交互研究，不复制代码、资源或资产；工具路线为 Figma 静态规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现，Rive / Lottie 仅用于小图标或装饰动效；Timer Dial 规格包含顶部总剩余时间、外圈阶段结构、内圈总进度、中心圆当前阶段和底部少量图标操作；后续拆为 E10.6 / E10.7 / E10.8，E12 统计和 E13 声音保持独立。
+E10.5 已记录 Timer Dial 设计工作流与重构范围：外部 APK / 截图只做 UI / 交互研究，不复制代码、资源或资产；工具路线为 Figma 静态规格、可选 HTML / Canvas 动效验证、Jetpack Compose Canvas 生产实现，Rive / Lottie 仅用于小图标或装饰动效；Timer Dial 规格包含顶部总剩余时间、外圈当前运动+休息周期、内圈总进度、中心圆当前阶段和底部少量图标操作；后续拆为 E10.6 / E10.7 / E10.8，E12 统计和 E13 声音保持独立。
 E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/planning/timer-dial-static-visual-variants.md`，覆盖 Official Flow 执行页状态帧、计时编辑页关键状态帧、Tile Flow / Big Type 适配、互动动画语义、小屏 / 无障碍检查、法律边界和 E10.7 handoff。E10.6 只改 Markdown / 设计文档，不实现 Android、不写 Kotlin、不改 Gradle、不改 prototype、不复制 APK 资产或动效参数、不新增第四套 skin、不混入 E11/E12/E13。
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
+E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 ```
 
-下一轮建议进入：
+下一轮建议进入 Review Gate：
 
 ```text
-Story E10.8 Timer Dial production integration / animation polish；E11 / E12 / E13 仍保持独立阶段
+Story E10.8 Timer Dial production integration / animation polish review；E11 / E12 / E13 仍保持独立阶段
 ```
 
-E10.8 建议重点确认：
+E10.8 review 建议重点确认：
 
-1. 是否把 E10.7 prototype 稳定纳入计时训练生产执行页，并补齐小屏、TalkBack、reduce-motion 和三套内置 skin 的 polish。
+1. 当前周期外圈、内圈总进度、中心暂停 / 继续和底部图标操作是否符合训练中可读性。
 2. 圆盘进度、暂停冻结、阶段切换、completed / abandoned 停止和最后 N 秒提醒是否继续只来自 `TimedWorkoutEngine` / UI state / `WorkoutEvent`。
 3. 中心圆暂停 / 继续、底部跳过 / 下一阶段和结束二次确认是否继续通过 `WorkoutCommand` 分发。
 4. Official Flow、Tile Flow 和 Big Type 是否只做内置 skin 适配，不新增第四套 skin。
-5. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.8。
+5. 最后 N 秒提醒在真实设备或更短测试计划中补一次稳定视觉截图。
+6. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.8。
 
 ## 8. 暂缓事项
 

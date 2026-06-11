@@ -36,7 +36,7 @@ internal data class TimerDialUiState(
             isPaused = false,
             isFinalCountdown = false,
             stageSegments = emptyList(),
-            visualVariant = TimerDialVisualVariant.OFFICIAL_FLOW,
+            visualVariant = ProductionTimerDialVisualVariant,
             currentStageIconKey = "timer",
             currentStageTimeText = "00:00",
             totalRemainingText = "00:00",
@@ -46,12 +46,16 @@ internal data class TimerDialUiState(
     }
 
     fun clamped(): TimerDialUiState {
+        val safeTotalRemainingSec = totalRemainingSec.coerceAtLeast(0)
+        val safeCurrentStageRemainingSec = currentStageRemainingSec.coerceAtLeast(0)
         return copy(
             totalProgress = totalProgress.clampedProgress(),
             currentStageProgress = currentStageProgress.clampedProgress(),
             stageSegments = stageSegments.map { segment -> segment.clamped() },
-            currentStageRemainingSec = currentStageRemainingSec.coerceAtLeast(0),
-            totalRemainingSec = totalRemainingSec.coerceAtLeast(0)
+            currentStageRemainingSec = safeCurrentStageRemainingSec,
+            totalRemainingSec = safeTotalRemainingSec,
+            currentStageTimeText = safeCurrentStageRemainingSec.formatTimerText(),
+            totalRemainingText = safeTotalRemainingSec.formatTimerText()
         )
     }
 }
@@ -74,7 +78,7 @@ internal data class TimerDialStageSegmentUiState(
 
 internal fun TimedWorkoutEngineState.toTimerDialUiState(
     screenState: TimedWorkoutSessionScreenState,
-    visualVariant: TimerDialVisualVariant = TimerDialVisualVariant.OFFICIAL_FLOW
+    visualVariant: TimerDialVisualVariant = ProductionTimerDialVisualVariant
 ): TimerDialUiState {
     val totalPlannedDurationSec = steps.sumOf { step -> step.durationSec }.coerceAtLeast(1)
     val current = currentStep
@@ -100,21 +104,9 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         0
     }
     val currentType = current?.timerDialStageType() ?: TimerDialStageType.WORK
-    val segments = steps.mapIndexed { index, step ->
-        val progress = when {
-            status == SessionStatus.COMPLETED || index < currentStepIndex -> 1f
-            index == currentStepIndex -> currentStepProgress
-            else -> 0f
-        }
-        TimerDialStageSegmentUiState(
-            id = step.id,
-            label = step.title,
-            stageType = step.timerDialStageType(),
-            durationSec = step.durationSec,
-            progress = progress,
-            isCurrent = index == currentStepIndex
-        )
-    }
+    val segments = currentTimerDialCycleSegments(
+        currentStepProgress = currentStepProgress
+    )
 
     return TimerDialUiState(
         totalRemainingSec = totalRemainingSec,
@@ -129,6 +121,7 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         currentStageRemainingSec = if (status == SessionStatus.COMPLETED) 0 else remainingSec,
         isPaused = status == SessionStatus.PAUSED,
         isFinalCountdown = screenState.countdownReminder.isActive &&
+            screenState.countdownReminder.emphasisAnimationEnabled &&
             screenState.countdownReminder.remainingSec in 1..5 &&
             status == SessionStatus.ACTIVE,
         stageSegments = segments,
@@ -160,9 +153,66 @@ private fun TimedSessionStep.timerDialStageType(): TimerDialStageType {
     }
 }
 
+private fun TimedWorkoutEngineState.currentTimerDialCycleSegments(
+    currentStepProgress: Float
+): List<TimerDialStageSegmentUiState> {
+    if (currentStepIndex !in steps.indices) {
+        return emptyList()
+    }
+
+    val indexes = currentCycleIndexes().ifEmpty { listOf(currentStepIndex) }
+    return indexes.mapNotNull { index ->
+        val step = steps.getOrNull(index) ?: return@mapNotNull null
+        val progress = when {
+            status == SessionStatus.COMPLETED || index < currentStepIndex -> 1f
+            index == currentStepIndex -> currentStepProgress
+            else -> 0f
+        }
+        TimerDialStageSegmentUiState(
+            id = step.id,
+            label = step.title,
+            stageType = step.timerDialStageType(),
+            durationSec = step.durationSec,
+            progress = progress,
+            isCurrent = index == currentStepIndex
+        )
+    }
+}
+
+private fun TimedWorkoutEngineState.currentCycleIndexes(): List<Int> {
+    val current = steps.getOrNull(currentStepIndex) ?: return emptyList()
+    return when (current.kind) {
+        TimedSessionStepKind.WORK -> {
+            val nextRestIndex = (currentStepIndex + 1).takeIf { index ->
+                val next = steps.getOrNull(index)
+                next?.kind == TimedSessionStepKind.REST &&
+                    next.blockId == current.blockId &&
+                    next.round == current.round
+            }
+            listOfNotNull(currentStepIndex, nextRestIndex)
+        }
+        TimedSessionStepKind.REST -> {
+            val previousWorkIndex = (currentStepIndex - 1).takeIf { index ->
+                val previous = steps.getOrNull(index)
+                previous?.kind == TimedSessionStepKind.WORK &&
+                    previous.blockId == current.blockId &&
+                    previous.round == current.round
+            }
+            listOfNotNull(previousWorkIndex, currentStepIndex)
+        }
+    }
+}
+
 private fun Float.clampedProgress(): Float {
     return when {
         isNaN() -> 0f
         else -> coerceIn(0f, 1f)
     }
+}
+
+private fun Int.formatTimerText(): String {
+    val safeSeconds = coerceAtLeast(0)
+    val minutes = safeSeconds / 60
+    val seconds = safeSeconds % 60
+    return "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
 }

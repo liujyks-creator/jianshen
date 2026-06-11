@@ -45,7 +45,7 @@ Official Flow 建议以 `DESIGN.md` token 为基础：
 圆盘规格建议：
 
 - 主视口按 360dp 宽设计时，Timer Dial 外径建议 280-304dp；720x1280 小屏按 360x640dp 等效检查时外径可降到 248-264dp。
-- 外圈 `work` 弧线 16-20dp；`rest` 弧线 8-10dp；`warmup` / `cooldown` 10-12dp；自定义阶段 10-14dp，按阶段类型图标辅助识别。
+- 外圈当前阶段弧线 16-20dp；同一运动+休息周期中的非当前阶段弧线 8-10dp；`warmup` / `cooldown` / `custom` 按当前阶段语义选择粗弧或辅助细弧，并用阶段类型图标辅助识别。
 - 外圈段间 gap 2-4 度，避免阶段粘连；当前阶段可用更高亮度、轻微外发光或端点强调表达焦点，但不得遮挡其他阶段结构。
 - 内圈总进度 5-7dp，低于当前阶段弧线层级；active 推进，paused 冻结，completed / abandoned 停止。
 - 中心圆直径建议为外径的 58%-64%；中心倒计时使用 `timerL` 语义，Official Flow 常规帧约 64-72sp，小屏压到 52-60sp。
@@ -67,8 +67,9 @@ E10.6 静态帧需要让评审者能比较 Timer Dial 在不同视觉方向下�
 
 弧线层级：
 
-- 外圈 `work` 使用粗弧表达训练强度和当前推进。
-- 外圈 `rest` 使用细弧表达恢复，不抢中心倒计时。
+- 外圈只展示当前一次运动+休息周期，不展示整次训练所有运动+休息阶段。
+- 当前阶段使用粗弧表达焦点和当前推进；非当前阶段使用细弧表达同周期上下文。
+- 当处于 work 时，work 为粗弧并填充，rest 为细弧；当处于 rest 时，rest 为粗弧并填充，已完成 work 退为细弧。
 - 内圈总进度保持低干扰，只表达整次训练进展，不制造第二个主焦点。
 
 最后 5 秒可以使用红色强调、轻微闪烁、中心圆呼吸或端点增强，但必须绑定真实 last-N cue state；不得用独立动画假装进度，也不得在 paused、completed 或 abandoned 后继续变化。本方向是 TrainFlow Timer Dial 的风格探索，不是新增第四套 skin。
@@ -79,7 +80,7 @@ E10.6 静态帧需要让评审者能比较 Timer Dial 在不同视觉方向下�
 |---|---|
 | Warmup | 深色背景保持一致；热身弧线低于 work 强度，可用绿色 / 青绿色或低饱和准备色；中心文字浅色且不使用红色警示。 |
 | Work | 当前 work 粗红弧为主焦点；中心大数字白色 / 浅色；已完成弧线弱化但仍可识别阶段结构。 |
-| Rest | 当前 rest 细弧使用冷色或低饱和色；红色 work 只作为已完成 / 下一阶段结构，不抢休息倒计时。 |
+| Rest | 当前 rest 粗弧使用冷色或低饱和色并填充推进；已完成 work 退为细弧结构，不抢休息倒计时。 |
 | Paused | 所有弧线冻结并降低饱和度；中心显示 `已暂停` / 继续入口；红色强调停止脉冲。 |
 | Final 5 seconds | 当前 work 可加强红色、端点或中心圆呼吸；rest 最后 5 秒只做克制提醒；两者都不得遮挡底部操作或伪造进度。 |
 
@@ -143,7 +144,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 ### 1. Active Work
 
 - 顶部总剩余时间放在页面顶端，使用 caption / label 层级，例如 `总剩余 18:42`，不大于中心倒计时的 30%-36%。
-- 外圈显示本轮结构，当前 `work` 段为粗弧且高亮推进；已完成段弱化但仍可辨认。
+- 外圈显示当前一次运动+休息周期，当前 `work` 段为粗弧且从空到高亮填充，同周期 `rest` 段为细弧；不把整次训练所有 work/rest 都排到外圈。
 - 内圈显示整次训练总进度，使用细弧，不与当前阶段争抢。
 - 中心圆显示阶段图标、阶段编号或名称、主倒计时和暂停入口。例如：`WORK 03`、`深蹲节奏` 或用户命名阶段、`00:28`。
 - 底部保留少量图标操作：重置、跳过 / 下一阶段、结束。结束图标必须进入二次确认。
@@ -151,7 +152,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 ### 2. Active Rest
 
 - 顶部总剩余时间层级保持不变。
-- 当前 `rest` 段使用细弧和休息色，避免休息与 work 同权。
+- 当前 `rest` 段使用粗弧和休息色，并从空到高亮填充；已经过的同周期 `work` 段退为细弧，避免和当前休息倒计时争抢。
 - 中心显示休息图标、`REST` / 用户命名休息阶段、倒计时和可点击继续 / 暂停区域。
 - 下一阶段预告可放在中心圆下方或圆盘下缘的辅助文本，不进入主字号。
 - 底部可保留跳过 / 下一阶段；重置和结束仍可达但不抢主层级。
@@ -341,7 +342,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 ### Big Type
 
 - Big Type 优先远距离可读：中心倒计时更大，阶段名称更短，辅助信息更少。
-- 外圈可简化非当前阶段标签，只保留颜色 / 粗细 / 段位结构。
+- 外圈可简化非当前阶段标签，只保留当前运动+休息周期的颜色 / 粗细 / 段位结构。
 - 底部图标按钮触控目标应更大，建议 56dp 或以上；文字标签可只在必要时显示。
 - 720x1280 小屏下 Big Type 仍必须保留中心暂停 / 继续、跳过 / 下一阶段和结束确认路径。
 
@@ -369,7 +370,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 E10.7 Compose prototype 已按以下输入实现为 Android prototype complete；后续生产收口进入 E10.8：
 
 1. 建立 `TimerDialUiState` 或等价 mapper，字段至少包含：phase type、phase name、icon key、color hex、current phase progress、total progress、remaining seconds、total remaining seconds、status、last-N cue state、available commands。
-2. Compose Canvas 绘制外圈阶段结构、当前阶段推进弧和内圈总进度；所有 fraction 来自 UI state。
+2. Compose Canvas 绘制外圈当前运动+休息周期、当前阶段推进弧和内圈总进度；所有 fraction 来自 UI state。
 3. 中心圆点击只分发 `WorkoutCommand.PauseSession` / `ResumeSession`，不直接修改计时。
 4. 阶段切换和 last-N cue 消费 `WorkoutEvent` / UI state；不引入声音、TTS、女声 cue 或音频素材。
 5. 对 Official Flow 先实现可运行 prototype，再验证 Tile Flow / Big Type token 和布局适配。
@@ -379,15 +380,22 @@ E10.7 implementation note:
 
 - Prototype 文件位于 Android `feature.workoutsession`：`TimerDialUiState.kt`、`TimerDialTokens.kt`、`TimerDial.kt` 和 `TimerDialPreview.kt`。
 - 三类 visual variant 已作为 Timer Dial prototype tokens 实现：Black / Red High Contrast、Cyber Neon、TrainFlow Official Flow Integration；它们不是新增 UI skin。
-- 计时执行页已低风险消费该 prototype，但 E10.8 仍负责最终 production integration、animation polish、三套内置 skin 适配和完整视觉 smoke。
+- 计时执行页已低风险消费该 prototype；E10.8 已将生产默认收口到 Official Flow Timer Dial，外圈只展示当前运动+休息周期，内圈展示整次训练总进度，中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认。
 - E10.7 未实现声音、TTS、女声 cue、统计图表、心率设备、Room/session repository 改动、foreground service、exact alarm 或 notification action。
+
+E10.8 implementation note:
+
+- `TimerDialUiState` 的生产默认 visual variant 为 Official Flow；Black / Red High Contrast 与 Cyber Neon 只保留为 preview/demo visual variants，不新增第四套 skin。
+- 外圈阶段 segments 由 UI state mapper 收窄到当前一次运动+休息周期：work active 时 work 粗弧填充、rest 细弧；rest active 时 rest 粗弧填充、已完成 work 细弧。
+- 计时执行页移除重复的计划标题、步骤标签、状态 pill 和圆盘外重复阶段标签；顶部保留总剩余时间，中心显示当前阶段倒计时，点击中心圆暂停 / 继续。
+- `+15秒` 只在 active rest 可用，用于给当前休息增加 15 秒，不修改原计划。
 
 ## Verification Notes
 
-E10.6 只改 Markdown / 设计文档。E10.7 进入 Android prototype 后，验证要求扩展为：
+E10.6 只改 Markdown / 设计文档。E10.8 production integration 后，验证要求扩展为：
 
 1. 运行 `git diff --check`。
 2. 运行 `git diff --name-status`。
 3. 运行 Android unit test / assemble / lint / check，确认 Timer Dial state mapping 和 existing session flow 不回退。
-4. 如可运行 emulator，截图放 `.local/verification/e10-7/` 且不提交；不可运行时说明原因。
+4. 如可运行 emulator，截图放 `.local/verification/e10-8/` 且不提交；不可运行时说明原因。
 5. 确认未 stage、commit、移动 APK、截图、录屏、反编译输出或参考解析产物。
