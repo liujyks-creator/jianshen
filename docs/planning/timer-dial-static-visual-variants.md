@@ -47,7 +47,8 @@ Official Flow 建议以 `DESIGN.md` token 为基础：
 - 主视口按 360dp 宽设计时，Timer Dial 外径建议 280-304dp；720x1280 小屏按 360x640dp 等效检查时外径可降到 248-264dp。
 - 外圈当前阶段弧线 16-20dp；同一运动+休息周期中的非当前阶段弧线 8-10dp；`warmup` / `cooldown` / `custom` 按当前阶段语义选择粗弧或辅助细弧，并用阶段类型图标辅助识别。
 - 外圈段间 gap 2-4 度，避免阶段粘连；当前阶段可用更高亮度、轻微外发光或端点强调表达焦点，但不得遮挡其他阶段结构。
-- 内圈总进度 5-7dp，低于当前阶段弧线层级；active 推进，paused 冻结，completed / abandoned 停止。
+- 内圈总进度 5-7dp，低于当前阶段弧线层级；不画未经过底轨，只画已经过的白色 / 高对比进度线。active 时像画笔一样线性推进，paused 冻结，completed / abandoned 停止。
+- 内圈 12 点位置显示总运动阶段数数字圆标；一个运动阶段包含 work+rest。完成阶段节点显示最新完成数字或实心圆点，当前画笔点直径略大于内圈弧线粗度。
 - 中心圆直径建议为外径的 58%-64%；中心倒计时使用 `timerL` 语义，Official Flow 常规帧约 64-72sp，小屏压到 52-60sp。
 
 ## Style Variant Directions
@@ -70,7 +71,7 @@ E10.6 静态帧需要让评审者能比较 Timer Dial 在不同视觉方向下�
 - 外圈只展示当前一次运动+休息周期，不展示整次训练所有运动+休息阶段。
 - 当前阶段使用粗弧表达焦点和当前推进；非当前阶段使用细弧表达同周期上下文。
 - 当处于 work 时，work 为粗弧并填充，rest 为细弧；当处于 rest 时，rest 为粗弧并填充，已完成 work 退为细弧。
-- 内圈总进度保持低干扰，只表达整次训练进展，不制造第二个主焦点。
+- 内圈总进度保持低干扰，只表达整次训练按运动阶段数量推进的进展，不制造第二个主焦点。
 
 最后 5 秒可以使用红色强调、轻微闪烁、中心圆呼吸或端点增强，但必须绑定真实 last-N cue state；不得用独立动画假装进度，也不得在 paused、completed 或 abandoned 后继续变化。本方向是 TrainFlow Timer Dial 的风格探索，不是新增第四套 skin。
 
@@ -145,7 +146,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 
 - 顶部总剩余时间放在页面顶端，使用 caption / label 层级，例如 `总剩余 18:42`，不大于中心倒计时的 30%-36%。
 - 外圈显示当前一次运动+休息周期，当前 `work` 段为粗弧且从空到高亮填充，同周期 `rest` 段为细弧；不把整次训练所有 work/rest 都排到外圈。
-- 内圈显示整次训练总进度，使用细弧，不与当前阶段争抢。
+- 内圈显示整次训练按运动阶段数量推进的总进度，使用无底轨细弧，不与当前阶段争抢；12 点数字圆标显示总运动阶段数，已完成节点显示数字或圆点。
 - 中心圆显示阶段图标、阶段编号或名称、主倒计时和暂停入口。例如：`WORK 03`、`深蹲节奏` 或用户命名阶段、`00:28`。
 - 底部保留少量图标操作：重置、跳过 / 下一阶段、结束。结束图标必须进入二次确认。
 
@@ -317,7 +318,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 本节只定义设计语义，不实现动画。E10.7 / E10.8 应使用 TrainFlow 自己的 Compose / Material 动效实现，不复制 APK 动画参数、duration、easing、关键帧或路径。
 
 1. Center tap pause / resume：点击中心圆后发送 `PauseSession` 或 `ResumeSession`；paused 静态帧冻结弧线，resume 从冻结点继续。
-2. Dial active progress：active 时当前阶段弧线和内圈总进度按 engine / UI state 推进；paused、completed、abandoned 不推进。
+2. Dial active progress：active 时当前阶段弧线和内圈总进度按 engine / UI state 线性推进；paused、completed、abandoned 不推进。
 3. Stage focus migration：阶段切换由 `WorkoutEvent` 或 UI state 差异触发；上一阶段停住，下一阶段获得焦点。
 4. Work / rest change：work 切 rest 时粗弧转为细弧和休息色；rest 切 work 时恢复粗弧和 action 色。变化应清晰但不整页闪烁。
 5. Last-N-seconds cue：根据用户 cue settings 表达数字强调、弧线增强或轻微脉冲；提醒不得遮挡主控制，不引入声音或女声 cue。
@@ -387,6 +388,7 @@ E10.8 implementation note:
 
 - `TimerDialUiState` 的生产默认 visual variant 为 Official Flow；Black / Red High Contrast 与 Cyber Neon 只保留为 preview/demo visual variants，不新增第四套 skin。
 - 外圈阶段 segments 由 UI state mapper 收窄到当前一次运动+休息周期：work active 时 work 粗弧填充、rest 细弧；rest active 时 rest 粗弧填充、已完成 work 细弧。
+- 内圈总进度由 raw second progress 收窄为 workout-stage marker progress：总数为 work/custom 运动阶段数量，一个阶段包含 work+rest；12 点圆标显示总数，最新完成节点显示数字，之前完成节点退为实心圆点，未经过部分不画底轨。
 - 计时执行页移除重复的计划标题、步骤标签、状态 pill 和圆盘外重复阶段标签；顶部保留总剩余时间，中心显示当前阶段倒计时，点击中心圆暂停 / 继续。
 - `+15秒` 只在 active rest 可用，用于给当前休息增加 15 秒，不修改原计划。
 

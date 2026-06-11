@@ -144,6 +144,41 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun innerProgressMapsWorkoutStageMarkersInsteadOfRawStepCount() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(sevenCycleTimerDialPlan()),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 3 * 60 + 25).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(7, dial.totalWorkoutStageCount)
+        assertEquals(3, dial.completedWorkoutStageCount)
+        assertEquals(TimerDialStageType.WORK, dial.currentStageType)
+        assertEquals(25f / 45f, dial.currentStageProgress, 0.0001f)
+        assertEquals((3f + 25f / 60f) / 7f, dial.totalProgress, 0.0001f)
+        assertEquals(2, dial.stageSegments.size)
+        assertEquals(45, dial.stageSegments.first().durationSec)
+        assertEquals(15, dial.stageSegments.last().durationSec)
+    }
+
+    @Test
+    fun innerProgressHoldsCompletedStageCountDuringRoundRest() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(roundRestTimerDialPlan()),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 6).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(2, dial.totalWorkoutStageCount)
+        assertEquals(1, dial.completedWorkoutStageCount)
+        assertEquals(0.5f, dial.totalProgress, 0.0001f)
+    }
+
+    @Test
     fun visualVariantsStayLimitedToThreePrototypeDirections() {
         val variants = TimerDialVisualVariant.entries
         val skinIds = SkinRegistry.skins.map { skin -> skin.id }.toSet()
@@ -314,6 +349,59 @@ class TimerDialUiStateTest {
             ),
             createdAt = "2026-06-10T00:00:00Z",
             updatedAt = "2026-06-10T00:00:00Z"
+        )
+    }
+
+    private fun sevenCycleTimerDialPlan(): WorkoutPlan {
+        return WorkoutPlan(
+            id = "timer-dial-seven-cycle-test",
+            mode = WorkoutMode.TIMED,
+            title = "Timer Dial Seven Cycle Test",
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "timer-dial-seven-cycle",
+                    order = 1,
+                    rounds = 1,
+                    items = (1..7).map { index ->
+                        TimedExerciseItem(
+                            id = "work-$index",
+                            labelOverride = "Work $index",
+                            stageType = TimedStageType.WORK,
+                            workDurationSec = 45,
+                            restAfterSec = 15
+                        )
+                    }
+                )
+            ),
+            createdAt = "2026-06-12T00:00:00Z",
+            updatedAt = "2026-06-12T00:00:00Z"
+        )
+    }
+
+    private fun roundRestTimerDialPlan(): WorkoutPlan {
+        return WorkoutPlan(
+            id = "timer-dial-round-rest-test",
+            mode = WorkoutMode.TIMED,
+            title = "Timer Dial Round Rest Test",
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "timer-dial-round-rest",
+                    order = 1,
+                    rounds = 2,
+                    restBetweenRoundsSec = 10,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "work",
+                            labelOverride = "Work",
+                            stageType = TimedStageType.WORK,
+                            workDurationSec = 4,
+                            restAfterSec = 2
+                        )
+                    )
+                )
+            ),
+            createdAt = "2026-06-12T00:00:00Z",
+            updatedAt = "2026-06-12T00:00:00Z"
         )
     }
 }

@@ -93,7 +93,7 @@ internal fun TimerDialVisualVariant.tokens(skin: TrainFlowSkin): TimerDialVisual
             pageBackground = skin.tokens.primary,
             dialSurface = skin.tokens.secondary,
             track = skin.tokens.neutral700.copy(alpha = 0.58f),
-            totalProgress = skin.tokens.focus,
+            totalProgress = skin.tokens.neutral50,
             centerSurface = skin.tokens.secondary,
             textPrimary = skin.tokens.neutral50,
             textSecondary = skin.tokens.neutral200,

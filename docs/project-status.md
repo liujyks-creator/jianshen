@@ -1,6 +1,6 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-06-11
+**状态日期:** 2026-06-12
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
@@ -229,7 +229,7 @@ E10.6 新增 Timer Dial Figma / static visual variants 规格；`docs/planning/t
 
 E10.7 新增 Timer Dial Compose prototype；`feature.workoutsession` 新增 `TimerDialUiState`、`TimerDialTokens`、`TimerDial` Canvas 组件和 `TimerDialPreview` demo，现有计时执行页以低风险方式消费 `TimedWorkoutEngineState.toTimedWorkoutSessionScreenState().timerDial` 展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号、阶段编号 / 名称 / 倒计时、paused 冻结态和 final 5 seconds 轻量强调。三类 visual variant 已作为原型 token 实现：黑红高对比、赛博霓虹和 TrainFlow Official Flow 融合；它们不是新增 UI skin。新增单元测试覆盖 progress clamp、total / stage progress mapping、work/rest stroke semantics、visual variant 数量、final countdown flag 和 paused mapping。E10.7 仍是 prototype complete，不是 E10.8 最终生产集成；当前未改 Room/session repository、训练记录业务逻辑、workout engine 语义、声音 / TTS / 女声 cue、统计图表、心率设备、foreground service、exact alarm、notification action、前端 prototype 或第四套 skin。
 
-E10.8 新增 Timer Dial production integration / animation polish；生产计时训练执行页默认使用 Official Flow Timer Dial，Black / Red High Contrast 与 Cyber Neon 仅保留为 preview/demo visual variants，不进入三套内置 UI skin registry。`TimerDialUiState` mapper 将外圈 segments 收窄为当前一次运动+休息周期：work active 时 work 粗弧填充、rest 细弧；rest active 时 rest 粗弧填充、已完成 work 细弧；内圈继续表达整次训练总进度。计时执行页顶部精简为总剩余时间，圆盘卡移除重复阶段标签、计划标题、步骤和进行中状态，中心圆显示当前阶段倒计时并承担暂停 / 继续点击；底部跳过和结束改为图标按钮，结束训练接入二次确认，`+15秒` 只在 active rest 可用，用于延长当前休息 15 秒且不修改原计划。新增/更新测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、当前阶段粗弧语义、final countdown 偏好开关和 timed route end confirmation；已运行 `app:testDebugUnitTest`、`app:assembleDebug`、`app:lintDebug`、`app:check`、`git diff --check HEAD` 和 `git diff --cached --check`。720x1280 emulator visual smoke 覆盖 active、paused、rest + `+15秒`，截图保存在未跟踪的 `.local/verification/e10-8/`；最后 N 秒视觉 smoke 本轮未稳定截到 1-5 秒窗口，保留为 review 关注点。本阶段未改 Room/session repository、训练记录业务逻辑、workout engine 语义、声音 / TTS / 女声 cue、统计图表、心率设备、foreground service、exact alarm、notification action、前端 prototype 或第四套 skin。
+E10.8 新增 Timer Dial production integration / animation polish；生产计时训练执行页默认使用 Official Flow Timer Dial，Black / Red High Contrast 与 Cyber Neon 仅保留为 preview/demo visual variants，不进入三套内置 UI skin registry。`TimerDialUiState` mapper 将外圈 segments 收窄为当前一次运动+休息周期：work active 时 work 粗弧填充、rest 细弧；rest active 时 rest 粗弧填充、已完成 work 细弧；外圈和内圈进度动画均使用线性推进，避免秒针式跳格。内圈不再画未经过底轨，而是按运动阶段数量从 12 点像画笔一样画出总进度：总数为 work/custom 运动阶段数量，一个阶段包含 work+rest；12 点数字圆标显示总运动阶段数，最新完成节点显示数字，之前完成节点退为实心圆点。计时执行页顶部精简为总剩余时间，圆盘卡移除重复阶段标签、计划标题、步骤和进行中状态，中心圆显示当前阶段倒计时并承担暂停 / 继续点击；底部跳过和结束改为图标按钮，结束训练接入二次确认，`+15秒` 只在 active rest 可用，用于延长当前休息 15 秒且不修改原计划。新增/更新测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、当前阶段粗弧语义、7 阶段 45+15 的内圈 marker progress、final countdown 偏好开关和 timed route end confirmation；已运行 `app:testDebugUnitTest`、`app:assembleDebug`、`app:lintDebug`、`app:check`、`git diff --check HEAD` 和 `git diff --cached --check`。720x1280 emulator visual smoke 覆盖 active、paused、rest + `+15秒`，截图保存在未跟踪的 `.local/verification/e10-8/`；最后 N 秒视觉 smoke 本轮未稳定截到 1-5 秒窗口，保留为 review 关注点。本阶段未改 Room/session repository、训练记录业务逻辑、workout engine 语义、声音 / TTS / 女声 cue、统计图表、心率设备、foreground service、exact alarm、notification action、前端 prototype 或第四套 skin。
 
 ## 新 Codex 会话提示词
 

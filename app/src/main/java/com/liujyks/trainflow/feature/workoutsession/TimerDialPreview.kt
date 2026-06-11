@@ -269,11 +269,12 @@ private fun sampleTimerDialState(
     paused: Boolean = false,
     finalCountdown: Boolean = false
 ): TimerDialUiState {
-    val currentProgress = if (finalCountdown) 0.88f else 0.42f
+    val currentProgress = if (finalCountdown) 0.88f else 25f / 45f
     val remainingSec = if (finalCountdown) 5 else 28
+    val totalProgress = (3f + currentProgress * 45f / 60f) / 7f
     return TimerDialUiState(
         totalRemainingSec = 868,
-        totalProgress = 0.38f,
+        totalProgress = totalProgress,
         currentStageProgress = currentProgress,
         currentStageType = TimerDialStageType.WORK,
         currentStageLabel = "爆发间歇",
@@ -281,14 +282,11 @@ private fun sampleTimerDialState(
         currentStageRemainingSec = remainingSec,
         isPaused = paused,
         isFinalCountdown = finalCountdown,
+        totalWorkoutStageCount = 7,
+        completedWorkoutStageCount = 3,
         stageSegments = listOf(
-            TimerDialStageSegmentUiState("warmup", "热身", TimerDialStageType.WARMUP, 180, 1f, false),
-            TimerDialStageSegmentUiState("work-1", "工作", TimerDialStageType.WORK, 40, 1f, false),
-            TimerDialStageSegmentUiState("rest-1", "休息", TimerDialStageType.REST, 20, 1f, false),
-            TimerDialStageSegmentUiState("work-2", "爆发间歇", TimerDialStageType.WORK, 40, currentProgress, true),
-            TimerDialStageSegmentUiState("rest-2", "休息", TimerDialStageType.REST, 20, 0f, false),
-            TimerDialStageSegmentUiState("custom", "核心保持", TimerDialStageType.CUSTOM, 35, 0f, false),
-            TimerDialStageSegmentUiState("cooldown", "放松", TimerDialStageType.COOLDOWN, 120, 0f, false)
+            TimerDialStageSegmentUiState("work-4", "爆发间歇", TimerDialStageType.WORK, 45, currentProgress, true),
+            TimerDialStageSegmentUiState("rest-4", "休息", TimerDialStageType.REST, 15, 0f, false)
         ),
         visualVariant = variant,
         currentStageIconKey = "work",

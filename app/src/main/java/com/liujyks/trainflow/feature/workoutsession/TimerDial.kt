@@ -1,6 +1,9 @@
 package com.liujyks.trainflow.feature.workoutsession
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
@@ -18,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -25,6 +29,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -37,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import com.liujyks.trainflow.ui.theme.isBigType
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 internal fun TimerDial(
@@ -48,17 +56,20 @@ internal fun TimerDial(
     val skin = LocalTrainFlowSkin.current
     val tokens = safeState.visualVariant.tokens(skin)
     val layoutSpec = skin.timerDialLayoutSpec()
-    val progressAnimationMillis = if (safeState.isPaused || !safeState.canTogglePause) 0 else 320
+    val progressAnimationMillis = if (safeState.isPaused || !safeState.canTogglePause) 0 else 1_000
+    val currentSegmentId = safeState.stageSegments.firstOrNull { segment -> segment.isCurrent }?.id
     val animatedTotalProgress by animateFloatAsState(
         targetValue = safeState.totalProgress,
-        animationSpec = tween(durationMillis = progressAnimationMillis),
+        animationSpec = tween(durationMillis = progressAnimationMillis, easing = LinearEasing),
         label = "TimerDialTotalProgress"
     )
-    val animatedStageProgress by animateFloatAsState(
-        targetValue = safeState.currentStageProgress,
-        animationSpec = tween(durationMillis = progressAnimationMillis.coerceAtMost(240)),
-        label = "TimerDialStageProgress"
-    )
+    val animatedStageProgress by key(currentSegmentId) {
+        animateFloatAsState(
+            targetValue = safeState.currentStageProgress,
+            animationSpec = tween(durationMillis = progressAnimationMillis, easing = LinearEasing),
+            label = "TimerDialStageProgress"
+        )
+    }
     val finalPulse by animateFloatAsState(
         targetValue = if (safeState.isFinalCountdown && !safeState.isPaused) 1f else 0f,
         animationSpec = tween(durationMillis = 220),
@@ -149,24 +160,63 @@ internal fun TimerDial(
                 startAngle += rawSweep
             }
 
-            drawArc(
-                color = tokens.track.copy(alpha = 0.46f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = innerTopLeft,
-                size = innerSize,
-                style = Stroke(width = innerStroke, cap = StrokeCap.Round)
+            val innerCenter = Offset(
+                x = innerTopLeft.x + innerSize.width / 2f,
+                y = innerTopLeft.y + innerSize.height / 2f
             )
-            drawArc(
-                color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.52f else 0.95f),
-                startAngle = -90f,
-                sweepAngle = 360f * animatedTotalProgress,
-                useCenter = false,
-                topLeft = innerTopLeft,
-                size = innerSize,
-                style = Stroke(width = innerStroke, cap = StrokeCap.Round)
-            )
+            val innerRadius = innerSize.width / 2f
+            val markerCount = safeState.totalWorkoutStageCount
+            val markerProgress = animatedTotalProgress.coerceIn(0f, 1f)
+
+            if (markerProgress > 0f) {
+                drawArc(
+                    color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.52f else 0.96f),
+                    startAngle = -90f,
+                    sweepAngle = 360f * markerProgress,
+                    useCenter = false,
+                    topLeft = innerTopLeft,
+                    size = innerSize,
+                    style = Stroke(width = innerStroke, cap = StrokeCap.Round)
+                )
+                drawCircle(
+                    color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.62f else 1f),
+                    radius = innerStroke * 0.82f,
+                    center = pointOnCircle(innerCenter, innerRadius, markerProgress)
+                )
+            }
+
+            if (markerCount > 0) {
+                drawTimerDialMarker(
+                    center = pointOnCircle(innerCenter, innerRadius, 0f),
+                    radius = innerStroke * 1.95f,
+                    fillColor = tokens.work,
+                    textColor = tokens.textPrimary,
+                    text = markerCount.toString()
+                )
+
+                val completedCount = safeState.completedWorkoutStageCount.coerceIn(0, markerCount)
+                (1 until completedCount).forEach { count ->
+                    drawCircle(
+                        color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.58f else 0.92f),
+                        radius = innerStroke * 1.1f,
+                        center = pointOnCircle(innerCenter, innerRadius, count.toFloat() / markerCount.toFloat())
+                    )
+                }
+
+                if (completedCount in 1 until markerCount) {
+                    drawTimerDialMarker(
+                        center = pointOnCircle(
+                            innerCenter,
+                            innerRadius,
+                            completedCount.toFloat() / markerCount.toFloat()
+                        ),
+                        radius = innerStroke * 1.9f,
+                        fillColor = tokens.textPrimary,
+                        textColor = tokens.work,
+                        text = completedCount.toString()
+                    )
+                }
+            }
         }
 
         if (safeState.isFinalCountdown) {
@@ -239,6 +289,42 @@ internal fun TimerDial(
             }
         }
     }
+}
+
+private fun pointOnCircle(
+    center: Offset,
+    radius: Float,
+    progress: Float
+): Offset {
+    val angleRadians = Math.toRadians((progress.coerceIn(0f, 1f) * 360f - 90f).toDouble())
+    return Offset(
+        x = center.x + cos(angleRadians).toFloat() * radius,
+        y = center.y + sin(angleRadians).toFloat() * radius
+    )
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTimerDialMarker(
+    center: Offset,
+    radius: Float,
+    fillColor: Color,
+    textColor: Color,
+    text: String
+) {
+    drawCircle(color = fillColor, radius = radius, center = center)
+    drawContext.canvas.nativeCanvas.drawText(
+        text,
+        center.x,
+        center.y - (markerTextPaint.descent() + markerTextPaint.ascent()) / 2f,
+        markerTextPaint.apply {
+            color = textColor.toArgb()
+            textSize = radius * 1.42f
+        }
+    )
+}
+
+private val markerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    textAlign = Paint.Align.CENTER
+    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
 }
 
 private fun currentCenterBorderColor(

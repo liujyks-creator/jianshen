@@ -1219,10 +1219,11 @@ stepsCompleted:
 **交付结果:**
 
 - 生产计时训练执行页默认使用 Official Flow Timer Dial；Black / Red High Contrast 与 Cyber Neon 仅保留为 preview/demo visual variants，不进入 Official Flow / Tile Flow / Big Type skin registry。
-- Timer Dial 外圈从整次训练全部阶段收窄为当前一次运动+休息周期；work active 时 work 粗弧填充、rest 细弧，rest active 时 rest 粗弧填充、已经过的 work 细弧；内圈继续表达整次训练总进度。
+- Timer Dial 外圈从整次训练全部阶段收窄为当前一次运动+休息周期；work active 时 work 粗弧填充、rest 细弧，rest active 时 rest 粗弧填充、已经过的 work 细弧；外圈和内圈进度动画均使用线性推进。
+- 内圈按运动阶段数量表达整次训练总进度，不画未经过底轨；12 点数字圆标显示总运动阶段数，一个阶段包含 work+rest，最新完成节点显示数字，之前完成节点退为实心圆点。
 - 顶部精简为总剩余时间；圆盘卡移除重复阶段标签、计划标题、步骤和进行中状态；中心圆显示当前阶段倒计时并承担暂停 / 继续点击。
 - 底部跳过和结束改为图标按钮，结束训练接入二次确认；`+15秒` 只在 active rest 可用，用于延长当前休息 15 秒，不修改原计划。
-- 新增/更新单元测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、current segment stroke semantics、final countdown 偏好开关和 timed route end confirmation。
+- 新增/更新单元测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、current segment stroke semantics、7 阶段 45+15 内圈 marker progress、final countdown 偏好开关和 timed route end confirmation。
 - 已运行 `app:testDebugUnitTest`、`app:assembleDebug`、`app:lintDebug`、`app:check`、`git diff --check HEAD` 和 `git diff --cached --check`。720x1280 emulator visual smoke 覆盖 active、paused、rest + `+15秒`；最后 N 秒截图窗口本轮未稳定捕获，单元测试已覆盖提醒 flag。
 - 本阶段未改 Room/session repository、训练引擎语义、记录统计、心率设备、foreground service、exact alarm、notification action、声音 / TTS / 女声 cue、前端 prototype 或第四套 skin。
 
