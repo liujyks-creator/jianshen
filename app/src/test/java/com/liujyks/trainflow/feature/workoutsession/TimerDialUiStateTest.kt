@@ -179,6 +179,94 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun restExtensionKeepsOuterAndInnerProgressMonotonic() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 10)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 9).state
+        val beforeExtension = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(TimerDialStageType.REST, beforeExtension.currentStageType)
+        assertEquals(0.5f, beforeExtension.currentStageProgress, 0.0001f)
+
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        val afterExtension = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertTrue(afterExtension.currentStageProgress >= beforeExtension.currentStageProgress)
+        assertTrue(afterExtension.totalProgress >= beforeExtension.totalProgress)
+        assertEquals(beforeExtension.currentStageProgress, afterExtension.currentStageProgress, 0.0001f)
+        assertEquals(beforeExtension.totalProgress, afterExtension.totalProgress, 0.0001f)
+        assertEquals(
+            beforeExtension.stageSegments.last().progress,
+            afterExtension.stageSegments.last().progress,
+            0.0001f
+        )
+
+        state = TimedWorkoutEngine.tick(state, seconds = 1).state
+        val afterTick = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertTrue(afterTick.currentStageProgress > afterExtension.currentStageProgress)
+        assertTrue(afterTick.totalProgress > afterExtension.totalProgress)
+        assertTrue(afterTick.stageSegments.last().progress > afterExtension.stageSegments.last().progress)
+    }
+
+    @Test
+    fun pausedRestExtensionProgressDoesNotAdvance() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 10)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 9).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession).state
+        val beforePausedTick = state.toTimedWorkoutSessionScreenState().timerDial
+
+        state = TimedWorkoutEngine.tick(state, seconds = 8).state
+        val afterPausedTick = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertTrue(afterPausedTick.isPaused)
+        assertEquals(beforePausedTick.currentStageProgress, afterPausedTick.currentStageProgress, 0.0001f)
+        assertEquals(beforePausedTick.totalProgress, afterPausedTick.totalProgress, 0.0001f)
+        assertEquals(
+            beforePausedTick.stageSegments.last().progress,
+            afterPausedTick.stageSegments.last().progress,
+            0.0001f
+        )
+    }
+
+    @Test
+    fun terminalRestExtensionProgressDoesNotAdvance() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 10)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 9).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+        val beforeTerminalTick = state.toTimedWorkoutSessionScreenState().timerDial
+
+        state = TimedWorkoutEngine.tick(state, seconds = 8).state
+        val afterTerminalScreenState = state.toTimedWorkoutSessionScreenState()
+        val afterTerminalTick = afterTerminalScreenState.timerDial
+
+        assertTrue(afterTerminalScreenState.isTerminal)
+        assertEquals(beforeTerminalTick.currentStageProgress, afterTerminalTick.currentStageProgress, 0.0001f)
+        assertEquals(beforeTerminalTick.totalProgress, afterTerminalTick.totalProgress, 0.0001f)
+        assertEquals(
+            beforeTerminalTick.stageSegments.last().progress,
+            afterTerminalTick.stageSegments.last().progress,
+            0.0001f
+        )
+    }
+
+    @Test
     fun visualVariantsStayLimitedToThreePrototypeDirections() {
         val variants = TimerDialVisualVariant.entries
         val skinIds = SkinRegistry.skins.map { skin -> skin.id }.toSet()

@@ -148,7 +148,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 - 外圈显示当前一次运动+休息周期，当前 `work` 段为粗弧且从空到高亮填充，同周期 `rest` 段为细弧；不把整次训练所有 work/rest 都排到外圈。
 - 内圈显示整次训练按运动阶段数量推进的总进度，使用无底轨细弧，不与当前阶段争抢；12 点数字圆标显示总运动阶段数，已完成节点显示数字或圆点。
 - 中心圆显示阶段图标、阶段编号或名称、主倒计时和暂停入口。例如：`WORK 03`、`深蹲节奏` 或用户命名阶段、`00:28`。
-- 底部保留少量图标操作：重置、跳过 / 下一阶段、结束。结束图标必须进入二次确认。
+- 底部保留生产少量操作：跳过 / 下一阶段、`+15秒`（仅 active rest）和结束。结束图标必须进入二次确认；reset 只保留在 preview / demo 或未来命令设计讨论中。
 
 ### 2. Active Rest
 
@@ -156,7 +156,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 - 当前 `rest` 段使用粗弧和休息色，并从空到高亮填充；已经过的同周期 `work` 段退为细弧，避免和当前休息倒计时争抢。
 - 中心显示休息图标、`REST` / 用户命名休息阶段、倒计时和可点击继续 / 暂停区域。
 - 下一阶段预告可放在中心圆下方或圆盘下缘的辅助文本，不进入主字号。
-- 底部可保留跳过 / 下一阶段；重置和结束仍可达但不抢主层级。
+- 底部可保留跳过 / 下一阶段、`+15秒` 和结束；`+15秒` 只在 active rest 可用，结束仍可达但不抢主层级。
 
 ### 3. Warmup / Cooldown
 
@@ -170,7 +170,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 - active 弧线和内圈总进度冻结在暂停瞬间的位置。
 - 中心圆切换为暂停态：显示暂停图标 / `已暂停` / 当前剩余时间，继续入口明确。
 - 背景和弧线可整体降低饱和度；不要让暂停态看起来仍在推进。
-- 底部跳过 / 结束可用；重置和结束仍需防误触层级，结束保留二次确认。
+- 底部跳过 / 结束可用；结束保留二次确认。Reset 若未来会清空本次进度，需另行定义命令、确认和记录边界。
 
 ### 5. Resume Transition
 
@@ -215,7 +215,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 ### 11. 720x1280 Small Screen State
 
 - 以 720x1280 px 或等效 360x640dp frame 检查 Official Flow active work、active rest、paused、end confirmation。
-- 顶部总剩余时间、中心倒计时、中心暂停 / 继续、底部重置、跳过 / 下一阶段、结束都必须首屏可见。
+- 顶部总剩余时间、中心倒计时、中心暂停 / 继续、底部跳过 / 下一阶段、`+15秒`、结束都必须首屏可见。
 - 小屏下可减少下一阶段预告、说明文字和装饰 glow；不得压缩触控目标低于 48dp。
 - 最后 N 秒提醒不得把底部操作挤出或覆盖。
 
@@ -318,7 +318,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 本节只定义设计语义，不实现动画。E10.7 / E10.8 应使用 TrainFlow 自己的 Compose / Material 动效实现，不复制 APK 动画参数、duration、easing、关键帧或路径。
 
 1. Center tap pause / resume：点击中心圆后发送 `PauseSession` 或 `ResumeSession`；paused 静态帧冻结弧线，resume 从冻结点继续。
-2. Dial active progress：active 时当前阶段弧线和内圈总进度按 engine / UI state 线性推进；paused、completed、abandoned 不推进。
+2. Dial active progress：active 时当前阶段弧线和内圈总进度按 engine / UI state 线性推进；rest extension 后外圈当前 rest 弧和内圈 work+rest cycle progress 必须单调、不倒退；paused、completed、abandoned 不推进。
 3. Stage focus migration：阶段切换由 `WorkoutEvent` 或 UI state 差异触发；上一阶段停住，下一阶段获得焦点。
 4. Work / rest change：work 切 rest 时粗弧转为细弧和休息色；rest 切 work 时恢复粗弧和 action 色。变化应清晰但不整页闪烁。
 5. Last-N-seconds cue：根据用户 cue settings 表达数字强调、弧线增强或轻微脉冲；提醒不得遮挡主控制，不引入声音或女声 cue。
@@ -355,7 +355,7 @@ E10.6 静态帧至少要能评审上述三类方向：Black / Red High Contrast 
 4. TalkBack：中心圆标签应读出当前状态，例如 `工作阶段，剩余 28 秒，双击暂停`；paused 时读 `已暂停，双击继续`。
 5. 最后 N 秒：强化提醒不能闪烁过强，不能遮挡主控；reduce-motion 下使用静态强调。
 6. 小屏：720x1280 检查 active work、active rest、paused、last-N cue、end confirmation、编辑页底部操作和 picker sheet。
-7. 误触：结束训练必须二次确认；重置若会清空本次进度，也应确认或延后到 E10.7 明确命令边界。
+7. 误触：结束训练必须二次确认；E10.8 production 不实现 reset。Reset 若会清空本次进度，应延后为未来命令设计项，并先明确 `WorkoutCommand`、二次确认、session record 边界和测试。
 
 ## Do Not Use / Legal Boundary
 
@@ -391,6 +391,7 @@ E10.8 implementation note:
 - 内圈总进度由 raw second progress 收窄为 workout-stage marker progress：总数为 work/custom 运动阶段数量，一个阶段包含 work+rest；12 点圆标显示总数，最新完成节点显示数字，之前完成节点退为实心圆点，未经过部分不画底轨。
 - 计时执行页移除重复的计划标题、步骤标签、状态 pill 和圆盘外重复阶段标签；顶部保留总剩余时间，中心显示当前阶段倒计时，点击中心圆暂停 / 继续。
 - `+15秒` 只在 active rest 可用，用于给当前休息增加 15 秒，不修改原计划。
+- Rest extension progress fix must follow the monotonic, non-regressing, state-driven Timer Dial rule: extending rest keeps the current outer rest arc and inner cycle progress at least at the pre-extension value, then continues forward while active; paused and terminal states stay frozen.
 
 ## Verification Notes
 

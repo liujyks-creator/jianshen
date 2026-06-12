@@ -32,6 +32,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 internal fun TimerDialPrototypeDemo(
     state: TimerDialUiState,
     onTogglePause: () -> Unit,
+    // Prototype/demo only. E10.8 production controls are skip, +15s, and end.
     onReset: () -> Unit,
     onSkip: () -> Unit,
     onEnd: () -> Unit,

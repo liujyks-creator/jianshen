@@ -100,11 +100,11 @@ E10.5 只做规划和设计范围收口：
 
 底部只保留少量图标操作：
 
-- 重置。
 - 跳过 / 下一阶段。
+- `+15秒`（仅 active rest）。
 - 结束。
 
-底部操作应使用图标和可访问标签表达，文字尽量少。结束训练仍需要二次确认。
+E10.8 production controls 收敛为 `skip`、`+15秒`、`end`。Reset 只保留在 preview / demo 或未来命令设计讨论中；如果后续进入生产实现，需要先明确 `WorkoutCommand` 语义、二次确认、本次 session record 边界和回归测试。底部操作应使用图标和可访问标签表达，文字尽量少。结束训练仍需要二次确认。
 
 ## 6. 动效规格
 
@@ -122,8 +122,10 @@ E10.5 只做规划和设计范围收口：
 动效原则：
 
 - `active` 时推进；`paused` 时冻结并显示暂停状态。
+- 休息延长后的外圈当前 rest 弧和内圈 work+rest cycle 进度必须保持单调、不倒退，并继续由 active elapsed / UI state 线性推进。
 - `work` 到 `rest` 的变化应短促清晰，避免整页闪烁过强。
 - 最后 N 秒提醒可增强弧线、中心数字或节奏，但必须服从用户 cue settings。
+- 外部 APK / 人工分析只作为观察材料；可吸收深色高对比、单一强强调色、约 100-300ms 轻量反馈和 final countdown 轻量强调等抽象原则，不复制代码、资源、字体、音频、命名或逐像素视觉。
 - 动效消费者使用 `WorkoutEvent` / UI state，不直接发明独立计时。
 - 声音、震动和未来固定女声 cue 留给 E13，不在 E10.5 实现。
 
@@ -188,6 +190,8 @@ E10.5 只做规划和设计范围收口：
 - 外圈从“整次训练全部阶段”收窄为当前一次运动+休息周期；内圈继续表达整次训练总进度。
 - 中心圆承担暂停 / 继续主交互；顶部只保留总剩余时间；底部跳过和结束改为图标，结束训练仍走二次确认。
 - `+15秒` 仅在 active rest 可用，用于延长当前休息 15 秒，不修改原计划。
+- Timer Dial 进度按“单调、不倒退、状态驱动”验收；rest extension 后外圈当前 rest 弧和内圈当前 work+rest cycle progress 不得回到 0 或小于延长前值。
+- Reset remains preview/demo or future command design. E10.8 production does not add reset; future reset work must define command semantics, confirmation, session-record boundaries, and tests before entering production.
 - 补齐回归测试和 720x1280 emulator visual smoke；最后 N 秒视觉 smoke 已尝试捕获，但本轮未稳定截到 1-5 秒窗口，单元测试覆盖提醒 flag 与偏好开关。
 - 保持 `WorkoutCommand` / `WorkoutEvent` / `TimedWorkoutEngine` 语义不变。
 

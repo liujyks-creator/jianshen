@@ -1211,7 +1211,8 @@ stepsCompleted:
 
 - Then 生产计时训练执行页使用通过 E10.6/E10.7 验证的 Timer Dial。
 - Then Official Flow、Tile Flow 和 Big Type 都有明确适配，不新增第四套 skin。
-- Then 暂停 / 继续、跳过 / 下一阶段、重置或结束操作保持即时可达，结束训练仍需二次确认。
+- Then 暂停 / 继续、跳过 / 下一阶段、`+15秒` 和结束操作保持即时可达，结束训练仍需二次确认。
+- Then reset remains preview/demo or future command design, not an E10.8 production control.
 - Then 动效继续由 engine state / `WorkoutEvent` / UI state 驱动。
 - Then 小屏可读性、主控制可达性和终态不污染进度有回归验证。
 - Then 不混入 E12 统计图表、E13 声音 / 女声 cue、心率设备或后台可靠计时。
@@ -1223,7 +1224,9 @@ stepsCompleted:
 - 内圈按运动阶段数量表达整次训练总进度，不画未经过底轨；12 点数字圆标显示总运动阶段数，一个阶段包含 work+rest，最新完成节点显示数字，之前完成节点退为实心圆点。
 - 顶部精简为总剩余时间；圆盘卡移除重复阶段标签、计划标题、步骤和进行中状态；中心圆显示当前阶段倒计时并承担暂停 / 继续点击。
 - 底部跳过和结束改为图标按钮，结束训练接入二次确认；`+15秒` 只在 active rest 可用，用于延长当前休息 15 秒，不修改原计划。
-- 新增/更新单元测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、current segment stroke semantics、7 阶段 45+15 内圈 marker progress、final countdown 偏好开关和 timed route end confirmation。
+- Rest extension progress 按单调、不倒退、状态驱动口径修复：`+15秒` 后当前 rest 外圈弧和内圈 work+rest cycle progress 保持不小于延长前，并在 active tick 继续推进；paused 和 terminal 状态不推进。
+- Reset 口径收敛为 preview/demo 或未来命令设计项；E10.8 production controls are `skip`, `+15秒`, `end`。未来若实现 reset，需要先明确 `WorkoutCommand`、二次确认、session record 边界和测试。
+- 新增/更新单元测试覆盖 production 默认 variant、preview-only variant 边界、current-cycle outer segments、current segment stroke semantics、rest extension progress 不倒退、paused / terminal 冻结、7 阶段 45+15 内圈 marker progress、final countdown 偏好开关和 timed route end confirmation。
 - 已运行 `app:testDebugUnitTest`、`app:assembleDebug`、`app:lintDebug`、`app:check`、`git diff --check HEAD` 和 `git diff --cached --check`。720x1280 emulator visual smoke 覆盖 active、paused、rest + `+15秒`；最后 N 秒截图窗口本轮未稳定捕获，单元测试已覆盖提醒 flag。
 - 本阶段未改 Room/session repository、训练引擎语义、记录统计、心率设备、foreground service、exact alarm、notification action、声音 / TTS / 女声 cue、前端 prototype 或第四套 skin。
 

@@ -91,12 +91,8 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
 ): TimerDialUiState {
     val totalPlannedDurationSec = steps.sumOf { step -> step.durationSec }.coerceAtLeast(1)
     val current = currentStep
-    val currentStepProgress = current?.let { step ->
-        if (step.durationSec <= 0) {
-            0f
-        } else {
-            (step.durationSec - remainingSec).toFloat() / step.durationSec.toFloat()
-        }
+    val currentStepProgress = current?.let {
+        currentStepDisplayProgress()
     } ?: when (status) {
         SessionStatus.COMPLETED -> 1f
         else -> 0f
@@ -197,6 +193,53 @@ private fun TimedWorkoutEngineState.currentTimerDialCycleSegments(
             isCurrent = index == currentStepIndex
         )
     }
+}
+
+private fun TimedWorkoutEngineState.currentStepDisplayProgress(): Float {
+    val step = currentStep ?: return when (status) {
+        SessionStatus.COMPLETED -> 1f
+        else -> 0f
+    }
+    if (step.durationSec <= 0) {
+        return 0f
+    }
+
+    val startedAtElapsedSec = stepHistory
+        .lastOrNull { record -> record.stepId == step.id }
+        ?.startedAtElapsedSec
+        ?: activeElapsedSec
+    val extensions = restExtensionHistory
+        .filter { extension ->
+            extension.stepId == step.id &&
+                extension.elapsedSec >= startedAtElapsedSec &&
+                extension.elapsedSec <= activeElapsedSec
+        }
+        .sortedBy { extension -> extension.elapsedSec }
+
+    var progressFloor = 0f
+    var segmentStartElapsedSec = startedAtElapsedSec
+    var segmentRemainingSec = step.durationSec.toFloat()
+
+    extensions.forEach { extension ->
+        val elapsedInSegment = (extension.elapsedSec - segmentStartElapsedSec)
+            .coerceAtLeast(0)
+            .toFloat()
+            .coerceAtMost(segmentRemainingSec)
+        val segmentProgress = elapsedInSegment.safeProgressOf(segmentRemainingSec)
+        progressFloor += (1f - progressFloor) * segmentProgress
+
+        segmentStartElapsedSec = extension.elapsedSec
+        segmentRemainingSec = (segmentRemainingSec - elapsedInSegment)
+            .coerceAtLeast(0f) + extension.addedSec.coerceAtLeast(0)
+    }
+
+    val elapsedInCurrentSegment = (activeElapsedSec - segmentStartElapsedSec)
+        .coerceAtLeast(0)
+        .toFloat()
+        .coerceAtMost(segmentRemainingSec)
+    val currentSegmentProgress = elapsedInCurrentSegment.safeProgressOf(segmentRemainingSec)
+
+    return (progressFloor + (1f - progressFloor) * currentSegmentProgress).clampedProgress()
 }
 
 private fun TimedWorkoutEngineState.currentCycleIndexes(): List<Int> {
@@ -318,6 +361,13 @@ private fun Float.clampedProgress(): Float {
         isNaN() -> 0f
         else -> coerceIn(0f, 1f)
     }
+}
+
+private fun Float.safeProgressOf(total: Float): Float {
+    if (total <= 0f) {
+        return 1f
+    }
+    return (this / total).clampedProgress()
 }
 
 private fun Int.formatTimerText(): String {
