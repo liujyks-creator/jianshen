@@ -3,7 +3,6 @@ package com.liujyks.trainflow.feature.workoutsession
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
@@ -20,8 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -56,20 +59,23 @@ internal fun TimerDial(
     val skin = LocalTrainFlowSkin.current
     val tokens = safeState.visualVariant.tokens(skin)
     val layoutSpec = skin.timerDialLayoutSpec()
-    val progressAnimationMillis = if (safeState.isPaused || !safeState.canTogglePause) 0 else 1_000
-    val currentSegmentId = safeState.stageSegments.firstOrNull { segment -> segment.isCurrent }?.id
-    val animatedTotalProgress by animateFloatAsState(
-        targetValue = safeState.totalProgress,
-        animationSpec = tween(durationMillis = progressAnimationMillis, easing = LinearEasing),
-        label = "TimerDialTotalProgress"
-    )
-    val animatedStageProgress by key(currentSegmentId) {
-        animateFloatAsState(
-            targetValue = safeState.currentStageProgress,
-            animationSpec = tween(durationMillis = progressAnimationMillis, easing = LinearEasing),
-            label = "TimerDialStageProgress"
-        )
+    val smoothProgressKey = safeState.smoothProgressKey()
+    var smoothProgressElapsedNanos by remember(smoothProgressKey) { mutableLongStateOf(0L) }
+    LaunchedEffect(smoothProgressKey) {
+        smoothProgressElapsedNanos = 0L
+        if (safeState.canProjectSmoothProgress()) {
+            val startedAtNanos = withFrameNanos { frameTimeNanos -> frameTimeNanos }
+            while (true) {
+                smoothProgressElapsedNanos = withFrameNanos { frameTimeNanos ->
+                    frameTimeNanos - startedAtNanos
+                }
+            }
+        }
     }
+    val smoothProgressElapsedMillis = (smoothProgressElapsedNanos / 1_000_000L)
+        .coerceAtMost(TimerDialSmoothProgressMaxMillis)
+    val animatedTotalProgress = safeState.projectedTotalProgress(smoothProgressElapsedMillis)
+    val animatedStageProgress = safeState.projectedStageProgress(smoothProgressElapsedMillis)
     val finalPulse by animateFloatAsState(
         targetValue = if (safeState.isFinalCountdown && !safeState.isPaused) 1f else 0f,
         animationSpec = tween(durationMillis = 220),
@@ -117,11 +123,7 @@ internal fun TimerDial(
                 val rawSweep = 360f * segment.durationSec.toFloat() / totalDuration.toFloat()
                 val visibleSweep = (rawSweep - gapDegrees).coerceAtLeast(0.6f)
                 val segmentColor = tokens.colorFor(segment.stageType)
-                val progress = if (segment.isCurrent) {
-                    animatedStageProgress
-                } else {
-                    segment.progress
-                }
+                val progress = if (segment.isCurrent) animatedStageProgress else segment.progress
                 val strokeWidth = segment.strokeWidthDp().dp.toPx()
                 val activeAlpha = if (segment.isCurrent) 1f else 0.48f
 
@@ -289,6 +291,30 @@ internal fun TimerDial(
             }
         }
     }
+}
+
+private data class TimerDialSmoothProgressKey(
+    val totalProgress: Float,
+    val currentStageProgress: Float,
+    val currentStageRemainingSec: Int,
+    val currentSegmentId: String?,
+    val isPaused: Boolean,
+    val canTogglePause: Boolean,
+    val segmentSignature: String
+)
+
+private fun TimerDialUiState.smoothProgressKey(): TimerDialSmoothProgressKey {
+    return TimerDialSmoothProgressKey(
+        totalProgress = totalProgress,
+        currentStageProgress = currentStageProgress,
+        currentStageRemainingSec = currentStageRemainingSec,
+        currentSegmentId = stageSegments.firstOrNull { segment -> segment.isCurrent }?.id,
+        isPaused = isPaused,
+        canTogglePause = canTogglePause,
+        segmentSignature = stageSegments.joinToString(separator = "|") { segment ->
+            "${segment.id}:${segment.durationSec}:${segment.progress}:${segment.isCurrent}"
+        }
+    )
 }
 
 private fun pointOnCircle(

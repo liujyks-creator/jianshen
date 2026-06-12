@@ -370,6 +370,98 @@ private fun Float.safeProgressOf(total: Float): Float {
     return (this / total).clampedProgress()
 }
 
+internal const val TimerDialSmoothProgressMaxMillis = 1_000L
+
+internal fun TimerDialUiState.canProjectSmoothProgress(): Boolean {
+    return !isPaused && canTogglePause && currentStageRemainingSec > 0
+}
+
+internal fun TimerDialUiState.projectedStageProgress(elapsedMillis: Long): Float {
+    return projectTimerDialProgress(
+        baseProgress = currentStageProgress,
+        remainingSec = currentStageRemainingSec,
+        elapsedMillis = elapsedMillis,
+        isRunning = canProjectSmoothProgress()
+    )
+}
+
+internal fun TimerDialUiState.projectedTotalProgress(elapsedMillis: Long): Float {
+    if (!canProjectSmoothProgress()) {
+        return totalProgress.clampedProgress()
+    }
+
+    if (totalWorkoutStageCount <= 0) {
+        return projectTimerDialProgress(
+            baseProgress = totalProgress,
+            remainingSec = totalRemainingSec,
+            elapsedMillis = elapsedMillis,
+            isRunning = true
+        )
+    }
+
+    if (!stageSegments.any { segment ->
+            segment.stageType == TimerDialStageType.WORK || segment.stageType == TimerDialStageType.CUSTOM
+        }
+    ) {
+        return totalProgress.clampedProgress()
+    }
+
+    val cycleProgress = stageSegments.cycleProgress()
+    val cycleRemainingSec = stageSegments.cycleRemainingSec(currentStageRemainingSec)
+    val projectedCycleProgress = projectTimerDialProgress(
+        baseProgress = cycleProgress,
+        remainingSec = cycleRemainingSec,
+        elapsedMillis = elapsedMillis,
+        isRunning = true
+    )
+    val projectedTotalProgress = (
+        completedWorkoutStageCount.coerceAtLeast(0).toFloat() + projectedCycleProgress
+        ) / totalWorkoutStageCount.toFloat()
+
+    return projectedTotalProgress.clampedProgress()
+        .coerceAtLeast(totalProgress.clampedProgress())
+}
+
+internal fun projectTimerDialProgress(
+    baseProgress: Float,
+    remainingSec: Int,
+    elapsedMillis: Long,
+    isRunning: Boolean
+): Float {
+    val safeBaseProgress = baseProgress.clampedProgress()
+    if (!isRunning || remainingSec <= 0 || elapsedMillis <= 0L) {
+        return safeBaseProgress
+    }
+
+    val elapsedSec = elapsedMillis.coerceIn(0L, TimerDialSmoothProgressMaxMillis).toFloat() / 1_000f
+    val progressPerSecond = (1f - safeBaseProgress) / remainingSec.toFloat()
+    return (safeBaseProgress + progressPerSecond * elapsedSec).clampedProgress()
+}
+
+private fun List<TimerDialStageSegmentUiState>.cycleProgress(): Float {
+    val totalDurationSec = sumOf { segment -> segment.durationSec.coerceAtLeast(0) }
+    if (totalDurationSec <= 0) {
+        return 0f
+    }
+
+    val elapsedSec = sumOf { segment ->
+        segment.durationSec.coerceAtLeast(0).toDouble() *
+            segment.progress.clampedProgress().toDouble()
+    }
+    return (elapsedSec / totalDurationSec.toDouble()).toFloat().clampedProgress()
+}
+
+private fun List<TimerDialStageSegmentUiState>.cycleRemainingSec(currentStageRemainingSec: Int): Int {
+    val remainingSec = sumOf { segment ->
+        when {
+            segment.isCurrent -> currentStageRemainingSec.coerceAtLeast(0)
+            segment.progress <= 0f -> segment.durationSec.coerceAtLeast(0)
+            else -> 0
+        }
+    }
+    return remainingSec.coerceAtLeast(1)
+}
+
 private fun Int.formatTimerText(): String {
     val safeSeconds = coerceAtLeast(0)
     val minutes = safeSeconds / 60

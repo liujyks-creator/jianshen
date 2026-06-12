@@ -213,6 +213,104 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun smoothProjectionAfterRestExtensionStaysMonotonic() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 10)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 9).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(0.5f, dial.currentStageProgress, 0.0001f)
+        assertTrue(dial.projectedStageProgress(elapsedMillis = 500) > dial.currentStageProgress)
+        assertTrue(dial.projectedTotalProgress(elapsedMillis = 500) > dial.totalProgress)
+        assertTrue(dial.projectedStageProgress(elapsedMillis = 500) >= dial.currentStageProgress)
+        assertTrue(dial.projectedTotalProgress(elapsedMillis = 500) >= dial.totalProgress)
+    }
+
+    @Test
+    fun smoothProjectionAdvancesBetweenEngineSecondTicks() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(0.4f, dial.currentStageProgress, 0.0001f)
+        assertEquals(0.45f, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
+        assertEquals(0.5f, dial.projectedStageProgress(elapsedMillis = 1_000), 0.0001f)
+        assertEquals(0.5f, dial.projectedStageProgress(elapsedMillis = 2_500), 0.0001f)
+    }
+
+    @Test
+    fun smoothProjectionFreezesWhenPaused() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertTrue(dial.isPaused)
+        assertEquals(dial.currentStageProgress, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
+        assertEquals(dial.totalProgress, dial.projectedTotalProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
+    fun smoothProjectionFreezesWhenCompleted() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 0)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertFalse(dial.canTogglePause)
+        assertEquals(dial.currentStageProgress, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
+        assertEquals(dial.totalProgress, dial.projectedTotalProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
+    fun smoothProjectionFreezesWhenAbandoned() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertFalse(dial.canTogglePause)
+        assertEquals(dial.currentStageProgress, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
+        assertEquals(dial.totalProgress, dial.projectedTotalProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
+    fun smoothProjectionAdvancesInnerProgressWithinCurrentCycle() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(4f / 15f, dial.totalProgress, 0.0001f)
+        assertEquals(4.5f / 15f, dial.projectedTotalProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
     fun pausedRestExtensionProgressDoesNotAdvance() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 10)),

@@ -1230,6 +1230,35 @@ stepsCompleted:
 - 已运行 `app:testDebugUnitTest`、`app:assembleDebug`、`app:lintDebug`、`app:check`、`git diff --check HEAD` 和 `git diff --cached --check`。720x1280 emulator visual smoke 覆盖 active、paused、rest + `+15秒`；最后 N 秒截图窗口本轮未稳定捕获，单元测试已覆盖提醒 flag。
 - 本阶段未改 Room/session repository、训练引擎语义、记录统计、心率设备、foreground service、exact alarm、notification action、声音 / TTS / 女声 cue、前端 prototype 或第四套 skin。
 
+### Story E10.9: Timer Dial reference polish / continuous progress / user-test APK
+
+**状态:** Implemented in Android Timer Dial polish branch
+
+作为计时训练用户，
+我想 Timer Dial 圆环在秒级 engine tick 之间也能连续推进，
+以便训练中进度反馈更接近真实流动，而倒计时数字仍保持清晰的秒级更新。
+
+**验收标准:**
+
+- Then active 状态下 Timer Dial 用 Compose frame clock 对当前 1 秒做 bounded progress projection，外圈当前阶段弧和内圈总进度在 engine tick 之间连续推进。
+- Then 中心倒计时文案仍只来自 engine/UI state 的秒级文本，不做毫秒级文案抖动。
+- Then paused、completed、abandoned 和不可暂停/继续状态不投影进度。
+- Then 投影最多覆盖当前 1 秒，后台恢复、卡顿或长帧不会让圆环超跑。
+- Then `+15秒` rest extension 后当前 rest 外圈弧和内圈 work+rest cycle progress 不倒退，并在 active 状态继续推进。
+- Then production controls 仍是 skip、`+15秒`、end；不新增 reset command。
+- Then `r-design.md` 只作为参考设计桥接文档纳入分支，不替代官方 `DESIGN.md`。
+- Then 生成可安装 debug APK 供用户测试。
+- Then 不进入 E11 手动心率、E12 统计图表 / 历史趋势或 E13 声音 / 女声 cue。
+
+**交付结果:**
+
+- `TimerDial` 改用 Compose `withFrameNanos` 记录当前 UI state key 下的帧间 elapsed，并把 elapsed clamp 到 1,000ms 后交给 `TimerDialUiState` 投影函数。
+- `TimerDialUiState` 新增可测试的 smooth projection helpers：active 且可暂停/继续时才推进；paused / completed / abandoned 冻结；fallback 总进度、当前 cycle 总进度和当前 stage 进度均 clamp 到 `0f..1f`。
+- `+15秒` rest extension 后继续使用 E10.8 的单调 floor，投影值不低于 base `totalProgress` / `currentStageProgress`，并按剩余秒数继续前进。
+- 新增/更新单元测试覆盖秒间 stage projection、秒间 inner progress projection、投影最多 1 秒、paused / completed / abandoned 冻结和 rest extension 后投影单调。
+- `r-design.md` 记录外部参考项目只读发现、禁止复制范围、颜色角色、动效原则和 TrainFlow 适配边界；外部 APK、`人工/`、`.local/` 与 build 输出均不提交。
+- 本阶段未改 Room/session repository、训练引擎语义、记录统计、心率设备、foreground service、exact alarm、notification action、声音 / TTS / 女声 cue、前端 prototype 或第四套 skin。
+
 ### Story E10.x: 后续力量训练新版 UI 设计
 
 力量训练完整新版 UI 设计单独开启，不塞进 E10.3。该阶段可重审力量训练信息架构、确认层、历史趋势入口和高级组设置，但必须保留计划值预填实际记录、训练命令、训练事件和核心引擎语义。
@@ -1347,7 +1376,7 @@ stepsCompleted:
 | FR-070 到 FR-081 | E5.1, E5.2, E5.3, E5.4 |
 | UI 定制与设计系统 | E8.1, E8.2, E8.3, E8.4 |
 | 用户测试后训练模式边界 | E10.1, E10.2, E10.3 |
-| Timer Dial 设计与真实记录、统计、心率和音频后续 | E10.4, E10.5, E10.6, E10.7, E10.8, E11, E12, E13 |
+| Timer Dial 设计与真实记录、统计、心率和音频后续 | E10.4, E10.5, E10.6, E10.7, E10.8, E10.9, E11, E12, E13 |
 
 ## 6. 推荐实施顺序
 
@@ -1362,7 +1391,7 @@ stepsCompleted:
 9. E8.1 到 E8.4：设计系统、UI shell 和开源定制边界。
 10. E9.1 到 E9.4：硬化、验收与用户测试修复包。
 11. E10.1 到 E10.5：训练模式边界、计时训练重做、执行页主操作可达性、记录闭环前置和 Timer Dial 设计工作流。
-12. E10.6 到 E10.8：Timer Dial 静态视觉方案、Compose 原型和生产集成 / 动画 polish。
+12. E10.6 到 E10.9：Timer Dial 静态视觉方案、Compose 原型、生产集成、连续进度 polish 和用户测试 APK。
 13. E11：手动心率输入与真实设备接口策略。
 14. E12：真实记录、总统计、图表、趋势分析和历史记录清理。
 15. E13：声音提醒、固定女声 cue 和音频共存。
@@ -1396,22 +1425,23 @@ E10.5 已记录 Timer Dial 设计工作流与重构范围：外部 APK / 截图�
 E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/planning/timer-dial-static-visual-variants.md`，覆盖 Official Flow 执行页状态帧、计时编辑页关键状态帧、Tile Flow / Big Type 适配、互动动画语义、小屏 / 无障碍检查、法律边界和 E10.7 handoff。E10.6 只改 Markdown / 设计文档，不实现 Android、不写 Kotlin、不改 Gradle、不改 prototype、不复制 APK 资产或动效参数、不新增第四套 skin、不混入 E11/E12/E13。
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
+E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
 ```
 
 下一轮建议进入 Review Gate：
 
 ```text
-Story E10.8 Timer Dial production integration / animation polish review；E11 / E12 / E13 仍保持独立阶段
+Story E10.9 Timer Dial reference polish / continuous progress / user-test APK review；E11 / E12 / E13 仍保持独立阶段
 ```
 
-E10.8 review 建议重点确认：
+E10.9 review 建议重点确认：
 
-1. 当前周期外圈、内圈总进度、中心暂停 / 继续和底部图标操作是否符合训练中可读性。
-2. 圆盘进度、暂停冻结、阶段切换、completed / abandoned 停止和最后 N 秒提醒是否继续只来自 `TimedWorkoutEngine` / UI state / `WorkoutEvent`。
-3. 中心圆暂停 / 继续、底部跳过 / 下一阶段和结束二次确认是否继续通过 `WorkoutCommand` 分发。
-4. Official Flow、Tile Flow 和 Big Type 是否只做内置 skin 适配，不新增第四套 skin。
-5. 最后 N 秒提醒在真实设备或更短测试计划中补一次稳定视觉截图。
-6. E12 统计图表、E13 声音 / 女声 cue、心率设备和记录闭环继续不混入 E10.8。
+1. Active 圆环是否在 engine 秒级 tick 之间连续推进，而中心倒计时文案仍按秒更新。
+2. Paused、completed、abandoned、后台恢复或长帧后是否不会超跑。
+3. `+15秒` rest extension 后当前 rest 外圈弧和内圈总进度是否不倒退。
+4. 中心圆暂停 / 继续、底部 skip、`+15秒` 和 end 是否继续通过既有 `WorkoutCommand` 分发，生产不新增 reset。
+5. 720x1280 active、paused、rest extension 和最后 N 秒视觉 smoke 是否可复现。
+6. E11 心率、E12 统计图表、E13 声音 / 女声 cue、Room/session repository 和记录闭环继续不混入 E10.9。
 
 ## 8. 暂缓事项
 
