@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,18 +68,15 @@ import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearRe
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
-import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowError
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
-import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
-import com.liujyks.trainflow.ui.designsystem.currentProminentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import com.liujyks.trainflow.ui.theme.isBigType
@@ -219,15 +217,10 @@ private fun TimedWorkoutSessionScreen(
                 uiState = uiState,
                 onPrimaryToggle = if (uiState.canResume) onResume else onPause
             )
-            if (uiState.shouldShowNextStepPanel) {
-                NextStepPanel(uiState)
-            }
             HeartRatePanel(uiState.heartRate)
 
             if (uiState.isTerminal) {
                 TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
-            } else if (!skin.isBigType) {
-                TimedControlHistoryPanel(uiState)
             }
         }
 
@@ -254,26 +247,17 @@ private fun TimedWorkoutSessionScreen(
 @Composable
 private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
     val skin = LocalTrainFlowSkin.current
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "总剩余",
-            style = MaterialTheme.typography.labelLarge,
-            color = TrainFlowNeutral200
-        )
-        Text(
-            text = uiState.totalRemainingText,
-            style = if (skin.isBigType) {
-                MaterialTheme.typography.headlineLarge.copy(
-                    fontSize = 40.sp,
-                    lineHeight = 44.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            } else {
-                MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold)
-            },
-            color = TrainFlowNeutral50
-        )
-    }
+    Text(
+        text = uiState.totalRemainingText,
+        modifier = Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.headlineLarge.copy(
+            fontSize = if (skin.isBigType) 62.sp else 54.sp,
+            lineHeight = if (skin.isBigType) 64.sp else 56.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
+        ),
+        color = TrainFlowNeutral50
+    )
 }
 
 @Composable
@@ -282,90 +266,19 @@ private fun MainCountdownPanel(
     onPrimaryToggle: () -> Unit
 ) {
     val skin = LocalTrainFlowSkin.current
-    val reminder = uiState.countdownReminder
-    val reminderActive = reminder.isActive && reminder.emphasisAnimationEnabled
-    val panelColor = if (reminderActive) {
-        skin.tokens.action.copy(alpha = 0.18f)
-    } else {
-        skin.tokens.secondary
-    }
-    val borderColor = if (reminderActive) {
-        skin.tokens.action.copy(alpha = 0.7f)
-    } else {
-        Color.White.copy(alpha = 0.08f)
-    }
-    Card(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(currentProminentCardCorner()),
-        colors = CardDefaults.cardColors(containerColor = panelColor),
-        border = BorderStroke(1.dp, borderColor)
+        verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 10.dp else 12.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(skin.tokens.executionPanelPaddingDp.dp),
-            verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 12.dp else 16.dp)
-        ) {
-            TimerDial(
-                state = uiState.timerDial,
-                onTogglePause = onPrimaryToggle
-            )
-            if (reminder.isActive) {
-                ReminderStatusPanel(reminder)
-            }
-        }
+        TimerDial(
+            state = uiState.timerDial,
+            onTogglePause = onPrimaryToggle
+        )
     }
 }
 
 internal fun TimedWorkoutEngineState.shouldTickTimedRouteClock(): Boolean {
     return status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
-}
-
-@Composable
-private fun ReminderStatusPanel(reminder: TimedWorkoutCountdownReminderUiState) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = Color.White.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = reminder.message,
-                style = MaterialTheme.typography.titleMedium,
-                color = TrainFlowNeutral50
-            )
-            Text(
-                text = reminder.feedbackLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = TrainFlowNeutral200
-            )
-        }
-    }
-}
-
-@Composable
-private fun NextStepPanel(uiState: TimedWorkoutSessionScreenState) {
-    val isBigType = LocalTrainFlowSkin.current.isBigType
-    DarkInfoPanel {
-        Text(
-            text = uiState.nextStepLabel,
-            style = if (isBigType) {
-                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-            } else {
-                MaterialTheme.typography.titleMedium
-            },
-            color = TrainFlowNeutral50
-        )
-        if (!isBigType) {
-            Text(
-                text = "保持节奏，当前阶段结束后会自动进入下一步。",
-                style = MaterialTheme.typography.bodySmall,
-                color = TrainFlowNeutral200
-            )
-        }
-    }
 }
 
 @Composable
@@ -872,20 +785,6 @@ private val TimedWorkoutCountdownReminderType.label: String
         TimedWorkoutCountdownReminderType.ACTION_ENDING -> "阶段提醒"
         TimedWorkoutCountdownReminderType.REST_ENDING -> "休息提醒"
         TimedWorkoutCountdownReminderType.NONE -> ""
-    }
-
-private val TimedWorkoutCountdownReminderUiState.feedbackLabel: String
-    get() {
-        val enabled = listOfNotNull(
-            "声音".takeIf { soundEnabled },
-            "震动".takeIf { vibrationEnabled },
-            "强化动画".takeIf { emphasisAnimationEnabled }
-        )
-        return if (enabled.isEmpty()) {
-            "仅显示屏幕提醒"
-        } else {
-            "已启用：${enabled.joinToString("、")}"
-        }
     }
 
 @Preview(showBackground = true)

@@ -164,6 +164,87 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun innerBaseDotsAndStageMarkersShareDynamicMarkerData() {
+        val dial = TimerDialUiState.Empty.copy(
+            totalWorkoutStageCount = 7,
+            completedWorkoutStageCount = 3
+        ).clamped()
+
+        val markers = dial.innerMarkerData()
+
+        assertEquals(7, markers.size)
+        markers.forEachIndexed { index, marker ->
+            assertEquals(index, marker.index)
+            assertEquals(timerDialMarkerProgress(index, 7), marker.progress, 0.0001f)
+        }
+        assertEquals(TimerDialInnerMarkerRole.TOTAL_COUNT, markers[0].role)
+        assertEquals("7", markers[0].label)
+        assertEquals(TimerDialInnerMarkerRole.COMPLETED_DOT, markers[1].role)
+        assertEquals(TimerDialInnerMarkerRole.COMPLETED_DOT, markers[2].role)
+        assertEquals(TimerDialInnerMarkerRole.LATEST_COMPLETED, markers[3].role)
+        assertEquals("3", markers[3].label)
+        assertEquals(TimerDialInnerMarkerRole.BASE_DOT, markers[4].role)
+    }
+
+    @Test
+    fun innerMarkerDataChangesWithWorkoutStageCountAndRounds() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(twoCycleTimerDialPlan()),
+            WorkoutCommand.StartSession
+        ).state
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        val twoCycleMarkers = state.toTimedWorkoutSessionScreenState().timerDial.innerMarkerData()
+
+        state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(sevenCycleTimerDialPlan()),
+            WorkoutCommand.StartSession
+        ).state
+        state = TimedWorkoutEngine.tick(state, seconds = 3 * 60 + 25).state
+        val sevenCycleMarkers = state.toTimedWorkoutSessionScreenState().timerDial.innerMarkerData()
+
+        assertEquals(2, twoCycleMarkers.size)
+        assertEquals(7, sevenCycleMarkers.size)
+        assertEquals(0.5f, twoCycleMarkers[1].progress, 0.0001f)
+        assertEquals(1f / 7f, sevenCycleMarkers[1].progress, 0.0001f)
+    }
+
+    @Test
+    fun markerAndRingLayerSemanticsKeepBaseBelowProgressAndMarkersAboveRings() {
+        assertTrue(TimerDialDrawLayer.OUTER_TRACK.ordinal < TimerDialDrawLayer.OUTER_PROGRESS.ordinal)
+        assertTrue(TimerDialDrawLayer.INNER_BASE_RING.ordinal < TimerDialDrawLayer.INNER_TOTAL_PROGRESS.ordinal)
+        assertTrue(TimerDialDrawLayer.INNER_BASE_DOT.ordinal < TimerDialDrawLayer.INNER_STAGE_MARKER.ordinal)
+        assertTrue(TimerDialDrawLayer.INNER_TOTAL_PROGRESS.ordinal < TimerDialDrawLayer.INNER_STAGE_MARKER.ordinal)
+        assertTrue(TimerDialDrawLayer.FINAL_COUNTDOWN.ordinal < TimerDialDrawLayer.CENTER_SURFACE.ordinal)
+
+        SkinRegistry.skins.forEach { skin ->
+            val spec = skin.timerDialLayoutSpec()
+            val innerRadius = spec.innerDiameterDp / 2f
+            val centerRadius = spec.centerSizeDp / 2f
+            val outerInnerEdge = spec.outerDiameterDp / 2f - spec.outerMaxStrokeDp / 2f
+
+            assertTrue("${skin.id} base ring should sit under the thin total line", spec.innerBaseStrokeDp > spec.innerStrokeDp)
+            assertTrue("${skin.id} base dots should stay lighter than numbered markers", spec.innerBaseDotRadiusDp < spec.innerMarkerRadiusDp)
+            assertTrue("${skin.id} marker should not touch center circle", innerRadius - spec.innerMarkerRadiusDp > centerRadius)
+            assertTrue("${skin.id} marker should not collide with outer ring", innerRadius + spec.innerMarkerRadiusDp < outerInnerEdge)
+        }
+    }
+
+    @Test
+    fun officialFusionProductionTokensComeFromSkinTokens() {
+        val skin = SkinRegistry.defaultSkin
+        val tokens = TimerDialVisualVariant.OFFICIAL_FLOW.tokens(skin)
+
+        assertEquals(skin.tokens.primary, tokens.pageBackground)
+        assertEquals(skin.tokens.secondary, tokens.dialSurface)
+        assertEquals(skin.tokens.action, tokens.work)
+        assertEquals(skin.tokens.focus, tokens.rest)
+        assertEquals(skin.tokens.accent, tokens.warmup)
+        assertEquals(skin.tokens.neutral50, tokens.totalProgress)
+        assertEquals(skin.tokens.neutral700.copy(alpha = 0.34f), tokens.innerBaseRing)
+        assertEquals(skin.tokens.neutral100.copy(alpha = 0.3f), tokens.innerBaseDot)
+    }
+
+    @Test
     fun innerProgressHoldsCompletedStageCountDuringRoundRest() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(roundRestTimerDialPlan()),

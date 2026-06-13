@@ -1,6 +1,6 @@
 # E10.5 Timer Dial Design Workflow
 
-**状态:** E10.5 docs-only planning story；E10.6-E10.9 已落地；E10.9 用户测试反馈后续已记录
+**状态:** E10.5 docs-only planning story；E10.6-E10.12 已落地；E10.12 已完成 Android Compose landing
 **日期:** 2026-06-13
 **范围:** Timer Dial 圆盘视觉语言重构的工具路线、研究边界、视觉规格、动效规格、E10.9 后续视觉修复、huashu HTML 原型和 E12/E13 分流
 **不包含:** 本轮不实现生产 Kotlin、Jetpack Compose 修复、Gradle、prototype、Room/session repository、统计图表、心率设备、语音/TTS、音频资源接入、foreground service、exact alarm、notification action、第四套 skin
@@ -48,7 +48,7 @@ E10.5 只做规划和设计范围收口：
 | Rive / Lottie | 小图标、装饰微动效或阶段切换辅助 | 不用于核心计时进度，因为进度必须实时绑定 engine state。 |
 | APK 静态 / 运行观察 | 研究信息架构和交互节奏 | 只做观察记录，不提交 APK、截图、录屏或反编译输出。 |
 
-E10.11 后续会使用已安装的 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原型方向：黑红高对比、TrainFlow Official 融合、赛博霓虹。该 story 只做原型探索，不复制外部 APK 或参考项目资源，也不自动进入生产实现。本轮不运行原型生成。
+E10.11 已使用 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原型方向：黑红高对比、TrainFlow Official 融合、赛博霓虹。E10.12 已选择其中最适合作为生产候选的 `TrainFlow Official Fusion` 落到 Android Compose Timer Dial；Black / Red 和 Cyber Neon 继续只作为探索 / preview 方向，不作为默认生产 UI。
 
 ## 5. Timer Dial 视觉规格
 
@@ -253,13 +253,35 @@ E10.8 production controls 收敛为 `skip`、`+15秒`、`end`。Reset 只保留�
 
 ### E10.11 Huashu Timer Dial HTML prototype
 
-后续使用 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原型方向：
+已使用 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原型方向：
 
 - 黑红高对比。
 - TrainFlow Official 融合。
 - 赛博霓虹。
 
 每个方向覆盖 active、rest、paused、final 5 seconds 和 rest extension。原型不复制外部 APK 或参考项目代码、资源、图标、字体、音频、命名、动效参数或逐像素视觉，不修改 Kotlin/Gradle/prototype，不接入声音，不实现计划保存。
+
+### E10.12 Timer Dial Compose landing
+
+E10.12 已把 E10.11 中的 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial。
+
+落地内容：
+
+- 计时执行页移除“总剩余”文字标签、下一阶段提示框、提醒说明 / 已启用声音提示框和训练中控制历史提示。
+- 顶部总剩余时间更大、更居中；Timer Dial 圆盘整体放大以适配 720x1280 小屏和常规屏。
+- 外圈 / 内圈线条同比例变细，marker 与外圈 / 中心圆保持清晰间距。
+- 内圈总进度线下方增加宽底层浅色圆环；底层浅点和阶段 marker 复用 `TimerDialUiState` 的同一套动态 marker 数据。
+- 中心圆使用当前阶段色填充，内部只保留白色图标、必要编号和阶段剩余时间。
+- `final 5 seconds` 继续使用轻量中心/边界强调，不做全屏强提醒。
+- `paused` 状态冻结进度，并用低饱和阶段色和虚线边界克制表达。
+- `+15秒` rest extension 后外圈和内圈 progress 继续单调不倒退。
+
+边界：
+
+- 颜色来自 TrainFlow skin token、Timer Dial token 和 UI state；Official 默认不硬编码 E10.11 HTML 原型色值。
+- 保留 E10.9 active Compose frame clock continuous progress、秒级文案 tick、paused / terminal freeze、最多投影当前 1 秒和 rest extension monotonic progress。
+- 不接入声音播放，不复制 `countdown_beep1.mp3` 或 `.local/audio/stage_bell_copper_clean.wav` 到 `res/raw`。
+- 不实现计划保存，不做统计图表，不改 Room/session repository，不接真实心率设备，不新增 foreground service、exact alarm、notification action 或第四套 skin。
 
 ### E13 声音 / 女声 cue 与视觉提醒联动
 
@@ -279,4 +301,4 @@ E10.5 完成时应满足：
 - 文档明确 Timer Dial 的顶部、外圈、内圈、中心圆和底部操作规格。
 - 文档明确动效必须来自 engine state，不能使用视觉假进度。
 - 文档明确黑红高对比只是参考方向，不新增第四套 skin。
-- roadmap/backlog 拆出 E10.6、E10.7、E10.8、E10.9 Review Fix、E10.10、E10.11，并把 E12 / E13 保持在各自阶段。
+- roadmap/backlog 拆出 E10.6、E10.7、E10.8、E10.9 Review Fix、E10.10、E10.11、E10.12，并把 E12 / E13 保持在各自阶段。

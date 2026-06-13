@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -84,8 +85,8 @@ internal fun TimerDial(
     val dialSize = layoutSpec.dialSizeDp.dp
     val centerSize = layoutSpec.centerSizeDp.dp
     val centerPadding = if (skin.isBigType) 10.dp else 8.dp
-    val timerFontSize = if (skin.isBigType) 40.sp else 34.sp
-    val timerLineHeight = if (skin.isBigType) 42.sp else 36.sp
+    val timerFontSize = if (skin.isBigType) 48.sp else 44.sp
+    val timerLineHeight = if (skin.isBigType) 50.sp else 46.sp
     val contentDescription = buildString {
         append(safeState.currentStageLabel)
         append("，剩余 ")
@@ -108,6 +109,7 @@ internal fun TimerDial(
         Canvas(modifier = Modifier.size(dialSize)) {
             val outerMaxStroke = layoutSpec.outerMaxStrokeDp.dp.toPx()
             val innerStroke = layoutSpec.innerStrokeDp.dp.toPx()
+            val innerBaseStroke = layoutSpec.innerBaseStrokeDp.dp.toPx()
             val outerInset = outerMaxStroke / 2f
             val outerSize = Size(size.width - outerMaxStroke, size.height - outerMaxStroke)
             val outerTopLeft = Offset(outerInset, outerInset)
@@ -167,8 +169,25 @@ internal fun TimerDial(
                 y = innerTopLeft.y + innerSize.height / 2f
             )
             val innerRadius = innerSize.width / 2f
-            val markerCount = safeState.totalWorkoutStageCount
+            val innerMarkers = safeState.innerMarkerData()
             val markerProgress = animatedTotalProgress.coerceIn(0f, 1f)
+
+            drawArc(
+                color = tokens.innerBaseRing,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = innerTopLeft,
+                size = innerSize,
+                style = Stroke(width = innerBaseStroke, cap = StrokeCap.Round)
+            )
+            innerMarkers.forEach { marker ->
+                drawCircle(
+                    color = tokens.innerBaseDot,
+                    radius = layoutSpec.innerBaseDotRadiusDp.dp.toPx(),
+                    center = pointOnCircle(innerCenter, innerRadius, marker.progress)
+                )
+            }
 
             if (markerProgress > 0f) {
                 drawArc(
@@ -182,42 +201,53 @@ internal fun TimerDial(
                 )
                 drawCircle(
                     color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.62f else 1f),
-                    radius = innerStroke * 0.82f,
+                    radius = layoutSpec.totalBrushRadiusDp.dp.toPx(),
                     center = pointOnCircle(innerCenter, innerRadius, markerProgress)
                 )
             }
 
-            if (markerCount > 0) {
-                drawTimerDialMarker(
-                    center = pointOnCircle(innerCenter, innerRadius, 0f),
-                    radius = innerStroke * 1.95f,
-                    fillColor = tokens.work,
-                    textColor = tokens.textPrimary,
-                    text = markerCount.toString()
+            innerMarkers.forEach { marker ->
+                val center = pointOnCircle(innerCenter, innerRadius, marker.progress)
+                when (marker.role) {
+                    TimerDialInnerMarkerRole.TOTAL_COUNT -> {
+                        drawTimerDialMarker(
+                            center = center,
+                            radius = layoutSpec.innerMarkerRadiusDp.dp.toPx(),
+                            fillColor = tokens.work,
+                            textColor = tokens.textPrimary,
+                            text = marker.label.orEmpty()
+                        )
+                    }
+                    TimerDialInnerMarkerRole.COMPLETED_DOT -> {
+                        drawCircle(
+                            color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.58f else 0.92f),
+                            radius = layoutSpec.innerCompletedDotRadiusDp.dp.toPx(),
+                            center = center
+                        )
+                    }
+                    TimerDialInnerMarkerRole.LATEST_COMPLETED -> {
+                        drawTimerDialMarker(
+                            center = center,
+                            radius = layoutSpec.innerMarkerRadiusDp.dp.toPx(),
+                            fillColor = tokens.textPrimary,
+                            textColor = tokens.work,
+                            text = marker.label.orEmpty()
+                        )
+                    }
+                    TimerDialInnerMarkerRole.BASE_DOT -> Unit
+                }
+            }
+
+            if (safeState.isPaused) {
+                drawCircle(
+                    color = tokens.textSecondary.copy(alpha = 0.28f),
+                    radius = size.minDimension / 2f - 2.dp.toPx(),
+                    center = center,
+                    style = Stroke(
+                        width = 2.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12.dp.toPx(), 12.dp.toPx()))
+                    )
                 )
-
-                val completedCount = safeState.completedWorkoutStageCount.coerceIn(0, markerCount)
-                (1 until completedCount).forEach { count ->
-                    drawCircle(
-                        color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.58f else 0.92f),
-                        radius = innerStroke * 1.1f,
-                        center = pointOnCircle(innerCenter, innerRadius, count.toFloat() / markerCount.toFloat())
-                    )
-                }
-
-                if (completedCount in 1 until markerCount) {
-                    drawTimerDialMarker(
-                        center = pointOnCircle(
-                            innerCenter,
-                            innerRadius,
-                            completedCount.toFloat() / markerCount.toFloat()
-                        ),
-                        radius = innerStroke * 1.9f,
-                        fillColor = tokens.textPrimary,
-                        textColor = tokens.work,
-                        text = completedCount.toString()
-                    )
-                }
             }
         }
 
@@ -241,7 +271,11 @@ internal fun TimerDial(
                     onTogglePause()
                 },
             shape = CircleShape,
-            color = if (safeState.isPaused) tokens.pausedOverlay else tokens.centerSurface,
+            color = if (safeState.isPaused) {
+                tokens.colorFor(safeState.currentStageType).copy(alpha = 0.38f)
+            } else {
+                tokens.colorFor(safeState.currentStageType)
+            },
             border = BorderStroke(
                 width = 1.dp,
                 color = currentCenterBorderColor(safeState, tokens)
@@ -254,37 +288,29 @@ internal fun TimerDial(
             ) {
                 TimerDialStageGlyph(
                     stageType = safeState.currentStageType,
-                    color = tokens.colorFor(safeState.currentStageType),
-                    size = if (skin.isBigType) 28.dp else 24.dp
-                )
-                Text(
-                    text = if (safeState.currentStageIndex > 0) {
-                        "阶段 ${safeState.currentStageIndex.toString().padStart(2, '0')}"
-                    } else {
-                        "准备"
-                    },
-                    modifier = Modifier.padding(top = 5.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = tokens.textSecondary
-                )
-                Text(
-                    text = safeState.currentStageLabel,
-                    modifier = Modifier.padding(top = 2.dp),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    ),
                     color = tokens.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    size = if (skin.isBigType) 34.dp else 30.dp
                 )
+                if (safeState.currentStageIndex > 0) {
+                    Text(
+                        text = safeState.currentStageIndex.toString().padStart(2, '0'),
+                        modifier = Modifier.padding(top = 8.dp),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center
+                        ),
+                        color = tokens.textPrimary.copy(alpha = 0.92f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+                }
                 Text(
                     text = safeState.currentStageTimeText,
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 6.dp),
                     fontSize = timerFontSize,
                     lineHeight = timerLineHeight,
                     fontWeight = FontWeight.ExtraBold,
-                    color = if (safeState.isFinalCountdown) tokens.finalCountdown else tokens.textPrimary,
+                    color = tokens.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Clip
                 )

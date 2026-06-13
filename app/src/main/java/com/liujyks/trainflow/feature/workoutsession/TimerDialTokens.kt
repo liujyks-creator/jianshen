@@ -29,11 +29,11 @@ internal data class TimerDialVisualTokens(
     val pageBackground: Color,
     val dialSurface: Color,
     val track: Color,
+    val innerBaseRing: Color,
+    val innerBaseDot: Color,
     val totalProgress: Color,
-    val centerSurface: Color,
     val textPrimary: Color,
     val textSecondary: Color,
-    val pausedOverlay: Color,
     val finalCountdown: Color,
     val glowAlpha: Float,
     val work: Color,
@@ -59,11 +59,11 @@ internal fun TimerDialVisualVariant.tokens(skin: TrainFlowSkin): TimerDialVisual
             pageBackground = Color(0xFF080A0D),
             dialSurface = Color(0xFF14181E),
             track = Color(0xFF2A3038),
+            innerBaseRing = Color(0xFF2A3038).copy(alpha = 0.68f),
+            innerBaseDot = Color(0xFFF8FAFC).copy(alpha = 0.24f),
             totalProgress = Color(0xFFFFFFFF),
-            centerSurface = Color(0xFF11151A),
             textPrimary = Color(0xFFF8FAFC),
             textSecondary = Color(0xFFB8C0CA),
-            pausedOverlay = Color(0xCC080A0D),
             finalCountdown = Color(0xFFFF3E34),
             glowAlpha = 0.16f,
             work = Color(0xFFFF453A),
@@ -76,11 +76,11 @@ internal fun TimerDialVisualVariant.tokens(skin: TrainFlowSkin): TimerDialVisual
             pageBackground = Color(0xFF060912),
             dialSurface = Color(0xFF101424),
             track = Color(0xFF252B40),
+            innerBaseRing = Color(0xFF252B40).copy(alpha = 0.7f),
+            innerBaseDot = Color(0xFF7CE7FF).copy(alpha = 0.28f),
             totalProgress = Color(0xFF7CE7FF),
-            centerSurface = Color(0xFF0B1020),
             textPrimary = Color(0xFFF7FBFF),
             textSecondary = Color(0xFFB5C5E8),
-            pausedOverlay = Color(0xCC060912),
             finalCountdown = Color(0xFFFF4F9D),
             glowAlpha = 0.24f,
             work = Color(0xFFFF4F6D),
@@ -93,18 +93,18 @@ internal fun TimerDialVisualVariant.tokens(skin: TrainFlowSkin): TimerDialVisual
             pageBackground = skin.tokens.primary,
             dialSurface = skin.tokens.secondary,
             track = skin.tokens.neutral700.copy(alpha = 0.58f),
+            innerBaseRing = skin.tokens.neutral700.copy(alpha = 0.34f),
+            innerBaseDot = skin.tokens.neutral100.copy(alpha = 0.3f),
             totalProgress = skin.tokens.neutral50,
-            centerSurface = skin.tokens.secondary,
             textPrimary = skin.tokens.neutral50,
             textSecondary = skin.tokens.neutral200,
-            pausedOverlay = skin.tokens.primary.copy(alpha = 0.78f),
             finalCountdown = skin.tokens.action,
             glowAlpha = 0.08f,
             work = skin.tokens.action,
             rest = skin.tokens.focus,
             warmup = skin.tokens.accent,
-            cooldown = Color(0xFF367FD6),
-            custom = Color(0xFFD9921E)
+            cooldown = skin.tokens.focus.copy(alpha = 0.78f),
+            custom = skin.tokens.neutral700
         )
     }
 }
@@ -121,9 +121,10 @@ internal fun TimerDialStageType.strokeWidthDp(): Float {
 
 internal fun TimerDialStageSegmentUiState.strokeWidthDp(): Float {
     return when {
-        isCurrent -> 18f
-        stageType == TimerDialStageType.REST -> 8f
-        else -> 10f
+        isCurrent && stageType == TimerDialStageType.REST -> 9f
+        isCurrent -> 12f
+        stageType == TimerDialStageType.REST -> 5f
+        else -> 7f
     }
 }
 
@@ -131,9 +132,14 @@ internal data class TimerDialLayoutSpec(
     val dialSizeDp: Int,
     val centerSizeDp: Int,
     val minHeightDp: Int,
-    val outerMaxStrokeDp: Float = 20f,
-    val innerStrokeDp: Float = 6f,
-    val innerInsetDp: Float = 42f
+    val outerMaxStrokeDp: Float = 14f,
+    val innerStrokeDp: Float = 5f,
+    val innerInsetDp: Float = 39f,
+    val innerBaseStrokeDp: Float = 24f,
+    val innerBaseDotRadiusDp: Float = 5.5f,
+    val innerCompletedDotRadiusDp: Float = 8f,
+    val innerMarkerRadiusDp: Float = 16f,
+    val totalBrushRadiusDp: Float = 9f
 ) {
     val outerInsetDp: Float = outerMaxStrokeDp / 2f
     val outerDiameterDp: Float = dialSizeDp - outerMaxStrokeDp
@@ -151,17 +157,29 @@ internal data class TimerDialLayoutSpec(
 internal fun TrainFlowSkin.timerDialLayoutSpec(): TimerDialLayoutSpec {
     return if (isBigType) {
         TimerDialLayoutSpec(
-            dialSizeDp = 284,
-            centerSizeDp = 196,
-            minHeightDp = 312,
-            innerInsetDp = 28f
+            dialSizeDp = 324,
+            centerSizeDp = 214,
+            minHeightDp = 346,
+            innerInsetDp = 40f
         )
     } else {
         TimerDialLayoutSpec(
-            dialSizeDp = 250,
-            centerSizeDp = 172,
-            minHeightDp = 276,
-            innerInsetDp = 24f
+            dialSizeDp = 320,
+            centerSizeDp = 204,
+            minHeightDp = 342
         )
     }
+}
+
+internal enum class TimerDialDrawLayer {
+    OUTER_TRACK,
+    OUTER_PROGRESS,
+    INNER_BASE_RING,
+    INNER_BASE_DOT,
+    INNER_TOTAL_PROGRESS,
+    INNER_BRUSH,
+    INNER_STAGE_MARKER,
+    FINAL_COUNTDOWN,
+    PAUSED_OVERLAY,
+    CENTER_SURFACE
 }

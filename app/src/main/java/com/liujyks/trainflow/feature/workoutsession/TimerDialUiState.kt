@@ -85,6 +85,54 @@ internal data class TimerDialStageSegmentUiState(
     }
 }
 
+internal enum class TimerDialInnerMarkerRole {
+    BASE_DOT,
+    TOTAL_COUNT,
+    COMPLETED_DOT,
+    LATEST_COMPLETED
+}
+
+internal data class TimerDialInnerMarkerUiState(
+    val index: Int,
+    val progress: Float,
+    val role: TimerDialInnerMarkerRole,
+    val label: String?
+)
+
+internal fun timerDialMarkerProgress(index: Int, count: Int): Float {
+    val safeCount = count.coerceAtLeast(1)
+    return index.coerceIn(0, safeCount).toFloat() / safeCount.toFloat()
+}
+
+internal fun TimerDialUiState.innerMarkerData(): List<TimerDialInnerMarkerUiState> {
+    val markerCount = totalWorkoutStageCount.coerceAtLeast(0)
+    if (markerCount == 0) {
+        return emptyList()
+    }
+
+    val completedCount = completedWorkoutStageCount.coerceIn(0, markerCount)
+    return List(markerCount) { index ->
+        val role = when {
+            index == 0 -> TimerDialInnerMarkerRole.TOTAL_COUNT
+            completedCount in 1 until markerCount && index == completedCount ->
+                TimerDialInnerMarkerRole.LATEST_COMPLETED
+            index in 1 until completedCount -> TimerDialInnerMarkerRole.COMPLETED_DOT
+            else -> TimerDialInnerMarkerRole.BASE_DOT
+        }
+        TimerDialInnerMarkerUiState(
+            index = index,
+            progress = timerDialMarkerProgress(index = index, count = markerCount),
+            role = role,
+            label = when (role) {
+                TimerDialInnerMarkerRole.TOTAL_COUNT -> markerCount.toString()
+                TimerDialInnerMarkerRole.LATEST_COMPLETED -> completedCount.toString()
+                TimerDialInnerMarkerRole.BASE_DOT,
+                TimerDialInnerMarkerRole.COMPLETED_DOT -> null
+            }
+        )
+    }
+}
+
 internal fun TimedWorkoutEngineState.toTimerDialUiState(
     screenState: TimedWorkoutSessionScreenState,
     visualVariant: TimerDialVisualVariant = ProductionTimerDialVisualVariant
