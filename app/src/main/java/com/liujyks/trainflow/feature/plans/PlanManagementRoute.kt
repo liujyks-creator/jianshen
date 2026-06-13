@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
+import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
+import com.liujyks.trainflow.core.notifications.PlanReminderScheduleResult
+import com.liujyks.trainflow.core.notifications.PlanReminderScheduler
 import com.liujyks.trainflow.core.notifications.resolvePlanReminderPermissionState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -110,8 +113,13 @@ internal fun PlanManagementRoute(
             )
             nextState.plans
                 .firstOrNull { it.id == planId }
-                ?.toPlanReminderScheduleRequest(permissionState)
-                ?.let(scheduler::schedule)
+                ?.let { plan ->
+                    dispatchPlanReminderReplacement(
+                        plan = plan,
+                        permissionState = permissionState,
+                        scheduler = scheduler
+                    )
+                }
             nextState.plans
                 .firstOrNull { it.id == planId }
                 ?.let(onPersistPlan)
@@ -137,6 +145,15 @@ internal fun PlanManagementRoute(
         onStartStrengthPlan = onStartStrengthPlan,
         modifier = modifier
     )
+}
+
+internal fun dispatchPlanReminderReplacement(
+    plan: WorkoutPlan,
+    permissionState: PlanReminderNotificationPermissionState,
+    scheduler: PlanReminderScheduler
+): PlanReminderScheduleResult {
+    scheduler.cancel(plan.id)
+    return scheduler.schedule(plan.toPlanReminderScheduleRequest(permissionState))
 }
 
 @Composable
