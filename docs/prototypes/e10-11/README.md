@@ -41,6 +41,7 @@
 - 底层圆环浅色小点和内圈阶段 marker 复用同一套动态角度计算，阶段数字 marker 和配套圆点应保持清楚可读，不应过度缩小。
 - 中心圆使用当前阶段预设色填充，图标、编号和阶段时间使用白色。
 - Work 阶段红色可保持更亮的实心处理，优先保证训练中一眼可读，不使用复杂玻璃高光。
+- 原型中的 work / rest / warmup / cooldown / custom / 背景 / 圆环颜色都应视为主题 token 默认值，后续生产实现需要允许使用者在主题设置选项中修改，不应把某一套方向的色值写死。
 - 中心圆减少文字，只保留图标、必要编号和当前阶段时间。
 - `paused` 状态冻结圆环进度，并用低饱和遮罩或虚线边界表达“已停住”。
 - `final 5 seconds` 使用轻量 pulse / border / color intensity，不做全屏强告警。
@@ -68,6 +69,7 @@ HTML 原型使用一套轻量数据结构模拟当前生产 UI state：
 - `final` 对应 `isFinalCountdown`。
 - `completed` 对应 `completedWorkoutStageCount`。
 - `stageCount` 对应 `totalWorkoutStageCount`。
+- HTML 中的 `directions` 色值只代表评审默认 token；Compose Canvas 应从 TrainFlow 主题设置 / UI theme state 读取阶段色、背景色、轨道色和 marker 色，让使用者可在主题设置里调整这些颜色。
 
 Compose Canvas 落地时，建议把 HTML 的 `markerPoints(cx, cy, radius, count)` 思路映射为一个纯函数，例如：
 
