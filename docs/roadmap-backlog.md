@@ -1297,7 +1297,7 @@ stepsCompleted:
 
 ### Story E10.11: Huashu Timer Dial HTML prototype exploration
 
-**状态:** Planned; prototype-only, not this docs story
+**状态:** Implemented; HTML prototype ready for review
 
 作为设计探索者，
 我想用已安装的 `huashu-design` skill 做 Timer Dial 高保真 HTML 原型方向，
@@ -1310,6 +1310,14 @@ stepsCompleted:
 - Then 原型只使用 TrainFlow 自己的 HTML/CSS/Canvas/SVG/图标语义，不复制外部 APK 或参考项目代码、资源、图标、字体、音频、命名、动效参数或逐像素视觉。
 - Then 原型结果服务 E10.9 Review Fix 或后续视觉评审，不自动进入生产实现。
 - Then 不修改 Kotlin/Gradle/prototype，不接入音频，不移动或提交根目录 APK、`.local/`、`人工/`、build 输出、截图或日志。
+
+**交付结果:**
+
+- `docs/prototypes/e10-11/index.html` 新增纯 HTML/CSS/Canvas 原型入口，支持 Black / Red High Contrast、TrainFlow Official Fusion 和 Cyber Neon restrained version 三个方向切换。
+- 每个方向复用同一套状态数据，覆盖 active work、rest、paused、final 5 seconds 和 rest extended by `+15`，并展示大号总剩余时间、更大的圆盘、更细的外圈 / 内圈、内圈总进度下方的宽底层圆环、阶段色中心圆和最少文字。
+- 原型中的内圈阶段 marker 与底层浅色小点复用同一套动态角度计算，避免固定装饰点；rest extension 使用 floor cue 表达进度不倒退。
+- `docs/prototypes/e10-11/README.md` 记录三套方向的设计意图、建议进入 Android Compose 生产实现的元素、仅探索不建议进入 MVP 的元素、`TimerDialUiState` / Compose Canvas 映射和后续声音 cue 位置。
+- 本 story 只提交 HTML / Markdown 设计探索与状态文档更新；未修改 Android Kotlin、Gradle、React prototype、训练引擎、Room/session repository、声音播放、计划保存、统计图表、心率设备、foreground service、exact alarm、notification action 或第四套 skin，也未提交 `.local`、APK、`人工/`、截图、日志或 build 输出。
 
 ### Story E10.x: 后续力量训练新版 UI 设计
 
@@ -1451,7 +1459,7 @@ stepsCompleted:
 12. E10.6 到 E10.9：Timer Dial 静态视觉方案、Compose 原型、生产集成、连续进度 polish 和用户测试 APK。
 13. E10.9 Review Fix / User Test Fix：Timer Dial 视觉减字、总剩余时间居中放大、圆盘放大、环线层级和动态浅点修复。
 14. E10.10：计划保存持久化和保存入口真实可用性检查。
-15. E10.11：使用 `huashu-design` 做 3 个 Timer Dial HTML 高保真原型方向。
+15. E10.11：使用 `huashu-design` 做 3 个 Timer Dial HTML 高保真原型方向。（Implemented; prototype ready for review）
 16. E11：手动心率输入与真实设备接口策略。
 17. E12：真实记录、总统计、图表、趋势分析、同日多轮运动分析和历史记录清理。
 18. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
@@ -1486,13 +1494,13 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.9 用户测试反馈计划已记录：Timer Dial 后续进入 Review Fix / User Test Fix，处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化；E10.10 处理计时/力量/跟练计划保存持久化和保存入口真实可用性；E10.11 使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
+E10.9 用户测试反馈计划已记录：Timer Dial 后续进入 Review Fix / User Test Fix，处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化；E10.10 处理计时/力量/跟练计划保存持久化和保存入口真实可用性；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向并进入 prototype ready for review；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-Story E10.9 Review Fix / User Test Fix；随后 E10.10 Plan Persistence、E10.11 Huashu Timer Dial Prototype、E13 Sound Cue System、E12 Stats / Records 分别推进。
+Story E10.9 Review Fix / User Test Fix；随后 E10.10 Plan Persistence、E13 Sound Cue System、E12 Stats / Records 分别推进。E10.11 HTML prototype 已准备好供主管理对话和用户选择方向。
 ```
 
 E10.9 Review Fix / User Test Fix 建议重点确认：

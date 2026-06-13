@@ -1,0 +1,956 @@
+<!doctype html>
+<!--
+E10.11 Huashu Timer Dial prototype assumptions:
+- This is a high-fidelity HTML exploration artifact, not TrainFlow production UI.
+- The dial is intentionally rebuilt with original HTML/CSS/Canvas code and no external assets.
+- Three directions share the same state model so visual differences do not change workout semantics.
+- Inner markers and pale base dots are both computed from the same dynamic marker-angle function.
+- Sound cue positions are only represented in README.md; this page does not load or play audio.
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrainFlow E10.11 Timer Dial Prototypes</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #090c11;
+      --ink: #f8fafc;
+      --muted: #aab4c1;
+      --line: rgba(255,255,255,.14);
+      --panel: rgba(255,255,255,.045);
+      --accent: #f26b4f;
+      --focus: #65a9ff;
+      font-family: ui-sans-serif, "SF Pro Display", "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      text-rendering: geometricPrecision;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% -20%, rgba(242,107,79,.11), transparent 34rem),
+        linear-gradient(180deg, #10151c 0%, var(--page) 46%, #050608 100%);
+      color: var(--ink);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .shell {
+      width: min(1180px, calc(100vw - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 28px 0;
+      display: grid;
+      grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+      gap: 30px;
+      align-items: center;
+    }
+
+    .phone {
+      position: relative;
+      width: min(420px, 100%);
+      min-height: 850px;
+      margin: 0 auto;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 34px;
+      padding: 18px;
+      background: #040507;
+      box-shadow: 0 28px 70px rgba(0,0,0,.46);
+      overflow: hidden;
+    }
+
+    .screen {
+      min-height: 812px;
+      border-radius: 24px;
+      overflow: hidden;
+      background: var(--screen-bg, #080a0d);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 22px 18px 18px;
+      transition: background 220ms ease;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 44px 1fr 44px;
+      align-items: center;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+      border-radius: 999px;
+      color: color-mix(in srgb, var(--ink) 86%, transparent);
+      background: rgba(255,255,255,.045);
+      display: grid;
+      place-items: center;
+    }
+
+    .tiny-glyph {
+      width: 18px;
+      height: 18px;
+      position: relative;
+    }
+
+    .tiny-glyph::before,
+    .tiny-glyph::after {
+      content: "";
+      position: absolute;
+      background: currentColor;
+      border-radius: 4px;
+    }
+
+    .tiny-glyph.back::before {
+      width: 13px;
+      height: 3px;
+      left: 2px;
+      top: 7px;
+      transform: rotate(-38deg);
+      transform-origin: left center;
+    }
+
+    .tiny-glyph.back::after {
+      width: 13px;
+      height: 3px;
+      left: 2px;
+      top: 8px;
+      transform: rotate(38deg);
+      transform-origin: left center;
+    }
+
+    .tiny-glyph.menu::before {
+      width: 16px;
+      height: 3px;
+      left: 1px;
+      top: 4px;
+      box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
+    }
+
+    .total-time {
+      text-align: center;
+      font-weight: 820;
+      font-size: clamp(58px, 15vw, 82px);
+      line-height: .86;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      transform: translateY(12px);
+    }
+
+    .dial-zone {
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 22px;
+      padding: 18px 0 6px;
+    }
+
+    .canvas-wrap {
+      width: min(100%, 370px);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      filter: saturate(1.02);
+    }
+
+    .dial-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      width: min(100%, 326px);
+    }
+
+    .action-button {
+      height: 58px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 999px;
+      color: var(--ink);
+      background: rgba(255,255,255,.055);
+      display: grid;
+      place-items: center;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .action-button.primary {
+      background: color-mix(in srgb, var(--accent) 18%, rgba(255,255,255,.055));
+      border-color: color-mix(in srgb, var(--accent) 48%, rgba(255,255,255,.1));
+    }
+
+    .action-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,.28);
+    }
+
+    .bar-glyph {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      color: currentColor;
+    }
+
+    .bar-glyph.skip::before,
+    .bar-glyph.skip::after,
+    .bar-glyph.end::before,
+    .bar-glyph.plus::before,
+    .bar-glyph.plus::after {
+      content: "";
+      position: absolute;
+      background: currentColor;
+      border-radius: 3px;
+    }
+
+    .bar-glyph.skip::before {
+      width: 14px;
+      height: 14px;
+      left: 2px;
+      top: 4px;
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+    }
+
+    .bar-glyph.skip::after {
+      width: 3px;
+      height: 16px;
+      right: 2px;
+      top: 3px;
+    }
+
+    .bar-glyph.plus::before {
+      width: 18px;
+      height: 3px;
+      left: 2px;
+      top: 9px;
+    }
+
+    .bar-glyph.plus::after {
+      width: 3px;
+      height: 18px;
+      left: 9px;
+      top: 2px;
+    }
+
+    .bar-glyph.end::before {
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      border-radius: 5px;
+    }
+
+    .state-strip {
+      display: flex;
+      gap: 8px;
+      padding: 10px 0 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .state-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .state-pill {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 1px solid rgba(255,255,255,.11);
+      border-radius: 999px;
+      padding: 0 14px;
+      color: color-mix(in srgb, var(--ink) 74%, transparent);
+      background: rgba(255,255,255,.04);
+    }
+
+    .state-pill[aria-pressed="true"] {
+      color: var(--ink);
+      background: color-mix(in srgb, var(--accent) 20%, rgba(255,255,255,.04));
+      border-color: color-mix(in srgb, var(--accent) 54%, rgba(255,255,255,.14));
+    }
+
+    .panel {
+      align-self: center;
+      display: grid;
+      gap: 22px;
+    }
+
+    .kicker {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      font-weight: 760;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 680px;
+      font-size: clamp(42px, 6vw, 74px);
+      line-height: .94;
+      letter-spacing: 0;
+      text-wrap: balance;
+    }
+
+    .summary {
+      margin: 0;
+      max-width: 620px;
+      color: #c0c9d4;
+      font-size: 18px;
+      line-height: 1.62;
+      text-wrap: pretty;
+    }
+
+    .direction-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      max-width: 720px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 16px;
+    }
+
+    .direction-tab {
+      min-height: 62px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: transparent;
+      color: #cbd5e1;
+      display: grid;
+      gap: 2px;
+      align-content: center;
+      padding: 0 12px;
+      text-align: left;
+    }
+
+    .direction-tab strong {
+      color: var(--ink);
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .direction-tab span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .direction-tab[aria-pressed="true"] {
+      background: color-mix(in srgb, var(--accent) 14%, rgba(255,255,255,.04));
+      border-color: color-mix(in srgb, var(--accent) 48%, rgba(255,255,255,.12));
+    }
+
+    .notes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      max-width: 760px;
+    }
+
+    .note {
+      min-height: 112px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .note p {
+      margin: 0;
+      color: #b7c1cd;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 920px) {
+      .shell {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      .panel {
+        order: -1;
+      }
+
+      .phone {
+        min-height: 780px;
+      }
+
+      .screen {
+        min-height: 742px;
+      }
+
+      .notes {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .shell {
+        width: min(100vw - 18px, 420px);
+        padding: 12px 0;
+      }
+
+      .phone {
+        min-height: 720px;
+        padding: 10px;
+        border-radius: 26px;
+      }
+
+      .screen {
+        min-height: 698px;
+        padding: 18px 12px 14px;
+      }
+
+      .direction-tabs {
+        grid-template-columns: 1fr;
+      }
+
+      .total-time {
+        font-size: 58px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="phone" aria-label="Timer Dial prototype preview">
+      <div class="screen" id="screen">
+        <header class="topbar">
+          <button class="icon-btn" type="button" aria-label="Back"><span class="tiny-glyph back"></span></button>
+          <div class="total-time" id="totalTime">14:20</div>
+          <button class="icon-btn" type="button" aria-label="Menu"><span class="tiny-glyph menu"></span></button>
+        </header>
+
+        <section class="dial-zone" aria-label="Timer Dial">
+          <div class="canvas-wrap">
+            <canvas id="dial" width="820" height="820" aria-label="Timer Dial canvas"></canvas>
+          </div>
+          <div class="dial-actions" aria-label="Workout controls">
+            <button class="action-button" type="button" aria-label="Skip"><span class="bar-glyph skip"></span></button>
+            <button class="action-button primary" type="button" id="extendButton" aria-label="Extend rest by 15 seconds">+15</button>
+            <button class="action-button" type="button" aria-label="End"><span class="bar-glyph end"></span></button>
+          </div>
+        </section>
+
+        <nav class="state-strip" aria-label="Prototype state">
+          <button class="state-pill" type="button" data-state="activeWork">Active</button>
+          <button class="state-pill" type="button" data-state="rest">Rest</button>
+          <button class="state-pill" type="button" data-state="paused">Paused</button>
+          <button class="state-pill" type="button" data-state="finalFive">Final 5</button>
+          <button class="state-pill" type="button" data-state="restExtended">+15 Rest</button>
+        </nav>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div>
+        <div class="kicker">E10.11 HTML Prototype</div>
+        <h1>Timer Dial directions for TrainFlow review</h1>
+      </div>
+      <p class="summary">
+        三个方向共用同一套训练状态和圆盘几何，只改变视觉 token。圆盘保持大尺寸、少文字、细外圈和内圈、宽底层圆环，以及由同一角度数据驱动的 marker 与浅点。
+      </p>
+      <div class="direction-tabs" role="group" aria-label="Visual direction">
+        <button class="direction-tab" type="button" data-direction="blackRed">
+          <strong>A Black / Red</strong>
+          <span>高对比、黑场、红橙动作感</span>
+        </button>
+        <button class="direction-tab" type="button" data-direction="official">
+          <strong>B Official Fusion</strong>
+          <span>TrainFlow token 融合方向</span>
+        </button>
+        <button class="direction-tab" type="button" data-direction="cyber">
+          <strong>C Cyber Neon</strong>
+          <span>克制赛博，霓虹但不噪</span>
+        </button>
+      </div>
+      <div class="notes" aria-label="Direction notes">
+        <article class="note">
+          <strong>Production candidates</strong>
+          <p>大总剩余时间、阶段色中心圆、宽底层圆环、动态浅点、暂停冻结和 rest extension floor。</p>
+        </article>
+        <article class="note">
+          <strong>Exploration only</strong>
+          <p>强黑红情绪、霓虹发光和较戏剧化的 final pulse 需要评审后再决定是否收敛。</p>
+        </article>
+        <article class="note">
+          <strong>Boundary</strong>
+          <p>本页不加载音频、不保存计划、不使用外部资源，也不是 Android Compose 代码。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const directions = {
+      blackRed: {
+        key: "blackRed",
+        page: "#050506",
+        screen: "#030304",
+        ink: "#fff7f2",
+        muted: "#aeb4bc",
+        outerTrack: "rgba(255,255,255,.105)",
+        innerBase: "rgba(255,255,255,.092)",
+        innerBaseDot: "rgba(255,255,255,.25)",
+        inner: "#f8fbff",
+        work: "#ff453a",
+        rest: "#6d94aa",
+        warmup: "#32c382",
+        cooldown: "#4e7fd6",
+        custom: "#d9921e",
+        centerShadow: "rgba(255,69,58,.28)",
+        final: "#ff2c22",
+        glow: 0.2
+      },
+      official: {
+        key: "official",
+        page: "#0f1720",
+        screen: "#0f1720",
+        ink: "#f8fafc",
+        muted: "#b5c0cb",
+        outerTrack: "rgba(238,242,245,.12)",
+        innerBase: "rgba(101,113,125,.34)",
+        innerBaseDot: "rgba(238,242,245,.30)",
+        inner: "#fafbfc",
+        work: "#f26b4f",
+        rest: "#65a9ff",
+        warmup: "#2fbf8f",
+        cooldown: "#367fd6",
+        custom: "#d9921e",
+        centerShadow: "rgba(242,107,79,.20)",
+        final: "#f26b4f",
+        glow: 0.1
+      },
+      cyber: {
+        key: "cyber",
+        page: "#050711",
+        screen: "#070a13",
+        ink: "#f7fbff",
+        muted: "#aebfe0",
+        outerTrack: "rgba(124,231,255,.12)",
+        innerBase: "rgba(124,231,255,.12)",
+        innerBaseDot: "rgba(124,231,255,.28)",
+        inner: "#7ce7ff",
+        work: "#ff5472",
+        rest: "#36e6ff",
+        warmup: "#2dffb3",
+        cooldown: "#8c6bff",
+        custom: "#e2b84c",
+        centerShadow: "rgba(54,230,255,.18)",
+        final: "#ff4f9d",
+        glow: 0.22
+      }
+    };
+
+    const states = {
+      activeWork: {
+        total: "14:20",
+        stageType: "work",
+        stageNo: 4,
+        time: "00:38",
+        totalProgress: 0.46,
+        currentProgress: 0.36,
+        completed: 3,
+        paused: false,
+        final: false,
+        extended: false,
+        segments: [
+          { type: "work", duration: 45, progress: 0.36, current: true },
+          { type: "rest", duration: 15, progress: 0, current: false }
+        ]
+      },
+      rest: {
+        total: "13:45",
+        stageType: "rest",
+        stageNo: 4,
+        time: "00:11",
+        totalProgress: 0.52,
+        currentProgress: 0.28,
+        completed: 3,
+        paused: false,
+        final: false,
+        extended: false,
+        segments: [
+          { type: "work", duration: 45, progress: 1, current: false },
+          { type: "rest", duration: 15, progress: 0.28, current: true }
+        ]
+      },
+      paused: {
+        total: "13:45",
+        stageType: "rest",
+        stageNo: 4,
+        time: "00:11",
+        totalProgress: 0.52,
+        currentProgress: 0.28,
+        completed: 3,
+        paused: true,
+        final: false,
+        extended: false,
+        segments: [
+          { type: "work", duration: 45, progress: 1, current: false },
+          { type: "rest", duration: 15, progress: 0.28, current: true }
+        ]
+      },
+      finalFive: {
+        total: "09:05",
+        stageType: "work",
+        stageNo: 6,
+        time: "00:05",
+        totalProgress: 0.75,
+        currentProgress: 0.89,
+        completed: 5,
+        paused: false,
+        final: true,
+        extended: false,
+        segments: [
+          { type: "work", duration: 45, progress: 0.89, current: true },
+          { type: "rest", duration: 15, progress: 0, current: false }
+        ]
+      },
+      restExtended: {
+        total: "12:50",
+        stageType: "rest",
+        stageNo: 5,
+        time: "00:24",
+        totalProgress: 0.62,
+        currentProgress: 0.58,
+        completed: 4,
+        paused: false,
+        final: false,
+        extended: true,
+        progressFloor: 0.44,
+        segments: [
+          { type: "work", duration: 45, progress: 1, current: false },
+          { type: "rest", duration: 30, progress: 0.58, current: true, floor: 0.44 }
+        ]
+      }
+    };
+
+    const stageCount = 7;
+    const canvas = document.getElementById("dial");
+    const ctx = canvas.getContext("2d");
+    const totalTime = document.getElementById("totalTime");
+    const screen = document.getElementById("screen");
+    const extendButton = document.getElementById("extendButton");
+    let currentDirection = "blackRed";
+    let currentState = "activeWork";
+    let rafId = 0;
+
+    function setDirection(key) {
+      currentDirection = key;
+      const tokens = directions[key];
+      document.documentElement.style.setProperty("--page", tokens.page);
+      document.documentElement.style.setProperty("--ink", tokens.ink);
+      document.documentElement.style.setProperty("--muted", tokens.muted);
+      document.documentElement.style.setProperty("--accent", tokens.work);
+      document.documentElement.style.setProperty("--focus", tokens.rest);
+      screen.style.setProperty("--screen-bg", tokens.screen);
+      document.querySelectorAll("[data-direction]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.direction === key));
+      });
+      draw();
+    }
+
+    function setState(key) {
+      currentState = key;
+      document.querySelectorAll("[data-state]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.state === key));
+      });
+      const state = states[key];
+      extendButton.classList.toggle("primary", state.stageType === "rest");
+      draw();
+    }
+
+    function colorFor(tokens, type) {
+      return tokens[type] || tokens.work;
+    }
+
+    function pointOnCircle(cx, cy, radius, progress) {
+      const angle = (progress * Math.PI * 2) - Math.PI / 2;
+      return {
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius
+      };
+    }
+
+    function markerPoints(cx, cy, radius, count) {
+      return Array.from({ length: count }, (_, index) => ({
+        index,
+        progress: index / count,
+        ...pointOnCircle(cx, cy, radius, index / count)
+      }));
+    }
+
+    function drawArc(cx, cy, radius, startProgress, endProgress, color, width, cap = "round") {
+      ctx.beginPath();
+      ctx.arc(
+        cx,
+        cy,
+        radius,
+        startProgress * Math.PI * 2 - Math.PI / 2,
+        endProgress * Math.PI * 2 - Math.PI / 2
+      );
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = cap;
+      ctx.stroke();
+    }
+
+    function fillCircle(x, y, radius, color) {
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    function drawText(text, x, y, size, weight, color, baseline = "middle") {
+      ctx.fillStyle = color;
+      ctx.font = `${weight} ${size}px ui-sans-serif, "Segoe UI", Roboto, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = baseline;
+      ctx.fillText(text, x, y);
+    }
+
+    function drawStageGlyph(cx, cy, type, color, scale = 1) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 8 * scale;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (type === "rest") {
+        ctx.beginPath();
+        ctx.moveTo(-13 * scale, -24 * scale);
+        ctx.lineTo(-13 * scale, 24 * scale);
+        ctx.moveTo(13 * scale, -24 * scale);
+        ctx.lineTo(13 * scale, 24 * scale);
+        ctx.stroke();
+      } else if (type === "warmup") {
+        fillCircle(0, 0, 12 * scale, color);
+        for (let i = 0; i < 4; i += 1) {
+          const angle = i * Math.PI / 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * 24 * scale, Math.sin(angle) * 24 * scale);
+          ctx.lineTo(Math.cos(angle) * 35 * scale, Math.sin(angle) * 35 * scale);
+          ctx.stroke();
+        }
+      } else if (type === "cooldown") {
+        ctx.beginPath();
+        ctx.arc(0, 0, 26 * scale, .15 * Math.PI, 1.72 * Math.PI);
+        ctx.stroke();
+        fillCircle(0, 0, 9 * scale, color.replace(")", ", .34)").replace("rgb", "rgba"));
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(-10 * scale, -32 * scale);
+        ctx.lineTo(20 * scale, -2 * scale);
+        ctx.lineTo(4 * scale, -2 * scale);
+        ctx.lineTo(18 * scale, 32 * scale);
+        ctx.lineTo(-19 * scale, -6 * scale);
+        ctx.lineTo(-2 * scale, -6 * scale);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawCenter(cx, cy, state, tokens, pulse) {
+      const centerColor = colorFor(tokens, state.stageType);
+      const radius = 148 + (state.final ? pulse * 6 : 0);
+      const shadowRadius = 168 + (state.final ? pulse * 14 : 0);
+
+      fillCircle(cx, cy, shadowRadius, tokens.centerShadow);
+      fillCircle(cx, cy, radius, state.paused ? "rgba(255,255,255,.115)" : centerColor);
+
+      ctx.lineWidth = state.paused ? 2 : 1.5;
+      ctx.strokeStyle = state.paused ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.28)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (state.paused) {
+        ctx.save();
+        ctx.setLineDash([12, 13]);
+        ctx.strokeStyle = "rgba(255,255,255,.34)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 15, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      drawStageGlyph(cx, cy - 56, state.stageType, "#ffffff", 1.04);
+      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 6, 28, 780, "rgba(255,255,255,.82)");
+      drawText(state.time, cx, cy + 54, 66, 860, "#ffffff");
+    }
+
+    function drawOuterSegments(cx, cy, radius, state, tokens) {
+      const totalDuration = state.segments.reduce((sum, segment) => sum + segment.duration, 0);
+      let cursor = 0;
+      state.segments.forEach((segment) => {
+        const start = cursor / totalDuration;
+        const sweep = segment.duration / totalDuration;
+        const gap = state.segments.length > 1 ? .012 : 0;
+        const end = start + sweep - gap;
+        const isRest = segment.type === "rest";
+        const width = segment.current ? (isRest ? 12 : 15) : (isRest ? 7 : 8);
+        const alpha = segment.current ? 1 : .52;
+        const color = colorFor(tokens, segment.type);
+
+        drawArc(cx, cy, radius, start, end, tokens.outerTrack, width, "round");
+        if (segment.progress > 0) {
+          drawArc(cx, cy, radius, start, start + (end - start) * segment.progress, hexWithAlpha(color, alpha), width, "round");
+        }
+        if (segment.current && tokens.glow > 0) {
+          drawArc(cx, cy, radius, start, start + (end - start) * segment.progress, hexWithAlpha(color, tokens.glow), width + 14, "round");
+        }
+        if (segment.floor !== undefined) {
+          const floorPoint = start + (end - start) * segment.floor;
+          const p = pointOnCircle(cx, cy, radius, floorPoint);
+          fillCircle(p.x, p.y, 8, "rgba(255,255,255,.58)");
+        }
+        cursor += segment.duration;
+      });
+    }
+
+    function hexWithAlpha(hex, alpha) {
+      if (!hex.startsWith("#")) {
+        return hex;
+      }
+      const bigint = parseInt(hex.slice(1), 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function drawInnerProgress(cx, cy, radius, state, tokens) {
+      drawArc(cx, cy, radius, 0, 1, tokens.innerBase, 24, "round");
+      const points = markerPoints(cx, cy, radius, stageCount);
+      points.forEach((point) => {
+        fillCircle(point.x, point.y, point.index === 0 ? 9 : 5.8, tokens.innerBaseDot);
+      });
+
+      if (state.totalProgress > 0) {
+        drawArc(cx, cy, radius, 0, state.totalProgress, hexWithAlpha(tokens.inner, state.paused ? .54 : .98), 7, "round");
+        const brush = pointOnCircle(cx, cy, radius, state.totalProgress);
+        fillCircle(brush.x, brush.y, 8.5, hexWithAlpha(tokens.inner, state.paused ? .62 : 1));
+      }
+
+      if (stageCount > 0) {
+        const start = points[0];
+        fillCircle(start.x, start.y, 19, colorFor(tokens, "work"));
+        drawText(String(stageCount), start.x, start.y + 1, 20, 820, "#ffffff");
+      }
+
+      for (let count = 1; count < state.completed; count += 1) {
+        const point = points[count % stageCount];
+        fillCircle(point.x, point.y, 8, hexWithAlpha(tokens.inner, state.paused ? .42 : .86));
+      }
+
+      if (state.completed > 0 && state.completed < stageCount) {
+        const latest = points[state.completed % stageCount];
+        fillCircle(latest.x, latest.y, 18, tokens.inner);
+        drawText(String(state.completed), latest.x, latest.y + 1, 19, 820, colorFor(tokens, "work"));
+      }
+    }
+
+    function drawExtendedCue(cx, cy, state, tokens) {
+      if (!state.extended) {
+        return;
+      }
+      const x = cx + 128;
+      const y = cy + 142;
+      ctx.save();
+      ctx.fillStyle = hexWithAlpha(colorFor(tokens, "rest"), .14);
+      ctx.strokeStyle = hexWithAlpha(colorFor(tokens, "rest"), .42);
+      ctx.lineWidth = 1.5;
+      roundedRect(x - 42, y - 19, 84, 38, 19);
+      ctx.fill();
+      ctx.stroke();
+      drawText("+15", x, y + 1, 24, 820, tokens.ink);
+      ctx.restore();
+    }
+
+    function roundedRect(x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
+      ctx.closePath();
+    }
+
+    function draw() {
+      cancelAnimationFrame(rafId);
+      const tokens = directions[currentDirection];
+      const state = states[currentState];
+      totalTime.textContent = state.total;
+
+      let start = performance.now();
+      function frame(now) {
+        const time = (now - start) / 1000;
+        const pulse = state.final && !state.paused ? (Math.sin(time * Math.PI * 4) + 1) / 2 : 0;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        drawOuterSegments(cx, cy, 356, state, tokens);
+        drawInnerProgress(cx, cy, 286, state, tokens);
+
+        if (state.final) {
+          fillCircle(cx, cy, 180 + pulse * 18, hexWithAlpha(tokens.final, .08 + pulse * .08));
+          drawArc(cx, cy, 182 + pulse * 14, 0, 1, hexWithAlpha(tokens.final, .16 + pulse * .12), 2, "round");
+        }
+
+        drawCenter(cx, cy, state, tokens, pulse);
+        drawExtendedCue(cx, cy, state, tokens);
+
+        if (state.paused) {
+          ctx.save();
+          ctx.setLineDash([10, 18]);
+          drawArc(cx, cy, 392, 0, 1, "rgba(255,255,255,.20)", 3, "round");
+          ctx.restore();
+        }
+
+        if (state.final && !state.paused) {
+          rafId = requestAnimationFrame(frame);
+        }
+      }
+
+      rafId = requestAnimationFrame(frame);
+    }
+
+    document.querySelectorAll("[data-direction]").forEach((button) => {
+      button.addEventListener("click", () => setDirection(button.dataset.direction));
+    });
+
+    document.querySelectorAll("[data-state]").forEach((button) => {
+      button.addEventListener("click", () => setState(button.dataset.state));
+    });
+
+    setDirection(currentDirection);
+    setState(currentState);
+    window.__trainFlowPrototypeReady = true;
+  </script>
+</body>
+</html>
