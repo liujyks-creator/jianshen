@@ -191,7 +191,25 @@ Conditional:
 The next timer work should not restart from scratch. It should refine the existing E10 Timer Dial:
 
 - Keep the E10.8/E10.9 continuous progress direction.
+- Preserve pause freeze, terminal freeze, and rest extension monotonic progress.
+- Reduce execution-screen text: remove or weaken total-remaining labels, next-stage explanation boxes, and sound-enabled explanation boxes.
+- Make total remaining time larger and more centered, while keeping the center countdown as the primary in-workout focus.
+- Increase the overall dial size and make outer / inner strokes proportionally thinner so markers do not visually collide with the outer ring.
+- Add a wide base ring under the inner total-progress line.
+- Any pale dots on the base ring must reuse the same dynamic angle calculation as inner-stage markers; they must react to stage count, stage duration, and rounds instead of acting as fixed decoration.
+- Simplify the center circle to the phase icon, necessary number, and time. The center fill should use the phase preset color, with white text and icon.
 - Use this palette as a reference variant, not a global app redesign.
 - Add visual smoke for active, paused, rest extension, and final 5 seconds.
 - Keep production controls scoped to the current command model unless a new command is explicitly designed.
 - Keep records and statistics separate from visual polish work.
+- Keep sound cue implementation separate in E13. `countdown_beep1.mp3` and `.local/audio/stage_bell_copper_clean.wav` are local user-confirmed candidates, but this reference note does not make `.local` audio submit-ready.
+
+## Huashu Prototype Fit
+
+A future E10.11 story can use the installed `huashu-design` skill for high-fidelity HTML exploration. It should compare three directions:
+
+- Black/Red High Contrast.
+- TrainFlow Official Fusion.
+- Cyber Neon.
+
+Each direction should cover active, rest, paused, final 5 seconds, and rest extension. These prototypes must not copy external APK or reference-project resources, and they should not move into production without a separate implementation story.

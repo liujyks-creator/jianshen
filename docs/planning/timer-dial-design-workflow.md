@@ -1,9 +1,9 @@
 # E10.5 Timer Dial Design Workflow
 
-**状态:** E10.5 docs-only planning story
-**日期:** 2026-06-09
-**范围:** Timer Dial 圆盘视觉语言重构的工具路线、研究边界、视觉规格、动效规格和后续实现拆分
-**不包含:** 生产 Kotlin、Jetpack Compose 实现、Gradle、prototype、Room/session repository、统计图表、心率设备、语音/TTS、音频资源、foreground service、exact alarm、notification action、第四套 skin
+**状态:** E10.5 docs-only planning story；E10.6-E10.9 已落地；E10.9 用户测试反馈后续已记录
+**日期:** 2026-06-13
+**范围:** Timer Dial 圆盘视觉语言重构的工具路线、研究边界、视觉规格、动效规格、E10.9 后续视觉修复、huashu HTML 原型和 E12/E13 分流
+**不包含:** 本轮不实现生产 Kotlin、Jetpack Compose 修复、Gradle、prototype、Room/session repository、统计图表、心率设备、语音/TTS、音频资源接入、foreground service、exact alarm、notification action、第四套 skin
 
 ## 1. 背景与当前状态
 
@@ -47,6 +47,8 @@ E10.5 只做规划和设计范围收口：
 | Jetpack Compose Canvas | 最终 Android 生产实现方式 | 圆盘、弧线、进度、点击暂停 / 继续都要绑定真实 engine state。 |
 | Rive / Lottie | 小图标、装饰微动效或阶段切换辅助 | 不用于核心计时进度，因为进度必须实时绑定 engine state。 |
 | APK 静态 / 运行观察 | 研究信息架构和交互节奏 | 只做观察记录，不提交 APK、截图、录屏或反编译输出。 |
+
+E10.11 后续会使用已安装的 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原型方向：黑红高对比、TrainFlow Official 融合、赛博霓虹。该 story 只做原型探索，不复制外部 APK 或参考项目资源，也不自动进入生产实现。本轮不运行原型生成。
 
 ## 5. Timer Dial 视觉规格
 
@@ -197,13 +199,75 @@ E10.8 production controls 收敛为 `skip`、`+15秒`、`end`。Reset 只保留�
 
 不新增第四套 skin，不混入 E11 心率、E12 统计图表或 E13 音频能力。
 
+### E10.9 Timer Dial reference polish / continuous progress / user-test APK
+
+目标：补齐 E10.8 后的参考风格 polish 和秒间连续进度，让用户测试 APK 中的圆环在 engine 秒级 tick 之间也保持流动。
+
+状态：E10.9 已在 `codex/e10-9-timer-dial-reference-polish` 分支完成并推送；`r-design.md` 作为参考桥接文档纳入分支，不替代官方 `DESIGN.md`。
+
+范围：
+
+- Active 状态下使用 Compose frame clock 做最多当前 1 秒的 bounded progress projection。
+- 中心倒计时文本仍只来自 engine / UI state 的秒级文本。
+- Paused、completed、abandoned 和不可暂停 / 继续状态不推进投影。
+- `+15秒` rest extension 后当前 rest 外圈弧和内圈 work+rest cycle progress 保持单调不倒退。
+- 生成 user-test debug APK。
+
+边界：
+
+- 不改 Room/session repository、训练引擎语义、记录统计、心率设备、foreground service、exact alarm、notification action、声音 / TTS / 女声 cue、前端 prototype 或第四套 skin。
+- 不提交外部 APK、`人工/`、`.local/`、build 输出、截图、日志或音频资源。
+
+### E10.9 Review Fix / User Test Fix
+
+目标：针对用户测试反馈继续修复 Timer Dial 视觉层级，不改变 E10.8/E10.9 的训练语义。
+
+范围：
+
+- 减少执行页文字，移除或弱化“总剩余”、下一阶段提示框、已启用声音提示框等。
+- 总剩余时间更大、更居中；圆盘整体更大。
+- 外圈 / 内圈线条同比例变细，避免 marker 与外圈视觉重叠。
+- 增加内圈总进度线下方的宽底层圆环。
+- 底层圆环浅色小点复用内圈阶段 marker 的动态角度计算，随阶段数量、时长和轮次变化。
+- 中心圆只保留阶段图标、必要编号和当前阶段时间。
+- 中心圆填充使用阶段预设色，文字和图标使用白色。
+
+必须保留：
+
+- Continuous progress。
+- Pause freeze。
+- Terminal freeze。
+- Rest extension monotonic progress。
+- Production controls: skip、`+15秒`、end；reset 仍不是生产控制。
+
+不包含：
+
+- 不接入声音播放。
+- 不实现计划保存。
+- 不做统计图表。
+- 不复制外部 APK 或参考项目资源。
+
+### E10.10 Plan Persistence
+
+计划保存持久化不是 Timer Dial 视觉工作，但来自同一轮用户测试反馈。它应单独 story 处理自定义计时训练阶段、秒数、轮次、颜色、图标、名称、排序的保存与恢复，并 audit 计时、力量、跟练计划保存入口是否真实可用。Timer Dial 视觉 story 不实现计划保存。
+
+### E10.11 Huashu Timer Dial HTML prototype
+
+后续使用 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原型方向：
+
+- 黑红高对比。
+- TrainFlow Official 融合。
+- 赛博霓虹。
+
+每个方向覆盖 active、rest、paused、final 5 seconds 和 rest extension。原型不复制外部 APK 或参考项目代码、资源、图标、字体、音频、命名、动效参数或逐像素视觉，不修改 Kotlin/Gradle/prototype，不接入声音，不实现计划保存。
+
 ### E13 声音 / 女声 cue 与视觉提醒联动
 
-固定阶段词、声音提醒、女声 cue、音频共存和不 ducking 进入 E13。E10.5 只定义视觉提醒与事件消费边界。
+固定阶段词、声音提醒、女声 cue、音频共存和不 ducking 进入 E13。E10.5 只定义视觉提醒与事件消费边界。E13 需要记录本轮素材边界：`countdown_beep1.mp3` 用于 5 / 4 / 3 / 2 等最后 N 秒前几声 beep；`.local/audio/stage_bell_copper_clean.wav` 用于最后 1 秒或阶段切换铃声候选，后续接入 App 时由执行 story 复制到 `app/src/main/res/raw/`，`.local` 原文件不提交。E13 还必须覆盖手机扬声器和蓝牙耳机 smoke，不主动 ducking，不请求会打断外部音乐 / 视频的 audio focus。
 
 ### E12 统计图表 / 历史趋势
 
-总统计、图表、计划趋势、平均心率趋势和历史记录清理进入 E12，不混入 E10.5 / E10.6 / E10.7 / E10.8。
+总统计、图表、计划趋势、平均心率趋势、同日多轮运动分析和历史记录清理进入 E12，不混入 E10.5 / E10.6 / E10.7 / E10.8 / E10.9。平均心率趋势只能消费明确来源的手动心率或后续真实设备数据，没有来源时不画假趋势。
 
 ## 9. 验收标准
 
@@ -215,4 +279,4 @@ E10.5 完成时应满足：
 - 文档明确 Timer Dial 的顶部、外圈、内圈、中心圆和底部操作规格。
 - 文档明确动效必须来自 engine state，不能使用视觉假进度。
 - 文档明确黑红高对比只是参考方向，不新增第四套 skin。
-- roadmap/backlog 拆出 E10.6、E10.7、E10.8，并把 E12 / E13 保持在各自阶段。
+- roadmap/backlog 拆出 E10.6、E10.7、E10.8、E10.9 Review Fix、E10.10、E10.11，并把 E12 / E13 保持在各自阶段。
