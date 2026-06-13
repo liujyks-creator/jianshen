@@ -515,13 +515,13 @@ E10.11 Huashu Timer Dial prototype assumptions:
         innerBase: "rgba(255,255,255,.092)",
         innerBaseDot: "rgba(255,255,255,.25)",
         inner: "#f8fbff",
-        work: "#ff453a",
+        work: "#ff2f27",
         rest: "#6d94aa",
         warmup: "#32c382",
         cooldown: "#4e7fd6",
         custom: "#d9921e",
-        centerShadow: "rgba(255,69,58,.28)",
-        final: "#ff2c22",
+        centerShadow: "rgba(255,47,39,.38)",
+        final: "#ff241c",
         glow: 0.2
       },
       official: {
@@ -534,13 +534,13 @@ E10.11 Huashu Timer Dial prototype assumptions:
         innerBase: "rgba(101,113,125,.34)",
         innerBaseDot: "rgba(238,242,245,.30)",
         inner: "#fafbfc",
-        work: "#f26b4f",
+        work: "#ff6748",
         rest: "#65a9ff",
         warmup: "#2fbf8f",
         cooldown: "#367fd6",
         custom: "#d9921e",
-        centerShadow: "rgba(242,107,79,.20)",
-        final: "#f26b4f",
+        centerShadow: "rgba(255,103,72,.24)",
+        final: "#ff6748",
         glow: 0.1
       },
       cyber: {
@@ -553,13 +553,13 @@ E10.11 Huashu Timer Dial prototype assumptions:
         innerBase: "rgba(124,231,255,.12)",
         innerBaseDot: "rgba(124,231,255,.28)",
         inner: "#7ce7ff",
-        work: "#ff5472",
+        work: "#ff4268",
         rest: "#36e6ff",
         warmup: "#2dffb3",
         cooldown: "#8c6bff",
         custom: "#e2b84c",
         centerShadow: "rgba(54,230,255,.18)",
-        final: "#ff4f9d",
+        final: "#ff4268",
         glow: 0.22
       }
     };
@@ -725,6 +725,13 @@ E10.11 Huashu Timer Dial prototype assumptions:
       ctx.fill();
     }
 
+    function fillCircleStyle(x, y, radius, style) {
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = style;
+      ctx.fill();
+    }
+
     function drawText(text, x, y, size, weight, color, baseline = "middle") {
       ctx.fillStyle = color;
       ctx.font = `${weight} ${size}px ui-sans-serif, "Segoe UI", Roboto, sans-serif`;
@@ -776,16 +783,96 @@ E10.11 Huashu Timer Dial prototype assumptions:
       ctx.restore();
     }
 
+    function shadeHex(hex, amount) {
+      if (!hex.startsWith("#")) {
+        return hex;
+      }
+      const value = parseInt(hex.slice(1), 16);
+      const channel = (shift) => {
+        const base = (value >> shift) & 255;
+        return Math.max(0, Math.min(255, Math.round(base + amount * 255)));
+      };
+      const r = channel(16).toString(16).padStart(2, "0");
+      const g = channel(8).toString(16).padStart(2, "0");
+      const b = channel(0).toString(16).padStart(2, "0");
+      return `#${r}${g}${b}`;
+    }
+
+    function drawGlassCenter(cx, cy, radius, state, tokens, centerColor) {
+      if (state.paused) {
+        fillCircle(cx, cy, radius, "rgba(255,255,255,.115)");
+        return;
+      }
+
+      const brightEdge = shadeHex(centerColor, .16);
+      const deepEdge = shadeHex(centerColor, -.2);
+      const body = ctx.createRadialGradient(
+        cx - radius * .24,
+        cy - radius * .34,
+        radius * .08,
+        cx,
+        cy + radius * .08,
+        radius * 1.04
+      );
+      body.addColorStop(0, hexWithAlpha(shadeHex(centerColor, .34), 1));
+      body.addColorStop(.14, hexWithAlpha(brightEdge, .98));
+      body.addColorStop(.52, hexWithAlpha(centerColor, 1));
+      body.addColorStop(1, hexWithAlpha(deepEdge, 1));
+      fillCircleStyle(cx, cy, radius, body);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
+      ctx.clip();
+
+      const topGloss = ctx.createLinearGradient(
+        cx - radius * .42,
+        cy - radius * .82,
+        cx + radius * .18,
+        cy - radius * .18
+      );
+      topGloss.addColorStop(0, "rgba(255,255,255,.30)");
+      topGloss.addColorStop(.46, "rgba(255,255,255,.09)");
+      topGloss.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = topGloss;
+      ctx.beginPath();
+      ctx.ellipse(cx - radius * .2, cy - radius * .48, radius * .5, radius * .18, -.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      const lowerGlass = ctx.createLinearGradient(cx, cy + radius * .05, cx, cy + radius);
+      lowerGlass.addColorStop(0, "rgba(255,255,255,0)");
+      lowerGlass.addColorStop(1, "rgba(255,255,255,.08)");
+      ctx.fillStyle = lowerGlass;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI);
+      ctx.lineTo(cx - radius, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255,255,255,.42)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius - 2, -Math.PI * .88, Math.PI * .1);
+      ctx.stroke();
+
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = "rgba(0,0,0,.16)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + 1, Math.PI * .15, Math.PI * .88);
+      ctx.stroke();
+    }
+
     function drawCenter(cx, cy, state, tokens, pulse) {
       const centerColor = colorFor(tokens, state.stageType);
       const radius = 246 + (state.final ? pulse * 6 : 0);
       const shadowRadius = 268 + (state.final ? pulse * 12 : 0);
 
       fillCircle(cx, cy, shadowRadius, tokens.centerShadow);
-      fillCircle(cx, cy, radius, state.paused ? "rgba(255,255,255,.115)" : centerColor);
+      drawGlassCenter(cx, cy, radius, state, tokens, centerColor);
 
       ctx.lineWidth = state.paused ? 2 : 1.5;
-      ctx.strokeStyle = state.paused ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.28)";
+      ctx.strokeStyle = state.paused ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.36)";
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.stroke();
