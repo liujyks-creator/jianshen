@@ -725,13 +725,6 @@ E10.11 Huashu Timer Dial prototype assumptions:
       ctx.fill();
     }
 
-    function fillCircleStyle(x, y, radius, style) {
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = style;
-      ctx.fill();
-    }
-
     function drawText(text, x, y, size, weight, color, baseline = "middle") {
       ctx.fillStyle = color;
       ctx.font = `${weight} ${size}px ui-sans-serif, "Segoe UI", Roboto, sans-serif`;
@@ -783,96 +776,16 @@ E10.11 Huashu Timer Dial prototype assumptions:
       ctx.restore();
     }
 
-    function shadeHex(hex, amount) {
-      if (!hex.startsWith("#")) {
-        return hex;
-      }
-      const value = parseInt(hex.slice(1), 16);
-      const channel = (shift) => {
-        const base = (value >> shift) & 255;
-        return Math.max(0, Math.min(255, Math.round(base + amount * 255)));
-      };
-      const r = channel(16).toString(16).padStart(2, "0");
-      const g = channel(8).toString(16).padStart(2, "0");
-      const b = channel(0).toString(16).padStart(2, "0");
-      return `#${r}${g}${b}`;
-    }
-
-    function drawGlassCenter(cx, cy, radius, state, tokens, centerColor) {
-      if (state.paused) {
-        fillCircle(cx, cy, radius, "rgba(255,255,255,.115)");
-        return;
-      }
-
-      const brightEdge = shadeHex(centerColor, .16);
-      const deepEdge = shadeHex(centerColor, -.2);
-      const body = ctx.createRadialGradient(
-        cx - radius * .24,
-        cy - radius * .34,
-        radius * .08,
-        cx,
-        cy + radius * .08,
-        radius * 1.04
-      );
-      body.addColorStop(0, hexWithAlpha(shadeHex(centerColor, .34), 1));
-      body.addColorStop(.14, hexWithAlpha(brightEdge, .98));
-      body.addColorStop(.52, hexWithAlpha(centerColor, 1));
-      body.addColorStop(1, hexWithAlpha(deepEdge, 1));
-      fillCircleStyle(cx, cy, radius, body);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
-      ctx.clip();
-
-      const topGloss = ctx.createLinearGradient(
-        cx - radius * .42,
-        cy - radius * .82,
-        cx + radius * .18,
-        cy - radius * .18
-      );
-      topGloss.addColorStop(0, "rgba(255,255,255,.30)");
-      topGloss.addColorStop(.46, "rgba(255,255,255,.09)");
-      topGloss.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = topGloss;
-      ctx.beginPath();
-      ctx.ellipse(cx - radius * .2, cy - radius * .48, radius * .5, radius * .18, -.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      const lowerGlass = ctx.createLinearGradient(cx, cy + radius * .05, cx, cy + radius);
-      lowerGlass.addColorStop(0, "rgba(255,255,255,0)");
-      lowerGlass.addColorStop(1, "rgba(255,255,255,.08)");
-      ctx.fillStyle = lowerGlass;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI);
-      ctx.lineTo(cx - radius, cy);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(255,255,255,.42)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius - 2, -Math.PI * .88, Math.PI * .1);
-      ctx.stroke();
-
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = "rgba(0,0,0,.16)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius + 1, Math.PI * .15, Math.PI * .88);
-      ctx.stroke();
-    }
-
     function drawCenter(cx, cy, state, tokens, pulse) {
       const centerColor = colorFor(tokens, state.stageType);
       const radius = 246 + (state.final ? pulse * 6 : 0);
       const shadowRadius = 268 + (state.final ? pulse * 12 : 0);
 
       fillCircle(cx, cy, shadowRadius, tokens.centerShadow);
-      drawGlassCenter(cx, cy, radius, state, tokens, centerColor);
+      fillCircle(cx, cy, radius, state.paused ? "rgba(255,255,255,.115)" : centerColor);
 
       ctx.lineWidth = state.paused ? 2 : 1.5;
-      ctx.strokeStyle = state.paused ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.36)";
+      ctx.strokeStyle = state.paused ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.30)";
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.stroke();
@@ -889,7 +802,7 @@ E10.11 Huashu Timer Dial prototype assumptions:
       }
 
       drawStageGlyph(cx, cy - 102, state.stageType, "#ffffff", 1.5);
-      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 5, 46, 800, "rgba(255,255,255,.9)");
+      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 5, 58, 840, "rgba(255,255,255,.92)");
       drawText(state.time, cx, cy + 98, 92, 820, "#ffffff");
     }
 
@@ -948,8 +861,8 @@ E10.11 Huashu Timer Dial prototype assumptions:
 
       if (stageCount > 0) {
         const start = points[0];
-        fillCircle(start.x, start.y, 36, colorFor(tokens, "work"));
-        drawText(String(stageCount), start.x, start.y + 1, 35, 820, "#ffffff");
+        fillCircle(start.x, start.y, 39, colorFor(tokens, "work"));
+        drawText(String(stageCount), start.x, start.y + 1, 42, 840, "#ffffff");
       }
 
       for (let count = 1; count < state.completed; count += 1) {
@@ -959,8 +872,8 @@ E10.11 Huashu Timer Dial prototype assumptions:
 
       if (state.completed > 0 && state.completed < stageCount) {
         const latest = points[state.completed % stageCount];
-        fillCircle(latest.x, latest.y, 36, tokens.inner);
-        drawText(String(state.completed), latest.x, latest.y + 1, 35, 820, colorFor(tokens, "work"));
+        fillCircle(latest.x, latest.y, 39, tokens.inner);
+        drawText(String(state.completed), latest.x, latest.y + 1, 42, 840, colorFor(tokens, "work"));
       }
     }
 
