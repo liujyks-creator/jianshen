@@ -850,30 +850,30 @@ E10.11 Huashu Timer Dial prototype assumptions:
       drawArc(cx, cy, radius, 0, 1, tokens.innerBase, 42, "round");
       const points = markerPoints(cx, cy, radius, stageCount);
       points.forEach((point) => {
-        fillCircle(point.x, point.y, point.index === 0 ? 14 : 11.5, tokens.innerBaseDot);
+        fillCircle(point.x, point.y, point.index === 0 ? 15.5 : 13, tokens.innerBaseDot);
       });
 
       if (state.totalProgress > 0) {
         drawArc(cx, cy, radius, 0, state.totalProgress, hexWithAlpha(tokens.inner, state.paused ? .54 : .98), 7, "round");
         const brush = pointOnCircle(cx, cy, radius, state.totalProgress);
-        fillCircle(brush.x, brush.y, 12.5, hexWithAlpha(tokens.inner, state.paused ? .62 : 1));
+        fillCircle(brush.x, brush.y, 14, hexWithAlpha(tokens.inner, state.paused ? .62 : 1));
       }
 
       if (stageCount > 0) {
         const start = points[0];
-        fillCircle(start.x, start.y, 31, colorFor(tokens, "work"));
-        drawText(String(stageCount), start.x, start.y + 1, 30, 820, "#ffffff");
+        fillCircle(start.x, start.y, 36, colorFor(tokens, "work"));
+        drawText(String(stageCount), start.x, start.y + 1, 35, 820, "#ffffff");
       }
 
       for (let count = 1; count < state.completed; count += 1) {
         const point = points[count % stageCount];
-        fillCircle(point.x, point.y, 13, hexWithAlpha(tokens.inner, state.paused ? .42 : .86));
+        fillCircle(point.x, point.y, 15, hexWithAlpha(tokens.inner, state.paused ? .42 : .86));
       }
 
       if (state.completed > 0 && state.completed < stageCount) {
         const latest = points[state.completed % stageCount];
-        fillCircle(latest.x, latest.y, 31, tokens.inner);
-        drawText(String(state.completed), latest.x, latest.y + 1, 30, 820, colorFor(tokens, "work"));
+        fillCircle(latest.x, latest.y, 36, tokens.inner);
+        drawText(String(state.completed), latest.x, latest.y + 1, 35, 820, colorFor(tokens, "work"));
       }
     }
 
@@ -919,7 +919,7 @@ E10.11 Huashu Timer Dial prototype assumptions:
         const cx = canvas.width / 2;
         const cy = canvas.height / 2;
         drawOuterSegments(cx, cy, 374, state, tokens);
-        drawInnerProgress(cx, cy, 286, state, tokens);
+        drawInnerProgress(cx, cy, 326, state, tokens);
 
         if (state.final) {
           fillCircle(cx, cy, 250 + pulse * 16, hexWithAlpha(tokens.final, .08 + pulse * .08));
