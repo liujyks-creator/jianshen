@@ -778,8 +778,8 @@ E10.11 Huashu Timer Dial prototype assumptions:
 
     function drawCenter(cx, cy, state, tokens, pulse) {
       const centerColor = colorFor(tokens, state.stageType);
-      const radius = 186 + (state.final ? pulse * 6 : 0);
-      const shadowRadius = 210 + (state.final ? pulse * 14 : 0);
+      const radius = 216 + (state.final ? pulse * 6 : 0);
+      const shadowRadius = 238 + (state.final ? pulse * 14 : 0);
 
       fillCircle(cx, cy, shadowRadius, tokens.centerShadow);
       fillCircle(cx, cy, radius, state.paused ? "rgba(255,255,255,.115)" : centerColor);
@@ -801,9 +801,9 @@ E10.11 Huashu Timer Dial prototype assumptions:
         ctx.restore();
       }
 
-      drawStageGlyph(cx, cy - 74, state.stageType, "#ffffff", 1.22);
-      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 5, 34, 800, "rgba(255,255,255,.86)");
-      drawText(state.time, cx, cy + 72, 76, 840, "#ffffff");
+      drawStageGlyph(cx, cy - 86, state.stageType, "#ffffff", 1.34);
+      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 4, 38, 800, "rgba(255,255,255,.88)");
+      drawText(state.time, cx, cy + 82, 82, 830, "#ffffff");
     }
 
     function drawOuterSegments(cx, cy, radius, state, tokens) {
@@ -881,8 +881,8 @@ E10.11 Huashu Timer Dial prototype assumptions:
       if (!state.extended) {
         return;
       }
-      const x = cx + 150;
-      const y = cy + 158;
+      const x = cx + 156;
+      const y = cy + 168;
       ctx.save();
       ctx.fillStyle = hexWithAlpha(colorFor(tokens, "rest"), .14);
       ctx.strokeStyle = hexWithAlpha(colorFor(tokens, "rest"), .42);
@@ -919,11 +919,11 @@ E10.11 Huashu Timer Dial prototype assumptions:
         const cx = canvas.width / 2;
         const cy = canvas.height / 2;
         drawOuterSegments(cx, cy, 374, state, tokens);
-        drawInnerProgress(cx, cy, 322, state, tokens);
+        drawInnerProgress(cx, cy, 286, state, tokens);
 
         if (state.final) {
-          fillCircle(cx, cy, 220 + pulse * 18, hexWithAlpha(tokens.final, .08 + pulse * .08));
-          drawArc(cx, cy, 224 + pulse * 14, 0, 1, hexWithAlpha(tokens.final, .16 + pulse * .12), 2, "round");
+          fillCircle(cx, cy, 250 + pulse * 16, hexWithAlpha(tokens.final, .08 + pulse * .08));
+          drawArc(cx, cy, 254 + pulse * 12, 0, 1, hexWithAlpha(tokens.final, .16 + pulse * .12), 2, "round");
         }
 
         drawCenter(cx, cy, state, tokens, pulse);
