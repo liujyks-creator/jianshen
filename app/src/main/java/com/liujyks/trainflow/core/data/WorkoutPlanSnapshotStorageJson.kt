@@ -8,6 +8,7 @@ import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
 import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.PlanBlockKind
+import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.RestBlock
@@ -24,7 +25,67 @@ import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+
+internal fun WorkoutPlan.toPlanSnapshot(): WorkoutPlanSnapshot {
+    return WorkoutPlanSnapshot(
+        planId = id,
+        title = title,
+        mode = mode,
+        blocks = blocks,
+        preferences = preferences,
+        followAlong = followAlong
+    )
+}
+
+internal fun List<PlanBlock>.toPlanBlocksStorageJson(): String {
+    return map { block -> block.toJson() }.jsonArray().render()
+}
+
+internal fun String.toPlanBlocksStorage(): List<PlanBlock> {
+    val root = runCatching { JsonParser(this).parse() }.getOrNull() as? JsonValue.Arr
+        ?: return emptyList()
+    return root.values.mapNotNull { value -> value.toPlanBlock() }
+}
+
+internal fun PlanReminder.toStorageJson(): String {
+    return jsonObject(
+        "enabled" to enabled.jsonBool(),
+        "scheduleAt" to scheduleAt?.jsonString(),
+        "repeatRule" to repeatRule?.jsonString()
+    ).render()
+}
+
+internal fun String.toPlanReminderStorage(): PlanReminder? {
+    val root = runCatching { JsonParser(this).parse() }.getOrNull() as? JsonValue.Obj
+        ?: return null
+    return PlanReminder(
+        enabled = root.boolean("enabled") ?: false,
+        scheduleAt = root.string("scheduleAt"),
+        repeatRule = root.string("repeatRule")
+    )
+}
+
+internal fun PlanPreferences.toStorageJson(): String {
+    return toJson().render()
+}
+
+internal fun String.toPlanPreferencesStorage(): PlanPreferences? {
+    val root = runCatching { JsonParser(this).parse() }.getOrNull() as? JsonValue.Obj
+        ?: return null
+    return root.toPlanPreferences()
+}
+
+internal fun FollowAlongPlanMeta.toStorageJson(): String {
+    return toJson().render()
+}
+
+internal fun String.toFollowAlongMetaStorage(): FollowAlongPlanMeta? {
+    val root = runCatching { JsonParser(this).parse() }.getOrNull() as? JsonValue.Obj
+        ?: return null
+    return root.toFollowAlongMeta()
+}
 
 internal fun WorkoutPlanSnapshot.toStorageJson(): String {
     return jsonObject(

@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,14 +47,17 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import java.time.Instant
 
 @Composable
 internal fun StrengthPlanEditorRoute(
     onBackToHome: () -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
+    onSaveStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier,
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
 ) {
+    val draftPlanId = rememberSaveable { "plan-strength-${System.currentTimeMillis()}" }
     var uiState by remember {
         mutableStateOf(buildDefaultStrengthPlanEditorState(defaults = planEditorDefaults))
     }
@@ -81,7 +85,18 @@ internal fun StrengthPlanEditorRoute(
         },
         onAddExercise = { exerciseId -> uiState = uiState.addExercise(exerciseId) },
         onRemoveExercise = { itemId -> uiState = uiState.removeExercise(itemId) },
-        onSaveDraft = { uiState = uiState.saveDraftPlan() },
+        onSaveDraft = {
+            if (uiState.canSave) {
+                val plan = uiState.toWorkoutPlan(
+                    planId = draftPlanId,
+                    timestamp = Instant.now().toString()
+                )
+                onSaveStrengthPlan(plan)
+                uiState = uiState.markPlanSaved(plan)
+            } else {
+                uiState = uiState.saveDraftPlan(planId = draftPlanId)
+            }
+        },
         onStartStrengthPlan = {
             if (uiState.canStartTraining) {
                 onStartStrengthPlan(
@@ -201,7 +216,7 @@ private fun StrengthPlanEditorHeader(uiState: StrengthPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "可直接开始当前草稿，也可保存后进入计划详情；真实计划保存后续接入。",
+            text = "可直接开始当前草稿，也可保存为本地计划后从计划详情再次启动。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -459,7 +474,7 @@ private fun StrengthSaveAndPreviewCard(
     onStartStrengthPlan: () -> Unit
 ) {
     EditorCard {
-        SectionTitle(text = "草稿预览")
+        SectionTitle(text = "计划预览")
         Text(
             text = uiState.summary,
             style = MaterialTheme.typography.bodyLarge,
@@ -489,7 +504,7 @@ private fun StrengthSaveAndPreviewCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "默认本组计时：${blocks.firstOrNull()?.setTimerMode?.contractValue ?: "manual_start"}；只保存本次编辑草稿预览。",
+                text = "默认本组计时：${blocks.firstOrNull()?.setTimerMode?.contractValue ?: "manual_start"}；保存后进入本地计划列表。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -503,7 +518,7 @@ private fun StrengthSaveAndPreviewCard(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
             ) {
-                Text(text = "保存草稿")
+                Text(text = "保存计划")
             }
             Button(
                 onClick = onStartStrengthPlan,

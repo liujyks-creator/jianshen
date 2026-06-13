@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.liujyks.trainflow.core.data.WorkoutPlanRepository
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
@@ -27,11 +28,20 @@ class MainActivity : ComponentActivity() {
             val preferencesDataSource = remember(context) {
                 TrainFlowPreferencesDataSource(context.trainFlowPreferencesDataStore)
             }
-            val workoutSessionRepository = remember(context) {
-                WorkoutSessionRepository(TrainFlowDatabase.create(context.applicationContext))
+            val trainFlowDatabase = remember(context) {
+                TrainFlowDatabase.create(context.applicationContext)
+            }
+            val workoutPlanRepository = remember(trainFlowDatabase) {
+                WorkoutPlanRepository(trainFlowDatabase)
+            }
+            val workoutSessionRepository = remember(trainFlowDatabase) {
+                WorkoutSessionRepository(trainFlowDatabase)
             }
             val preferences by preferencesDataSource.preferences.collectAsState(
                 initial = TrainFlowPreferences()
+            )
+            val workoutPlans by workoutPlanRepository.plans.collectAsState(
+                initial = emptyList()
             )
             val workoutSessions by workoutSessionRepository.sessions.collectAsState(
                 initial = emptyList()
@@ -40,9 +50,20 @@ class MainActivity : ComponentActivity() {
 
             TrainFlowTheme(skin = preferences.toTrainFlowSkin()) {
                 TrainFlowApp(
+                    workoutPlans = workoutPlans,
                     workoutSessions = workoutSessions,
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),
                     planEditorDefaults = preferences.toPlanEditorDefaults(),
+                    onSaveWorkoutPlan = { plan ->
+                        scope.launch {
+                            workoutPlanRepository.upsertPlan(plan)
+                        }
+                    },
+                    onDeleteWorkoutPlan = { planId ->
+                        scope.launch {
+                            workoutPlanRepository.deletePlan(planId)
+                        }
+                    },
                     onRecordWorkoutSession = { session ->
                         workoutSessionRepository.upsertSession(session)
                     },

@@ -6,6 +6,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,10 +22,13 @@ import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
 import com.liujyks.trainflow.feature.home.HomeRoute
 import com.liujyks.trainflow.feature.plans.PlanEditorDefaults
-import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
+import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
+import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
+import com.liujyks.trainflow.feature.plans.upsertPlan
+import com.liujyks.trainflow.feature.plans.withPlans
 import com.liujyks.trainflow.feature.recovery.RecoveryRoute
 import com.liujyks.trainflow.feature.recovery.emptyRecoveryScreenState
 import com.liujyks.trainflow.feature.recovery.toRecoveryScreenState
@@ -38,9 +42,12 @@ import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
 
 @Composable
 internal fun TrainFlowApp(
+    workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
     workoutSessions: List<WorkoutSession> = emptyList(),
     trainingPreferencesState: TrainingPreferencesScreenState = defaultTrainingPreferencesScreenState(),
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults(),
+    onSaveWorkoutPlan: (WorkoutPlan) -> Unit = {},
+    onDeleteWorkoutPlan: (String) -> Unit = {},
     onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
     onDefaultCountdownThresholdChanged: (Int) -> Unit = {},
     onActionCueEnabledChanged: (Boolean) -> Unit = {},
@@ -55,7 +62,7 @@ internal fun TrainFlowApp(
         mutableStateOf(OfficialShellDestination.TRAINING)
     }
     var planManagementState by remember {
-        mutableStateOf(buildDefaultPlanManagementState())
+        mutableStateOf(PlanManagementScreenState(plans = workoutPlans))
     }
     var activeTimedSessionPlan by remember {
         mutableStateOf<WorkoutPlan?>(null)
@@ -77,6 +84,10 @@ internal fun TrainFlowApp(
         activeFollowAlongSessionPlan = activeFollowAlongSessionPlan,
         activeRecoveryRecommendation = activeRecoveryRecommendation
     )
+
+    LaunchedEffect(workoutPlans) {
+        planManagementState = planManagementState.withPlans(workoutPlans)
+    }
 
     fun applyShellState(nextState: OfficialShellState) {
         currentDestination = nextState.currentDestination
@@ -133,6 +144,14 @@ internal fun TrainFlowApp(
                     onStartTimedPlan = { plan ->
                         applyShellState(shellState.startTimedSession(plan))
                     },
+                    onSaveTimedPlan = { plan ->
+                        onSaveWorkoutPlan(plan)
+                        applyShellState(
+                            shellState.withPlanManagementState(
+                                shellState.planManagementState.upsertPlan(plan)
+                            )
+                        )
+                    },
                     planEditorDefaults = planEditorDefaults,
                     modifier = Modifier.padding(innerPadding)
                 )
@@ -143,6 +162,14 @@ internal fun TrainFlowApp(
                     },
                     onStartStrengthPlan = { plan ->
                         applyShellState(shellState.startStrengthSession(plan))
+                    },
+                    onSaveStrengthPlan = { plan ->
+                        onSaveWorkoutPlan(plan)
+                        applyShellState(
+                            shellState.withPlanManagementState(
+                                shellState.planManagementState.upsertPlan(plan)
+                            )
+                        )
                     },
                     planEditorDefaults = planEditorDefaults,
                     modifier = Modifier.padding(innerPadding)
@@ -212,6 +239,8 @@ internal fun TrainFlowApp(
                             onStateChange = { planManagementState ->
                                 applyShellState(shellState.withPlanManagementState(planManagementState))
                             },
+                            onPersistPlan = onSaveWorkoutPlan,
+                            onDeletePlan = onDeleteWorkoutPlan,
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
@@ -243,6 +272,8 @@ internal fun TrainFlowApp(
                             onStateChange = { planManagementState ->
                                 applyShellState(shellState.withPlanManagementState(planManagementState))
                             },
+                            onPersistPlan = onSaveWorkoutPlan,
+                            onDeletePlan = onDeleteWorkoutPlan,
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
@@ -263,6 +294,8 @@ internal fun TrainFlowApp(
                     onStateChange = { planManagementState ->
                         applyShellState(shellState.withPlanManagementState(planManagementState))
                     },
+                    onPersistPlan = onSaveWorkoutPlan,
+                    onDeletePlan = onDeleteWorkoutPlan,
                     onStartTimedPlan = { plan ->
                         applyShellState(shellState.startTimedSession(plan))
                     },

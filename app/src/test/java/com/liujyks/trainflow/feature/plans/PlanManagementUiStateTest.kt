@@ -60,6 +60,38 @@ class PlanManagementUiStateTest {
     }
 
     @Test
+    fun persistedPlanListCanStartEmptyAndRecoverSavedPlans() {
+        val empty = PlanManagementScreenState(plans = emptyList())
+        val savedTimedPlan = buildDefaultTimedPlanEditorState().toWorkoutPlan(
+            planId = "saved-timed",
+            timestamp = "2026-06-13T08:00:00Z"
+        )
+        val recovered = empty.withPlans(listOf(savedTimedPlan))
+
+        assertTrue(empty.isEmpty)
+        assertEquals("saved-timed", recovered.selectedPlanId)
+        assertEquals("saved-timed", recovered.selectedPlan?.id)
+        assertTrue(requireNotNull(recovered.selectedDetail).canStartTraining)
+    }
+
+    @Test
+    fun upsertPlanSelectsSavedPlanAndKeepsLocalPlanSummary() {
+        val empty = PlanManagementScreenState(plans = emptyList())
+        val savedTimedPlan = buildDefaultTimedPlanEditorState()
+            .updateTitle("保存后的计时计划")
+            .toWorkoutPlan(
+                planId = "saved-timed",
+                timestamp = "2026-06-13T08:00:00Z"
+            )
+        val updated = empty.upsertPlan(savedTimedPlan)
+
+        assertFalse(updated.isEmpty)
+        assertEquals("saved-timed", updated.selectedPlanId)
+        assertEquals("保存后的计时计划", updated.listItems.single().title)
+        assertTrue(requireNotNull(updated.statusMessage).contains("本地计划"))
+    }
+
+    @Test
     fun selectingAPlanMapsDetailSectionsWithoutStartingTraining() {
         val strengthId = buildDefaultPlanManagementState().plans[1].id
         val state = buildDefaultPlanManagementState().selectPlan(strengthId)
@@ -69,7 +101,7 @@ class PlanManagementUiStateTest {
         assertEquals("力量训练", detail.modeLabel)
         assertTrue(detail.canStartTraining)
         assertEquals("开始力量训练", detail.startStatus)
-        assertTrue(detail.editStatus.contains("后续接入"))
+        assertTrue(detail.editStatus.contains("本地计划"))
         assertTrue(detail.sections.any { section -> section.title == "动作与组" })
         assertTrue(detail.reminder.boundaryCopy.contains("普通通知"))
     }
@@ -101,6 +133,7 @@ class PlanManagementUiStateTest {
         assertNotEquals(originalCircuit.id, copiedCircuit.id)
         assertNotEquals(originalCircuit.items.first().id, copiedCircuit.items.first().id)
         assertTrue(requireNotNull(copiedState.statusMessage).contains("已复制"))
+        assertTrue(requireNotNull(copiedState.statusMessage).contains("本地计划"))
     }
 
     @Test
