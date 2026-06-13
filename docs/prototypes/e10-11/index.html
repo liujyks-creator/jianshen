@@ -73,7 +73,7 @@ E10.11 Huashu Timer Dial prototype assumptions:
       overflow: hidden;
       background: var(--screen-bg, #080a0d);
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto 1fr;
       padding: 22px 18px 18px;
       transition: background 220ms ease;
     }
@@ -150,12 +150,12 @@ E10.11 Huashu Timer Dial prototype assumptions:
       display: grid;
       align-content: center;
       justify-items: center;
-      gap: 22px;
-      padding: 18px 0 6px;
+      gap: 18px;
+      padding: 10px 0 6px;
     }
 
     .canvas-wrap {
-      width: min(100%, 370px);
+      width: min(100%, 390px);
       aspect-ratio: 1;
       display: grid;
       place-items: center;
@@ -251,15 +251,19 @@ E10.11 Huashu Timer Dial prototype assumptions:
       border-radius: 5px;
     }
 
-    .state-strip {
+    .review-states {
       display: flex;
       gap: 8px;
-      padding: 10px 0 0;
+      max-width: 760px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
       overflow-x: auto;
       scrollbar-width: none;
     }
 
-    .state-strip::-webkit-scrollbar {
+    .review-states::-webkit-scrollbar {
       display: none;
     }
 
@@ -450,13 +454,6 @@ E10.11 Huashu Timer Dial prototype assumptions:
           </div>
         </section>
 
-        <nav class="state-strip" aria-label="Prototype state">
-          <button class="state-pill" type="button" data-state="activeWork">Active</button>
-          <button class="state-pill" type="button" data-state="rest">Rest</button>
-          <button class="state-pill" type="button" data-state="paused">Paused</button>
-          <button class="state-pill" type="button" data-state="finalFive">Final 5</button>
-          <button class="state-pill" type="button" data-state="restExtended">+15 Rest</button>
-        </nav>
       </div>
     </section>
 
@@ -482,6 +479,13 @@ E10.11 Huashu Timer Dial prototype assumptions:
           <span>克制赛博，霓虹但不噪</span>
         </button>
       </div>
+      <nav class="review-states" aria-label="Prototype review state">
+        <button class="state-pill" type="button" data-state="activeWork">Active</button>
+        <button class="state-pill" type="button" data-state="rest">Rest</button>
+        <button class="state-pill" type="button" data-state="paused">Paused</button>
+        <button class="state-pill" type="button" data-state="finalFive">Final 5</button>
+        <button class="state-pill" type="button" data-state="restExtended">+15 Rest</button>
+      </nav>
       <div class="notes" aria-label="Direction notes">
         <article class="note">
           <strong>Production candidates</strong>
@@ -774,8 +778,8 @@ E10.11 Huashu Timer Dial prototype assumptions:
 
     function drawCenter(cx, cy, state, tokens, pulse) {
       const centerColor = colorFor(tokens, state.stageType);
-      const radius = 148 + (state.final ? pulse * 6 : 0);
-      const shadowRadius = 168 + (state.final ? pulse * 14 : 0);
+      const radius = 186 + (state.final ? pulse * 6 : 0);
+      const shadowRadius = 210 + (state.final ? pulse * 14 : 0);
 
       fillCircle(cx, cy, shadowRadius, tokens.centerShadow);
       fillCircle(cx, cy, radius, state.paused ? "rgba(255,255,255,.115)" : centerColor);
@@ -792,14 +796,14 @@ E10.11 Huashu Timer Dial prototype assumptions:
         ctx.strokeStyle = "rgba(255,255,255,.34)";
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(cx, cy, radius + 15, 0, Math.PI * 2);
+        ctx.arc(cx, cy, radius + 13, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
 
-      drawStageGlyph(cx, cy - 56, state.stageType, "#ffffff", 1.04);
-      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 6, 28, 780, "rgba(255,255,255,.82)");
-      drawText(state.time, cx, cy + 54, 66, 860, "#ffffff");
+      drawStageGlyph(cx, cy - 74, state.stageType, "#ffffff", 1.22);
+      drawText(String(state.stageNo).padStart(2, "0"), cx, cy - 5, 34, 800, "rgba(255,255,255,.86)");
+      drawText(state.time, cx, cy + 72, 76, 840, "#ffffff");
     }
 
     function drawOuterSegments(cx, cy, radius, state, tokens) {
@@ -811,7 +815,7 @@ E10.11 Huashu Timer Dial prototype assumptions:
         const gap = state.segments.length > 1 ? .012 : 0;
         const end = start + sweep - gap;
         const isRest = segment.type === "rest";
-        const width = segment.current ? (isRest ? 12 : 15) : (isRest ? 7 : 8);
+        const width = segment.current ? (isRest ? 12 : 16) : (isRest ? 7 : 9);
         const alpha = segment.current ? 1 : .52;
         const color = colorFor(tokens, segment.type);
 
@@ -843,33 +847,33 @@ E10.11 Huashu Timer Dial prototype assumptions:
     }
 
     function drawInnerProgress(cx, cy, radius, state, tokens) {
-      drawArc(cx, cy, radius, 0, 1, tokens.innerBase, 24, "round");
+      drawArc(cx, cy, radius, 0, 1, tokens.innerBase, 30, "round");
       const points = markerPoints(cx, cy, radius, stageCount);
       points.forEach((point) => {
-        fillCircle(point.x, point.y, point.index === 0 ? 9 : 5.8, tokens.innerBaseDot);
+        fillCircle(point.x, point.y, point.index === 0 ? 11 : 8.2, tokens.innerBaseDot);
       });
 
       if (state.totalProgress > 0) {
         drawArc(cx, cy, radius, 0, state.totalProgress, hexWithAlpha(tokens.inner, state.paused ? .54 : .98), 7, "round");
         const brush = pointOnCircle(cx, cy, radius, state.totalProgress);
-        fillCircle(brush.x, brush.y, 8.5, hexWithAlpha(tokens.inner, state.paused ? .62 : 1));
+        fillCircle(brush.x, brush.y, 10.5, hexWithAlpha(tokens.inner, state.paused ? .62 : 1));
       }
 
       if (stageCount > 0) {
         const start = points[0];
-        fillCircle(start.x, start.y, 19, colorFor(tokens, "work"));
-        drawText(String(stageCount), start.x, start.y + 1, 20, 820, "#ffffff");
+        fillCircle(start.x, start.y, 25, colorFor(tokens, "work"));
+        drawText(String(stageCount), start.x, start.y + 1, 25, 820, "#ffffff");
       }
 
       for (let count = 1; count < state.completed; count += 1) {
         const point = points[count % stageCount];
-        fillCircle(point.x, point.y, 8, hexWithAlpha(tokens.inner, state.paused ? .42 : .86));
+        fillCircle(point.x, point.y, 10, hexWithAlpha(tokens.inner, state.paused ? .42 : .86));
       }
 
       if (state.completed > 0 && state.completed < stageCount) {
         const latest = points[state.completed % stageCount];
-        fillCircle(latest.x, latest.y, 18, tokens.inner);
-        drawText(String(state.completed), latest.x, latest.y + 1, 19, 820, colorFor(tokens, "work"));
+        fillCircle(latest.x, latest.y, 25, tokens.inner);
+        drawText(String(state.completed), latest.x, latest.y + 1, 25, 820, colorFor(tokens, "work"));
       }
     }
 
@@ -877,8 +881,8 @@ E10.11 Huashu Timer Dial prototype assumptions:
       if (!state.extended) {
         return;
       }
-      const x = cx + 128;
-      const y = cy + 142;
+      const x = cx + 150;
+      const y = cy + 158;
       ctx.save();
       ctx.fillStyle = hexWithAlpha(colorFor(tokens, "rest"), .14);
       ctx.strokeStyle = hexWithAlpha(colorFor(tokens, "rest"), .42);
@@ -914,12 +918,12 @@ E10.11 Huashu Timer Dial prototype assumptions:
 
         const cx = canvas.width / 2;
         const cy = canvas.height / 2;
-        drawOuterSegments(cx, cy, 356, state, tokens);
-        drawInnerProgress(cx, cy, 286, state, tokens);
+        drawOuterSegments(cx, cy, 374, state, tokens);
+        drawInnerProgress(cx, cy, 322, state, tokens);
 
         if (state.final) {
-          fillCircle(cx, cy, 180 + pulse * 18, hexWithAlpha(tokens.final, .08 + pulse * .08));
-          drawArc(cx, cy, 182 + pulse * 14, 0, 1, hexWithAlpha(tokens.final, .16 + pulse * .12), 2, "round");
+          fillCircle(cx, cy, 220 + pulse * 18, hexWithAlpha(tokens.final, .08 + pulse * .08));
+          drawArc(cx, cy, 224 + pulse * 14, 0, 1, hexWithAlpha(tokens.final, .16 + pulse * .12), 2, "round");
         }
 
         drawCenter(cx, cy, state, tokens, pulse);
@@ -928,7 +932,7 @@ E10.11 Huashu Timer Dial prototype assumptions:
         if (state.paused) {
           ctx.save();
           ctx.setLineDash([10, 18]);
-          drawArc(cx, cy, 392, 0, 1, "rgba(255,255,255,.20)", 3, "round");
+          drawArc(cx, cy, 398, 0, 1, "rgba(255,255,255,.20)", 3, "round");
           ctx.restore();
         }
 
