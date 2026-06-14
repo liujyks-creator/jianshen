@@ -116,9 +116,9 @@ When changing UI, theme, layout, or components, read `DESIGN.md` first. When cha
 This project may use two optional local skills for product and design planning:
 
 - `skills/bmad-method`
-- `skills/design-md`
+- `huashu-design` if available in the active Codex skills list
 
-They are local working copies for this computer only and are intentionally ignored by Git. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, or design-system work when relevant. If they are missing, continue from the repository documents rather than blocking.
+`skills/bmad-method` is a local working copy for this computer only and is intentionally ignored by Git. `huashu-design` is normally installed as a Codex skill rather than under the repository `skills/` directory. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, design-system work, high-fidelity prototype work, design-variant exploration, or visual review when relevant. If they are missing, continue from the repository documents rather than blocking.
 
 ## Working Habits
 
