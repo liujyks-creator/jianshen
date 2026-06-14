@@ -17,6 +17,7 @@ import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
 import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
 import com.liujyks.trainflow.ui.shell.official.TrainFlowApp
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.ui.theme.rememberTrainFlowReduceMotion
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
             val preferences by preferencesDataSource.preferences.collectAsState(
                 initial = TrainFlowPreferences()
             )
+            val reduceMotion = rememberTrainFlowReduceMotion()
             val workoutPlans by workoutPlanRepository.plans.collectAsState(
                 initial = emptyList()
             )
@@ -48,7 +50,10 @@ class MainActivity : ComponentActivity() {
             )
             val scope = rememberCoroutineScope()
 
-            TrainFlowTheme(skin = preferences.toTrainFlowSkin()) {
+            TrainFlowTheme(
+                skin = preferences.toTrainFlowSkin(),
+                reduceMotion = reduceMotion
+            ) {
                 TrainFlowApp(
                     workoutPlans = workoutPlans,
                     workoutSessions = workoutSessions,

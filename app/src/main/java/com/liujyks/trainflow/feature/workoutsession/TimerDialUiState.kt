@@ -433,21 +433,29 @@ private fun Float.safeProgressOf(total: Float): Float {
 
 internal val TimerDialSmoothProgressMaxMillis = TrainFlowMotionTokens.ContinuousProjectionMaxDurationMillis
 
-internal fun TimerDialUiState.canProjectSmoothProgress(): Boolean {
-    return !isPaused && canTogglePause && currentStageRemainingSec > 0
+internal fun TimerDialUiState.canProjectSmoothProgress(
+    reduceMotion: Boolean = false
+): Boolean {
+    return !reduceMotion && !isPaused && canTogglePause && currentStageRemainingSec > 0
 }
 
-internal fun TimerDialUiState.projectedStageProgress(elapsedMillis: Long): Float {
+internal fun TimerDialUiState.projectedStageProgress(
+    elapsedMillis: Long,
+    reduceMotion: Boolean = false
+): Float {
     return projectTimerDialProgress(
         baseProgress = currentStageProgress,
         remainingSec = currentStageRemainingSec,
         elapsedMillis = elapsedMillis,
-        isRunning = canProjectSmoothProgress()
+        isRunning = canProjectSmoothProgress(reduceMotion)
     )
 }
 
-internal fun TimerDialUiState.projectedTotalProgress(elapsedMillis: Long): Float {
-    if (!canProjectSmoothProgress()) {
+internal fun TimerDialUiState.projectedTotalProgress(
+    elapsedMillis: Long,
+    reduceMotion: Boolean = false
+): Float {
+    if (!canProjectSmoothProgress(reduceMotion)) {
         return totalProgress.clampedProgress()
     }
 

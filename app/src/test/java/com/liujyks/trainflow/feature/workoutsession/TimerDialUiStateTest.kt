@@ -336,6 +336,33 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun reduceMotionDisablesSmoothProjectionAndKeepsSecondTickState() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertTrue(dial.canProjectSmoothProgress(reduceMotion = false))
+        assertFalse(dial.canProjectSmoothProgress(reduceMotion = true))
+        assertEquals(0.4f, dial.currentStageProgress, 0.0001f)
+        assertEquals(
+            dial.currentStageProgress,
+            dial.projectedStageProgress(elapsedMillis = 500, reduceMotion = true),
+            0.0001f
+        )
+        assertEquals(
+            dial.totalProgress,
+            dial.projectedTotalProgress(elapsedMillis = 500, reduceMotion = true),
+            0.0001f
+        )
+        assertTrue(dial.projectedStageProgress(elapsedMillis = 500, reduceMotion = false) > dial.currentStageProgress)
+        assertTrue(dial.projectedTotalProgress(elapsedMillis = 500, reduceMotion = false) > dial.totalProgress)
+    }
+
+    @Test
     fun smoothProjectionFreezesWhenPaused() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),

@@ -59,11 +59,64 @@ internal fun timerDialColorStateTransitionSpec(
     )
 }
 
-internal fun timerDialFinalPulseAnimationSpec(): TweenSpec<Float> {
+internal fun timerDialFinalPulseAnimationSpec(
+    reduceMotion: Boolean = false
+): TweenSpec<Float> {
     return tween(
-        durationMillis = TrainFlowMotionTokens.StateTransitionDurationMillis,
+        durationMillis = motionDuration(
+            reduceMotion = reduceMotion,
+            durationMillis = TrainFlowMotionTokens.StateTransitionDurationMillis
+        ),
         easing = TrainFlowMotionTokens.EmphasisEasing
     )
+}
+
+internal fun readyStartTouchScaleTarget(
+    pressed: Boolean,
+    reduceMotion: Boolean
+): Float {
+    return if (pressed && !reduceMotion) {
+        TrainFlowMotionTokens.TouchFeedbackScale
+    } else {
+        1f
+    }
+}
+
+internal fun timerDialCenterTouchScaleTarget(
+    pressed: Boolean,
+    canTogglePause: Boolean,
+    reduceMotion: Boolean
+): Float {
+    return if (pressed && canTogglePause && !reduceMotion) {
+        TrainFlowMotionTokens.TouchFeedbackScale
+    } else {
+        1f
+    }
+}
+
+internal fun timedRestExtensionTouchScaleTarget(
+    pressed: Boolean,
+    canExtendRest: Boolean,
+    buttonEnabled: Boolean,
+    reduceMotion: Boolean
+): Float {
+    return if (pressed && canExtendRest && buttonEnabled && !reduceMotion) {
+        TrainFlowMotionTokens.TouchFeedbackScale
+    } else {
+        1f
+    }
+}
+
+internal fun timerDialFinalPulseTarget(
+    isFinalCountdown: Boolean,
+    isPaused: Boolean,
+    reduceMotion: Boolean
+): Float {
+    return if (isFinalCountdown && !isPaused && !reduceMotion) {
+        1f
+    } else {
+        0f
+    }
 }
 
 private fun timerDialStateTransitionSpec(

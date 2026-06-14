@@ -87,8 +87,8 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
+import com.liujyks.trainflow.ui.theme.LocalTrainFlowReduceMotion
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
-import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import com.liujyks.trainflow.ui.theme.isBigType
 import java.time.Instant
 import kotlinx.coroutines.delay
@@ -112,6 +112,7 @@ internal fun TimedWorkoutSessionRoute(
     }
     val feedbackSink = rememberCountdownReminderFeedbackSink()
     val context = LocalContext.current
+    val reduceMotion = LocalTrainFlowReduceMotion.current
     val activeWorkoutNotifications = remember(context) {
         AndroidActiveWorkoutNotificationController(context.applicationContext)
     }
@@ -227,7 +228,7 @@ internal fun TimedWorkoutSessionRoute(
 
     Crossfade(
         targetState = readyGate,
-        animationSpec = timedRouteLocalLayoutTransitionSpec(),
+        animationSpec = timedRouteLocalLayoutTransitionSpec(reduceMotion),
         label = "TimedReadyGateToExecution"
     ) { targetReadyGate ->
         if (targetReadyGate != null) {
@@ -235,6 +236,7 @@ internal fun TimedWorkoutSessionRoute(
                 uiState = targetReadyGate,
                 onStartSession = ::startSessionFromReadyGate,
                 onBackToPlans = onBackToPlans,
+                reduceMotion = reduceMotion,
                 modifier = modifier
             )
         } else {
@@ -255,6 +257,7 @@ internal fun TimedWorkoutSessionRoute(
                 },
                 onBackToPlans = onBackToPlans,
                 onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                reduceMotion = reduceMotion,
                 modifier = modifier
             )
         }
@@ -307,6 +310,7 @@ private fun TimedWorkoutReadyStartGateScreen(
     uiState: TimedReadyStartGateUiState,
     onStartSession: () -> Unit,
     onBackToPlans: () -> Unit,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -341,7 +345,10 @@ private fun TimedWorkoutReadyStartGateScreen(
                 }
             }
 
-            ReadyStartCenterButton(onClick = onStartSession)
+            ReadyStartCenterButton(
+                onClick = onStartSession,
+                reduceMotion = reduceMotion
+            )
 
             Text(
                 text = "点击圆盘开始",
@@ -362,16 +369,20 @@ private fun TimedWorkoutReadyStartGateScreen(
 @Composable
 private fun ReadyStartCenterButton(
     onClick: () -> Unit,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) TrainFlowMotionTokens.TouchFeedbackScale else 1f,
-        animationSpec = timerDialTouchFeedbackSpec(),
+        targetValue = readyStartTouchScaleTarget(
+            pressed = pressed,
+            reduceMotion = reduceMotion
+        ),
+        animationSpec = timerDialTouchFeedbackSpec(reduceMotion),
         label = "ReadyStartTouchScale"
     )
-    val indication = LocalIndication.current
+    val indication = if (reduceMotion) null else LocalIndication.current
     Surface(
         modifier = modifier
             .size(220.dp)
@@ -428,6 +439,7 @@ private fun TimedWorkoutSessionScreen(
     onConfirmEnd: () -> Unit,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -470,6 +482,7 @@ private fun TimedWorkoutSessionScreen(
                 onSkip = onSkip,
                 onExtendRest = onExtendRest,
                 onEnd = onRequestEnd,
+                reduceMotion = reduceMotion,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -586,22 +599,20 @@ private fun TimedSessionControls(
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
     onEnd: () -> Unit,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
     val restExtensionInteractionSource = remember { MutableInteractionSource() }
     val restExtensionPressed by restExtensionInteractionSource.collectIsPressedAsState()
     val restExtensionScale by animateFloatAsState(
-        targetValue = if (
-            restExtensionPressed &&
-            uiState.canExtendRest &&
-            restExtensionControl.buttonEnabled
-        ) {
-            TrainFlowMotionTokens.TouchFeedbackScale
-        } else {
-            1f
-        },
-        animationSpec = timerDialTouchFeedbackSpec(),
+        targetValue = timedRestExtensionTouchScaleTarget(
+            pressed = restExtensionPressed,
+            canExtendRest = uiState.canExtendRest,
+            buttonEnabled = restExtensionControl.buttonEnabled,
+            reduceMotion = reduceMotion
+        ),
+        animationSpec = timerDialTouchFeedbackSpec(reduceMotion),
         label = "TimedRestExtensionTouchScale"
     )
     Surface(
@@ -654,7 +665,7 @@ private fun TimedSessionControls(
                 ) {
                     Crossfade(
                         targetState = restExtensionControl.buttonLabel,
-                        animationSpec = timedRestExtensionStateTransitionSpec(),
+                        animationSpec = timedRestExtensionStateTransitionSpec(reduceMotion),
                         label = "TimedRestExtensionLabel"
                     ) { buttonLabel ->
                         Text(

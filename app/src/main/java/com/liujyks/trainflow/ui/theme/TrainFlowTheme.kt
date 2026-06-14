@@ -7,6 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 
 val LocalTrainFlowSkin = staticCompositionLocalOf { SkinRegistry.defaultSkin }
+val LocalTrainFlowReduceMotion = staticCompositionLocalOf { false }
 
 internal fun trainFlowLightColorSchemeForSkin(skin: TrainFlowSkin) = lightColorScheme(
     primary = skin.tokens.primary,
@@ -28,9 +29,13 @@ internal fun trainFlowLightColorSchemeForSkin(skin: TrainFlowSkin) = lightColorS
 @Composable
 fun TrainFlowTheme(
     skin: TrainFlowSkin = SkinRegistry.defaultSkin,
+    reduceMotion: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    CompositionLocalProvider(LocalTrainFlowSkin provides skin) {
+    CompositionLocalProvider(
+        LocalTrainFlowSkin provides skin,
+        LocalTrainFlowReduceMotion provides reduceMotion
+    ) {
         MaterialTheme(
             colorScheme = trainFlowLightColorSchemeForSkin(skin),
             typography = TrainFlowTypography,
