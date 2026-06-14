@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.engine.TimedSessionStepKind
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 
 internal data class TimerDialUiState(
     val totalRemainingSec: Int,
@@ -430,7 +431,7 @@ private fun Float.safeProgressOf(total: Float): Float {
     return (this / total).clampedProgress()
 }
 
-internal const val TimerDialSmoothProgressMaxMillis = 1_000L
+internal val TimerDialSmoothProgressMaxMillis = TrainFlowMotionTokens.ContinuousProjectionMaxDurationMillis
 
 internal fun TimerDialUiState.canProjectSmoothProgress(): Boolean {
     return !isPaused && canTogglePause && currentStageRemainingSec > 0

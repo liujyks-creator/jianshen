@@ -109,6 +109,20 @@ rounded:
   "2xl": "20px"
   full: "9999px"
 
+motion:
+  touchFeedbackDurationMs: 100
+  stateTransitionDurationMs: 160
+  localLayoutTransitionDurationMs: 220
+  pageTransitionDurationMs: 260
+  continuousProjectionMaxDurationMs: 1000
+  reducedMotionDurationMs: 0
+  touchFeedbackScale: 0.97
+  pressedAlpha: 0.86
+  disabledMotionAlpha: 0.72
+  standardEasing: "cubic-bezier(0.16, 1, 0.30, 1)"
+  emphasisEasing: "cubic-bezier(0.34, 1.16, 0.64, 1)"
+  continuousProgressEasing: "linear"
+
 components:
   buttonPrimary:
     backgroundColor: "{colors.accent}"
@@ -343,6 +357,31 @@ Timer Dial 的设计结构：
 Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度。阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒都应服从真实训练状态和用户 cue settings。休息延长后，当前 rest 外圈弧和内圈 work+rest cycle progress 必须单调、不倒退，并在 active tick 继续推进；paused、completed 和 abandoned 状态不继续动画。
 
 后续可以探索赛博霓虹、Official Flow、Tile Flow 和 Big Type 的 Timer Dial 适配，但 MVP 不新增第四套 skin。先定义圆盘语言，再讨论它如何融入 TrainFlow 风格。
+
+## Motion
+
+TrainFlow 的动效只服务训练节奏和可操作性，不作为炫技层。运动中的关键控制反馈优先于完整播放；用户二次点击、暂停、跳过、结束确认、`+15秒` 二段确认等操作不得被动画阻塞。
+
+### Motion Tokens
+
+- **Touch feedback (`100ms`, range `80-120ms`):** 按下、松开、中心圆轻微响应、按钮轻微缩放。缩放建议为 `0.97`，只表达“已接收到触摸”，不制造弹跳表演。
+- **State transition (`160ms`, range `120-180ms`):** play/pause、`确认 +15秒` / `已加 15秒`、阶段颜色切换、marker 状态变化。用于状态确认，必须可被新状态立即打断。
+- **Local layout transition (`220ms`, range `180-240ms`):** ready gate -> execution、paused -> active、局部控制显隐、训练页内部小范围布局切换。
+- **Page transition (`260ms`, range `220-300ms`):** 计划详情 -> ready gate、ready gate -> execution、execution -> summary。页面切换不应慢到让用户怀疑点击未生效。
+- **Continuous projection (`max 1000ms`):** Timer Dial 秒间连续进度可持续投影，但只消费 UI state / engine state，不更新真实倒计时、不写 session record、不改变 `WorkoutCommand` / `WorkoutEvent`。
+
+默认 easing 使用 `cubic-bezier(0.16, 1, 0.30, 1)`，让状态落位明确；强调反馈可用 `cubic-bezier(0.34, 1.16, 0.64, 1)`，但仅用于短促状态强调；持续进度必须使用 linear projection，避免真实时间和视觉速度产生偏差。
+
+### Motion Rules
+
+- 动画必须状态驱动、可中断。新 UI state 到达时，旧动画应取消或 snap 到新状态。
+- 动画不得驱动 engine state、倒计时、session record、暂停时长、额外休息记录或业务分析字段。
+- 训练中主控制的反馈必须比视觉完整播放优先；暂停 / 继续、跳过、结束、`+15秒` 确认等二次点击不能等待动画结束。
+- reduce-motion 默认降级为 `0ms` snap，关闭非必要动效和 continuous projection；文案数字仍消费真实 UI state。
+- paused、completed、abandoned、ready gate 未启动等状态不得继续推进持续进度动画。
+- 最后 N 秒提醒可以更强，但仍应短促、克制，并遵守用户 cue settings；声音、震动和动画都消费 `WorkoutEvent` / UI state，不互相伪造事件。
+
+E10.15 只定义 motion timing rules 和 token，并做最小 token 接入。实际 ready gate、页面切换、play/pause、阶段切换和完整 Motion Landing 留给后续 story；本阶段不实现 Stage color picker、声音播放、统计图表、真实心率设备、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ## Open Source UI Customization
 

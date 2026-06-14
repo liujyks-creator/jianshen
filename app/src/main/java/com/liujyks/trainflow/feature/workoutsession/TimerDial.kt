@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import com.liujyks.trainflow.ui.theme.isBigType
 import kotlin.math.cos
 import kotlin.math.sin
@@ -79,7 +80,10 @@ internal fun TimerDial(
     val animatedStageProgress = safeState.projectedStageProgress(smoothProgressElapsedMillis)
     val finalPulse by animateFloatAsState(
         targetValue = if (safeState.isFinalCountdown && !safeState.isPaused) 1f else 0f,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = tween(
+            durationMillis = TrainFlowMotionTokens.LocalLayoutTransitionDurationMillis,
+            easing = TrainFlowMotionTokens.StandardEasing
+        ),
         label = "TimerDialFinalPulse"
     )
     val dialSize = layoutSpec.dialSizeDp.dp
