@@ -134,7 +134,7 @@ internal data class TimerDialLayoutSpec(
     val minHeightDp: Int,
     val outerMaxStrokeDp: Float = 14f,
     val innerStrokeDp: Float = 5f,
-    val innerInsetDp: Float = 39f,
+    val innerInsetDp: Float = 36f,
     val innerBaseStrokeDp: Float = 24f,
     val innerBaseDotRadiusDp: Float = 5.5f,
     val innerCompletedDotRadiusDp: Float = 8f,
@@ -145,6 +145,7 @@ internal data class TimerDialLayoutSpec(
     val outerDiameterDp: Float = dialSizeDp - outerMaxStrokeDp
     val innerDiameterDp: Float = dialSizeDp - innerInsetDp * 2f
     val centerClearanceDp: Float = innerDiameterDp - centerSizeDp
+    val innerMarkerBoundaryRadiusDp: Float = innerBaseStrokeDp / 2f
 
     fun keepsDialInsideBounds(): Boolean {
         return dialSizeDp <= minHeightDp &&
@@ -160,7 +161,7 @@ internal fun TrainFlowSkin.timerDialLayoutSpec(): TimerDialLayoutSpec {
             dialSizeDp = 324,
             centerSizeDp = 214,
             minHeightDp = 346,
-            innerInsetDp = 40f
+            innerInsetDp = 35f
         )
     } else {
         TimerDialLayoutSpec(

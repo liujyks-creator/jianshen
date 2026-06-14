@@ -275,13 +275,14 @@ E10.12 已把 E10.11 中的 `TrainFlow Official Fusion` 方向落到 Android Com
 - `final 5 seconds` 继续使用轻量中心/边界强调，不做全屏强提醒。
 - `paused` 状态冻结进度，并用低饱和阶段色和虚线边界克制表达。
 - `+15秒` rest extension 后外圈和内圈 progress 继续单调不倒退。
+- Review fix 已将所有内置 skin 的 marker 轨道重新布局到中心圆和总进程外圈之间，并用 `3.5dp` 最小间距测试约束 center gap、outer gap 和 marker 内部浅点边界；暂停态中心圆继续作为整块可点击的“继续训练”入口，只保留继续图标、当前编号和当前阶段倒计时。
 
 边界：
 
 - 颜色来自 TrainFlow skin token、Timer Dial token 和 UI state；Official 默认不硬编码 E10.11 HTML 原型色值。
 - 保留 E10.9 active Compose frame clock continuous progress、秒级文案 tick、paused / terminal freeze、最多投影当前 1 秒和 rest extension monotonic progress。
 - 不接入声音播放，不复制 `countdown_beep1.mp3` 或 `.local/audio/stage_bell_copper_clean.wav` 到 `res/raw`。
-- 不实现计划保存，不做统计图表，不改 Room/session repository，不接真实心率设备，不新增 foreground service、exact alarm、notification action 或第四套 skin。
+- 本轮 review fix 不实现 ready/start gate、阶段颜色 picker、motion timing rules、计划保存、统计图表，不改 Room/session repository，不接真实心率设备，不新增 foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ### E13 声音 / 女声 cue 与视觉提醒联动
 

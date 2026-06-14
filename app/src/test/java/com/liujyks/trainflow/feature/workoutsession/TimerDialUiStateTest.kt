@@ -70,7 +70,7 @@ class TimerDialUiStateTest {
         assertEquals(screenState.currentTitle, dial.currentStageLabel)
         assertEquals(screenState.timerText, dial.currentStageTimeText)
         assertEquals(screenState.totalRemainingText, dial.totalRemainingText)
-        assertEquals("双击暂停", dial.centerActionLabel)
+        assertEquals("暂停训练", dial.centerActionLabel)
         assertTrue(dial.canTogglePause)
     }
 
@@ -221,11 +221,19 @@ class TimerDialUiStateTest {
             val innerRadius = spec.innerDiameterDp / 2f
             val centerRadius = spec.centerSizeDp / 2f
             val outerInnerEdge = spec.outerDiameterDp / 2f - spec.outerMaxStrokeDp / 2f
+            val centerGap = innerRadius - spec.innerMarkerRadiusDp - centerRadius
+            val outerGap = outerInnerEdge - (innerRadius + spec.innerMarkerRadiusDp)
+            val markerInternalGap = spec.innerMarkerBoundaryRadiusDp - spec.innerBaseDotRadiusDp
 
             assertTrue("${skin.id} base ring should sit under the thin total line", spec.innerBaseStrokeDp > spec.innerStrokeDp)
             assertTrue("${skin.id} base dots should stay lighter than numbered markers", spec.innerBaseDotRadiusDp < spec.innerMarkerRadiusDp)
-            assertTrue("${skin.id} marker should not touch center circle", innerRadius - spec.innerMarkerRadiusDp > centerRadius)
-            assertTrue("${skin.id} marker should not collide with outer ring", innerRadius + spec.innerMarkerRadiusDp < outerInnerEdge)
+            assertTrue("${skin.id} marker should keep at least 3.5dp from center circle", centerGap >= 3.5f)
+            assertTrue("${skin.id} marker should keep at least 3.5dp from outer ring", outerGap >= 3.5f)
+            assertTrue("${skin.id} marker internals should stay inside the base ring boundary", markerInternalGap >= 3.5f)
+            assertTrue(
+                "${skin.id} completed dots should stay inside the base ring boundary",
+                spec.innerMarkerBoundaryRadiusDp - spec.innerCompletedDotRadiusDp >= 3.5f
+            )
         }
     }
 
@@ -544,7 +552,9 @@ class TimerDialUiStateTest {
 
         assertTrue(pausedDial.isPaused)
         assertTrue(pausedDial.canTogglePause)
-        assertEquals("双击继续", pausedDial.centerActionLabel)
+        assertEquals("继续训练", pausedDial.centerActionLabel)
+        assertTrue(pausedDial.accessibilityDescription().contains("继续训练"))
+        assertTrue(pausedDial.accessibilityDescription().contains("已暂停"))
         assertEquals(activeDial.currentStageProgress, pausedDial.currentStageProgress, 0.0001f)
         assertEquals(activeDial.totalProgress, pausedDial.totalProgress, 0.0001f)
     }

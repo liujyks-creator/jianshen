@@ -1355,6 +1355,7 @@ stepsCompleted:
 - `TimerDialUiState` 新增可测试的内圈 marker 数据和 marker progress helper，Canvas 与测试共用该数据，避免浅点成为固定装饰。
 - 生产执行页移除训练中不会看的说明卡，保留大总剩余时间、Timer Dial、辅助心率和底部 skip / `+15秒` / end controls。
 - 单元测试覆盖同源 marker 数据、marker / ring layer 语义、Official token 映射、final countdown、paused / terminal freeze 和 rest extension monotonic progress。
+- Review fix 重新布局 marker 轨道，所有内置 skin 的 center gap、outer gap 和 marker internal gap 均以 `3.5dp` 最小间距测试约束；暂停态中心圆保留整圆可点击继续语义和“继续训练”可访问文案。本轮未实现 ready/start gate、Stage color picker、motion timing rules、声音、统计图表、Room/session repository 语义、真实心率设备、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ### Story E10.x: 后续力量训练新版 UI 设计
 

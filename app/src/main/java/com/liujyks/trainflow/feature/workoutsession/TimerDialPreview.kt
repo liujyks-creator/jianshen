@@ -293,7 +293,7 @@ private fun sampleTimerDialState(
         currentStageIconKey = "work",
         currentStageTimeText = "00:${remainingSec.toString().padStart(2, '0')}",
         totalRemainingText = "14:28",
-        centerActionLabel = if (paused) "双击继续" else "双击暂停",
+        centerActionLabel = if (paused) "继续训练" else "暂停训练",
         canTogglePause = true
     )
 }

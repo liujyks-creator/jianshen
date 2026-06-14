@@ -194,12 +194,24 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         currentStageTimeText = screenState.timerText,
         totalRemainingText = screenState.totalRemainingText,
         centerActionLabel = when {
-            screenState.canResume -> "双击继续"
-            screenState.canPause -> "双击暂停"
+            screenState.canResume -> "继续训练"
+            screenState.canPause -> "暂停训练"
             else -> "当前不可切换"
         },
         canTogglePause = screenState.canPause || screenState.canResume
     ).clamped()
+}
+
+internal fun TimerDialUiState.accessibilityDescription(): String {
+    return buildString {
+        append(currentStageLabel)
+        append("，剩余 ")
+        append(currentStageTimeText)
+        append("，总剩余 ")
+        append(totalRemainingText)
+        append(if (isPaused) "，已暂停，" else "，进行中，")
+        append(centerActionLabel)
+    }
 }
 
 private fun TimedSessionStep.timerDialStageType(): TimerDialStageType {

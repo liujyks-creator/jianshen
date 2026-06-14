@@ -87,15 +87,23 @@ internal fun TimerDial(
     val centerPadding = if (skin.isBigType) 10.dp else 8.dp
     val timerFontSize = if (skin.isBigType) 48.sp else 44.sp
     val timerLineHeight = if (skin.isBigType) 50.sp else 46.sp
-    val contentDescription = buildString {
-        append(safeState.currentStageLabel)
-        append("，剩余 ")
-        append(safeState.currentStageTimeText)
-        append("，总剩余 ")
-        append(safeState.totalRemainingText)
-        append(if (safeState.isPaused) "，已暂停，" else "，进行中，")
-        append(safeState.centerActionLabel)
+    val glyphSize = when {
+        safeState.isPaused && skin.isBigType -> 44.dp
+        safeState.isPaused -> 38.dp
+        skin.isBigType -> 38.dp
+        else -> 32.dp
     }
+    val roundFontSize = when {
+        safeState.isPaused && skin.isBigType -> 30.sp
+        safeState.isPaused -> 26.sp
+        skin.isBigType -> 26.sp
+        else -> 23.sp
+    }
+    val roundLineHeight = when {
+        skin.isBigType -> 32.sp
+        else -> 28.sp
+    }
+    val contentDescription = safeState.accessibilityDescription()
 
     Box(
         modifier = modifier
@@ -286,18 +294,21 @@ internal fun TimerDial(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                TimerDialStageGlyph(
+                TimerDialCenterGlyph(
+                    isPaused = safeState.isPaused,
                     stageType = safeState.currentStageType,
                     color = tokens.textPrimary,
-                    size = if (skin.isBigType) 34.dp else 30.dp
+                    size = glyphSize
                 )
                 if (safeState.currentStageIndex > 0) {
                     Text(
-                        text = safeState.currentStageIndex.toString().padStart(2, '0'),
+                        text = safeState.currentStageIndex.toString(),
                         modifier = Modifier.padding(top = 8.dp),
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            fontSize = roundFontSize,
+                            lineHeight = roundLineHeight
                         ),
                         color = tokens.textPrimary.copy(alpha = 0.92f),
                         maxLines = 1,
@@ -387,6 +398,36 @@ private fun currentCenterBorderColor(
         state.isFinalCountdown -> tokens.finalCountdown.copy(alpha = 0.62f)
         state.isPaused -> tokens.textSecondary.copy(alpha = 0.28f)
         else -> tokens.colorFor(state.currentStageType).copy(alpha = 0.34f)
+    }
+}
+
+@Composable
+private fun TimerDialCenterGlyph(
+    isPaused: Boolean,
+    stageType: TimerDialStageType,
+    color: Color,
+    size: Dp
+) {
+    if (isPaused) {
+        TimerDialResumeGlyph(color = color, size = size)
+    } else {
+        TimerDialStageGlyph(stageType = stageType, color = color, size = size)
+    }
+}
+
+@Composable
+private fun TimerDialResumeGlyph(
+    color: Color,
+    size: Dp
+) {
+    Canvas(modifier = Modifier.size(size)) {
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(size.toPx() * 0.36f, size.toPx() * 0.2f)
+            lineTo(size.toPx() * 0.36f, size.toPx() * 0.8f)
+            lineTo(size.toPx() * 0.78f, size.toPx() * 0.5f)
+            close()
+        }
+        drawPath(path, color)
     }
 }
 
