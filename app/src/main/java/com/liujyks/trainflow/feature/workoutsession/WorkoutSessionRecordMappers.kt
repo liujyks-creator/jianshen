@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
 import com.liujyks.trainflow.core.engine.TimedSessionStepHistoryStatus
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.SessionStepRecord
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.core.model.WorkoutSession
@@ -44,6 +45,24 @@ internal fun TimedWorkoutEngineState.toWorkoutSessionRecord(
                 },
                 skipped = record.status == TimedSessionStepHistoryStatus.SKIPPED,
                 actualDurationSec = duration
+            )
+        },
+        timedRestExtensionRecords = restExtensionHistory.mapIndexed { index, record ->
+            TimedRestExtensionRecord(
+                id = "timed-rest-extension-${index + 1}",
+                stepId = record.stepId,
+                stepIndex = record.stepIndex,
+                roundIndex = record.roundIndex,
+                restStageId = record.restStageId,
+                restStageTitle = record.title,
+                previousStageId = record.previousStageId,
+                previousStageTitle = record.previousStageTitle,
+                addedSec = record.addedSec,
+                plannedRestSec = record.plannedRestSec,
+                restElapsedBeforeExtensionSec = record.restElapsedBeforeExtensionSec,
+                extensionAtRemainingSec = record.extensionAtRemainingSec,
+                cumulativeExtraRestSec = record.cumulativeAddedSec,
+                eventElapsedSec = record.elapsedSec
             )
         }
     )

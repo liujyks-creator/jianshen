@@ -107,6 +107,44 @@ class TrainFlowDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationFromVersion3To4CreatesTimedRestExtensionRecordsTable() {
+        val testDbPath = ApplicationProvider.getApplicationContext<Context>()
+            .getDatabasePath(TEST_DB)
+            .absolutePath
+
+        helper.createDatabase(testDbPath, 3).apply {
+            insertVersion3WorkoutSession()
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            testDbPath,
+            4,
+            true,
+            TrainFlowDatabase.MIGRATION_3_4
+        )
+
+        migrated.query("SELECT id FROM workout_sessions").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("session-v3", cursor.getString(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM timed_rest_extension_records").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        migrated.query("PRAGMA table_info(timed_rest_extension_records)").use { cursor ->
+            val names = mutableSetOf<String>()
+            while (cursor.moveToNext()) {
+                names += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+            }
+            assertTrue("step_index" in names)
+            assertTrue("round_index" in names)
+            assertTrue("previous_stage_title" in names)
+            assertTrue("cumulative_extra_rest_sec" in names)
+        }
+    }
+
     private fun SupportSQLiteDatabase.insertVersion1WorkoutSession() {
         execSQL(
             """
@@ -178,6 +216,28 @@ class TrainFlowDatabaseMigrationTest {
                 NULL,
                 '2026-06-13T08:00:00Z',
                 '2026-06-13T08:01:00Z'
+            )
+            """.trimIndent()
+        )
+    }
+
+    private fun SupportSQLiteDatabase.insertVersion3WorkoutSession() {
+        execSQL(
+            """
+            INSERT INTO workout_sessions(
+                id, plan_id, mode, status, plan_snapshot_json, started_at, ended_at,
+                total_elapsed_sec, effective_elapsed_sec, paused_elapsed_sec
+            ) VALUES(
+                'session-v3',
+                'plan-v3',
+                'timed',
+                'completed',
+                '{"title":"Legacy Timed","mode":"timed","blocks":[]}',
+                '2026-06-14T10:00:00Z',
+                '2026-06-14T10:10:00Z',
+                600,
+                580,
+                20
             )
             """.trimIndent()
         )

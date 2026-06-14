@@ -43,6 +43,31 @@ data class SessionStepRecordEntity(
 )
 
 @Entity(
+    tableName = "timed_rest_extension_records",
+    indices = [
+        Index(value = ["session_id"]),
+        Index(value = ["step_id"])
+    ]
+)
+data class TimedRestExtensionRecordEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "step_id") val stepId: String,
+    @ColumnInfo(name = "step_index") val stepIndex: Int,
+    @ColumnInfo(name = "round_index") val roundIndex: Int? = null,
+    @ColumnInfo(name = "rest_stage_id") val restStageId: String? = null,
+    @ColumnInfo(name = "rest_stage_title") val restStageTitle: String,
+    @ColumnInfo(name = "previous_stage_id") val previousStageId: String? = null,
+    @ColumnInfo(name = "previous_stage_title") val previousStageTitle: String? = null,
+    @ColumnInfo(name = "added_sec") val addedSec: Int,
+    @ColumnInfo(name = "planned_rest_sec") val plannedRestSec: Int,
+    @ColumnInfo(name = "rest_elapsed_before_extension_sec") val restElapsedBeforeExtensionSec: Int,
+    @ColumnInfo(name = "extension_at_remaining_sec") val extensionAtRemainingSec: Int,
+    @ColumnInfo(name = "cumulative_extra_rest_sec") val cumulativeExtraRestSec: Int,
+    @ColumnInfo(name = "event_elapsed_sec") val eventElapsedSec: Int
+)
+
+@Entity(
     tableName = "strength_set_records",
     indices = [Index(value = ["session_id"]), Index(value = ["exercise_id"])]
 )

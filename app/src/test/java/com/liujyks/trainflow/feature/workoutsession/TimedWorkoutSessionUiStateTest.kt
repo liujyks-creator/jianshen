@@ -232,8 +232,9 @@ class TimedWorkoutSessionUiStateTest {
 
         val summary = requireNotNull(state.toTimedWorkoutSessionScreenState().summary)
 
-        assertTrue(summary.restExtensionSummary.contains("累计延长 15秒"))
+        assertTrue(summary.restExtensionSummary.contains("额外休息 +15秒"))
         assertTrue(summary.restExtensionSummary.contains("共 1 次"))
+        assertTrue(summary.restExtensionSummary.contains("开合跳后 +15秒"))
         assertEquals("15秒", summary.metricItems.first { it.label == "延长休息" }.value)
     }
 

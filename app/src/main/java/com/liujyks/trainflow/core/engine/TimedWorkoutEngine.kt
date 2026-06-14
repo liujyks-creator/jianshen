@@ -218,10 +218,10 @@ object TimedWorkoutEngine {
         }
 
         return TimedWorkoutEngineResult(
-            state = state.copy(
+            state = state.recordRestExtension(currentStep, seconds).copy(
                 remainingSec = state.remainingSec + seconds,
                 extendedRestSec = state.extendedRestSec + seconds
-            ).recordRestExtension(currentStep, seconds)
+            )
         )
     }
 
@@ -367,6 +367,9 @@ object TimedWorkoutEngine {
         step: TimedSessionStep,
         seconds: Int
     ): TimedWorkoutEngineState {
+        val previousWorkStep = steps
+            .take(currentStepIndex.coerceAtLeast(0))
+            .lastOrNull { candidate -> candidate.kind == TimedSessionStepKind.WORK }
         val cumulativeAddedSec = restExtensionHistory
             .filter { extension -> extension.stepId == step.id }
             .sumOf { extension -> extension.addedSec } + seconds
@@ -374,8 +377,16 @@ object TimedWorkoutEngine {
             stepId = step.id,
             kind = step.sessionStepKind,
             title = step.title,
+            stepIndex = currentStepIndex,
+            roundIndex = step.round,
+            restStageId = step.itemId ?: step.blockId,
+            previousStageId = previousWorkStep?.itemId ?: previousWorkStep?.blockId,
+            previousStageTitle = previousWorkStep?.title,
             addedSec = seconds,
             cumulativeAddedSec = cumulativeAddedSec,
+            plannedRestSec = step.durationSec,
+            restElapsedBeforeExtensionSec = currentStepActualDurationSec(),
+            extensionAtRemainingSec = remainingSec,
             elapsedSec = activeElapsedSec
         )
         val updatedStepHistory = stepHistory.map { record ->

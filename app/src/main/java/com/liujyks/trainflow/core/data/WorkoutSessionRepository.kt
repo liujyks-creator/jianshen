@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.database.dao.WorkoutSessionWithRecords
 import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
 import com.liujyks.trainflow.core.database.entity.StrengthSetRecordEntity
+import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.RepTarget
@@ -14,6 +15,7 @@ import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -33,8 +35,12 @@ internal class WorkoutSessionRepository(
         database.withTransaction {
             dao.upsertSession(session.toEntity())
             dao.deleteStepRecordsForSession(session.id)
+            dao.deleteTimedRestExtensionRecordsForSession(session.id)
             dao.deleteStrengthSetRecordsForSession(session.id)
             dao.upsertStepRecords(session.stepHistory.map { record -> record.toEntity(session.id) })
+            dao.upsertTimedRestExtensionRecords(
+                session.timedRestExtensionRecords.map { record -> record.toEntity(session.id) }
+            )
             dao.upsertStrengthSetRecords(session.strengthSetRecords.map { record -> record.toEntity(session.id) })
         }
     }
@@ -91,6 +97,26 @@ private fun StrengthSetRecord.toEntity(sessionId: String): StrengthSetRecordEnti
     )
 }
 
+private fun TimedRestExtensionRecord.toEntity(sessionId: String): TimedRestExtensionRecordEntity {
+    return TimedRestExtensionRecordEntity(
+        id = "$sessionId:$id",
+        sessionId = sessionId,
+        stepId = stepId,
+        stepIndex = stepIndex,
+        roundIndex = roundIndex,
+        restStageId = restStageId,
+        restStageTitle = restStageTitle,
+        previousStageId = previousStageId,
+        previousStageTitle = previousStageTitle,
+        addedSec = addedSec,
+        plannedRestSec = plannedRestSec,
+        restElapsedBeforeExtensionSec = restElapsedBeforeExtensionSec,
+        extensionAtRemainingSec = extensionAtRemainingSec,
+        cumulativeExtraRestSec = cumulativeExtraRestSec,
+        eventElapsedSec = eventElapsedSec
+    )
+}
+
 private fun WorkoutSessionWithRecords.toDomain(): WorkoutSession {
     val mode = workoutModeFrom(session.mode)
     return WorkoutSession(
@@ -105,6 +131,10 @@ private fun WorkoutSessionWithRecords.toDomain(): WorkoutSession {
         effectiveElapsedSec = session.effectiveElapsedSec,
         pausedElapsedSec = session.pausedElapsedSec,
         stepHistory = stepRecords.sortedBy { record -> record.startedAt }.map { record -> record.toDomain() },
+        timedRestExtensionRecords = timedRestExtensionRecords
+            .sortedWith(compareBy<TimedRestExtensionRecordEntity> { record -> record.eventElapsedSec }
+                .thenBy { record -> record.id })
+            .map { record -> record.toDomain() },
         strengthSetRecords = strengthSetRecords.sortedBy { record -> record.setOrder }.map { record -> record.toDomain() }
     )
 }
@@ -139,6 +169,25 @@ private fun StrengthSetRecordEntity.toDomain(): StrengthSetRecord {
         effort = effort?.let(::setEffortFrom),
         substitutedFromExerciseId = substitutedFromExerciseId,
         notes = notes
+    )
+}
+
+private fun TimedRestExtensionRecordEntity.toDomain(): TimedRestExtensionRecord {
+    return TimedRestExtensionRecord(
+        id = id.substringAfter(':', id),
+        stepId = stepId,
+        stepIndex = stepIndex,
+        roundIndex = roundIndex,
+        restStageId = restStageId,
+        restStageTitle = restStageTitle,
+        previousStageId = previousStageId,
+        previousStageTitle = previousStageTitle,
+        addedSec = addedSec,
+        plannedRestSec = plannedRestSec,
+        restElapsedBeforeExtensionSec = restElapsedBeforeExtensionSec,
+        extensionAtRemainingSec = extensionAtRemainingSec,
+        cumulativeExtraRestSec = cumulativeExtraRestSec,
+        eventElapsedSec = eventElapsedSec
     )
 }
 

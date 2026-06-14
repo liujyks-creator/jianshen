@@ -284,9 +284,16 @@ class TimedWorkoutEngineTest {
         result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ExtendRest(seconds = 15))
         assertEquals(17, result.state.remainingSec)
         assertEquals(15, result.state.extendedRestSec)
+        assertEquals(2, result.state.steps.size)
         assertEquals(1, result.state.restExtensionHistory.size)
         assertEquals(15, result.state.restExtensionHistory.single().addedSec)
         assertEquals(15, result.state.restExtensionHistory.single().cumulativeAddedSec)
+        assertEquals(1, result.state.restExtensionHistory.single().stepIndex)
+        assertEquals(2, result.state.restExtensionHistory.single().plannedRestSec)
+        assertEquals(0, result.state.restExtensionHistory.single().restElapsedBeforeExtensionSec)
+        assertEquals(2, result.state.restExtensionHistory.single().extensionAtRemainingSec)
+        assertEquals("jump", result.state.restExtensionHistory.single().previousStageId)
+        assertEquals("jumping-jacks", result.state.restExtensionHistory.single().previousStageTitle)
         assertEquals(15, result.state.stepHistory.last().extendedRestSec)
         assertEquals(TimedWorkoutControlHistoryType.EXTEND_REST, result.state.controlHistory.last().type)
 
@@ -294,6 +301,45 @@ class TimedWorkoutEngineTest {
         assertEquals(17, result.state.remainingSec)
         assertEquals(15, result.state.extendedRestSec)
         assertEquals(1, result.state.restExtensionHistory.size)
+    }
+
+    @Test
+    fun multipleRestExtensionsAccumulateOnSameRestWithoutInsertingSteps() {
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(
+                plan(
+                    blocks = listOf(
+                        circuit(
+                            rounds = 2,
+                            items = listOf(
+                                stage(id = "work", name = "工作", type = TimedStageType.WORK, sec = 2),
+                                stage(id = "rest", name = "恢复", type = TimedStageType.REST, sec = 5)
+                            )
+                        )
+                    )
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 2)
+        assertEquals("circuit-r1-rest-rest", result.state.currentStep?.id)
+        assertEquals(4, result.state.steps.size)
+
+        result = TimedWorkoutEngine.tick(result.state, seconds = 2)
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ExtendRest(seconds = 15))
+        result = TimedWorkoutEngine.dispatch(result.state, WorkoutCommand.ExtendRest(seconds = 15))
+
+        assertEquals(33, result.state.remainingSec)
+        assertEquals(30, result.state.extendedRestSec)
+        assertEquals(4, result.state.steps.size)
+        assertEquals(listOf(15, 30), result.state.restExtensionHistory.map { record -> record.cumulativeAddedSec })
+        assertEquals(listOf(2, 2), result.state.restExtensionHistory.map { record -> record.restElapsedBeforeExtensionSec })
+        assertEquals(listOf(3, 18), result.state.restExtensionHistory.map { record -> record.extensionAtRemainingSec })
+        assertEquals(listOf(1, 1), result.state.restExtensionHistory.map { record -> record.roundIndex })
+        assertEquals("work", result.state.restExtensionHistory.first().previousStageId)
+        assertEquals("工作", result.state.restExtensionHistory.first().previousStageTitle)
+        assertEquals(30, result.state.stepHistory.last().extendedRestSec)
     }
 
     @Test

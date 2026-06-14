@@ -536,6 +536,7 @@ interface WorkoutSession {
   pausedElapsedSec?: number;
   currentStep?: SessionStep;
   stepHistory: SessionStepRecord[];
+  timedRestExtensionRecords?: TimedRestExtensionRecord[];
   strengthSetRecords?: StrengthSetRecord[];
   userFeedback?: SessionFeedback;
 }
@@ -575,6 +576,13 @@ E10.4 约定：
 - 计时、力量和基础跟练在 completed / abandoned 终态都可以写入本地真实 `WorkoutSession`；终态写入使用一次性 guard 和异常吞并边界，避免重组重复插入或 Room 异常直接 crash UI。
 - E10.4 仍只是本地 Room MVP 记录闭环；统计图表、趋势分析、删除清理、心率数据、云同步、账号体系和后台可靠计时仍留给后续 story。
 
+E10.14 约定：
+
+- 计时训练中的 `extend_rest` / `+15秒` 表示延长当前休息阶段，不插入新的休息阶段，也不修改原 `WorkoutPlan` 或 plan snapshot 中的计划休息秒数。
+- 额外休息是用户主动增加恢复时间，和暂停不同：暂停冻结训练流程并计入 `pausedElapsedSec`；额外休息继续处于 active 训练流程内，计入本次 `totalElapsedSec` 和有效推进时间，但通过 `timedRestExtensionRecords` 单独记录。
+- completed 与 abandoned 终态都应保存已发生的额外休息记录；ready/start gate 尚未真正开始时不能产生额外休息记录。
+- E10.14 只提供真实记录输入，不实现 E12 统计图表、趋势分析、真实心率、motion timing rules、Stage color picker、声音播放、notification action 或后台可靠计时。
+
 ### 9.2 执行步骤
 
 ```ts
@@ -611,7 +619,37 @@ interface SessionStepRecord {
 }
 ```
 
-### 9.3 力量训练组记录
+### 9.3 计时休息延长记录
+
+```ts
+interface TimedRestExtensionRecord {
+  id: string;
+  stepId: string;
+  stepIndex: number;
+  roundIndex?: number;
+  restStageId?: string;
+  restStageTitle: string;
+  previousStageId?: string;
+  previousStageTitle?: string;
+  addedSec: number;
+  plannedRestSec: number;
+  restElapsedBeforeExtensionSec: number;
+  extensionAtRemainingSec: number;
+  cumulativeExtraRestSec: number;
+  eventElapsedSec: number;
+}
+```
+
+字段含义：
+
+- `stepId` / `stepIndex` 指向本次执行 timeline 中被延长的当前 rest step。
+- `roundIndex`、`restStageId` / `restStageTitle` 和 `previousStageId` / `previousStageTitle` 用于后续分析哪些轮次、阶段或前一个工作 / 自定义阶段后更常需要额外休息。
+- `addedSec` 当前由 UI 固定为 15 秒；多次点击会产生多条记录。
+- `plannedRestSec` 保留原计划休息时长；额外休息不能伪装成 planned rest。
+- `restElapsedBeforeExtensionSec` 与 `extensionAtRemainingSec` 记录点击时机；`cumulativeExtraRestSec` 记录当前 rest step 上累计额外休息。
+- `eventElapsedSec` 是从真实启动后训练引擎有效推进时间轴上的发生秒数，供记录排序和 E12 后续分析使用。
+
+### 9.4 力量训练组记录
 
 ```ts
 interface StrengthSetRecord {
@@ -635,7 +673,7 @@ interface StrengthSetRecord {
 type SetEffort = "easy" | "good" | "hard" | "form_breakdown";
 ```
 
-### 9.4 单组默认回填规则
+### 9.5 单组默认回填规则
 
 用户完成力量训练单组时：
 

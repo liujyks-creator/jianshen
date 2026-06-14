@@ -53,7 +53,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSummaryUiState(
     val completedPhaseSummary = buildCompletedPhaseSummary()
     val roundSummary = buildRoundSummary()
     val skippedSummary = buildSkippedSummary(exerciseById)
-    val restExtensionSummary = buildRestExtensionSummary()
+    val restExtensionSummary = buildRestExtensionSummary(exerciseById)
     val earlyEndSummary = buildEarlyEndSummary()
     val trainedAreaSummary = buildTrainedAreaSummary(exerciseById)
     val recoveryRecommendation = BasicRecoveryRecommendationGenerator.fromExerciseIds(
@@ -219,14 +219,53 @@ private fun TimedWorkoutEngineState.buildSkippedSummary(
     return "跳过 ${skippedStepHistory.size} 步：$skippedLabels$moreText。"
 }
 
-private fun TimedWorkoutEngineState.buildRestExtensionSummary(): String {
+private fun TimedWorkoutEngineState.buildRestExtensionSummary(
+    exerciseById: Map<String, Exercise>
+): String {
     if (restExtensionHistory.isEmpty()) {
         return "没有延长休息。"
     }
 
-    val latest = restExtensionHistory.last()
-    return "累计延长 ${extendedRestSec.formatSummaryDuration()}，共 ${restExtensionHistory.size} 次；最近一次在 ${latest.title.toRestTitle()} 增加 ${latest.addedSec} 秒。"
+    val groupedDetails = restExtensionHistory
+        .groupBy { record ->
+            RestExtensionDetailKey(
+                roundIndex = record.roundIndex,
+                previousStageTitle = record.previousStageTitle,
+                restTitle = record.title
+            )
+        }
+        .entries
+        .take(2)
+        .joinToString("；") { (key, records) ->
+            val addedSec = records.sumOf { record -> record.addedSec }
+            val roundLabel = key.roundIndex?.let { round -> "第 $round 轮 " }.orEmpty()
+            val anchor = key.previousStageTitle?.let { title ->
+                exerciseById[title]?.name ?: title.toFallbackStepTitle()
+            }
+                ?: key.restTitle.toRestTitle()
+            "$roundLabel${anchor}后 +${addedSec.formatSummaryDuration()}"
+        }
+    val moreCount = restExtensionHistory.size - restExtensionHistory
+        .groupBy { record ->
+            RestExtensionDetailKey(
+                roundIndex = record.roundIndex,
+                previousStageTitle = record.previousStageTitle,
+                restTitle = record.title
+            )
+        }
+        .entries
+        .take(2)
+        .sumOf { entry -> entry.value.size }
+    val moreText = if (moreCount > 0) "；另有 $moreCount 次" else ""
+
+    return "额外休息 +${extendedRestSec.formatSummaryDuration()}，共 ${restExtensionHistory.size} 次；$groupedDetails$moreText。"
 }
+
+private data class RestExtensionDetailKey(
+    val roundIndex: Int?,
+    val previousStageTitle: String?,
+    val restTitle: String
+)
 
 private fun TimedWorkoutEngineState.buildEarlyEndSummary(): String {
     if (status == SessionStatus.COMPLETED) {

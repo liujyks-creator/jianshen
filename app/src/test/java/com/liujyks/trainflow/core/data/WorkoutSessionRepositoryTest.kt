@@ -18,6 +18,7 @@ import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
@@ -108,6 +109,67 @@ class WorkoutSessionRepositoryTest {
         assertEquals(30, item.workDurationSec)
         assertEquals(10, item.restAfterSec)
         assertEquals(4, snapshot.preferences?.cueSettings?.actionEnding?.thresholdSec)
+    }
+
+    @Test
+    fun timedRestExtensionRecordsRoundTripThroughRoom() = runBlocking {
+        repository.upsertSession(
+            timedSession(
+                id = "timed-rest-extended",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 105,
+                effectiveElapsedSec = 90,
+                pausedElapsedSec = 0,
+                restExtensionRecords = listOf(
+                    TimedRestExtensionRecord(
+                        id = "extension-1",
+                        stepId = "interval-r2-work-stage-rest",
+                        stepIndex = 3,
+                        roundIndex = 2,
+                        restStageId = "work-stage",
+                        restStageTitle = "Rest",
+                        previousStageId = "work-stage",
+                        previousStageTitle = "Work",
+                        addedSec = 15,
+                        plannedRestSec = 10,
+                        restElapsedBeforeExtensionSec = 4,
+                        extensionAtRemainingSec = 6,
+                        cumulativeExtraRestSec = 15,
+                        eventElapsedSec = 64
+                    ),
+                    TimedRestExtensionRecord(
+                        id = "extension-2",
+                        stepId = "interval-r2-work-stage-rest",
+                        stepIndex = 3,
+                        roundIndex = 2,
+                        restStageId = "work-stage",
+                        restStageTitle = "Rest",
+                        previousStageId = "work-stage",
+                        previousStageTitle = "Work",
+                        addedSec = 15,
+                        plannedRestSec = 10,
+                        restElapsedBeforeExtensionSec = 4,
+                        extensionAtRemainingSec = 21,
+                        cumulativeExtraRestSec = 30,
+                        eventElapsedSec = 64
+                    )
+                )
+            )
+        )
+
+        val session = repository.getSessions().single()
+        val records = session.timedRestExtensionRecords
+
+        assertEquals(2, database.workoutSessionDao().timedRestExtensionRecordCount())
+        assertEquals(30, records.sumOf { record -> record.addedSec })
+        assertEquals(listOf(15, 30), records.map { record -> record.cumulativeExtraRestSec })
+        assertEquals(2, records.first().roundIndex)
+        assertEquals(3, records.first().stepIndex)
+        assertEquals("interval-r2-work-stage-rest", records.first().stepId)
+        assertEquals("work-stage", records.first().previousStageId)
+        assertEquals(10, records.first().plannedRestSec)
+        assertEquals(4, records.first().restElapsedBeforeExtensionSec)
+        assertEquals(6, records.first().extensionAtRemainingSec)
     }
 
     @Test
@@ -204,7 +266,8 @@ class WorkoutSessionRepositoryTest {
         status: SessionStatus,
         totalElapsedSec: Int,
         effectiveElapsedSec: Int,
-        pausedElapsedSec: Int
+        pausedElapsedSec: Int,
+        restExtensionRecords: List<TimedRestExtensionRecord> = emptyList()
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
@@ -246,6 +309,7 @@ class WorkoutSessionRepositoryTest {
             totalElapsedSec = totalElapsedSec,
             effectiveElapsedSec = effectiveElapsedSec,
             pausedElapsedSec = pausedElapsedSec,
+            timedRestExtensionRecords = restExtensionRecords,
             stepHistory = listOf(
                 SessionStepRecord(
                     stepId = "warmup",

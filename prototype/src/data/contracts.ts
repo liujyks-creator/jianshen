@@ -269,6 +269,23 @@ export interface SessionStepRecord {
   actualDurationSec?: number
 }
 
+export interface TimedRestExtensionRecord {
+  id: string
+  stepId: string
+  stepIndex: number
+  roundIndex?: number
+  restStageId?: string
+  restStageTitle: string
+  previousStageId?: string
+  previousStageTitle?: string
+  addedSec: number
+  plannedRestSec: number
+  restElapsedBeforeExtensionSec: number
+  extensionAtRemainingSec: number
+  cumulativeExtraRestSec: number
+  eventElapsedSec: number
+}
+
 export type SetEffort = 'easy' | 'good' | 'hard' | 'form_breakdown'
 
 export interface StrengthSetRecord {
@@ -317,6 +334,7 @@ export interface WorkoutSession {
   pausedElapsedSec?: number
   currentStep?: SessionStep
   stepHistory: SessionStepRecord[]
+  timedRestExtensionRecords?: TimedRestExtensionRecord[]
   strengthSetRecords?: StrengthSetRecord[]
   userFeedback?: SessionFeedback
 }

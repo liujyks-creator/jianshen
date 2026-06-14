@@ -82,6 +82,20 @@ class TimedReadyStartGateTest {
     }
 
     @Test
+    fun readyGateIgnoresRestExtensionWithoutCreatingRestExtensionRecord() {
+        val ready = TimedWorkoutEngine.create(buildDefaultPlanManagementState().plans.first())
+        val result = TimedWorkoutEngine.dispatch(
+            ready,
+            com.liujyks.trainflow.core.model.WorkoutCommand.ExtendRest(seconds = 15)
+        )
+
+        assertEquals(SessionStatus.READY, result.state.status)
+        assertEquals(0, result.state.extendedRestSec)
+        assertTrue(result.state.restExtensionHistory.isEmpty())
+        assertTrue(result.state.controlHistory.isEmpty())
+    }
+
+    @Test
     fun terminalSessionRecordsStillWriteAfterRealStart() {
         val startedAt = Instant.parse("2026-06-14T09:00:00Z")
         var started = TimedWorkoutEngine.create(buildDefaultPlanManagementState().plans.first())

@@ -31,8 +31,16 @@ data class TimedRestExtensionHistoryRecord(
     val stepId: String,
     val kind: SessionStepKind,
     val title: String,
+    val stepIndex: Int,
+    val roundIndex: Int? = null,
+    val restStageId: String? = null,
+    val previousStageId: String? = null,
+    val previousStageTitle: String? = null,
     val addedSec: Int,
     val cumulativeAddedSec: Int,
+    val plannedRestSec: Int,
+    val restElapsedBeforeExtensionSec: Int,
+    val extensionAtRemainingSec: Int,
     val elapsedSec: Int
 )
 

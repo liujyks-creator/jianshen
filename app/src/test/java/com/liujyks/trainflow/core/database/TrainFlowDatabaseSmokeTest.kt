@@ -39,6 +39,7 @@ class TrainFlowDatabaseSmokeTest {
         assertEquals(0, database.workoutPlanDao().count())
         assertEquals(0, database.workoutSessionDao().sessionCount())
         assertEquals(0, database.workoutSessionDao().stepRecordCount())
+        assertEquals(0, database.workoutSessionDao().timedRestExtensionRecordCount())
         assertEquals(0, database.workoutSessionDao().strengthSetRecordCount())
         assertEquals(0, database.recoveryDao().areaCount())
         assertEquals(0, database.recoveryDao().recommendationCount())

@@ -56,6 +56,7 @@
 | D-037 | Accepted | E10.8 生产 Timer Dial 外圈只表达当前一次运动+休息周期，内圈表达按运动阶段数量推进的整次训练进度。 | 外圈当前阶段弧线按线性动画匀速填充；处于 work 阶段时 work 为粗弧、同周期 rest 为细弧，处于 rest 阶段时 rest 为粗弧、已完成 work 退为细弧。内圈不画未经过底轨，只像画笔一样沿圆弧匀速画出总进度；12 点位置用数字圆标显示总运动阶段数，每个运动阶段包含 work+rest，完成的阶段节点显示数字或圆点。暂停 / 继续由中心圆点击触发，跳过和结束使用底部图标，结束仍需二次确认；黑红高对比和赛博霓虹仅保留为 preview/demo 变体，不进入 UI skin registry。 |
 | D-038 | Accepted | E10.9 用户测试反馈拆为独立后续 story，不混入已完成 polish。 | Timer Dial 视觉减字、总剩余时间放大居中、圆盘放大、环线层级、宽底层圆环、动态浅点和中心圆简化进入 E10.9 Review Fix / User Test Fix，并保留 continuous progress、pause freeze、terminal freeze、rest extension monotonic progress。计划保存真实持久化和保存入口 audit 进入 E10.10；`huashu-design` HTML 高保真原型进入 E10.11；`countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙 / 扬声器 smoke 和不 duck / 不抢占外部音频进入 E13；总统计、图表、平均心率趋势和同日多轮运动分析进入 E12。本轮 docs-only，不提交 `.local`、APK、`人工/`、build 输出或音频资源。 |
 | D-039 | Accepted | 计时训练从编辑页或计划详情开始后先进入 ready/start gate，用户点击中心圆才真正开始训练。 | Ready gate 是 route/UI 启动边界，不是 `WorkoutSession` 的 completed / abandoned / paused 状态；ready 期间不推进 engine tick、不触发 countdown reminder / sound / haptics、不写 abandoned session record。真实启动仍通过 `WorkoutCommand.StartSession` 进入 `TimedWorkoutEngine`，completed / abandoned 记录只在用户实际启动后写入。 |
+| D-040 | Accepted | 计时训练 `+15秒` 表示延长当前休息阶段，并作为实际会话记录保存。 | `WorkoutCommand.ExtendRest` 只作用于 active rest step；不插入新休息阶段，不修改原 `WorkoutPlan` 或 plan snapshot，不把额外休息伪装成 planned rest。额外休息是用户主动增加恢复时间，区别于暂停；它继续计入训练 active / total 用时，并通过 `timedRestExtensionRecords` 独立保存发生 session、round、step、前一个阶段、计划休息、点击时机、addedSec 和累计额外休息，供 E12 后续分析。Ready gate 未真实启动时不能产生额外休息记录。 |
 
 ## 预留能力
 

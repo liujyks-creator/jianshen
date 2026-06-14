@@ -9,6 +9,7 @@ import androidx.room.Relation
 import androidx.room.Transaction
 import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
 import com.liujyks.trainflow.core.database.entity.StrengthSetRecordEntity
+import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -23,6 +24,9 @@ interface WorkoutSessionDao {
     @Query("SELECT COUNT(*) FROM strength_set_records")
     suspend fun strengthSetRecordCount(): Int
 
+    @Query("SELECT COUNT(*) FROM timed_rest_extension_records")
+    suspend fun timedRestExtensionRecordCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSession(session: WorkoutSessionEntity)
 
@@ -32,8 +36,14 @@ interface WorkoutSessionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertStrengthSetRecords(records: List<StrengthSetRecordEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTimedRestExtensionRecords(records: List<TimedRestExtensionRecordEntity>)
+
     @Query("DELETE FROM session_step_records WHERE session_id = :sessionId")
     suspend fun deleteStepRecordsForSession(sessionId: String)
+
+    @Query("DELETE FROM timed_rest_extension_records WHERE session_id = :sessionId")
+    suspend fun deleteTimedRestExtensionRecordsForSession(sessionId: String)
 
     @Query("DELETE FROM strength_set_records WHERE session_id = :sessionId")
     suspend fun deleteStrengthSetRecordsForSession(sessionId: String)
@@ -54,6 +64,11 @@ data class WorkoutSessionWithRecords(
         entityColumn = "session_id"
     )
     val stepRecords: List<SessionStepRecordEntity>,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "session_id"
+    )
+    val timedRestExtensionRecords: List<TimedRestExtensionRecordEntity>,
     @Relation(
         parentColumn = "id",
         entityColumn = "session_id"

@@ -156,6 +156,75 @@ class WorkoutSessionRecordMappersTest {
             requireNotNull(session.effectiveElapsedSec) + requireNotNull(session.pausedElapsedSec))
     }
 
+    @Test
+    fun completedTimedRecordPersistsRestExtensionWithoutPollutingPausedTimeOrPlan() {
+        val plan = timedPlan()
+        val originalBlocks = plan.blocks
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan, sessionId = "timed-rest-completed"),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 30).state
+        state = TimedWorkoutEngine.tick(state, seconds = 1).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.tick(state, seconds = 39).state
+
+        val session = state.toWorkoutSessionRecord(
+            plan = plan,
+            startedAt = instant(0),
+            endedAt = instant(70)
+        )
+
+        assertEquals(SessionStatus.COMPLETED, session.status)
+        assertEquals(originalBlocks, plan.blocks)
+        assertEquals(70, session.totalElapsedSec)
+        assertEquals(70, session.effectiveElapsedSec)
+        assertEquals(0, session.pausedElapsedSec)
+        assertEquals(2, session.timedRestExtensionRecords.size)
+        assertEquals(30, session.timedRestExtensionRecords.sumOf { record -> record.addedSec })
+        assertEquals(listOf(15, 30), session.timedRestExtensionRecords.map { record ->
+            record.cumulativeExtraRestSec
+        })
+        val first = session.timedRestExtensionRecords.first()
+        assertEquals("interval-r1-work-rest", first.stepId)
+        assertEquals(1, first.stepIndex)
+        assertEquals(1, first.roundIndex)
+        assertEquals("work", first.restStageId)
+        assertEquals("work", first.previousStageId)
+        assertEquals(10, first.plannedRestSec)
+        assertEquals(1, first.restElapsedBeforeExtensionSec)
+        assertEquals(9, first.extensionAtRemainingSec)
+    }
+
+    @Test
+    fun abandonedTimedRecordKeepsAlreadyRecordedRestExtension() {
+        val plan = timedPlan()
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan, sessionId = "timed-rest-abandoned"),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 30).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.EndSession(reason = "user_requested")).state
+
+        val session = state.toWorkoutSessionRecord(
+            plan = plan,
+            startedAt = instant(0),
+            endedAt = instant(30)
+        )
+
+        assertEquals(SessionStatus.ABANDONED, session.status)
+        assertEquals(30, session.totalElapsedSec)
+        assertEquals(30, session.effectiveElapsedSec)
+        assertEquals(0, session.pausedElapsedSec)
+        assertEquals(1, session.timedRestExtensionRecords.size)
+        assertEquals(15, session.timedRestExtensionRecords.single().addedSec)
+        assertEquals(10, session.timedRestExtensionRecords.single().extensionAtRemainingSec)
+    }
+
     private fun strengthPlan(): WorkoutPlan {
         return WorkoutPlan(
             id = "plan-strength",
@@ -199,7 +268,8 @@ class WorkoutSessionRecordMappersTest {
                         TimedExerciseItem(
                             id = "work",
                             stageType = TimedStageType.WORK,
-                            workDurationSec = 30
+                            workDurationSec = 30,
+                            restAfterSec = 10
                         )
                     )
                 )

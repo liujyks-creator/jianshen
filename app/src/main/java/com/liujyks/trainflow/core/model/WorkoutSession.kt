@@ -13,6 +13,7 @@ data class WorkoutSession(
     val pausedElapsedSec: Int? = null,
     val currentStep: SessionStep? = null,
     val stepHistory: List<SessionStepRecord> = emptyList(),
+    val timedRestExtensionRecords: List<TimedRestExtensionRecord> = emptyList(),
     val strengthSetRecords: List<StrengthSetRecord> = emptyList(),
     val userFeedback: SessionFeedback? = null
 )
@@ -65,6 +66,23 @@ data class SessionStepRecord(
     val endedAt: String? = null,
     val skipped: Boolean = false,
     val actualDurationSec: Int? = null
+)
+
+data class TimedRestExtensionRecord(
+    val id: String,
+    val stepId: String,
+    val stepIndex: Int,
+    val roundIndex: Int? = null,
+    val restStageId: String? = null,
+    val restStageTitle: String,
+    val previousStageId: String? = null,
+    val previousStageTitle: String? = null,
+    val addedSec: Int,
+    val plannedRestSec: Int,
+    val restElapsedBeforeExtensionSec: Int,
+    val extensionAtRemainingSec: Int,
+    val cumulativeExtraRestSec: Int,
+    val eventElapsedSec: Int
 )
 
 enum class SessionStepKind(val contractValue: String) {
