@@ -1394,8 +1394,12 @@ stepsCompleted:
 **验收标准:**
 
 - Given 计时训练处于 active rest step，When 用户点击 `+15秒`，Then 当前休息剩余时间增加 15 秒，不插入新 step，不修改原 `WorkoutPlan` 或 plan snapshot。
+- Then 生产 UI 采用二段式确认：第一次点击只显示 `确认 +15秒`，2 秒内第二次点击才真正延长并记录；超时自动恢复，不记录、不加时。
+- Then 确认成功后短暂显示 `已加 15秒`，约 800ms 后恢复。
+- Then 每个 rest step 最多确认成功 4 次，即最多额外休息 60 秒；达到上限后禁用该休息阶段的 `+15秒`，提示“已额外休息 1 分钟，需要更久可以暂停训练”，但不自动暂停。
 - Then 额外休息不同于暂停：不增加 `pausedElapsedSec`，不冻结训练流程，继续计入本次训练 active / total 用时。
 - Then 每次延长都会保存可持久化记录，至少包含 session、round index、step index、当前 rest step / 阶段、前一个 work/custom 阶段、addedSec、plannedRestSec、点击时剩余秒数、已休息秒数和当前 rest 累计 extra rest。
+- Then `extensionCount`、`cumulativeExtraRestSec` 和 `hitExtensionLimit` 在 UI / 分析层可从当前 rest step 的 extension records 推导；数据记录只发生在二次确认成功后。
 - Then completed 和 abandoned 终态都会写入已发生的 rest extension records；ready gate 未真实启动时不会产生 rest extension record。
 - Then Timer Dial 的 rest extension monotonic progress、pause freeze 和 terminal freeze 不回归。
 - Then 总结页展示最小额外休息摘要，例如 `额外休息 +30秒` 和 `第 1 轮 工作后 +30秒`。
@@ -1404,8 +1408,10 @@ stepsCompleted:
 **交付结果:**
 
 - `core.engine.TimedWorkoutEngine` 保持 `WorkoutCommand.ExtendRest` 只在 active rest 生效，并为每次额外休息补齐 step index、round、planned rest、点击时剩余秒数、已休息秒数、前一个阶段和当前 rest 累计 extra rest。
+- `feature.workoutsession` 在 `TimedWorkoutSessionRoute` / UI state 层加入 `+15秒` 二段式确认；第一次点击不派发 `ExtendRest`，第二次确认成功才派发，pending confirm 会随当前 rest step 改变或 2 秒超时清除。
+- 每个 rest step 的确认上限为 4 次 / 60 秒；达上限后 UI 禁用并提示可暂停训练，但不会自动进入暂停。
 - `core.model.WorkoutSession` 新增 `timedRestExtensionRecords`，作为实际 session 结果保存；`WorkoutPlan` 和 `WorkoutPlanSnapshot` 仍保留原计划结构和计划休息秒数。
-- Room 数据库升级到 version 4，新增 `timed_rest_extension_records` 表、DAO relation、repository round-trip 和 3→4 migration / schema 导出。
+- Room 数据库升级到 version 4，新增 `timed_rest_extension_records` 表、DAO relation、repository round-trip 和 3→4 migration / schema 导出；repository 读回按 `eventElapsedSec -> stepIndex -> cumulativeExtraRestSec -> id` 排序，覆盖同秒 10+ 条记录，避免字符串 id 顺序错位。
 - 计时终态记录 mapper 将 engine rest extension history 写入真实 `WorkoutSession`；completed / abandoned 都会保存已发生记录，ready gate 未启动时仍不记录。
 - 计时训练总结最小展示额外休息总量、次数和前序阶段明细；没有实现复杂统计、图表、趋势或同日多轮分析。
 
@@ -1551,7 +1557,7 @@ stepsCompleted:
 14. E10.11：使用 `huashu-design` 做 3 个 Timer Dial HTML 高保真原型方向。（Implemented; prototype served as E10.12 input）
 15. E10.12：Timer Dial Compose landing，把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产执行页，完成视觉减字、总剩余时间居中放大、圆盘放大、环线层级和动态浅点修复。（Implemented）
 16. E10.13：Ready Start Gate，计时训练从编辑页或计划详情开始后先进入极简启动界面，点击中心圆才真正开始训练。（Implemented）
-17. E10.14：Rest Extension Semantics And Recording，明确 `+15秒` 只延长当前休息阶段，并把每次额外休息保存为真实 session record。（Implemented）
+17. E10.14：Rest Extension Semantics And Recording，明确 `+15秒` 只延长当前休息阶段，加入二段式确认和每段上限，并把确认成功的额外休息保存为真实 session record。（Implemented）
 18. E11：手动心率输入与真实设备接口策略。
 19. E12：真实记录、总统计、图表、趋势分析、同日多轮运动分析和历史记录清理。
 20. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
@@ -1586,7 +1592,7 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，并将每次额外休息保存为真实 session record 供 E12 后续分析；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
+E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record 供 E12 后续分析；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
 ```
 
 下一轮建议按用户测试优先级进入：
@@ -1598,11 +1604,12 @@ Story E10.14 Review Gate；随后按用户测试优先级进入 E12 Stats / Reco
 E10.14 Rest Extension Semantics And Recording 回看重点：
 
 1. `WorkoutCommand.ExtendRest` 是否仍只在 active rest step 生效，work / paused / terminal / ready 状态都不产生记录。
-2. `+15秒` 是否只增加当前休息剩余时间，不插入新 step，不修改原 `WorkoutPlan` 或 plan snapshot。
+2. `+15秒` 是否只在二段确认成功后增加当前休息剩余时间；第一次点击、pending 超时、ready / paused / terminal / non-rest 状态都不 dispatch、不记录。
 3. `timedRestExtensionRecords` 是否能还原 session、round index、step index、当前 rest、前一个 work/custom 阶段、addedSec、plannedRestSec、点击时剩余秒数、已休息秒数和累计 extra rest。
-4. completed 与 abandoned 终态是否都写入已发生的额外休息记录；ready gate 未真实启动时是否不写记录。
-5. `pausedElapsedSec` 是否仍只表示暂停，不包含额外休息；total/effective 口径是否保持 E10.4/E10.14 约定。
-6. E10.14 不混入 E12 统计图表 / 趋势分析、真实心率设备、motion timing rules、Stage color picker、声音播放、foreground service、exact alarm、notification action、reset production command、第四套 skin 或 prototype 前端行为改造。
+4. 每个 rest step 是否最多确认成功 4 次 / 60 秒，达到上限后禁用并提示可暂停训练但不自动暂停。
+5. completed 与 abandoned 终态是否都写入已发生的额外休息记录；ready gate 未真实启动时是否不写记录。
+6. `pausedElapsedSec` 是否仍只表示暂停，不包含额外休息；total/effective 口径是否保持 E10.4/E10.14 约定。
+7. E10.14 不混入 E12 统计图表 / 趋势分析、真实心率设备、motion timing rules、Stage color picker、声音播放、foreground service、exact alarm、notification action、reset production command、第四套 skin 或 prototype 前端行为改造。
 
 ## 8. 暂缓事项
 

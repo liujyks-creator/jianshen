@@ -579,6 +579,8 @@ E10.4 约定：
 E10.14 约定：
 
 - 计时训练中的 `extend_rest` / `+15秒` 表示延长当前休息阶段，不插入新的休息阶段，也不修改原 `WorkoutPlan` 或 plan snapshot 中的计划休息秒数。
+- 生产 UI 应在 route / UI state 层提供轻量防误触：第一次点击只进入 `确认 +15秒` 待确认态，2 秒内第二次点击才真正派发 `WorkoutCommand.ExtendRest`；超时自动恢复，不记录、不加时。
+- 确认成功后可短暂显示 `已加 15秒`；每个 rest step 最多确认成功 4 次，即最多额外休息 60 秒。达到上限后禁用该休息阶段的 `+15秒`，提示“已额外休息 1 分钟，需要更久可以暂停训练”，但不自动暂停。
 - 额外休息是用户主动增加恢复时间，和暂停不同：暂停冻结训练流程并计入 `pausedElapsedSec`；额外休息继续处于 active 训练流程内，计入本次 `totalElapsedSec` 和有效推进时间，但通过 `timedRestExtensionRecords` 单独记录。
 - completed 与 abandoned 终态都应保存已发生的额外休息记录；ready/start gate 尚未真正开始时不能产生额外休息记录。
 - E10.14 只提供真实记录输入，不实现 E12 统计图表、趋势分析、真实心率、motion timing rules、Stage color picker、声音播放、notification action 或后台可靠计时。
@@ -647,7 +649,8 @@ interface TimedRestExtensionRecord {
 - `addedSec` 当前由 UI 固定为 15 秒；多次点击会产生多条记录。
 - `plannedRestSec` 保留原计划休息时长；额外休息不能伪装成 planned rest。
 - `restElapsedBeforeExtensionSec` 与 `extensionAtRemainingSec` 记录点击时机；`cumulativeExtraRestSec` 记录当前 rest step 上累计额外休息。
-- `eventElapsedSec` 是从真实启动后训练引擎有效推进时间轴上的发生秒数，供记录排序和 E12 后续分析使用。
+- `extensionCount` 可由同一 `stepId` 的记录数推导；`hitExtensionLimit` 可由同一 `stepId` 的记录数是否达到 4 或 `cumulativeExtraRestSec` 是否达到 60 推导，不必重复落库。
+- `eventElapsedSec` 是从真实启动后训练引擎有效推进时间轴上的发生秒数，供记录排序和 E12 后续分析使用。读取同一 session 的记录时应按 `eventElapsedSec -> stepIndex -> cumulativeExtraRestSec -> id` 排序，避免同秒多次确认时字符串 id 顺序错位。
 
 ### 9.4 力量训练组记录
 

@@ -133,6 +133,8 @@ private fun WorkoutSessionWithRecords.toDomain(): WorkoutSession {
         stepHistory = stepRecords.sortedBy { record -> record.startedAt }.map { record -> record.toDomain() },
         timedRestExtensionRecords = timedRestExtensionRecords
             .sortedWith(compareBy<TimedRestExtensionRecordEntity> { record -> record.eventElapsedSec }
+                .thenBy { record -> record.stepIndex }
+                .thenBy { record -> record.cumulativeExtraRestSec }
                 .thenBy { record -> record.id })
             .map { record -> record.toDomain() },
         strengthSetRecords = strengthSetRecords.sortedBy { record -> record.setOrder }.map { record -> record.toDomain() }

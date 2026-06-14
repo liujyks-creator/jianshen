@@ -97,6 +97,9 @@ internal fun TimedWorkoutSessionRoute(
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
     var sessionStartedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
     var recordWriteState by remember(sessionId) { mutableStateOf(TerminalWorkoutSessionRecordWriteState()) }
+    var restExtensionInteractionState by remember(sessionId) {
+        mutableStateOf(TimedRestExtensionInteractionState())
+    }
     var engineState by remember(plan.id, sessionId) {
         mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
     }
@@ -129,6 +132,18 @@ internal fun TimedWorkoutSessionRoute(
         applyEngineResult(TimedWorkoutEngine.dispatch(engineState, command))
     }
 
+    fun onRestExtensionClick() {
+        val nowMillis = System.currentTimeMillis()
+        val result = restExtensionInteractionState.onRestExtensionClick(
+            engineState = engineState,
+            nowMillis = nowMillis
+        )
+        restExtensionInteractionState = result.state
+        if (result.shouldDispatchExtendRest) {
+            dispatch(WorkoutCommand.ExtendRest(seconds = TimedRestExtensionSeconds))
+        }
+    }
+
     fun startSessionFromReadyGate() {
         if (!engineState.isTimedReadyStartGate()) return
 
@@ -138,6 +153,10 @@ internal fun TimedWorkoutSessionRoute(
 
     val uiState = engineState.toTimedWorkoutSessionScreenState()
     val readyGate = engineState.toTimedReadyStartGateUiState()
+    val restExtensionControl = restExtensionInteractionState.toRestExtensionControlUiState(
+        engineState = engineState,
+        nowMillis = System.currentTimeMillis()
+    )
     var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
     val notificationState = timedActiveWorkoutNotificationState(
         planId = plan.id,
@@ -146,6 +165,36 @@ internal fun TimedWorkoutSessionRoute(
     )
     LaunchedEffect(uiState.canEnd) {
         if (!uiState.canEnd) endConfirmation = endConfirmation.cancel()
+    }
+    LaunchedEffect(engineState.status, engineState.currentStep?.id) {
+        restExtensionInteractionState = restExtensionInteractionState.clearForCurrentEngineStep(
+            engineState = engineState,
+            nowMillis = System.currentTimeMillis()
+        )
+    }
+    LaunchedEffect(
+        restExtensionInteractionState.pendingStepId,
+        restExtensionInteractionState.pendingStartedAtMillis
+    ) {
+        if (restExtensionInteractionState.pendingStepId != null) {
+            delay(TimedRestExtensionConfirmWindowMillis)
+            restExtensionInteractionState = restExtensionInteractionState.clearForCurrentEngineStep(
+                engineState = engineState,
+                nowMillis = System.currentTimeMillis()
+            )
+        }
+    }
+    LaunchedEffect(
+        restExtensionInteractionState.successStepId,
+        restExtensionInteractionState.successStartedAtMillis
+    ) {
+        if (restExtensionInteractionState.successStepId != null) {
+            delay(TimedRestExtensionSuccessFeedbackMillis)
+            restExtensionInteractionState = restExtensionInteractionState.clearForCurrentEngineStep(
+                engineState = engineState,
+                nowMillis = System.currentTimeMillis()
+            )
+        }
     }
     LaunchedEffect(notificationState) {
         activeWorkoutNotifications.update(notificationState)
@@ -182,7 +231,8 @@ internal fun TimedWorkoutSessionRoute(
             onPause = { dispatch(WorkoutCommand.PauseSession) },
             onResume = { dispatch(WorkoutCommand.ResumeSession) },
             onSkip = { dispatch(WorkoutCommand.SkipStep) },
-            onExtendRest = { dispatch(WorkoutCommand.ExtendRest(seconds = 15)) },
+            restExtensionControl = restExtensionControl,
+            onExtendRest = ::onRestExtensionClick,
             showEndConfirmation = endConfirmation.visible,
             onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
             onCancelEnd = { endConfirmation = endConfirmation.cancel() },
@@ -337,6 +387,7 @@ private fun ReadyStartPlayGlyph(
 @Composable
 private fun TimedWorkoutSessionScreen(
     uiState: TimedWorkoutSessionScreenState,
+    restExtensionControl: TimedRestExtensionControlUiState,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onSkip: () -> Unit,
@@ -385,6 +436,7 @@ private fun TimedWorkoutSessionScreen(
         if (!uiState.isTerminal) {
             TimedSessionControls(
                 uiState = uiState,
+                restExtensionControl = restExtensionControl,
                 onSkip = onSkip,
                 onExtendRest = onExtendRest,
                 onEnd = onRequestEnd,
@@ -500,6 +552,7 @@ private fun HeartRatePanel(heartRate: HeartRateDisplayUiState) {
 @Composable
 private fun TimedSessionControls(
     uiState: TimedWorkoutSessionScreenState,
+    restExtensionControl: TimedRestExtensionControlUiState,
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
     onEnd: () -> Unit,
@@ -537,7 +590,7 @@ private fun TimedSessionControls(
                 )
                 OutlinedButton(
                     onClick = onExtendRest,
-                    enabled = uiState.canExtendRest,
+                    enabled = uiState.canExtendRest && restExtensionControl.buttonEnabled,
                     modifier = Modifier
                         .weight(1f)
                         .then(
@@ -550,9 +603,13 @@ private fun TimedSessionControls(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "+15秒",
+                        text = restExtensionControl.buttonLabel,
                         fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                        color = if (uiState.canExtendRest) TrainFlowNeutral50 else TrainFlowNeutral500
+                        color = if (uiState.canExtendRest && restExtensionControl.buttonEnabled) {
+                            TrainFlowNeutral50
+                        } else {
+                            TrainFlowNeutral500
+                        }
                     )
                 }
                 TimedIconControlButton(
@@ -569,6 +626,14 @@ private fun TimedSessionControls(
                                 Modifier
                             }
                         )
+                )
+            }
+            restExtensionControl.helperText?.let { helperText ->
+                Text(
+                    text = helperText,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.Center),
+                    color = TrainFlowNeutral200
                 )
             }
         }

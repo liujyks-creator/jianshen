@@ -173,6 +173,51 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun timedRestExtensionRecordsWithSameElapsedSecondSortByCumulativeExtraRest() = runBlocking {
+        val sameSecondRecords = (1..12).map { index ->
+            TimedRestExtensionRecord(
+                id = "extension-$index",
+                stepId = "interval-r2-work-stage-rest",
+                stepIndex = 3,
+                roundIndex = 2,
+                restStageId = "work-stage",
+                restStageTitle = "Rest",
+                previousStageId = "work-stage",
+                previousStageTitle = "Work",
+                addedSec = 15,
+                plannedRestSec = 10,
+                restElapsedBeforeExtensionSec = 4,
+                extensionAtRemainingSec = 6 + ((index - 1) * 15),
+                cumulativeExtraRestSec = index * 15,
+                eventElapsedSec = 64
+            )
+        }
+
+        repository.upsertSession(
+            timedSession(
+                id = "timed-rest-extended-many",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 255,
+                effectiveElapsedSec = 240,
+                pausedElapsedSec = 0,
+                restExtensionRecords = sameSecondRecords
+            )
+        )
+
+        val records = repository.getSessions().single().timedRestExtensionRecords
+
+        assertEquals(12, database.workoutSessionDao().timedRestExtensionRecordCount())
+        assertEquals(
+            (1..12).map { index -> index * 15 },
+            records.map { record -> record.cumulativeExtraRestSec }
+        )
+        assertEquals(
+            (1..12).map { index -> "extension-$index" },
+            records.map { record -> record.id }
+        )
+    }
+
+    @Test
     fun strengthSessionPersistsOnlyConfirmedActualRecords() = runBlocking {
         repository.upsertSession(
             strengthSession(
