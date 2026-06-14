@@ -103,7 +103,7 @@ internal data class TimedPlanEditorScreenState(
             id = planId,
             mode = WorkoutMode.TIMED,
             title = title.trim(),
-            description = "E10.2 纯间歇计时器草稿",
+            description = "本地保存的纯间歇计时器计划",
             blocks = blocks,
             preferences = PlanPreferences(
                 cueSettings = CueSettings(
@@ -541,15 +541,20 @@ internal fun TimedPlanEditorScreenState.canMoveStageDown(stageId: String): Boole
 }
 
 internal fun TimedPlanEditorScreenState.saveDraftPlan(
+    planId: String = "plan-timed-draft",
     timestamp: String = DefaultTimedPlanTimestamp
 ): TimedPlanEditorScreenState {
     if (!canSave) {
         return copy(statusMessage = validationMessage ?: "请至少保留一个阶段并填写计划名称。")
     }
 
+    return markPlanSaved(toWorkoutPlan(planId = planId, timestamp = timestamp))
+}
+
+internal fun TimedPlanEditorScreenState.markPlanSaved(plan: WorkoutPlan): TimedPlanEditorScreenState {
     return copy(
-        savedPlan = toWorkoutPlan(timestamp = timestamp),
-        statusMessage = "已生成本次纯间歇计时草稿，可用于当前内存态计划预览；真实保存后续接入。"
+        savedPlan = plan,
+        statusMessage = "已保存「${plan.title}」到本地计划；可切换页面或重新进入计划详情继续启动。"
     )
 }
 

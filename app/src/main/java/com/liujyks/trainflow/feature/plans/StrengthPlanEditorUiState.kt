@@ -51,7 +51,7 @@ internal data class StrengthPlanEditorScreenState(
             id = planId,
             mode = WorkoutMode.STRENGTH,
             title = title.trim(),
-            description = "内存态力量计划草稿",
+            description = "本地保存的力量计划",
             blocks = exercises.mapIndexed { index, exercise ->
                 exercise.toStrengthExerciseBlock(
                     order = index + 1,
@@ -601,15 +601,20 @@ internal fun StrengthPlanEditorScreenState.removeExercise(exerciseItemId: String
 }
 
 internal fun StrengthPlanEditorScreenState.saveDraftPlan(
+    planId: String = "plan-strength-draft",
     timestamp: String = DefaultStrengthPlanTimestamp
 ): StrengthPlanEditorScreenState {
     if (!canSave) {
         return copy(statusMessage = validationMessage ?: "请至少保留一个动作、一个计划组，并填写计划名称。")
     }
 
+    return markPlanSaved(toWorkoutPlan(planId = planId, timestamp = timestamp))
+}
+
+internal fun StrengthPlanEditorScreenState.markPlanSaved(plan: WorkoutPlan): StrengthPlanEditorScreenState {
     return copy(
-        savedPlan = toWorkoutPlan(timestamp = timestamp),
-        statusMessage = "已生成本次力量计划草稿，可用于当前内存态计划预览；真实保存后续接入。"
+        savedPlan = plan,
+        statusMessage = "已保存「${plan.title}」到本地计划；计划值会继续作为训练实际记录的预填来源。"
     )
 }
 

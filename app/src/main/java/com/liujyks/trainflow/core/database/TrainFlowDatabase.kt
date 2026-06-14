@@ -28,7 +28,7 @@ import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
         RecoveryAreaEntity::class,
         RecoveryRecommendationEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class TrainFlowDatabase : RoomDatabase() {
@@ -45,7 +45,7 @@ abstract class TrainFlowDatabase : RoomDatabase() {
                 context = context.applicationContext,
                 klass = TrainFlowDatabase::class.java,
                 name = DATABASE_NAME
-            ).addMigrations(MIGRATION_1_2).build()
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -64,6 +64,12 @@ abstract class TrainFlowDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE strength_set_records ADD COLUMN actual_rest_after_sec INTEGER")
                 db.execSQL("ALTER TABLE strength_set_records ADD COLUMN substituted_from_exercise_id TEXT")
                 db.execSQL("ALTER TABLE strength_set_records ADD COLUMN notes TEXT")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workout_plans ADD COLUMN description TEXT")
             }
         }
     }

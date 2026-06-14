@@ -1281,7 +1281,7 @@ stepsCompleted:
 
 ### Story E10.10: Plan persistence and save-entry audit
 
-**状态:** Planned from user-test feedback
+**状态:** Implemented in Android Room plan repository and save-entry audit
 
 作为训练计划用户，
 我想自定义计时阶段、秒数、轮次、颜色和图标能真实保存并在退出后恢复，
@@ -1294,6 +1294,16 @@ stepsCompleted:
 - Then 检查计时、力量和跟练相关计划保存入口是否真实可用；不可用入口必须改为明确禁用、待实现或进入对应 story。
 - Then 计划保存继续遵守 `WorkoutPlan` 存目标和结构、`WorkoutSession` 存实际执行结果和计划快照的边界。
 - Then 不改训练执行引擎语义，不实现声音播放，不做统计图表，不提交 `.local`、APK、`人工/`、build 输出或截图日志。
+
+**交付结果:**
+
+- `core.data.WorkoutPlanRepository` 接入 `workout_plans` Room 表，提供本地计划 observe / read / upsert / delete，并继续向 UI 输出 `WorkoutPlan` domain model，不暴露 Room entity。
+- 计划 blocks / reminder / preferences / followAlong 复用 E10.4 plan snapshot JSON 编解码边界；计时计划的自定义阶段名称、秒数、轮次、轮间休息、颜色、图标、类型和排序可 round-trip 保存与恢复。
+- 计时编辑页和力量编辑页的“保存计划”入口改为真实本地保存；`立即开始` / `开始力量训练` 仍可直接启动当前有效草稿，但不伪装成保存。
+- 计划页改为消费本地 `workoutPlans`，空状态不再展示 seed 内存态计划；复制、删除、设置提醒和关闭提醒都会同步写回本地计划。删除计划不改写既有 `WorkoutSession` 历史快照。
+- 跟练当前只有清楚标识的基础 preset 启动入口，没有保存按钮；计划详情里的 follow-along 计划启动保持禁用并标为“待完整编排”，不留下假保存入口。
+- 新增/更新测试覆盖 plan repository Room round-trip、计时自定义阶段持久化、力量计划目标结构不写 session records、编辑保存文案和计划页本地状态恢复。
+- 本阶段未改训练执行引擎语义，未实现声音播放、统计图表、心率设备、foreground service、exact alarm、notification action、prototype 前端或 Timer Dial 视觉，也未提交 `.local`、APK、`人工/`、deliverables、截图、日志或 build 输出。
 
 ### Story E10.11: Huashu Timer Dial HTML prototype exploration
 
@@ -1484,9 +1494,9 @@ stepsCompleted:
 10. E9.1 到 E9.4：硬化、验收与用户测试修复包。
 11. E10.1 到 E10.5：训练模式边界、计时训练重做、执行页主操作可达性、记录闭环前置和 Timer Dial 设计工作流。
 12. E10.6 到 E10.9：Timer Dial 静态视觉方案、Compose 原型、生产集成、连续进度 polish 和用户测试 APK。
-13. E10.12：Timer Dial Compose landing，把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产执行页，完成视觉减字、总剩余时间居中放大、圆盘放大、环线层级和动态浅点修复。（Implemented）
-14. E10.10：计划保存持久化和保存入口真实可用性检查。
-15. E10.11：使用 `huashu-design` 做 3 个 Timer Dial HTML 高保真原型方向。（Implemented; prototype served as E10.12 input）
+13. E10.10：计划保存持久化和保存入口真实可用性检查。（Implemented）
+14. E10.11：使用 `huashu-design` 做 3 个 Timer Dial HTML 高保真原型方向。（Implemented; prototype served as E10.12 input）
+15. E10.12：Timer Dial Compose landing，把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产执行页，完成视觉减字、总剩余时间居中放大、圆盘放大、环线层级和动态浅点修复。（Implemented）
 16. E11：手动心率输入与真实设备接口策略。
 17. E12：真实记录、总统计、图表、趋势分析、同日多轮运动分析和历史记录清理。
 18. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
@@ -1521,13 +1531,13 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.10 处理计时/力量/跟练计划保存持久化和保存入口真实可用性；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
+E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-Story E10.10 Plan Persistence；随后 E13 Sound Cue System、E12 Stats / Records 分别推进。E10.12 已完成 Timer Dial Compose landing，E10.11 HTML prototype 后续仅作为评审参考。
+Story E10.12 Review Fix；随后按用户测试优先级进入 E13 Sound Cue System 或 E12 Stats / Records。E10.10 Plan Persistence 已完成，E10.11 HTML prototype 后续仅作为评审参考。
 ```
 
 E10.12 Timer Dial Compose landing 回看重点：
@@ -1537,7 +1547,7 @@ E10.12 Timer Dial Compose landing 回看重点：
 3. 圆盘是否更大，外圈/内圈线条是否同比例更细，marker 与外圈是否不再重叠。
 4. 宽底层圆环和浅色小点是否复用内圈阶段 marker 的动态角度计算，而不是固定装饰点。
 5. 中心圆是否只保留图标、必要编号和时间，填充色来自阶段预设色，文字/图标为白色。
-6. E10.10 计划保存、E13 声音播放、E12 统计图表、Room/session repository 和 prototype / Kotlin 以外的工作继续不混入该视觉修复 story。
+6. E10.10 计划保存已独立完成；E13 声音播放、E12 统计图表、Room/session repository 额外语义和 prototype / Kotlin 以外的工作继续不混入该视觉修复 story。
 
 ## 8. 暂缓事项
 

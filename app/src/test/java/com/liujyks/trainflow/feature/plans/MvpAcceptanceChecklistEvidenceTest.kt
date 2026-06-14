@@ -36,10 +36,15 @@ class MvpAcceptanceChecklistEvidenceTest {
         )
 
         assertTrue(timedRoute.contains("计时训练不再选择动作库动作"))
-        assertTrue(strengthRoute.contains("可直接开始当前草稿，也可保存后进入计划详情"))
+        assertTrue(strengthRoute.contains("可直接开始当前草稿，也可保存为本地计划后从计划详情再次启动"))
         assertTrue(timedRoute.contains("长按阶段卡右侧"))
         assertTrue(timedRoute.contains("上移 / 下移保留为备用排序路径"))
-        assertTrue(strengthRoute.contains("真实计划保存后续接入"))
+        assertTrue(timedRoute.contains("onSaveTimedPlan"))
+        assertTrue(strengthRoute.contains("onSaveStrengthPlan"))
+        assertTrue(timedRoute.contains("保存计划"))
+        assertTrue(strengthRoute.contains("保存计划"))
+        assertFalse(timedRoute.contains("真实保存后续接入"))
+        assertFalse(strengthRoute.contains("真实计划保存后续接入"))
         assertFalse(timedRoute.contains("训练执行引擎、真实保存和记录闭环留给后续 story"))
         assertFalse(strengthRoute.contains("计划详情已可启动力量训练，真实保存和 session records 后续接入"))
     }

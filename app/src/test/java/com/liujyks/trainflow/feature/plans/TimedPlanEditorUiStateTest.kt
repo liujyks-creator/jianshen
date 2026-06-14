@@ -352,14 +352,14 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
-    fun saveDraftKeepsPlanInMemoryOnlyForCurrentEditorState() {
+    fun saveDraftProducesPersistablePlanForCurrentEditorState() {
         val unsaved = buildDefaultTimedPlanEditorState()
         val saved = unsaved.saveDraftPlan()
         val editedAfterSave = saved.updateTitle("改名后需要重新保存")
 
         assertNull(unsaved.savedPlan)
         assertNotNull(saved.savedPlan)
-        assertTrue(requireNotNull(saved.statusMessage).contains("真实保存"))
+        assertTrue(requireNotNull(saved.statusMessage).contains("本地计划"))
         assertNull(editedAfterSave.savedPlan)
         assertNull(editedAfterSave.statusMessage)
     }

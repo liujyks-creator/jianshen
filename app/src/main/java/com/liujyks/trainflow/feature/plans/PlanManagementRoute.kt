@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
+import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
+import com.liujyks.trainflow.core.notifications.PlanReminderScheduleResult
+import com.liujyks.trainflow.core.notifications.PlanReminderScheduler
 import com.liujyks.trainflow.core.notifications.resolvePlanReminderPermissionState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -58,11 +61,14 @@ import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import com.liujyks.trainflow.ui.theme.TrainFlowSkin
 import com.liujyks.trainflow.ui.theme.isTileFlow
+import java.time.Instant
 
 @Composable
 internal fun PlanManagementRoute(
     uiState: PlanManagementScreenState,
     onStateChange: (PlanManagementScreenState) -> Unit,
+    onPersistPlan: (WorkoutPlan) -> Unit = {},
+    onDeletePlan: (String) -> Unit = {},
     onStartTimedPlan: (WorkoutPlan) -> Unit = {},
     onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier
@@ -85,21 +91,50 @@ internal fun PlanManagementRoute(
         uiState = displayState,
         reminderPresetOptions = reminderPresetOptions,
         onSelectPlan = { planId -> onStateChange(displayState.selectPlan(planId)) },
-        onCopyPlan = { planId -> onStateChange(displayState.copyPlan(planId)) },
+        onCopyPlan = { planId ->
+            val nextState = displayState.copyPlan(planId, timestamp = Instant.now().toString())
+            nextState.selectedPlan?.let(onPersistPlan)
+            onStateChange(nextState)
+        },
         onRequestDeletePlan = { planId -> onStateChange(displayState.requestDeletePlan(planId)) },
-        onConfirmDeletePlan = { onStateChange(displayState.confirmDeletePlan()) },
+        onConfirmDeletePlan = {
+            val deletePlanId = displayState.pendingDeletePlanId
+            val nextState = displayState.confirmDeletePlan()
+            deletePlanId?.let(scheduler::cancel)
+            deletePlanId?.let(onDeletePlan)
+            onStateChange(nextState)
+        },
         onCancelDeletePlan = { onStateChange(displayState.cancelDeletePlan()) },
         onSetPlanReminder = { planId, scheduleAt ->
-            val nextState = displayState.setPlanReminder(planId = planId, scheduleAt = scheduleAt)
+            val nextState = displayState.setPlanReminder(
+                planId = planId,
+                scheduleAt = scheduleAt,
+                timestamp = Instant.now().toString()
+            )
             nextState.plans
                 .firstOrNull { it.id == planId }
-                ?.toPlanReminderScheduleRequest(permissionState)
-                ?.let(scheduler::schedule)
+                ?.let { plan ->
+                    dispatchPlanReminderReplacement(
+                        plan = plan,
+                        permissionState = permissionState,
+                        scheduler = scheduler
+                    )
+                }
+            nextState.plans
+                .firstOrNull { it.id == planId }
+                ?.let(onPersistPlan)
             onStateChange(nextState)
         },
         onClearPlanReminder = { planId ->
+            val nextState = displayState.clearPlanReminder(
+                planId = planId,
+                timestamp = Instant.now().toString()
+            )
             scheduler.cancel(planId)
-            onStateChange(displayState.clearPlanReminder(planId))
+            nextState.plans
+                .firstOrNull { it.id == planId }
+                ?.let(onPersistPlan)
+            onStateChange(nextState)
         },
         onRequestNotificationPermission = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -110,6 +145,15 @@ internal fun PlanManagementRoute(
         onStartStrengthPlan = onStartStrengthPlan,
         modifier = modifier
     )
+}
+
+internal fun dispatchPlanReminderReplacement(
+    plan: WorkoutPlan,
+    permissionState: PlanReminderNotificationPermissionState,
+    scheduler: PlanReminderScheduler
+): PlanReminderScheduleResult {
+    scheduler.cancel(plan.id)
+    return scheduler.schedule(plan.toPlanReminderScheduleRequest(permissionState))
 }
 
 @Composable
@@ -205,9 +249,9 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
         )
         Text(
             text = if (uiState.isEmpty) {
-                "暂无已保存计划。当前演示仍使用内存态计划；真实持久化后续接入。"
+                "暂无已保存计划。可从训练首页创建计时或力量计划并保存到本地。"
             } else {
-                "${uiState.plans.size} 个内存态计划 · 可查看详情、复制和删除"
+                "${uiState.plans.size} 个本地计划 · 可查看详情、复制、提醒和删除"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -485,7 +529,7 @@ private fun EmptyPlanStateCard() {
     EditorCard {
         SectionTitle(text = "空状态")
         Text(
-            text = "还没有可管理的训练计划。真实持久化接入前，本页只维护当前内存态列表。",
+            text = "还没有可管理的训练计划。保存计时或力量计划后，会在这里恢复并可直接启动训练。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -522,7 +566,7 @@ private fun DeletePlanDialog(
             Text(text = "删除计划")
         },
         text = {
-            Text(text = "确认删除「$title」？本阶段只会从当前内存态列表移除。")
+            Text(text = "确认删除本地计划「$title」？训练历史中的计划快照不会被改写。")
         },
         confirmButton = {
             TextButton(onClick = onConfirmDeletePlan) {

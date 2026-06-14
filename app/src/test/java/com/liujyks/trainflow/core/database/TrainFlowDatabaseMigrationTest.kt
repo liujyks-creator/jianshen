@@ -82,6 +82,31 @@ class TrainFlowDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationFromVersion2To3AddsNullableWorkoutPlanDescription() {
+        val testDbPath = ApplicationProvider.getApplicationContext<Context>()
+            .getDatabasePath(TEST_DB)
+            .absolutePath
+
+        helper.createDatabase(testDbPath, 2).apply {
+            insertVersion2WorkoutPlan()
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            testDbPath,
+            3,
+            true,
+            TrainFlowDatabase.MIGRATION_2_3
+        )
+
+        migrated.query("SELECT id, description FROM workout_plans").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("plan-v2", cursor.getString(0))
+            assertTrue(cursor.isNull(1))
+        }
+    }
+
     private fun SupportSQLiteDatabase.insertVersion1WorkoutSession() {
         execSQL(
             """
@@ -133,6 +158,26 @@ class TrainFlowDatabaseMigrationTest {
                 'weight=60.0,kg|rep=range,8,12',
                 'weight=60.0,kg|reps=8',
                 'good'
+            )
+            """.trimIndent()
+        )
+    }
+
+    private fun SupportSQLiteDatabase.insertVersion2WorkoutPlan() {
+        execSQL(
+            """
+            INSERT INTO workout_plans(
+                id, mode, title, blocks_json, reminder_json, preferences_json, follow_along_json, created_at, updated_at
+            ) VALUES(
+                'plan-v2',
+                'timed',
+                'Legacy Timed',
+                '[]',
+                NULL,
+                NULL,
+                NULL,
+                '2026-06-13T08:00:00Z',
+                '2026-06-13T08:01:00Z'
             )
             """.trimIndent()
         )

@@ -9,6 +9,7 @@ data class WorkoutPlanEntity(
     @PrimaryKey val id: String,
     val mode: String,
     val title: String,
+    val description: String? = null,
     @ColumnInfo(name = "blocks_json") val blocksJson: String,
     @ColumnInfo(name = "reminder_json") val reminderJson: String? = null,
     @ColumnInfo(name = "preferences_json") val preferencesJson: String? = null,

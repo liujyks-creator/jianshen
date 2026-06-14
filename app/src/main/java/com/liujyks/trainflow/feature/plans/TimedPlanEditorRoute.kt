@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,15 +57,18 @@ import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import java.time.Instant
 import kotlin.math.roundToInt
 
 @Composable
 internal fun TimedPlanEditorRoute(
     onBackToHome: () -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit = {},
+    onSaveTimedPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier,
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
 ) {
+    val draftPlanId = rememberSaveable { "plan-timed-${System.currentTimeMillis()}" }
     var uiState by remember {
         mutableStateOf(buildDefaultTimedPlanEditorState(defaults = planEditorDefaults))
     }
@@ -92,7 +96,18 @@ internal fun TimedPlanEditorRoute(
         onMoveStageDown = { stageId -> uiState = uiState.moveStageDown(stageId) },
         onMoveStage = { fromIndex, toIndex -> uiState = uiState.moveStage(fromIndex, toIndex) },
         onAddStage = { type -> uiState = uiState.addStage(type) },
-        onSaveDraft = { uiState = uiState.saveDraftPlan() },
+        onSaveDraft = {
+            if (uiState.canSave) {
+                val plan = uiState.toWorkoutPlan(
+                    planId = draftPlanId,
+                    timestamp = Instant.now().toString()
+                )
+                onSaveTimedPlan(plan)
+                uiState = uiState.markPlanSaved(plan)
+            } else {
+                uiState = uiState.saveDraftPlan(planId = draftPlanId)
+            }
+        },
         onStartTimedPlan = {
             if (uiState.canStartTraining) {
                 onStartTimedPlan(
@@ -571,7 +586,7 @@ private fun SaveAndPreviewCard(
     onStartTimedPlan: () -> Unit
 ) {
     EditorCard {
-        SectionTitle(text = "草稿预览")
+        SectionTitle(text = "计划预览")
         Text(
             text = uiState.summary,
             style = MaterialTheme.typography.bodyLarge,
@@ -607,7 +622,7 @@ private fun SaveAndPreviewCard(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
             ) {
-                Text(text = "保存草稿")
+                Text(text = "保存计划")
             }
             Button(
                 onClick = onStartTimedPlan,

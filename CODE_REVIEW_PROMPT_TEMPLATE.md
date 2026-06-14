@@ -83,7 +83,7 @@ Windows 文本编码规则：
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
-- 如 skills/design-md/SKILL.md 存在，UI、设计系统、主题、token、界面规则类任务先读取并遵循。
+- 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞 review。
 - skills/ 是本地辅助目录，不应提交。
 
 当前 Story 原目标：

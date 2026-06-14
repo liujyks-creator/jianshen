@@ -126,6 +126,35 @@ internal fun buildDefaultPlanManagementState(
     )
 }
 
+internal fun PlanManagementScreenState.withPlans(plans: List<WorkoutPlan>): PlanManagementScreenState {
+    val nextSelectedPlanId = when {
+        plans.any { plan -> plan.id == selectedPlanId } -> selectedPlanId
+        else -> plans.firstOrNull()?.id
+    }
+    val nextPendingDeletePlanId = pendingDeletePlanId?.takeIf { pendingId ->
+        plans.any { plan -> plan.id == pendingId }
+    }
+    return copy(
+        plans = plans,
+        selectedPlanId = nextSelectedPlanId,
+        pendingDeletePlanId = nextPendingDeletePlanId
+    )
+}
+
+internal fun PlanManagementScreenState.upsertPlan(plan: WorkoutPlan): PlanManagementScreenState {
+    val updatedPlans = if (plans.any { existing -> existing.id == plan.id }) {
+        plans.replacePlan(plan)
+    } else {
+        listOf(plan) + plans
+    }
+    return copy(
+        plans = updatedPlans,
+        selectedPlanId = plan.id,
+        pendingDeletePlanId = null,
+        statusMessage = "已保存「${plan.title}」到本地计划。"
+    )
+}
+
 internal fun PlanManagementScreenState.selectPlan(planId: String): PlanManagementScreenState {
     if (plans.none { it.id == planId }) return this
 
@@ -208,7 +237,7 @@ internal fun PlanManagementScreenState.copyPlan(
         plans = plans + copiedPlan,
         selectedPlanId = copiedPlan.id,
         pendingDeletePlanId = null,
-        statusMessage = "已复制「${original.title}」，新计划暂存在本次内存态列表。"
+        statusMessage = "已复制「${original.title}」，新计划已保存到本地计划。"
     )
 }
 
@@ -238,7 +267,7 @@ internal fun PlanManagementScreenState.confirmDeletePlan(): PlanManagementScreen
         plans = remainingPlans,
         selectedPlanId = nextSelectedPlanId,
         pendingDeletePlanId = null,
-        statusMessage = "已删除「${deletedPlan.title}」。"
+        statusMessage = "已删除本地计划「${deletedPlan.title}」。"
     )
 }
 
@@ -271,11 +300,11 @@ private fun WorkoutPlan.toDetailState(
         metrics = planMetrics(),
         sections = detailSections(),
         reminder = toReminderUiState(notificationPermissionState),
-        editStatus = "编辑回填后续接入",
+        editStatus = "保存、复制、删除和提醒已接入本地计划；编辑回填留给后续 story。",
         startStatus = when (mode) {
             WorkoutMode.TIMED -> "开始计时训练"
             WorkoutMode.STRENGTH -> "开始力量训练"
-            WorkoutMode.FOLLOW_ALONG -> "跟练闭环留给 E6"
+            WorkoutMode.FOLLOW_ALONG -> "跟练计划保存待完整编排"
         },
         canStartTraining = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH
     )
@@ -359,7 +388,7 @@ private fun WorkoutPlan.planSummary(): String {
             "${strengthBlocks.size} 个动作 · ${strengthBlocks.sumOf { it.sets.size }} 组"
         }
 
-        WorkoutMode.FOLLOW_ALONG -> "跟练雏形计划 · 后续接入"
+        WorkoutMode.FOLLOW_ALONG -> "跟练雏形计划 · 待完整编排"
     }
 }
 
@@ -414,7 +443,7 @@ private fun WorkoutPlan.detailSections(): List<PlanDetailSectionUiState> {
         WorkoutMode.FOLLOW_ALONG -> listOf(
             PlanDetailSectionUiState(
                 title = "边界",
-                rows = listOf("跟练计划元数据已保留，完整跟练闭环后续接入。")
+                rows = listOf("跟练计划元数据已保留，完整跟练编排和保存入口留给对应 story。")
             )
         )
     }
