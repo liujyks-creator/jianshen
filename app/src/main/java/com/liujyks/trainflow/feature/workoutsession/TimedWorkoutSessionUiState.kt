@@ -11,6 +11,8 @@ import com.liujyks.trainflow.core.model.HeartRateAvailability
 import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
+import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.normalizeStageColorHex
 
 internal data class TimedWorkoutSessionScreenState(
     val planTitle: String,
@@ -166,7 +168,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         timerText = remainingSec.formatTimer(),
         totalRemainingText = totalRemainingSec.formatTimer(),
         stageIconKey = current?.iconKey ?: current?.stageType?.defaultIconKey ?: "timer",
-        stageColorHex = current?.colorHex ?: current?.stageType?.defaultColorHex,
+        stageColorHex = normalizeStageColorHex(current?.colorHex, current?.stageType ?: TimedStageType.WORK),
         stageProgressFraction = stageProgressFraction.coerceIn(0f, 1f),
         progressLabel = progressLabel,
         nextStepLabel = nextStepLabel,

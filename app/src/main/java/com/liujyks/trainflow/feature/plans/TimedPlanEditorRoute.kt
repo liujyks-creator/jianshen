@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,6 +46,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -154,6 +157,7 @@ private fun TimedPlanEditorScreen(
     var draggedStageStartIndex by remember { mutableStateOf<Int?>(null) }
     var draggedStageOffsetY by remember { mutableStateOf(0f) }
     var draggedStageHeightPx by remember { mutableStateOf(1) }
+    var colorPickerStage by remember { mutableStateOf<TimedPlanEditorStageUiState?>(null) }
 
     fun resetStageDrag() {
         draggedStageId = null
@@ -214,7 +218,7 @@ private fun TimedPlanEditorScreen(
                 onNameChanged = { name -> onStageNameChanged(stage.id, name) },
                 onDurationChanged = { seconds -> onStageDurationChanged(stage.id, seconds) },
                 onStageTypeChanged = { type -> onStageTypeChanged(stage.id, type) },
-                onStageColorChanged = { colorHex -> onStageColorChanged(stage.id, colorHex) },
+                onOpenColorPicker = { colorPickerStage = stage },
                 onCopy = { onCopyStage(stage.id) },
                 onRemove = { onRemoveStage(stage.id) },
                 onMoveUp = { onMoveStageUp(stage.id) },
@@ -261,6 +265,17 @@ private fun TimedPlanEditorScreen(
                 onStartTimedPlan = onStartTimedPlan
             )
         }
+    }
+
+    colorPickerStage?.let { stage ->
+        StageColorPickerDialog(
+            stage = stage,
+            onDismiss = { colorPickerStage = null },
+            onColorSelected = { colorHex ->
+                onStageColorChanged(stage.id, colorHex)
+                colorPickerStage = null
+            }
+        )
     }
 }
 
@@ -341,7 +356,7 @@ private fun TimedStageEditorCard(
     onNameChanged: (String) -> Unit,
     onDurationChanged: (String) -> Unit,
     onStageTypeChanged: (TimedStageType) -> Unit,
-    onStageColorChanged: (String) -> Unit,
+    onOpenColorPicker: () -> Unit,
     onCopy: () -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
@@ -440,18 +455,7 @@ private fun TimedStageEditorCard(
             style = MaterialTheme.typography.bodySmall,
             color = TrainFlowNeutral700
         )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            TimedStageColorOptions.forEach { colorHex ->
-                StageColorSwatchButton(
-                    colorHex = colorHex,
-                    selected = stage.colorHex.equals(colorHex, ignoreCase = true),
-                    onClick = { onStageColorChanged(colorHex) }
-                )
-            }
-        }
+        StageColorPickerEntry(stage = stage, onOpenColorPicker = onOpenColorPicker)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
                 Text("复制")
@@ -464,42 +468,157 @@ private fun TimedStageEditorCard(
 }
 
 @Composable
+private fun StageColorPickerEntry(
+    stage: TimedPlanEditorStageUiState,
+    onOpenColorPicker: () -> Unit
+) {
+    val picker = stage.toStageColorPickerUiState()
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = TrainFlowSurfaceMuted,
+        border = BorderStroke(1.dp, TrainFlowNeutral100),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "阶段颜色，${picker.selectedColorName}，${picker.selectedColorHex}"
+            }
+            .clickable(onClick = onOpenColorPicker)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StageSwatch(stage.colorHex)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "阶段颜色",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${picker.selectedColorName} · ${picker.selectedColorHex}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral700
+                )
+            }
+            TextButton(
+                onClick = onOpenColorPicker,
+                modifier = Modifier.align(Alignment.CenterVertically)
+            ) {
+                Text("选择")
+            }
+        }
+    }
+}
+
+@Composable
 private fun StageSwatch(colorHex: String) {
     Surface(
         shape = RoundedCornerShape(999.dp),
         color = colorHex.toComposeColor(),
-        modifier = Modifier.padding(top = 2.dp)
+        modifier = Modifier
+            .padding(start = 10.dp, top = 10.dp, bottom = 10.dp)
+            .size(34.dp),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
     ) {
+        Box(contentAlignment = Alignment.Center) {}
+    }
+}
+
+@Composable
+private fun StageColorPickerDialog(
+    stage: TimedPlanEditorStageUiState,
+    onDismiss: () -> Unit,
+    onColorSelected: (String) -> Unit
+) {
+    val picker = stage.toStageColorPickerUiState()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("完成")
+            }
+        },
+        title = {
+            Text("选择阶段颜色")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = "${stage.name} 当前为 ${picker.selectedColorName}。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TrainFlowNeutral700
+                )
+                StageColorSection(
+                    title = "推荐色",
+                    options = picker.recommendedColors,
+                    onColorSelected = onColorSelected
+                )
+                StageColorSection(
+                    title = "更多颜色",
+                    options = picker.moreColors,
+                    onColorSelected = onColorSelected
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun StageColorSection(
+    title: String,
+    options: List<StageColorOptionUiState>,
+    onColorSelected: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            text = "  ",
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface
         )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.chunked(4).forEach { rowOptions ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowOptions.forEach { option ->
+                        StageColorSwatchButton(
+                            option = option,
+                            onClick = { onColorSelected(option.hex) }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun StageColorSwatchButton(
-    colorHex: String,
-    selected: Boolean,
+    option: StageColorOptionUiState,
     onClick: () -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = colorHex.toComposeColor(),
+        color = option.hex.toComposeColor(),
         border = BorderStroke(
-            width = if (selected) 3.dp else 1.dp,
-            color = if (selected) TrainFlowPrimary else TrainFlowNeutral100
+            width = if (option.selected) 3.dp else 1.dp,
+            color = if (option.selected) TrainFlowPrimary else TrainFlowNeutral100
         ),
         modifier = Modifier
-            .sizeIn(minWidth = 44.dp, minHeight = 44.dp)
-            .semantics { contentDescription = "阶段颜色 $colorHex" }
+            .size(50.dp)
+            .semantics {
+                contentDescription = option.contentDescription
+                stateDescription = if (option.selected) "已选中" else "未选中"
+            }
             .clickable(onClick = onClick)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
-                text = if (selected) "✓" else "",
+                text = if (option.hasCheckIndicator) "✓" else "",
                 style = MaterialTheme.typography.labelLarge,
-                color = TrainFlowPrimary
+                color = option.textColor.toComposeColor(defaultColor = TrainFlowPrimary)
             )
         }
     }
@@ -778,9 +897,9 @@ private fun StatusPill(
     }
 }
 
-private fun String.toComposeColor(): Color {
+private fun String.toComposeColor(defaultColor: Color = TrainFlowAccent): Color {
     return runCatching { Color(android.graphics.Color.parseColor(this)) }
-        .getOrElse { TrainFlowAccent }
+        .getOrElse { defaultColor }
 }
 
 @Preview(showBackground = true)

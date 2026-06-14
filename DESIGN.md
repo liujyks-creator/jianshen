@@ -233,6 +233,24 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 训练执行页中，`{colors.action}` 的使用要短促、有目的，避免整页橙色造成紧张。
 - 心率状态不能使用医疗化红色警报，除非未来有明确非医疗提示规则。
 
+### Stage Colors
+
+计时阶段颜色服务阶段识别，不只是装饰。阶段色保存为 `TimedExerciseItem.colorHex`，由计划编辑、计划持久化、ready gate 和 Timer Dial 共同消费；颜色选择不能改变训练引擎、命令、事件或 session record 语义。
+
+- 阶段色板由集中 `StageColorPreset` 定义，字段包含 `id`、`name`、`hex`、`tone`、`recommendedUse`、`textColor`、`isHighAttention` 和 `isRecommended`。
+- 推荐色保持 5-8 个，服务快速创建；更多色可覆盖完整 20 色 Material-like 色板，服务用户自定义。
+- 默认体验保持克制，不鼓励同一计划堆叠大量高饱和或高注意色。红、深橙、橙、琥珀、柠黄绿等高注意色应明确标记，用于工作、爆发或提醒感阶段。
+- 执行页深色背景下，阶段色填充 Timer Dial 中心圆时，圆内文字和图标必须使用 preset `textColor` 或安全 fallback 保持高对比。
+- 非法 `colorHex` 必须回退到阶段默认安全色，不应导致计划详情、ready gate 或执行页崩溃。
+
+### Stage Color Picker
+
+- 阶段卡应展示当前色块和可打开的颜色选择入口；颜色选择器优先展示推荐色，再展示更多颜色。
+- 色块尺寸应稳定，避免选中、hover、TalkBack 或文案变化导致布局跳动。
+- 选中态不能只靠颜色表达，必须至少包含外圈 / 描边、对勾和 TalkBack 文案。
+- 每个色块的可访问文案应包含颜色名称、推荐用途、高注意色状态和当前是否选中。
+- 色板可以使用 bottom sheet、dialog 或轻量 panel，但不能引入第四套 skin、远程主题、运行时插件市场或第三方皮肤安装。
+
 ## Typography
 
 字体栈优先使用 Inter，Android 实现可落到 Roboto/system。排版目标是运动中可扫读：数字大、标签短、正文稳。

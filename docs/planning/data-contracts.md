@@ -333,6 +333,31 @@ interface TimedExerciseItem {
 }
 ```
 
+### 6.1.1 阶段颜色色板
+
+E10.17 约定：阶段颜色由集中 `StageColorPreset` 色板提供，UI 不应在各处散落 hex。`TimedExerciseItem.colorHex` 仍是计划结构中的保存字段；色板 metadata 服务编辑器、可访问性和执行页高对比，不改变训练引擎、命令、事件或 session record 语义。
+
+```ts
+interface StageColorPreset {
+  id: string;
+  name: string;
+  hex: string;
+  tone: string;
+  recommendedUse: string;
+  textColor: string;
+  isHighAttention: boolean;
+  isRecommended: boolean;
+}
+```
+
+E10.17 规则：
+
+- 推荐色保持 5-8 个，服务快速创建。
+- 更多颜色覆盖 20 个 Material-like 色值，服务自定义。
+- `textColor` 用于深色执行页中阶段色填充中心圆时的圆内文字 / 图标对比。
+- 选中态不能只靠颜色表达，必须有外圈 / 描边、对勾和 TalkBack 文案。
+- 非法 `colorHex` 读回或映射时回退到当前阶段类型默认安全色，不应影响计划持久化或执行页。
+
 E10.2 约定：
 
 - 纯计时阶段使用 `labelOverride` 作为阶段名称。

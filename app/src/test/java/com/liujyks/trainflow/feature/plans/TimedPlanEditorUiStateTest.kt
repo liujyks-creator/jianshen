@@ -283,6 +283,51 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun stageColorPickerStateSeparatesRecommendedMoreAndSelectedSemantics() {
+        val workStage = buildDefaultTimedPlanEditorState()
+            .updateStageColor("stage-work", "#FFC107")
+            .stages
+            .first { it.id == "stage-work" }
+        val picker = workStage.toStageColorPickerUiState()
+        val selected = picker.moreColors.single { option -> option.hex == "#FFC107" }
+
+        assertEquals("#FFC107", picker.selectedColorHex)
+        assertEquals("琥珀", picker.selectedColorName)
+        assertTrue(picker.recommendedColors.size in 5..8)
+        assertTrue(picker.moreColors.size >= 20)
+        assertTrue(selected.selected)
+        assertTrue(selected.hasCheckIndicator)
+        assertTrue(selected.contentDescription.contains("已选中"))
+        assertTrue(selected.contentDescription.contains("适合提醒 / 明亮"))
+    }
+
+    @Test
+    fun stageColorSelectionUpdatesCurrentStageAndPlanMapping() {
+        val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
+        val state = buildDefaultTimedPlanEditorState().updateStageColor(workId, "#00BCD4")
+        val stage = state.stages.first { it.id == workId }
+        val item = state.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single()
+            .items
+            .first { it.id == workId }
+
+        assertEquals("#00BCD4", stage.colorHex)
+        assertEquals("#00BCD4", item.colorHex)
+    }
+
+    @Test
+    fun invalidStageColorFallsBackToCurrentStageDefault() {
+        val restId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.REST }.id
+        val state = buildDefaultTimedPlanEditorState().updateStageColor(restId, "bad-color")
+        val stage = state.stages.first { it.id == restId }
+        val item = state.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single()
+            .items
+            .first { it.id == restId }
+
+        assertEquals(TimedStageType.REST.defaultColorHex, stage.colorHex)
+        assertEquals(TimedStageType.REST.defaultColorHex, item.colorHex)
+    }
+
+    @Test
     fun updateStageColorAndTypeKeepIconColorAndPlanMapping() {
         val workId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.WORK }.id
         val state = buildDefaultTimedPlanEditorState()

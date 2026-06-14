@@ -67,6 +67,8 @@ internal fun TimerDial(
     val reduceMotion = LocalTrainFlowReduceMotion.current
     val tokens = safeState.visualVariant.tokens(skin)
     val layoutSpec = skin.timerDialLayoutSpec()
+    val currentStageColor = safeState.currentStageColorHex.toComposeColor(tokens.colorFor(safeState.currentStageType))
+    val currentStageTextColor = safeState.currentStageTextColorHex.toComposeColor(tokens.textPrimary)
     val smoothProgressKey = safeState.smoothProgressKey()
     var smoothProgressElapsedNanos by remember(smoothProgressKey) { mutableLongStateOf(0L) }
     LaunchedEffect(smoothProgressKey, reduceMotion) {
@@ -121,9 +123,9 @@ internal fun TimerDial(
     )
     val centerColor by animateColorAsState(
         targetValue = if (safeState.isPaused) {
-            tokens.colorFor(safeState.currentStageType).copy(alpha = 0.38f)
+            currentStageColor.copy(alpha = 0.38f)
         } else {
-            tokens.colorFor(safeState.currentStageType)
+            currentStageColor
         },
         animationSpec = timerDialColorStateTransitionSpec(reduceMotion),
         label = "TimerDialCenterColor"
@@ -195,7 +197,7 @@ internal fun TimerDial(
             safeState.stageSegments.forEach { segment ->
                 val rawSweep = 360f * segment.durationSec.toFloat() / totalDuration.toFloat()
                 val visibleSweep = (rawSweep - gapDegrees).coerceAtLeast(0.6f)
-                val segmentColor = tokens.colorFor(segment.stageType)
+                val segmentColor = segment.colorHex.toComposeColor(tokens.colorFor(segment.stageType))
                 val progress = if (segment.isCurrent) animatedStageProgress else segment.progress
                 val strokeWidth = segment.strokeWidthDp().dp.toPx()
                 val activeAlpha = if (segment.isCurrent) currentSegmentAlpha else 0.48f
@@ -369,7 +371,7 @@ internal fun TimerDial(
                     TimerDialCenterGlyph(
                         isPaused = isPaused,
                         stageType = safeState.currentStageType,
-                        color = tokens.textPrimary,
+                        color = currentStageTextColor,
                         size = glyphSize
                     )
                 }
@@ -383,7 +385,7 @@ internal fun TimerDial(
                             fontSize = roundFontSize,
                             lineHeight = roundLineHeight
                         ),
-                        color = tokens.textPrimary.copy(alpha = 0.92f),
+                        color = currentStageTextColor.copy(alpha = 0.92f),
                         maxLines = 1,
                         overflow = TextOverflow.Clip
                     )
@@ -394,7 +396,7 @@ internal fun TimerDial(
                     fontSize = timerFontSize,
                     lineHeight = timerLineHeight,
                     fontWeight = FontWeight.ExtraBold,
-                    color = tokens.textPrimary,
+                    color = currentStageTextColor,
                     maxLines = 1,
                     overflow = TextOverflow.Clip
                 )
@@ -467,11 +469,17 @@ private fun currentCenterBorderColor(
     state: TimerDialUiState,
     tokens: TimerDialVisualTokens
 ): Color {
+    val currentStageColor = state.currentStageColorHex.toComposeColor(tokens.colorFor(state.currentStageType))
     return when {
         state.isFinalCountdown -> tokens.finalCountdown.copy(alpha = 0.62f)
         state.isPaused -> tokens.textSecondary.copy(alpha = 0.28f)
-        else -> tokens.colorFor(state.currentStageType).copy(alpha = 0.34f)
+        else -> currentStageColor.copy(alpha = 0.34f)
     }
+}
+
+private fun String.toComposeColor(defaultColor: Color): Color {
+    return runCatching { Color(android.graphics.Color.parseColor(this)) }
+        .getOrElse { defaultColor }
 }
 
 @Composable

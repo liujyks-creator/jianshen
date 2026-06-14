@@ -5,6 +5,8 @@ import com.liujyks.trainflow.core.engine.TimedSessionStepKind
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.normalizeStageColorHex
+import com.liujyks.trainflow.core.model.stageTextColorHexFor
 import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 
 internal data class TimerDialUiState(
@@ -21,6 +23,8 @@ internal data class TimerDialUiState(
     val completedWorkoutStageCount: Int,
     val stageSegments: List<TimerDialStageSegmentUiState>,
     val visualVariant: TimerDialVisualVariant,
+    val currentStageColorHex: String,
+    val currentStageTextColorHex: String,
     val currentStageIconKey: String,
     val currentStageTimeText: String,
     val totalRemainingText: String,
@@ -42,6 +46,8 @@ internal data class TimerDialUiState(
             completedWorkoutStageCount = 0,
             stageSegments = emptyList(),
             visualVariant = ProductionTimerDialVisualVariant,
+            currentStageColorHex = TimedStageType.WORK.defaultColorHex,
+            currentStageTextColorHex = "#FFFFFF",
             currentStageIconKey = "timer",
             currentStageTimeText = "00:00",
             totalRemainingText = "00:00",
@@ -62,6 +68,8 @@ internal data class TimerDialUiState(
                 totalWorkoutStageCount.coerceAtLeast(0)
             ),
             stageSegments = stageSegments.map { segment -> segment.clamped() },
+            currentStageColorHex = normalizeStageColorHex(currentStageColorHex, currentStageType.toTimedStageType()),
+            currentStageTextColorHex = currentStageTextColorHex.takeIf { isValidColorHex(it) } ?: "#FFFFFF",
             currentStageRemainingSec = safeCurrentStageRemainingSec,
             totalRemainingSec = safeTotalRemainingSec,
             currentStageTimeText = safeCurrentStageRemainingSec.formatTimerText(),
@@ -76,12 +84,14 @@ internal data class TimerDialStageSegmentUiState(
     val stageType: TimerDialStageType,
     val durationSec: Int,
     val progress: Float,
-    val isCurrent: Boolean
+    val isCurrent: Boolean,
+    val colorHex: String
 ) {
     fun clamped(): TimerDialStageSegmentUiState {
         return copy(
             durationSec = durationSec.coerceAtLeast(0),
-            progress = progress.clampedProgress()
+            progress = progress.clampedProgress(),
+            colorHex = normalizeStageColorHex(colorHex, stageType.toTimedStageType())
         )
     }
 }
@@ -191,6 +201,8 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         completedWorkoutStageCount = completedWorkoutStageCount,
         stageSegments = segments,
         visualVariant = visualVariant,
+        currentStageColorHex = normalizeStageColorHex(screenState.stageColorHex, currentType.toTimedStageType()),
+        currentStageTextColorHex = stageTextColorHexFor(screenState.stageColorHex, currentType.toTimedStageType()),
         currentStageIconKey = screenState.stageIconKey,
         currentStageTimeText = screenState.timerText,
         totalRemainingText = screenState.totalRemainingText,
@@ -251,9 +263,25 @@ private fun TimedWorkoutEngineState.currentTimerDialCycleSegments(
             stageType = step.timerDialStageType(),
             durationSec = step.durationSec,
             progress = progress,
-            isCurrent = index == currentStepIndex
+            isCurrent = index == currentStepIndex,
+            colorHex = normalizeStageColorHex(step.colorHex, step.timerDialStageType().toTimedStageType())
         )
     }
+}
+
+private fun TimerDialStageType.toTimedStageType(): TimedStageType {
+    return when (this) {
+        TimerDialStageType.WARMUP -> TimedStageType.WARMUP
+        TimerDialStageType.WORK -> TimedStageType.WORK
+        TimerDialStageType.REST -> TimedStageType.REST
+        TimerDialStageType.COOLDOWN -> TimedStageType.COOLDOWN
+        TimerDialStageType.CUSTOM -> TimedStageType.CUSTOM
+    }
+}
+
+private fun isValidColorHex(hex: String?): Boolean {
+    val value = hex?.trim() ?: return false
+    return Regex("#[0-9A-Fa-f]{6}").matches(value)
 }
 
 private fun TimedWorkoutEngineState.currentStepDisplayProgress(): Float {

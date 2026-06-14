@@ -85,6 +85,37 @@ class WorkoutPlanRepositoryTest {
     }
 
     @Test
+    fun timedPlanInvalidStageColorFallsBackDuringRoundTrip() = runBlocking {
+        val plan = customTimedPlan().copy(
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "invalid-color-circuit",
+                    order = 1,
+                    rounds = 1,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "bad-color-work",
+                            labelOverride = "坏色值",
+                            stageType = TimedStageType.WORK,
+                            iconKey = "work",
+                            colorHex = "not-a-color",
+                            workDurationSec = 30,
+                            autoAdvance = true
+                        )
+                    )
+                )
+            )
+        )
+
+        repository.upsertPlan(plan)
+
+        val restored = requireNotNull(repository.getPlan("custom-timed"))
+        val item = (restored.blocks.single() as TimedCircuitBlock).items.single()
+
+        assertEquals(TimedStageType.WORK.defaultColorHex, item.colorHex)
+    }
+
+    @Test
     fun strengthPlanPersistsTargetsWithoutCreatingSessionRecords() = runBlocking {
         repository.upsertPlan(strengthPlan())
 

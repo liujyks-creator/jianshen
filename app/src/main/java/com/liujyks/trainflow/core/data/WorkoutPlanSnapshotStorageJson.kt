@@ -27,6 +27,7 @@ import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.core.model.normalizeStageColorHex
 
 internal fun WorkoutPlan.toPlanSnapshot(): WorkoutPlanSnapshot {
     return WorkoutPlanSnapshot(
@@ -344,7 +345,7 @@ private fun JsonValue.toTimedExerciseItem(): TimedExerciseItem? {
         side = obj.string("side")?.let(::exerciseSideFrom),
         stageType = stageType,
         iconKey = obj.string("iconKey") ?: stageType.defaultIconKey,
-        colorHex = obj.string("colorHex") ?: stageType.defaultColorHex,
+        colorHex = normalizeStageColorHex(obj.string("colorHex"), stageType),
         workDurationSec = obj.int("workDurationSec") ?: return null,
         restAfterSec = obj.int("restAfterSec"),
         cueSettings = obj.obj("cueSettings")?.toCueSettings(),

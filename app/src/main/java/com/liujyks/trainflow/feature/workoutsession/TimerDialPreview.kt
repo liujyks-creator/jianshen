@@ -286,10 +286,28 @@ private fun sampleTimerDialState(
         totalWorkoutStageCount = 7,
         completedWorkoutStageCount = 3,
         stageSegments = listOf(
-            TimerDialStageSegmentUiState("work-4", "爆发间歇", TimerDialStageType.WORK, 45, currentProgress, true),
-            TimerDialStageSegmentUiState("rest-4", "休息", TimerDialStageType.REST, 15, 0f, false)
+            TimerDialStageSegmentUiState(
+                id = "work-4",
+                label = "爆发间歇",
+                stageType = TimerDialStageType.WORK,
+                durationSec = 45,
+                progress = currentProgress,
+                isCurrent = true,
+                colorHex = "#F26B4F"
+            ),
+            TimerDialStageSegmentUiState(
+                id = "rest-4",
+                label = "休息",
+                stageType = TimerDialStageType.REST,
+                durationSec = 15,
+                progress = 0f,
+                isCurrent = false,
+                colorHex = "#65A9FF"
+            )
         ),
         visualVariant = variant,
+        currentStageColorHex = "#F26B4F",
+        currentStageTextColorHex = "#FFFFFF",
         currentStageIconKey = "work",
         currentStageTimeText = "00:${remainingSec.toString().padStart(2, '0')}",
         totalRemainingText = "14:28",

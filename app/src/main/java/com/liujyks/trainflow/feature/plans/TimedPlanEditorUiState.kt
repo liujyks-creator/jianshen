@@ -5,6 +5,9 @@ import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.PlanPreferences
+import com.liujyks.trainflow.core.model.MoreStageColorPresets
+import com.liujyks.trainflow.core.model.RecommendedStageColorPresets
+import com.liujyks.trainflow.core.model.StageColorPreset
 import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
@@ -12,6 +15,9 @@ import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.normalizeStageColorHex
+import com.liujyks.trainflow.core.model.stageColorPresetFor
+import com.liujyks.trainflow.core.model.stageTextColorHexFor
 
 internal const val DefaultTimedPlanTimestamp = "2026-05-28T00:00:00Z"
 
@@ -156,6 +162,27 @@ internal data class TimedStageTypeOptionUiState(
     val colorHex: String
 )
 
+internal data class StageColorOptionUiState(
+    val id: String,
+    val name: String,
+    val hex: String,
+    val tone: String,
+    val recommendedUse: String,
+    val textColor: String,
+    val isHighAttention: Boolean,
+    val selected: Boolean,
+    val hasCheckIndicator: Boolean,
+    val contentDescription: String
+)
+
+internal data class StageColorPickerUiState(
+    val selectedColorHex: String,
+    val selectedColorName: String,
+    val selectedTextColorHex: String,
+    val recommendedColors: List<StageColorOptionUiState>,
+    val moreColors: List<StageColorOptionUiState>
+)
+
 internal data class CountdownCueUiState(
     val enabled: Boolean = true,
     val thresholdSec: Int = CountdownCue.DEFAULT_THRESHOLD_SEC,
@@ -188,16 +215,40 @@ internal val TimedStageTypeOptions: List<TimedStageTypeOptionUiState> = TimedSta
     )
 }
 
-internal val TimedStageColorOptions: List<String> = listOf(
-    "#F2B84B",
-    "#F26B4F",
-    "#2FBF8F",
-    "#65A9FF",
-    "#8B6CFF",
-    "#E45DA7",
-    "#18A6A6",
-    "#A8B3BE"
-)
+internal fun TimedPlanEditorStageUiState.toStageColorPickerUiState(): StageColorPickerUiState {
+    val selectedHex = normalizeStageColorHex(colorHex, stageType)
+    val selectedPreset = stageColorPresetFor(selectedHex)
+    return StageColorPickerUiState(
+        selectedColorHex = selectedHex,
+        selectedColorName = selectedPreset?.name ?: "自定义颜色",
+        selectedTextColorHex = stageTextColorHexFor(selectedHex, stageType),
+        recommendedColors = RecommendedStageColorPresets.map { preset ->
+            preset.toOption(selectedHex)
+        },
+        moreColors = MoreStageColorPresets.map { preset ->
+            preset.toOption(selectedHex)
+        }
+    )
+}
+
+private fun StageColorPreset.toOption(selectedHex: String): StageColorOptionUiState {
+    val isSelected = hex.equals(selectedHex, ignoreCase = true)
+    return StageColorOptionUiState(
+        id = id,
+        name = name,
+        hex = hex,
+        tone = tone,
+        recommendedUse = recommendedUse,
+        textColor = textColor,
+        isHighAttention = isHighAttention,
+        selected = isSelected,
+        hasCheckIndicator = isSelected,
+        contentDescription = buildString {
+            if (isSelected) append("已选中，")
+            append(accessibilityLabel)
+        }
+    )
+}
 
 internal fun buildDefaultTimedPlanEditorState(
     defaults: PlanEditorDefaults = PlanEditorDefaults()
@@ -447,9 +498,14 @@ internal fun TimedPlanEditorScreenState.updateStageColor(
     stageId: String,
     colorHex: String
 ): TimedPlanEditorScreenState {
-    val sanitized = colorHex.takeIf { it.matches(Regex("#[0-9A-Fa-f]{6}")) } ?: return this
     return copy(
-        stages = stages.map { stage -> if (stage.id == stageId) stage.copy(colorHex = sanitized) else stage },
+        stages = stages.map { stage ->
+            if (stage.id == stageId) {
+                stage.copy(colorHex = normalizeStageColorHex(colorHex, stage.stageType))
+            } else {
+                stage
+            }
+        },
         savedPlan = null,
         statusMessage = null
     )

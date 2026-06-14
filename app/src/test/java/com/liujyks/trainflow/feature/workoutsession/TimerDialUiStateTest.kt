@@ -31,7 +31,8 @@ class TimerDialUiStateTest {
                     stageType = TimerDialStageType.WORK,
                     durationSec = -10,
                     progress = Float.NaN,
-                    isCurrent = true
+                    isCurrent = true,
+                    colorHex = "not-a-color"
                 )
             )
         ).clamped()
@@ -44,6 +45,7 @@ class TimerDialUiStateTest {
         assertEquals("00:00", state.currentStageTimeText)
         assertEquals(0, state.stageSegments.single().durationSec)
         assertEquals(0f, state.stageSegments.single().progress, 0.0001f)
+        assertEquals("#F26B4F", state.stageSegments.single().colorHex)
     }
 
     @Test
@@ -72,6 +74,37 @@ class TimerDialUiStateTest {
         assertEquals(screenState.totalRemainingText, dial.totalRemainingText)
         assertEquals("暂停训练", dial.centerActionLabel)
         assertTrue(dial.canTogglePause)
+    }
+
+    @Test
+    fun timerDialConsumesCustomStageColorAndTextColorFromPlan() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5, workColorHex = "#FFC107")),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        val screenState = state.toTimedWorkoutSessionScreenState()
+        val dial = screenState.timerDial
+
+        assertEquals("#FFC107", screenState.stageColorHex)
+        assertEquals("#FFC107", dial.currentStageColorHex)
+        assertEquals("#111820", dial.currentStageTextColorHex)
+        assertEquals("#FFC107", dial.stageSegments.first().colorHex)
+    }
+
+    @Test
+    fun timerDialFallsBackWhenStageColorIsInvalid() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5, workColorHex = "bad-color")),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals("#F26B4F", dial.currentStageColorHex)
+        assertEquals("#F26B4F", dial.stageSegments.first().colorHex)
     }
 
     @Test
@@ -589,7 +622,8 @@ class TimerDialUiStateTest {
     private fun timerDialPlan(
         workSec: Int,
         restSec: Int,
-        cueSettings: CueSettings? = null
+        cueSettings: CueSettings? = null,
+        workColorHex: String = TimedStageType.WORK.defaultColorHex
     ): WorkoutPlan {
         return WorkoutPlan(
             id = "timer-dial-test",
@@ -611,6 +645,7 @@ class TimerDialUiStateTest {
                             id = "work",
                             labelOverride = "Work",
                             stageType = TimedStageType.WORK,
+                            colorHex = workColorHex,
                             workDurationSec = workSec,
                             restAfterSec = restSec
                         )

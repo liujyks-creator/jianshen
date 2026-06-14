@@ -169,6 +169,17 @@ export interface TimedExerciseItem {
   autoAdvance?: boolean
 }
 
+export interface StageColorPreset {
+  id: string
+  name: string
+  hex: string
+  tone: string
+  recommendedUse: string
+  textColor: string
+  isHighAttention: boolean
+  isRecommended: boolean
+}
+
 export interface CountdownCue {
   enabled: boolean
   thresholdSec: number
