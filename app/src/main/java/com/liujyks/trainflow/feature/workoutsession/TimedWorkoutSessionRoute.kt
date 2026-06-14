@@ -2,10 +2,15 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +47,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +88,7 @@ import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
 import com.liujyks.trainflow.ui.designsystem.currentSectionSpacing
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import com.liujyks.trainflow.ui.theme.isBigType
 import java.time.Instant
 import kotlinx.coroutines.delay
@@ -218,33 +225,39 @@ internal fun TimedWorkoutSessionRoute(
         }
     }
 
-    if (readyGate != null) {
-        TimedWorkoutReadyStartGateScreen(
-            uiState = readyGate,
-            onStartSession = ::startSessionFromReadyGate,
-            onBackToPlans = onBackToPlans,
-            modifier = modifier
-        )
-    } else {
-        TimedWorkoutSessionScreen(
-            uiState = uiState,
-            onPause = { dispatch(WorkoutCommand.PauseSession) },
-            onResume = { dispatch(WorkoutCommand.ResumeSession) },
-            onSkip = { dispatch(WorkoutCommand.SkipStep) },
-            restExtensionControl = restExtensionControl,
-            onExtendRest = ::onRestExtensionClick,
-            showEndConfirmation = endConfirmation.visible,
-            onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
-            onCancelEnd = { endConfirmation = endConfirmation.cancel() },
-            onConfirmEnd = {
-                val result = endConfirmation.confirm(uiState.canEnd)
-                endConfirmation = result.nextState
-                result.command?.let(::dispatch)
-            },
-            onBackToPlans = onBackToPlans,
-            onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
-            modifier = modifier
-        )
+    Crossfade(
+        targetState = readyGate,
+        animationSpec = timedRouteLocalLayoutTransitionSpec(),
+        label = "TimedReadyGateToExecution"
+    ) { targetReadyGate ->
+        if (targetReadyGate != null) {
+            TimedWorkoutReadyStartGateScreen(
+                uiState = targetReadyGate,
+                onStartSession = ::startSessionFromReadyGate,
+                onBackToPlans = onBackToPlans,
+                modifier = modifier
+            )
+        } else {
+            TimedWorkoutSessionScreen(
+                uiState = uiState,
+                onPause = { dispatch(WorkoutCommand.PauseSession) },
+                onResume = { dispatch(WorkoutCommand.ResumeSession) },
+                onSkip = { dispatch(WorkoutCommand.SkipStep) },
+                restExtensionControl = restExtensionControl,
+                onExtendRest = ::onRestExtensionClick,
+                showEndConfirmation = endConfirmation.visible,
+                onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
+                onCancelEnd = { endConfirmation = endConfirmation.cancel() },
+                onConfirmEnd = {
+                    val result = endConfirmation.confirm(uiState.canEnd)
+                    endConfirmation = result.nextState
+                    result.command?.let(::dispatch)
+                },
+                onBackToPlans = onBackToPlans,
+                onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                modifier = modifier
+            )
+        }
     }
 }
 
@@ -351,14 +364,31 @@ private fun ReadyStartCenterButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) TrainFlowMotionTokens.TouchFeedbackScale else 1f,
+        animationSpec = timerDialTouchFeedbackSpec(),
+        label = "ReadyStartTouchScale"
+    )
+    val indication = LocalIndication.current
     Surface(
         modifier = modifier
             .size(220.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .semantics {
                 contentDescription = "开始计时训练"
                 role = Role.Button
             }
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = indication,
+                role = Role.Button,
+                onClick = onClick
+            ),
         shape = CircleShape,
         color = TrainFlowAction,
         border = BorderStroke(1.dp, TrainFlowNeutral50.copy(alpha = 0.16f))
@@ -559,6 +589,21 @@ private fun TimedSessionControls(
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
+    val restExtensionInteractionSource = remember { MutableInteractionSource() }
+    val restExtensionPressed by restExtensionInteractionSource.collectIsPressedAsState()
+    val restExtensionScale by animateFloatAsState(
+        targetValue = if (
+            restExtensionPressed &&
+            uiState.canExtendRest &&
+            restExtensionControl.buttonEnabled
+        ) {
+            TrainFlowMotionTokens.TouchFeedbackScale
+        } else {
+            1f
+        },
+        animationSpec = timerDialTouchFeedbackSpec(),
+        label = "TimedRestExtensionTouchScale"
+    )
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = skin.tokens.primary,
@@ -591,8 +636,13 @@ private fun TimedSessionControls(
                 OutlinedButton(
                     onClick = onExtendRest,
                     enabled = uiState.canExtendRest && restExtensionControl.buttonEnabled,
+                    interactionSource = restExtensionInteractionSource,
                     modifier = Modifier
                         .weight(1f)
+                        .graphicsLayer {
+                            scaleX = restExtensionScale
+                            scaleY = restExtensionScale
+                        }
                         .then(
                             if (skin.isBigType) {
                                 Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
@@ -602,15 +652,21 @@ private fun TimedSessionControls(
                         ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(
-                        text = restExtensionControl.buttonLabel,
-                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                        color = if (uiState.canExtendRest && restExtensionControl.buttonEnabled) {
-                            TrainFlowNeutral50
-                        } else {
-                            TrainFlowNeutral500
-                        }
-                    )
+                    Crossfade(
+                        targetState = restExtensionControl.buttonLabel,
+                        animationSpec = timedRestExtensionStateTransitionSpec(),
+                        label = "TimedRestExtensionLabel"
+                    ) { buttonLabel ->
+                        Text(
+                            text = buttonLabel,
+                            fontSize = if (skin.isBigType) 17.sp else 14.sp,
+                            color = if (uiState.canExtendRest && restExtensionControl.buttonEnabled) {
+                                TrainFlowNeutral50
+                            } else {
+                                TrainFlowNeutral500
+                            }
+                        )
+                    }
                 }
                 TimedIconControlButton(
                     icon = TimedControlIcon.END,

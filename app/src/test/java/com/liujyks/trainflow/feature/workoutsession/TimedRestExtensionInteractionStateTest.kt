@@ -11,6 +11,7 @@ import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,6 +32,23 @@ class TimedRestExtensionInteractionStateTest {
         assertTrue(restState.restExtensionHistory.isEmpty())
         assertEquals("确认 +15秒", uiState.buttonLabel)
         assertTrue(uiState.buttonEnabled)
+    }
+
+    @Test
+    fun confirmationMotionSpecDoesNotChangeTwoStepRule() {
+        val restState = activeRestState()
+        val motionSpec = timedRestExtensionStateTransitionSpec()
+        val reducedMotionSpec = timedRestExtensionStateTransitionSpec(reduceMotion = true)
+        val firstClick = TimedRestExtensionInteractionState().onRestExtensionClick(
+            engineState = restState,
+            nowMillis = 1_000
+        )
+
+        assertEquals(TrainFlowMotionTokens.StateTransitionDurationMillis, motionSpec.durationMillis)
+        assertEquals(TrainFlowMotionTokens.ReducedMotionDurationMillis, reducedMotionSpec.durationMillis)
+        assertFalse(firstClick.shouldDispatchExtendRest)
+        assertEquals(0, restState.extendedRestSec)
+        assertTrue(restState.restExtensionHistory.isEmpty())
     }
 
     @Test

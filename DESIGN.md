@@ -381,7 +381,7 @@ TrainFlow 的动效只服务训练节奏和可操作性，不作为炫技层。�
 - paused、completed、abandoned、ready gate 未启动等状态不得继续推进持续进度动画。
 - 最后 N 秒提醒可以更强，但仍应短促、克制，并遵守用户 cue settings；声音、震动和动画都消费 `WorkoutEvent` / UI state，不互相伪造事件。
 
-E10.15 只定义 motion timing rules 和 token，并做最小 token 接入。实际 ready gate、页面切换、play/pause、阶段切换和完整 Motion Landing 留给后续 story；本阶段不实现 Stage color picker、声音播放、统计图表、真实心率设备、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
+E10.16 已把 motion token 最小落地到计时训练关键交互：ready gate -> execution 使用局部布局切换；ready gate center circle、Timer Dial center dial 和 `+15秒` 使用短触摸反馈；Timer Dial play/pause glyph、marker / ring alpha、center color / border 和 `+15秒` label 使用 state transition；reduce-motion specs 降级为 `0ms` snap。动效仍只消费 UI state / engine state，不驱动 engine、倒计时、session record、`WorkoutCommand`、`WorkoutEvent`、`pausedElapsedSec` 或 extra rest。E10.16 不实现大型页面转场系统、Stage color picker、声音播放、统计图表、真实心率设备、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ## Open Source UI Customization
 

@@ -2,10 +2,15 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import android.graphics.Paint
 import android.graphics.Typeface
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.Role
@@ -45,6 +51,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import com.liujyks.trainflow.ui.theme.isBigType
 import kotlin.math.cos
 import kotlin.math.sin
@@ -81,6 +88,52 @@ internal fun TimerDial(
         animationSpec = timerDialFinalPulseAnimationSpec(),
         label = "TimerDialFinalPulse"
     )
+    val currentSegmentAlpha by animateFloatAsState(
+        targetValue = if (safeState.isPaused) 0.5f else 1f,
+        animationSpec = timerDialMarkerRingStateTransitionSpec(),
+        label = "TimerDialCurrentSegmentAlpha"
+    )
+    val totalProgressAlpha by animateFloatAsState(
+        targetValue = if (safeState.isPaused) 0.52f else 0.96f,
+        animationSpec = timerDialMarkerRingStateTransitionSpec(),
+        label = "TimerDialTotalProgressAlpha"
+    )
+    val totalBrushAlpha by animateFloatAsState(
+        targetValue = if (safeState.isPaused) 0.62f else 1f,
+        animationSpec = timerDialMarkerRingStateTransitionSpec(),
+        label = "TimerDialTotalBrushAlpha"
+    )
+    val completedDotAlpha by animateFloatAsState(
+        targetValue = if (safeState.isPaused) 0.58f else 0.92f,
+        animationSpec = timerDialMarkerRingStateTransitionSpec(),
+        label = "TimerDialCompletedDotAlpha"
+    )
+    val centerColor by animateColorAsState(
+        targetValue = if (safeState.isPaused) {
+            tokens.colorFor(safeState.currentStageType).copy(alpha = 0.38f)
+        } else {
+            tokens.colorFor(safeState.currentStageType)
+        },
+        animationSpec = timerDialColorStateTransitionSpec(),
+        label = "TimerDialCenterColor"
+    )
+    val centerBorderColor by animateColorAsState(
+        targetValue = currentCenterBorderColor(safeState, tokens),
+        animationSpec = timerDialColorStateTransitionSpec(),
+        label = "TimerDialCenterBorderColor"
+    )
+    val centerInteractionSource = remember { MutableInteractionSource() }
+    val centerPressed by centerInteractionSource.collectIsPressedAsState()
+    val centerScale by animateFloatAsState(
+        targetValue = if (centerPressed && safeState.canTogglePause) {
+            TrainFlowMotionTokens.TouchFeedbackScale
+        } else {
+            1f
+        },
+        animationSpec = timerDialTouchFeedbackSpec(),
+        label = "TimerDialCenterTouchScale"
+    )
+    val centerIndication = LocalIndication.current
     val dialSize = layoutSpec.dialSizeDp.dp
     val centerSize = layoutSpec.centerSizeDp.dp
     val centerPadding = if (skin.isBigType) 10.dp else 8.dp
@@ -134,7 +187,7 @@ internal fun TimerDial(
                 val segmentColor = tokens.colorFor(segment.stageType)
                 val progress = if (segment.isCurrent) animatedStageProgress else segment.progress
                 val strokeWidth = segment.strokeWidthDp().dp.toPx()
-                val activeAlpha = if (segment.isCurrent) 1f else 0.48f
+                val activeAlpha = if (segment.isCurrent) currentSegmentAlpha else 0.48f
 
                 drawArc(
                     color = tokens.track.copy(alpha = 0.6f),
@@ -147,7 +200,7 @@ internal fun TimerDial(
                 )
                 if (progress > 0f) {
                     drawArc(
-                        color = segmentColor.copy(alpha = if (safeState.isPaused) 0.5f else activeAlpha),
+                        color = segmentColor.copy(alpha = activeAlpha),
                         startAngle = startAngle,
                         sweepAngle = visibleSweep * progress,
                         useCenter = false,
@@ -198,7 +251,7 @@ internal fun TimerDial(
 
             if (markerProgress > 0f) {
                 drawArc(
-                    color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.52f else 0.96f),
+                    color = tokens.totalProgress.copy(alpha = totalProgressAlpha),
                     startAngle = -90f,
                     sweepAngle = 360f * markerProgress,
                     useCenter = false,
@@ -207,7 +260,7 @@ internal fun TimerDial(
                     style = Stroke(width = innerStroke, cap = StrokeCap.Round)
                 )
                 drawCircle(
-                    color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.62f else 1f),
+                    color = tokens.totalProgress.copy(alpha = totalBrushAlpha),
                     radius = layoutSpec.totalBrushRadiusDp.dp.toPx(),
                     center = pointOnCircle(innerCenter, innerRadius, markerProgress)
                 )
@@ -227,7 +280,7 @@ internal fun TimerDial(
                     }
                     TimerDialInnerMarkerRole.COMPLETED_DOT -> {
                         drawCircle(
-                            color = tokens.totalProgress.copy(alpha = if (safeState.isPaused) 0.58f else 0.92f),
+                            color = tokens.totalProgress.copy(alpha = completedDotAlpha),
                             radius = layoutSpec.innerCompletedDotRadiusDp.dp.toPx(),
                             center = center
                         )
@@ -270,22 +323,26 @@ internal fun TimerDial(
         Surface(
             modifier = Modifier
                 .size(centerSize)
+                .graphicsLayer {
+                    scaleX = centerScale
+                    scaleY = centerScale
+                }
                 .semantics {
                     this.contentDescription = contentDescription
                     role = Role.Button
                 }
-                .clickable(enabled = safeState.canTogglePause) {
-                    onTogglePause()
-                },
+                .clickable(
+                    interactionSource = centerInteractionSource,
+                    indication = centerIndication,
+                    enabled = safeState.canTogglePause,
+                    role = Role.Button,
+                    onClick = onTogglePause
+                ),
             shape = CircleShape,
-            color = if (safeState.isPaused) {
-                tokens.colorFor(safeState.currentStageType).copy(alpha = 0.38f)
-            } else {
-                tokens.colorFor(safeState.currentStageType)
-            },
+            color = centerColor,
             border = BorderStroke(
                 width = 1.dp,
-                color = currentCenterBorderColor(safeState, tokens)
+                color = centerBorderColor
             )
         ) {
             Column(
@@ -293,12 +350,18 @@ internal fun TimerDial(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                TimerDialCenterGlyph(
-                    isPaused = safeState.isPaused,
-                    stageType = safeState.currentStageType,
-                    color = tokens.textPrimary,
-                    size = glyphSize
-                )
+                Crossfade(
+                    targetState = safeState.isPaused,
+                    animationSpec = timerDialPlayPauseStateTransitionSpec(),
+                    label = "TimerDialPlayPauseGlyph"
+                ) { isPaused ->
+                    TimerDialCenterGlyph(
+                        isPaused = isPaused,
+                        stageType = safeState.currentStageType,
+                        color = tokens.textPrimary,
+                        size = glyphSize
+                    )
+                }
                 if (safeState.currentStageIndex > 0) {
                     Text(
                         text = safeState.currentStageIndex.toString(),

@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.buildDefaultTimedPlanEditorState
+import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import java.io.File
 import java.time.Instant
 import org.junit.Assert.assertEquals
@@ -55,6 +56,21 @@ class TimedReadyStartGateTest {
         assertTrue(startedResult.events.any { event -> event is WorkoutEvent.SessionStarted })
         assertEquals(null, started.toTimedReadyStartGateUiState())
         assertTrue(started.toTimedWorkoutSessionScreenState().canPause)
+    }
+
+    @Test
+    fun readyGateLayoutMotionDoesNotStartOrTickTheSession() {
+        val ready = TimedWorkoutEngine.create(buildDefaultPlanManagementState().plans.first())
+        val layoutSpec = timedRouteLocalLayoutTransitionSpec()
+        val reducedMotionSpec = timedRouteLocalLayoutTransitionSpec(reduceMotion = true)
+
+        assertEquals(TrainFlowMotionTokens.LocalLayoutTransitionDurationMillis, layoutSpec.durationMillis)
+        assertEquals(TrainFlowMotionTokens.ReducedMotionDurationMillis, reducedMotionSpec.durationMillis)
+        assertEquals(SessionStatus.READY, ready.status)
+        assertEquals(null, ready.currentStep)
+        assertEquals(0, ready.activeElapsedSec)
+        assertFalse(ready.shouldTickTimedRouteClock())
+        assertTrue(ready.controlHistory.isEmpty())
     }
 
     @Test
@@ -142,7 +158,9 @@ class TimedReadyStartGateTest {
         val buttonSource = source.substring(buttonStart, glyphStart)
         val glyphSource = source.substring(glyphStart)
 
-        assertTrue(buttonSource.contains(".clickable(onClick = onClick)"))
+        assertTrue(buttonSource.contains(".clickable("))
+        assertTrue(buttonSource.contains("interactionSource = interactionSource"))
+        assertTrue(buttonSource.contains("onClick = onClick"))
         assertTrue(buttonSource.contains("contentDescription = \"开始计时训练\""))
         assertFalse(glyphSource.contains(".clickable"))
     }

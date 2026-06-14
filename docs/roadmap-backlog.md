@@ -1441,6 +1441,32 @@ stepsCompleted:
 - `DESIGN.md` 新增 motion token 和 motion rules，明确动画服务训练节奏、可中断、状态驱动、reduce-motion 降级，以及不驱动业务状态。
 - 本阶段只做规则和最小 token 接入，没有实现完整 Motion Landing、页面切换动画落地、color picker、sound、stats、heart-rate device 或其他后续能力。
 
+### Story E10.16: Motion Landing
+
+**状态:** Implemented as minimal timed workout motion landing
+
+作为计时训练用户，
+我想 ready gate、中心圆、阶段变化和 `+15秒` 确认反馈有短促、统一且可中断的动效，
+以便界面能确认我的操作但不阻塞下一次点击或真实训练计时。
+
+**验收标准:**
+
+- Given E10.15 motion token，Then ready gate、center dial、play/pause、Timer Dial marker / ring 状态和 `+15秒` 反馈都使用集中 motion specs，不写散落 magic duration。
+- Then ready gate -> execution 只做局部切换；点击 center circle 仍立即通过 `WorkoutCommand.StartSession` 启动。
+- Then center dial play/pause glyph、中心圆颜色 / 边框和按压反馈只消费 UI state，不改变 engine state。
+- Then Timer Dial marker / ring / center color 状态变化可以平滑，但 continuous progress 仍只是 bounded UI projection，paused / terminal 不推进真实进度。
+- Then `+15秒` label 在 `+15秒` / `确认 +15秒` / `已加 15秒` 之间使用 state transition 和 touch feedback，但第一次点击仍只进入 pending，第二次确认才 dispatch `ExtendRest(15)`。
+- Then reduce-motion specs 降级为 `0ms` snap，不改变业务状态。
+- Then 本阶段不实现大型页面转场系统、Stage color picker、声音播放、E12 统计图表、真实心率设备、foreground service、exact alarm、notification action、reset production command、第四套 skin 或 prototype 前端改动。
+
+**交付结果:**
+
+- `feature.workoutsession.TimerDialMotionSpecs` 新增 ready/execution local layout、touch feedback、play/pause state、marker/ring state、color state、`+15秒` state 和 reduce-motion snap specs，全部消费 `TrainFlowMotionTokens`。
+- `TimedWorkoutSessionRoute` 使用局部 `Crossfade` 承载 ready gate -> execution；ready center circle 和 `+15秒` 控件加入 tokenized touch feedback，`+15秒` label 使用 state transition。
+- `TimerDial` center dial 加入 tokenized touch feedback、play/pause glyph state transition、center color / border transition，以及 marker / ring alpha state transition；进度投影、pause freeze、terminal freeze 和 rest extension monotonic progress 语义不变。
+- 测试覆盖 motion spec token usage、reduce-motion fallback、ready gate motion 不启动 session、play/pause 和 `+15秒` 使用 state transition、`+15秒` motion 不改变二段确认规则，并保留既有 Timer Dial / rest extension 回归。
+- 本阶段未改变 `WorkoutCommand` / `WorkoutEvent` / engine / session record / extra rest / paused elapsed 语义，未新增声音、统计、设备、通知 action、reset production command 或第四套 skin。
+
 ### Story E10.x: 后续力量训练新版 UI 设计
 
 力量训练完整新版 UI 设计单独开启，不塞进 E10.3。该阶段可重审力量训练信息架构、确认层、历史趋势入口和高级组设置，但必须保留计划值预填实际记录、训练命令、训练事件和核心引擎语义。
@@ -1563,7 +1589,7 @@ stepsCompleted:
 | FR-070 到 FR-081 | E5.1, E5.2, E5.3, E5.4 |
 | UI 定制与设计系统 | E8.1, E8.2, E8.3, E8.4 |
 | 用户测试后训练模式边界 | E10.1, E10.2, E10.3 |
-| Timer Dial 设计与真实记录、统计、心率和音频后续 | E10.4, E10.5, E10.6, E10.7, E10.8, E10.9, E10.10, E10.11, E10.12, E10.13, E10.14, E10.15, E11, E12, E13 |
+| Timer Dial 设计与真实记录、统计、心率和音频后续 | E10.4, E10.5, E10.6, E10.7, E10.8, E10.9, E10.10, E10.11, E10.12, E10.13, E10.14, E10.15, E10.16, E11, E12, E13 |
 
 ## 6. 推荐实施顺序
 
@@ -1585,9 +1611,10 @@ stepsCompleted:
 16. E10.13：Ready Start Gate，计时训练从编辑页或计划详情开始后先进入极简启动界面，点击中心圆才真正开始训练。（Implemented）
 17. E10.14：Rest Extension Semantics And Recording，明确 `+15秒` 只延长当前休息阶段，加入二段式确认和每段上限，并把确认成功的额外休息保存为真实 session record。（Implemented）
 18. E10.15：Motion Timing Rules，建立训练交互动效 token、时长范围、easing、可中断和 reduce-motion 边界。（Implemented）
-19. E11：手动心率输入与真实设备接口策略。
-20. E12：真实记录、总统计、图表、趋势分析、同日多轮运动分析和历史记录清理。
-21. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+19. E10.16：Motion Landing，把 E10.15 token 最小落地到计时训练 ready gate、center dial、Timer Dial 状态变化和 `+15秒` 二段确认反馈。（Implemented）
+20. E11：手动心率输入与真实设备接口策略。
+21. E12：真实记录、总统计、图表、趋势分析、同日多轮运动分析和历史记录清理。
+22. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
 
@@ -1619,13 +1646,13 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record 供 E12 后续分析；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
+E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record 供 E12 后续分析；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并保持 ready/start、pause/resume、rest extension、session record 和 continuous projection 业务语义不变；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 继续处理总统计、图表、平均心率趋势和同日多轮运动分析。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-Story E10.15 Review Gate；随后按用户测试优先级进入 E12 Stats / Records 或 E13 Sound Cue System，或单独开启 E10.16 Motion Landing。E10.14 已提供真实 rest extension records，E12 可以基于它做统计和趋势，但不要回填或改写历史计划结构；E10.16 若启动，只消费 E10.15 token，不改变训练语义。
+Story E10.16 Review Gate；随后按用户测试优先级进入 E12 Stats / Records 或 E13 Sound Cue System。E10.14 已提供真实 rest extension records，E12 可以基于它做统计和趋势，但不要回填或改写历史计划结构；后续 motion polish 仍只消费 E10.15 / E10.16 token 和 specs，不改变训练语义。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
