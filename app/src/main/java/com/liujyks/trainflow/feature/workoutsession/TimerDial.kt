@@ -3,7 +3,6 @@ package com.liujyks.trainflow.feature.workoutsession
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -46,7 +45,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
-import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
 import com.liujyks.trainflow.ui.theme.isBigType
 import kotlin.math.cos
 import kotlin.math.sin
@@ -80,10 +78,7 @@ internal fun TimerDial(
     val animatedStageProgress = safeState.projectedStageProgress(smoothProgressElapsedMillis)
     val finalPulse by animateFloatAsState(
         targetValue = if (safeState.isFinalCountdown && !safeState.isPaused) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = TrainFlowMotionTokens.LocalLayoutTransitionDurationMillis,
-            easing = TrainFlowMotionTokens.StandardEasing
-        ),
+        animationSpec = timerDialFinalPulseAnimationSpec(),
         label = "TimerDialFinalPulse"
     )
     val dialSize = layoutSpec.dialSizeDp.dp
