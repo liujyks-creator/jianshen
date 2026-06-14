@@ -5,6 +5,7 @@ import android.media.ToneGenerator
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -68,6 +70,7 @@ import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearRe
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
+import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowError
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
@@ -92,7 +95,7 @@ internal fun TimedWorkoutSessionRoute(
     modifier: Modifier = Modifier
 ) {
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
-    val sessionStartedAt = remember(sessionId) { Instant.now() }
+    var sessionStartedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
     var recordWriteState by remember(sessionId) { mutableStateOf(TerminalWorkoutSessionRecordWriteState()) }
     var engineState by remember(plan.id, sessionId) {
         mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
@@ -105,14 +108,15 @@ internal fun TimedWorkoutSessionRoute(
 
     fun applyEngineResult(result: TimedWorkoutEngineResult) {
         engineState = result.state
-        result.events.dispatchCountdownReminders(
-            state = result.state,
-            feedbackSink = feedbackSink
-        )
+        if (result.shouldDispatchTimedCountdownReminderFeedback()) {
+            result.events.dispatchCountdownReminders(
+                state = result.state,
+                feedbackSink = feedbackSink
+            )
+        }
     }
 
-    LaunchedEffect(plan.id) {
-        applyEngineResult(TimedWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession))
+    LaunchedEffect(plan.id, sessionId) {
         while (true) {
             delay(1000)
             if (engineState.shouldTickTimedRouteClock()) {
@@ -125,7 +129,15 @@ internal fun TimedWorkoutSessionRoute(
         applyEngineResult(TimedWorkoutEngine.dispatch(engineState, command))
     }
 
+    fun startSessionFromReadyGate() {
+        if (!engineState.isTimedReadyStartGate()) return
+
+        sessionStartedAt = Instant.now()
+        applyEngineResult(engineState.startTimedSessionFromReadyGate())
+    }
+
     val uiState = engineState.toTimedWorkoutSessionScreenState()
+    val readyGate = engineState.toTimedReadyStartGateUiState()
     var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
     val notificationState = timedActiveWorkoutNotificationState(
         planId = plan.id,
@@ -139,11 +151,12 @@ internal fun TimedWorkoutSessionRoute(
         activeWorkoutNotifications.update(notificationState)
     }
     LaunchedEffect(engineState.status, engineState.sessionId) {
-        if (engineState.isTerminal) {
+        val startedAt = sessionStartedAt
+        if (engineState.shouldRecordTimedTerminalSession(startedAt) && startedAt != null) {
             recordWriteState = recordWriteState.recordTerminalSessionOnce(
                 session = engineState.toWorkoutSessionRecord(
                     plan = plan,
-                    startedAt = sessionStartedAt,
+                    startedAt = startedAt,
                     endedAt = Instant.now()
                 ),
                 onRecordWorkoutSession = onRecordWorkoutSession
@@ -156,24 +169,169 @@ internal fun TimedWorkoutSessionRoute(
         }
     }
 
-    TimedWorkoutSessionScreen(
-        uiState = uiState,
-        onPause = { dispatch(WorkoutCommand.PauseSession) },
-        onResume = { dispatch(WorkoutCommand.ResumeSession) },
-        onSkip = { dispatch(WorkoutCommand.SkipStep) },
-        onExtendRest = { dispatch(WorkoutCommand.ExtendRest(seconds = 15)) },
-        showEndConfirmation = endConfirmation.visible,
-        onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
-        onCancelEnd = { endConfirmation = endConfirmation.cancel() },
-        onConfirmEnd = {
-            val result = endConfirmation.confirm(uiState.canEnd)
-            endConfirmation = result.nextState
-            result.command?.let(::dispatch)
-        },
-        onBackToPlans = onBackToPlans,
-        onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
-        modifier = modifier
+    if (readyGate != null) {
+        TimedWorkoutReadyStartGateScreen(
+            uiState = readyGate,
+            onStartSession = ::startSessionFromReadyGate,
+            onBackToPlans = onBackToPlans,
+            modifier = modifier
+        )
+    } else {
+        TimedWorkoutSessionScreen(
+            uiState = uiState,
+            onPause = { dispatch(WorkoutCommand.PauseSession) },
+            onResume = { dispatch(WorkoutCommand.ResumeSession) },
+            onSkip = { dispatch(WorkoutCommand.SkipStep) },
+            onExtendRest = { dispatch(WorkoutCommand.ExtendRest(seconds = 15)) },
+            showEndConfirmation = endConfirmation.visible,
+            onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
+            onCancelEnd = { endConfirmation = endConfirmation.cancel() },
+            onConfirmEnd = {
+                val result = endConfirmation.confirm(uiState.canEnd)
+                endConfirmation = result.nextState
+                result.command?.let(::dispatch)
+            },
+            onBackToPlans = onBackToPlans,
+            onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+            modifier = modifier
+        )
+    }
+}
+
+internal data class TimedReadyStartGateUiState(
+    val planTitle: String,
+    val estimatedDurationLabel: String,
+    val stageCountLabel: String,
+    val roundsLabel: String
+)
+
+internal fun TimedWorkoutEngineState.isTimedReadyStartGate(): Boolean {
+    return status == SessionStatus.READY && currentStep == null
+}
+
+internal fun TimedWorkoutEngineState.toTimedReadyStartGateUiState(): TimedReadyStartGateUiState? {
+    if (!isTimedReadyStartGate()) return null
+
+    val estimatedDurationSec = steps.sumOf { step -> step.durationSec }
+    val roundCount = steps.mapNotNull { step -> step.roundCount }.maxOrNull()
+
+    return TimedReadyStartGateUiState(
+        planTitle = planTitle,
+        estimatedDurationLabel = estimatedDurationSec.formatReadyDuration(),
+        stageCountLabel = "${steps.size} 阶段",
+        roundsLabel = roundCount?.let { "$it 轮" } ?: "单轮"
     )
+}
+
+internal fun TimedWorkoutEngineState.startTimedSessionFromReadyGate(): TimedWorkoutEngineResult {
+    return if (isTimedReadyStartGate()) {
+        TimedWorkoutEngine.dispatch(this, WorkoutCommand.StartSession)
+    } else {
+        TimedWorkoutEngineResult(state = this)
+    }
+}
+
+internal fun TimedWorkoutEngineState.shouldRecordTimedTerminalSession(startedAt: Instant?): Boolean {
+    return isTerminal && startedAt != null
+}
+
+internal fun TimedWorkoutEngineResult.shouldDispatchTimedCountdownReminderFeedback(): Boolean {
+    return state.status == SessionStatus.ACTIVE && events.isNotEmpty()
+}
+
+@Composable
+private fun TimedWorkoutReadyStartGateScreen(
+    uiState: TimedReadyStartGateUiState,
+    onStartSession: () -> Unit,
+    onBackToPlans: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val skin = LocalTrainFlowSkin.current
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(skin.tokens.primary)
+            .padding(horizontal = currentPageHorizontalPadding(), vertical = 28.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = uiState.planTitle,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    ),
+                    color = TrainFlowNeutral50
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SessionPill(text = uiState.estimatedDurationLabel)
+                    SessionPill(text = uiState.stageCountLabel)
+                    SessionPill(text = uiState.roundsLabel)
+                }
+            }
+
+            ReadyStartCenterButton(onClick = onStartSession)
+
+            Text(
+                text = "点击圆盘开始",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral200
+            )
+
+            OutlinedButton(
+                onClick = onBackToPlans,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = "返回计划", color = TrainFlowNeutral200)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadyStartCenterButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .size(220.dp)
+            .semantics {
+                contentDescription = "开始计时训练"
+                role = Role.Button
+            }
+            .clickable(onClick = onClick),
+        shape = CircleShape,
+        color = TrainFlowAction,
+        border = BorderStroke(1.dp, TrainFlowNeutral50.copy(alpha = 0.16f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            ReadyStartPlayGlyph()
+        }
+    }
+}
+
+@Composable
+private fun ReadyStartPlayGlyph(
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(58.dp)) {
+        val path = Path().apply {
+            moveTo(size.width * 0.34f, size.height * 0.18f)
+            lineTo(size.width * 0.34f, size.height * 0.82f)
+            lineTo(size.width * 0.82f, size.height * 0.50f)
+            close()
+        }
+        drawPath(path, TrainFlowNeutral50)
+    }
 }
 
 @Composable
@@ -279,6 +437,17 @@ private fun MainCountdownPanel(
 
 internal fun TimedWorkoutEngineState.shouldTickTimedRouteClock(): Boolean {
     return status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
+}
+
+private fun Int.formatReadyDuration(): String {
+    val safeSeconds = coerceAtLeast(0)
+    val minutes = safeSeconds / 60
+    val seconds = safeSeconds % 60
+    return when {
+        minutes > 0 && seconds > 0 -> "约 ${minutes}分${seconds}秒"
+        minutes > 0 -> "约 ${minutes}分钟"
+        else -> "约 ${seconds}秒"
+    }
 }
 
 @Composable
