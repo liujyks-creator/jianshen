@@ -147,6 +147,40 @@ class OfficialShellStateTest {
     }
 
     @Test
+    fun planDetailEditRoutesTimedAndStrengthModesToMatchingEditors() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val strengthPlan = initial.planManagementState.plans[1]
+        val timedEdit = initial.editPlan(timedPlan)
+        val strengthEdit = initial.editPlan(strengthPlan)
+
+        assertEquals(OfficialShellDestination.TIMED_PLAN_EDITOR, timedEdit.currentDestination)
+        assertEquals(timedPlan.id, timedEdit.editingPlanId)
+        assertEquals(OfficialShellDestination.STRENGTH_PLAN_EDITOR, strengthEdit.currentDestination)
+        assertEquals(strengthPlan.id, strengthEdit.editingPlanId)
+    }
+
+    @Test
+    fun createEditorsClearAnyPlanEditSource() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val editing = initial.editPlan(timedPlan)
+
+        assertEquals(null, editing.openTimedPlanEditorForCreate().editingPlanId)
+        assertEquals(null, editing.openStrengthPlanEditorForCreate().editingPlanId)
+    }
+
+    @Test
+    fun followAlongPlanEditDoesNotOpenFakeEditor() {
+        val initial = OfficialShellState(currentDestination = OfficialShellDestination.PLANS)
+        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
+        val afterEdit = initial.editPlan(preset)
+
+        assertEquals(initial.currentDestination, afterEdit.currentDestination)
+        assertEquals(null, afterEdit.editingPlanId)
+    }
+
+    @Test
     fun timedEditorDraftStartsTimedSessionDestination() {
         val initial = OfficialShellState(currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR)
         val editorPlan = buildDefaultTimedPlanEditorState()

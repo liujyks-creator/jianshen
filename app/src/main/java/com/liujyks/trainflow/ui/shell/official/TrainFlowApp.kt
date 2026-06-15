@@ -64,6 +64,9 @@ internal fun TrainFlowApp(
     var planManagementState by remember {
         mutableStateOf(PlanManagementScreenState(plans = workoutPlans))
     }
+    var editingPlanId by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
     var activeTimedSessionPlan by remember {
         mutableStateOf<WorkoutPlan?>(null)
     }
@@ -79,6 +82,7 @@ internal fun TrainFlowApp(
     val shellState = OfficialShellState(
         currentDestination = currentDestination,
         planManagementState = planManagementState,
+        editingPlanId = editingPlanId,
         activeTimedSessionPlan = activeTimedSessionPlan,
         activeStrengthSessionPlan = activeStrengthSessionPlan,
         activeFollowAlongSessionPlan = activeFollowAlongSessionPlan,
@@ -92,6 +96,7 @@ internal fun TrainFlowApp(
     fun applyShellState(nextState: OfficialShellState) {
         currentDestination = nextState.currentDestination
         planManagementState = nextState.planManagementState
+        editingPlanId = nextState.editingPlanId
         activeTimedSessionPlan = nextState.activeTimedSessionPlan
         activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
         activeFollowAlongSessionPlan = nextState.activeFollowAlongSessionPlan
@@ -117,10 +122,10 @@ internal fun TrainFlowApp(
                         applyShellState(shellState.selectDestination(OfficialShellDestination.EXERCISE_LIBRARY))
                     },
                     onOpenTimedPlanEditor = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.TIMED_PLAN_EDITOR))
+                        applyShellState(shellState.openTimedPlanEditorForCreate())
                     },
                     onOpenStrengthPlanEditor = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.STRENGTH_PLAN_EDITOR))
+                        applyShellState(shellState.openStrengthPlanEditorForCreate())
                     },
                     onOpenFollowAlong = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.FOLLOW_ALONG_ENTRY))
@@ -139,39 +144,51 @@ internal fun TrainFlowApp(
 
                 OfficialShellDestination.TIMED_PLAN_EDITOR -> TimedPlanEditorRoute(
                     onBackToHome = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
+                        applyShellState(
+                            shellState
+                                .selectDestination(OfficialShellDestination.TRAINING)
+                                .copy(editingPlanId = null)
+                        )
                     },
                     onStartTimedPlan = { plan ->
                         applyShellState(shellState.startTimedSession(plan))
                     },
                     onSaveTimedPlan = { plan ->
                         onSaveWorkoutPlan(plan)
+                        val nextPlanManagementState = shellState.planManagementState.upsertPlan(plan)
                         applyShellState(
-                            shellState.withPlanManagementState(
-                                shellState.planManagementState.upsertPlan(plan)
-                            )
+                            shellState.finishPlanEdit(nextPlanManagementState)
                         )
                     },
                     planEditorDefaults = planEditorDefaults,
+                    initialPlan = shellState.planManagementState.plans.firstOrNull { plan ->
+                        plan.id == shellState.editingPlanId
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 OfficialShellDestination.STRENGTH_PLAN_EDITOR -> StrengthPlanEditorRoute(
                     onBackToHome = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
+                        applyShellState(
+                            shellState
+                                .selectDestination(OfficialShellDestination.TRAINING)
+                                .copy(editingPlanId = null)
+                        )
                     },
                     onStartStrengthPlan = { plan ->
                         applyShellState(shellState.startStrengthSession(plan))
                     },
                     onSaveStrengthPlan = { plan ->
                         onSaveWorkoutPlan(plan)
+                        val nextPlanManagementState = shellState.planManagementState.upsertPlan(plan)
                         applyShellState(
-                            shellState.withPlanManagementState(
-                                shellState.planManagementState.upsertPlan(plan)
-                            )
+                            shellState.finishPlanEdit(nextPlanManagementState)
                         )
                     },
                     planEditorDefaults = planEditorDefaults,
+                    initialPlan = shellState.planManagementState.plans.firstOrNull { plan ->
+                        plan.id == shellState.editingPlanId
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
@@ -241,6 +258,9 @@ internal fun TrainFlowApp(
                             },
                             onPersistPlan = onSaveWorkoutPlan,
                             onDeletePlan = onDeleteWorkoutPlan,
+                            onEditPlan = { plan ->
+                                applyShellState(shellState.editPlan(plan))
+                            },
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
@@ -274,6 +294,9 @@ internal fun TrainFlowApp(
                             },
                             onPersistPlan = onSaveWorkoutPlan,
                             onDeletePlan = onDeleteWorkoutPlan,
+                            onEditPlan = { plan ->
+                                applyShellState(shellState.editPlan(plan))
+                            },
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
@@ -296,6 +319,9 @@ internal fun TrainFlowApp(
                     },
                     onPersistPlan = onSaveWorkoutPlan,
                     onDeletePlan = onDeleteWorkoutPlan,
+                    onEditPlan = { plan ->
+                        applyShellState(shellState.editPlan(plan))
+                    },
                     onStartTimedPlan = { plan ->
                         applyShellState(shellState.startTimedSession(plan))
                     },

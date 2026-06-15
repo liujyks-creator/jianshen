@@ -7,6 +7,7 @@ import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -16,6 +17,97 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimedPlanEditorUiStateTest {
+    @Test
+    fun savedTimedPlanBackfillsTitleDescriptionStagesRoundsRestAndCues() {
+        val savedPlan = buildDefaultTimedPlanEditorState()
+            .updateTitle("晚间间歇")
+            .updateDescription("保留阶段颜色和提醒")
+            .updateRounds(5)
+            .updateRestBetweenRounds(75)
+            .updateActionCueThreshold(6)
+            .updateRestCueThreshold(3)
+            .updateSoundEnabled(false)
+            .let { state ->
+                val warmupId = state.stages.first { it.stageType == TimedStageType.WARMUP }.id
+                val workId = state.stages.first { it.stageType == TimedStageType.WORK }.id
+                state
+                    .updateStageColor(warmupId, "#00BCD4")
+                    .updateStageColor(workId, "#FFC107")
+                    .copy(
+                        stages = state
+                            .updateStageColor(warmupId, "#00BCD4")
+                            .updateStageColor(workId, "#FFC107")
+                            .stages
+                            .map { stage ->
+                                when (stage.id) {
+                                    warmupId -> stage.copy(iconKey = "mobility")
+                                    workId -> stage.copy(iconKey = "bolt")
+                                    else -> stage
+                                }
+                            }
+                    )
+            }
+            .toWorkoutPlan(planId = "saved-timed", timestamp = "2026-06-14T01:00:00Z")
+
+        val editor = savedPlan.toTimedPlanEditorState()
+        val resavedPlan = editor.toWorkoutPlan(timestamp = "2026-06-15T01:00:00Z")
+        val circuit = resavedPlan.blocks.filterIsInstance<TimedCircuitBlock>().single()
+        val warmup = resavedPlan.blocks.filterIsInstance<WarmupBlock>().single().items.single()
+
+        assertEquals("saved-timed", editor.sourcePlanId)
+        assertEquals("晚间间歇", editor.title)
+        assertEquals("保留阶段颜色和提醒", editor.description)
+        assertEquals(5, editor.rounds)
+        assertEquals(75, editor.restBetweenRoundsSec)
+        assertEquals(listOf(TimedStageType.WARMUP, TimedStageType.WORK, TimedStageType.REST, TimedStageType.CUSTOM, TimedStageType.COOLDOWN), editor.stages.map { it.stageType })
+        assertEquals("mobility", warmup.iconKey)
+        assertEquals("#00BCD4", warmup.colorHex)
+        assertEquals("bolt", circuit.items.first().iconKey)
+        assertEquals("#FFC107", circuit.items.first().colorHex)
+        assertEquals(6, resavedPlan.preferences?.cueSettings?.actionEnding?.thresholdSec)
+        assertEquals(3, resavedPlan.preferences?.cueSettings?.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(resavedPlan.preferences?.cueSettings?.actionEnding).soundEnabled)
+    }
+
+    @Test
+    fun editingSavedTimedPlanUpdatesSamePlanIdAndKeepsCreatedAt() {
+        val savedPlan = buildDefaultTimedPlanEditorState().toWorkoutPlan(
+            planId = "saved-timed",
+            timestamp = "2026-06-14T01:00:00Z"
+        )
+        val updated = savedPlan
+            .toTimedPlanEditorState()
+            .updateTitle("更新后的计时")
+            .saveDraftPlan(timestamp = "2026-06-15T01:00:00Z")
+        val plan = requireNotNull(updated.savedPlan)
+
+        assertEquals("saved-timed", plan.id)
+        assertEquals("更新后的计时", plan.title)
+        assertEquals("2026-06-14T01:00:00Z", plan.createdAt)
+        assertEquals("2026-06-15T01:00:00Z", plan.updatedAt)
+        assertTrue(requireNotNull(updated.statusMessage).contains("已更新"))
+    }
+
+    @Test
+    fun malformedTimedPlanBackfillDoesNotCrashAndUsesSafeStages() {
+        val malformed = WorkoutPlan(
+            id = "bad-timed",
+            mode = WorkoutMode.TIMED,
+            title = "损坏计时",
+            blocks = emptyList(),
+            createdAt = "2026-06-14T01:00:00Z",
+            updatedAt = "2026-06-14T01:00:00Z"
+        )
+
+        val editor = malformed.toTimedPlanEditorState()
+
+        assertEquals("bad-timed", editor.sourcePlanId)
+        assertEquals("损坏计时", editor.title)
+        assertTrue(editor.stages.isNotEmpty())
+        assertTrue(editor.canSave)
+        assertTrue(requireNotNull(editor.statusMessage).contains("安全默认阶段"))
+    }
+
     @Test
     fun defaultEditorCreatesPureIntervalPlanWithoutExerciseLibraryDependency() {
         val state = buildDefaultTimedPlanEditorState()

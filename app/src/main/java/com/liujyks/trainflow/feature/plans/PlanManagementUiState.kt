@@ -79,6 +79,8 @@ internal data class PlanDetailUiState(
     val reminder: PlanReminderUiState,
     val editStatus: String,
     val startStatus: String,
+    val editActionLabel: String,
+    val canEditPlan: Boolean,
     val canStartTraining: Boolean = false
 )
 
@@ -300,12 +302,22 @@ private fun WorkoutPlan.toDetailState(
         metrics = planMetrics(),
         sections = detailSections(),
         reminder = toReminderUiState(notificationPermissionState),
-        editStatus = "保存、复制、删除和提醒已接入本地计划；编辑回填留给后续 story。",
+        editStatus = when (mode) {
+            WorkoutMode.TIMED -> "可编辑已保存的阶段、轮次、颜色、图标和提醒设置，并保存回同一个本地计划。"
+            WorkoutMode.STRENGTH -> "可编辑已保存的动作、目标、组、休息和逐组计划，并保存回同一个本地计划。"
+            WorkoutMode.FOLLOW_ALONG -> "跟练完整编排未进入本阶段，因此不提供假编辑入口。"
+        },
         startStatus = when (mode) {
             WorkoutMode.TIMED -> "开始计时训练"
             WorkoutMode.STRENGTH -> "开始力量训练"
             WorkoutMode.FOLLOW_ALONG -> "跟练计划保存待完整编排"
         },
+        editActionLabel = when (mode) {
+            WorkoutMode.TIMED -> "编辑计时计划"
+            WorkoutMode.STRENGTH -> "编辑力量计划"
+            WorkoutMode.FOLLOW_ALONG -> "待完整编排"
+        },
+        canEditPlan = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH,
         canStartTraining = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH
     )
 }

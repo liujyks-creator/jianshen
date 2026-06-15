@@ -55,17 +55,24 @@ internal fun StrengthPlanEditorRoute(
     onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     onSaveStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier,
-    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
+    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults(),
+    initialPlan: WorkoutPlan? = null
 ) {
-    val draftPlanId = rememberSaveable { "plan-strength-${System.currentTimeMillis()}" }
-    var uiState by remember {
-        mutableStateOf(buildDefaultStrengthPlanEditorState(defaults = planEditorDefaults))
+    val draftPlanId = rememberSaveable(initialPlan?.id) {
+        initialPlan?.id ?: "plan-strength-${System.currentTimeMillis()}"
+    }
+    var uiState by remember(initialPlan?.id) {
+        mutableStateOf(
+            initialPlan?.toStrengthPlanEditorState(defaults = planEditorDefaults)
+                ?: buildDefaultStrengthPlanEditorState(defaults = planEditorDefaults)
+        )
     }
 
     StrengthPlanEditorScreen(
         uiState = uiState,
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
+        onDescriptionChanged = { uiState = uiState.updateDescription(it) },
         onTargetWeightChanged = { itemId, input -> uiState = uiState.updateTargetWeightText(itemId, input) },
         onRepRangeChanged = { itemId, minRepsInput, maxRepsInput ->
             uiState = uiState.updateRepRangeText(itemId, minRepsInput, maxRepsInput)
@@ -101,7 +108,7 @@ internal fun StrengthPlanEditorRoute(
             if (uiState.canStartTraining) {
                 onStartStrengthPlan(
                     uiState.toWorkoutPlan(
-                        planId = "plan-strength-editor-start",
+                        planId = uiState.sourcePlanId ?: "plan-strength-editor-start",
                         timestamp = DefaultStrengthPlanTimestamp
                     )
                 )
@@ -116,6 +123,7 @@ private fun StrengthPlanEditorScreen(
     uiState: StrengthPlanEditorScreenState,
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
+    onDescriptionChanged: (String) -> Unit,
     onTargetWeightChanged: (String, String) -> Unit,
     onRepRangeChanged: (String, String, String) -> Unit,
     onFixedRepsChanged: (String, String) -> Unit,
@@ -151,7 +159,8 @@ private fun StrengthPlanEditorScreen(
         item {
             StrengthPlanBasicsCard(
                 uiState = uiState,
-                onTitleChanged = onTitleChanged
+                onTitleChanged = onTitleChanged,
+                onDescriptionChanged = onDescriptionChanged
             )
         }
 
@@ -226,7 +235,8 @@ private fun StrengthPlanEditorHeader(uiState: StrengthPlanEditorScreenState) {
 @Composable
 private fun StrengthPlanBasicsCard(
     uiState: StrengthPlanEditorScreenState,
-    onTitleChanged: (String) -> Unit
+    onTitleChanged: (String) -> Unit,
+    onDescriptionChanged: (String) -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "基础信息")
@@ -236,6 +246,13 @@ private fun StrengthPlanBasicsCard(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("计划名称") },
             singleLine = true
+        )
+        OutlinedTextField(
+            value = uiState.description,
+            onValueChange = onDescriptionChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("计划描述") },
+            minLines = 2
         )
     }
 }

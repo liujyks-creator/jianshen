@@ -20,9 +20,12 @@ internal const val DefaultStrengthPlanTimestamp = "2026-05-28T00:00:00Z"
 
 internal data class StrengthPlanEditorScreenState(
     val title: String,
+    val description: String = "",
     val exercises: List<StrengthPlanExerciseUiState>,
     val selectableExercises: List<StrengthExerciseOptionUiState>,
     val strengthSetTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START,
+    val sourcePlanId: String? = null,
+    val sourceCreatedAt: String? = null,
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
@@ -40,8 +43,11 @@ internal data class StrengthPlanEditorScreenState(
     val summary: String
         get() = "${exercises.size} 个动作 · ${totalSets} 组 · 组间休息 ${defaultRestSummary()}"
 
+    val isEditingExistingPlan: Boolean
+        get() = sourcePlanId != null
+
     fun toWorkoutPlan(
-        planId: String = "plan-strength-draft",
+        planId: String = sourcePlanId ?: "plan-strength-draft",
         timestamp: String = DefaultStrengthPlanTimestamp
     ): WorkoutPlan {
         require(canSave) {
@@ -51,14 +57,14 @@ internal data class StrengthPlanEditorScreenState(
             id = planId,
             mode = WorkoutMode.STRENGTH,
             title = title.trim(),
-            description = "本地保存的力量计划",
+            description = description.ifBlank { "本地保存的力量计划" },
             blocks = exercises.mapIndexed { index, exercise ->
                 exercise.toStrengthExerciseBlock(
                     order = index + 1,
                     setTimerMode = strengthSetTimerMode
                 )
             },
-            createdAt = timestamp,
+            createdAt = sourceCreatedAt ?: timestamp,
             updatedAt = timestamp
         )
     }
@@ -75,6 +81,7 @@ internal data class StrengthPlanEditorScreenState(
 
 internal data class StrengthPlanExerciseUiState(
     val id: String,
+    val sourceBlockId: String? = null,
     val exerciseId: String,
     val exerciseName: String,
     val shortCue: String,
@@ -121,7 +128,7 @@ internal data class StrengthPlanExerciseUiState(
     ): StrengthExerciseBlock {
         val plannedSide = if (perSide) ExerciseSide.ALTERNATING else null
         return StrengthExerciseBlock(
-            id = "strength-block-$order-$exerciseId",
+            id = sourceBlockId ?: "strength-block-$order-$exerciseId",
             order = order,
             title = exerciseName,
             exerciseId = exerciseId,
@@ -131,7 +138,7 @@ internal data class StrengthPlanExerciseUiState(
                 restAfterSetSec = restAfterSetSec.takeIf { it > 0 }
             ),
             sets = setTargets.mapIndexed { index, setTarget ->
-                setTarget.toStrengthSetPlan(blockOrder = order, order = index + 1, side = plannedSide)
+                setTarget.toStrengthSetPlan(order = index + 1, side = plannedSide)
             },
             substitutions = substitutions,
             setTimerMode = setTimerMode
@@ -159,9 +166,9 @@ internal data class StrengthSetTargetUiState(
             StrengthSetKind.BACKOFF -> "退阶组 $order"
         }
 
-    fun toStrengthSetPlan(blockOrder: Int, order: Int, side: ExerciseSide?): StrengthSetPlan {
+    fun toStrengthSetPlan(order: Int, side: ExerciseSide?): StrengthSetPlan {
         return StrengthSetPlan(
-            id = "strength-set-$blockOrder-$order",
+            id = id,
             order = order,
             kind = kind,
             side = side,
@@ -245,6 +252,10 @@ internal fun buildDefaultStrengthPlanEditorState(
 
 internal fun StrengthPlanEditorScreenState.updateTitle(value: String): StrengthPlanEditorScreenState {
     return copy(title = value, savedPlan = null, statusMessage = null)
+}
+
+internal fun StrengthPlanEditorScreenState.updateDescription(value: String): StrengthPlanEditorScreenState {
+    return copy(description = value, savedPlan = null, statusMessage = null)
 }
 
 internal fun StrengthPlanEditorScreenState.updateTargetWeight(
@@ -601,7 +612,7 @@ internal fun StrengthPlanEditorScreenState.removeExercise(exerciseItemId: String
 }
 
 internal fun StrengthPlanEditorScreenState.saveDraftPlan(
-    planId: String = "plan-strength-draft",
+    planId: String = sourcePlanId ?: "plan-strength-draft",
     timestamp: String = DefaultStrengthPlanTimestamp
 ): StrengthPlanEditorScreenState {
     if (!canSave) {
@@ -614,8 +625,133 @@ internal fun StrengthPlanEditorScreenState.saveDraftPlan(
 internal fun StrengthPlanEditorScreenState.markPlanSaved(plan: WorkoutPlan): StrengthPlanEditorScreenState {
     return copy(
         savedPlan = plan,
-        statusMessage = "已保存「${plan.title}」到本地计划；计划值会继续作为训练实际记录的预填来源。"
+        statusMessage = if (isEditingExistingPlan) {
+            "已更新「${plan.title}」；训练会继续用计划值预填实际记录，历史快照不改写。"
+        } else {
+            "已保存「${plan.title}」到本地计划；计划值会继续作为训练实际记录的预填来源。"
+        }
     )
+}
+
+internal fun WorkoutPlan.toStrengthPlanEditorState(
+    entries: List<ActionExerciseFixture> = FirstActionExerciseFixtures.entries,
+    defaults: PlanEditorDefaults = PlanEditorDefaults()
+): StrengthPlanEditorScreenState {
+    val selectable = entries.strengthCapableEntries().map { entry -> entry.toStrengthOption() }
+    if (mode != WorkoutMode.STRENGTH) {
+        return buildDefaultStrengthPlanEditorState(entries, defaults).copy(
+            title = title,
+            description = description.orEmpty(),
+            sourcePlanId = id,
+            sourceCreatedAt = createdAt,
+            statusMessage = "当前计划不是力量训练，已使用安全默认草稿。"
+        )
+    }
+
+    val strengthBlocks = blocks.filterIsInstance<StrengthExerciseBlock>().sortedBy { block -> block.order }
+    val mappedExercises = strengthBlocks.mapIndexed { index, block ->
+        block.toStrengthEditorExercise(
+            order = index + 1,
+            entries = entries
+        )
+    }.filterNotNull()
+    val safeExercises = mappedExercises.ifEmpty {
+        buildDefaultStrengthPlanEditorState(entries, defaults).exercises
+    }
+    val timerMode = strengthBlocks.firstOrNull()?.setTimerMode ?: defaults.strengthSetTimerMode
+    return StrengthPlanEditorScreenState(
+        title = title,
+        description = description.orEmpty(),
+        exercises = safeExercises,
+        selectableExercises = selectable,
+        strengthSetTimerMode = timerMode,
+        sourcePlanId = id,
+        sourceCreatedAt = createdAt,
+        statusMessage = if (mappedExercises.isEmpty()) {
+            "已载入计划基础信息，但原计划没有可回填的力量动作，已使用安全默认动作。"
+        } else {
+            "已载入已保存计划，可编辑后保存回同一个本地计划。"
+        }
+    )
+}
+
+private fun StrengthExerciseBlock.toStrengthEditorExercise(
+    order: Int,
+    entries: List<ActionExerciseFixture>
+): StrengthPlanExerciseUiState? {
+    val fixture = entries.firstOrNull { entry -> entry.exercise.id == exerciseId }
+    val targetWeightKg = target?.weight?.value
+    val targetRepTarget = target?.repTarget?.toStrengthRepTargetUiState()
+        ?: sets.firstOrNull { set -> set.kind == StrengthSetKind.WORKING }?.repTarget?.toStrengthRepTargetUiState()
+        ?: StrengthRepTargetUiState()
+    val safeSets = sets.sortedBy { set -> set.order }.ifEmpty {
+        listOf(
+            StrengthSetPlan(
+                id = "$id-working-1",
+                order = 1,
+                kind = StrengthSetKind.WORKING,
+                targetWeight = target?.weight,
+                repTarget = targetRepTarget.toRepTarget(),
+                restAfterSec = target?.restAfterSetSec
+            )
+        )
+    }
+    val warmupCount = safeSets.count { set -> set.kind == StrengthSetKind.WARMUP }
+    val workingCount = safeSets.count { set -> set.kind == StrengthSetKind.WORKING }.coerceAtLeast(1)
+    val restAfterSet = target?.restAfterSetSec
+        ?: safeSets.firstNotNullOfOrNull { set -> set.restAfterSec }
+        ?: 0
+    val requiresWeight = fixture?.exercise?.capabilities?.supportsWeight
+        ?: ((target?.weight != null) || safeSets.any { set -> set.targetWeight != null })
+
+    return StrengthPlanExerciseUiState(
+        id = "strength-editor-item-$order-$exerciseId",
+        sourceBlockId = id,
+        exerciseId = exerciseId,
+        exerciseName = title ?: fixture?.exercise?.name ?: exerciseId,
+        shortCue = fixture?.exercise?.instructions?.shortCue ?: "按计划完成当前动作",
+        requiresWeightInput = requiresWeight,
+        targetWeightKg = targetWeightKg,
+        targetWeightRawText = targetWeightKg.formatWeightInput(),
+        repTarget = targetRepTarget,
+        workingSets = workingCount,
+        warmupSets = warmupCount,
+        restAfterSetSec = restAfterSet,
+        perSide = safeSets.any { set -> set.side != null },
+        substitutions = substitutions,
+        expandedSetTargets = true,
+        setTargets = safeSets.map { set -> set.toStrengthSetTargetUiState() }
+    )
+}
+
+private fun StrengthSetPlan.toStrengthSetTargetUiState(): StrengthSetTargetUiState {
+    return StrengthSetTargetUiState(
+        id = id,
+        order = order,
+        kind = kind,
+        targetWeightKg = targetWeight?.value,
+        targetWeightRawText = targetWeight?.value.formatWeightInput(),
+        repTarget = repTarget?.toStrengthRepTargetUiState() ?: StrengthRepTargetUiState(),
+        restAfterSec = restAfterSec ?: 0
+    )
+}
+
+private fun RepTarget.toStrengthRepTargetUiState(): StrengthRepTargetUiState {
+    return when (this) {
+        is RepTarget.Fixed -> StrengthRepTargetUiState(
+            kind = StrengthRepTargetKind.FIXED,
+            fixedReps = reps,
+            fixedRepsRawText = reps.toString()
+        )
+
+        is RepTarget.Range -> StrengthRepTargetUiState(
+            kind = StrengthRepTargetKind.RANGE,
+            minReps = minReps,
+            minRepsRawText = minReps.toString(),
+            maxReps = maxReps,
+            maxRepsRawText = maxReps.toString()
+        )
+    }
 }
 
 private fun StrengthPlanEditorScreenState.updateExercise(

@@ -9,6 +9,7 @@ import com.liujyks.trainflow.core.model.WorkoutPlan
 internal data class OfficialShellState(
     val currentDestination: OfficialShellDestination = OfficialShellDestination.TRAINING,
     val planManagementState: PlanManagementScreenState = buildDefaultPlanManagementState(),
+    val editingPlanId: String? = null,
     val activeTimedSessionPlan: WorkoutPlan? = null,
     val activeStrengthSessionPlan: WorkoutPlan? = null,
     val activeFollowAlongSessionPlan: WorkoutPlan? = null,
@@ -41,11 +42,62 @@ internal data class OfficialShellState(
         return copy(planManagementState = planManagementState)
     }
 
+    fun openTimedPlanEditorForCreate(): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR,
+            editingPlanId = null,
+            activeTimedSessionPlan = null,
+            activeStrengthSessionPlan = null,
+            activeFollowAlongSessionPlan = null
+        )
+    }
+
+    fun openStrengthPlanEditorForCreate(): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR,
+            editingPlanId = null,
+            activeTimedSessionPlan = null,
+            activeStrengthSessionPlan = null,
+            activeFollowAlongSessionPlan = null
+        )
+    }
+
+    fun editPlan(plan: WorkoutPlan): OfficialShellState {
+        return when (plan.mode) {
+            WorkoutMode.TIMED -> copy(
+                currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR,
+                editingPlanId = plan.id,
+                activeTimedSessionPlan = null,
+                activeStrengthSessionPlan = null,
+                activeFollowAlongSessionPlan = null
+            )
+
+            WorkoutMode.STRENGTH -> copy(
+                currentDestination = OfficialShellDestination.STRENGTH_PLAN_EDITOR,
+                editingPlanId = plan.id,
+                activeTimedSessionPlan = null,
+                activeStrengthSessionPlan = null,
+                activeFollowAlongSessionPlan = null
+            )
+
+            WorkoutMode.FOLLOW_ALONG -> this
+        }
+    }
+
+    fun finishPlanEdit(planManagementState: PlanManagementScreenState): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.PLANS,
+            planManagementState = planManagementState,
+            editingPlanId = null
+        )
+    }
+
     fun startTimedSession(plan: WorkoutPlan): OfficialShellState {
         if (plan.mode != WorkoutMode.TIMED) return this
 
         return copy(
             currentDestination = OfficialShellDestination.TIMED_SESSION,
+            editingPlanId = null,
             activeTimedSessionPlan = plan,
             activeStrengthSessionPlan = null,
             activeFollowAlongSessionPlan = null,
@@ -58,6 +110,7 @@ internal data class OfficialShellState(
 
         return copy(
             currentDestination = OfficialShellDestination.STRENGTH_SESSION,
+            editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = plan,
             activeFollowAlongSessionPlan = null,
@@ -70,6 +123,7 @@ internal data class OfficialShellState(
 
         return copy(
             currentDestination = OfficialShellDestination.FOLLOW_ALONG_SESSION,
+            editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
             activeFollowAlongSessionPlan = plan,
@@ -80,6 +134,7 @@ internal data class OfficialShellState(
     fun openRecoveryRecommendation(recommendation: BasicRecoveryRecommendation): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.RECOVERY,
+            editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
             activeFollowAlongSessionPlan = null,
@@ -90,6 +145,7 @@ internal data class OfficialShellState(
     fun finishTimedSession(): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
+            editingPlanId = null,
             activeTimedSessionPlan = null,
             activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = null
@@ -99,6 +155,7 @@ internal data class OfficialShellState(
     fun finishStrengthSession(): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.PLANS,
+            editingPlanId = null,
             activeStrengthSessionPlan = null,
             activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = null
@@ -108,6 +165,7 @@ internal data class OfficialShellState(
     fun finishFollowAlongSession(): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY,
+            editingPlanId = null,
             activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = null
         )

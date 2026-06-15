@@ -69,17 +69,24 @@ internal fun TimedPlanEditorRoute(
     onStartTimedPlan: (WorkoutPlan) -> Unit = {},
     onSaveTimedPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier,
-    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults()
+    planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults(),
+    initialPlan: WorkoutPlan? = null
 ) {
-    val draftPlanId = rememberSaveable { "plan-timed-${System.currentTimeMillis()}" }
-    var uiState by remember {
-        mutableStateOf(buildDefaultTimedPlanEditorState(defaults = planEditorDefaults))
+    val draftPlanId = rememberSaveable(initialPlan?.id) {
+        initialPlan?.id ?: "plan-timed-${System.currentTimeMillis()}"
+    }
+    var uiState by remember(initialPlan?.id) {
+        mutableStateOf(
+            initialPlan?.toTimedPlanEditorState(defaults = planEditorDefaults)
+                ?: buildDefaultTimedPlanEditorState(defaults = planEditorDefaults)
+        )
     }
 
     TimedPlanEditorScreen(
         uiState = uiState,
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
+        onDescriptionChanged = { uiState = uiState.updateDescription(it) },
         onRoundsChanged = { uiState = uiState.updateRoundsText(it) },
         onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRoundsText(it) },
         onActionCueThresholdChanged = { uiState = uiState.updateActionCueThresholdText(it) },
@@ -115,7 +122,7 @@ internal fun TimedPlanEditorRoute(
             if (uiState.canStartTraining) {
                 onStartTimedPlan(
                     uiState.toWorkoutPlan(
-                        planId = "plan-timed-editor-start",
+                        planId = uiState.sourcePlanId ?: "plan-timed-editor-start",
                         timestamp = DefaultTimedPlanTimestamp
                     )
                 )
@@ -130,6 +137,7 @@ private fun TimedPlanEditorScreen(
     uiState: TimedPlanEditorScreenState,
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
+    onDescriptionChanged: (String) -> Unit,
     onRoundsChanged: (String) -> Unit,
     onRestBetweenRoundsChanged: (String) -> Unit,
     onActionCueThresholdChanged: (String) -> Unit,
@@ -195,7 +203,11 @@ private fun TimedPlanEditorScreen(
         }
 
         item {
-            PlanBasicsCard(uiState = uiState, onTitleChanged = onTitleChanged)
+            PlanBasicsCard(
+                uiState = uiState,
+                onTitleChanged = onTitleChanged,
+                onDescriptionChanged = onDescriptionChanged
+            )
         }
 
         item {
@@ -304,7 +316,8 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
 @Composable
 private fun PlanBasicsCard(
     uiState: TimedPlanEditorScreenState,
-    onTitleChanged: (String) -> Unit
+    onTitleChanged: (String) -> Unit,
+    onDescriptionChanged: (String) -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "基础信息")
@@ -314,6 +327,13 @@ private fun PlanBasicsCard(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("计划名称") },
             singleLine = true
+        )
+        OutlinedTextField(
+            value = uiState.description,
+            onValueChange = onDescriptionChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("计划描述") },
+            minLines = 2
         )
         Text(
             text = "主题色 ${uiState.themeColorHex}，阶段颜色可在阶段卡中选择。",

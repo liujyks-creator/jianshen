@@ -7,6 +7,7 @@ import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -15,6 +16,86 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StrengthPlanEditorUiStateTest {
+    @Test
+    fun savedStrengthPlanBackfillsExercisesTargetsSetsRestOverridesAndSubstitutions() {
+        val initialExercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val baseState = buildDefaultStrengthPlanEditorState()
+            .updateTitle("保存后的力量")
+            .updateDescription("保留逐组计划")
+            .updateTargetWeight(initialExercise.id, 64.0)
+            .updateRepRange(initialExercise.id, minReps = 5, maxReps = 7)
+            .updateWorkingSets(initialExercise.id, 4)
+            .updateWarmupSets(initialExercise.id, 1)
+            .updateRestAfterSet(initialExercise.id, 150)
+        val exercise = baseState.exercises.first()
+        val secondSetId = exercise.setTargets[1].id
+        val savedPlan = baseState
+            .updateSetTargetWeight(exercise.id, secondSetId, 68.0)
+            .updateSetFixedReps(exercise.id, secondSetId, 6)
+            .toWorkoutPlan(planId = "saved-strength", timestamp = "2026-06-14T01:00:00Z")
+
+        val editor = savedPlan.toStrengthPlanEditorState()
+        val editedExercise = editor.exercises.first()
+        val resaved = editor.toWorkoutPlan(timestamp = "2026-06-15T01:00:00Z")
+        val block = resaved.blocks.filterIsInstance<StrengthExerciseBlock>().first()
+        val overriddenSet = block.sets.first { set -> set.id == secondSetId }
+
+        assertEquals("saved-strength", editor.sourcePlanId)
+        assertEquals("保存后的力量", editor.title)
+        assertEquals("保留逐组计划", editor.description)
+        assertEquals(exercise.exerciseId, editedExercise.exerciseId)
+        assertEquals(64.0, editedExercise.targetWeightKg ?: 0.0, 0.0)
+        assertEquals(4, editedExercise.workingSets)
+        assertEquals(1, editedExercise.warmupSets)
+        assertEquals(150, editedExercise.restAfterSetSec)
+        assertTrue(editedExercise.expandedSetTargets)
+        assertEquals(savedPlan.blocks.filterIsInstance<StrengthExerciseBlock>().first().substitutions, editedExercise.substitutions)
+        assertEquals(68.0, requireNotNull(overriddenSet.targetWeight).value, 0.0)
+        assertEquals(6, (requireNotNull(overriddenSet.repTarget) as RepTarget.Fixed).reps)
+        assertEquals("saved-strength", resaved.id)
+        assertEquals("2026-06-14T01:00:00Z", resaved.createdAt)
+        assertEquals("2026-06-15T01:00:00Z", resaved.updatedAt)
+    }
+
+    @Test
+    fun editingSavedStrengthPlanUpdatesSamePlanId() {
+        val savedPlan = buildDefaultStrengthPlanEditorState().toWorkoutPlan(
+            planId = "saved-strength",
+            timestamp = "2026-06-14T01:00:00Z"
+        )
+        val updated = savedPlan
+            .toStrengthPlanEditorState()
+            .updateTitle("更新后的力量")
+            .saveDraftPlan(timestamp = "2026-06-15T01:00:00Z")
+        val plan = requireNotNull(updated.savedPlan)
+
+        assertEquals("saved-strength", plan.id)
+        assertEquals("更新后的力量", plan.title)
+        assertEquals("2026-06-14T01:00:00Z", plan.createdAt)
+        assertEquals("2026-06-15T01:00:00Z", plan.updatedAt)
+        assertTrue(requireNotNull(updated.statusMessage).contains("已更新"))
+    }
+
+    @Test
+    fun malformedStrengthPlanBackfillDoesNotCrashAndUsesSafeExercises() {
+        val malformed = WorkoutPlan(
+            id = "bad-strength",
+            mode = WorkoutMode.STRENGTH,
+            title = "损坏力量",
+            blocks = emptyList(),
+            createdAt = "2026-06-14T01:00:00Z",
+            updatedAt = "2026-06-14T01:00:00Z"
+        )
+
+        val editor = malformed.toStrengthPlanEditorState()
+
+        assertEquals("bad-strength", editor.sourcePlanId)
+        assertEquals("损坏力量", editor.title)
+        assertTrue(editor.exercises.isNotEmpty())
+        assertTrue(editor.canSave)
+        assertTrue(requireNotNull(editor.statusMessage).contains("安全默认动作"))
+    }
+
     @Test
     fun defaultEditorCreatesUsableStrengthPlanDraft() {
         val state = buildDefaultStrengthPlanEditorState()

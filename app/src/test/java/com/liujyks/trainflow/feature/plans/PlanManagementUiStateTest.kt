@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.feature.plans
 
 import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
@@ -100,6 +101,8 @@ class PlanManagementUiStateTest {
         assertEquals(strengthId, detail.id)
         assertEquals("力量训练", detail.modeLabel)
         assertTrue(detail.canStartTraining)
+        assertTrue(detail.canEditPlan)
+        assertEquals("编辑力量计划", detail.editActionLabel)
         assertEquals("开始力量训练", detail.startStatus)
         assertTrue(detail.editStatus.contains("本地计划"))
         assertTrue(detail.sections.any { section -> section.title == "动作与组" })
@@ -113,7 +116,28 @@ class PlanManagementUiStateTest {
 
         assertEquals("计时训练", detail.modeLabel)
         assertTrue(detail.canStartTraining)
+        assertTrue(detail.canEditPlan)
+        assertEquals("编辑计时计划", detail.editActionLabel)
         assertEquals("开始计时训练", detail.startStatus)
+    }
+
+    @Test
+    fun followAlongPlanDoesNotExposeFakeEditEntry() {
+        val followAlong = WorkoutPlan(
+            id = "follow-along-saved",
+            mode = WorkoutMode.FOLLOW_ALONG,
+            title = "基础跟练",
+            blocks = emptyList(),
+            followAlong = com.liujyks.trainflow.core.model.FollowAlongPlanMeta(preset = true),
+            createdAt = "2026-06-14T01:00:00Z",
+            updatedAt = "2026-06-14T01:00:00Z"
+        )
+        val detail = requireNotNull(PlanManagementScreenState(plans = listOf(followAlong)).selectedDetail)
+
+        assertFalse(detail.canEditPlan)
+        assertFalse(detail.canStartTraining)
+        assertEquals("待完整编排", detail.editActionLabel)
+        assertTrue(detail.editStatus.contains("不提供假编辑入口"))
     }
 
     @Test

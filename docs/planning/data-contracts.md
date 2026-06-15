@@ -610,6 +610,14 @@ E10.14 约定：
 - completed 与 abandoned 终态都应保存已发生的额外休息记录；ready/start gate 尚未真正开始时不能产生额外休息记录。
 - E10.14 只提供真实记录输入，不实现 E12 统计图表、趋势分析、真实心率、motion timing rules、Stage color picker、声音播放、notification action 或后台可靠计时。
 
+E10.18 约定：
+
+- 编辑已保存计划时，编辑器应从当前 `WorkoutPlan` 回填标题、描述、blocks、计时阶段 / 轮次 / 休息 / cue settings、力量动作 / 目标 / 计划组 / 休息等计划结构。
+- 保存编辑结果时继续使用同一个 `WorkoutPlan.id` 并保留原 `createdAt`，只更新当前计划结构、目标和 `updatedAt`；复制计划仍生成新的计划 ID。
+- 编辑计划不得回写任何既有 `WorkoutSession.planSnapshot`。历史记录和后续统计应按训练发生时保存的 snapshot 展示 / 分析，不能用编辑后的当前计划反推旧 session。
+- 跟练计划在完整编排能力完成前不暴露假的完整编辑入口。
+- E10.18 不引入计划版本历史、撤销 / 重做、云同步冲突解决、完整跟练编排、统计图表、声音播放、真实心率设备、foreground service、exact alarm、notification action 或 reset production command。
+
 ### 9.2 执行步骤
 
 ```ts

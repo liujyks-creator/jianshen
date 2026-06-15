@@ -69,6 +69,7 @@ internal fun PlanManagementRoute(
     onStateChange: (PlanManagementScreenState) -> Unit,
     onPersistPlan: (WorkoutPlan) -> Unit = {},
     onDeletePlan: (String) -> Unit = {},
+    onEditPlan: (WorkoutPlan) -> Unit = {},
     onStartTimedPlan: (WorkoutPlan) -> Unit = {},
     onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier
@@ -143,6 +144,7 @@ internal fun PlanManagementRoute(
         },
         onStartTimedPlan = onStartTimedPlan,
         onStartStrengthPlan = onStartStrengthPlan,
+        onEditPlan = onEditPlan,
         modifier = modifier
     )
 }
@@ -170,6 +172,7 @@ private fun PlanManagementScreen(
     onRequestNotificationPermission: () -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit,
+    onEditPlan: (WorkoutPlan) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -220,6 +223,7 @@ private fun PlanManagementScreen(
                         onSetPlanReminder = { scheduleAt -> onSetPlanReminder(detail.id, scheduleAt) },
                         onClearPlanReminder = { onClearPlanReminder(detail.id) },
                         onRequestNotificationPermission = onRequestNotificationPermission,
+                        onEditPlan = onEditPlan,
                         onStartTimedPlan = onStartTimedPlan,
                         onStartStrengthPlan = onStartStrengthPlan
                     )
@@ -353,6 +357,7 @@ private fun PlanDetailCard(
     onSetPlanReminder: (String) -> Unit,
     onClearPlanReminder: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onEditPlan: (WorkoutPlan) -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit
 ) {
@@ -407,6 +412,18 @@ private fun PlanDetailCard(
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = {
+                    if (plan != null && detail.canEditPlan) {
+                        onEditPlan(plan)
+                    }
+                },
+                enabled = detail.canEditPlan && plan != null,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = detail.editActionLabel)
+            }
             Button(
                 onClick = onCopyPlan,
                 modifier = Modifier.weight(1f),
@@ -415,9 +432,11 @@ private fun PlanDetailCard(
             ) {
                 Text(text = "复制计划")
             }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = onRequestDeletePlan,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(text = "删除计划", color = TrainFlowError)

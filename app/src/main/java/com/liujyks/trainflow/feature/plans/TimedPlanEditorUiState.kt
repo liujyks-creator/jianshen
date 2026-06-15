@@ -7,8 +7,11 @@ import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.MoreStageColorPresets
 import com.liujyks.trainflow.core.model.RecommendedStageColorPresets
+import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.StageColorPreset
 import com.liujyks.trainflow.core.model.StrengthSetTimerMode
+import com.liujyks.trainflow.core.model.StretchBlock
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedStageType
@@ -57,6 +60,7 @@ internal data class PlanEditorDefaults(
 
 internal data class TimedPlanEditorScreenState(
     val title: String,
+    val description: String = "",
     val rounds: Int,
     val roundsRawText: String? = null,
     val restBetweenRoundsSec: Int,
@@ -66,6 +70,8 @@ internal data class TimedPlanEditorScreenState(
     val stages: List<TimedPlanEditorStageUiState>,
     val themeColorHex: String = "#2FBF8F",
     val nextStageSequence: Int = 1,
+    val sourcePlanId: String? = null,
+    val sourceCreatedAt: String? = null,
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
@@ -98,8 +104,11 @@ internal data class TimedPlanEditorScreenState(
     val summary: String
         get() = "${stages.size} 个阶段 · ${rounds} 轮 · 预计 ${estimatedDurationSec.formatDuration()}"
 
+    val isEditingExistingPlan: Boolean
+        get() = sourcePlanId != null
+
     fun toWorkoutPlan(
-        planId: String = "plan-timed-draft",
+        planId: String = sourcePlanId ?: "plan-timed-draft",
         timestamp: String = DefaultTimedPlanTimestamp
     ): WorkoutPlan {
         val cueSafeState = constrainCueSettings().normalizeFixedBoundaryStages()
@@ -109,7 +118,7 @@ internal data class TimedPlanEditorScreenState(
             id = planId,
             mode = WorkoutMode.TIMED,
             title = title.trim(),
-            description = "本地保存的纯间歇计时器计划",
+            description = description.ifBlank { "本地保存的纯间歇计时器计划" },
             blocks = blocks,
             preferences = PlanPreferences(
                 cueSettings = CueSettings(
@@ -119,7 +128,7 @@ internal data class TimedPlanEditorScreenState(
                     }
                 )
             ),
-            createdAt = timestamp,
+            createdAt = sourceCreatedAt ?: timestamp,
             updatedAt = timestamp
         )
     }
@@ -132,7 +141,8 @@ internal data class TimedPlanEditorStageUiState(
     val iconKey: String = stageType.defaultIconKey,
     val colorHex: String = stageType.defaultColorHex,
     val durationSec: Int,
-    val durationRawText: String? = null
+    val durationRawText: String? = null,
+    val cueSettings: CueSettings? = null
 ) {
     val durationText: String
         get() = durationRawText ?: durationSec.toString()
@@ -150,6 +160,7 @@ internal data class TimedPlanEditorStageUiState(
             colorHex = colorHex,
             workDurationSec = durationSec,
             restAfterSec = null,
+            cueSettings = cueSettings,
             autoAdvance = true
         )
     }
@@ -296,6 +307,10 @@ internal fun buildDefaultTimedPlanEditorState(
 
 internal fun TimedPlanEditorScreenState.updateTitle(value: String): TimedPlanEditorScreenState {
     return copy(title = value, savedPlan = null, statusMessage = null)
+}
+
+internal fun TimedPlanEditorScreenState.updateDescription(value: String): TimedPlanEditorScreenState {
+    return copy(description = value, savedPlan = null, statusMessage = null)
 }
 
 internal fun TimedPlanEditorScreenState.updateRounds(value: Int): TimedPlanEditorScreenState {
@@ -597,7 +612,7 @@ internal fun TimedPlanEditorScreenState.canMoveStageDown(stageId: String): Boole
 }
 
 internal fun TimedPlanEditorScreenState.saveDraftPlan(
-    planId: String = "plan-timed-draft",
+    planId: String = sourcePlanId ?: "plan-timed-draft",
     timestamp: String = DefaultTimedPlanTimestamp
 ): TimedPlanEditorScreenState {
     if (!canSave) {
@@ -610,9 +625,169 @@ internal fun TimedPlanEditorScreenState.saveDraftPlan(
 internal fun TimedPlanEditorScreenState.markPlanSaved(plan: WorkoutPlan): TimedPlanEditorScreenState {
     return copy(
         savedPlan = plan,
-        statusMessage = "已保存「${plan.title}」到本地计划；可切换页面或重新进入计划详情继续启动。"
+        statusMessage = if (isEditingExistingPlan) {
+            "已更新「${plan.title}」；计划详情和 ready gate 会使用最新配置，历史训练快照不改写。"
+        } else {
+            "已保存「${plan.title}」到本地计划；可切换页面或重新进入计划详情继续启动。"
+        }
     )
 }
+
+internal fun WorkoutPlan.toTimedPlanEditorState(
+    defaults: PlanEditorDefaults = PlanEditorDefaults()
+): TimedPlanEditorScreenState {
+    if (mode != WorkoutMode.TIMED) {
+        return buildDefaultTimedPlanEditorState(defaults).copy(
+            title = title,
+            description = description.orEmpty(),
+            sourcePlanId = id,
+            sourceCreatedAt = createdAt,
+            statusMessage = "当前计划不是计时训练，已使用安全默认草稿。"
+        )
+    }
+
+    val orderedBlocks = blocks.sortedBy { block -> block.order }
+    val circuit = orderedBlocks.filterIsInstance<TimedCircuitBlock>().firstOrNull()
+    val mappedStages = orderedBlocks.flatMap { block -> block.toTimedEditorStages() }
+    val safeStages = mappedStages.ifEmpty { buildDefaultTimedPlanEditorState(defaults).stages }
+    val cueSettings = preferences?.cueSettings
+    val state = TimedPlanEditorScreenState(
+        title = title,
+        description = description.orEmpty(),
+        rounds = circuit?.rounds?.coerceIn(1, 12) ?: 1,
+        restBetweenRoundsSec = circuit?.restBetweenRoundsSec?.coerceIn(0, 3600) ?: 0,
+        actionCue = cueSettings?.actionEnding?.toCountdownCueUiState() ?: defaults.actionCueDefaults(),
+        restCue = cueSettings?.restEnding?.toCountdownCueUiState() ?: defaults.restCueDefaults(),
+        stages = safeStages,
+        nextStageSequence = safeStages.size + 1,
+        sourcePlanId = id,
+        sourceCreatedAt = createdAt,
+        statusMessage = if (mappedStages.isEmpty()) {
+            "已载入计划基础信息，但原计划没有可回填的计时阶段，已使用安全默认阶段。"
+        } else {
+            "已载入已保存计划，可编辑后保存回同一个本地计划。"
+        }
+    )
+    return state.normalizeFixedBoundaryStages().constrainCueSettings()
+}
+
+private fun PlanBlock.toTimedEditorStages(): List<TimedPlanEditorStageUiState> {
+    return when (this) {
+        is WarmupBlock -> timedBoundaryStages(
+            fallbackStageType = TimedStageType.WARMUP,
+            fallbackDurationSec = durationSec,
+            fallbackTitle = title
+        )
+
+        is CooldownBlock -> timedBoundaryStages(
+            fallbackStageType = TimedStageType.COOLDOWN,
+            fallbackDurationSec = durationSec,
+            fallbackTitle = title
+        )
+
+        is StretchBlock -> timedBoundaryStages(
+            fallbackStageType = TimedStageType.COOLDOWN,
+            fallbackDurationSec = durationSec,
+            fallbackTitle = title
+        )
+
+        is RestBlock -> listOf(
+            TimedPlanEditorStageUiState(
+                id = id,
+                name = label ?: title ?: TimedStageType.REST.displayName,
+                stageType = TimedStageType.REST,
+                iconKey = TimedStageType.REST.defaultIconKey,
+                colorHex = normalizeStageColorHex(TimedStageType.REST.defaultColorHex, TimedStageType.REST),
+                durationSec = durationSec.sanitizeDuration(min = 5)
+            )
+        )
+
+        is TimedCircuitBlock -> items.map { item -> item.toTimedEditorStage() }
+        is StrengthExerciseBlock -> emptyList()
+    }
+}
+
+private fun WarmupBlock.timedBoundaryStages(
+    fallbackStageType: TimedStageType,
+    fallbackDurationSec: Int?,
+    fallbackTitle: String?
+): List<TimedPlanEditorStageUiState> {
+    return items.map { item ->
+        item.toTimedEditorStage(fallbackStageType = fallbackStageType)
+    }.ifEmpty {
+        listOf(fallbackTimedBoundaryStage(id, fallbackStageType, fallbackDurationSec, fallbackTitle))
+    }
+}
+
+private fun CooldownBlock.timedBoundaryStages(
+    fallbackStageType: TimedStageType,
+    fallbackDurationSec: Int?,
+    fallbackTitle: String?
+): List<TimedPlanEditorStageUiState> {
+    return items.map { item ->
+        item.toTimedEditorStage(fallbackStageType = fallbackStageType)
+    }.ifEmpty {
+        listOf(fallbackTimedBoundaryStage(id, fallbackStageType, fallbackDurationSec, fallbackTitle))
+    }
+}
+
+private fun StretchBlock.timedBoundaryStages(
+    fallbackStageType: TimedStageType,
+    fallbackDurationSec: Int?,
+    fallbackTitle: String?
+): List<TimedPlanEditorStageUiState> {
+    return items.map { item ->
+        item.toTimedEditorStage(fallbackStageType = fallbackStageType)
+    }.ifEmpty {
+        listOf(fallbackTimedBoundaryStage(id, fallbackStageType, fallbackDurationSec, fallbackTitle))
+    }
+}
+
+private fun fallbackTimedBoundaryStage(
+    id: String,
+    fallbackStageType: TimedStageType,
+    fallbackDurationSec: Int?,
+    fallbackTitle: String?
+): TimedPlanEditorStageUiState {
+    return TimedPlanEditorStageUiState(
+        id = id,
+        name = fallbackTitle ?: fallbackStageType.displayName,
+        stageType = fallbackStageType,
+        iconKey = fallbackStageType.defaultIconKey,
+        colorHex = normalizeStageColorHex(fallbackStageType.defaultColorHex, fallbackStageType),
+        durationSec = (fallbackDurationSec ?: 60).sanitizeDuration(min = 5)
+    )
+}
+
+private fun TimedExerciseItem.toTimedEditorStage(
+    fallbackStageType: TimedStageType = stageType
+): TimedPlanEditorStageUiState {
+    val safeStageType = if (stageType == TimedStageType.WORK && fallbackStageType != TimedStageType.WORK) {
+        fallbackStageType
+    } else {
+        stageType
+    }
+    return TimedPlanEditorStageUiState(
+        id = id,
+        name = labelOverride?.takeIf { it.isNotBlank() } ?: safeStageType.displayName,
+        stageType = safeStageType,
+        iconKey = iconKey.ifBlank { safeStageType.defaultIconKey },
+        colorHex = normalizeStageColorHex(colorHex, safeStageType),
+        durationSec = workDurationSec.sanitizeDuration(min = 5),
+        cueSettings = cueSettings
+    )
+}
+
+private fun CountdownCue.toCountdownCueUiState(): CountdownCueUiState {
+    return CountdownCueUiState(
+        enabled = enabled,
+        thresholdSec = thresholdSec.sanitizeCueThreshold(),
+        soundEnabled = soundEnabled,
+        vibrationEnabled = vibrationEnabled,
+        emphasisAnimationEnabled = emphasisAnimationEnabled
+    )
+}
+
 
 internal fun Int.formatDuration(): String {
     val minutes = this / 60
