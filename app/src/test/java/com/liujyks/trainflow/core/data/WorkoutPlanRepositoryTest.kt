@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
@@ -62,6 +63,7 @@ class WorkoutPlanRepositoryTest {
         val restored = requireNotNull(repository.getPlan("custom-timed"))
         val warmup = restored.blocks[0] as WarmupBlock
         val circuit = restored.blocks[1] as TimedCircuitBlock
+        val cooldown = restored.blocks[2] as CooldownBlock
         val items = circuit.items
 
         assertEquals(WorkoutMode.TIMED, restored.mode)
@@ -69,6 +71,8 @@ class WorkoutPlanRepositoryTest {
         assertEquals("本地保存的纯间歇计时器计划", restored.description)
         assertEquals("激活热身", warmup.title)
         assertEquals(90, warmup.durationSec)
+        assertEquals("warmup-flow", warmup.items.single().iconKey)
+        assertEquals("#00BCD4", warmup.items.single().colorHex)
         assertEquals(4, circuit.rounds)
         assertEquals(35, circuit.restBetweenRoundsSec)
         assertEquals(
@@ -80,6 +84,10 @@ class WorkoutPlanRepositoryTest {
         assertEquals(listOf(TimedStageType.REST, TimedStageType.CUSTOM, TimedStageType.WORK), items.map { it.stageType })
         assertEquals(listOf("rest", "plank", "bolt"), items.map { it.iconKey })
         assertEquals(listOf("#2FBF8F", "#8B6CFF", "#F26B4F"), items.map { it.colorHex })
+        assertEquals("静态放松", cooldown.title)
+        assertEquals(75, cooldown.durationSec)
+        assertEquals("cooldown-moon", cooldown.items.single().iconKey)
+        assertEquals("#FFC107", cooldown.items.single().colorHex)
         assertEquals(4, restored.preferences?.cueSettings?.actionEnding?.thresholdSec)
         assertEquals(3, restored.preferences?.cueSettings?.restEnding?.thresholdSec)
     }
@@ -178,7 +186,18 @@ class WorkoutPlanRepositoryTest {
                     id = "stage-warmup",
                     order = 1,
                     title = "激活热身",
-                    durationSec = 90
+                    durationSec = 90,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "stage-warmup",
+                            labelOverride = "激活热身",
+                            stageType = TimedStageType.WARMUP,
+                            iconKey = "warmup-flow",
+                            colorHex = "#00BCD4",
+                            workDurationSec = 90,
+                            autoAdvance = true
+                        )
+                    )
                 ),
                 TimedCircuitBlock(
                     id = "custom-circuit",
@@ -212,6 +231,23 @@ class WorkoutPlanRepositoryTest {
                             iconKey = "bolt",
                             colorHex = "#F26B4F",
                             workDurationSec = 40,
+                            autoAdvance = true
+                        )
+                    )
+                ),
+                CooldownBlock(
+                    id = "stage-cooldown",
+                    order = 3,
+                    title = "静态放松",
+                    durationSec = 75,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "stage-cooldown",
+                            labelOverride = "静态放松",
+                            stageType = TimedStageType.COOLDOWN,
+                            iconKey = "cooldown-moon",
+                            colorHex = "#FFC107",
+                            workDurationSec = 75,
                             autoAdvance = true
                         )
                     )

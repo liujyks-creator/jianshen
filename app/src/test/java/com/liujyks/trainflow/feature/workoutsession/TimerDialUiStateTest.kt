@@ -10,6 +10,8 @@ import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
+import com.liujyks.trainflow.feature.plans.buildDefaultTimedPlanEditorState
 import com.liujyks.trainflow.ui.theme.SkinRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,6 +107,38 @@ class TimerDialUiStateTest {
 
         assertEquals("#F26B4F", dial.currentStageColorHex)
         assertEquals("#F26B4F", dial.stageSegments.first().colorHex)
+    }
+
+    @Test
+    fun planDetailReadyExecutionAndTimerDialConsumeBoundaryStageColors() {
+        val plan = boundaryColoredEditorPlan()
+        val detail = requireNotNull(PlanManagementScreenState(plans = listOf(plan)).selectedDetail)
+        val ready = TimedWorkoutEngine.create(plan)
+        val readyGate = requireNotNull(ready.toTimedReadyStartGateUiState())
+        val started = ready.startTimedSessionFromReadyGate().state
+        val warmupScreen = started.toTimedWorkoutSessionScreenState()
+
+        assertTrue(detail.canStartTraining)
+        assertEquals("开始计时训练", detail.startStatus)
+        assertEquals(plan.title, readyGate.planTitle)
+        assertEquals("#00BCD4", warmupScreen.stageColorHex)
+        assertEquals("mobility", warmupScreen.stageIconKey)
+        assertEquals("#00BCD4", warmupScreen.timerDial.currentStageColorHex)
+        assertEquals("#00BCD4", warmupScreen.timerDial.stageSegments.single().colorHex)
+        assertEquals("#111820", warmupScreen.timerDial.currentStageTextColorHex)
+
+        val secondsBeforeCooldown = started.steps
+            .takeWhile { step -> step.stageType != TimedStageType.COOLDOWN }
+            .sumOf { step -> step.durationSec }
+        val cooldown = TimedWorkoutEngine.tick(started, seconds = secondsBeforeCooldown).state
+        val cooldownScreen = cooldown.toTimedWorkoutSessionScreenState()
+
+        assertEquals(TimedStageType.COOLDOWN, cooldown.currentStep?.stageType)
+        assertEquals("#FFC107", cooldownScreen.stageColorHex)
+        assertEquals("moon", cooldownScreen.stageIconKey)
+        assertEquals("#FFC107", cooldownScreen.timerDial.currentStageColorHex)
+        assertEquals("#FFC107", cooldownScreen.timerDial.stageSegments.single().colorHex)
+        assertEquals("#111820", cooldownScreen.timerDial.currentStageTextColorHex)
     }
 
     @Test
@@ -655,6 +689,35 @@ class TimerDialUiStateTest {
             preferences = cueSettings?.let { PlanPreferences(cueSettings = it) },
             createdAt = "2026-06-10T00:00:00Z",
             updatedAt = "2026-06-10T00:00:00Z"
+        )
+    }
+
+    private fun boundaryColoredEditorPlan(): WorkoutPlan {
+        val editor = buildDefaultTimedPlanEditorState()
+        val compactStages = editor.stages.map { stage ->
+            when (stage.stageType) {
+                TimedStageType.WARMUP -> stage.copy(
+                    iconKey = "mobility",
+                    colorHex = "#00BCD4",
+                    durationSec = 5
+                )
+                TimedStageType.COOLDOWN -> stage.copy(
+                    iconKey = "moon",
+                    colorHex = "#FFC107",
+                    durationSec = 5
+                )
+                else -> stage.copy(durationSec = 5)
+            }
+        }
+
+        return editor.copy(
+            title = "Boundary Color Editor Plan",
+            rounds = 1,
+            restBetweenRoundsSec = 0,
+            stages = compactStages
+        ).toWorkoutPlan(
+            planId = "boundary-color-editor-plan",
+            timestamp = "2026-06-15T00:00:00Z"
         )
     }
 

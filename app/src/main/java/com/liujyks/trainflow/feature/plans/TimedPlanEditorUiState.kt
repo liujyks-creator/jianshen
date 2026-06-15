@@ -636,7 +636,8 @@ private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
                 id = stage.id,
                 order = blocks.size + 1,
                 title = stage.name,
-                durationSec = stage.durationSec
+                durationSec = stage.durationSec,
+                items = listOf(stage.toTimedExerciseItem())
             )
 
             TimedStageType.COOLDOWN -> Unit
@@ -661,7 +662,8 @@ private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
                 id = stage.id,
                 order = blocks.size + 1,
                 title = stage.name,
-                durationSec = stage.durationSec
+                durationSec = stage.durationSec,
+                items = listOf(stage.toTimedExerciseItem())
             )
         }
     }

@@ -315,6 +315,50 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun warmupStageColorAndIconPersistToBoundaryBlockItem() {
+        val baseState = buildDefaultTimedPlanEditorState()
+        val warmupId = baseState.stages.first { it.stageType == TimedStageType.WARMUP }.id
+        val colorState = baseState.updateStageColor(warmupId, "#00BCD4")
+        val state = colorState.copy(
+            stages = colorState.stages.map { stage ->
+                if (stage.id == warmupId) stage.copy(iconKey = "mobility") else stage
+            }
+        )
+        val block = state.toWorkoutPlan().blocks.filterIsInstance<WarmupBlock>().single()
+        val item = block.items.single()
+
+        assertEquals(180, block.durationSec)
+        assertEquals(warmupId, item.id)
+        assertEquals("热身", item.labelOverride)
+        assertEquals(TimedStageType.WARMUP, item.stageType)
+        assertEquals("mobility", item.iconKey)
+        assertEquals("#00BCD4", item.colorHex)
+        assertEquals(180, item.workDurationSec)
+    }
+
+    @Test
+    fun cooldownStageColorAndIconPersistToBoundaryBlockItem() {
+        val baseState = buildDefaultTimedPlanEditorState()
+        val cooldownId = baseState.stages.first { it.stageType == TimedStageType.COOLDOWN }.id
+        val colorState = baseState.updateStageColor(cooldownId, "#FFC107")
+        val state = colorState.copy(
+            stages = colorState.stages.map { stage ->
+                if (stage.id == cooldownId) stage.copy(iconKey = "moon") else stage
+            }
+        )
+        val block = state.toWorkoutPlan().blocks.filterIsInstance<CooldownBlock>().single()
+        val item = block.items.single()
+
+        assertEquals(120, block.durationSec)
+        assertEquals(cooldownId, item.id)
+        assertEquals("放松", item.labelOverride)
+        assertEquals(TimedStageType.COOLDOWN, item.stageType)
+        assertEquals("moon", item.iconKey)
+        assertEquals("#FFC107", item.colorHex)
+        assertEquals(120, item.workDurationSec)
+    }
+
+    @Test
     fun invalidStageColorFallsBackToCurrentStageDefault() {
         val restId = buildDefaultTimedPlanEditorState().stages.first { it.stageType == TimedStageType.REST }.id
         val state = buildDefaultTimedPlanEditorState().updateStageColor(restId, "bad-color")
