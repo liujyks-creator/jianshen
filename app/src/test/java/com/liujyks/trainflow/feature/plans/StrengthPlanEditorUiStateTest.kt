@@ -1,6 +1,9 @@
 package com.liujyks.trainflow.feature.plans
 
 import com.liujyks.trainflow.core.model.ExerciseSide
+import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
+import com.liujyks.trainflow.core.model.PlanPreferences
+import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
@@ -55,6 +58,37 @@ class StrengthPlanEditorUiStateTest {
         assertEquals("saved-strength", resaved.id)
         assertEquals("2026-06-14T01:00:00Z", resaved.createdAt)
         assertEquals("2026-06-15T01:00:00Z", resaved.updatedAt)
+    }
+
+    @Test
+    fun editingSavedStrengthPlanKeepsReminderAndPreferences() {
+        val savedPlan = buildDefaultStrengthPlanEditorState()
+            .toWorkoutPlan(planId = "saved-strength", timestamp = "2026-06-14T01:00:00Z")
+            .copy(
+                reminder = PlanReminder(
+                    enabled = true,
+                    scheduleAt = "2026-06-16T11:30:00Z",
+                    repeatRule = "weekly"
+                ),
+                preferences = PlanPreferences(
+                    heartRateDisplay = HeartRateDisplayPreference(
+                        enabled = false,
+                        showDisconnectedPlaceholder = false
+                    )
+                )
+            )
+
+        val editedPlan = savedPlan
+            .toStrengthPlanEditorState()
+            .updateTitle("力量保留提醒")
+            .saveDraftPlan(timestamp = "2026-06-15T01:00:00Z")
+            .savedPlan
+            .let(::requireNotNull)
+
+        assertEquals(savedPlan.reminder, editedPlan.reminder)
+        assertEquals(savedPlan.preferences, editedPlan.preferences)
+        assertEquals("weekly", editedPlan.reminder?.repeatRule)
+        assertEquals("力量保留提醒", editedPlan.title)
     }
 
     @Test
@@ -116,6 +150,14 @@ class StrengthPlanEditorUiStateTest {
         assertEquals(WeightUnit.KG, requireNotNull(target.weight).unit)
         assertTrue(requireNotNull(target.repTarget) is RepTarget.Range)
         assertEquals(90, target.restAfterSetSec)
+    }
+
+    @Test
+    fun createModeStrengthPlanDoesNotInventReminderOrPreferences() {
+        val plan = buildDefaultStrengthPlanEditorState().toWorkoutPlan()
+
+        assertNull(plan.reminder)
+        assertNull(plan.preferences)
     }
 
     @Test

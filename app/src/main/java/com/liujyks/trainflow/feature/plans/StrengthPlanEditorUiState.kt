@@ -26,6 +26,7 @@ internal data class StrengthPlanEditorScreenState(
     val strengthSetTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START,
     val sourcePlanId: String? = null,
     val sourceCreatedAt: String? = null,
+    val originalPlanMetadata: OriginalPlanMetadata? = null,
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
@@ -64,7 +65,9 @@ internal data class StrengthPlanEditorScreenState(
                     setTimerMode = strengthSetTimerMode
                 )
             },
-            createdAt = sourceCreatedAt ?: timestamp,
+            reminder = originalPlanMetadata?.reminder,
+            preferences = originalPlanMetadata?.preferences,
+            createdAt = originalPlanMetadata?.createdAt ?: sourceCreatedAt ?: timestamp,
             updatedAt = timestamp
         )
     }
@@ -644,6 +647,7 @@ internal fun WorkoutPlan.toStrengthPlanEditorState(
             description = description.orEmpty(),
             sourcePlanId = id,
             sourceCreatedAt = createdAt,
+            originalPlanMetadata = toOriginalPlanMetadata(),
             statusMessage = "当前计划不是力量训练，已使用安全默认草稿。"
         )
     }
@@ -667,6 +671,7 @@ internal fun WorkoutPlan.toStrengthPlanEditorState(
         strengthSetTimerMode = timerMode,
         sourcePlanId = id,
         sourceCreatedAt = createdAt,
+        originalPlanMetadata = toOriginalPlanMetadata(),
         statusMessage = if (mappedExercises.isEmpty()) {
             "已载入计划基础信息，但原计划没有可回填的力量动作，已使用安全默认动作。"
         } else {

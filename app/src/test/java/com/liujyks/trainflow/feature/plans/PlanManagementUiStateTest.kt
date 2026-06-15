@@ -2,6 +2,9 @@ package com.liujyks.trainflow.feature.plans
 
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.core.model.WorkoutSession
+import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
@@ -311,6 +314,36 @@ class PlanManagementUiStateTest {
 
         assertFalse(requireNotNull(copied.reminder).enabled)
         assertNull(requireNotNull(copied.reminder).scheduleAt)
+    }
+
+    @Test
+    fun editingCurrentPlanDoesNotRewriteHistoricalSessionPlanSnapshot() {
+        val state = buildDefaultPlanManagementState()
+        val original = state.plans.first()
+        val historicalSession = WorkoutSession(
+            id = "session-before-edit",
+            planId = original.id,
+            mode = original.mode,
+            planSnapshot = WorkoutPlanSnapshot(
+                planId = original.id,
+                title = original.title,
+                mode = original.mode,
+                blocks = original.blocks,
+                preferences = original.preferences,
+                followAlong = original.followAlong
+            ),
+            status = SessionStatus.COMPLETED
+        )
+        val editedPlan = original
+            .toTimedPlanEditorState()
+            .updateTitle("编辑后的当前计划")
+            .toWorkoutPlan(timestamp = "2026-06-15T01:00:00Z")
+        val updatedState = state.upsertPlan(editedPlan)
+
+        assertEquals("编辑后的当前计划", updatedState.selectedPlan?.title)
+        assertEquals(original.title, historicalSession.planSnapshot.title)
+        assertEquals(original.blocks, historicalSession.planSnapshot.blocks)
+        assertEquals(original.preferences, historicalSession.planSnapshot.preferences)
     }
 
     @Test

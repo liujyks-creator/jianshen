@@ -158,6 +158,20 @@ internal fun dispatchPlanReminderReplacement(
     return scheduler.schedule(plan.toPlanReminderScheduleRequest(permissionState))
 }
 
+internal fun dispatchPlanReminderReplacementForEditedPlan(
+    plan: WorkoutPlan,
+    wasEditingExistingPlan: Boolean,
+    permissionState: PlanReminderNotificationPermissionState,
+    scheduler: PlanReminderScheduler
+): PlanReminderScheduleResult? {
+    if (!wasEditingExistingPlan) return null
+    return dispatchPlanReminderReplacement(
+        plan = plan,
+        permissionState = permissionState,
+        scheduler = scheduler
+    )
+}
+
 @Composable
 private fun PlanManagementScreen(
     uiState: PlanManagementScreenState,

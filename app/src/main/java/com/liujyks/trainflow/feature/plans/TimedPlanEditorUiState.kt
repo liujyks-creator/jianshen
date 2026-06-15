@@ -72,6 +72,7 @@ internal data class TimedPlanEditorScreenState(
     val nextStageSequence: Int = 1,
     val sourcePlanId: String? = null,
     val sourceCreatedAt: String? = null,
+    val originalPlanMetadata: OriginalPlanMetadata? = null,
     val savedPlan: WorkoutPlan? = null,
     val statusMessage: String? = null
 ) {
@@ -113,6 +114,15 @@ internal data class TimedPlanEditorScreenState(
     ): WorkoutPlan {
         val cueSafeState = constrainCueSettings().normalizeFixedBoundaryStages()
         val blocks = cueSafeState.toPlanBlocks()
+        val cueSettings = CueSettings(
+            actionEnding = cueSafeState.actionCue.toCountdownCue(),
+            restEnding = cueSafeState.restCue.toCountdownCue().takeIf {
+                cueSafeState.hasPositiveRestDuration()
+            }
+        )
+        val preferences = (originalPlanMetadata?.preferences ?: PlanPreferences()).copy(
+            cueSettings = cueSettings
+        )
 
         return WorkoutPlan(
             id = planId,
@@ -120,15 +130,9 @@ internal data class TimedPlanEditorScreenState(
             title = title.trim(),
             description = description.ifBlank { "本地保存的纯间歇计时器计划" },
             blocks = blocks,
-            preferences = PlanPreferences(
-                cueSettings = CueSettings(
-                    actionEnding = cueSafeState.actionCue.toCountdownCue(),
-                    restEnding = cueSafeState.restCue.toCountdownCue().takeIf {
-                        cueSafeState.hasPositiveRestDuration()
-                    }
-                )
-            ),
-            createdAt = sourceCreatedAt ?: timestamp,
+            reminder = originalPlanMetadata?.reminder,
+            preferences = preferences,
+            createdAt = originalPlanMetadata?.createdAt ?: sourceCreatedAt ?: timestamp,
             updatedAt = timestamp
         )
     }
@@ -642,6 +646,7 @@ internal fun WorkoutPlan.toTimedPlanEditorState(
             description = description.orEmpty(),
             sourcePlanId = id,
             sourceCreatedAt = createdAt,
+            originalPlanMetadata = toOriginalPlanMetadata(),
             statusMessage = "当前计划不是计时训练，已使用安全默认草稿。"
         )
     }
@@ -662,6 +667,7 @@ internal fun WorkoutPlan.toTimedPlanEditorState(
         nextStageSequence = safeStages.size + 1,
         sourcePlanId = id,
         sourceCreatedAt = createdAt,
+        originalPlanMetadata = toOriginalPlanMetadata(),
         statusMessage = if (mappedStages.isEmpty()) {
             "已载入计划基础信息，但原计划没有可回填的计时阶段，已使用安全默认阶段。"
         } else {

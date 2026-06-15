@@ -14,9 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
+import com.liujyks.trainflow.core.notifications.resolvePlanReminderPermissionState
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
@@ -27,6 +30,7 @@ import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
+import com.liujyks.trainflow.feature.plans.dispatchPlanReminderReplacementForEditedPlan
 import com.liujyks.trainflow.feature.plans.upsertPlan
 import com.liujyks.trainflow.feature.plans.withPlans
 import com.liujyks.trainflow.feature.recovery.RecoveryRoute
@@ -58,6 +62,10 @@ internal fun TrainFlowApp(
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {},
     onUiSkinChanged: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val planReminderScheduler = remember(context) {
+        AndroidPlanReminderScheduler(context.applicationContext)
+    }
     var currentDestination by rememberSaveable {
         mutableStateOf(OfficialShellDestination.TRAINING)
     }
@@ -101,6 +109,15 @@ internal fun TrainFlowApp(
         activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
         activeFollowAlongSessionPlan = nextState.activeFollowAlongSessionPlan
         activeRecoveryRecommendation = nextState.activeRecoveryRecommendation
+    }
+
+    fun refreshEditedPlanReminder(plan: WorkoutPlan) {
+        dispatchPlanReminderReplacementForEditedPlan(
+            plan = plan,
+            wasEditingExistingPlan = shellState.editingPlanId == plan.id,
+            permissionState = context.resolvePlanReminderPermissionState(),
+            scheduler = planReminderScheduler
+        )
     }
 
     Surface {
@@ -155,6 +172,7 @@ internal fun TrainFlowApp(
                     },
                     onSaveTimedPlan = { plan ->
                         onSaveWorkoutPlan(plan)
+                        refreshEditedPlanReminder(plan)
                         val nextPlanManagementState = shellState.planManagementState.upsertPlan(plan)
                         applyShellState(
                             shellState.finishPlanEdit(nextPlanManagementState)
@@ -180,6 +198,7 @@ internal fun TrainFlowApp(
                     },
                     onSaveStrengthPlan = { plan ->
                         onSaveWorkoutPlan(plan)
+                        refreshEditedPlanReminder(plan)
                         val nextPlanManagementState = shellState.planManagementState.upsertPlan(plan)
                         applyShellState(
                             shellState.finishPlanEdit(nextPlanManagementState)

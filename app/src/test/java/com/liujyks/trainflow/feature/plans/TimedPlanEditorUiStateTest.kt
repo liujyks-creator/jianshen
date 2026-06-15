@@ -3,6 +3,9 @@ package com.liujyks.trainflow.feature.plans
 import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
+import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
+import com.liujyks.trainflow.core.model.PlanPreferences
+import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
@@ -70,6 +73,47 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
+    fun editingSavedTimedPlanKeepsReminderAndNonCuePreferencesWhileReplacingCueSettings() {
+        val savedPlan = buildDefaultTimedPlanEditorState()
+            .updateActionCueThreshold(8)
+            .toWorkoutPlan(planId = "saved-timed", timestamp = "2026-06-14T01:00:00Z")
+            .copy(
+                reminder = PlanReminder(
+                    enabled = true,
+                    scheduleAt = "2026-06-16T11:30:00Z",
+                    repeatRule = "weekly"
+                ),
+                preferences = PlanPreferences(
+                    cueSettings = CueSettings(
+                        actionEnding = CountdownCue(thresholdSec = 8),
+                        restEnding = CountdownCue(thresholdSec = 4)
+                    ),
+                    heartRateDisplay = HeartRateDisplayPreference(
+                        enabled = true,
+                        showDisconnectedPlaceholder = false
+                    )
+                )
+            )
+
+        val editedPlan = savedPlan
+            .toTimedPlanEditorState()
+            .updateActionCueThreshold(3)
+            .updateRestCueThreshold(2)
+            .saveDraftPlan(timestamp = "2026-06-15T01:00:00Z")
+            .savedPlan
+            .let(::requireNotNull)
+
+        assertEquals(savedPlan.reminder, editedPlan.reminder)
+        assertEquals(
+            savedPlan.preferences?.heartRateDisplay,
+            editedPlan.preferences?.heartRateDisplay
+        )
+        assertEquals(3, editedPlan.preferences?.cueSettings?.actionEnding?.thresholdSec)
+        assertEquals(2, editedPlan.preferences?.cueSettings?.restEnding?.thresholdSec)
+        assertEquals("weekly", editedPlan.reminder?.repeatRule)
+    }
+
+    @Test
     fun editingSavedTimedPlanUpdatesSamePlanIdAndKeepsCreatedAt() {
         val savedPlan = buildDefaultTimedPlanEditorState().toWorkoutPlan(
             planId = "saved-timed",
@@ -128,6 +172,15 @@ class TimedPlanEditorUiStateTest {
         assertEquals("训练", circuit.items.first().labelOverride)
         assertEquals(45, circuit.items.first().workDurationSec)
         assertEquals(null, circuit.items.first().restAfterSec)
+    }
+
+    @Test
+    fun createModeTimedPlanDoesNotInventReminderOrNonCuePreferences() {
+        val plan = buildDefaultTimedPlanEditorState().toWorkoutPlan()
+
+        assertNull(plan.reminder)
+        assertNotNull(plan.preferences?.cueSettings)
+        assertNull(plan.preferences?.heartRateDisplay)
     }
 
     @Test
