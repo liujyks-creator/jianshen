@@ -83,7 +83,7 @@ stepsCompleted:
 | E8 | 设计系统、UI Shell 与开源定制边界 | M0-M6 |
 | E9 | MVP 验收与发布准备 | M6 |
 | E10 | 训练模式边界与执行页交互修正 | 用户测试后续 |
-| E11 | 手动心率输入与设备接口策略 | 用户测试后续 |
+| E11 | 心率数据源策略与设备接口边界 | 用户测试后续 |
 | E12 | 真实记录、统计图表与趋势分析 | 用户测试后续 |
 | E13 | 声音提示、固定女声 cue 与音频共存 | 用户测试后续 |
 
@@ -992,7 +992,7 @@ stepsCompleted:
 **交付结果:**
 
 - 新增 E10 训练模式交互计划，记录计时训练纯间歇计时器边界、阶段名称/时间/图标/颜色、阶段增删复制拖动排序、计划主题色、大圆盘执行页、暂停时长记录、固定阶段 cue 预留、统一执行页主操作原则和跟练/力量统一动作选择页。
-- 用户反馈已分流：记录未真实闭环与历史清理进入 E10.4/E12，Timer Dial 圆盘视觉语言进入 E10.5-E10.8，手动心率输入进入 E11，真实设备进入 E11 或独立阶段，统计图表和趋势进入 E12，声音/女声 cue/音频共存进入 E13。
+- 用户反馈已分流：记录未真实闭环与历史清理进入 E10.4/E12，Timer Dial 圆盘视觉语言进入 E10.5-E10.8，心率数据源状态、设备优先策略和可选手动输入进入 E11，统计图表和趋势进入 E12，声音/女声 cue/音频共存进入 E13。
 - 本 story 未实现任何生产 UI、训练引擎、持久化、手动心率、真实设备、语音、TTS、音频资源、foreground service、notification action 或统计图表。
 
 ### Story E10.2: 计时训练编辑页与执行页重做
@@ -1531,28 +1531,42 @@ stepsCompleted:
 
 力量训练完整新版 UI 设计单独开启，不塞进 E10.3。该阶段可重审力量训练信息架构、确认层、历史趋势入口和高级组设置，但必须保留计划值预填实际记录、训练命令、训练事件和核心引擎语义。
 
-## Epic E11: 手动心率输入与设备接口策略
+## Epic E11: 心率数据源策略与设备接口边界
 
-目标：先允许用户手动录入心率，让心率进入记录和分析，同时保留真实设备接口。
+目标：先收敛心率数据源、未获取状态和设备接口边界。心率来源以设备获取为优先，用户手动输入只是可选补充；如果设备数据和手动输入都不存在，训练记录和趋势页应显示未获取心率，不绘制假趋势。
 
-### Story E11.1: 手动心率输入
+### Story E11.1: 心率数据源状态与未获取展示
 
 作为用户，
-我想在训练或记录中手动录入心率，
-以便没有设备时也能保存心率信息用于回顾。
+我想清楚知道训练记录是否获取到了心率，
+以便没有心率来源时也不会被误导为已有心率数据。
 
 **验收标准:**
 
-- Then 用户可手动录入心率。
-- Then 手动心率进入训练记录或后续分析数据源。
-- Then UI 明确手动心率不是实时设备数据。
+- Then 训练记录和趋势入口能区分设备心率、手动心率和未获取心率。
+- Then 没有设备数据且没有手动输入时，UI 显示未获取心率。
+- Then 未获取心率时不绘制平均心率趋势。
 - Then 继续保留 `HeartRateState` / provider 抽象。
 - Then 不接 Health Connect、Wear OS、BLE 或厂商 SDK。
 - Then 不做医疗判断、危险告警或训练中断依据。
 
-### Story E11.x: 真实心率设备策略
+### Story E11.2: 设备心率获取接入策略
 
-真实设备、Health Connect、Wear OS、BLE 或厂商 SDK 接入另开 story 或独立阶段。进入前必须重新确认权限、数据来源、非医疗文案、设备支持范围、后台行为和失败状态。
+真实设备、Health Connect、Wear OS、BLE 或厂商 SDK 接入另开 story 或独立阶段。进入前必须重新确认权限、数据来源、非医疗文案、设备支持范围、后台行为和失败状态。设备数据是后续心率趋势的优先来源。
+
+### Story E11.3: 可选手动心率输入
+
+作为用户，
+我可以在没有设备数据时选择手动录入心率，
+以便把自测或外部设备读数作为可标注来源的回顾数据。
+
+**验收标准:**
+
+- Then 用户可选择手动录入心率，但手动输入不是使用心率趋势的必需前置。
+- Then 手动心率进入训练记录或后续分析数据源时必须标注来源。
+- Then UI 明确手动心率不是实时设备数据。
+- Then 手动心率不得伪装成设备数据。
+- Then 不做医疗判断、危险告警或训练中断依据。
 
 ## Epic E12: 真实记录、统计图表与趋势分析
 
@@ -1593,8 +1607,35 @@ stepsCompleted:
 - Then 提供总统计图表、计划趋势和平均心率趋势。
 - Then 分析时比较同类数据：同一计划、同一阶段、同一轮次或同一动作。
 - Then 不把某天第一轮和另一天最后一轮直接比较。
-- Then 平均心率趋势只消费明确来源的手动心率或后续真实设备数据；没有来源时不画假趋势。
+- Then 平均心率趋势只消费明确来源的设备心率或可选手动心率；没有来源时显示未获取心率，不画假趋势。
 - Then 不用不可比数据得出强弱、康复或医疗结论。
+
+### Story E12.2a: Non-heart-rate history charts and aggregate trends
+
+**状态:** Implemented in Android history aggregate charts
+
+作为用户，
+我想先看到不依赖心率来源的真实记录图表，
+以便了解训练次数、状态、用时、休息和训练类型分布的基础变化。
+
+**验收标准:**
+
+- Then 图表只消费真实持久化 `WorkoutSession` list，不使用 preview / fixture / 内存示例记录。
+- Then 按 `startedAt` 日期聚合训练总次数趋势。
+- Then completed / abandoned 趋势分开显示。
+- Then `totalElapsedSec` / `effectiveElapsedSec` / `pausedElapsedSec` 趋势分开显示。
+- Then planned rest / actual rest / extra rest 趋势分开显示，extra rest 不并入 paused。
+- Then mode breakdown 展示 timed / strength / follow_along 数量和占比。
+- Then 空记录或不足 2 个日期点时显示暂无趋势，不绘制假曲线。
+- Then planned rest 继续来自历史 `WorkoutSession.planSnapshot`，当前计划编辑不回写旧趋势。
+- Then 没有明确来源心率时显示未获取心率，不输出平均心率趋势数据。
+
+**交付结果:**
+
+- Android 记录页新增“非心率图表与聚合趋势”区，基于真实 Room session records 的 UI state mapper 推导图表数据。
+- 新增轻量 Compose 折线图和训练类型分布条，保持记录页浅色、克制、可读；样本不足时只显示空状态文案。
+- 单元测试覆盖真实 session list 聚合、completed / abandoned 分离、total / effective / paused 分离、planned / actual / extra rest 分离、mode breakdown、空记录 / 不足时间点、历史 planSnapshot 使用，以及无心率来源时不输出平均心率趋势数据。
+- 本阶段不实现设备心率获取、手动心率输入、持久化心率模型、E12.2b 力量同类 set 趋势、E12.2c 计时同类阶段 / 轮次深趋势、E12.3 历史记录清理、声音播放、云同步、账号体系、foreground service、exact alarm、notification action 或 reset production command。
 
 ### Story E12.3: 历史记录清理
 
@@ -1684,10 +1725,11 @@ stepsCompleted:
 19. E10.16：Motion Landing，把 E10.15 token 最小落地到计时训练 ready gate、center dial、Timer Dial 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source / snap 降级路径。（Implemented）
 20. E10.17：Stage Color Picker，为计时阶段编辑页提供推荐色 / 更多颜色选择、集中色板、可访问选中态、计划持久化恢复和 Timer Dial 阶段色消费。（Implemented）
 21. E10.18：Plan Edit Backfill，从计划详情进入计时 / 力量编辑器，回填已保存计划并保存回同一 plan id，同时保持历史 session snapshot 不回写。（Implemented）
-22. E11：手动心率输入与真实设备接口策略。
+22. E11：心率数据源策略、设备接口边界和可选手动输入。
 23. E12.1：真实记录与基础统计。（Implemented）
-24. E12.2 / E12.3：图表、趋势分析、同日多轮运动分析和历史记录清理。
-25. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+24. E12.2a：非心率历史图表与聚合趋势。（Implemented）
+25. E12.2b / E12.2c / E12.3：力量同类 set 趋势、计时同类阶段 / 轮次深趋势和历史记录清理。
+26. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
 

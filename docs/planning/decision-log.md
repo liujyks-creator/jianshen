@@ -58,6 +58,7 @@
 | D-039 | Accepted | 计时训练从编辑页或计划详情开始后先进入 ready/start gate，用户点击中心圆才真正开始训练。 | Ready gate 是 route/UI 启动边界，不是 `WorkoutSession` 的 completed / abandoned / paused 状态；ready 期间不推进 engine tick、不触发 countdown reminder / sound / haptics、不写 abandoned session record。真实启动仍通过 `WorkoutCommand.StartSession` 进入 `TimedWorkoutEngine`，completed / abandoned 记录只在用户实际启动后写入。 |
 | D-040 | Accepted | 计时训练 `+15秒` 表示延长当前休息阶段，并作为实际会话记录保存。 | `WorkoutCommand.ExtendRest` 只作用于 active rest step；生产 UI 用二段式确认防误触，第一次点击只显示 `确认 +15秒`，2 秒内第二次点击才加时并记录，超时不记录。每个 rest step 最多确认 4 次 / 60 秒，达到上限后禁用并提示“已额外休息 1 分钟，需要更久可以暂停训练”，但不自动暂停。该命令不插入新休息阶段，不修改原 `WorkoutPlan` 或 plan snapshot，不把额外休息伪装成 planned rest。额外休息是用户主动增加恢复时间，区别于暂停；它继续计入训练 active / total 用时，不增加 `pausedElapsedSec`，并通过 `timedRestExtensionRecords` 独立保存发生 session、round、step、前一个阶段、计划休息、点击时机、addedSec 和累计额外休息，供 E12 后续分析。Ready gate 未真实启动时不能产生额外休息记录。 |
 | D-041 | Accepted | TrainFlow motion timing 采用集中 token，并且动画只消费状态不驱动训练。 | 触摸反馈使用 `80-120ms`，状态切换 `120-180ms`，局部布局 `180-240ms`，页面切换 `220-300ms`，Timer Dial continuous projection 最多投影 `1000ms` 且只作为 UI projection。所有训练动效必须可中断、状态驱动、支持 reduce-motion snap / disabled fallback；不得驱动 engine state、倒计时、session record、`pausedElapsedSec`、额外休息记录、`WorkoutCommand` 或 `WorkoutEvent`。E10.15 只定义规则和 token，不落地完整 Motion Landing。 |
+| D-042 | Accepted | 心率数据源以设备获取为优先，手动输入只是可选补充；没有来源时显示未获取心率。 | 真实设备、Health Connect、Wear OS、BLE 或厂商 SDK 接入仍需 E11 或独立设备阶段决策；手动输入不作为心率趋势的必需前置。平均心率趋势只能消费明确来源的设备数据或用户手动录入数据；两者都没有时，历史页和趋势页显示“未获取心率”，不得绘制假心率趋势，不做医疗判断、危险告警或训练中断依据。 |
 
 ## 预留能力
 
@@ -81,7 +82,7 @@
 | O-003 | Accepted | 首版是否播放语音读秒，还是只保留语音接口？ | E10.1 收敛为后续只预留固定阶段词 cue；第一版不做用户任意文本 TTS、自动语音教练或语音读秒大范围能力。 |
 | O-004 | Accepted | 训练日程提醒是否要强于普通通知？ | 已按 D-019 收敛为普通通知基线；强提醒暂不进入 MVP。 |
 | O-005 | Accepted | Android 具体架构和模块拆分是什么？ | 已按 D-016、D-017、D-018 和 `docs/architecture.md` 收敛。 |
-| O-006 | Open | 后续健康数据与可穿戴设备的接入策略是什么？ | E10.1 将手动心率输入归入 E11，并保留真实设备接口；Health Connect、Wear OS、BLE 或厂商 SDK 仍需在 E11 或独立设备阶段继续决策。 |
+| O-006 | Accepted | 后续健康数据与可穿戴设备的接入策略是什么？ | 已按 D-042 收敛：心率来源以设备获取为优先，手动输入只是可选补充；两者都没有时显示未获取心率。Health Connect、Wear OS、BLE 或厂商 SDK 的具体权限、来源、设备范围和失败状态仍需在 E11 或独立设备 story 中细化。 |
 | O-007 | Accepted | E1.2 如何处理 `sourceMeta`/`extensions` 与 prototype contract 的差异？ | 已按 D-026 收敛：prototype contract 补齐字段，fixture 写入来源信息，扩展与默认建议不进入核心动作模型。 |
 
 ## 来源文档

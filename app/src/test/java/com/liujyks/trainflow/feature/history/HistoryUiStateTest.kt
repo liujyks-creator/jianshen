@@ -231,6 +231,308 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun aggregateChartsAreOnlyBuiltForRealPersistedRecords() {
+        assertEquals(null, HistoryScreenState(sessions = emptyList()).aggregateChartsUiState)
+        assertEquals(null, buildDefaultHistoryScreenState().aggregateChartsUiState)
+
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "real-timed-chart",
+                    status = SessionStatus.COMPLETED,
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 80,
+                    pausedElapsedSec = 20,
+                    actualRestSec = 25,
+                    extraRestAdds = listOf(15),
+                    plannedRestSec = 30
+                )
+            )
+        )
+
+        assertNotNull(state.aggregateChartsUiState)
+    }
+
+    @Test
+    fun aggregateTrendsNeedAtLeastTwoStartedAtDates() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "only-one-date",
+                    status = SessionStatus.COMPLETED,
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 80,
+                    pausedElapsedSec = 20,
+                    actualRestSec = 25,
+                    extraRestAdds = emptyList(),
+                    plannedRestSec = 30
+                )
+            )
+        )
+
+        val charts = requireNotNull(state.aggregateChartsUiState)
+
+        assertEquals(1, charts.pointCount)
+        assertFalse(charts.countTrend.hasDrawableTrend)
+        assertTrue(requireNotNull(charts.countTrend.emptyMessage).contains("暂无趋势"))
+        assertTrue(charts.countTrend.series.isEmpty())
+    }
+
+    @Test
+    fun aggregateCountAndStatusTrendsGroupRealSessionsByStartedAtDate() {
+        val charts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "date-one-completed",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    ),
+                    strengthSession(
+                        id = "date-one-abandoned",
+                        status = SessionStatus.ABANDONED,
+                        startedAt = "2026-06-08T18:00:00Z",
+                        records = emptyList()
+                    ),
+                    timedSession(
+                        id = "date-two-completed",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 50,
+                        effectiveElapsedSec = 50,
+                        pausedElapsedSec = 0,
+                        actualRestSec = 10,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 10
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+
+        assertEquals(listOf("2026-06-08", "2026-06-09"), charts.countTrend.dateLabels)
+        assertEquals(listOf(2, 1), charts.countTrend.series.single().points.map { point -> point.value })
+
+        val statusSeries = charts.statusTrend.series.associateBy { series -> series.label }
+        assertEquals(listOf(1, 1), requireNotNull(statusSeries["completed"]).points.map { point -> point.value })
+        assertEquals(listOf(1, 0), requireNotNull(statusSeries["abandoned"]).points.map { point -> point.value })
+    }
+
+    @Test
+    fun aggregateElapsedTrendSeparatesTotalEffectiveAndPausedDurations() {
+        val charts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "elapsed-one",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 70,
+                        pausedElapsedSec = 30,
+                        actualRestSec = 20,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 20
+                    ),
+                    timedSession(
+                        id = "elapsed-two",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 80,
+                        effectiveElapsedSec = 75,
+                        pausedElapsedSec = 5,
+                        actualRestSec = 10,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 10
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+
+        val elapsedSeries = charts.elapsedTrend.series.associateBy { series -> series.label }
+
+        assertEquals(listOf(100, 80), requireNotNull(elapsedSeries["总用时"]).points.map { point -> point.value })
+        assertEquals(listOf(70, 75), requireNotNull(elapsedSeries["有效训练时间"]).points.map { point -> point.value })
+        assertEquals(listOf(30, 5), requireNotNull(elapsedSeries["暂停时间"]).points.map { point -> point.value })
+    }
+
+    @Test
+    fun aggregateRestTrendSeparatesPlannedActualAndExtraRestWithoutPausedPollution() {
+        val charts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "rest-one",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 70,
+                        pausedElapsedSec = 30,
+                        actualRestSec = 20,
+                        extraRestAdds = listOf(15),
+                        plannedRestSec = 10
+                    ),
+                    timedSession(
+                        id = "rest-two",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 80,
+                        effectiveElapsedSec = 75,
+                        pausedElapsedSec = 5,
+                        actualRestSec = 12,
+                        extraRestAdds = listOf(15, 15),
+                        plannedRestSec = 12
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+
+        val restSeries = charts.restTrend.series.associateBy { series -> series.label }
+        val elapsedSeries = charts.elapsedTrend.series.associateBy { series -> series.label }
+
+        assertEquals(listOf(10, 12), requireNotNull(restSeries["计划休息"]).points.map { point -> point.value })
+        assertEquals(listOf(20, 12), requireNotNull(restSeries["实际休息"]).points.map { point -> point.value })
+        assertEquals(listOf(15, 30), requireNotNull(restSeries["额外休息"]).points.map { point -> point.value })
+        assertEquals(listOf(30, 5), requireNotNull(elapsedSeries["暂停时间"]).points.map { point -> point.value })
+    }
+
+    @Test
+    fun aggregateModeBreakdownCountsTimedStrengthAndFollowAlong() {
+        val charts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "mode-timed-one",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    ),
+                    timedSession(
+                        id = "mode-timed-two",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 80,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 0,
+                        actualRestSec = 10,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 10
+                    ),
+                    strengthSession(
+                        id = "mode-strength",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T18:00:00Z",
+                        records = emptyList()
+                    ),
+                    followAlongSession(
+                        id = "mode-follow",
+                        startedAt = "2026-06-10T18:00:00Z",
+                        totalElapsedSec = 40,
+                        effectiveElapsedSec = 40
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+
+        val rows = charts.modeBreakdown.rows.associateBy { row -> row.label }
+
+        assertEquals(4, charts.modeBreakdown.totalCount)
+        assertEquals(2, requireNotNull(rows["计时训练"]).count)
+        assertEquals("50%", requireNotNull(rows["计时训练"]).percentLabel)
+        assertEquals(1, requireNotNull(rows["力量训练"]).count)
+        assertEquals(1, requireNotNull(rows["跟练"]).count)
+    }
+
+    @Test
+    fun aggregatePlannedRestTrendUsesHistoricalPlanSnapshot() {
+        val charts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "old-snapshot-rest",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 100,
+                        pausedElapsedSec = 0,
+                        actualRestSec = 20,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 10
+                    ),
+                    timedSession(
+                        id = "new-snapshot-rest",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 100,
+                        pausedElapsedSec = 0,
+                        actualRestSec = 20,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 45
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+
+        val plannedRestSeries = charts.restTrend.series.single { series -> series.label == "计划休息" }
+
+        assertEquals(listOf(10, 45), plannedRestSeries.points.map { point -> point.value })
+    }
+
+    @Test
+    fun noHeartRateSourceDoesNotOutputAverageHeartRateTrendData() {
+        val charts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "hr-one",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    ),
+                    timedSession(
+                        id = "hr-two",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 80,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 0,
+                        actualRestSec = 10,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 10
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+
+        assertEquals(null, charts.averageHeartRateTrend)
+        assertTrue(charts.heartRateUnavailableText.contains("未获取心率"))
+        assertFalse(
+            listOf(
+                charts.countTrend,
+                charts.statusTrend,
+                charts.elapsedTrend,
+                charts.restTrend
+            ).flatMap { chart -> chart.series }.any { series -> series.label.contains("心率") }
+        )
+    }
+
+    @Test
     fun timedDetailShowsTotalEffectivePausedAndExtraRestFromRealRecord() {
         val state = buildHistoryScreenState(
             sessions = listOf(
@@ -492,6 +794,7 @@ class HistoryUiStateTest {
     private fun timedSession(
         id: String,
         status: SessionStatus,
+        startedAt: String = "2026-06-08T09:00:00Z",
         totalElapsedSec: Int,
         effectiveElapsedSec: Int,
         pausedElapsedSec: Int,
@@ -523,8 +826,8 @@ class HistoryUiStateTest {
                 )
             ),
             status = status,
-            startedAt = "2026-06-08T09:00:00Z",
-            endedAt = "2026-06-08T09:10:00Z",
+            startedAt = startedAt,
+            endedAt = startedAt,
             totalElapsedSec = totalElapsedSec,
             effectiveElapsedSec = effectiveElapsedSec,
             pausedElapsedSec = pausedElapsedSec,
@@ -565,6 +868,7 @@ class HistoryUiStateTest {
 
     private fun followAlongSession(
         id: String,
+        startedAt: String = "2026-06-08T11:00:00Z",
         totalElapsedSec: Int,
         effectiveElapsedSec: Int
     ): WorkoutSession {
@@ -577,8 +881,8 @@ class HistoryUiStateTest {
                 blocks = emptyList()
             ),
             status = SessionStatus.COMPLETED,
-            startedAt = "2026-06-08T11:00:00Z",
-            endedAt = "2026-06-08T11:05:00Z",
+            startedAt = startedAt,
+            endedAt = startedAt,
             totalElapsedSec = totalElapsedSec,
             effectiveElapsedSec = effectiveElapsedSec,
             pausedElapsedSec = 0

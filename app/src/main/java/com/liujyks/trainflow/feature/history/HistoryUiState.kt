@@ -51,6 +51,13 @@ internal data class HistoryScreenState(
     val recordStatsUiState: WorkoutRecordStatsUiState?
         get() = recordStats?.toUiState()
 
+    val aggregateChartsUiState: WorkoutAggregateChartsUiState?
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
+            sessions.toWorkoutAggregateChartsUiState()
+        } else {
+            null
+        }
+
     val actionTrend: BasicTrendUiState
         get() = sessions.toActionTrend()
 
@@ -141,6 +148,57 @@ internal data class WorkoutRecordStatsUiState(
     val title: String,
     val description: String,
     val rows: List<HistorySummaryRowUiState>
+)
+
+internal data class WorkoutAggregateChartsUiState(
+    val title: String,
+    val description: String,
+    val pointCount: Int,
+    val countTrend: AggregateTrendChartUiState,
+    val statusTrend: AggregateTrendChartUiState,
+    val elapsedTrend: AggregateTrendChartUiState,
+    val restTrend: AggregateTrendChartUiState,
+    val modeBreakdown: ModeBreakdownChartUiState,
+    val averageHeartRateTrend: AggregateTrendChartUiState?,
+    val heartRateUnavailableText: String
+)
+
+internal data class AggregateTrendChartUiState(
+    val title: String,
+    val description: String,
+    val dateLabels: List<String>,
+    val series: List<AggregateTrendSeriesUiState>,
+    val emptyMessage: String? = null
+) {
+    val hasDrawableTrend: Boolean
+        get() = emptyMessage == null && dateLabels.size >= 2 && series.any { trendSeries ->
+            trendSeries.points.size >= 2
+        }
+}
+
+internal data class AggregateTrendSeriesUiState(
+    val label: String,
+    val points: List<AggregateTrendPointUiState>
+)
+
+internal data class AggregateTrendPointUiState(
+    val dateLabel: String,
+    val value: Int,
+    val valueLabel: String
+)
+
+internal data class ModeBreakdownChartUiState(
+    val title: String,
+    val description: String,
+    val totalCount: Int,
+    val rows: List<ModeBreakdownRowUiState>,
+    val emptyMessage: String? = null
+)
+
+internal data class ModeBreakdownRowUiState(
+    val label: String,
+    val count: Int,
+    val percentLabel: String
 )
 
 internal data class BasicTrendUiState(
@@ -390,7 +448,7 @@ private fun List<WorkoutSession>.toWorkoutRecordStats(): WorkoutRecordStats {
 private fun WorkoutRecordStats.toUiState(): WorkoutRecordStatsUiState {
     return WorkoutRecordStatsUiState(
         title = "真实记录基础统计",
-        description = "从本地 Room session records 汇总；只做总量和 mode breakdown，不做图表趋势或医疗判断。",
+        description = "从本地 Room session records 汇总；只做总量和 mode breakdown，不做医疗判断。",
         rows = listOf(
             HistorySummaryRowUiState(
                 "训练总次数",
@@ -410,6 +468,156 @@ private fun WorkoutRecordStats.toUiState(): WorkoutRecordStatsUiState {
                 "计时 $timedCount · 力量 $strengthCount · 跟练 $followAlongCount",
                 "只做基础 mode breakdown，不比较不可比计划或阶段"
             )
+        )
+    )
+}
+
+private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggregateChartsUiState {
+    val daily = toDailyAggregates()
+    val notEnoughMessage = "暂无趋势；至少需要 2 个 startedAt 日期点，当前不绘制假曲线。"
+    val countTrend = daily.toTrendChart(
+        title = "训练总次数趋势",
+        description = "按 startedAt 日期聚合真实 WorkoutSession 数量。",
+        notEnoughMessage = notEnoughMessage,
+        series = listOf("训练总次数" to { aggregate -> aggregate.totalCount })
+    ) { value -> "$value 次" }
+    val statusTrend = daily.toTrendChart(
+        title = "完成 / 提前结束趋势",
+        description = "completed 和 abandoned 分开显示，不合并为单一状态。",
+        notEnoughMessage = notEnoughMessage,
+        series = listOf(
+            "completed" to { aggregate -> aggregate.completedCount },
+            "abandoned" to { aggregate -> aggregate.abandonedCount }
+        )
+    ) { value -> "$value 次" }
+    val elapsedTrend = daily.toTrendChart(
+        title = "用时趋势",
+        description = "totalElapsedSec、effectiveElapsedSec 和 pausedElapsedSec 分开统计。",
+        notEnoughMessage = notEnoughMessage,
+        series = listOf(
+            "总用时" to { aggregate -> aggregate.totalElapsedSec },
+            "有效训练时间" to { aggregate -> aggregate.effectiveElapsedSec },
+            "暂停时间" to { aggregate -> aggregate.pausedElapsedSec }
+        )
+    ) { value -> value.formatDuration() }
+    val restTrend = daily.toTrendChart(
+        title = "休息趋势",
+        description = "planned rest 来自历史 planSnapshot；actual rest 来自执行记录；extra rest 独立显示。",
+        notEnoughMessage = notEnoughMessage,
+        series = listOf(
+            "计划休息" to { aggregate -> aggregate.plannedRestSec },
+            "实际休息" to { aggregate -> aggregate.actualRestSec },
+            "额外休息" to { aggregate -> aggregate.extraRestSec }
+        )
+    ) { value -> value.formatDuration() }
+    return WorkoutAggregateChartsUiState(
+        title = "非心率图表与聚合趋势",
+        description = "只消费真实持久化 session list；统计和图表不回写历史计划、session 或 plan snapshot。",
+        pointCount = daily.size,
+        countTrend = countTrend,
+        statusTrend = statusTrend,
+        elapsedTrend = elapsedTrend,
+        restTrend = restTrend,
+        modeBreakdown = toModeBreakdownChart(),
+        averageHeartRateTrend = null,
+        heartRateUnavailableText = "未获取心率：当前没有明确来源的设备心率或可选手动心率记录，因此不绘制心率趋势。"
+    )
+}
+
+private data class DailyWorkoutAggregate(
+    val dateLabel: String,
+    val totalCount: Int,
+    val completedCount: Int,
+    val abandonedCount: Int,
+    val totalElapsedSec: Int,
+    val effectiveElapsedSec: Int,
+    val pausedElapsedSec: Int,
+    val plannedRestSec: Int,
+    val actualRestSec: Int,
+    val extraRestSec: Int
+)
+
+private fun List<WorkoutSession>.toDailyAggregates(): List<DailyWorkoutAggregate> {
+    return mapNotNull { session ->
+        session.startedAt?.take(10)?.let { date -> date to session }
+    }
+        .groupBy(keySelector = { (date) -> date }, valueTransform = { (_, session) -> session })
+        .toSortedMap()
+        .map { (date, sessionsOnDate) ->
+            DailyWorkoutAggregate(
+                dateLabel = date,
+                totalCount = sessionsOnDate.size,
+                completedCount = sessionsOnDate.count { session -> session.status == SessionStatus.COMPLETED },
+                abandonedCount = sessionsOnDate.count { session -> session.status == SessionStatus.ABANDONED },
+                totalElapsedSec = sessionsOnDate.sumOf { session -> session.durationSec() },
+                effectiveElapsedSec = sessionsOnDate.sumOf { session -> session.effectiveDurationSec() },
+                pausedElapsedSec = sessionsOnDate.sumOf { session -> session.pausedDurationSec() },
+                plannedRestSec = sessionsOnDate.sumOf { session -> session.plannedRestSec() },
+                actualRestSec = sessionsOnDate.sumOf { session -> session.actualRestSec() },
+                extraRestSec = sessionsOnDate.sumOf { session -> session.extraRestSec() }
+            )
+        }
+}
+
+private fun List<DailyWorkoutAggregate>.toTrendChart(
+    title: String,
+    description: String,
+    notEnoughMessage: String,
+    series: List<Pair<String, (DailyWorkoutAggregate) -> Int>>,
+    valueLabel: (Int) -> String
+): AggregateTrendChartUiState {
+    val dateLabels = map { aggregate -> aggregate.dateLabel }
+    if (size < 2) {
+        return AggregateTrendChartUiState(
+            title = title,
+            description = description,
+            dateLabels = dateLabels,
+            series = emptyList(),
+            emptyMessage = notEnoughMessage
+        )
+    }
+    return AggregateTrendChartUiState(
+        title = title,
+        description = description,
+        dateLabels = dateLabels,
+        series = series.map { (label, selector) ->
+            AggregateTrendSeriesUiState(
+                label = label,
+                points = map { aggregate ->
+                    val value = selector(aggregate).coerceAtLeast(0)
+                    AggregateTrendPointUiState(
+                        dateLabel = aggregate.dateLabel,
+                        value = value,
+                        valueLabel = valueLabel(value)
+                    )
+                }
+            )
+        }
+    )
+}
+
+private fun List<WorkoutSession>.toModeBreakdownChart(): ModeBreakdownChartUiState {
+    val total = size
+    if (total == 0) {
+        return ModeBreakdownChartUiState(
+            title = "训练类型分布",
+            description = "按真实记录的 mode 汇总。",
+            totalCount = 0,
+            rows = emptyList(),
+            emptyMessage = "暂无真实记录可汇总。"
+        )
+    }
+    val timedCount = count { session -> session.mode == WorkoutMode.TIMED }
+    val strengthCount = count { session -> session.mode == WorkoutMode.STRENGTH }
+    val followAlongCount = count { session -> session.mode == WorkoutMode.FOLLOW_ALONG }
+    return ModeBreakdownChartUiState(
+        title = "训练类型分布",
+        description = "timed / strength / follow_along 分开显示数量和占比。",
+        totalCount = total,
+        rows = listOf(
+            ModeBreakdownRowUiState("计时训练", timedCount, total.percentLabel(timedCount)),
+            ModeBreakdownRowUiState("力量训练", strengthCount, total.percentLabel(strengthCount)),
+            ModeBreakdownRowUiState("跟练", followAlongCount, total.percentLabel(followAlongCount))
         )
     )
 }
@@ -742,4 +950,10 @@ private fun Int.formatDuration(): String {
         minutes > 0 -> "${minutes}分"
         else -> "${seconds}秒"
     }
+}
+
+private fun Int.percentLabel(count: Int): String {
+    if (this <= 0) return "0%"
+    val percent = count * 100 / this
+    return "$percent%"
 }
