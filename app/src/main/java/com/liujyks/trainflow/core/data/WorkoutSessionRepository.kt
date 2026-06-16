@@ -45,6 +45,34 @@ internal class WorkoutSessionRepository(
         }
     }
 
+    suspend fun deleteAllSessions() {
+        database.withTransaction {
+            dao.deleteAllStepRecords()
+            dao.deleteAllTimedRestExtensionRecords()
+            dao.deleteAllStrengthSetRecords()
+            dao.deleteAllSessions()
+        }
+    }
+
+    suspend fun deleteSessionsForPlan(planId: String) {
+        database.withTransaction {
+            dao.deleteStepRecordsForPlan(planId)
+            dao.deleteTimedRestExtensionRecordsForPlan(planId)
+            dao.deleteStrengthSetRecordsForPlan(planId)
+            dao.deleteSessionsForPlan(planId)
+        }
+    }
+
+    suspend fun deleteSessionsStartedOnDate(date: String) {
+        val dateKey = date.take(10)
+        database.withTransaction {
+            dao.deleteStepRecordsStartedOnDate(dateKey)
+            dao.deleteTimedRestExtensionRecordsStartedOnDate(dateKey)
+            dao.deleteStrengthSetRecordsStartedOnDate(dateKey)
+            dao.deleteSessionsStartedOnDate(dateKey)
+        }
+    }
+
     suspend fun getSessions(): List<WorkoutSession> {
         return dao.getSessionsWithRecords().map { row -> row.toDomain() }
     }

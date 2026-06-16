@@ -21,7 +21,9 @@ import com.liujyks.trainflow.core.model.WorkoutSession
 internal data class HistoryScreenState(
     val sessions: List<WorkoutSession>,
     val selectedSessionId: String? = sessions.firstOrNull()?.id,
-    val recordSource: HistoryRecordSource = HistoryRecordSource.PERSISTED
+    val recordSource: HistoryRecordSource = HistoryRecordSource.PERSISTED,
+    val pendingCleanupTarget: HistoryCleanupTarget? = null,
+    val statusMessage: String? = null
 ) {
     val isEmpty: Boolean = sessions.isEmpty()
 
@@ -57,6 +59,16 @@ internal data class HistoryScreenState(
         } else {
             null
         }
+
+    val cleanupUiState: HistoryCleanupUiState?
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
+            sessions.toHistoryCleanupUiState()
+        } else {
+            null
+        }
+
+    val pendingCleanupDialog: HistoryCleanupDialogUiState?
+        get() = pendingCleanupTarget?.toDialogUiState()
 
     val actionTrend: BasicTrendUiState
         get() = sessions.toActionTrend()
@@ -97,6 +109,50 @@ internal enum class HistoryRecordSource {
     PERSISTED,
     EXAMPLE
 }
+
+internal sealed interface HistoryCleanupTarget {
+    val count: Int
+
+    data class All(
+        override val count: Int
+    ) : HistoryCleanupTarget
+
+    data class Plan(
+        val planId: String,
+        val planTitle: String,
+        override val count: Int
+    ) : HistoryCleanupTarget
+
+    data class Date(
+        val dateLabel: String,
+        override val count: Int
+    ) : HistoryCleanupTarget
+}
+
+internal data class HistoryCleanupUiState(
+    val title: String,
+    val description: String,
+    val allOption: HistoryCleanupOptionUiState,
+    val planOptions: List<HistoryCleanupOptionUiState>,
+    val dateOptions: List<HistoryCleanupOptionUiState>
+)
+
+internal data class HistoryCleanupOptionUiState(
+    val label: String,
+    val helper: String,
+    val target: HistoryCleanupTarget
+)
+
+internal data class HistoryCleanupDialogUiState(
+    val title: String,
+    val message: String,
+    val confirmLabel: String
+)
+
+internal data class HistoryCleanupConfirmationResult(
+    val state: HistoryScreenState,
+    val target: HistoryCleanupTarget?
+)
 
 internal data class HistoryDateGroupUiState(
     val dateLabel: String,
@@ -229,6 +285,30 @@ internal fun buildHistoryScreenState(sessions: List<WorkoutSession>): HistoryScr
 internal fun HistoryScreenState.selectSession(sessionId: String): HistoryScreenState {
     if (sessions.none { session -> session.id == sessionId }) return this
     return copy(selectedSessionId = sessionId)
+}
+
+internal fun HistoryScreenState.requestCleanup(target: HistoryCleanupTarget): HistoryScreenState {
+    if (recordSource != HistoryRecordSource.PERSISTED || sessions.isEmpty()) return this
+    return copy(pendingCleanupTarget = target, statusMessage = null)
+}
+
+internal fun HistoryScreenState.cancelCleanup(): HistoryScreenState {
+    return copy(pendingCleanupTarget = null)
+}
+
+internal fun HistoryScreenState.confirmCleanup(): HistoryCleanupConfirmationResult {
+    val target = pendingCleanupTarget
+    return HistoryCleanupConfirmationResult(
+        state = copy(
+            pendingCleanupTarget = null,
+            statusMessage = if (target == null) {
+                statusMessage
+            } else {
+                "已提交历史清理请求；记录页会按本地 Room 数据自动刷新。"
+            }
+        ),
+        target = target
+    )
 }
 
 internal fun defaultHistorySessions(): List<WorkoutSession> {
@@ -522,6 +602,70 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         averageHeartRateTrend = null,
         heartRateUnavailableText = "未获取心率：当前没有明确来源的设备心率或可选手动心率记录，因此不绘制心率趋势。"
     )
+}
+
+private fun List<WorkoutSession>.toHistoryCleanupUiState(): HistoryCleanupUiState {
+    val planOptions = filter { session -> session.planId != null }
+        .groupBy { session -> requireNotNull(session.planId) }
+        .map { (planId, planSessions) ->
+            val planTitle = planSessions.firstOrNull()?.planSnapshot?.title ?: planId
+            HistoryCleanupOptionUiState(
+                label = "清除计划：$planTitle",
+                helper = "${planSessions.size} 条本地 WorkoutSession；不会删除 WorkoutPlan 或改写历史 plan snapshot。",
+                target = HistoryCleanupTarget.Plan(
+                    planId = planId,
+                    planTitle = planTitle,
+                    count = planSessions.size
+                )
+            )
+        }
+        .sortedBy { option -> option.label }
+    val dateOptions = filter { session -> session.startedAt != null }
+        .groupBy { session -> session.dateKey }
+        .toSortedMap(compareByDescending { date -> date })
+        .map { (date, dateSessions) ->
+            HistoryCleanupOptionUiState(
+                label = "清除日期：$date",
+                helper = "${dateSessions.size} 条本地 WorkoutSession；按 startedAt 展示日期匹配。",
+                target = HistoryCleanupTarget.Date(
+                    dateLabel = date,
+                    count = dateSessions.size
+                )
+            )
+        }
+    return HistoryCleanupUiState(
+        title = "历史记录清理",
+        description = "只清理真实本地 WorkoutSession 记录；不会删除训练计划、动作库、fixture、preview 或心率来源。",
+        allOption = HistoryCleanupOptionUiState(
+            label = "清除全部历史",
+            helper = "$size 条本地 WorkoutSession；基础统计和图表会随剩余记录自动刷新。",
+            target = HistoryCleanupTarget.All(count = size)
+        ),
+        planOptions = planOptions,
+        dateOptions = dateOptions
+    )
+}
+
+private fun HistoryCleanupTarget.toDialogUiState(): HistoryCleanupDialogUiState {
+    return when (this) {
+        is HistoryCleanupTarget.All -> HistoryCleanupDialogUiState(
+            title = "清除全部历史记录",
+            message = "确认删除全部 $count 条本地 WorkoutSession 历史记录？这不会删除 WorkoutPlan、动作库、fixture 或 preview 数据。",
+            confirmLabel = "确认全部清除"
+        )
+
+        is HistoryCleanupTarget.Plan -> HistoryCleanupDialogUiState(
+            title = "按计划清除历史记录",
+            message = "确认删除计划「$planTitle」下的 $count 条本地 WorkoutSession 历史记录？已保存 WorkoutPlan 会保留，历史 plan snapshot 不会被改写。",
+            confirmLabel = "确认清除该计划"
+        )
+
+        is HistoryCleanupTarget.Date -> HistoryCleanupDialogUiState(
+            title = "按日期清除历史记录",
+            message = "确认删除 startedAt 日期为 $dateLabel 的 $count 条本地 WorkoutSession 历史记录？其他日期记录会保留。",
+            confirmLabel = "确认清除该日期"
+        )
+    }
 }
 
 private data class DailyWorkoutAggregate(

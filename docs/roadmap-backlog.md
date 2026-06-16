@@ -1639,6 +1639,8 @@ stepsCompleted:
 
 ### Story E12.3: 历史记录清理
 
+**状态:** Implemented in Android real persisted session cleanup
+
 作为用户，
 我想清理历史记录，
 以便管理本地训练数据。
@@ -1650,6 +1652,15 @@ stepsCompleted:
 - Then 支持按日期清除。
 - Then 删除前有明确确认。
 - Then 仅对真实持久化记录执行真实删除，不做假删除。
+
+**交付结果:**
+
+- `core.data.WorkoutSessionRepository` 和 Room `WorkoutSessionDao` 新增真实删除能力，支持全部清除、按 `WorkoutSession.planId` 清除，以及按 `startedAt` 展示日期清除。
+- 删除以事务清理 `workout_sessions` 及其 `session_step_records`、`timed_rest_extension_records`、`strength_set_records` 子记录；不删除 `WorkoutPlan`、`Exercise`、fixture / preview 数据，也不改写任何历史 `planSnapshot`。
+- 记录页新增“历史记录清理”区，按全部 / 训练计划 / startedAt 日期生成清理入口；每一种删除都必须先进入明确确认对话框，确认后才调用 repository 删除。
+- 删除后记录页继续消费 Room Flow 的真实剩余 records，列表、E12.1 基础统计、E12.2a 聚合趋势、mode breakdown 和空状态随真实数据自动刷新，不在 Compose 层做假过滤。
+- 新增 / 更新测试覆盖全部删除、按计划删除、按日期删除、删除后不影响 WorkoutPlan、子记录清理、剩余记录统计 / 图表重算、未确认不删除 / 确认后才发出清理目标，以及不触碰心率趋势或计划快照语义。
+- 本阶段不实现 undo / recycle bin / 版本历史、云同步、账号体系、远端删除、E12.2b 力量同类趋势、E12.2c 计时阶段 / 额外休息深趋势、心率数据源、声音播放、foreground service、exact alarm、notification action 或 reset production command。
 
 ## Epic E13: 声音提示、固定女声 cue 与音频共存
 
@@ -1728,8 +1739,9 @@ stepsCompleted:
 22. E11：心率数据源策略、设备接口边界和可选手动输入。
 23. E12.1：真实记录与基础统计。（Implemented）
 24. E12.2a：非心率历史图表与聚合趋势。（Implemented）
-25. E12.2b / E12.2c / E12.3：力量同类 set 趋势、计时同类阶段 / 轮次深趋势和历史记录清理。
-26. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+25. E12.3：历史记录清理。（Implemented）
+26. E12.2b / E12.2c：力量同类 set 趋势和计时同类阶段 / 轮次深趋势。
+27. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
 

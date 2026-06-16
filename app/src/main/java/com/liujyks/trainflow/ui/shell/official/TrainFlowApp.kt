@@ -53,6 +53,9 @@ internal fun TrainFlowApp(
     onSaveWorkoutPlan: (WorkoutPlan) -> Unit = {},
     onDeleteWorkoutPlan: (String) -> Unit = {},
     onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
+    onClearAllWorkoutSessions: () -> Unit = {},
+    onClearWorkoutSessionsForPlan: (String) -> Unit = {},
+    onClearWorkoutSessionsStartedOnDate: (String) -> Unit = {},
     onDefaultCountdownThresholdChanged: (Int) -> Unit = {},
     onActionCueEnabledChanged: (Boolean) -> Unit = {},
     onRestCueEnabledChanged: (Boolean) -> Unit = {},
@@ -352,6 +355,9 @@ internal fun TrainFlowApp(
 
                 OfficialShellDestination.RECORDS -> HistoryRoute(
                     sessions = workoutSessions,
+                    onClearAllHistory = onClearAllWorkoutSessions,
+                    onClearPlanHistory = onClearWorkoutSessionsForPlan,
+                    onClearDateHistory = onClearWorkoutSessionsStartedOnDate,
                     modifier = Modifier.padding(innerPadding)
                 )
 

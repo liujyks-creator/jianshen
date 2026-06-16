@@ -16,11 +16,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
+import com.liujyks.trainflow.ui.theme.TrainFlowError
 import com.liujyks.trainflow.ui.theme.TrainFlowFocus
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
@@ -49,6 +55,9 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 @Composable
 internal fun HistoryRoute(
     sessions: List<WorkoutSession> = emptyList(),
+    onClearAllHistory: () -> Unit = {},
+    onClearPlanHistory: (String) -> Unit = {},
+    onClearDateHistory: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var uiState by remember(sessions) {
@@ -60,6 +69,22 @@ internal fun HistoryRoute(
         onSelectSession = { sessionId ->
             uiState = uiState.selectSession(sessionId)
         },
+        onRequestCleanup = { target ->
+            uiState = uiState.requestCleanup(target)
+        },
+        onConfirmCleanup = {
+            val result = uiState.confirmCleanup()
+            uiState = result.state
+            when (val target = result.target) {
+                is HistoryCleanupTarget.All -> onClearAllHistory()
+                is HistoryCleanupTarget.Plan -> onClearPlanHistory(target.planId)
+                is HistoryCleanupTarget.Date -> onClearDateHistory(target.dateLabel)
+                null -> Unit
+            }
+        },
+        onCancelCleanup = {
+            uiState = uiState.cancelCleanup()
+        },
         modifier = modifier
     )
 }
@@ -68,6 +93,9 @@ internal fun HistoryRoute(
 private fun HistoryScreen(
     uiState: HistoryScreenState,
     onSelectSession: (String) -> Unit,
+    onRequestCleanup: (HistoryCleanupTarget) -> Unit,
+    onConfirmCleanup: () -> Unit,
+    onCancelCleanup: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -79,6 +107,12 @@ private fun HistoryScreen(
     ) {
         item {
             HistoryHeader(uiState)
+        }
+
+        uiState.statusMessage?.let { message ->
+            item {
+                StatusMessageCard(message)
+            }
         }
 
         if (uiState.isEmpty) {
@@ -122,6 +156,18 @@ private fun HistoryScreen(
                 }
             }
 
+            uiState.cleanupUiState?.let { cleanup ->
+                item {
+                    SectionTitle("历史清理")
+                }
+                item {
+                    HistoryCleanupCard(
+                        cleanup = cleanup,
+                        onRequestCleanup = onRequestCleanup
+                    )
+                }
+            }
+
             item {
                 SectionTitle("按日期")
             }
@@ -156,6 +202,14 @@ private fun HistoryScreen(
                 TrendCard(uiState.volumeTrend)
             }
         }
+    }
+
+    uiState.pendingCleanupDialog?.let { dialog ->
+        HistoryCleanupDialog(
+            dialog = dialog,
+            onConfirmCleanup = onConfirmCleanup,
+            onCancelCleanup = onCancelCleanup
+        )
     }
 }
 
@@ -200,6 +254,118 @@ private fun HistoryHeader(uiState: HistoryScreenState) {
             color = TrainFlowNeutral700
         )
     }
+}
+
+@Composable
+private fun HistoryCleanupCard(
+    cleanup: HistoryCleanupUiState,
+    onRequestCleanup: (HistoryCleanupTarget) -> Unit
+) {
+    HistoryCard {
+        Text(
+            text = cleanup.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = cleanup.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        CleanupOptionButton(
+            option = cleanup.allOption,
+            danger = true,
+            onRequestCleanup = onRequestCleanup
+        )
+        if (cleanup.planOptions.isNotEmpty()) {
+            Text(
+                text = "按训练计划",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            cleanup.planOptions.forEach { option ->
+                CleanupOptionButton(
+                    option = option,
+                    danger = false,
+                    onRequestCleanup = onRequestCleanup
+                )
+            }
+        }
+        if (cleanup.dateOptions.isNotEmpty()) {
+            Text(
+                text = "按日期",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            cleanup.dateOptions.forEach { option ->
+                CleanupOptionButton(
+                    option = option,
+                    danger = false,
+                    onRequestCleanup = onRequestCleanup
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CleanupOptionButton(
+    option: HistoryCleanupOptionUiState,
+    danger: Boolean,
+    onRequestCleanup: (HistoryCleanupTarget) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (danger) {
+            Button(
+                onClick = { onRequestCleanup(option.target) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TrainFlowError)
+            ) {
+                Text(text = option.label)
+            }
+        } else {
+            OutlinedButton(
+                onClick = { onRequestCleanup(option.target) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = option.label)
+            }
+        }
+        Text(
+            text = option.helper,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+    }
+}
+
+@Composable
+private fun HistoryCleanupDialog(
+    dialog: HistoryCleanupDialogUiState,
+    onConfirmCleanup: () -> Unit,
+    onCancelCleanup: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancelCleanup,
+        title = {
+            Text(text = dialog.title)
+        },
+        text = {
+            Text(text = dialog.message)
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirmCleanup) {
+                Text(text = dialog.confirmLabel, color = TrainFlowError)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelCleanup) {
+                Text(text = "取消")
+            }
+        }
+    )
 }
 
 @Composable
@@ -406,6 +572,17 @@ private fun chartColor(index: Int): Color {
         TrainFlowFocus,
         TrainFlowNeutral500
     )[index % 4]
+}
+
+@Composable
+private fun StatusMessageCard(message: String) {
+    HistoryCard {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+    }
 }
 
 @Composable
@@ -687,6 +864,9 @@ private fun HistoryRoutePreview() {
         HistoryScreen(
             uiState = buildDefaultHistoryScreenState(),
             onSelectSession = {},
+            onRequestCleanup = {},
+            onConfirmCleanup = {},
+            onCancelCleanup = {},
             modifier = Modifier
         )
     }
