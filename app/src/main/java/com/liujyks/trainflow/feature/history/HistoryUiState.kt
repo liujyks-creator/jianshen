@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.feature.history
 
 import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SessionStepRecord
@@ -10,6 +11,7 @@ import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -39,6 +41,16 @@ internal data class HistoryScreenState(
     val selectedDetail: HistorySessionDetailUiState?
         get() = selectedSession?.toDetailState(recordSource)
 
+    val recordStats: WorkoutRecordStats?
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
+            sessions.toWorkoutRecordStats()
+        } else {
+            null
+        }
+
+    val recordStatsUiState: WorkoutRecordStatsUiState?
+        get() = recordStats?.toUiState()
+
     val actionTrend: BasicTrendUiState
         get() = sessions.toActionTrend()
 
@@ -61,7 +73,7 @@ internal data class HistoryScreenState(
         get() = if (isEmpty) {
             emptyStateDescription
         } else {
-            "${sessions.size} 条本地记录 · 支持按日期、详情和基础趋势查看"
+            "${sessions.size} 条本地记录 · 支持按日期、详情和基础记录参考查看"
         }
 
     val boundaryNote: String
@@ -108,6 +120,27 @@ internal data class HistorySummaryRowUiState(
     val label: String,
     val value: String,
     val helper: String
+)
+
+internal data class WorkoutRecordStats(
+    val totalCount: Int,
+    val completedCount: Int,
+    val abandonedCount: Int,
+    val totalElapsedSec: Int,
+    val effectiveElapsedSec: Int,
+    val pausedElapsedSec: Int,
+    val plannedRestSec: Int,
+    val actualRestSec: Int,
+    val extraRestSec: Int,
+    val timedCount: Int,
+    val strengthCount: Int,
+    val followAlongCount: Int
+)
+
+internal data class WorkoutRecordStatsUiState(
+    val title: String,
+    val description: String,
+    val rows: List<HistorySummaryRowUiState>
 )
 
 internal data class BasicTrendUiState(
@@ -285,7 +318,16 @@ private fun WorkoutSession.timedDetailRows(): List<HistorySummaryRowUiState> {
     val plannedSteps = planSnapshot.blocks.filterIsInstance<TimedCircuitBlock>()
         .sumOf { block -> block.items.size * block.rounds }
     return listOf(
-        HistorySummaryRowUiState("训练时长", durationSec().formatDuration(), "按 step history 的实际时长合计"),
+        HistorySummaryRowUiState("总用时", durationSec().formatDuration(), "来自 totalElapsedSec；缺失时回退 step records"),
+        HistorySummaryRowUiState("有效训练时间", effectiveDurationSec().formatDuration(), "来自 effectiveElapsedSec；不包含暂停时间"),
+        HistorySummaryRowUiState("暂停时间", pausedDurationSec().formatDuration(), "来自 pausedElapsedSec；不包含额外休息"),
+        HistorySummaryRowUiState("计划休息", plannedRestSec().formatDuration(), "来自本次训练保存的 plan snapshot"),
+        HistorySummaryRowUiState("实际休息", actualRestSec().formatDuration(), "来自 timed rest step records"),
+        HistorySummaryRowUiState(
+            "额外休息",
+            extraRestSec().formatDuration(),
+            "来自 timedRestExtensionRecords.addedSec，不计入暂停时间"
+        ),
         HistorySummaryRowUiState("完成步骤", "$completedSteps / ${plannedSteps.coerceAtLeast(completedSteps + skippedSteps)}", "包含热身、拉伸或计时步骤记录"),
         HistorySummaryRowUiState("跳过内容", "$skippedSteps 步", if (skippedSteps == 0) "没有跳过内容" else "仅记录跳过事实，不做表现判断")
     )
@@ -297,7 +339,11 @@ private fun WorkoutSession.strengthDetailRows(): List<HistorySummaryRowUiState> 
     val totalLoad = strengthSetRecords.totalLoadKg()
     val replaced = strengthSetRecords.count { record -> record.substitutedFromExerciseId != null }
     return listOf(
-        HistorySummaryRowUiState("训练时长", durationSec().formatDuration(), "按已确认组耗时和实际休息合计"),
+        HistorySummaryRowUiState("总用时", durationSec().formatDuration(), "来自 totalElapsedSec；缺失时回退组记录"),
+        HistorySummaryRowUiState("有效训练时间", effectiveDurationSec().formatDuration(), "来自 effectiveElapsedSec；力量训练不把暂停计入有效时间"),
+        HistorySummaryRowUiState("暂停时间", pausedDurationSec().formatDuration(), "来自 pausedElapsedSec，和实际休息分开记录"),
+        HistorySummaryRowUiState("计划休息", plannedRestSec().formatDuration(), "来自本次训练保存的 plan snapshot"),
+        HistorySummaryRowUiState("实际休息", actualRestSec().formatDuration(), "来自 strength set records 的 actualRestAfterSec"),
         HistorySummaryRowUiState("确认组数", "${strengthSetRecords.size} / $plannedSets", "计划值和实际值保持区分"),
         HistorySummaryRowUiState("总次数", "$totalReps 次", "来自已确认 strength set records"),
         HistorySummaryRowUiState("训练容量", totalLoad.formatLoad(), "按实际重量 * 实际次数轻量汇总"),
@@ -322,6 +368,50 @@ private fun WorkoutSession.keySummary(): String {
 
         WorkoutMode.FOLLOW_ALONG -> "跟练历史后续接入"
     }
+}
+
+private fun List<WorkoutSession>.toWorkoutRecordStats(): WorkoutRecordStats {
+    return WorkoutRecordStats(
+        totalCount = size,
+        completedCount = count { session -> session.status == SessionStatus.COMPLETED },
+        abandonedCount = count { session -> session.status == SessionStatus.ABANDONED },
+        totalElapsedSec = sumOf { session -> session.durationSec() },
+        effectiveElapsedSec = sumOf { session -> session.effectiveDurationSec() },
+        pausedElapsedSec = sumOf { session -> session.pausedDurationSec() },
+        plannedRestSec = sumOf { session -> session.plannedRestSec() },
+        actualRestSec = sumOf { session -> session.actualRestSec() },
+        extraRestSec = sumOf { session -> session.extraRestSec() },
+        timedCount = count { session -> session.mode == WorkoutMode.TIMED },
+        strengthCount = count { session -> session.mode == WorkoutMode.STRENGTH },
+        followAlongCount = count { session -> session.mode == WorkoutMode.FOLLOW_ALONG }
+    )
+}
+
+private fun WorkoutRecordStats.toUiState(): WorkoutRecordStatsUiState {
+    return WorkoutRecordStatsUiState(
+        title = "真实记录基础统计",
+        description = "从本地 Room session records 汇总；只做总量和 mode breakdown，不做图表趋势或医疗判断。",
+        rows = listOf(
+            HistorySummaryRowUiState(
+                "训练总次数",
+                "$totalCount 次",
+                "仅统计真实持久化记录；completed 和 abandoned 分开显示"
+            ),
+            HistorySummaryRowUiState("completed", "$completedCount 次", "正常完成的 session 数"),
+            HistorySummaryRowUiState("abandoned", "$abandonedCount 次", "提前结束的 session 数；仍参与时长、暂停和额外休息统计"),
+            HistorySummaryRowUiState("总用时", totalElapsedSec.formatDuration(), "汇总 totalElapsedSec；缺失时回退实际记录时长"),
+            HistorySummaryRowUiState("有效训练时间", effectiveElapsedSec.formatDuration(), "汇总 effectiveElapsedSec，不包含暂停"),
+            HistorySummaryRowUiState("暂停时间", pausedElapsedSec.formatDuration(), "汇总 pausedElapsedSec，和额外休息分开"),
+            HistorySummaryRowUiState("计划休息", plannedRestSec.formatDuration(), "来自每次训练保存的 plan snapshot"),
+            HistorySummaryRowUiState("实际休息", actualRestSec.formatDuration(), "来自 timed rest steps 与 strength actual rests"),
+            HistorySummaryRowUiState("计时额外休息", extraRestSec.formatDuration(), "来自 timedRestExtensionRecords.addedSec"),
+            HistorySummaryRowUiState(
+                "模式分布",
+                "计时 $timedCount · 力量 $strengthCount · 跟练 $followAlongCount",
+                "只做基础 mode breakdown，不比较不可比计划或阶段"
+            )
+        )
+    )
 }
 
 private fun List<WorkoutSession>.toActionTrend(): BasicTrendUiState {
@@ -526,6 +616,56 @@ private fun WorkoutSession.durationSec(): Int {
         }
         WorkoutMode.FOLLOW_ALONG -> stepHistory.sumOf { record -> record.actualDurationSec ?: 0 }
     }
+}
+
+private fun WorkoutSession.effectiveDurationSec(): Int {
+    effectiveElapsedSec?.let { elapsed -> return elapsed.coerceAtLeast(0) }
+    return (durationSec() - pausedDurationSec()).coerceAtLeast(0)
+}
+
+private fun WorkoutSession.pausedDurationSec(): Int {
+    return pausedElapsedSec?.coerceAtLeast(0) ?: 0
+}
+
+private fun WorkoutSession.extraRestSec(): Int {
+    return timedRestExtensionRecords.sumOf { record -> record.addedSec.coerceAtLeast(0) }
+}
+
+private fun WorkoutSession.actualRestSec(): Int {
+    return stepHistory.sumOf { record ->
+        if (record.kind == SessionStepKind.TIMED_REST || record.kind == SessionStepKind.STRENGTH_REST) {
+            record.actualDurationSec ?: 0
+        } else {
+            0
+        }
+    } + strengthSetRecords.sumOf { record -> record.actualRestAfterSec ?: 0 }
+}
+
+private fun WorkoutSession.plannedRestSec(): Int {
+    return planSnapshot.blocks.sumOf { block ->
+        when (block) {
+            is RestBlock -> block.durationSec
+            is TimedCircuitBlock -> block.plannedTimedRestSec()
+            is StrengthExerciseBlock -> block.plannedStrengthRestSec()
+            else -> 0
+        }
+    }
+}
+
+private fun TimedCircuitBlock.plannedTimedRestSec(): Int {
+    val perRoundRest = items.sumOf { item ->
+        if (item.stageType == TimedStageType.REST) {
+            item.workDurationSec
+        } else {
+            item.restAfterSec ?: 0
+        }
+    }
+    val betweenRounds = (rounds - 1).coerceAtLeast(0) * (restBetweenRoundsSec ?: 0)
+    return perRoundRest * rounds.coerceAtLeast(0) + betweenRounds
+}
+
+private fun StrengthExerciseBlock.plannedStrengthRestSec(): Int {
+    return sets.sumOf { set -> set.restAfterSec ?: target?.restAfterSetSec ?: 0 }
 }
 
 private fun List<StrengthSetRecord>.totalLoadKg(): Double {

@@ -78,6 +78,15 @@ private fun HistoryScreen(
                 EmptyHistoryCard(uiState)
             }
         } else {
+            uiState.recordStatsUiState?.let { stats ->
+                item {
+                    SectionTitle("基础统计")
+                }
+                item {
+                    StatsCard(stats)
+                }
+            }
+
             item {
                 SectionTitle("按日期")
             }
@@ -103,7 +112,7 @@ private fun HistoryScreen(
             }
 
             item {
-                SectionTitle("基础趋势")
+                SectionTitle("记录参考")
             }
             item {
                 TrendCard(uiState.actionTrend)
@@ -134,6 +143,25 @@ private fun HistoryHeader(uiState: HistoryScreenState) {
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
+    }
+}
+
+@Composable
+private fun StatsCard(stats: WorkoutRecordStatsUiState) {
+    HistoryCard {
+        Text(
+            text = stats.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = stats.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        stats.rows.forEach { row ->
+            SummaryRow(row)
+        }
     }
 }
 

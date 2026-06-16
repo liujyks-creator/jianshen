@@ -618,6 +618,17 @@ E10.18 约定：
 - 跟练计划在完整编排能力完成前不暴露假的完整编辑入口。
 - E10.18 不引入计划版本历史、撤销 / 重做、云同步冲突解决、完整跟练编排、统计图表、声音播放、真实心率设备、foreground service、exact alarm、notification action 或 reset production command。
 
+E12.1 基础统计口径：
+
+- 基础统计从本地真实 `WorkoutSession` list 推导，不把 preview / fixture / 内存态示例记录混入生产统计；无真实记录时不显示假统计。
+- `totalElapsedSec` 继续表示 wall-clock 总用时；`effectiveElapsedSec` 表示有效推进时间；`pausedElapsedSec` 表示暂停累计时间，三者在统计 UI 中分开展示。
+- planned rest 来自每条历史 session 保存的 `WorkoutSession.planSnapshot`，用于表达当时计划目标；计划后来编辑不回写历史 planned rest。
+- actual rest 来自真实执行记录：计时训练使用 `SessionStepRecord.kind == "timed_rest"` 的实际时长，力量训练使用 `StrengthSetRecord.actualRestAfterSec`。
+- extra rest 仅来自计时训练 `timedRestExtensionRecords.sum(addedSec)`，表示用户确认的 `+15秒` 额外休息；它不同于暂停，不增加 `pausedElapsedSec`。
+- completed 与 abandoned 必须分开计数；abandoned session 仍可参与总用时、有效时间、暂停时间、actual rest 和 extra rest 总量统计。
+- mode breakdown 只统计 `timed` / `strength` / `follow_along` 的基础数量，不在 E12.1 比较不同计划、不同阶段、不同轮次或不同动作的强弱趋势。
+- E12.1 不定义图表趋势、平均心率趋势、真实设备数据、云同步、账号体系、历史记录清理或医疗判断。
+
 ### 9.2 执行步骤
 
 ```ts
