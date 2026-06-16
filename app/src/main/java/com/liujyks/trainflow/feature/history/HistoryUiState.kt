@@ -632,13 +632,19 @@ private fun WorkoutSession.extraRestSec(): Int {
 }
 
 private fun WorkoutSession.actualRestSec(): Int {
-    return stepHistory.sumOf { record ->
-        if (record.kind == SessionStepKind.TIMED_REST || record.kind == SessionStepKind.STRENGTH_REST) {
-            record.actualDurationSec ?: 0
-        } else {
-            0
+    return when (mode) {
+        WorkoutMode.TIMED,
+        WorkoutMode.FOLLOW_ALONG -> stepHistory.actualDurationSecFor(SessionStepKind.TIMED_REST)
+
+        WorkoutMode.STRENGTH -> {
+            val hasSetRestRecords = strengthSetRecords.any { record -> record.actualRestAfterSec != null }
+            if (hasSetRestRecords) {
+                strengthSetRecords.sumOf { record -> record.actualRestAfterSec?.coerceAtLeast(0) ?: 0 }
+            } else {
+                stepHistory.actualDurationSecFor(SessionStepKind.STRENGTH_REST)
+            }
         }
-    } + strengthSetRecords.sumOf { record -> record.actualRestAfterSec ?: 0 }
+    }
 }
 
 private fun WorkoutSession.plannedRestSec(): Int {
@@ -646,8 +652,17 @@ private fun WorkoutSession.plannedRestSec(): Int {
         when (block) {
             is RestBlock -> block.durationSec
             is TimedCircuitBlock -> block.plannedTimedRestSec()
-            is StrengthExerciseBlock -> block.plannedStrengthRestSec()
             else -> 0
+        }
+    } + planSnapshot.plannedStrengthRestSec()
+}
+
+private fun List<SessionStepRecord>.actualDurationSecFor(kind: SessionStepKind): Int {
+    return sumOf { record ->
+        if (record.kind == kind) {
+            record.actualDurationSec?.coerceAtLeast(0) ?: 0
+        } else {
+            0
         }
     }
 }
@@ -664,8 +679,16 @@ private fun TimedCircuitBlock.plannedTimedRestSec(): Int {
     return perRoundRest * rounds.coerceAtLeast(0) + betweenRounds
 }
 
-private fun StrengthExerciseBlock.plannedStrengthRestSec(): Int {
-    return sets.sumOf { set -> set.restAfterSec ?: target?.restAfterSetSec ?: 0 }
+private fun WorkoutPlanSnapshot.plannedStrengthRestSec(): Int {
+    val plannedSetRests = blocks
+        .filterIsInstance<StrengthExerciseBlock>()
+        .sortedBy { block -> block.order }
+        .flatMap { block ->
+            block.sets
+                .sortedBy { set -> set.order }
+                .map { set -> set.restAfterSec ?: block.target?.restAfterSetSec ?: 0 }
+        }
+    return plannedSetRests.dropLast(1).sumOf { restSec -> restSec.coerceAtLeast(0) }
 }
 
 private fun List<StrengthSetRecord>.totalLoadKg(): Double {

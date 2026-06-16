@@ -149,12 +149,60 @@ class HistoryUiStateTest {
         assertEquals(390, stats.totalElapsedSec)
         assertEquals(350, stats.effectiveElapsedSec)
         assertEquals(40, stats.pausedElapsedSec)
-        assertEquals(220, stats.plannedRestSec)
+        assertEquals(160, stats.plannedRestSec)
         assertEquals(95, stats.actualRestSec)
         assertEquals(45, stats.extraRestSec)
         assertEquals(2, stats.timedCount)
         assertEquals(1, stats.strengthCount)
         assertEquals(1, stats.followAlongCount)
+    }
+
+    @Test
+    fun strengthActualRestDoesNotDoubleCountStepHistoryAndSetRecords() {
+        val session = strengthSession(
+            id = "real-strength-rest-double-source",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-08T10:00:00Z",
+            records = listOf(
+                strengthSetRecord(
+                    id = "set-with-rest-record",
+                    actualWeight = WeightValue(50.0, WeightUnit.KG),
+                    actualReps = 8,
+                    actualRestAfterSec = 60
+                )
+            ),
+            stepHistory = listOf(
+                SessionStepRecord(
+                    stepId = "same-rest-step",
+                    kind = SessionStepKind.STRENGTH_REST,
+                    startedAt = "2026-06-08T10:02:00Z",
+                    endedAt = "2026-06-08T10:03:00Z",
+                    actualDurationSec = 60
+                )
+            )
+        )
+
+        val state = buildHistoryScreenState(sessions = listOf(session))
+        val actualRestRow = requireNotNull(state.selectedDetail)
+            .rows
+            .single { row -> row.label == "实际休息" }
+
+        assertEquals(60, requireNotNull(state.recordStats).actualRestSec)
+        assertEquals("1分", actualRestRow.value)
+    }
+
+    @Test
+    fun strengthPlannedRestExcludesFinalGlobalSetRest() {
+        val session = strengthSession(
+            id = "real-strength-two-sets-one-rest",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-08T10:00:00Z",
+            records = emptyList(),
+            plannedSetCount = 2,
+            plannedRestAfterSetSec = 60
+        )
+
+        assertEquals(60, requireNotNull(buildHistoryScreenState(listOf(session)).recordStats).plannedRestSec)
     }
 
     @Test
@@ -380,7 +428,8 @@ class HistoryUiStateTest {
         totalElapsedSec: Int? = null,
         effectiveElapsedSec: Int? = null,
         pausedElapsedSec: Int? = null,
-        plannedRestAfterSetSec: Int? = null
+        plannedRestAfterSetSec: Int? = null,
+        stepHistory: List<SessionStepRecord> = emptyList()
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
@@ -418,6 +467,7 @@ class HistoryUiStateTest {
             totalElapsedSec = totalElapsedSec,
             effectiveElapsedSec = effectiveElapsedSec,
             pausedElapsedSec = pausedElapsedSec,
+            stepHistory = stepHistory,
             strengthSetRecords = records
         )
     }
