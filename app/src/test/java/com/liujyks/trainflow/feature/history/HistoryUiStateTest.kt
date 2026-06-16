@@ -533,6 +533,132 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun cleanupOptionsAreOnlyBuiltForRealPersistedRecords() {
+        assertEquals(null, HistoryScreenState(sessions = emptyList()).cleanupUiState)
+        assertEquals(null, buildDefaultHistoryScreenState().cleanupUiState)
+
+        val cleanup = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "cleanup-timed",
+                        status = SessionStatus.COMPLETED,
+                        planId = "plan-cleanup",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    ),
+                    strengthSession(
+                        id = "cleanup-strength",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T18:00:00Z",
+                        planId = "plan-cleanup",
+                        records = emptyList()
+                    )
+                )
+            ).cleanupUiState
+        )
+
+        assertEquals(2, cleanup.allOption.target.count)
+        assertEquals(listOf("清除计划：测试计时记录"), cleanup.planOptions.map { option -> option.label })
+        assertEquals(2, cleanup.planOptions.single().target.count)
+        assertEquals(listOf("清除日期：2026-06-09", "清除日期：2026-06-08"), cleanup.dateOptions.map { it.label })
+        assertTrue(cleanup.description.contains("WorkoutSession"))
+        assertTrue(cleanup.description.contains("不会删除训练计划"))
+    }
+
+    @Test
+    fun cleanupRequestMustBeConfirmedBeforeCommandIsEmitted() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "cleanup-unconfirmed",
+                    status = SessionStatus.COMPLETED,
+                    planId = "plan-cleanup",
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 80,
+                    pausedElapsedSec = 20,
+                    actualRestSec = 25,
+                    extraRestAdds = emptyList(),
+                    plannedRestSec = 30
+                )
+            )
+        )
+        val target = HistoryCleanupTarget.All(count = 1)
+
+        val requested = state.requestCleanup(target)
+        val canceled = requested.cancelCleanup()
+
+        assertEquals(target, requested.pendingCleanupTarget)
+        assertNotNull(requested.pendingCleanupDialog)
+        assertEquals(listOf("cleanup-unconfirmed"), requested.sessions.map { session -> session.id })
+        assertEquals(null, canceled.pendingCleanupTarget)
+        assertEquals(listOf("cleanup-unconfirmed"), canceled.sessions.map { session -> session.id })
+
+        val result = requested.confirmCleanup()
+
+        assertEquals(target, result.target)
+        assertEquals(null, result.state.pendingCleanupTarget)
+        assertEquals(listOf("cleanup-unconfirmed"), result.state.sessions.map { session -> session.id })
+        assertTrue(requireNotNull(result.state.statusMessage).contains("Room"))
+    }
+
+    @Test
+    fun planAndDateCleanupConfirmationCopyDistinguishesTargets() {
+        val planDialog = HistoryCleanupTarget.Plan(
+            planId = "plan-cleanup",
+            planTitle = "测试计划",
+            count = 3
+        ).let { target ->
+            buildHistoryScreenState(listOf(defaultHistorySessions().first())).requestCleanup(target).pendingCleanupDialog
+        }.let(::requireNotNull)
+        val dateDialog = HistoryCleanupTarget.Date(
+            dateLabel = "2026-06-08",
+            count = 2
+        ).let { target ->
+            buildHistoryScreenState(listOf(defaultHistorySessions().first())).requestCleanup(target).pendingCleanupDialog
+        }.let(::requireNotNull)
+
+        assertTrue(planDialog.title.contains("按计划"))
+        assertTrue(planDialog.message.contains("WorkoutPlan 会保留"))
+        assertTrue(planDialog.message.contains("plan snapshot 不会被改写"))
+        assertTrue(dateDialog.title.contains("按日期"))
+        assertTrue(dateDialog.message.contains("其他日期记录会保留"))
+    }
+
+    @Test
+    fun statsAndChartsRecalculateFromRemainingSessionsAfterCleanup() {
+        val remaining = timedSession(
+            id = "remaining-after-cleanup",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-09T09:00:00Z",
+            totalElapsedSec = 80,
+            effectiveElapsedSec = 70,
+            pausedElapsedSec = 10,
+            actualRestSec = 12,
+            extraRestAdds = listOf(15),
+            plannedRestSec = 12
+        )
+        val state = buildHistoryScreenState(sessions = listOf(remaining))
+
+        val stats = requireNotNull(state.recordStats)
+        val charts = requireNotNull(state.aggregateChartsUiState)
+
+        assertEquals(1, stats.totalCount)
+        assertEquals(80, stats.totalElapsedSec)
+        assertEquals(70, stats.effectiveElapsedSec)
+        assertEquals(10, stats.pausedElapsedSec)
+        assertEquals(12, stats.plannedRestSec)
+        assertEquals(12, stats.actualRestSec)
+        assertEquals(15, stats.extraRestSec)
+        assertEquals(1, charts.modeBreakdown.totalCount)
+        assertFalse(charts.countTrend.hasDrawableTrend)
+    }
+
+    @Test
     fun timedDetailShowsTotalEffectivePausedAndExtraRestFromRealRecord() {
         val state = buildHistoryScreenState(
             sessions = listOf(
@@ -726,6 +852,7 @@ class HistoryUiStateTest {
         status: SessionStatus,
         startedAt: String,
         records: List<StrengthSetRecord>,
+        planId: String? = null,
         plannedSetCount: Int = 0,
         totalElapsedSec: Int? = null,
         effectiveElapsedSec: Int? = null,
@@ -735,6 +862,7 @@ class HistoryUiStateTest {
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
+            planId = planId,
             mode = WorkoutMode.STRENGTH,
             planSnapshot = WorkoutPlanSnapshot(
                 title = "测试力量记录",
@@ -800,10 +928,12 @@ class HistoryUiStateTest {
         pausedElapsedSec: Int,
         actualRestSec: Int,
         extraRestAdds: List<Int>,
-        plannedRestSec: Int
+        plannedRestSec: Int,
+        planId: String? = null
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
+            planId = planId,
             mode = WorkoutMode.TIMED,
             planSnapshot = WorkoutPlanSnapshot(
                 title = "测试计时记录",

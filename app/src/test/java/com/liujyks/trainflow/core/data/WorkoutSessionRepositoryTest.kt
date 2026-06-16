@@ -23,12 +23,15 @@ import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.core.model.WorkoutSession
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -306,20 +309,134 @@ class WorkoutSessionRepositoryTest {
         assertNotNull(session.endedAt)
     }
 
+    @Test
+    fun deleteAllSessionsRemovesSessionsAndChildRecords() = runBlocking {
+        repository.upsertSession(
+            timedSession(
+                id = "timed-delete-all",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 105,
+                effectiveElapsedSec = 90,
+                pausedElapsedSec = 0,
+                restExtensionRecords = listOf(restExtensionRecord("extension-delete-all"))
+            )
+        )
+        repository.upsertSession(
+            strengthSession(
+                id = "strength-delete-all",
+                status = SessionStatus.COMPLETED,
+                records = listOf(confirmedStrengthRecord("confirmed-delete-all"))
+            )
+        )
+
+        repository.deleteAllSessions()
+
+        assertTrue(repository.getSessions().isEmpty())
+        assertEquals(0, database.workoutSessionDao().sessionCount())
+        assertEquals(0, database.workoutSessionDao().stepRecordCount())
+        assertEquals(0, database.workoutSessionDao().timedRestExtensionRecordCount())
+        assertEquals(0, database.workoutSessionDao().strengthSetRecordCount())
+    }
+
+    @Test
+    fun deleteSessionsForPlanRemovesOnlyThatPlanSessionsAndKeepsWorkoutPlans() = runBlocking {
+        val planRepository = WorkoutPlanRepository(database)
+        planRepository.upsertPlan(savedPlan("plan-timed"))
+        planRepository.upsertPlan(savedPlan("plan-other"))
+        repository.upsertSession(
+            timedSession(
+                id = "timed-plan-delete",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 75,
+                effectiveElapsedSec = 60,
+                pausedElapsedSec = 0,
+                planId = "plan-timed",
+                restExtensionRecords = listOf(restExtensionRecord("extension-plan-delete"))
+            )
+        )
+        repository.upsertSession(
+            timedSession(
+                id = "timed-plan-keep",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 75,
+                effectiveElapsedSec = 60,
+                pausedElapsedSec = 0,
+                planId = "plan-other"
+            )
+        )
+
+        repository.deleteSessionsForPlan("plan-timed")
+
+        val remaining = repository.getSessions()
+        assertEquals(listOf("timed-plan-keep"), remaining.map { session -> session.id })
+        assertEquals(listOf("plan-other"), remaining.map { session -> session.planId })
+        assertEquals(2, planRepository.getPlans().size)
+        assertNotNull(planRepository.getPlan("plan-timed"))
+        assertNotNull(planRepository.getPlan("plan-other"))
+        assertEquals(1, database.workoutSessionDao().sessionCount())
+        assertEquals(2, database.workoutSessionDao().stepRecordCount())
+        assertEquals(0, database.workoutSessionDao().timedRestExtensionRecordCount())
+    }
+
+    @Test
+    fun deleteSessionsStartedOnDateRemovesOnlyThatStartedAtDate() = runBlocking {
+        repository.upsertSession(
+            timedSession(
+                id = "date-delete-morning",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 75,
+                effectiveElapsedSec = 60,
+                pausedElapsedSec = 0,
+                startedAt = "2026-06-07T08:00:00Z",
+                restExtensionRecords = listOf(restExtensionRecord("extension-date-delete"))
+            )
+        )
+        repository.upsertSession(
+            strengthSession(
+                id = "date-delete-evening",
+                status = SessionStatus.COMPLETED,
+                records = listOf(confirmedStrengthRecord("set-date-delete")),
+                startedAt = "2026-06-07T19:00:00Z"
+            )
+        )
+        repository.upsertSession(
+            timedSession(
+                id = "date-keep",
+                status = SessionStatus.COMPLETED,
+                totalElapsedSec = 75,
+                effectiveElapsedSec = 60,
+                pausedElapsedSec = 0,
+                startedAt = "2026-06-08T08:00:00Z"
+            )
+        )
+
+        repository.deleteSessionsStartedOnDate("2026-06-07")
+
+        val remaining = repository.getSessions()
+        assertEquals(listOf("date-keep"), remaining.map { session -> session.id })
+        assertFalse(remaining.any { session -> session.startedAt?.startsWith("2026-06-07") == true })
+        assertEquals(1, database.workoutSessionDao().sessionCount())
+        assertEquals(2, database.workoutSessionDao().stepRecordCount())
+        assertEquals(0, database.workoutSessionDao().timedRestExtensionRecordCount())
+        assertEquals(0, database.workoutSessionDao().strengthSetRecordCount())
+    }
+
     private fun timedSession(
         id: String,
         status: SessionStatus,
         totalElapsedSec: Int,
         effectiveElapsedSec: Int,
         pausedElapsedSec: Int,
-        restExtensionRecords: List<TimedRestExtensionRecord> = emptyList()
+        restExtensionRecords: List<TimedRestExtensionRecord> = emptyList(),
+        planId: String = "plan-timed",
+        startedAt: String = "2026-06-07T10:00:00Z"
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
-            planId = "plan-timed",
+            planId = planId,
             mode = WorkoutMode.TIMED,
             planSnapshot = WorkoutPlanSnapshot(
-                planId = "plan-timed",
+                planId = planId,
                 title = "测试计时",
                 mode = WorkoutMode.TIMED,
                 blocks = listOf(
@@ -349,7 +466,7 @@ class WorkoutSessionRepositoryTest {
                 )
             ),
             status = status,
-            startedAt = "2026-06-07T10:00:00Z",
+            startedAt = startedAt,
             endedAt = "2026-06-07T10:01:15Z",
             totalElapsedSec = totalElapsedSec,
             effectiveElapsedSec = effectiveElapsedSec,
@@ -377,14 +494,16 @@ class WorkoutSessionRepositoryTest {
     private fun strengthSession(
         id: String,
         status: SessionStatus,
-        records: List<StrengthSetRecord>
+        records: List<StrengthSetRecord>,
+        planId: String = "plan-strength",
+        startedAt: String = "2026-06-07T11:00:00Z"
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
-            planId = "plan-strength",
+            planId = planId,
             mode = WorkoutMode.STRENGTH,
             planSnapshot = WorkoutPlanSnapshot(
-                planId = "plan-strength",
+                planId = planId,
                 title = "测试力量",
                 mode = WorkoutMode.STRENGTH,
                 blocks = listOf(
@@ -416,12 +535,56 @@ class WorkoutSessionRepositoryTest {
                 )
             ),
             status = status,
-            startedAt = "2026-06-07T11:00:00Z",
+            startedAt = startedAt,
             endedAt = "2026-06-07T11:08:00Z",
             totalElapsedSec = 480,
             effectiveElapsedSec = 450,
             pausedElapsedSec = 30,
             strengthSetRecords = records
+        )
+    }
+
+    private fun restExtensionRecord(id: String): TimedRestExtensionRecord {
+        return TimedRestExtensionRecord(
+            id = id,
+            stepId = "interval-r2-work-stage-rest",
+            stepIndex = 3,
+            roundIndex = 2,
+            restStageId = "work-stage",
+            restStageTitle = "Rest",
+            previousStageId = "work-stage",
+            previousStageTitle = "Work",
+            addedSec = 15,
+            plannedRestSec = 10,
+            restElapsedBeforeExtensionSec = 4,
+            extensionAtRemainingSec = 6,
+            cumulativeExtraRestSec = 15,
+            eventElapsedSec = 64
+        )
+    }
+
+    private fun confirmedStrengthRecord(id: String): StrengthSetRecord {
+        return StrengthSetRecord(
+            id = id,
+            exerciseId = "barbell-bench-press",
+            sourceSetPlanId = "bench-working-1",
+            setOrder = 1,
+            setKind = StrengthSetKind.WORKING,
+            actualWeight = WeightValue(60.0, WeightUnit.KG),
+            actualReps = 8,
+            activeDurationSec = 40,
+            actualRestAfterSec = 90
+        )
+    }
+
+    private fun savedPlan(planId: String): WorkoutPlan {
+        return WorkoutPlan(
+            id = planId,
+            mode = WorkoutMode.TIMED,
+            title = "保存计划 $planId",
+            blocks = emptyList(),
+            createdAt = "2026-06-07T09:00:00Z",
+            updatedAt = "2026-06-07T09:00:00Z"
         )
     }
 }

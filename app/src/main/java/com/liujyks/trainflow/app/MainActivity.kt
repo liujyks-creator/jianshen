@@ -72,6 +72,21 @@ class MainActivity : ComponentActivity() {
                     onRecordWorkoutSession = { session ->
                         workoutSessionRepository.upsertSession(session)
                     },
+                    onClearAllWorkoutSessions = {
+                        scope.launch {
+                            workoutSessionRepository.deleteAllSessions()
+                        }
+                    },
+                    onClearWorkoutSessionsForPlan = { planId ->
+                        scope.launch {
+                            workoutSessionRepository.deleteSessionsForPlan(planId)
+                        }
+                    },
+                    onClearWorkoutSessionsStartedOnDate = { date ->
+                        scope.launch {
+                            workoutSessionRepository.deleteSessionsStartedOnDate(date)
+                        }
+                    },
                     onDefaultCountdownThresholdChanged = { seconds ->
                         scope.launch {
                             preferencesDataSource.setDefaultCountdownThresholdSec(seconds)
