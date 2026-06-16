@@ -7,8 +7,14 @@ import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
 import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.core.model.SessionStepKind
+import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
+import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.core.model.WorkoutSession
@@ -77,6 +83,198 @@ class HistoryUiStateTest {
         assertEquals(listOf("real-strength-2026-06-07"), state.dateGroups.single().items.map { item -> item.id })
         assertFalse(state.dateGroups.single().items.any { item -> item.id.startsWith("history-") })
         assertTrue(requireNotNull(state.selectedDetail).sourceNote.contains("本地 session record"))
+    }
+
+    @Test
+    fun realRecordStatsAreEmptyForNoRecordsAndPreviewFixtures() {
+        assertEquals(null, HistoryScreenState(sessions = emptyList()).recordStats)
+        assertEquals(null, buildDefaultHistoryScreenState().recordStats)
+    }
+
+    @Test
+    fun realRecordStatsSummarizeCountsDurationsRestAndModeBreakdown() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "real-timed-completed",
+                    status = SessionStatus.COMPLETED,
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 80,
+                    pausedElapsedSec = 20,
+                    actualRestSec = 25,
+                    extraRestAdds = listOf(15, 15),
+                    plannedRestSec = 90
+                ),
+                timedSession(
+                    id = "real-timed-abandoned",
+                    status = SessionStatus.ABANDONED,
+                    totalElapsedSec = 50,
+                    effectiveElapsedSec = 50,
+                    pausedElapsedSec = 0,
+                    actualRestSec = 10,
+                    extraRestAdds = listOf(15),
+                    plannedRestSec = 10
+                ),
+                strengthSession(
+                    id = "real-strength-completed",
+                    status = SessionStatus.COMPLETED,
+                    startedAt = "2026-06-08T10:00:00Z",
+                    records = listOf(
+                        strengthSetRecord(
+                            id = "set-with-rest",
+                            actualWeight = WeightValue(50.0, WeightUnit.KG),
+                            actualReps = 8,
+                            actualRestAfterSec = 60
+                        )
+                    ),
+                    plannedSetCount = 2,
+                    totalElapsedSec = 200,
+                    effectiveElapsedSec = 180,
+                    pausedElapsedSec = 20,
+                    plannedRestAfterSetSec = 60
+                ),
+                followAlongSession(
+                    id = "real-follow-completed",
+                    totalElapsedSec = 40,
+                    effectiveElapsedSec = 40
+                )
+            )
+        )
+
+        val stats = requireNotNull(state.recordStats)
+
+        assertEquals(4, stats.totalCount)
+        assertEquals(3, stats.completedCount)
+        assertEquals(1, stats.abandonedCount)
+        assertEquals(390, stats.totalElapsedSec)
+        assertEquals(350, stats.effectiveElapsedSec)
+        assertEquals(40, stats.pausedElapsedSec)
+        assertEquals(160, stats.plannedRestSec)
+        assertEquals(95, stats.actualRestSec)
+        assertEquals(45, stats.extraRestSec)
+        assertEquals(2, stats.timedCount)
+        assertEquals(1, stats.strengthCount)
+        assertEquals(1, stats.followAlongCount)
+    }
+
+    @Test
+    fun strengthActualRestDoesNotDoubleCountStepHistoryAndSetRecords() {
+        val session = strengthSession(
+            id = "real-strength-rest-double-source",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-08T10:00:00Z",
+            records = listOf(
+                strengthSetRecord(
+                    id = "set-with-rest-record",
+                    actualWeight = WeightValue(50.0, WeightUnit.KG),
+                    actualReps = 8,
+                    actualRestAfterSec = 60
+                )
+            ),
+            stepHistory = listOf(
+                SessionStepRecord(
+                    stepId = "same-rest-step",
+                    kind = SessionStepKind.STRENGTH_REST,
+                    startedAt = "2026-06-08T10:02:00Z",
+                    endedAt = "2026-06-08T10:03:00Z",
+                    actualDurationSec = 60
+                )
+            )
+        )
+
+        val state = buildHistoryScreenState(sessions = listOf(session))
+        val actualRestRow = requireNotNull(state.selectedDetail)
+            .rows
+            .single { row -> row.label == "实际休息" }
+
+        assertEquals(60, requireNotNull(state.recordStats).actualRestSec)
+        assertEquals("1分", actualRestRow.value)
+    }
+
+    @Test
+    fun strengthPlannedRestExcludesFinalGlobalSetRest() {
+        val session = strengthSession(
+            id = "real-strength-two-sets-one-rest",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-08T10:00:00Z",
+            records = emptyList(),
+            plannedSetCount = 2,
+            plannedRestAfterSetSec = 60
+        )
+
+        assertEquals(60, requireNotNull(buildHistoryScreenState(listOf(session)).recordStats).plannedRestSec)
+    }
+
+    @Test
+    fun realRecordStatsUiCopyKeepsExtraRestSeparateFromPausedTime() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "real-timed-rest-extension",
+                    status = SessionStatus.ABANDONED,
+                    totalElapsedSec = 50,
+                    effectiveElapsedSec = 50,
+                    pausedElapsedSec = 0,
+                    actualRestSec = 10,
+                    extraRestAdds = listOf(15),
+                    plannedRestSec = 10
+                )
+            )
+        )
+
+        val rows = requireNotNull(state.recordStatsUiState).rows.associateBy { row -> row.label }
+
+        assertEquals("15秒", requireNotNull(rows["计时额外休息"]).value)
+        assertEquals("0秒", requireNotNull(rows["暂停时间"]).value)
+        assertTrue(requireNotNull(rows["计时额外休息"]).helper.contains("timedRestExtensionRecords.addedSec"))
+        assertTrue(requireNotNull(rows["暂停时间"]).helper.contains("额外休息分开"))
+    }
+
+    @Test
+    fun timedDetailShowsTotalEffectivePausedAndExtraRestFromRealRecord() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "real-timed-detail",
+                    status = SessionStatus.COMPLETED,
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 80,
+                    pausedElapsedSec = 20,
+                    actualRestSec = 25,
+                    extraRestAdds = listOf(15, 15),
+                    plannedRestSec = 90
+                )
+            )
+        )
+
+        val detailRows = requireNotNull(state.selectedDetail).rows.associateBy { row -> row.label }
+
+        assertEquals("1分40秒", requireNotNull(detailRows["总用时"]).value)
+        assertEquals("1分20秒", requireNotNull(detailRows["有效训练时间"]).value)
+        assertEquals("20秒", requireNotNull(detailRows["暂停时间"]).value)
+        assertEquals("1分30秒", requireNotNull(detailRows["计划休息"]).value)
+        assertEquals("25秒", requireNotNull(detailRows["实际休息"]).value)
+        assertEquals("30秒", requireNotNull(detailRows["额外休息"]).value)
+    }
+
+    @Test
+    fun plannedRestStatsUseHistoricalPlanSnapshotOnly() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "real-timed-old-snapshot",
+                    status = SessionStatus.COMPLETED,
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 100,
+                    pausedElapsedSec = 0,
+                    actualRestSec = 20,
+                    extraRestAdds = emptyList(),
+                    plannedRestSec = 90
+                )
+            )
+        )
+
+        assertEquals(90, requireNotNull(state.recordStats).plannedRestSec)
     }
 
     @Test
@@ -201,6 +399,15 @@ class HistoryUiStateTest {
                 append(row.helper)
             }
             append(state.boundaryNote)
+            state.recordStatsUiState?.let { stats ->
+                append(stats.title)
+                append(stats.description)
+                stats.rows.forEach { row ->
+                    append(row.label)
+                    append(row.value)
+                    append(row.helper)
+                }
+            }
         }
 
         assertFalse(combinedCopy.contains("你变强了"))
@@ -208,6 +415,7 @@ class HistoryUiStateTest {
         assertFalse(combinedCopy.contains("医疗"))
         assertFalse(combinedCopy.contains("诊断"))
         assertFalse(combinedCopy.contains("心率告警"))
+        assertFalse(combinedCopy.contains("平均心率趋势"))
         assertFalse(combinedCopy.contains("E5 接入真实记录"))
     }
 
@@ -216,7 +424,12 @@ class HistoryUiStateTest {
         status: SessionStatus,
         startedAt: String,
         records: List<StrengthSetRecord>,
-        plannedSetCount: Int = 0
+        plannedSetCount: Int = 0,
+        totalElapsedSec: Int? = null,
+        effectiveElapsedSec: Int? = null,
+        pausedElapsedSec: Int? = null,
+        plannedRestAfterSetSec: Int? = null,
+        stepHistory: List<SessionStepRecord> = emptyList()
     ): WorkoutSession {
         return WorkoutSession(
             id = id,
@@ -234,7 +447,8 @@ class HistoryUiStateTest {
                             exerciseId = "barbell-bench-press",
                             target = StrengthExerciseTarget(
                                 weight = WeightValue(50.0, WeightUnit.KG),
-                                repTarget = RepTarget.Range(8, 12)
+                                repTarget = RepTarget.Range(8, 12),
+                                restAfterSetSec = plannedRestAfterSetSec
                             ),
                             sets = (1..plannedSetCount).map { index ->
                                 StrengthSetPlan(
@@ -250,6 +464,10 @@ class HistoryUiStateTest {
             status = status,
             startedAt = startedAt,
             endedAt = startedAt,
+            totalElapsedSec = totalElapsedSec,
+            effectiveElapsedSec = effectiveElapsedSec,
+            pausedElapsedSec = pausedElapsedSec,
+            stepHistory = stepHistory,
             strengthSetRecords = records
         )
     }
@@ -257,7 +475,8 @@ class HistoryUiStateTest {
     private fun strengthSetRecord(
         id: String,
         actualWeight: WeightValue?,
-        actualReps: Int?
+        actualReps: Int?,
+        actualRestAfterSec: Int? = null
     ): StrengthSetRecord {
         return StrengthSetRecord(
             id = id,
@@ -265,7 +484,104 @@ class HistoryUiStateTest {
             setOrder = 1,
             setKind = StrengthSetKind.WORKING,
             actualWeight = actualWeight,
-            actualReps = actualReps
+            actualReps = actualReps,
+            actualRestAfterSec = actualRestAfterSec
+        )
+    }
+
+    private fun timedSession(
+        id: String,
+        status: SessionStatus,
+        totalElapsedSec: Int,
+        effectiveElapsedSec: Int,
+        pausedElapsedSec: Int,
+        actualRestSec: Int,
+        extraRestAdds: List<Int>,
+        plannedRestSec: Int
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            mode = WorkoutMode.TIMED,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "测试计时记录",
+                mode = WorkoutMode.TIMED,
+                blocks = listOf(
+                    TimedCircuitBlock(
+                        id = "snapshot-circuit",
+                        order = 1,
+                        rounds = 1,
+                        items = listOf(
+                            TimedExerciseItem(
+                                id = "snapshot-work",
+                                labelOverride = "工作",
+                                stageType = TimedStageType.WORK,
+                                workDurationSec = 40,
+                                restAfterSec = plannedRestSec
+                            )
+                        )
+                    )
+                )
+            ),
+            status = status,
+            startedAt = "2026-06-08T09:00:00Z",
+            endedAt = "2026-06-08T09:10:00Z",
+            totalElapsedSec = totalElapsedSec,
+            effectiveElapsedSec = effectiveElapsedSec,
+            pausedElapsedSec = pausedElapsedSec,
+            stepHistory = listOf(
+                SessionStepRecord(
+                    stepId = "$id-work",
+                    kind = SessionStepKind.TIMED_WORK,
+                    startedAt = "2026-06-08T09:00:00Z",
+                    endedAt = "2026-06-08T09:01:00Z",
+                    actualDurationSec = 40
+                ),
+                SessionStepRecord(
+                    stepId = "$id-rest",
+                    kind = SessionStepKind.TIMED_REST,
+                    startedAt = "2026-06-08T09:01:00Z",
+                    endedAt = "2026-06-08T09:02:00Z",
+                    actualDurationSec = actualRestSec
+                )
+            ),
+            timedRestExtensionRecords = extraRestAdds.runningFold(0) { total, added -> total + added }
+                .drop(1)
+                .mapIndexed { index, cumulative ->
+                    TimedRestExtensionRecord(
+                        id = "$id-rest-extension-$index",
+                        stepId = "$id-rest",
+                        stepIndex = 1,
+                        restStageTitle = "休息",
+                        addedSec = extraRestAdds[index],
+                        plannedRestSec = plannedRestSec,
+                        restElapsedBeforeExtensionSec = 5,
+                        extensionAtRemainingSec = 5,
+                        cumulativeExtraRestSec = cumulative,
+                        eventElapsedSec = 40 + index
+                    )
+                }
+        )
+    }
+
+    private fun followAlongSession(
+        id: String,
+        totalElapsedSec: Int,
+        effectiveElapsedSec: Int
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            mode = WorkoutMode.FOLLOW_ALONG,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "测试跟练记录",
+                mode = WorkoutMode.FOLLOW_ALONG,
+                blocks = emptyList()
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-08T11:00:00Z",
+            endedAt = "2026-06-08T11:05:00Z",
+            totalElapsedSec = totalElapsedSec,
+            effectiveElapsedSec = effectiveElapsedSec,
+            pausedElapsedSec = 0
         )
     }
 }

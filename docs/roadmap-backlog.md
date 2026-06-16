@@ -1560,6 +1560,8 @@ stepsCompleted:
 
 ### Story E12.1: 真实记录与基础统计
 
+**状态:** Implemented in Android history real record stats
+
 作为用户，
 我想看到真实训练记录和总统计，
 以便知道自己完成了多少训练。
@@ -1571,6 +1573,14 @@ stepsCompleted:
 - Then 统计口径区分 fixture、内存态和真实记录。
 - Then 数字、时间、次数、轮次、总时长、有效时长和暂停时长有回归验证。
 - Then 为同日多轮运动保留可分组分析口径，避免把不同轮次、不同计划结构或不可比阶段混在一起。
+
+**交付结果:**
+
+- 记录页继续消费本地 Room `WorkoutSession` 真实记录，非空真实记录时展示“真实记录基础统计”；preview / fixture 示例记录不进入生产统计，空记录页不显示假统计。
+- 新增 `WorkoutRecordStats` / `WorkoutRecordStatsUiState`，从真实 session list 推导训练总次数、completed / abandoned 分开计数、`totalElapsedSec`、`effectiveElapsedSec`、`pausedElapsedSec`、计划休息、实际休息、计时额外休息和计时 / 力量 / 跟练 mode breakdown。
+- 统计口径明确区分 planned rest、actual rest、extra rest、paused elapsed、total elapsed 和 effective elapsed；计时 extra rest 仅来自 `timedRestExtensionRecords.addedSec`，不并入 `pausedElapsedSec`。
+- 单次记录详情补充总用时、有效训练时间、暂停时间、计划休息、实际休息和额外休息；计划休息继续按历史 `WorkoutSession.planSnapshot` 计算，计划编辑不会回写历史统计。
+- 本阶段不实现 E12.2 图表趋势、平均心率趋势、同类趋势比较、真实心率设备、Health Connect、Wear OS、BLE、声音播放、云同步、账号体系、历史记录清理、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ### Story E12.2: 图表与趋势分析
 
@@ -1675,8 +1685,9 @@ stepsCompleted:
 20. E10.17：Stage Color Picker，为计时阶段编辑页提供推荐色 / 更多颜色选择、集中色板、可访问选中态、计划持久化恢复和 Timer Dial 阶段色消费。（Implemented）
 21. E10.18：Plan Edit Backfill，从计划详情进入计时 / 力量编辑器，回填已保存计划并保存回同一 plan id，同时保持历史 session snapshot 不回写。（Implemented）
 22. E11：手动心率输入与真实设备接口策略。
-23. E12：真实记录、总统计、图表、趋势分析、同日多轮运动分析和历史记录清理。
-24. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+23. E12.1：真实记录与基础统计。（Implemented）
+24. E12.2 / E12.3：图表、趋势分析、同日多轮运动分析和历史记录清理。
+25. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
 
