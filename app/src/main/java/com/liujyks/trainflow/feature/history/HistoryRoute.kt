@@ -156,6 +156,15 @@ private fun HistoryScreen(
                 }
             }
 
+            uiState.timedComparableRestTrendUiState?.let { trend ->
+                item {
+                    SectionTitle("计时同类阶段")
+                }
+                item {
+                    TimedComparableRestTrendCard(trend)
+                }
+            }
+
             uiState.cleanupUiState?.let { cleanup ->
                 item {
                     SectionTitle("历史清理")
@@ -561,6 +570,101 @@ private fun HeartRateUnavailableCard(message: String) {
             text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
+        )
+    }
+}
+
+@Composable
+private fun TimedComparableRestTrendCard(trend: TimedComparableRestTrendUiState) {
+    HistoryCard {
+        Text(
+            text = trend.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = trend.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        if (trend.groups.isEmpty()) {
+            Text(
+                text = trend.emptyMessage.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            trend.groups.forEach { group ->
+                TimedComparableRestTrendGroup(group)
+            }
+        }
+        trend.dataQualityRows.forEach { row ->
+            SummaryRow(
+                HistorySummaryRowUiState(
+                    label = row.label,
+                    value = "已降级",
+                    helper = row.helper
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimedComparableRestTrendGroup(group: TimedComparableRestTrendGroupUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = group.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = group.ruleLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        group.rows.forEach { row ->
+            TimedComparableRestTrendRow(row)
+        }
+    }
+}
+
+@Composable
+private fun TimedComparableRestTrendRow(row: TimedComparableRestTrendRowUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = row.dateLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = row.sessionTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral700
+                )
+            }
+            Text(
+                text = "计划 ${row.plannedRestLabel}",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Text(
+            text = "实际 ${row.actualRestLabel} · 额外 ${row.extraRestLabel}",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral700
+        )
+        Text(
+            text = row.positionLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
         )
     }
 }

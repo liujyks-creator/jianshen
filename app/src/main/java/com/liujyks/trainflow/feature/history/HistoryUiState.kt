@@ -11,6 +11,7 @@ import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
@@ -56,6 +57,13 @@ internal data class HistoryScreenState(
     val aggregateChartsUiState: WorkoutAggregateChartsUiState?
         get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
             sessions.toWorkoutAggregateChartsUiState()
+        } else {
+            null
+        }
+
+    val timedComparableRestTrendUiState: TimedComparableRestTrendUiState?
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
+            sessions.toTimedComparableRestTrendUiState()
         } else {
             null
         }
@@ -268,6 +276,34 @@ internal data class BasicTrendRowUiState(
     val primary: String,
     val secondary: String,
     val metric: String,
+    val helper: String
+)
+
+internal data class TimedComparableRestTrendUiState(
+    val title: String,
+    val description: String,
+    val groups: List<TimedComparableRestTrendGroupUiState>,
+    val dataQualityRows: List<TimedComparableRestDataQualityRowUiState>,
+    val emptyMessage: String? = null
+)
+
+internal data class TimedComparableRestTrendGroupUiState(
+    val title: String,
+    val ruleLabel: String,
+    val rows: List<TimedComparableRestTrendRowUiState>
+)
+
+internal data class TimedComparableRestTrendRowUiState(
+    val dateLabel: String,
+    val sessionTitle: String,
+    val plannedRestLabel: String,
+    val actualRestLabel: String,
+    val extraRestLabel: String,
+    val positionLabel: String
+)
+
+internal data class TimedComparableRestDataQualityRowUiState(
+    val label: String,
     val helper: String
 )
 
@@ -602,6 +638,332 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         averageHeartRateTrend = null,
         heartRateUnavailableText = "未获取心率：当前没有明确来源的设备心率或可选手动心率记录，因此不绘制心率趋势。"
     )
+}
+
+private fun List<WorkoutSession>.toTimedComparableRestTrendUiState(): TimedComparableRestTrendUiState {
+    val timedSessions = filter { session ->
+        session.mode == WorkoutMode.TIMED && session.planSnapshot.mode == WorkoutMode.TIMED
+    }
+    val samples = timedSessions.flatMap { session -> session.toTimedComparableRestSamples() }
+    val comparableGroups = samples
+        .groupBy { sample -> sample.key }
+        .values
+        .filter { group -> group.size >= 2 }
+        .sortedWith(
+            compareBy<List<TimedComparableRestSample>>(
+                { group -> group.first().descriptor.structureSignature },
+                { group -> group.first().descriptor.roundIndex },
+                { group -> group.first().descriptor.stepIndex }
+            )
+        )
+        .map { group -> group.toTimedComparableRestTrendGroup() }
+    val fallbackRows = toTimedComparableRestDataQualityRows(
+        sampleCount = samples.size,
+        comparableGroupCount = comparableGroups.size
+    )
+    return TimedComparableRestTrendUiState(
+        title = "计时同类阶段与额外休息趋势",
+        description = "只比较同一历史计划结构下的计时休息阶段；planned rest 来自 planSnapshot，actual rest 来自 step records，extra rest 只来自 timedRestExtensionRecords.addedSec。",
+        groups = comparableGroups,
+        dataQualityRows = fallbackRows,
+        emptyMessage = if (comparableGroups.isEmpty()) {
+            "暂无可比计时阶段趋势；至少需要 2 条同一计划结构、同一阶段类型、同一顺序、同一轮次和同一休息关系的真实计时记录。"
+        } else {
+            null
+        }
+    )
+}
+
+private data class TimedComparableRestSample(
+    val key: TimedComparableRestKey,
+    val session: WorkoutSession,
+    val descriptor: TimedComparableRestDescriptor,
+    val actualRestSec: Int,
+    val extraRestSec: Int
+)
+
+private data class TimedComparableRestKey(
+    val structureSignature: String,
+    val stageType: TimedStageType,
+    val stageOrder: Int,
+    val roundIndex: Int,
+    val restStageId: String,
+    val previousStageId: String,
+    val stepIndex: Int
+)
+
+private data class TimedComparableRestDescriptor(
+    val key: TimedComparableRestKey,
+    val structureSignature: String,
+    val stepId: String,
+    val stepIndex: Int,
+    val roundIndex: Int,
+    val restStageId: String,
+    val restStageTitle: String,
+    val previousStageId: String,
+    val previousStageTitle: String,
+    val plannedRestSec: Int
+)
+
+private fun WorkoutSession.toTimedComparableRestSamples(): List<TimedComparableRestSample> {
+    val descriptors = planSnapshot.toTimedComparableRestDescriptors()
+    val stepRecordsById = stepHistory
+        .filter { record -> record.kind == SessionStepKind.TIMED_REST }
+        .associateBy { record -> record.stepId }
+    val validExtraRecords = timedRestExtensionRecords.filter { record ->
+        record.hasComparableRestKey()
+    }
+    return descriptors.mapNotNull { descriptor ->
+        val stepRecord = stepRecordsById[descriptor.stepId] ?: return@mapNotNull null
+        val actualRestSec = stepRecord.actualDurationSec?.coerceAtLeast(0) ?: return@mapNotNull null
+        val extraRestSec = validExtraRecords
+            .filter { record ->
+                record.stepId == descriptor.stepId &&
+                    record.stepIndex == descriptor.stepIndex &&
+                    record.roundIndex == descriptor.roundIndex &&
+                    record.restStageId == descriptor.restStageId &&
+                    record.previousStageId == descriptor.previousStageId
+            }
+            .sumOf { record -> record.addedSec.coerceAtLeast(0) }
+        TimedComparableRestSample(
+            key = descriptor.key,
+            session = this,
+            descriptor = descriptor,
+            actualRestSec = actualRestSec,
+            extraRestSec = extraRestSec
+        )
+    }
+}
+
+private fun WorkoutPlanSnapshot.toTimedComparableRestDescriptors(): List<TimedComparableRestDescriptor> {
+    val structureSignature = timedStructureSignature()
+    val descriptors = mutableListOf<TimedComparableRestDescriptor>()
+    var stepIndex = 0
+    blocks.sortedBy { block -> block.order }.forEach { block ->
+        when (block) {
+            is RestBlock -> {
+                if (block.durationSec > 0) stepIndex += 1
+            }
+            is TimedCircuitBlock -> {
+                if (block.rounds > 0) {
+                    (1..block.rounds).forEach { round ->
+                        block.items.forEachIndexed { itemIndex, item ->
+                            if (item.stageType == TimedStageType.REST) {
+                                if (item.workDurationSec > 0) {
+                                    timedRestDescriptorOrNull(
+                                        structureSignature = structureSignature,
+                                        stepId = "${block.id}-r$round-${item.id}-rest",
+                                        stepIndex = stepIndex,
+                                        roundIndex = round,
+                                        stageOrder = itemIndex,
+                                        restStageId = item.id,
+                                        restStageTitle = item.stageTitle(),
+                                        previousStage = block.items.take(itemIndex)
+                                            .lastOrNull { previous -> previous.stageType != TimedStageType.REST },
+                                        plannedRestSec = item.workDurationSec
+                                    )?.let { descriptor -> descriptors += descriptor }
+                                    stepIndex += 1
+                                }
+                            } else {
+                                if (item.workDurationSec > 0) stepIndex += 1
+                                val restAfterSec = item.restAfterSec ?: 0
+                                if (restAfterSec > 0) {
+                                    timedRestDescriptorOrNull(
+                                        structureSignature = structureSignature,
+                                        stepId = "${block.id}-r$round-${item.id}-rest",
+                                        stepIndex = stepIndex,
+                                        roundIndex = round,
+                                        stageOrder = itemIndex,
+                                        restStageId = item.id,
+                                        restStageTitle = "休息",
+                                        previousStage = item,
+                                        plannedRestSec = restAfterSec
+                                    )?.let { descriptor -> descriptors += descriptor }
+                                    stepIndex += 1
+                                }
+                            }
+                        }
+                        val roundRestSec = block.restBetweenRoundsSec ?: 0
+                        if (round < block.rounds && roundRestSec > 0) {
+                            val previousStage = block.items.lastOrNull { item -> item.stageType != TimedStageType.REST }
+                            timedRestDescriptorOrNull(
+                                structureSignature = structureSignature,
+                                stepId = "${block.id}-r$round-round-rest",
+                                stepIndex = stepIndex,
+                                roundIndex = round,
+                                stageOrder = block.items.size,
+                                restStageId = block.id,
+                                restStageTitle = "轮间休息",
+                                previousStage = previousStage,
+                                plannedRestSec = roundRestSec
+                            )?.let { descriptor -> descriptors += descriptor }
+                            stepIndex += 1
+                        }
+                    }
+                }
+            }
+            is com.liujyks.trainflow.core.model.WarmupBlock -> {
+                stepIndex += block.timedStepCount()
+            }
+            is com.liujyks.trainflow.core.model.StretchBlock -> {
+                stepIndex += block.timedStepCount()
+            }
+            is com.liujyks.trainflow.core.model.CooldownBlock -> {
+                stepIndex += block.timedStepCount()
+            }
+            else -> Unit
+        }
+    }
+    return descriptors
+}
+
+private fun timedRestDescriptorOrNull(
+    structureSignature: String,
+    stepId: String,
+    stepIndex: Int,
+    roundIndex: Int,
+    stageOrder: Int,
+    restStageId: String,
+    restStageTitle: String,
+    previousStage: TimedExerciseItem?,
+    plannedRestSec: Int
+): TimedComparableRestDescriptor? {
+    val previousStageId = previousStage?.id ?: return null
+    val previousStageTitle = previousStage.stageTitle()
+    val key = TimedComparableRestKey(
+        structureSignature = structureSignature,
+        stageType = TimedStageType.REST,
+        stageOrder = stageOrder,
+        roundIndex = roundIndex,
+        restStageId = restStageId,
+        previousStageId = previousStageId,
+        stepIndex = stepIndex
+    )
+    return TimedComparableRestDescriptor(
+        key = key,
+        structureSignature = structureSignature,
+        stepId = stepId,
+        stepIndex = stepIndex,
+        roundIndex = roundIndex,
+        restStageId = restStageId,
+        restStageTitle = restStageTitle,
+        previousStageId = previousStageId,
+        previousStageTitle = previousStageTitle,
+        plannedRestSec = plannedRestSec.coerceAtLeast(0)
+    )
+}
+
+private fun TimedRestExtensionRecord.hasComparableRestKey(): Boolean {
+    return roundIndex != null &&
+        !restStageId.isNullOrBlank() &&
+        !previousStageId.isNullOrBlank() &&
+        stepIndex >= 0
+}
+
+private fun List<WorkoutSession>.toTimedComparableRestDataQualityRows(
+    sampleCount: Int,
+    comparableGroupCount: Int
+): List<TimedComparableRestDataQualityRowUiState> {
+    val rows = mutableListOf<TimedComparableRestDataQualityRowUiState>()
+    val timedCount = count { session -> session.mode == WorkoutMode.TIMED && session.planSnapshot.mode == WorkoutMode.TIMED }
+    val nonTimedCount = size - timedCount
+    if (nonTimedCount > 0) {
+        rows += TimedComparableRestDataQualityRowUiState(
+            label = "已排除非计时记录",
+            helper = "$nonTimedCount 条 strength / follow_along 记录没有进入本计时阶段趋势。"
+        )
+    }
+    val malformedExtraRestCount = filter { session -> session.mode == WorkoutMode.TIMED }
+        .sumOf { session -> session.timedRestExtensionRecords.count { record -> !record.hasComparableRestKey() } }
+    if (malformedExtraRestCount > 0) {
+        rows += TimedComparableRestDataQualityRowUiState(
+            label = "额外休息位置数据不足",
+            helper = "$malformedExtraRestCount 条 timedRestExtensionRecords 缺少 roundIndex、restStageId、previousStageId 或 stepIndex，已降级为不进入阶段级趋势。"
+        )
+    }
+    if (timedCount > 0 && sampleCount == 0) {
+        rows += TimedComparableRestDataQualityRowUiState(
+            label = "暂无阶段级样本",
+            helper = "现有计时记录缺少可匹配的 timed rest step records，暂不生成阶段级趋势。"
+        )
+    } else if (timedCount > 0 && comparableGroupCount == 0) {
+        rows += TimedComparableRestDataQualityRowUiState(
+            label = "样本不足",
+            helper = "已找到 $sampleCount 个计时休息样本，但没有任一同类阶段达到 2 条真实记录。"
+        )
+    }
+    return rows
+}
+
+private fun List<TimedComparableRestSample>.toTimedComparableRestTrendGroup(): TimedComparableRestTrendGroupUiState {
+    val firstSample = first()
+    val descriptor = firstSample.descriptor
+    val rows = sortedBy { sample -> sample.session.startedAt.orEmpty() }
+        .map { sample ->
+            TimedComparableRestTrendRowUiState(
+                dateLabel = sample.session.dateKey,
+                sessionTitle = sample.session.planSnapshot.title,
+                plannedRestLabel = sample.descriptor.plannedRestSec.formatDuration(),
+                actualRestLabel = sample.actualRestSec.formatDuration(),
+                extraRestLabel = sample.extraRestSec.formatDuration(),
+                positionLabel = "round ${sample.descriptor.roundIndex} · step ${sample.descriptor.stepIndex} · rest ${sample.descriptor.restStageId} · prev ${sample.descriptor.previousStageId}"
+            )
+        }
+    return TimedComparableRestTrendGroupUiState(
+        title = "轮 ${descriptor.roundIndex} · ${descriptor.previousStageTitle} 后 ${descriptor.restStageTitle}",
+        ruleLabel = "同一结构签名 · 同一 REST 阶段 · 同一顺序 · 同一轮次 · 同一 rest/work 关系",
+        rows = rows
+    )
+}
+
+private fun WorkoutPlanSnapshot.timedStructureSignature(): String {
+    return blocks.sortedBy { block -> block.order }.joinToString("|") { block ->
+        when (block) {
+            is RestBlock -> "rest:${block.id}:${block.durationSec}"
+            is TimedCircuitBlock -> {
+                val items = block.items.joinToString(",") { item ->
+                    "${item.id}:${item.stageType.contractValue}:${item.workDurationSec}:${item.restAfterSec ?: 0}"
+                }
+                "circuit:${block.id}:${block.rounds}:${block.restBetweenRoundsSec ?: 0}:$items"
+            }
+            is com.liujyks.trainflow.core.model.WarmupBlock -> "warmup:${block.id}:${block.durationSec ?: 0}:${block.items.timedItemsSignature()}"
+            is com.liujyks.trainflow.core.model.StretchBlock -> "stretch:${block.id}:${block.durationSec ?: 0}:${block.items.timedItemsSignature()}"
+            is com.liujyks.trainflow.core.model.CooldownBlock -> "cooldown:${block.id}:${block.durationSec ?: 0}:${block.items.timedItemsSignature()}"
+            else -> "${block.kind.contractValue}:${block.id}"
+        }
+    }
+}
+
+private fun List<TimedExerciseItem>.timedItemsSignature(): String {
+    return joinToString(",") { item ->
+        "${item.id}:${item.stageType.contractValue}:${item.workDurationSec}:${item.restAfterSec ?: 0}"
+    }
+}
+
+private fun List<TimedExerciseItem>.timedStepCount(): Int {
+    return sumOf { item ->
+        if (item.stageType == TimedStageType.REST) {
+            if (item.workDurationSec > 0) 1 else 0
+        } else {
+            (if (item.workDurationSec > 0) 1 else 0) + (if ((item.restAfterSec ?: 0) > 0) 1 else 0)
+        }
+    }
+}
+
+private fun com.liujyks.trainflow.core.model.WarmupBlock.timedStepCount(): Int {
+    return if (items.isNotEmpty()) items.timedStepCount() else if ((durationSec ?: 0) > 0) 1 else 0
+}
+
+private fun com.liujyks.trainflow.core.model.StretchBlock.timedStepCount(): Int {
+    return if (items.isNotEmpty()) items.timedStepCount() else if ((durationSec ?: 0) > 0) 1 else 0
+}
+
+private fun com.liujyks.trainflow.core.model.CooldownBlock.timedStepCount(): Int {
+    return if (items.isNotEmpty()) items.timedStepCount() else if ((durationSec ?: 0) > 0) 1 else 0
+}
+
+private fun TimedExerciseItem.stageTitle(): String {
+    return labelOverride ?: exerciseId ?: stageType.displayName
 }
 
 private fun List<WorkoutSession>.toHistoryCleanupUiState(): HistoryCleanupUiState {

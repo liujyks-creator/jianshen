@@ -402,6 +402,204 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun timedComparableRestTrendIsOnlyBuiltForRealPersistedTimedSessions() {
+        assertEquals(null, buildDefaultHistoryScreenState().timedComparableRestTrendUiState)
+
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "timed-comparable-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 20
+                    ),
+                    comparableTimedSession(
+                        id = "timed-comparable-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        actualRestSec = 24
+                    ),
+                    strengthSession(
+                        id = "strength-not-comparable",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T18:00:00Z",
+                        records = emptyList()
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        assertEquals(1, trend.groups.size)
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "已排除非计时记录" })
+        assertTrue(trend.description.contains("timedRestExtensionRecords.addedSec"))
+    }
+
+    @Test
+    fun timedComparableRestTrendComparesSameStructureStageOrderRoundAndRelationship() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "same-stage-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 20,
+                        extraRestAdds = listOf(15)
+                    ),
+                    comparableTimedSession(
+                        id = "same-stage-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        actualRestSec = 28,
+                        extraRestAdds = listOf(15, 15)
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertTrue(group.ruleLabel.contains("同一 REST 阶段"))
+        assertEquals(listOf("2026-06-08", "2026-06-09"), group.rows.map { row -> row.dateLabel })
+        assertEquals(listOf("20秒", "20秒"), group.rows.map { row -> row.plannedRestLabel })
+        assertEquals(listOf("20秒", "28秒"), group.rows.map { row -> row.actualRestLabel })
+        assertEquals(listOf("15秒", "30秒"), group.rows.map { row -> row.extraRestLabel })
+        assertTrue(group.rows.all { row -> row.positionLabel.contains("round 1") })
+        assertTrue(group.rows.all { row -> row.positionLabel.contains("step 1") })
+        assertTrue(group.rows.all { row -> row.positionLabel.contains("prev snapshot-work") })
+    }
+
+    @Test
+    fun timedComparableRestTrendDoesNotMixDifferentPlanStructures() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "structure-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        plannedRestSec = 20,
+                        actualRestSec = 20
+                    ),
+                    comparableTimedSession(
+                        id = "structure-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        plannedRestSec = 30,
+                        actualRestSec = 30
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("暂无可比计时阶段趋势"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "样本不足" })
+    }
+
+    @Test
+    fun timedComparableRestTrendDoesNotMixDifferentRounds() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "round-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        roundIndex = 1,
+                        actualRestSec = 20
+                    ),
+                    comparableTimedSession(
+                        id = "round-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        roundIndex = 2,
+                        actualRestSec = 22
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("同一轮次"))
+    }
+
+    @Test
+    fun timedComparableRestTrendUsesExtraRestAddedSecWithoutPausedPollution() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "extra-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 25,
+                        extraRestAdds = listOf(15),
+                        pausedElapsedSec = 90
+                    ),
+                    comparableTimedSession(
+                        id = "extra-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        actualRestSec = 40,
+                        extraRestAdds = listOf(15, 15),
+                        pausedElapsedSec = 120
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        val rows = trend.groups.single().rows
+
+        assertEquals(listOf("15秒", "30秒"), rows.map { row -> row.extraRestLabel })
+        assertFalse(rows.any { row -> row.extraRestLabel == "1分30秒" || row.extraRestLabel == "2分" })
+    }
+
+    @Test
+    fun timedComparableRestTrendDowngradesMalformedExtraRestPositionFields() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "malformed-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 25,
+                        extraRestAdds = listOf(15),
+                        malformedExtraRestPosition = true
+                    ),
+                    comparableTimedSession(
+                        id = "malformed-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        actualRestSec = 30,
+                        extraRestAdds = emptyList()
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        val rows = trend.groups.single().rows
+
+        assertEquals(listOf("0秒", "0秒"), rows.map { row -> row.extraRestLabel })
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "额外休息位置数据不足" })
+    }
+
+    @Test
+    fun timedComparableRestTrendDoesNotInventSamplesWhenStepRecordsAreMissing() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "missing-step-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 20,
+                        includeRestStepRecord = false
+                    ),
+                    comparableTimedSession(
+                        id = "missing-step-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        actualRestSec = 30,
+                        includeRestStepRecord = false
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "暂无阶段级样本" })
+    }
+
+    @Test
     fun aggregateModeBreakdownCountsTimedStrengthAndFollowAlong() {
         val charts = requireNotNull(
             buildHistoryScreenState(
@@ -806,6 +1004,21 @@ class HistoryUiStateTest {
     @Test
     fun historyCopyDoesNotUseMedicalOrOverConclusiveLanguage() {
         val state = buildDefaultHistoryScreenState()
+        val realTimedState = buildHistoryScreenState(
+            sessions = listOf(
+                comparableTimedSession(
+                    id = "copy-timed-one",
+                    startedAt = "2026-06-08T09:00:00Z",
+                    actualRestSec = 20,
+                    extraRestAdds = listOf(15)
+                ),
+                comparableTimedSession(
+                    id = "copy-timed-two",
+                    startedAt = "2026-06-09T09:00:00Z",
+                    actualRestSec = 24
+                )
+            )
+        )
         val combinedCopy = buildString {
             append(state.emptyStateDescription)
             state.dateGroups.flatMap { group -> group.items }.forEach { item ->
@@ -835,6 +1048,21 @@ class HistoryUiStateTest {
                     append(row.value)
                     append(row.helper)
                 }
+            }
+            realTimedState.timedComparableRestTrendUiState?.let { trend ->
+                append(trend.title)
+                append(trend.description)
+                trend.groups.forEach { group ->
+                    append(group.title)
+                    append(group.ruleLabel)
+                    group.rows.forEach { row ->
+                        append(row.plannedRestLabel)
+                        append(row.actualRestLabel)
+                        append(row.extraRestLabel)
+                        append(row.positionLabel)
+                    }
+                }
+                trend.dataQualityRows.forEach { row -> append(row.helper) }
             }
         }
 
@@ -985,6 +1213,80 @@ class HistoryUiStateTest {
                         stepId = "$id-rest",
                         stepIndex = 1,
                         restStageTitle = "休息",
+                        addedSec = extraRestAdds[index],
+                        plannedRestSec = plannedRestSec,
+                        restElapsedBeforeExtensionSec = 5,
+                        extensionAtRemainingSec = 5,
+                        cumulativeExtraRestSec = cumulative,
+                        eventElapsedSec = 40 + index
+                    )
+                }
+        )
+    }
+
+    private fun comparableTimedSession(
+        id: String,
+        startedAt: String,
+        roundIndex: Int = 1,
+        plannedRestSec: Int = 20,
+        actualRestSec: Int,
+        extraRestAdds: List<Int> = emptyList(),
+        pausedElapsedSec: Int = 0,
+        malformedExtraRestPosition: Boolean = false,
+        includeRestStepRecord: Boolean = true
+    ): WorkoutSession {
+        val stepIndex = if (roundIndex == 1) 1 else 3
+        val restStepId = "snapshot-circuit-r$roundIndex-snapshot-work-rest"
+        val restStepRecord = SessionStepRecord(
+            stepId = restStepId,
+            kind = SessionStepKind.TIMED_REST,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            actualDurationSec = actualRestSec
+        )
+        return WorkoutSession(
+            id = id,
+            planId = "plan-comparable-timed",
+            mode = WorkoutMode.TIMED,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "可比计时记录",
+                mode = WorkoutMode.TIMED,
+                blocks = listOf(
+                    TimedCircuitBlock(
+                        id = "snapshot-circuit",
+                        order = 1,
+                        rounds = 2,
+                        items = listOf(
+                            TimedExerciseItem(
+                                id = "snapshot-work",
+                                labelOverride = "工作",
+                                stageType = TimedStageType.WORK,
+                                workDurationSec = 40,
+                                restAfterSec = plannedRestSec
+                            )
+                        )
+                    )
+                )
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = 80 + actualRestSec,
+            effectiveElapsedSec = 80 + actualRestSec,
+            pausedElapsedSec = pausedElapsedSec,
+            stepHistory = if (includeRestStepRecord) listOf(restStepRecord) else emptyList(),
+            timedRestExtensionRecords = extraRestAdds.runningFold(0) { total, added -> total + added }
+                .drop(1)
+                .mapIndexed { index, cumulative ->
+                    TimedRestExtensionRecord(
+                        id = "$id-extra-$index",
+                        stepId = restStepId,
+                        stepIndex = if (malformedExtraRestPosition) -1 else stepIndex,
+                        roundIndex = if (malformedExtraRestPosition) null else roundIndex,
+                        restStageId = if (malformedExtraRestPosition) null else "snapshot-work",
+                        restStageTitle = "休息",
+                        previousStageId = if (malformedExtraRestPosition) null else "snapshot-work",
+                        previousStageTitle = "工作",
                         addedSec = extraRestAdds[index],
                         plannedRestSec = plannedRestSec,
                         restElapsedBeforeExtensionSec = 5,
