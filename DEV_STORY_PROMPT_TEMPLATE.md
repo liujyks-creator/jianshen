@@ -151,5 +151,5 @@ Windows 文本编码规则：
 - .local/ 是否未提交
 - 是否有未提交内容
 - 给主管理对话的交付摘要、风险和下一步建议
-- 下一轮建议：review / 修复 / 合并 main / 下一 Story
+- 下一轮建议：review gate（如无 blocker / must-fix / should-fix 且验证通过，可由 review 对话直接合并 main）/ 修复 / 下一 Story
 ```

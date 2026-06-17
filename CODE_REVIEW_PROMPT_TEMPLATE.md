@@ -1,6 +1,6 @@
 # TrainFlow Code Review Prompt Template
 
-Use this template for the review gate after a TrainFlow development story is implemented and pushed.
+Use this template for the review gate after a TrainFlow development story is implemented and pushed. If review finds no blocking issues and all merge preconditions pass, this gate may also merge the story branch into `main` and push `origin/main`.
 
 ```text
 你是 TrainFlow 项目的 Code Review 对话。
@@ -12,7 +12,7 @@ Code Review <Story ID>: <Story 名称>
 C:/Users/25073/Desktop/jianshen
 
 目标：
-对已完成并推送的 <story branch> 做正式 code review。重点审查阶段范围、架构边界、数据契约、UI 状态流、测试覆盖、潜在 bug 和范围倒灌。默认只做 review，不合并 main，不开始下一阶段。
+对已完成并推送的 <story branch> 做正式 code review。重点审查阶段范围、架构边界、数据契约、UI 状态流、测试覆盖、潜在 bug 和范围倒灌。如果没有 blocker / must-fix / should-fix 且验证、同步和禁区文件检查都通过，则直接将 <story branch> 以 `--no-ff` 合入 `main` 并推送 `origin/main`。如果发现问题，则不要合并 main，输出 findings 和修复建议。不开始下一阶段。
 
 固定规则：
 - 不创建新的 git worktree。
@@ -20,9 +20,9 @@ C:/Users/25073/Desktop/jianshen
 - 不把工程建到临时目录或其他目录。
 - 只在 C:/Users/25073/Desktop/jianshen 工作。
 - 不 reset、不 rebase、不强推。
-- 不合并 <story branch> 到 main。
+- 只有在 review 无 blocker / must-fix / should-fix、验证通过、main 与 origin/main 同步、story branch 与 origin/<story branch> 同步、禁区文件未 staged / 未提交时，才允许合并 <story branch> 到 main。
 - 不开始下一阶段。
-- 本轮默认只做 review。除非用户明确要求修复，不要改文件。
+- 本轮默认先做 review；若 review 通过并满足合并条件，可执行合并和推送。除非用户明确要求修复，不要改代码。
 - 不提交 skills/、.local/、build 输出、日志、设备输出、node_modules、dist 或本地临时文件。
 
 Windows 文本编码规则：
@@ -56,14 +56,20 @@ Windows 文本编码规则：
 - 不要把本机 JDK/SDK 路径写进项目源码。
 
 审查前确认：
+- git fetch --prune origin
 - git status
 - git branch --show-current
 - git rev-parse --show-toplevel
 - git log --oneline --decorate -6
+- git rev-parse main origin/main
+- git rev-list --left-right --count main...origin/main
+- git rev-parse <story branch> origin/<story branch>
+- git rev-list --left-right --count <story branch>...origin/<story branch>
 - git diff --stat main..<story branch>
 - git diff --name-status main..<story branch>
 - skills/ 是否仍未被 Git 跟踪
 - .local/ 是否仍未被 Git 跟踪
+- 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
 
 必读状态文档：
 1. AGENTS.md
@@ -144,20 +150,48 @@ Windows 文本编码规则：
 - npm.cmd run lint
 - npm.cmd run build
 
+Review 后处理规则：
+- 如果发现 blocker / must-fix / should-fix：不要合并 main；输出 findings、最小修复建议和修复提示词要点，停止。
+- 如果只有 nice-to-have：默认可以合并，但必须在输出中说明剩余建议；如果 nice-to-have 实际影响验收、数据安全、架构边界或用户风险，应提升为 should-fix 并停止。
+- 如果没有 blocker / must-fix / should-fix，且验证通过、story branch 与 origin/<story branch> 同步、main 与 origin/main 同步、禁区文件未 staged / 未提交：直接将 story branch 以 `--no-ff` 合入 main 并 push origin main。
+- 合并前必须再次确认：
+  - git status
+  - git rev-list --left-right --count main...origin/main
+  - git rev-list --left-right --count <story branch>...origin/<story branch>
+  - git diff --check main..<story branch>
+  - skills/、.local/、APK、countdown_beep1.mp3、deliverables/、人工/ 未被 staged 或提交
+- 合并步骤：
+  - git switch main
+  - git pull --ff-only origin main
+  - git merge --no-ff <story branch>
+  - git status
+  - git log --oneline --decorate -8
+  - git push origin main
+- 合并后必须确认：
+  - git rev-parse main origin/main
+  - git rev-list --left-right --count main...origin/main
+  - <story commit> 是 main ancestor
+  - git status
+- 如 main 不同步、story branch 不同步、验证失败、merge conflict、禁区文件 staged / tracked、或合并后 main 与 origin/main 不一致：停止并报告，不要强推、不要 reset、不要自行修复无关文件。
+
 输出要求：
 - 使用 code review 格式，先列 Findings，按严重程度排序。
 - 每个 finding 必须包含文件路径、具体行号、严重级别、原因和建议修复方式。
 - 严重级别使用 blocker / must-fix / should-fix / nice-to-have。
-- 如果没有 blocker 或 must-fix，要明确说可以合入 main。
-- 如果发现需要修复的问题，不要合并 main；给出最小修复建议。
+- 如果没有 blocker / must-fix / should-fix 且已合并，要明确说已合入 main。
+- 如果发现需要修复的问题，不要合并 main；给出最小修复建议和修复提示词要点。
 - 明确 Code Review 结论：
-  - 是否建议合入 main
+  - Findings 结论
+  - 是否已合入 main
+  - merge commit（如已合并）
+  - 是否已推送 origin/main（如已合并）
   - Story 状态应为 implemented、changes requested，还是 reviewed
   - 是否需要修复 commit
   - 是否可以进入下一阶段
   - 本轮是否运行验证以及结果
   - 是否确认没有触碰禁止范围
   - 是否确认 skills/ 和 .local/ 未提交
+  - 是否确认 APK、countdown_beep1.mp3、deliverables/、人工/ 未提交
   - 仍有哪些风险或技术债
   - 给主管理对话的下一步建议
 ```
