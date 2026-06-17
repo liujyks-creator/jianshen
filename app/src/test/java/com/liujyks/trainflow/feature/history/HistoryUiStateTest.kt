@@ -718,6 +718,47 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun strengthComparableSetTrendDoesNotFallbackToSetOrderWhenSourceSetPlanIdIsPresentButMissing() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "source-missing-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = "missing-source-set",
+                        snapshotSetPlanId = "bench-working-1",
+                        setOrder = 1,
+                        setKind = StrengthSetKind.WORKING,
+                        plannedKg = null,
+                        plannedRepTarget = null,
+                        snapshotTargetKg = 50.0,
+                        snapshotRepTarget = RepTarget.Fixed(6),
+                        actualKg = 50.0
+                    ),
+                    comparableStrengthSession(
+                        id = "source-missing-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = "missing-source-set",
+                        snapshotSetPlanId = "bench-working-1",
+                        setOrder = 1,
+                        setKind = StrengthSetKind.WORKING,
+                        plannedKg = null,
+                        plannedRepTarget = null,
+                        snapshotTargetKg = 52.5,
+                        snapshotRepTarget = RepTarget.Fixed(6),
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("暂无可比力量 set 趋势"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "组记录字段不足" })
+        assertTrue(trend.dataQualityRows.none { row -> row.label == "使用 setOrder + setKind 降级" })
+    }
+
+    @Test
     fun strengthComparableSetTrendDoesNotMixDifferentExerciseOrderOrKind() {
         val differentExercises = requireNotNull(
             buildHistoryScreenState(
@@ -1671,6 +1712,7 @@ class HistoryUiStateTest {
         exerciseId: String = "barbell-bench-press",
         sourceSetPlanId: String? = "bench-working-1",
         setOrder: Int = 1,
+        snapshotSetPlanId: String = sourceSetPlanId ?: "bench-working-$setOrder",
         setKind: StrengthSetKind = StrengthSetKind.WORKING,
         plannedKg: Double? = 60.0,
         plannedRepTarget: RepTarget? = RepTarget.Range(8, 12),
@@ -1683,7 +1725,6 @@ class HistoryUiStateTest {
         effort: SetEffort? = SetEffort.GOOD,
         substitutedFromExerciseId: String? = null
     ): WorkoutSession {
-        val setPlanId = sourceSetPlanId ?: "bench-working-$setOrder"
         return WorkoutSession(
             id = id,
             planId = "plan-comparable-strength",
@@ -1703,7 +1744,7 @@ class HistoryUiStateTest {
                         ),
                         sets = listOf(
                             StrengthSetPlan(
-                                id = setPlanId,
+                                id = snapshotSetPlanId,
                                 order = setOrder,
                                 kind = setKind,
                                 targetWeight = snapshotTargetKg?.let { kg -> WeightValue(kg, WeightUnit.KG) },

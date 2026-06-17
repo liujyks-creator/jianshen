@@ -1129,6 +1129,7 @@ private fun WorkoutPlanSnapshot.plannedValuesFor(record: StrengthSetRecord): Str
                 )
             }
         }
+        return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
     }
     comparableBlocks
         .firstOrNull { block ->
