@@ -1115,28 +1115,29 @@ private fun StrengthSetRecord.toStrengthComparableSetKeyOrNull(): StrengthCompar
 
 private fun WorkoutPlanSnapshot.plannedValuesFor(record: StrengthSetRecord): StrengthPlannedSetValues {
     val sourceSetPlanId = record.sourceSetPlanId?.takeIf { id -> id.isNotBlank() }
-    val blocks = blocks.filterIsInstance<StrengthExerciseBlock>().sortedBy { block -> block.order }
-    val substitutedFromExerciseId = record.substitutedFromExerciseId?.takeIf { id -> id.isNotBlank() }
-    val comparableBlocks = blocks.filter { block -> block.exerciseId == record.exerciseId } +
-        blocks.filter { block -> substitutedFromExerciseId != null && block.exerciseId == substitutedFromExerciseId }
+    val candidateExerciseId = record.substitutedFromExerciseId
+        ?.takeIf { id -> id.isNotBlank() }
+        ?: record.exerciseId
+    val candidateSets = blocks
+        .filterIsInstance<StrengthExerciseBlock>()
+        .sortedBy { block -> block.order }
+        .filter { block -> block.exerciseId == candidateExerciseId }
+        .flatMap { block ->
+            block.sets.map { set -> block to set }
+        }
     if (sourceSetPlanId != null) {
-        comparableBlocks.forEach { block ->
-            val set = block.sets.firstOrNull { set -> set.id == sourceSetPlanId }
-            if (set != null) {
-                return StrengthPlannedSetValues(
-                    plannedWeight = set.targetWeight ?: block.target?.weight,
-                    plannedRepTarget = set.repTarget ?: block.target?.repTarget
-                )
-            }
-        }
-        return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
+        val (block, set) = candidateSets.firstOrNull { (_, set) -> set.id == sourceSetPlanId }
+            ?: return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
+        return StrengthPlannedSetValues(
+            plannedWeight = set.targetWeight ?: block.target?.weight,
+            plannedRepTarget = set.repTarget ?: block.target?.repTarget
+        )
     }
-    comparableBlocks
-        .firstOrNull { block ->
-            block.sets.any { set -> set.order == record.setOrder && set.kind == record.setKind }
+    candidateSets
+        .firstOrNull { (_, set) ->
+            set.order == record.setOrder && set.kind == record.setKind
         }
-        ?.let { block ->
-            val set = block.sets.first { set -> set.order == record.setOrder && set.kind == record.setKind }
+        ?.let { (block, set) ->
             return StrengthPlannedSetValues(
                 plannedWeight = set.targetWeight ?: block.target?.weight,
                 plannedRepTarget = set.repTarget ?: block.target?.repTarget

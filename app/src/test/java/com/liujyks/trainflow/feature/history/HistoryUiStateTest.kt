@@ -935,6 +935,176 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun strengthComparableSetTrendSubstitutionSourceLookupUsesOriginalBlockAsSingleCandidate() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    substitutedCandidateStrengthSession(
+                        id = "substitute-source-candidate-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = "shared-set-plan",
+                        originalSetPlanId = "shared-set-plan",
+                        substitutedSetPlanId = "shared-set-plan",
+                        originalSnapshotKg = 50.0,
+                        substitutedSnapshotKg = 99.0,
+                        actualKg = 50.0
+                    ),
+                    substitutedCandidateStrengthSession(
+                        id = "substitute-source-candidate-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = "shared-set-plan",
+                        originalSetPlanId = "shared-set-plan",
+                        substitutedSetPlanId = "shared-set-plan",
+                        originalSnapshotKg = 52.5,
+                        substitutedSnapshotKg = 97.5,
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertEquals(listOf("50 kg · 6 次", "52.5 kg · 6 次"), group.rows.map { row -> row.plannedLabel })
+        assertFalse(group.rows.any { row -> row.plannedLabel.contains("99 kg") })
+        assertFalse(group.rows.any { row -> row.plannedLabel.contains("97.5 kg") })
+        assertTrue(group.rows.all { row -> requireNotNull(row.substitutionLabel).contains("替换自 杠铃卧推") })
+    }
+
+    @Test
+    fun strengthComparableSetTrendSubstitutionMissingSourceDoesNotUseSubstitutedBlockOrFallbackOrder() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    substitutedCandidateStrengthSession(
+                        id = "substitute-missing-source-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = "missing-original-source",
+                        originalSetPlanId = "bench-working-1",
+                        substitutedSetPlanId = "missing-original-source",
+                        originalSnapshotKg = 50.0,
+                        substitutedSnapshotKg = 99.0,
+                        actualKg = 50.0
+                    ),
+                    substitutedCandidateStrengthSession(
+                        id = "substitute-missing-source-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = "missing-original-source",
+                        originalSetPlanId = "bench-working-1",
+                        substitutedSetPlanId = "missing-original-source",
+                        originalSnapshotKg = 52.5,
+                        substitutedSnapshotKg = 97.5,
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("暂无可比力量 set 趋势"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "组记录字段不足" })
+        assertTrue(trend.dataQualityRows.none { row -> row.label == "使用 setOrder + setKind 降级" })
+    }
+
+    @Test
+    fun strengthComparableSetTrendSubstitutionOrderFallbackUsesOriginalBlockOnlyWhenSourceIsMissing() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    substitutedCandidateStrengthSession(
+                        id = "substitute-order-fallback-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = null,
+                        originalSetPlanId = "bench-working-1",
+                        substitutedSetPlanId = "dumbbell-working-1",
+                        originalSnapshotKg = 50.0,
+                        substitutedSnapshotKg = 99.0,
+                        actualKg = 50.0
+                    ),
+                    substitutedCandidateStrengthSession(
+                        id = "substitute-order-fallback-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = null,
+                        originalSetPlanId = "bench-working-1",
+                        substitutedSetPlanId = "dumbbell-working-1",
+                        originalSnapshotKg = 52.5,
+                        substitutedSnapshotKg = 97.5,
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertTrue(group.ruleLabel.contains("setOrder + setKind"))
+        assertEquals(listOf("50 kg · 6 次", "52.5 kg · 6 次"), group.rows.map { row -> row.plannedLabel })
+        assertFalse(group.rows.any { row -> row.plannedLabel.contains("99 kg") })
+        assertFalse(group.rows.any { row -> row.plannedLabel.contains("97.5 kg") })
+    }
+
+    @Test
+    fun strengthComparableSetTrendNonSubstitutionUsesCurrentExerciseAsSingleCandidate() {
+        val sourceMissing = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    nonSubstitutedCandidateStrengthSession(
+                        id = "non-sub-missing-source-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = "missing-current-source",
+                        currentSetPlanId = "bench-working-1",
+                        otherSetPlanId = "missing-current-source",
+                        currentSnapshotKg = 50.0,
+                        otherSnapshotKg = 99.0,
+                        actualKg = 50.0
+                    ),
+                    nonSubstitutedCandidateStrengthSession(
+                        id = "non-sub-missing-source-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = "missing-current-source",
+                        currentSetPlanId = "bench-working-1",
+                        otherSetPlanId = "missing-current-source",
+                        currentSnapshotKg = 52.5,
+                        otherSnapshotKg = 97.5,
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+        val orderFallback = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    nonSubstitutedCandidateStrengthSession(
+                        id = "non-sub-order-fallback-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = null,
+                        currentSetPlanId = "bench-working-1",
+                        otherSetPlanId = "row-working-1",
+                        currentSnapshotKg = 50.0,
+                        otherSnapshotKg = 99.0,
+                        actualKg = 50.0
+                    ),
+                    nonSubstitutedCandidateStrengthSession(
+                        id = "non-sub-order-fallback-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = null,
+                        currentSetPlanId = "bench-working-1",
+                        otherSetPlanId = "row-working-1",
+                        currentSnapshotKg = 52.5,
+                        otherSnapshotKg = 97.5,
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertTrue(sourceMissing.groups.isEmpty())
+        assertTrue(sourceMissing.dataQualityRows.any { row -> row.label == "组记录字段不足" })
+        assertEquals(listOf("50 kg · 6 次", "52.5 kg · 6 次"), orderFallback.groups.single().rows.map { row -> row.plannedLabel })
+        assertFalse(orderFallback.groups.single().rows.any { row -> row.plannedLabel.contains("99 kg") })
+    }
+
+    @Test
     fun strengthComparableSetTrendDoesNotInventSamplesWhenCriticalFieldsAreMissing() {
         val trend = requireNotNull(
             buildHistoryScreenState(
@@ -1927,6 +2097,173 @@ class HistoryUiStateTest {
                     actualRestAfterSec = 90,
                     effort = SetEffort.GOOD,
                     substitutedFromExerciseId = "barbell-bench-press"
+                )
+            )
+        )
+    }
+
+    private fun substitutedCandidateStrengthSession(
+        id: String,
+        startedAt: String,
+        sourceSetPlanId: String?,
+        originalSetPlanId: String,
+        substitutedSetPlanId: String,
+        originalSnapshotKg: Double,
+        substitutedSnapshotKg: Double,
+        actualKg: Double
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            planId = "plan-substitution-candidate",
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "替换候选力量记录",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "substituted-dumbbell",
+                        order = 1,
+                        exerciseId = "dumbbell-bench-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(substitutedSnapshotKg, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(1),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = substitutedSetPlanId,
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(substitutedSnapshotKg, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(1),
+                                restAfterSec = 90
+                            )
+                        )
+                    ),
+                    StrengthExerciseBlock(
+                        id = "original-bench",
+                        order = 2,
+                        exerciseId = "barbell-bench-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(originalSnapshotKg, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(6),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = originalSetPlanId,
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(originalSnapshotKg, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(6),
+                                restAfterSec = 90
+                            )
+                        )
+                    )
+                )
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = 130,
+            effectiveElapsedSec = 130,
+            pausedElapsedSec = 0,
+            strengthSetRecords = listOf(
+                StrengthSetRecord(
+                    id = "$id-set",
+                    exerciseId = "dumbbell-bench-press",
+                    sourceSetPlanId = sourceSetPlanId,
+                    setOrder = 1,
+                    setKind = StrengthSetKind.WORKING,
+                    actualWeight = WeightValue(actualKg, WeightUnit.KG),
+                    actualReps = 8,
+                    activeDurationSec = 40,
+                    actualRestAfterSec = 90,
+                    effort = SetEffort.GOOD,
+                    substitutedFromExerciseId = "barbell-bench-press"
+                )
+            )
+        )
+    }
+
+    private fun nonSubstitutedCandidateStrengthSession(
+        id: String,
+        startedAt: String,
+        sourceSetPlanId: String?,
+        currentSetPlanId: String,
+        otherSetPlanId: String,
+        currentSnapshotKg: Double,
+        otherSnapshotKg: Double,
+        actualKg: Double
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            planId = "plan-non-substitution-candidate",
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "非替换候选力量记录",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "other-row",
+                        order = 1,
+                        exerciseId = "one-arm-dumbbell-row",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(otherSnapshotKg, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(1),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = otherSetPlanId,
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(otherSnapshotKg, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(1),
+                                restAfterSec = 90
+                            )
+                        )
+                    ),
+                    StrengthExerciseBlock(
+                        id = "current-bench",
+                        order = 2,
+                        exerciseId = "barbell-bench-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(currentSnapshotKg, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(6),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = currentSetPlanId,
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(currentSnapshotKg, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(6),
+                                restAfterSec = 90
+                            )
+                        )
+                    )
+                )
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = 130,
+            effectiveElapsedSec = 130,
+            pausedElapsedSec = 0,
+            strengthSetRecords = listOf(
+                StrengthSetRecord(
+                    id = "$id-set",
+                    exerciseId = "barbell-bench-press",
+                    sourceSetPlanId = sourceSetPlanId,
+                    setOrder = 1,
+                    setKind = StrengthSetKind.WORKING,
+                    actualWeight = WeightValue(actualKg, WeightUnit.KG),
+                    actualReps = 8,
+                    activeDurationSec = 40,
+                    actualRestAfterSec = 90,
+                    effort = SetEffort.GOOD
                 )
             )
         )
