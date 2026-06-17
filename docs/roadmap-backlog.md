@@ -1637,6 +1637,36 @@ stepsCompleted:
 - 单元测试覆盖真实 session list 聚合、completed / abandoned 分离、total / effective / paused 分离、planned / actual / extra rest 分离、mode breakdown、空记录 / 不足时间点、历史 planSnapshot 使用，以及无心率来源时不输出平均心率趋势数据。
 - 本阶段不实现设备心率获取、手动心率输入、持久化心率模型、E12.2b 力量同类 set 趋势、E12.2c 计时同类阶段 / 轮次深趋势、E12.3 历史记录清理、声音播放、云同步、账号体系、foreground service、exact alarm、notification action 或 reset production command。
 
+### Story E12.2b: Strength comparable set trends
+
+**状态:** Planned / review boundary clarification
+
+作为力量训练用户，
+我想在历史 / 趋势页看到同一力量动作的可比 set 计划值与实际值变化，
+以便回顾同一动作、同一组类型和计划组位置下的实际完成情况。
+
+**验收标准:**
+
+- Then 只消费真实持久化 `WorkoutSession` list，不使用 preview / fixture / 内存示例记录。
+- Then 只分析 `WorkoutMode.STRENGTH` 记录中的 `StrengthSetRecord`，不生成计时趋势或跟练趋势。
+- Then 同类比较必须限定同一 `StrengthSetRecord.exerciseId`，不得跨不同动作比较。
+- Then planned values 来自每条历史 `WorkoutSession.planSnapshot`，不得用编辑后的当前计划反推旧 session。
+- Then planned lookup 优先使用 `sourceSetPlanId`，并且 lookup 必须限定在对应 `exerciseId` 的 `StrengthExerciseBlock` 内。
+- Then 只有 `sourceSetPlanId == null` 时，才允许在同一 `exerciseId` block 内 fallback 到 `setOrder + setKind`。
+- Then `sourceSetPlanId != null` 但找不到同一动作 matching set 时，显示数据不足或降级说明，不得 fallback。
+- Then 替换动作的 planned values 只能来自 `substitutedFromExerciseId` 对应原动作 block；非替换动作的 planned values 只能来自 record 的 `exerciseId` 对应 block。
+- Then 不拼接原动作和替换后动作候选，不把替换动作自动并入原动作趋势；替换记录必须标注替换来源。
+- Then 趋势可以展示 planned / actual weight、planned / actual reps、set kind、set order、active duration、actual rest 和 date。
+- Then 样本不足、缺少 planSnapshot block、缺少 matching set 或替换来源不完整时显示暂无趋势 / 数据不足或降级说明，不绘制假趋势。
+- Then 不输出训练强弱、恢复不足、康复、医疗、平均心率、自动调整计划或加重量建议。
+
+**实现边界:**
+
+- mapper 应在历史 `WorkoutSession.planSnapshot` 内重建 strength block descriptor，并以 `exerciseId`、planned set identity 和替换来源标注形成可比 key。
+- `sourceSetPlanId` lookup 不得离开当前 record 的动作边界；替换记录的 planned lookup 使用原动作边界，实际趋势行仍标注替换后的 `exerciseId`。
+- `sourceSetPlanId` 存在但匹配失败是数据不足，不是 fallback 触发条件。
+- E12.2b 不修改训练执行引擎、`WorkoutCommand`、`WorkoutEvent`、Room schema、`WorkoutSession.planSnapshot`、历史删除语义、心率数据源或 E12.2c 计时趋势语义。
+
 ### Story E12.3: 历史记录清理
 
 **状态:** Implemented in Android real persisted session cleanup
@@ -1808,7 +1838,7 @@ E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性
 下一轮建议按用户测试优先级进入：
 
 ```text
-Story E12.2c Review Gate；随后按用户测试优先级进入 E12.2b 力量同类 set 趋势、E13 Sound Cue System、平均心率来源阶段或同日多轮分析。E10.14 已提供真实 rest extension records，E12 后续仍必须消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+Story E12.2b Review Fix / Review Gate；随后按用户测试优先级进入 E13 Sound Cue System、平均心率来源阶段或同日多轮分析。E12.2b 必须按本文档的 strength planned lookup 规则处理 `sourceSetPlanId`、`setOrder + setKind` fallback 和替换动作来源。E10.14 已提供真实 rest extension records，E12 后续仍必须消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
