@@ -840,6 +840,60 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun strengthComparableSetTrendDoesNotFallbackToDifferentExerciseWithDuplicateSetPlanIds() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    duplicateSetPlanIdStrengthSession(
+                        id = "duplicate-plan-id-row-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        actualKg = 20.0
+                    ),
+                    duplicateSetPlanIdStrengthSession(
+                        id = "duplicate-plan-id-row-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        actualKg = 22.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("暂无可比力量 set 趋势"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "组记录字段不足" })
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "暂无完整 set 样本" })
+    }
+
+    @Test
+    fun strengthComparableSetTrendFallbackForSubstitutionOnlyUsesSubstitutedFromExerciseBlock() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    substitutedSourceFallbackStrengthSession(
+                        id = "substitute-planned-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        originalSnapshotKg = 50.0,
+                        actualKg = 50.0
+                    ),
+                    substitutedSourceFallbackStrengthSession(
+                        id = "substitute-planned-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        originalSnapshotKg = 52.5,
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertTrue(group.title.contains("dumbbell-bench-press"))
+        assertEquals(listOf("50 kg · 6 次", "52.5 kg · 6 次"), group.rows.map { row -> row.plannedLabel })
+        assertFalse(group.rows.any { row -> row.plannedLabel.contains("99 kg") })
+        assertTrue(group.rows.all { row -> requireNotNull(row.substitutionLabel).contains("替换自 杠铃卧推") })
+    }
+
+    @Test
     fun strengthComparableSetTrendDoesNotInventSamplesWhenCriticalFieldsAreMissing() {
         val trend = requireNotNull(
             buildHistoryScreenState(
@@ -1681,6 +1735,157 @@ class HistoryUiStateTest {
                     actualRestAfterSec = actualRestAfterSec,
                     effort = effort,
                     substitutedFromExerciseId = substitutedFromExerciseId
+                )
+            )
+        )
+    }
+
+    private fun duplicateSetPlanIdStrengthSession(
+        id: String,
+        startedAt: String,
+        actualKg: Double
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            planId = "plan-duplicate-set-plan-id",
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "重复 set id 力量记录",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "bench",
+                        order = 1,
+                        exerciseId = "barbell-bench-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(100.0, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(3),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = "shared-set-plan",
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(100.0, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(3),
+                                restAfterSec = 90
+                            )
+                        )
+                    ),
+                    StrengthExerciseBlock(
+                        id = "row",
+                        order = 2,
+                        exerciseId = "one-arm-dumbbell-row",
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = "shared-set-plan",
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                restAfterSec = 90
+                            )
+                        )
+                    )
+                )
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = 130,
+            effectiveElapsedSec = 130,
+            pausedElapsedSec = 0,
+            strengthSetRecords = listOf(
+                StrengthSetRecord(
+                    id = "$id-set",
+                    exerciseId = "one-arm-dumbbell-row",
+                    sourceSetPlanId = "shared-set-plan",
+                    setOrder = 1,
+                    setKind = StrengthSetKind.WORKING,
+                    actualWeight = WeightValue(actualKg, WeightUnit.KG),
+                    actualReps = 8,
+                    activeDurationSec = 40,
+                    actualRestAfterSec = 90,
+                    effort = SetEffort.GOOD
+                )
+            )
+        )
+    }
+
+    private fun substitutedSourceFallbackStrengthSession(
+        id: String,
+        startedAt: String,
+        originalSnapshotKg: Double,
+        actualKg: Double
+    ): WorkoutSession {
+        return WorkoutSession(
+            id = id,
+            planId = "plan-substitution-source-fallback",
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "替换 planned 回退力量记录",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "unrelated-machine",
+                        order = 1,
+                        exerciseId = "machine-chest-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(99.0, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(1),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = "bench-working-1",
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(99.0, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(1),
+                                restAfterSec = 90
+                            )
+                        )
+                    ),
+                    StrengthExerciseBlock(
+                        id = "original-bench",
+                        order = 2,
+                        exerciseId = "barbell-bench-press",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(originalSnapshotKg, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(6),
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = "bench-working-1",
+                                order = 1,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(originalSnapshotKg, WeightUnit.KG),
+                                repTarget = RepTarget.Fixed(6),
+                                restAfterSec = 90
+                            )
+                        )
+                    )
+                )
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = 130,
+            effectiveElapsedSec = 130,
+            pausedElapsedSec = 0,
+            strengthSetRecords = listOf(
+                StrengthSetRecord(
+                    id = "$id-set",
+                    exerciseId = "dumbbell-bench-press",
+                    sourceSetPlanId = "bench-working-1",
+                    setOrder = 1,
+                    setKind = StrengthSetKind.WORKING,
+                    actualWeight = WeightValue(actualKg, WeightUnit.KG),
+                    actualReps = 8,
+                    activeDurationSec = 40,
+                    actualRestAfterSec = 90,
+                    effort = SetEffort.GOOD,
+                    substitutedFromExerciseId = "barbell-bench-press"
                 )
             )
         )

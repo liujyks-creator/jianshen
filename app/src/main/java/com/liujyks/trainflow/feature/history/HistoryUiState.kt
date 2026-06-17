@@ -1116,8 +1116,11 @@ private fun StrengthSetRecord.toStrengthComparableSetKeyOrNull(): StrengthCompar
 private fun WorkoutPlanSnapshot.plannedValuesFor(record: StrengthSetRecord): StrengthPlannedSetValues {
     val sourceSetPlanId = record.sourceSetPlanId?.takeIf { id -> id.isNotBlank() }
     val blocks = blocks.filterIsInstance<StrengthExerciseBlock>().sortedBy { block -> block.order }
+    val substitutedFromExerciseId = record.substitutedFromExerciseId?.takeIf { id -> id.isNotBlank() }
+    val comparableBlocks = blocks.filter { block -> block.exerciseId == record.exerciseId } +
+        blocks.filter { block -> substitutedFromExerciseId != null && block.exerciseId == substitutedFromExerciseId }
     if (sourceSetPlanId != null) {
-        blocks.forEach { block ->
+        comparableBlocks.forEach { block ->
             val set = block.sets.firstOrNull { set -> set.id == sourceSetPlanId }
             if (set != null) {
                 return StrengthPlannedSetValues(
@@ -1127,11 +1130,12 @@ private fun WorkoutPlanSnapshot.plannedValuesFor(record: StrengthSetRecord): Str
             }
         }
     }
-    blocks.firstOrNull { block -> block.exerciseId == record.exerciseId }
-        ?.sets
-        ?.firstOrNull { set -> set.order == record.setOrder && set.kind == record.setKind }
-        ?.let { set ->
-            val block = blocks.first { block -> block.exerciseId == record.exerciseId }
+    comparableBlocks
+        .firstOrNull { block ->
+            block.sets.any { set -> set.order == record.setOrder && set.kind == record.setKind }
+        }
+        ?.let { block ->
+            val set = block.sets.first { set -> set.order == record.setOrder && set.kind == record.setKind }
             return StrengthPlannedSetValues(
                 plannedWeight = set.targetWeight ?: block.target?.weight,
                 plannedRepTarget = set.repTarget ?: block.target?.repTarget
