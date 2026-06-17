@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.feature.history
 
 import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseTarget
 import com.liujyks.trainflow.core.model.StrengthSetKind
@@ -600,6 +601,286 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun strengthComparableSetTrendIsOnlyBuiltForRealPersistedStrengthSessions() {
+        assertEquals(null, buildDefaultHistoryScreenState().strengthComparableSetTrendUiState)
+
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "strength-comparable-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        actualKg = 60.0
+                    ),
+                    comparableStrengthSession(
+                        id = "strength-comparable-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        actualKg = 62.5
+                    ),
+                    timedSession(
+                        id = "timed-not-strength",
+                        status = SessionStatus.COMPLETED,
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 90,
+                        pausedElapsedSec = 10,
+                        actualRestSec = 20,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 20
+                    ),
+                    followAlongSession(
+                        id = "follow-not-strength",
+                        totalElapsedSec = 40,
+                        effectiveElapsedSec = 40
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertEquals(1, trend.groups.size)
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "已排除非力量记录" })
+        assertTrue(trend.description.contains("sourceSetPlanId"))
+        assertTrue(trend.description.contains("不输出强弱判断"))
+    }
+
+    @Test
+    fun strengthComparableSetTrendPrioritizesSameExerciseAndSourceSetPlanId() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "source-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        plannedKg = 57.5,
+                        actualKg = 57.5,
+                        actualReps = 8,
+                        activeDurationSec = 42,
+                        actualRestAfterSec = 75,
+                        effort = SetEffort.GOOD
+                    ),
+                    comparableStrengthSession(
+                        id = "source-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        plannedKg = 60.0,
+                        actualKg = 60.0,
+                        actualReps = 10,
+                        activeDurationSec = 45,
+                        actualRestAfterSec = 90,
+                        effort = SetEffort.HARD
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertTrue(group.ruleLabel.contains("同一 sourceSetPlanId"))
+        assertTrue(group.title.contains("杠铃卧推"))
+        assertEquals(listOf("2026-06-08", "2026-06-09"), group.rows.map { row -> row.dateLabel })
+        assertEquals(listOf("57.5 kg · 8-12 次", "60 kg · 8-12 次"), group.rows.map { row -> row.plannedLabel })
+        assertEquals(listOf("57.5 kg · 8 次", "60 kg · 10 次"), group.rows.map { row -> row.actualLabel })
+        assertEquals(listOf("42秒", "45秒"), group.rows.map { row -> row.activeDurationLabel })
+        assertEquals(listOf("1分15秒", "1分30秒"), group.rows.map { row -> row.actualRestLabel })
+        assertEquals(listOf("good", "hard"), group.rows.map { row -> row.effortLabel })
+        assertTrue(group.rows.all { row -> row.sourceLabel.contains("bench-working-1") })
+    }
+
+    @Test
+    fun strengthComparableSetTrendFallsBackToSetOrderAndKindWhenSourceSetPlanIdIsMissing() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "fallback-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = null,
+                        actualKg = 55.0,
+                        setOrder = 2,
+                        setKind = StrengthSetKind.WORKING
+                    ),
+                    comparableStrengthSession(
+                        id = "fallback-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = null,
+                        actualKg = 57.5,
+                        setOrder = 2,
+                        setKind = StrengthSetKind.WORKING
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertTrue(group.ruleLabel.contains("setOrder + setKind"))
+        assertTrue(group.rows.all { row -> row.sourceLabel.contains("setOrder 2") })
+        assertTrue(group.rows.all { row -> row.sourceLabel.contains("working") })
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "使用 setOrder + setKind 降级" })
+    }
+
+    @Test
+    fun strengthComparableSetTrendDoesNotMixDifferentExerciseOrderOrKind() {
+        val differentExercises = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "bench-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        exerciseId = "barbell-bench-press",
+                        sourceSetPlanId = "shared-source"
+                    ),
+                    comparableStrengthSession(
+                        id = "row-one",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        exerciseId = "one-arm-dumbbell-row",
+                        sourceSetPlanId = "shared-source"
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+        val differentFallbackOrder = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "order-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        sourceSetPlanId = null,
+                        setOrder = 1,
+                        setKind = StrengthSetKind.WORKING
+                    ),
+                    comparableStrengthSession(
+                        id = "order-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        sourceSetPlanId = null,
+                        setOrder = 2,
+                        setKind = StrengthSetKind.WORKING
+                    ),
+                    comparableStrengthSession(
+                        id = "kind-one",
+                        startedAt = "2026-06-10T18:00:00Z",
+                        sourceSetPlanId = null,
+                        setOrder = 1,
+                        setKind = StrengthSetKind.WARMUP
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertTrue(differentExercises.groups.isEmpty())
+        assertTrue(requireNotNull(differentExercises.emptyMessage).contains("同一 exerciseId"))
+        assertTrue(differentFallbackOrder.groups.isEmpty())
+        assertTrue(differentFallbackOrder.dataQualityRows.any { row -> row.label == "样本不足" })
+    }
+
+    @Test
+    fun strengthComparableSetTrendLabelsSubstitutionsWithoutMergingIntoOriginalExercise() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "original-bench",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        exerciseId = "barbell-bench-press",
+                        sourceSetPlanId = "bench-working-1"
+                    ),
+                    comparableStrengthSession(
+                        id = "substitute-one",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        exerciseId = "dumbbell-bench-press",
+                        sourceSetPlanId = "bench-working-1",
+                        substitutedFromExerciseId = "barbell-bench-press"
+                    ),
+                    comparableStrengthSession(
+                        id = "substitute-two",
+                        startedAt = "2026-06-10T18:00:00Z",
+                        exerciseId = "dumbbell-bench-press",
+                        sourceSetPlanId = "bench-working-1",
+                        substitutedFromExerciseId = "barbell-bench-press"
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        val group = trend.groups.single()
+
+        assertTrue(group.title.contains("dumbbell-bench-press"))
+        assertEquals(2, group.rows.size)
+        assertTrue(group.rows.all { row -> requireNotNull(row.substitutionLabel).contains("替换自 杠铃卧推") })
+        assertTrue(group.rows.all { row -> requireNotNull(row.substitutionLabel).contains("未并入原动作趋势") })
+    }
+
+    @Test
+    fun strengthComparableSetTrendUsesHistoricalPlanSnapshotForMissingPlannedFields() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "snapshot-planned-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        plannedKg = null,
+                        plannedRepTarget = null,
+                        snapshotTargetKg = 50.0,
+                        snapshotRepTarget = RepTarget.Fixed(6),
+                        actualKg = 50.0
+                    ),
+                    comparableStrengthSession(
+                        id = "snapshot-planned-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        plannedKg = null,
+                        plannedRepTarget = null,
+                        snapshotTargetKg = 52.5,
+                        snapshotRepTarget = RepTarget.Fixed(6),
+                        actualKg = 52.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertEquals(listOf("50 kg · 6 次", "52.5 kg · 6 次"), trend.groups.single().rows.map { row -> row.plannedLabel })
+        assertEquals(listOf("50 kg · 8 次", "52.5 kg · 8 次"), trend.groups.single().rows.map { row -> row.actualLabel })
+    }
+
+    @Test
+    fun strengthComparableSetTrendDoesNotInventSamplesWhenCriticalFieldsAreMissing() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "missing-fields-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        actualKg = null
+                    ),
+                    comparableStrengthSession(
+                        id = "missing-fields-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        effort = null
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("暂无可比力量 set 趋势"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "组记录字段不足" })
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "暂无完整 set 样本" })
+    }
+
+    @Test
+    fun strengthComparableSetTrendRecalculatesFromRemainingSessionsAfterCleanup() {
+        val remaining = comparableStrengthSession(
+            id = "remaining-strength-after-cleanup",
+            startedAt = "2026-06-09T18:00:00Z",
+            actualKg = 60.0
+        )
+        val state = buildHistoryScreenState(sessions = listOf(remaining))
+
+        val trend = requireNotNull(state.strengthComparableSetTrendUiState)
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(requireNotNull(trend.emptyMessage).contains("至少需要 2 条"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "样本不足" })
+    }
+
+    @Test
     fun aggregateModeBreakdownCountsTimedStrengthAndFollowAlong() {
         val charts = requireNotNull(
             buildHistoryScreenState(
@@ -1019,6 +1300,20 @@ class HistoryUiStateTest {
                 )
             )
         )
+        val realStrengthState = buildHistoryScreenState(
+            sessions = listOf(
+                comparableStrengthSession(
+                    id = "copy-strength-one",
+                    startedAt = "2026-06-08T18:00:00Z",
+                    actualKg = 60.0
+                ),
+                comparableStrengthSession(
+                    id = "copy-strength-two",
+                    startedAt = "2026-06-09T18:00:00Z",
+                    actualKg = 62.5
+                )
+            )
+        )
         val combinedCopy = buildString {
             append(state.emptyStateDescription)
             state.dateGroups.flatMap { group -> group.items }.forEach { item ->
@@ -1060,6 +1355,24 @@ class HistoryUiStateTest {
                         append(row.actualRestLabel)
                         append(row.extraRestLabel)
                         append(row.positionLabel)
+                    }
+                }
+                trend.dataQualityRows.forEach { row -> append(row.helper) }
+            }
+            realStrengthState.strengthComparableSetTrendUiState?.let { trend ->
+                append(trend.title)
+                append(trend.description)
+                trend.groups.forEach { group ->
+                    append(group.title)
+                    append(group.ruleLabel)
+                    group.rows.forEach { row ->
+                        append(row.plannedLabel)
+                        append(row.actualLabel)
+                        append(row.activeDurationLabel)
+                        append(row.actualRestLabel)
+                        append(row.effortLabel)
+                        append(row.sourceLabel)
+                        append(row.substitutionLabel)
                     }
                 }
                 trend.dataQualityRows.forEach { row -> append(row.helper) }
@@ -1295,6 +1608,81 @@ class HistoryUiStateTest {
                         eventElapsedSec = 40 + index
                     )
                 }
+        )
+    }
+
+    private fun comparableStrengthSession(
+        id: String,
+        startedAt: String,
+        exerciseId: String = "barbell-bench-press",
+        sourceSetPlanId: String? = "bench-working-1",
+        setOrder: Int = 1,
+        setKind: StrengthSetKind = StrengthSetKind.WORKING,
+        plannedKg: Double? = 60.0,
+        plannedRepTarget: RepTarget? = RepTarget.Range(8, 12),
+        snapshotTargetKg: Double? = plannedKg,
+        snapshotRepTarget: RepTarget? = plannedRepTarget,
+        actualKg: Double? = 60.0,
+        actualReps: Int? = 8,
+        activeDurationSec: Int? = 40,
+        actualRestAfterSec: Int? = 90,
+        effort: SetEffort? = SetEffort.GOOD,
+        substitutedFromExerciseId: String? = null
+    ): WorkoutSession {
+        val setPlanId = sourceSetPlanId ?: "bench-working-$setOrder"
+        return WorkoutSession(
+            id = id,
+            planId = "plan-comparable-strength",
+            mode = WorkoutMode.STRENGTH,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "可比力量记录",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "bench",
+                        order = 1,
+                        exerciseId = exerciseId,
+                        target = StrengthExerciseTarget(
+                            weight = snapshotTargetKg?.let { kg -> WeightValue(kg, WeightUnit.KG) },
+                            repTarget = snapshotRepTarget,
+                            restAfterSetSec = 90
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = setPlanId,
+                                order = setOrder,
+                                kind = setKind,
+                                targetWeight = snapshotTargetKg?.let { kg -> WeightValue(kg, WeightUnit.KG) },
+                                repTarget = snapshotRepTarget,
+                                restAfterSec = 90
+                            )
+                        )
+                    )
+                )
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = (activeDurationSec ?: 0) + (actualRestAfterSec ?: 0),
+            effectiveElapsedSec = (activeDurationSec ?: 0) + (actualRestAfterSec ?: 0),
+            pausedElapsedSec = 0,
+            strengthSetRecords = listOf(
+                StrengthSetRecord(
+                    id = "$id-set",
+                    exerciseId = exerciseId,
+                    sourceSetPlanId = sourceSetPlanId,
+                    setOrder = setOrder,
+                    setKind = setKind,
+                    plannedWeight = plannedKg?.let { kg -> WeightValue(kg, WeightUnit.KG) },
+                    plannedRepTarget = plannedRepTarget,
+                    actualWeight = actualKg?.let { kg -> WeightValue(kg, WeightUnit.KG) },
+                    actualReps = actualReps,
+                    activeDurationSec = activeDurationSec,
+                    actualRestAfterSec = actualRestAfterSec,
+                    effort = effort,
+                    substitutedFromExerciseId = substitutedFromExerciseId
+                )
+            )
         )
     }
 

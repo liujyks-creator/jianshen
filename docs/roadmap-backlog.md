@@ -1690,6 +1690,36 @@ stepsCompleted:
 - 新增 / 更新单元测试覆盖只消费真实 timed sessions、排除 strength / follow_along、同结构同阶段同轮次比较、不同计划结构不混比、不同轮次不混比、planned / actual / extra rest 分离、extra rest 只来自 `addedSec`、位置字段缺失降级、缺少 step records 不造样本，以及不输出心率趋势、力量趋势或训练结论。
 - 本阶段不实现 E12.2b 力量同类趋势、平均心率趋势、设备心率获取、手动心率输入、Health Connect、Wear OS、BLE、声音播放、云同步、账号体系、foreground service、exact alarm、notification action 或 reset production command；不修改训练执行引擎、`WorkoutCommand`、`WorkoutEvent`、Room schema、`WorkoutSession.planSnapshot` 或历史删除语义。
 
+### Story E12.2b: Strength comparable set trends
+
+**状态:** Implemented in Android strength comparable set history trends
+
+作为力量训练用户，
+我想在历史 / 趋势页看到同一动作、同一计划组来源或同类组序下的 planned / actual set 记录变化，
+以便回顾不同训练日同类 set 的重量、次数、组耗时、实际休息和主观感受。
+
+**验收标准:**
+
+- Then 只消费真实持久化 `WorkoutSession` list，不使用 preview / fixture / 内存示例记录。
+- Then 只分析 `WorkoutMode.STRENGTH` 记录，不生成计时趋势或跟练趋势。
+- Then 只比较同一 `exerciseId` 下的 set。
+- Then 优先使用同一 `sourceSetPlanId` 做同类比较；`sourceSetPlanId` 缺失时才降级到同一 `setOrder + setKind`。
+- Then 替换动作不得自动并入原动作趋势；如展示，必须标注 `substitutedFromExerciseId` 来源。
+- Then planned weight / reps 与 actual weight / reps 分开展示，planned 值来自真实 set record 或历史 `WorkoutSession.planSnapshot`。
+- Then 展示 active duration、actual rest 和 effort；关键字段不足时显示数据不足，不造样本。
+- Then 样本不足时显示暂无趋势，不绘制假曲线。
+- Then 不输出训练强弱、加重量建议、康复、医疗、平均心率或自动调整计划建议。
+
+**交付结果:**
+
+- `feature.history.HistoryScreenState` 新增 strength comparable set trend UI state，继续在 mapper 层从真实 session list 推导，Compose 只展示已生成的 UI state。
+- mapper 对 strength session 生成同类 set 样本 key：有 `sourceSetPlanId` 时使用 `exerciseId + sourceSetPlanId`；缺失时才使用 `exerciseId + setOrder + setKind` fallback。
+- planned weight / reps 优先使用 `StrengthSetRecord` 字段，缺失时从历史 `WorkoutSession.planSnapshot` 的 `StrengthSetPlan` 或 block target 推导；actual weight / reps、active duration、actual rest 和 effort 必须来自真实 set record。
+- 替换动作记录按替换后的 `exerciseId` 单独成组，趋势行显式显示 `substitutedFromExerciseId`，不把替换动作样本自动并入原动作。
+- 字段不完整、key 不完整或同类样本不足时显示暂无趋势 / 数据不足 / 降级说明，不造样本、不画假曲线。
+- 新增 / 更新单元测试覆盖只消费真实 strength sessions、排除 timed / follow_along、sourceSetPlanId 优先比较、source 缺失 fallback、不同 exerciseId / setOrder / setKind 不混比、替换动作标注且不并入原动作、planned / actual 分离、active duration / actual rest / effort 展示、字段不足不造样本、删除后剩余记录自然刷新，以及不输出强弱判断、加重量建议、心率趋势或计时趋势变更。
+- 本阶段不实现平均心率趋势、设备心率获取、手动心率输入、Health Connect、Wear OS、BLE、声音播放、云同步、账号体系、foreground service、exact alarm、notification action 或 reset production command；不修改训练执行引擎、`WorkoutCommand`、`WorkoutEvent`、Room schema、`WorkoutSession.planSnapshot` 或历史删除语义。
+
 ## Epic E13: 声音提示、固定女声 cue 与音频共存
 
 目标：建立悦耳、克制、不打断其他 App 的训练音频提示。
@@ -1769,7 +1799,7 @@ stepsCompleted:
 24. E12.2a：非心率历史图表与聚合趋势。（Implemented）
 25. E12.3：历史记录清理。（Implemented）
 26. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
-27. E12.2b：力量同类 set 趋势。
+27. E12.2b：力量同类 set 趋势。（Implemented）
 28. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
@@ -1802,13 +1832,13 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3 和 E12.2c 已覆盖真实基础统计、非心率聚合趋势、历史清理和计时同类阶段 / 额外休息趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 后续可进入 E12.2b 力量同类 set 趋势、平均心率来源或同日多轮运动分析。
+E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 后续可进入平均心率来源阶段或同日多轮运动分析。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-Story E12.2c Review Gate；随后按用户测试优先级进入 E12.2b 力量同类 set 趋势、E13 Sound Cue System、平均心率来源阶段或同日多轮分析。E10.14 已提供真实 rest extension records，E12 后续仍必须消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+Story E12.2b Review Gate；随后按用户测试优先级进入 E13 Sound Cue System、平均心率来源阶段或同日多轮分析。E10.14 已提供真实 rest extension records，E12 后续仍必须消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
