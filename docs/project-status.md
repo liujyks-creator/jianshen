@@ -151,7 +151,7 @@ E12.2b Strength comparable set trends 已实现；记录页在真实持久化 se
 2. E10.13 Ready Start Gate 已完成；计时训练从编辑页或计划详情开始后先进入极简 ready gate，点击中心圆才真正 `StartSession`。
 3. E10.12 Timer Dial Compose landing 已把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产 Timer Dial：执行页减字、总剩余时间放大居中、圆盘放大、线条变细、宽底层圆环、同源动态浅点和阶段色中心圆；继续保留 continuous progress、pause freeze、terminal freeze、rest extension monotonic progress。
 4. E10.16 Motion Landing 已完成；后续若继续训练执行页 polish，仍只消费既有 motion token，不改变训练语义、真实记录或倒计时口径。
-5. E12 Stats / Records 已具备真实基础统计、非心率聚合图表、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；后续若继续 E12，可按优先级进入 E12.2b review gate、同日多轮分析或明确来源的平均心率阶段，仍不得回填或修改原计划结构。平均心率趋势必须等待明确来源的设备心率或可选手动心率数据；如果两者都没有，历史页和趋势页显示未获取心率，不画假趋势。
+5. E12 Stats / Records 已具备真实基础统计、非心率聚合图表、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；后续若继续 E12，应优先完成 E12.2b 力量同类 set 趋势 Review Fix / Review Gate，或另行拆分同日多轮分析，仍不得回填或修改原计划结构。E12.2b planned lookup 必须限定单一候选动作 block：`sourceSetPlanId` 优先，只有缺失时才可按 `setOrder + setKind` fallback；存在但未匹配时是数据不足；替换动作 planned values 只能来自 `substitutedFromExerciseId` 对应原动作 block，非替换动作只能来自 record 的 `exerciseId` block，不得拼接原动作和替换后动作候选，并且必须标注替换来源。平均心率趋势必须等待明确来源的设备心率或可选手动心率数据；如果两者都没有，历史页和趋势页显示未获取心率，不画假趋势。
 6. E13 Sound Cue System 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机 / 手机扬声器 smoke、不申请会打断外部音频的 audio focus、不 duck、不暂停音乐 / 视频，以及后续女声 cue / 阶段名朗读。
 7. E11 继续保持独立阶段，但不再默认手动心率先行；后续按“未获取展示 / 设备心率接入策略 / 可选手动输入”拆分，真实心率设备、Health Connect、Wear OS、BLE 或厂商 SDK 仍需另行决策。
 

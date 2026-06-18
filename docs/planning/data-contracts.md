@@ -629,6 +629,18 @@ E12.1 基础统计口径：
 - mode breakdown 只统计 `timed` / `strength` / `follow_along` 的基础数量，不在 E12.1 比较不同计划、不同阶段、不同轮次或不同动作的强弱趋势。
 - E12.1 不定义图表趋势、平均心率趋势、真实设备数据、云同步、账号体系、历史记录清理或医疗判断。
 
+E12.2b 力量同类 set 趋势口径：
+
+- 只消费真实持久化 `WorkoutSession` list 中的 `StrengthSetRecord`，不使用 preview / fixture / 内存示例记录。
+- 同类 set 比较必须限定同一 `StrengthSetRecord.exerciseId`，不得把不同动作的 set 自动合并成同一趋势。
+- planned values 只能从每条历史 `WorkoutSession.planSnapshot` 的力量 block 中查找，不能用编辑后的当前 `WorkoutPlan` 反推旧 session。
+- planned lookup 优先使用 `sourceSetPlanId`，且必须限定在对应 `exerciseId` 的 `StrengthExerciseBlock` 内匹配。
+- 只有 `sourceSetPlanId == null` 时，才允许 fallback 到同一 `exerciseId` block 内的 `setOrder + setKind`。
+- 如果 `sourceSetPlanId != null` 但找不到同一 `exerciseId` 的 matching set，应标记数据不足，不得再 fallback 到 `setOrder + setKind`。
+- 替换动作的 planned values 只能查 `substitutedFromExerciseId` 对应原动作 block；非替换动作的 planned values 只能查 record 的 `exerciseId` 对应 block。
+- 不得把原动作 block 和替换后动作 block 拼接为候选集合，也不得让替换动作自动并入原动作趋势；替换记录必须在趋势 UI 标注来源。
+- 趋势只展示 planned / actual weight、planned / actual reps、set kind、set order、actual rest 和 active duration 等可回顾字段；不判断强弱，不推荐加重量，不输出康复、医疗或训练中断结论。
+
 E12 后续心率趋势边界：
 
 - 心率趋势只能消费已经保存到训练记录或分析数据源中的明确来源心率数据，不能直接把执行页瞬时 `HeartRateState` 当作历史趋势事实。
@@ -726,6 +738,14 @@ interface StrengthSetRecord {
 
 type SetEffort = "easy" | "good" | "hard" | "form_breakdown";
 ```
+
+E12.2b 计划值匹配规则：
+
+- `sourceSetPlanId` 是 planned values 的首选匹配键；匹配必须同时满足同一历史 `planSnapshot`、同一 `exerciseId` block 和同一 set id。
+- `sourceSetPlanId` 缺失时，才可在同一 `exerciseId` block 内使用 `setOrder + setKind` 作为兼容 fallback。
+- `sourceSetPlanId` 存在但匹配失败时，说明计划快照或记录缺少可比计划组，趋势应显示数据不足；不得继续用 `setOrder + setKind` 猜测。
+- 当 `substitutedFromExerciseId` 存在时，planned values 来源是原动作 `substitutedFromExerciseId` 对应 block，实际表现仍归属 record 的 `exerciseId` 并标注“替换自”。
+- 当 `substitutedFromExerciseId` 不存在时，planned values 来源只能是 record 的 `exerciseId` 对应 block。
 
 ### 9.5 单组默认回填规则
 
