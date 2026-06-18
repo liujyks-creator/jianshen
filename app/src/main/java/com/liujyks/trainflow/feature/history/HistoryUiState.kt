@@ -1117,33 +1117,30 @@ private fun WorkoutPlanSnapshot.plannedValuesFor(record: StrengthSetRecord): Str
     val sourceSetPlanId = record.sourceSetPlanId?.takeIf { id -> id.isNotBlank() }
     val candidateExerciseId = record.substitutedFromExerciseId
         ?.takeIf { id -> id.isNotBlank() }
-        ?: record.exerciseId
+        ?: record.exerciseId.takeIf { id -> id.isNotBlank() }
+        ?: return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
     val candidateSets = blocks
         .filterIsInstance<StrengthExerciseBlock>()
-        .sortedBy { block -> block.order }
         .filter { block -> block.exerciseId == candidateExerciseId }
+        .sortedBy { block -> block.order }
         .flatMap { block ->
             block.sets.map { set -> block to set }
         }
-    if (sourceSetPlanId != null) {
-        val (block, set) = candidateSets.firstOrNull { (_, set) -> set.id == sourceSetPlanId }
-            ?: return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
-        return StrengthPlannedSetValues(
+
+    val plannedSet = if (sourceSetPlanId != null) {
+        candidateSets.firstOrNull { (_, set) -> set.id == sourceSetPlanId }
+    } else {
+        candidateSets.firstOrNull { (_, set) ->
+            set.order == record.setOrder && set.kind == record.setKind
+        }
+    }
+
+    return plannedSet?.let { (block, set) ->
+        StrengthPlannedSetValues(
             plannedWeight = set.targetWeight ?: block.target?.weight,
             plannedRepTarget = set.repTarget ?: block.target?.repTarget
         )
-    }
-    candidateSets
-        .firstOrNull { (_, set) ->
-            set.order == record.setOrder && set.kind == record.setKind
-        }
-        ?.let { (block, set) ->
-            return StrengthPlannedSetValues(
-                plannedWeight = set.targetWeight ?: block.target?.weight,
-                plannedRepTarget = set.repTarget ?: block.target?.repTarget
-            )
-        }
-    return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
+    } ?: StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
 }
 
 private fun List<WorkoutSession>.toStrengthComparableSetDataQualityRows(
