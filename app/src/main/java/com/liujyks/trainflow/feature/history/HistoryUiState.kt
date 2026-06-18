@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SessionStepRecord
+import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
@@ -64,6 +65,13 @@ internal data class HistoryScreenState(
     val timedComparableRestTrendUiState: TimedComparableRestTrendUiState?
         get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
             sessions.toTimedComparableRestTrendUiState()
+        } else {
+            null
+        }
+
+    val strengthComparableSetTrendUiState: StrengthComparableSetTrendUiState?
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
+            sessions.toStrengthComparableSetTrendUiState()
         } else {
             null
         }
@@ -303,6 +311,37 @@ internal data class TimedComparableRestTrendRowUiState(
 )
 
 internal data class TimedComparableRestDataQualityRowUiState(
+    val label: String,
+    val helper: String
+)
+
+internal data class StrengthComparableSetTrendUiState(
+    val title: String,
+    val description: String,
+    val groups: List<StrengthComparableSetTrendGroupUiState>,
+    val dataQualityRows: List<StrengthComparableSetDataQualityRowUiState>,
+    val emptyMessage: String? = null
+)
+
+internal data class StrengthComparableSetTrendGroupUiState(
+    val title: String,
+    val ruleLabel: String,
+    val rows: List<StrengthComparableSetTrendRowUiState>
+)
+
+internal data class StrengthComparableSetTrendRowUiState(
+    val dateLabel: String,
+    val sessionTitle: String,
+    val plannedLabel: String,
+    val actualLabel: String,
+    val activeDurationLabel: String,
+    val actualRestLabel: String,
+    val effortLabel: String,
+    val sourceLabel: String,
+    val substitutionLabel: String?
+)
+
+internal data class StrengthComparableSetDataQualityRowUiState(
     val label: String,
     val helper: String
 )
@@ -966,6 +1005,247 @@ private fun TimedExerciseItem.stageTitle(): String {
     return labelOverride ?: exerciseId ?: stageType.displayName
 }
 
+private fun List<WorkoutSession>.toStrengthComparableSetTrendUiState(): StrengthComparableSetTrendUiState {
+    val strengthSessions = filter { session ->
+        session.mode == WorkoutMode.STRENGTH && session.planSnapshot.mode == WorkoutMode.STRENGTH
+    }
+    val samples = strengthSessions.flatMap { session -> session.toStrengthComparableSetSamples() }
+    val comparableGroups = samples
+        .groupBy { sample -> sample.key }
+        .values
+        .filter { group -> group.size >= 2 }
+        .sortedWith(
+            compareBy<List<StrengthComparableSetSample>>(
+                { group -> group.first().key.exerciseId },
+                { group -> group.first().key.sortSource },
+                { group -> group.first().key.fallbackSetOrder ?: 0 },
+                { group -> group.first().key.fallbackSetKind?.contractValue.orEmpty() }
+            )
+        )
+        .map { group -> group.toStrengthComparableSetTrendGroup() }
+    val dataQualityRows = toStrengthComparableSetDataQualityRows(
+        sampleCount = samples.size,
+        comparableGroupCount = comparableGroups.size
+    )
+    return StrengthComparableSetTrendUiState(
+        title = "力量同类 set 趋势",
+        description = "只比较同一 exerciseId 下的真实 strength set records；优先用 sourceSetPlanId，同类来源缺失时才降级到 setOrder + setKind。planned 与 actual 分开展示，不输出强弱判断或加重量建议。",
+        groups = comparableGroups,
+        dataQualityRows = dataQualityRows,
+        emptyMessage = if (comparableGroups.isEmpty()) {
+            "暂无可比力量 set 趋势；至少需要 2 条同一 exerciseId 且同一 sourceSetPlanId，或 sourceSetPlanId 缺失时同一 setOrder + setKind 的完整真实组记录。"
+        } else {
+            null
+        }
+    )
+}
+
+private data class StrengthComparableSetSample(
+    val key: StrengthComparableSetKey,
+    val session: WorkoutSession,
+    val record: StrengthSetRecord,
+    val plannedWeight: WeightValue,
+    val plannedRepTarget: RepTarget,
+    val actualWeight: WeightValue,
+    val actualReps: Int,
+    val activeDurationSec: Int,
+    val actualRestAfterSec: Int,
+    val effort: SetEffort
+)
+
+private data class StrengthComparableSetKey(
+    val exerciseId: String,
+    val sourceSetPlanId: String?,
+    val fallbackSetOrder: Int?,
+    val fallbackSetKind: StrengthSetKind?
+) {
+    val sortSource: String
+        get() = sourceSetPlanId ?: "fallback"
+
+    val comparisonRuleLabel: String
+        get() = if (sourceSetPlanId != null) {
+            "同一 exerciseId · 同一 sourceSetPlanId"
+        } else {
+            "同一 exerciseId · sourceSetPlanId 缺失后降级为同一 setOrder + setKind"
+        }
+}
+
+private data class StrengthPlannedSetValues(
+    val plannedWeight: WeightValue?,
+    val plannedRepTarget: RepTarget?
+)
+
+private fun WorkoutSession.toStrengthComparableSetSamples(): List<StrengthComparableSetSample> {
+    return strengthSetRecords.mapNotNull { record ->
+        val key = record.toStrengthComparableSetKeyOrNull() ?: return@mapNotNull null
+        val plannedValues = planSnapshot.plannedValuesFor(record)
+        val plannedWeight = record.plannedWeight ?: plannedValues.plannedWeight ?: return@mapNotNull null
+        val plannedRepTarget = record.plannedRepTarget ?: plannedValues.plannedRepTarget ?: return@mapNotNull null
+        val actualWeight = record.actualWeight ?: return@mapNotNull null
+        val actualReps = record.actualReps?.takeIf { reps -> reps >= 0 } ?: return@mapNotNull null
+        val activeDurationSec = record.activeDurationSec?.coerceAtLeast(0) ?: return@mapNotNull null
+        val actualRestAfterSec = record.actualRestAfterSec?.coerceAtLeast(0) ?: return@mapNotNull null
+        val effort = record.effort ?: return@mapNotNull null
+        StrengthComparableSetSample(
+            key = key,
+            session = this,
+            record = record,
+            plannedWeight = plannedWeight,
+            plannedRepTarget = plannedRepTarget,
+            actualWeight = actualWeight,
+            actualReps = actualReps,
+            activeDurationSec = activeDurationSec,
+            actualRestAfterSec = actualRestAfterSec,
+            effort = effort
+        )
+    }
+}
+
+private fun StrengthSetRecord.toStrengthComparableSetKeyOrNull(): StrengthComparableSetKey? {
+    val comparableExerciseId = exerciseId.takeIf { id -> id.isNotBlank() } ?: return null
+    val normalizedSourceSetPlanId = sourceSetPlanId?.takeIf { id -> id.isNotBlank() }
+    val safeSetOrder = setOrder.takeIf { order -> order > 0 } ?: return null
+    return StrengthComparableSetKey(
+        exerciseId = comparableExerciseId,
+        sourceSetPlanId = normalizedSourceSetPlanId,
+        fallbackSetOrder = if (normalizedSourceSetPlanId == null) safeSetOrder else null,
+        fallbackSetKind = if (normalizedSourceSetPlanId == null) setKind else null
+    )
+}
+
+private fun WorkoutPlanSnapshot.plannedValuesFor(record: StrengthSetRecord): StrengthPlannedSetValues {
+    val sourceSetPlanId = record.sourceSetPlanId?.takeIf { id -> id.isNotBlank() }
+    val candidateExerciseId = record.substitutedFromExerciseId
+        ?.takeIf { id -> id.isNotBlank() }
+        ?: record.exerciseId.takeIf { id -> id.isNotBlank() }
+        ?: return StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
+    val candidateSets = blocks
+        .filterIsInstance<StrengthExerciseBlock>()
+        .filter { block -> block.exerciseId == candidateExerciseId }
+        .sortedBy { block -> block.order }
+        .flatMap { block ->
+            block.sets.map { set -> block to set }
+        }
+
+    val plannedSet = if (sourceSetPlanId != null) {
+        candidateSets.firstOrNull { (_, set) -> set.id == sourceSetPlanId }
+    } else {
+        candidateSets.firstOrNull { (_, set) ->
+            set.order == record.setOrder && set.kind == record.setKind
+        }
+    }
+
+    return plannedSet?.let { (block, set) ->
+        StrengthPlannedSetValues(
+            plannedWeight = set.targetWeight ?: block.target?.weight,
+            plannedRepTarget = set.repTarget ?: block.target?.repTarget
+        )
+    } ?: StrengthPlannedSetValues(plannedWeight = null, plannedRepTarget = null)
+}
+
+private fun List<WorkoutSession>.toStrengthComparableSetDataQualityRows(
+    sampleCount: Int,
+    comparableGroupCount: Int
+): List<StrengthComparableSetDataQualityRowUiState> {
+    val rows = mutableListOf<StrengthComparableSetDataQualityRowUiState>()
+    val strengthCount = count { session -> session.mode == WorkoutMode.STRENGTH && session.planSnapshot.mode == WorkoutMode.STRENGTH }
+    val nonStrengthCount = size - strengthCount
+    if (nonStrengthCount > 0) {
+        rows += StrengthComparableSetDataQualityRowUiState(
+            label = "已排除非力量记录",
+            helper = "$nonStrengthCount 条 timed / follow_along 记录没有进入力量同类 set 趋势。"
+        )
+    }
+    val strengthRecords = filter { session -> session.mode == WorkoutMode.STRENGTH }
+        .flatMap { session -> session.strengthSetRecords }
+    val fallbackCount = strengthRecords.count { record ->
+        record.sourceSetPlanId.isNullOrBlank() && record.toStrengthComparableSetKeyOrNull() != null
+    }
+    if (fallbackCount > 0) {
+        rows += StrengthComparableSetDataQualityRowUiState(
+            label = "使用 setOrder + setKind 降级",
+            helper = "$fallbackCount 条 strength set record 缺少 sourceSetPlanId，已按同一 exerciseId、setOrder 和 setKind 降级比较。"
+        )
+    }
+    val malformedKeyCount = strengthRecords.count { record -> record.toStrengthComparableSetKeyOrNull() == null }
+    if (malformedKeyCount > 0) {
+        rows += StrengthComparableSetDataQualityRowUiState(
+            label = "同类 key 数据不足",
+            helper = "$malformedKeyCount 条 strength set record 缺少 exerciseId 或有效 setOrder，未进入趋势。"
+        )
+    }
+    val incompleteMetricCount = filter { session -> session.mode == WorkoutMode.STRENGTH }
+        .sumOf { session ->
+            session.strengthSetRecords.count { record ->
+                record.toStrengthComparableSetKeyOrNull() != null && !session.hasCompleteComparableStrengthMetrics(record)
+            }
+        }
+    if (incompleteMetricCount > 0) {
+        rows += StrengthComparableSetDataQualityRowUiState(
+            label = "组记录字段不足",
+            helper = "$incompleteMetricCount 条 strength set record 缺少 planned weight/reps、actual weight/reps、active duration、actual rest 或 effort，未造样本。"
+        )
+    }
+    if (strengthCount > 0 && sampleCount == 0) {
+        rows += StrengthComparableSetDataQualityRowUiState(
+            label = "暂无完整 set 样本",
+            helper = "现有力量记录缺少完整 planned / actual / duration / rest / effort 字段，暂不生成同类 set 趋势。"
+        )
+    } else if (strengthCount > 0 && comparableGroupCount == 0) {
+        rows += StrengthComparableSetDataQualityRowUiState(
+            label = "样本不足",
+            helper = "已找到 $sampleCount 个完整力量 set 样本，但没有任一同类 set 达到 2 条真实记录。"
+        )
+    }
+    return rows
+}
+
+private fun WorkoutSession.hasCompleteComparableStrengthMetrics(record: StrengthSetRecord): Boolean {
+    val plannedValues = planSnapshot.plannedValuesFor(record)
+    return (record.plannedWeight ?: plannedValues.plannedWeight) != null &&
+        (record.plannedRepTarget ?: plannedValues.plannedRepTarget) != null &&
+        record.actualWeight != null &&
+        record.actualReps != null &&
+        record.activeDurationSec != null &&
+        record.actualRestAfterSec != null &&
+        record.effort != null
+}
+
+private fun List<StrengthComparableSetSample>.toStrengthComparableSetTrendGroup(): StrengthComparableSetTrendGroupUiState {
+    val firstSample = first()
+    val rows = sortedBy { sample -> sample.session.startedAt.orEmpty() }
+        .map { sample ->
+            StrengthComparableSetTrendRowUiState(
+                dateLabel = sample.session.dateKey,
+                sessionTitle = sample.session.planSnapshot.title,
+                plannedLabel = "${sample.plannedWeight.formatWeight()} · ${sample.plannedRepTarget.formatRepTarget()}",
+                actualLabel = "${sample.actualWeight.formatWeight()} · ${sample.actualReps} 次",
+                activeDurationLabel = sample.activeDurationSec.formatDuration(),
+                actualRestLabel = sample.actualRestAfterSec.formatDuration(),
+                effortLabel = sample.effort.displayLabel,
+                sourceLabel = sample.sourceLabel(),
+                substitutionLabel = sample.record.substitutedFromExerciseId?.let { originalId ->
+                    "替换自 ${originalId.exerciseName()}；未并入原动作趋势"
+                }
+            )
+        }
+    return StrengthComparableSetTrendGroupUiState(
+        title = "${firstSample.key.exerciseId.exerciseName()} · ${firstSample.groupTitleSuffix()}",
+        ruleLabel = firstSample.key.comparisonRuleLabel,
+        rows = rows
+    )
+}
+
+private fun StrengthComparableSetSample.groupTitleSuffix(): String {
+    return key.sourceSetPlanId ?: "第 ${key.fallbackSetOrder} 组 · ${key.fallbackSetKind?.displayName}"
+}
+
+private fun StrengthComparableSetSample.sourceLabel(): String {
+    return key.sourceSetPlanId?.let { sourceId ->
+        "sourceSetPlanId $sourceId"
+    } ?: "setOrder ${key.fallbackSetOrder} · setKind ${key.fallbackSetKind?.contractValue}"
+}
+
 private fun List<WorkoutSession>.toHistoryCleanupUiState(): HistoryCleanupUiState {
     val planOptions = filter { session -> session.planId != null }
         .groupBy { session -> requireNotNull(session.planId) }
@@ -1436,6 +1716,29 @@ private fun WeightValue?.formatWeight(): String {
     }
     return "$valueText ${weight.unit.contractValue}"
 }
+
+private fun RepTarget.formatRepTarget(): String {
+    return when (this) {
+        is RepTarget.Fixed -> "$reps 次"
+        is RepTarget.Range -> "$minReps-$maxReps 次"
+    }
+}
+
+private val StrengthSetKind.displayName: String
+    get() = when (this) {
+        StrengthSetKind.WARMUP -> "热身组"
+        StrengthSetKind.WORKING -> "正式组"
+        StrengthSetKind.DROP -> "递减组"
+        StrengthSetKind.BACKOFF -> "回退组"
+    }
+
+private val SetEffort.displayLabel: String
+    get() = when (this) {
+        SetEffort.EASY -> "easy"
+        SetEffort.GOOD -> "good"
+        SetEffort.HARD -> "hard"
+        SetEffort.FORM_BREAKDOWN -> "form breakdown"
+    }
 
 private fun Double.formatLoad(): String {
     if (this <= 0.0) return "暂无容量"

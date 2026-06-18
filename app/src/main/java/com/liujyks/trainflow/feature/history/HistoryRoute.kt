@@ -165,6 +165,15 @@ private fun HistoryScreen(
                 }
             }
 
+            uiState.strengthComparableSetTrendUiState?.let { trend ->
+                item {
+                    SectionTitle("力量同类 set")
+                }
+                item {
+                    StrengthComparableSetTrendCard(trend)
+                }
+            }
+
             uiState.cleanupUiState?.let { cleanup ->
                 item {
                     SectionTitle("历史清理")
@@ -666,6 +675,113 @@ private fun TimedComparableRestTrendRow(row: TimedComparableRestTrendRowUiState)
             style = MaterialTheme.typography.bodySmall,
             color = TrainFlowNeutral500
         )
+    }
+}
+
+@Composable
+private fun StrengthComparableSetTrendCard(trend: StrengthComparableSetTrendUiState) {
+    HistoryCard {
+        Text(
+            text = trend.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = trend.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        if (trend.groups.isEmpty()) {
+            Text(
+                text = trend.emptyMessage.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            trend.groups.forEach { group ->
+                StrengthComparableSetTrendGroup(group)
+            }
+        }
+        trend.dataQualityRows.forEach { row ->
+            SummaryRow(
+                HistorySummaryRowUiState(
+                    label = row.label,
+                    value = "已降级",
+                    helper = row.helper
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun StrengthComparableSetTrendGroup(group: StrengthComparableSetTrendGroupUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = group.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = group.ruleLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        group.rows.forEach { row ->
+            StrengthComparableSetTrendRow(row)
+        }
+    }
+}
+
+@Composable
+private fun StrengthComparableSetTrendRow(row: StrengthComparableSetTrendRowUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = row.dateLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = row.sessionTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral700
+                )
+            }
+            Text(
+                text = row.actualLabel,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Text(
+            text = "计划 ${row.plannedLabel}",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral700
+        )
+        Text(
+            text = "组耗时 ${row.activeDurationLabel} · 实际休息 ${row.actualRestLabel} · 感受 ${row.effortLabel}",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral700
+        )
+        Text(
+            text = row.sourceLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        row.substitutionLabel?.let { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500
+            )
+        }
     }
 }
 
