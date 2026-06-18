@@ -49,8 +49,12 @@ import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
+import com.liujyks.trainflow.core.media.WorkoutSoundCueController
+import com.liujyks.trainflow.core.media.WorkoutSoundCueDispatcher
+import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
+import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
@@ -89,6 +93,7 @@ internal fun StrengthWorkoutSessionRoute(
     var engineState by remember(plan.id, sessionId) {
         mutableStateOf(StrengthWorkoutEngine.create(plan, sessionId = sessionId))
     }
+    val soundCueController = rememberWorkoutSoundCueController()
     val context = LocalContext.current
     val activeWorkoutNotifications = remember(context) {
         AndroidActiveWorkoutNotificationController(context.applicationContext)
@@ -96,6 +101,10 @@ internal fun StrengthWorkoutSessionRoute(
 
     fun applyEngineResult(result: StrengthWorkoutEngineResult) {
         engineState = result.state
+        result.events.dispatchStrengthWorkoutSoundCues(
+            cueSettings = plan.preferences?.cueSettings,
+            soundCueController = soundCueController
+        )
     }
 
     LaunchedEffect(plan.id) {
@@ -205,6 +214,16 @@ internal fun StrengthWorkoutSessionRoute(
         onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
         modifier = modifier
     )
+}
+
+private fun List<WorkoutEvent>.dispatchStrengthWorkoutSoundCues(
+    cueSettings: CueSettings?,
+    soundCueController: WorkoutSoundCueController
+) {
+    forEach { event ->
+        val cue = WorkoutSoundCueDispatcher.cueFor(event = event, cueSettings = cueSettings)
+        soundCueController.dispatch(WorkoutSoundCueDispatcher.requestFor(event = event, cue = cue))
+    }
 }
 
 @Composable

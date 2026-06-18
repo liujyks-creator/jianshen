@@ -1,7 +1,4 @@
 package com.liujyks.trainflow.feature.workoutsession
-
-import android.media.AudioManager
-import android.media.ToneGenerator
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -65,8 +62,11 @@ import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
+import com.liujyks.trainflow.core.media.AndroidWorkoutSoundCuePlayer
 import com.liujyks.trainflow.core.media.CountdownReminderFeedbackDispatcher
 import com.liujyks.trainflow.core.media.CountdownReminderFeedbackRequest
+import com.liujyks.trainflow.core.media.WorkoutSoundCueController
+import com.liujyks.trainflow.core.media.WorkoutSoundCueDispatcher
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
@@ -110,7 +110,8 @@ internal fun TimedWorkoutSessionRoute(
     var engineState by remember(plan.id, sessionId) {
         mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
     }
-    val feedbackSink = rememberCountdownReminderFeedbackSink()
+    val soundCueController = rememberWorkoutSoundCueController()
+    val hapticFeedbackSink = rememberCountdownReminderHapticFeedbackSink()
     val context = LocalContext.current
     val reduceMotion = LocalTrainFlowReduceMotion.current
     val activeWorkoutNotifications = remember(context) {
@@ -120,9 +121,10 @@ internal fun TimedWorkoutSessionRoute(
     fun applyEngineResult(result: TimedWorkoutEngineResult) {
         engineState = result.state
         if (result.shouldDispatchTimedCountdownReminderFeedback()) {
-            result.events.dispatchCountdownReminders(
+            result.events.dispatchTimedWorkoutFeedback(
                 state = result.state,
-                feedbackSink = feedbackSink
+                soundCueController = soundCueController,
+                hapticFeedbackSink = hapticFeedbackSink
             )
         }
     }
@@ -1028,55 +1030,65 @@ private fun SessionPill(
 }
 
 @Composable
-private fun rememberCountdownReminderFeedbackSink(): CountdownReminderFeedbackSink {
-    val hapticFeedback = LocalHapticFeedback.current
-    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 60) }
-
-    DisposableEffect(toneGenerator) {
-        onDispose { toneGenerator.release() }
+internal fun rememberWorkoutSoundCueController(): WorkoutSoundCueController {
+    val context = LocalContext.current
+    val soundCuePlayer = remember(context) {
+        AndroidWorkoutSoundCuePlayer(context.applicationContext)
     }
 
-    return remember(hapticFeedback, toneGenerator) {
-        AndroidCountdownReminderFeedbackSink(
-            toneGenerator = toneGenerator,
+    DisposableEffect(soundCuePlayer) {
+        onDispose { soundCuePlayer.release() }
+    }
+
+    return remember(soundCuePlayer) {
+        WorkoutSoundCueController(soundCuePlayer)
+    }
+}
+
+@Composable
+private fun rememberCountdownReminderHapticFeedbackSink(): CountdownReminderHapticFeedbackSink {
+    val hapticFeedback = LocalHapticFeedback.current
+
+    return remember(hapticFeedback) {
+        AndroidCountdownReminderHapticFeedbackSink(
             hapticFeedback = hapticFeedback
         )
     }
 }
 
-private interface CountdownReminderFeedbackSink {
+private interface CountdownReminderHapticFeedbackSink {
     fun dispatch(request: CountdownReminderFeedbackRequest)
 }
 
-private class AndroidCountdownReminderFeedbackSink(
-    private val toneGenerator: ToneGenerator,
+private class AndroidCountdownReminderHapticFeedbackSink(
     private val hapticFeedback: HapticFeedback
-) : CountdownReminderFeedbackSink {
+) : CountdownReminderHapticFeedbackSink {
     override fun dispatch(request: CountdownReminderFeedbackRequest) {
-        if (request.soundEnabled) {
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 90)
-        }
         if (request.vibrationEnabled) {
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 }
 
-private fun List<WorkoutEvent>.dispatchCountdownReminders(
+private fun List<WorkoutEvent>.dispatchTimedWorkoutFeedback(
     state: TimedWorkoutEngineState,
-    feedbackSink: CountdownReminderFeedbackSink
+    soundCueController: WorkoutSoundCueController,
+    hapticFeedbackSink: CountdownReminderHapticFeedbackSink
 ) {
     forEach { event ->
-        val cue = state.endingCueFor(event)
-        val request = CountdownReminderFeedbackDispatcher.requestFor(event = event, cue = cue)
-        if (request != null) {
-            feedbackSink.dispatch(request)
+        val cue = state.soundCueFor(event)
+        soundCueController.dispatch(WorkoutSoundCueDispatcher.requestFor(event = event, cue = cue))
+        val hapticRequest = CountdownReminderFeedbackDispatcher.requestFor(event = event, cue = cue)
+        if (hapticRequest != null) {
+            hapticFeedbackSink.dispatch(hapticRequest)
         }
     }
 }
 
-private fun TimedWorkoutEngineState.endingCueFor(event: WorkoutEvent) = when (event) {
+private fun TimedWorkoutEngineState.soundCueFor(event: WorkoutEvent) = when (event) {
+    is WorkoutEvent.TimedWorkStarted -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
     is WorkoutEvent.TimedWorkEnding -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
+    is WorkoutEvent.RestStarted -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
     is WorkoutEvent.RestEnding -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
     else -> null
 }

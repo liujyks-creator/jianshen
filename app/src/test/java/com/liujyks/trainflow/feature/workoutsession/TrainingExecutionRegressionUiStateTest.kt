@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
+import com.liujyks.trainflow.core.media.WorkoutSoundCueAudioPolicy
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.WorkoutCommand
@@ -259,18 +260,23 @@ class TrainingExecutionRegressionUiStateTest {
 
     @Test
     fun countdownReminderAudioBoundaryDoesNotRequestAudioFocusOrDucking() {
-        val source = File(
-            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        val playerSource = File(
+            "src/main/java/com/liujyks/trainflow/core/media/AndroidWorkoutSoundCuePlayer.kt"
         ).readText(Charsets.UTF_8)
+        val policy = WorkoutSoundCueAudioPolicy.coexistencePolicy
 
-        assertTrue(source.contains("ToneGenerator"))
-        assertTrue(source.contains("AudioManager.STREAM_NOTIFICATION"))
-        assertFalse(source.contains("requestAudioFocus"))
-        assertFalse(source.contains("AudioFocusRequest"))
-        assertFalse(source.contains("AUDIOFOCUS_GAIN"))
-        assertFalse(source.contains("AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK"))
-        assertFalse(source.contains("setWillPauseWhenDucked"))
-        assertFalse(source.contains("adjustStreamVolume"))
+        assertTrue(playerSource.contains("SoundPool"))
+        assertTrue(playerSource.contains("USAGE_ASSISTANCE_SONIFICATION"))
+        assertTrue(playerSource.contains("CONTENT_TYPE_SONIFICATION"))
+        assertFalse(policy.requestsAudioFocus)
+        assertFalse(policy.allowsDucking)
+        assertFalse(policy.pausesExternalAudio)
+        assertFalse(playerSource.contains("requestAudioFocus"))
+        assertFalse(playerSource.contains("AudioFocusRequest"))
+        assertFalse(playerSource.contains("AUDIOFOCUS_GAIN"))
+        assertFalse(playerSource.contains("AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK"))
+        assertFalse(playerSource.contains("setWillPauseWhenDucked"))
+        assertFalse(playerSource.contains("adjustStreamVolume"))
     }
 
     private fun TimedWorkoutSessionScreenState.semanticSnapshot(): List<Any?> {
