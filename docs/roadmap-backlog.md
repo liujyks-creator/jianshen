@@ -1756,6 +1756,8 @@ stepsCompleted:
 
 ### Story E13.1: 声音提醒与音频共存
 
+**状态:** Implemented in Android sound cue playback and audio coexistence boundary
+
 作为训练中的用户，
 我想听到短促提醒但不影响正在播放的音乐或视频，
 以便训练节奏提示不会打断我的其他 App。
@@ -1769,6 +1771,15 @@ stepsCompleted:
 - Then 不主动执行 ducking。
 - Then 不请求会打断外部音频的 audio focus。
 - Then 覆盖手机扬声器和蓝牙耳机 smoke，并记录不同 Android 版本和设备的回归结果。
+
+**交付结果:**
+
+- `core.media` 新增声音提示 request mapper、重复事件去重 controller 和音频共存策略；声音继续消费既有 `WorkoutEvent` / `CueSettings`，不修改 `WorkoutCommand` / `WorkoutEvent` / training engine 语义。
+- 计时执行页用阶段自身 cue settings 触发最后 N 秒、最后 1 秒、阶段切换和休息开始声音；力量执行页用计划 cue settings 触发准备下一组、休息开始和休息临近结束声音。
+- Android 播放层使用 `SoundPool` 与 `USAGE_ASSISTANCE_SONIFICATION` / `CONTENT_TYPE_SONIFICATION` audio attributes，不请求 audio focus，不 duck，不暂停外部音乐 / 视频，并在 route dispose 时释放资源。
+- `app/src/main/res/raw/countdown_beep1.mp3` 和 `app/src/main/res/raw/stage_bell_copper_clean.wav` 是 App 内提交资源副本；素材由用户确认为用户本人 / 项目内制作，授权用于 TrainFlow App 内短提示音分发。根目录 `countdown_beep1.mp3` 原文件和 `.local/audio/stage_bell_copper_clean.wav` 原文件不得提交。
+- 新增单元测试覆盖最后 N 秒映射、阶段切换映射、休息相关事件映射、声音关闭、重复事件去重和不请求 disruptive focus / duck / pause 的音频共存策略。
+- 本阶段未实现固定女声 cue、TTS、自动语音教练、notification action、foreground service、exact alarm、真实心率设备、云同步、账号体系或训练引擎语义变更。手机扬声器 / 蓝牙耳机 smoke 需要在可用设备上补记录。
 
 ### Story E13.2: 固定女声阶段 cue
 

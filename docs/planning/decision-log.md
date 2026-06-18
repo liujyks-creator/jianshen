@@ -61,6 +61,8 @@
 | D-042 | Accepted | 心率数据源以设备获取为优先，手动输入只是可选补充；没有来源时显示未获取心率。 | 真实设备、Health Connect、Wear OS、BLE 或厂商 SDK 接入仍需 E11 或独立设备阶段决策；手动输入不作为心率趋势的必需前置。平均心率趋势只能消费明确来源的设备数据或用户手动录入数据；两者都没有时，历史页和趋势页显示“未获取心率”，不得绘制假心率趋势，不做医疗判断、危险告警或训练中断依据。 |
 | D-043 | Accepted | E12.2b 力量同类 set 趋势只做可比记录回顾，不做自动训练建议。 | 同类比较必须限定同一 `StrengthSetRecord.exerciseId`。planned values 查找优先使用 `sourceSetPlanId`，且必须在对应 `exerciseId` 的历史 `WorkoutSession.planSnapshot` block 中匹配；只有 `sourceSetPlanId == null` 时才允许按 `setOrder + setKind` fallback。`sourceSetPlanId != null` 但找不到同一动作 matching set 时，必须标记数据不足，不得 fallback。替换动作的 planned values 只能来自 `substitutedFromExerciseId` 对应原动作 block；非替换动作只能来自 record 的 `exerciseId` 对应 block；不得拼接原动作和替换后动作候选。替换动作不得自动并入原动作趋势，必须在趋势 UI 标注替换来源。E12.2b 不判断强弱、不推荐加重量、不输出康复、医疗或训练中断结论。 |
 
+| D-044 | Accepted | E13.1 短提示音使用用户本人 / 项目内制作素材，并以不抢占外部音频为默认策略。 | `countdown_beep1.mp3` 和 `.local/audio/stage_bell_copper_clean.wav` 已由用户确认授权用于 TrainFlow App 内短提示音分发；提交时只允许提交 Android raw 资源副本，不提交根目录原文件或 `.local` 原文件。声音提示只消费既有 `WorkoutEvent` / `CueSettings`，不改变训练引擎、`WorkoutCommand` 或 `WorkoutEvent` 语义；Android 播放层不得请求会打断外部音乐 / 视频的 audio focus，不主动 duck，不暂停外部音频。 |
+
 ## 预留能力
 
 | ID | 状态 | 能力 | 当前边界 |
