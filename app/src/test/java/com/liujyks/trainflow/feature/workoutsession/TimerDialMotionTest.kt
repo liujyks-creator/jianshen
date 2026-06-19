@@ -205,4 +205,18 @@ class TimerDialMotionTest {
         assertFalse(routeSource.contains("TimedWorkoutPausedScreen("))
         assertFalse(routeSource.contains("TimedExecutionPausedStateTransition"))
     }
+
+    @Test
+    fun executionBottomControlsKeepNavigationBarSafePadding() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val pausedActionsUseNavigationPadding = Regex(
+            pattern = "PausedBottomActionRow\\([\\s\\S]*modifier = Modifier\\s*\\.navigationBarsPadding\\(\\)"
+        ).containsMatchIn(routeSource)
+
+        assertTrue(routeSource.contains("useNavigationBarsPadding = true"))
+        assertFalse(routeSource.contains("useNavigationBarsPadding = false"))
+        assertTrue(pausedActionsUseNavigationPadding)
+    }
 }

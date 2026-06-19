@@ -621,7 +621,7 @@ private fun TimedWorkoutExecutionScreen(
                                 translationY = 10.dp.toPx() * morphProgress
                             },
                         controlsEnabled = !uiState.isPaused,
-                        useNavigationBarsPadding = false,
+                        useNavigationBarsPadding = true,
                         horizontalPadding = 0.dp,
                         verticalPadding = if (compact) 6.dp else 8.dp
                     )
@@ -632,10 +632,12 @@ private fun TimedWorkoutExecutionScreen(
                         onRequestEnd = onRequestEnd,
                         buttonSize = actionButtonSize,
                         enabled = uiState.isPaused,
-                        modifier = Modifier.graphicsLayer {
-                            alpha = timerDialPausedSupportingAlpha(morphProgress)
-                            translationY = 10.dp.toPx() * (1f - morphProgress)
-                        }
+                        modifier = Modifier
+                            .navigationBarsPadding()
+                            .graphicsLayer {
+                                alpha = timerDialPausedSupportingAlpha(morphProgress)
+                                translationY = 10.dp.toPx() * (1f - morphProgress)
+                            }
                     )
                 }
             }
@@ -1583,14 +1585,25 @@ private fun WorkoutEvent.isInitialTimedStageStart(state: TimedWorkoutEngineState
         (this is WorkoutEvent.TimedWorkStarted || this is WorkoutEvent.RestStarted)
 }
 
-private fun TimedWorkoutEngineState.soundCueFor(event: WorkoutEvent) = when (event) {
-    is WorkoutEvent.TimedWorkStarted -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
+internal fun TimedWorkoutEngineState.soundCueFor(event: WorkoutEvent) = when (event) {
+    is WorkoutEvent.TimedWorkStarted -> completedPreviousStepCueFor(startedStepId = event.stepId)
     is WorkoutEvent.TimedWorkEnding -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
-    is WorkoutEvent.RestStarted -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
+    is WorkoutEvent.RestStarted -> completedPreviousStepCueFor(startedStepId = event.stepId)
     is WorkoutEvent.RestEnding -> steps.firstOrNull { step -> step.id == event.stepId }?.endingCue
     is WorkoutEvent.SessionCompleted -> completedFinalStepCue()
     else -> null
 }
+
+private fun TimedWorkoutEngineState.completedPreviousStepCueFor(startedStepId: String) =
+    steps.indexOfFirst { step -> step.id == startedStepId }
+        .takeIf { index -> index > 0 }
+        ?.let { startedIndex -> steps[startedIndex - 1] }
+        ?.let { previousStep ->
+            val previousStepHistory = stepHistory.lastOrNull { record -> record.stepId == previousStep.id }
+            previousStep.endingCue.takeIf {
+                previousStepHistory?.status == TimedSessionStepHistoryStatus.COMPLETED
+            }
+        }
 
 private fun TimedWorkoutEngineState.completedFinalStepCue() = steps.lastOrNull()?.let { finalStep ->
     val finalStepHistory = stepHistory.lastOrNull { record -> record.stepId == finalStep.id }
