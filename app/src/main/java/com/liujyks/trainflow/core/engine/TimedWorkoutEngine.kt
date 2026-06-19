@@ -710,8 +710,10 @@ object TimedWorkoutEngine {
     private fun CountdownCue?.effectiveCue(durationSec: Int): CountdownCue? {
         val cue = this ?: return null
         return cue.takeIf {
-            cue.enabled && cue.thresholdSec > 0 && cue.thresholdSec <= durationSec
-        }
+            cue.enabled && cue.thresholdSec > 0
+        }?.copy(
+            thresholdSec = cue.thresholdSec.coerceAtMost(durationSec)
+        )
     }
 
     private fun PlanBlockKind.defaultStepTitle(): String {

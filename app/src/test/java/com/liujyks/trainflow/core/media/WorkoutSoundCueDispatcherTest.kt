@@ -10,64 +10,91 @@ import org.junit.Test
 
 class WorkoutSoundCueDispatcherTest {
     @Test
-    fun finalCountdownMapsToBeepBeforeLastSecondAndBellAtOneSecond() {
-        val cue = CountdownCue(thresholdSec = 5, soundEnabled = true)
+    fun finalCountdownMapsEveryRemainingSecondToBeep() {
+        val cue = CountdownCue(thresholdSec = 3, soundEnabled = true)
 
-        val fiveSecondRequest = WorkoutSoundCueDispatcher.requestFor(
-            event = WorkoutEvent.TimedWorkEnding(stepId = "work-1", remainingSec = 5),
-            cue = cue
-        )
-        val oneSecondRequest = WorkoutSoundCueDispatcher.requestFor(
-            event = WorkoutEvent.TimedWorkEnding(stepId = "work-1", remainingSec = 1),
-            cue = cue
-        )
+        val requests = (3 downTo 1).map { remainingSec ->
+            requireNotNull(
+                WorkoutSoundCueDispatcher.requestFor(
+                    event = WorkoutEvent.TimedWorkEnding(stepId = "work-1", remainingSec = remainingSec),
+                    cue = cue
+                )
+            )
+        }
 
-        requireNotNull(fiveSecondRequest)
-        requireNotNull(oneSecondRequest)
-        assertEquals(WorkoutSoundCueKind.COUNTDOWN_BEEP, fiveSecondRequest.kind)
-        assertEquals(WorkoutSoundCueSource.ACTION_ENDING, fiveSecondRequest.source)
-        assertEquals(WorkoutSoundCueKind.STAGE_BELL, oneSecondRequest.kind)
-        assertEquals(WorkoutSoundCueSource.ACTION_ENDING, oneSecondRequest.source)
+        assertEquals(
+            listOf(
+                WorkoutSoundCueKind.COUNTDOWN_BEEP,
+                WorkoutSoundCueKind.COUNTDOWN_BEEP,
+                WorkoutSoundCueKind.COUNTDOWN_BEEP
+            ),
+            requests.map { request -> request.kind }
+        )
+        assertEquals(
+            List(3) { WorkoutSoundCueSource.ACTION_ENDING },
+            requests.map { request -> request.source }
+        )
     }
 
     @Test
-    fun phaseTransitionEventsMapToStageBell() {
+    fun timedPhaseStartedEventsMapToStageBells() {
         val cue = CountdownCue(soundEnabled = true)
 
         val workStarted = WorkoutSoundCueDispatcher.requestFor(
             event = WorkoutEvent.TimedWorkStarted(stepId = "work-1"),
             cue = cue
         )
+        val restStarted = WorkoutSoundCueDispatcher.requestFor(
+            event = WorkoutEvent.RestStarted(stepId = "rest-1", durationSec = 20),
+            cue = cue
+        )
+
+        requireNotNull(workStarted)
+        requireNotNull(restStarted)
+        assertEquals(WorkoutSoundCueKind.STAGE_BELL, workStarted.kind)
+        assertEquals(WorkoutSoundCueSource.STAGE_TRANSITION, workStarted.source)
+        assertEquals(WorkoutSoundCueKind.STAGE_BELL, restStarted.kind)
+        assertEquals(WorkoutSoundCueSource.REST_STARTED, restStarted.source)
+    }
+
+    @Test
+    fun strengthPhaseReadyEventsMapToStageBell() {
+        val cue = CountdownCue(soundEnabled = true)
+
         val strengthReady = WorkoutSoundCueDispatcher.requestFor(
             event = WorkoutEvent.StrengthSetReady(exerciseId = "squat", setPlanId = "set-1"),
             cue = cue
         )
 
-        requireNotNull(workStarted)
         requireNotNull(strengthReady)
-        assertEquals(WorkoutSoundCueKind.STAGE_BELL, workStarted.kind)
-        assertEquals(WorkoutSoundCueSource.STAGE_TRANSITION, workStarted.source)
         assertEquals(WorkoutSoundCueKind.STAGE_BELL, strengthReady.kind)
         assertEquals(WorkoutSoundCueSource.STAGE_TRANSITION, strengthReady.source)
+    }
+
+    @Test
+    fun sessionCompletedMapsToStageBellForFinalZeroSecondBoundary() {
+        val cue = CountdownCue(soundEnabled = true)
+
+        val completed = WorkoutSoundCueDispatcher.requestFor(
+            event = WorkoutEvent.SessionCompleted(sessionId = "session-1"),
+            cue = cue
+        )
+
+        requireNotNull(completed)
+        assertEquals(WorkoutSoundCueKind.STAGE_BELL, completed.kind)
+        assertEquals(WorkoutSoundCueSource.STAGE_TRANSITION, completed.source)
     }
 
     @Test
     fun restEventsMapToRestSoundRequests() {
         val cue = CountdownCue(thresholdSec = 4, soundEnabled = true)
 
-        val restStarted = WorkoutSoundCueDispatcher.requestFor(
-            event = WorkoutEvent.RestStarted(stepId = "rest-1", durationSec = 20),
-            cue = cue
-        )
         val restEnding = WorkoutSoundCueDispatcher.requestFor(
             event = WorkoutEvent.RestEnding(stepId = "rest-1", remainingSec = 3),
             cue = cue
         )
 
-        requireNotNull(restStarted)
         requireNotNull(restEnding)
-        assertEquals(WorkoutSoundCueKind.STAGE_BELL, restStarted.kind)
-        assertEquals(WorkoutSoundCueSource.REST_STARTED, restStarted.source)
         assertEquals(WorkoutSoundCueKind.COUNTDOWN_BEEP, restEnding.kind)
         assertEquals(WorkoutSoundCueSource.REST_ENDING, restEnding.source)
     }
@@ -142,8 +169,8 @@ class WorkoutSoundCueDispatcherTest {
         assertFalse(policy.requestsAudioFocus)
         assertFalse(policy.allowsDucking)
         assertFalse(policy.pausesExternalAudio)
-        assertEquals("USAGE_ASSISTANCE_SONIFICATION", policy.usageLabel)
-        assertEquals("CONTENT_TYPE_SONIFICATION", policy.contentTypeLabel)
+        assertEquals("USAGE_MEDIA", policy.usageLabel)
+        assertEquals("CONTENT_TYPE_MUSIC", policy.contentTypeLabel)
     }
 }
 

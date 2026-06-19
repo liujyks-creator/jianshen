@@ -98,6 +98,10 @@ class TimerDialMotionTest {
             TrainFlowMotionTokens.LocalLayoutTransitionDurationMillis,
             timedRouteLocalLayoutTransitionSpec().durationMillis
         )
+        assertEquals(
+            TrainFlowMotionTokens.LocalLayoutTransitionDurationMillis,
+            timerDialPauseMorphSpec().durationMillis
+        )
     }
 
     @Test
@@ -132,7 +136,32 @@ class TimerDialMotionTest {
             TrainFlowMotionTokens.ReducedMotionDurationMillis,
             timedRouteLocalLayoutTransitionSpec(true).durationMillis
         )
+        assertEquals(
+            TrainFlowMotionTokens.ReducedMotionDurationMillis,
+            timerDialPauseMorphSpec(true).durationMillis
+        )
         assertEquals(0, TrainFlowMotionTokens.ReduceMotionPolicy.fallbackDurationMillis)
+    }
+
+    @Test
+    fun pauseMorphUsesSharedDialMotionAndSnapsForReduceMotion() {
+        assertEquals(0f, timerDialPauseMorphTarget(isPaused = false, reduceMotion = false), 0.0001f)
+        assertEquals(1f, timerDialPauseMorphTarget(isPaused = true, reduceMotion = false), 0.0001f)
+        assertEquals(1f, timerDialPauseMorphTarget(isPaused = true, reduceMotion = true), 0.0001f)
+        assertEquals(0, timerDialPauseMorphSpec(reduceMotion = true).durationMillis)
+
+        assertEquals(1f, timerDialRunningLayerAlpha(0f), 0.0001f)
+        assertEquals(0f, timerDialRunningLayerAlpha(1f), 0.0001f)
+        assertEquals(1f, timerDialRunningLayerScale(0f), 0.0001f)
+        assertEquals(0.9f, timerDialRunningLayerScale(1f), 0.0001f)
+        assertEquals(0f, timerDialPausedCircleAlpha(0f), 0.0001f)
+        assertEquals(1f, timerDialPausedCircleAlpha(1f), 0.0001f)
+        assertEquals(0.72f, timerDialPausedCircleScale(0f), 0.0001f)
+        assertEquals(1f, timerDialPausedCircleScale(1f), 0.0001f)
+        assertEquals(0f, timerDialPausedContentAlpha(0.5f), 0.0001f)
+        assertEquals(1f, timerDialPausedContentAlpha(1f), 0.0001f)
+        assertEquals(1f, timerDialSupportingContentAlpha(0f), 0.0001f)
+        assertEquals(0.92f, timerDialSupportingContentAlpha(1f), 0.0001f)
     }
 
     @Test
@@ -146,6 +175,7 @@ class TimerDialMotionTest {
 
         assertTrue(routeSource.contains("val reduceMotion = LocalTrainFlowReduceMotion.current"))
         assertTrue(routeSource.contains("timedRouteLocalLayoutTransitionSpec(reduceMotion)"))
+        assertTrue(routeSource.contains("timerDialPauseMorphSpec(reduceMotion)"))
         assertTrue(routeSource.contains("timerDialTouchFeedbackSpec(reduceMotion)"))
         assertTrue(routeSource.contains("timedRestExtensionStateTransitionSpec(reduceMotion)"))
         assertTrue(routeSource.contains("readyStartTouchScaleTarget("))
@@ -160,5 +190,19 @@ class TimerDialMotionTest {
         assertTrue(dialSource.contains("timerDialColorStateTransitionSpec(reduceMotion)"))
         assertTrue(dialSource.contains("timerDialPlayPauseStateTransitionSpec(reduceMotion)"))
         assertFalse(dialSource.contains("canProjectSmoothProgress())"))
+    }
+
+    @Test
+    fun pausedExecutionUsesSharedMorphInsteadOfFullScreenHardCut() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(routeSource.contains("TimerDialPauseMorph("))
+        assertTrue(routeSource.contains("TimerDialPauseMorphProgress"))
+        assertTrue(routeSource.contains("timerDialRunningLayerAlpha(morphProgress)"))
+        assertTrue(routeSource.contains("timerDialPausedCircleScale(morphProgress)"))
+        assertFalse(routeSource.contains("TimedWorkoutPausedScreen("))
+        assertFalse(routeSource.contains("TimedExecutionPausedStateTransition"))
     }
 }

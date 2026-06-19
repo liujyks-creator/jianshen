@@ -42,6 +42,8 @@ internal data class TimedWorkoutSessionScreenState(
     val extendedRestTotalSec: Int,
     val pausedTotalSec: Int,
     val pausedDurationLabel: String,
+    val pausedClockText: String,
+    val currentStageElapsedText: String,
     val historySummaryLabel: String,
     val lastControlLabel: String,
     val terminalTitle: String? = null,
@@ -159,6 +161,9 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         }
         else -> null
     }
+    val currentStageElapsedSec = current?.let { step ->
+        currentStepElapsedSec(step)
+    } ?: 0
 
     val screenState = TimedWorkoutSessionScreenState(
         planTitle = planTitle,
@@ -191,6 +196,8 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         extendedRestTotalSec = extendedRestSec,
         pausedTotalSec = pausedElapsedSec,
         pausedDurationLabel = pausedElapsedSec.formatShortDuration(),
+        pausedClockText = "+${pausedElapsedSec.formatTimer()}",
+        currentStageElapsedText = currentStageElapsedSec.formatTimer(),
         historySummaryLabel = historySummaryLabel,
         lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
         terminalTitle = terminalTitle,
@@ -198,6 +205,14 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         summary = toTimedWorkoutSummaryUiState(exercises)
     )
     return screenState.copy(timerDial = toTimerDialUiState(screenState))
+}
+
+private fun TimedWorkoutEngineState.currentStepElapsedSec(step: TimedSessionStep): Int {
+    val startedAtElapsedSec = stepHistory
+        .lastOrNull { record -> record.stepId == step.id }
+        ?.startedAtElapsedSec
+        ?: activeElapsedSec
+    return (activeElapsedSec - startedAtElapsedSec).coerceAtLeast(0)
 }
 
 private fun String?.toEarlyEndReasonSummary(): String {

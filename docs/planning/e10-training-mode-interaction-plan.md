@@ -145,8 +145,8 @@ E10.3 已按该原则落地：力量和基础跟练执行页都保留现有视�
 | 数据分析后续需要总统计、图表、计划趋势、平均心率趋势。 | E12 | 依赖真实记录闭环和可比较数据分组，不先做静态图表。 |
 | 分析时要比较同类数据：同一计划、同一阶段、同一轮次或同一动作；不要把某天第一轮和另一天最后一轮直接比较。 | E12 | 统计口径先定义，再实现趋势和图表。 |
 | 手机连接蓝牙耳机时没有听到声音提示。 | E13 | 声音系统 story 必须覆盖手机扬声器与蓝牙耳机 smoke，记录设备 / Android 版本差异；本轮不接入声音播放代码。 |
-| 用户希望使用根目录本地 `countdown_beep1.mp3` 作为最后 N 秒前几声提醒。 | E13 | 可作为 5 / 4 / 3 / 2 等最后 N 秒 beep 素材候选；执行 story 接入前确认授权、目标资源路径和偏好开关。 |
-| 用户确认 `.local/audio/stage_bell_copper_clean.wav` 作为最后一声或阶段切换铃声。 | E13 | `.local` 原文件当前不能提交；如果后续接入 App，由执行 story 复制到 `app/src/main/res/raw/` 并只提交 rights-cleared app resource。 |
+| 用户希望使用根目录本地 `countdown_beep1.mp3` 作为最后 N 秒提醒。 | E13 | 可作为 5 / 4 / 3 / 2 / 1 等最后 N 秒 beep 素材候选；执行 story 接入前确认授权、目标资源路径和偏好开关。 |
+| 用户确认 `.local/audio/stage_bell_copper_clean.mp3` 作为下阶段开始铃声。 | E13 | `.local` 原文件当前不能提交；如果后续接入 App，由执行 story 复制到 `app/src/main/res/raw/` 并只提交 rights-cleared app resource。 |
 | 声音提醒不应降低、暂停或打断其他 App 的音乐/视频声音。 | E13 | 音频共存是验收项；短提示音不得主动 ducking 或抢占会打断外部音频的 focus。 |
 | 后续需要悦耳、有磁性的女性人声 cue；第一版只做固定阶段词，不做用户任意文本 TTS。 | E13 | 先做固定阶段词和素材策略；任意文本 TTS、自动语音教练继续不进第一版。 |
 | 自定义计时训练阶段、秒数、轮次、颜色、图标等好像不能保存，退出后恢复默认。 | E10.10 | 计划保存持久化 story 需要覆盖计时计划结构恢复；不能继续把保存入口表现成真实持久化但只保存在内存态。 |
@@ -446,8 +446,8 @@ E10.2 已确认未实现：
 范围：
 
 - 最后 N 秒声音提醒。
-- `countdown_beep1.mp3` 作为 5 / 4 / 3 / 2 等最后 N 秒前几声 beep 候选。
-- `.local/audio/stage_bell_copper_clean.wav` 作为最后 1 秒或阶段切换铃声候选；执行 story 接入时再复制到 `app/src/main/res/raw/`，`.local` 原文件不提交。
+- `countdown_beep1.mp3` 作为 5 / 4 / 3 / 2 / 1 等最后 N 秒 beep 候选。
+- `.local/audio/stage_bell_copper_clean.mp3` 作为倒数到 0 后下阶段开始铃声候选；执行 story 接入时再复制到 `app/src/main/res/raw/`，`.local` 原文件不提交。
 - 固定阶段词女声 cue。
 - 音频共存策略。
 - 手机扬声器和蓝牙耳机 smoke。

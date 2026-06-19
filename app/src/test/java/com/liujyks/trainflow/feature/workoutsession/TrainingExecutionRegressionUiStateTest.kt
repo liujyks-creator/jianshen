@@ -222,6 +222,24 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun timedPausedMorphKeepsResumeHeartRatePlanTitleAndBottomActionSemantics() {
+        val source = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(source.contains("TimedSessionTopBar(uiState = uiState)"))
+        assertTrue(source.contains("text = uiState.planTitle"))
+        assertTrue(source.contains("TimerDialPauseMorph("))
+        assertTrue(source.contains("PausedResumeCircle("))
+        assertTrue(source.contains("contentDescription = \"继续训练"))
+        assertTrue(source.contains("HeartRatePanel("))
+        assertTrue(source.contains("heartRate = uiState.heartRate"))
+        assertTrue(source.contains("PausedBottomActionRow("))
+        assertTrue(source.contains("contentDescription = \"返回阶段设定\""))
+        assertTrue(source.contains("contentDescription = \"结束此次计时训练\""))
+    }
+
+    @Test
     fun builtInSkinSwitchingKeepsTrainingSemanticStateAndControlContract() {
         val plans = buildDefaultPlanManagementState().plans
         val timedState = TimedWorkoutEngine.dispatch(
@@ -266,8 +284,8 @@ class TrainingExecutionRegressionUiStateTest {
         val policy = WorkoutSoundCueAudioPolicy.coexistencePolicy
 
         assertTrue(playerSource.contains("SoundPool"))
-        assertTrue(playerSource.contains("USAGE_ASSISTANCE_SONIFICATION"))
-        assertTrue(playerSource.contains("CONTENT_TYPE_SONIFICATION"))
+        assertTrue(playerSource.contains("USAGE_MEDIA"))
+        assertTrue(playerSource.contains("CONTENT_TYPE_MUSIC"))
         assertFalse(policy.requestsAudioFocus)
         assertFalse(policy.allowsDucking)
         assertFalse(policy.pausesExternalAudio)

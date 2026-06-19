@@ -195,7 +195,6 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         isPaused = status == SessionStatus.PAUSED,
         isFinalCountdown = screenState.countdownReminder.isActive &&
             screenState.countdownReminder.emphasisAnimationEnabled &&
-            screenState.countdownReminder.remainingSec in 1..5 &&
             status == SessionStatus.ACTIVE,
         totalWorkoutStageCount = workoutCycles.size,
         completedWorkoutStageCount = completedWorkoutStageCount,

@@ -281,12 +281,23 @@ E10.12 已把 E10.11 中的 `TrainFlow Official Fusion` 方向落到 Android Com
 
 - 颜色来自 TrainFlow skin token、Timer Dial token 和 UI state；Official 默认不硬编码 E10.11 HTML 原型色值。
 - 保留 E10.9 active Compose frame clock continuous progress、秒级文案 tick、paused / terminal freeze、最多投影当前 1 秒和 rest extension monotonic progress。
-- 不接入声音播放，不复制 `countdown_beep1.mp3` 或 `.local/audio/stage_bell_copper_clean.wav` 到 `res/raw`。
+- 不接入声音播放，不复制 `countdown_beep1.mp3` 或 `.local/audio/stage_bell_copper_clean.mp3` 到 `res/raw`。
 - 本轮 review fix 不实现 ready/start gate、阶段颜色 picker、motion timing rules、计划保存、统计图表，不改 Room/session repository，不接真实心率设备，不新增 foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ### E13 声音 / 女声 cue 与视觉提醒联动
 
-固定阶段词、声音提醒、女声 cue、音频共存和不 ducking 进入 E13。E10.5 只定义视觉提醒与事件消费边界。E13 需要记录本轮素材边界：`countdown_beep1.mp3` 用于 5 / 4 / 3 / 2 等最后 N 秒前几声 beep；`.local/audio/stage_bell_copper_clean.wav` 用于最后 1 秒或阶段切换铃声候选，后续接入 App 时由执行 story 复制到 `app/src/main/res/raw/`，`.local` 原文件不提交。E13 还必须覆盖手机扬声器和蓝牙耳机 smoke，不主动 ducking，不请求会打断外部音乐 / 视频的 audio focus。
+固定阶段词、声音提醒、女声 cue、音频共存和不 ducking 进入 E13。E10.5 只定义视觉提醒与事件消费边界。E13 需要记录本轮素材边界：`countdown_beep1.mp3` 用于 5 / 4 / 3 / 2 / 1 等最后 N 秒 beep；`.local/audio/stage_bell_copper_clean.mp3` 用于倒数到 0 后下阶段开始铃声候选，后续接入 App 时由执行 story 复制到 `app/src/main/res/raw/`，`.local` 原文件不提交。E13 还必须覆盖手机扬声器和蓝牙耳机 smoke，不主动 ducking，不请求会打断外部音乐 / 视频的 audio focus。
+
+### E13.1 Timer Dial pause / resume morph 回归基准
+
+E13.1 sound cue/media fix 的用户确认版同时收口了计时执行页运行态、暂停态、声音和 App 图标的人工体验基准。后续修改 Timer Dial 动画、暂停页、底部控制、心率卡片或声音交互时，必须回看以下 4 个点，避免把用户已确认的体验回退：
+
+1. 运行 -> 暂停：Timer Dial 外圈、节点和进度弧应有向中心收束并落到暂停大圆盘的连续感，不能退回整屏硬切或只有 page crossfade。
+2. 暂停 -> 运行：暂停大圆盘应反向缩回并展开回 Timer Dial，运行态进度继续消费真实 engine / UI state，不伪造进度。
+3. 布局稳定性：左上角显示训练 / 计划名称，不显示阶段数字；心率卡片、底部按钮、总剩余时间和 Timer Dial 不互相挤压，底部按钮在真机上完整可见。
+4. 声音与倒计时不回归：剩余 N / ... / 1 秒播放 `countdown_beep1.mp3`，倒数到 0 后播放 `stage_bell_copper_clean.mp3`；声音继续走媒体音量，不 duck、不暂停或抢占外部音乐 / 视频。
+
+该基准是后续 animation polish / visual smoke 的验收输入，不要求每次都做新功能；若只调整视觉，也不得改变 `WorkoutCommand`、`WorkoutEvent`、engine、session record、raw 音频资源或心率数据源语义。
 
 ### E12 统计图表 / 历史趋势
 

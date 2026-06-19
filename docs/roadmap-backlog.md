@@ -341,7 +341,7 @@ stepsCompleted:
 - Android 侧新增纯 Kotlin `TimedWorkoutEngine`，可从 `WorkoutPlan` 或 `WorkoutPlanSnapshot` 展开有效计时 timeline。
 - 支持 `start_session`、`pause_session`、`resume_session`、`skip_step`、`extend_rest` 和 `end_session` 命令；`end_session` 进入 `abandoned` 状态，不伪装为正常完成。
 - 支持 `TimedCircuitBlock` 的 items、rounds、item restAfterSec 和 restBetweenRoundsSec，并可产出动作开始、动作临近结束、休息开始、休息临近结束、暂停、继续和完成事件。
-- 支持全局 `PlanPreferences.cueSettings` 与 `TimedExerciseItem.cueSettings`，item 级提醒覆盖全局提醒；大于动作/休息时长的阈值会被忽略，避免短时长边界重复触发。
+- 支持全局 `PlanPreferences.cueSettings` 与 `TimedExerciseItem.cueSettings`，item 级提醒覆盖全局提醒；大于动作/休息时长的阈值会按当前阶段时长裁剪，短阶段最多覆盖整个阶段。
 - 新增单元测试覆盖核心状态推进、事件触发、暂停恢复、跳过、延长休息、轮次推进、短时长阈值边界和提前结束废弃状态。
 - 本 story 未接入 UI、ViewModel、Room repository、真实 session records、通知调度、声音、震动、动画、心率设备、语音、完整跟练闭环或力量训练执行引擎。
 
@@ -387,7 +387,7 @@ stepsCompleted:
 - `TimedSessionStep` 保留有效 `CountdownCue`，UI state 暴露动作临近结束、休息临近结束、剩余秒数、提醒类型、提醒文案以及声音/震动/强化动画启用项。
 - Compose 执行页在动作或休息进入提醒窗口时强化倒计时颜色、面板边框和短促提示文案；动作提醒与休息提醒在标签和文案上区分，心率占位仍保持辅助层级。
 - 新增 `core.media` 反馈分发边界，根据 `WorkoutEvent` 与 `CueSettings` / `CountdownCue` 生成声音、震动和强化动画请求；Android route 仅做薄 in-app 声音和触感消费，不接通知或前台服务。
-- 新增单元测试覆盖动作提醒、休息提醒、cue 开关、阈值关闭、短时长阈值忽略和事件驱动反馈请求。
+- 新增单元测试覆盖动作提醒、休息提醒、cue 开关、阈值关闭、短时长阈值裁剪和事件驱动反馈请求。
 - 本 story 未实现通知调度、前台服务、真实 `WorkoutSession` 持久化、session records 写库、Room/DataStore repository 闭环、真实心率设备、语音能力、完整训练总结、跟练闭环或力量训练执行页。
 
 ### Story E3.4: 暂停、跳过、延长休息与提前结束
@@ -1765,8 +1765,8 @@ stepsCompleted:
 **验收标准:**
 
 - Then 最后 N 秒声音提醒按偏好触发。
-- Then `countdown_beep1.mp3` 用于 5 / 4 / 3 / 2 等最后 N 秒前几声 beep；具体触发秒数由 `CountdownCue.thresholdSec` 和偏好控制。
-- Then `.local/audio/stage_bell_copper_clean.wav` 可作为最后 1 秒或阶段切换铃声候选；接入 App 时由执行 story 复制到 `app/src/main/res/raw/`，本地 `.local` 原文件不得提交。
+- Then `countdown_beep1.mp3` 用于 5 / 4 / 3 / 2 / 1 等最后 N 秒 beep；具体触发秒数由 `CountdownCue.thresholdSec`、阶段时长裁剪和偏好控制。
+- Then `.local/audio/stage_bell_copper_clean.mp3` 可作为倒数到 0 后下阶段开始铃声候选；接入 App 时由执行 story 复制到 `app/src/main/res/raw/`，本地 `.local` 原文件不得提交。
 - Then 声音提醒不降低、暂停或打断其他 App 音乐/视频。
 - Then 不主动执行 ducking。
 - Then 不请求会打断外部音频的 audio focus。
@@ -1775,9 +1775,10 @@ stepsCompleted:
 **交付结果:**
 
 - `core.media` 新增声音提示 request mapper、重复事件去重 controller 和音频共存策略；声音继续消费既有 `WorkoutEvent` / `CueSettings`，不修改 `WorkoutCommand` / `WorkoutEvent` / training engine 语义。
-- 计时执行页用阶段自身 cue settings 触发最后 N 秒、最后 1 秒、阶段切换和休息开始声音；力量执行页用计划 cue settings 触发准备下一组、休息开始和休息临近结束声音。
-- Android 播放层使用 `SoundPool` 与 `USAGE_ASSISTANCE_SONIFICATION` / `CONTENT_TYPE_SONIFICATION` audio attributes，不请求 audio focus，不 duck，不暂停外部音乐 / 视频，并在 route dispose 时释放资源。
-- `app/src/main/res/raw/countdown_beep1.mp3` 和 `app/src/main/res/raw/stage_bell_copper_clean.wav` 是 App 内提交资源副本；素材由用户确认为用户本人 / 项目内制作，授权用于 TrainFlow App 内短提示音分发。根目录 `countdown_beep1.mp3` 原文件和 `.local/audio/stage_bell_copper_clean.wav` 原文件不得提交。
+- 计时执行页用阶段自身 cue settings 触发最后 N 秒临近结束声音：剩余 N / ... / 1 秒 beep，倒数到 0 后的下阶段开始 bell；最后阶段没有下阶段时，在 session completed 的 0 秒边界同样 bell；开始训练的第一阶段不额外插入 bell。所有计时阶段都可触发临近结束提醒，阈值等于阶段时长时覆盖整个阶段，阈值超过阶段时长时按阶段全长裁剪覆盖。力量执行页继续用计划 cue settings 触发准备下一组和休息临近结束声音。
+- Android 播放层使用 `SoundPool` 与 `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` media audio attributes，走媒体音量通道，不请求 audio focus，不 duck，不暂停外部音乐 / 视频，并在 route dispose 时释放资源。
+- `app/src/main/res/raw/countdown_beep1.mp3` 和 `app/src/main/res/raw/stage_bell_copper_clean.mp3` 是 App 内提交资源副本；素材由用户确认为用户本人 / 项目内制作，授权用于 TrainFlow App 内短提示音分发。根目录 `countdown_beep1.mp3` 原文件和 `.local/audio/stage_bell_copper_clean.mp3` 原文件不得提交。计时临近结束按阈值 N 映射：剩余 N / ... / 1 秒播放 beep，倒数到 0 后的下阶段开始播放 bell；最后阶段完成时也在 0 秒边界 bell；开始训练的第一阶段不额外插入 bell。
+- 用户确认的 Timer Dial 交互回归基准：运行 -> 暂停应有圆环 / 节点 / 进度弧向中心暂停圆盘收束的连续 morph；暂停 -> 运行应反向展开并继续真实进度；左上角显示训练 / 计划名称而非阶段数字，心率卡片和底部按钮不挤压且按钮真机完整可见；倒计时和声音行为不得回归。
 - 新增单元测试覆盖最后 N 秒映射、阶段切换映射、休息相关事件映射、声音关闭、重复事件去重和不请求 disruptive focus / duck / pause 的音频共存策略。
 - 本阶段未实现固定女声 cue、TTS、自动语音教练、notification action、foreground service、exact alarm、真实心率设备、云同步、账号体系或训练引擎语义变更。手机扬声器 / 蓝牙耳机 smoke 需要在可用设备上补记录。
 
@@ -1873,7 +1874,7 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.wav`、蓝牙耳机/扬声器 smoke 和不抢占外部音乐视频；E12 后续可进入平均心率来源阶段或同日多轮运动分析。
+E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.mp3`、蓝牙耳机/扬声器 smoke、媒体音量通道和不抢占外部音乐视频；E12 后续可进入平均心率来源阶段或同日多轮运动分析。
 ```
 
 下一轮建议按用户测试优先级进入：
