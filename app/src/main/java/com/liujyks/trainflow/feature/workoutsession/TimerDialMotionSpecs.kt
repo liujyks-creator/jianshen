@@ -47,6 +47,23 @@ internal fun timedRestExtensionStateTransitionSpec(
     return timerDialStateTransitionSpec(reduceMotion)
 }
 
+internal fun timerDialPauseMorphSpec(
+    reduceMotion: Boolean = false
+): TweenSpec<Float> {
+    return timedRouteLocalLayoutTransitionSpec(reduceMotion)
+}
+
+internal fun timerDialPauseMorphTarget(
+    isPaused: Boolean,
+    reduceMotion: Boolean
+): Float {
+    return when {
+        reduceMotion && isPaused -> 1f
+        isPaused -> 1f
+        else -> 0f
+    }
+}
+
 internal fun timerDialColorStateTransitionSpec(
     reduceMotion: Boolean = false
 ): TweenSpec<Color> {
@@ -117,6 +134,34 @@ internal fun timerDialFinalPulseTarget(
     } else {
         0f
     }
+}
+
+internal fun timerDialRunningLayerAlpha(morphProgress: Float): Float {
+    return (1f - morphProgress).coerceIn(0f, 1f)
+}
+
+internal fun timerDialRunningLayerScale(morphProgress: Float): Float {
+    return (1f - 0.10f * morphProgress.coerceIn(0f, 1f)).coerceIn(0.90f, 1f)
+}
+
+internal fun timerDialPausedCircleAlpha(morphProgress: Float): Float {
+    return ((morphProgress - 0.12f) / 0.88f).coerceIn(0f, 1f)
+}
+
+internal fun timerDialPausedCircleScale(morphProgress: Float): Float {
+    return (0.72f + 0.28f * morphProgress.coerceIn(0f, 1f)).coerceIn(0.72f, 1f)
+}
+
+internal fun timerDialPausedContentAlpha(morphProgress: Float): Float {
+    return ((morphProgress - 0.62f) / 0.38f).coerceIn(0f, 1f)
+}
+
+internal fun timerDialPausedSupportingAlpha(morphProgress: Float): Float {
+    return ((morphProgress - 0.18f) / 0.82f).coerceIn(0f, 1f)
+}
+
+internal fun timerDialSupportingContentAlpha(morphProgress: Float): Float {
+    return (1f - 0.08f * morphProgress.coerceIn(0f, 1f)).coerceIn(0.92f, 1f)
 }
 
 private fun timerDialStateTransitionSpec(

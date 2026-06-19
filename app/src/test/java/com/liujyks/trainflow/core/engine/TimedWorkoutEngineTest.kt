@@ -189,7 +189,70 @@ class TimedWorkoutEngineTest {
     }
 
     @Test
-    fun itemCueOverridesGlobalCueAndTooLargeThresholdsAreIgnored() {
+    fun endingCueEventsCoverConfiguredFinalSecondsThroughOne() {
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(
+                singleActionPlan(
+                    workSec = 8,
+                    cueSettings = CueSettings(
+                        actionEnding = CountdownCue(thresholdSec = 6)
+                    )
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        val remainingSeconds = mutableListOf<Int>()
+
+        repeat(8) {
+            result = TimedWorkoutEngine.tick(result.state)
+            remainingSeconds += result.events.workEndingRemainingSeconds()
+        }
+
+        assertEquals(listOf(6, 5, 4, 3, 2, 1), remainingSeconds)
+        assertEquals(SessionStatus.COMPLETED, result.state.status)
+    }
+
+    @Test
+    fun endingCueThresholdClampsToStageDurationAcrossTimedStages() {
+        var result = TimedWorkoutEngine.dispatch(
+            state = TimedWorkoutEngine.create(
+                plan(
+                    preferences = PlanPreferences(
+                        cueSettings = CueSettings(
+                            actionEnding = CountdownCue(thresholdSec = 5),
+                            restEnding = CountdownCue(thresholdSec = 5)
+                        )
+                    ),
+                    blocks = listOf(
+                        WarmupBlock(id = "warm", order = 1, title = "Warm", durationSec = 2),
+                        circuit(
+                            items = listOf(
+                                stage(id = "work", name = "Work", type = TimedStageType.WORK, sec = 2),
+                                stage(id = "rest", name = "Rest", type = TimedStageType.REST, sec = 2)
+                            )
+                        ),
+                        CooldownBlock(id = "cool", order = 3, title = "Cool", durationSec = 2)
+                    )
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        val workRemainingSeconds = result.events.workEndingRemainingSeconds().toMutableList()
+        val restRemainingSeconds = result.events.restEndingRemainingSeconds().toMutableList()
+
+        repeat(8) {
+            result = TimedWorkoutEngine.tick(result.state)
+            workRemainingSeconds += result.events.workEndingRemainingSeconds()
+            restRemainingSeconds += result.events.restEndingRemainingSeconds()
+        }
+
+        assertEquals(listOf(2, 1, 2, 1, 2, 1), workRemainingSeconds)
+        assertEquals(listOf(2, 1), restRemainingSeconds)
+        assertEquals(SessionStatus.COMPLETED, result.state.status)
+    }
+
+    @Test
+    fun itemCueOverridesGlobalCueAndTooLargeThresholdsClampToStageDuration() {
         val globalCueTooLarge = CueSettings(
             actionEnding = CountdownCue(thresholdSec = 5),
             restEnding = CountdownCue(thresholdSec = 5)
@@ -208,6 +271,7 @@ class TimedWorkoutEngineTest {
             ),
             command = WorkoutCommand.StartSession
         )
+        assertEquals(emptyList<Int>(), result.events.workEndingRemainingSeconds())
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 2)
         assertEquals(listOf(1), result.events.workEndingRemainingSeconds())
@@ -227,8 +291,14 @@ class TimedWorkoutEngineTest {
             ),
             command = WorkoutCommand.StartSession
         )
-        result = TimedWorkoutEngine.tick(result.state, seconds = 3)
-        assertTrue(result.events.workEndingRemainingSeconds().isEmpty())
+        val clampedRemainingSeconds = result.events.workEndingRemainingSeconds().toMutableList()
+
+        repeat(3) {
+            result = TimedWorkoutEngine.tick(result.state)
+            clampedRemainingSeconds += result.events.workEndingRemainingSeconds()
+        }
+
+        assertEquals(listOf(3, 2, 1), clampedRemainingSeconds)
         assertEquals(SessionStatus.COMPLETED, result.state.status)
     }
 

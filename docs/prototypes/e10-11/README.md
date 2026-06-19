@@ -84,8 +84,8 @@ private fun markerProgress(index: Int, count: Int): Float =
 
 本轮不接入音频播放。后续 E13 可以按以下视觉时机绑定声音：
 
-- `final 5 seconds`: `countdown_beep1.mp3` 作为 5 / 4 / 3 / 2 等前几声 beep 候选。
-- 阶段切换或最后 1 秒: `.local/audio/stage_bell_copper_clean.wav` 作为铃声候选。
+- `final N seconds`: `countdown_beep1.mp3` 作为 N / ... / 1 秒 beep 候选。
+- 下阶段开始: `.local/audio/stage_bell_copper_clean.mp3` 作为铃声候选。
 
 音频接入必须留到 E13，且需要覆盖手机扬声器、蓝牙耳机、不 ducking、不打断其他 App 音频。本原型没有读取、复制或提交这些音频文件。
 

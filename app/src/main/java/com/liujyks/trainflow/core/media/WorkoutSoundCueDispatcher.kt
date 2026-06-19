@@ -39,6 +39,11 @@ internal object WorkoutSoundCueDispatcher {
                 cue = cue,
                 source = WorkoutSoundCueSource.STAGE_TRANSITION
             )
+            is WorkoutEvent.SessionCompleted -> stageTransitionRequest(
+                eventKey = "session_completed:${event.sessionId}",
+                cue = cue,
+                source = WorkoutSoundCueSource.STAGE_TRANSITION
+            )
             else -> null
         }
     }
@@ -64,13 +69,8 @@ internal object WorkoutSoundCueDispatcher {
         val activeCue = cue?.takeIf {
             it.enabled && it.soundEnabled && remainingSec > 0 && remainingSec <= it.thresholdSec
         } ?: return null
-        val kind = if (remainingSec == 1) {
-            WorkoutSoundCueKind.STAGE_BELL
-        } else {
-            WorkoutSoundCueKind.COUNTDOWN_BEEP
-        }
         return WorkoutSoundCueRequest(
-            kind = kind,
+            kind = WorkoutSoundCueKind.COUNTDOWN_BEEP,
             eventKey = eventKey,
             remainingSec = remainingSec,
             source = source,
@@ -143,7 +143,7 @@ internal object WorkoutSoundCueAudioPolicy {
         requestsAudioFocus = false,
         allowsDucking = false,
         pausesExternalAudio = false,
-        usageLabel = "USAGE_ASSISTANCE_SONIFICATION",
-        contentTypeLabel = "CONTENT_TYPE_SONIFICATION"
+        usageLabel = "USAGE_MEDIA",
+        contentTypeLabel = "CONTENT_TYPE_MUSIC"
     )
 }

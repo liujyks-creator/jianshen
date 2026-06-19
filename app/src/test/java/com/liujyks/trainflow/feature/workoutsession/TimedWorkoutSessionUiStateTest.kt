@@ -98,6 +98,28 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun pausedStateMapsPauseClockAndCurrentStageElapsedTime() {
+        val plan = reminderPlan(
+            workSec = 60,
+            cueSettings = CueSettings(actionEnding = CountdownCue(thresholdSec = 5))
+        )
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 36).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession).state
+        state = TimedWorkoutEngine.tick(state, seconds = 9).state
+        val uiState = state.toTimedWorkoutSessionScreenState()
+
+        assertTrue(uiState.isPaused)
+        assertEquals("+00:09", uiState.pausedClockText)
+        assertEquals("00:36", uiState.currentStageElapsedText)
+        assertEquals("00:24", uiState.timerText)
+    }
+
+    @Test
     fun routeClockDoesNotTickTerminalState() {
         val plan = buildDefaultPlanManagementState().plans.first()
         val started = TimedWorkoutEngine.dispatch(
@@ -433,6 +455,32 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
+    fun actionEndingReminderStateCoversConfiguredFinalSecondsThroughOne() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(
+                reminderPlan(
+                    workSec = 8,
+                    cueSettings = CueSettings(
+                        actionEnding = CountdownCue(thresholdSec = 6)
+                    )
+                )
+            ),
+            WorkoutCommand.StartSession
+        ).state
+        val activeRemainingSeconds = mutableListOf<Int>()
+
+        repeat(8) {
+            state = TimedWorkoutEngine.tick(state).state
+            val reminder = state.toTimedWorkoutSessionScreenState().countdownReminder
+            if (reminder.isActive) {
+                activeRemainingSeconds += reminder.remainingSec
+            }
+        }
+
+        assertEquals(listOf(6, 5, 4, 3, 2, 1), activeRemainingSeconds)
+    }
+
+    @Test
     fun restEndingReminderIsDistinctFromActionEnding() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(
@@ -506,7 +554,7 @@ class TimedWorkoutSessionUiStateTest {
     }
 
     @Test
-    fun disabledAndTooLargeThresholdsDoNotCreateReminderState() {
+    fun disabledThresholdDoesNotCreateReminderButTooLargeThresholdCoversWholeStage() {
         var disabledState = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(
                 reminderPlan(
@@ -534,8 +582,14 @@ class TimedWorkoutSessionUiStateTest {
             WorkoutCommand.StartSession
         ).state
 
+        var reminder = shortDurationState.toTimedWorkoutSessionScreenState().countdownReminder
+        assertTrue(reminder.isActive)
+        assertEquals(3, reminder.remainingSec)
+
         shortDurationState = TimedWorkoutEngine.tick(shortDurationState).state
-        assertFalse(shortDurationState.toTimedWorkoutSessionScreenState().countdownReminder.isActive)
+        reminder = shortDurationState.toTimedWorkoutSessionScreenState().countdownReminder
+        assertTrue(reminder.isActive)
+        assertEquals(2, reminder.remainingSec)
     }
 
     private fun reminderPlan(

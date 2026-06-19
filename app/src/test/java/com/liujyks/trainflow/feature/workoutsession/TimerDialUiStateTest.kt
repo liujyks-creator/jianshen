@@ -587,15 +587,16 @@ class TimerDialUiStateTest {
                 timerDialPlan(
                     workSec = 8,
                     restSec = 4,
-                    cueSettings = CueSettings(actionEnding = CountdownCue(thresholdSec = 5))
+                    cueSettings = CueSettings(actionEnding = CountdownCue(thresholdSec = 6))
                 )
             ),
             WorkoutCommand.StartSession
         ).state
 
-        state = TimedWorkoutEngine.tick(state, seconds = 3).state
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
         var dial = state.toTimedWorkoutSessionScreenState().timerDial
 
+        assertEquals(6, dial.currentStageRemainingSec)
         assertTrue(dial.isFinalCountdown)
 
         state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession).state
