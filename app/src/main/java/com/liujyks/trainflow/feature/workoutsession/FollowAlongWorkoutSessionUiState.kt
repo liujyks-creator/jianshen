@@ -7,8 +7,10 @@ import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryEvent
 import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryType
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.Exercise
-import com.liujyks.trainflow.core.model.HeartRateAvailability
+import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.HeartRateStateKind
+import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.WorkoutCommand
@@ -64,7 +66,11 @@ internal fun FollowAlongWorkoutSessionControl.toWorkoutCommand(): WorkoutCommand
 }
 
 internal fun TimedWorkoutEngineState.toFollowAlongWorkoutSessionUiState(
-    heartRateState: HeartRateState = HeartRateState(availability = HeartRateAvailability.NOT_CONNECTED),
+    heartRateState: HeartRateState = HeartRateState(
+        kind = HeartRateStateKind.UNAVAILABLE,
+        sourceKind = HeartRateSourceKind.NONE,
+        unavailableReason = HeartRateUnavailableReason.NO_SOURCE
+    ),
     exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise }
 ): FollowAlongWorkoutSessionUiState {
     val exerciseById = exercises.associateBy { exercise -> exercise.id }

@@ -124,13 +124,15 @@ class CoreModelContractTest {
     @Test
     fun heartRateStateStaysAbstractAndDeviceAgnostic() {
         val state = HeartRateState(
-            availability = HeartRateAvailability.NOT_CONNECTED,
-            warningLevel = HeartRateWarningLevel.NONE,
-            message = "No device connected"
+            kind = HeartRateStateKind.UNAVAILABLE,
+            sourceKind = HeartRateSourceKind.NONE,
+            unavailableReason = HeartRateUnavailableReason.NO_SOURCE,
+            message = "No source"
         )
 
-        assertEquals("not_connected", state.availability.contractValue)
-        assertEquals("none", state.warningLevel?.contractValue)
+        assertEquals("unavailable", state.kind.contractValue)
+        assertEquals("none", state.sourceKind.contractValue)
+        assertEquals("no_source", state.unavailableReason?.contractValue)
         assertEquals(null, state.bpm)
     }
 }

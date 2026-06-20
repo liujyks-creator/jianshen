@@ -1,25 +1,35 @@
 package com.liujyks.trainflow.core.model
 
 data class HeartRateState(
-    val availability: HeartRateAvailability,
+    val kind: HeartRateStateKind,
+    val sourceKind: HeartRateSourceKind,
     val bpm: Int? = null,
     val measuredAt: String? = null,
+    val recordedAt: String? = null,
     val sourceId: String? = null,
-    val warningLevel: HeartRateWarningLevel? = null,
+    val sourceLabel: String? = null,
+    val unavailableReason: HeartRateUnavailableReason? = null,
     val message: String? = null
 )
 
-enum class HeartRateAvailability(val contractValue: String) {
-    DISABLED("disabled"),
-    NOT_CONNECTED("not_connected"),
-    CONNECTING("connecting"),
-    AVAILABLE("available"),
-    STALE("stale"),
-    ERROR("error")
+enum class HeartRateStateKind(val contractValue: String) {
+    UNAVAILABLE("unavailable"),
+    DEVICE_CONNECTED_NO_READING("device_connected_no_reading"),
+    DEVICE_READING("device_reading"),
+    MANUAL_READING("manual_reading"),
+    STALE_READING("stale_reading"),
+    PERMISSION_UNAVAILABLE("permission_unavailable"),
+    PROVIDER_UNAVAILABLE("provider_unavailable")
 }
 
-enum class HeartRateWarningLevel(val contractValue: String) {
+enum class HeartRateSourceKind(val contractValue: String) {
     NONE("none"),
-    ATTENTION("attention"),
-    HIGH("high")
+    DEVICE("device"),
+    MANUAL("manual")
+}
+
+enum class HeartRateUnavailableReason(val contractValue: String) {
+    NO_SOURCE("no_source"),
+    DISABLED_BY_USER("disabled_by_user"),
+    NOT_CONFIGURED("not_configured")
 }
