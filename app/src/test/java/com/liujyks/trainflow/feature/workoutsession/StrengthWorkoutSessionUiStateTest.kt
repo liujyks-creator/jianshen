@@ -2,8 +2,10 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
-import com.liujyks.trainflow.core.model.HeartRateAvailability
+import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.HeartRateStateKind
+import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SetEffort
@@ -538,11 +540,15 @@ class StrengthWorkoutSessionUiStateTest {
             WorkoutCommand.StartSession
         ).state
         val uiState = started.toStrengthWorkoutSessionScreenState(
-            heartRateState = HeartRateState(availability = HeartRateAvailability.NOT_CONNECTED)
+            heartRateState = HeartRateState(
+                kind = HeartRateStateKind.UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.NONE,
+                unavailableReason = HeartRateUnavailableReason.NO_SOURCE
+            )
         )
 
         assertEquals("-- bpm", uiState.heartRate.valueText)
-        assertEquals("未连接设备", uiState.heartRate.statusText)
+        assertEquals("未获取心率", uiState.heartRate.statusText)
         assertFalse(uiState.heartRate.isAvailable)
     }
 

@@ -1,7 +1,8 @@
 package com.liujyks.trainflow.feature.workoutsession
 
-import com.liujyks.trainflow.core.model.HeartRateAvailability
+import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.HeartRateStateKind
 import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 
 internal data class HeartRateDisplayUiState(
@@ -17,29 +18,31 @@ internal fun HeartRateState.toHeartRateDisplayUiState(): HeartRateDisplayUiState
         valueText = valueText(),
         statusText = statusText(),
         auxiliaryText = auxiliaryText(),
-        isAvailable = availability == HeartRateAvailability.AVAILABLE && bpm != null
+        isAvailable = kind in currentReadingKinds && bpm != null
     )
 }
 
 private fun HeartRateState.valueText(): String {
-    return when (availability) {
-        HeartRateAvailability.AVAILABLE,
-        HeartRateAvailability.STALE -> "${bpm ?: "--"} bpm"
-        HeartRateAvailability.DISABLED,
-        HeartRateAvailability.NOT_CONNECTED,
-        HeartRateAvailability.CONNECTING,
-        HeartRateAvailability.ERROR -> "-- bpm"
+    return when (kind) {
+        HeartRateStateKind.DEVICE_READING,
+        HeartRateStateKind.MANUAL_READING,
+        HeartRateStateKind.STALE_READING -> "${bpm ?: "--"} bpm"
+        HeartRateStateKind.UNAVAILABLE,
+        HeartRateStateKind.DEVICE_CONNECTED_NO_READING,
+        HeartRateStateKind.PERMISSION_UNAVAILABLE,
+        HeartRateStateKind.PROVIDER_UNAVAILABLE -> "-- bpm"
     }
 }
 
 private fun HeartRateState.statusText(): String {
-    return when (availability) {
-        HeartRateAvailability.DISABLED -> "心率显示已关闭"
-        HeartRateAvailability.NOT_CONNECTED -> "未连接设备"
-        HeartRateAvailability.CONNECTING -> "等待数据"
-        HeartRateAvailability.AVAILABLE -> message ?: "演示心率状态"
-        HeartRateAvailability.STALE -> message ?: "数据暂时中断"
-        HeartRateAvailability.ERROR -> message ?: "心率状态暂不可用"
+    return when (kind) {
+        HeartRateStateKind.UNAVAILABLE -> "未获取心率"
+        HeartRateStateKind.DEVICE_CONNECTED_NO_READING -> "设备已连接，等待读数"
+        HeartRateStateKind.DEVICE_READING -> sourceText()
+        HeartRateStateKind.MANUAL_READING -> "手动录入"
+        HeartRateStateKind.STALE_READING -> staleStatusText()
+        HeartRateStateKind.PERMISSION_UNAVAILABLE -> "权限不可用"
+        HeartRateStateKind.PROVIDER_UNAVAILABLE -> "来源不可用"
     }
 }
 
@@ -48,13 +51,42 @@ private fun HeartRateState.auxiliaryText(): String {
         measuredAt?.takeIf { it.isNotBlank() }?.let { measuredAt ->
             add("时间 $measuredAt")
         }
+        recordedAt?.takeIf { it.isNotBlank() }?.let { recordedAt ->
+            add("记录 $recordedAt")
+        }
         sourceId?.takeIf { it.isNotBlank() }?.let { sourceId ->
             add("来源 $sourceId")
         }
+        sourceLabel
+            ?.takeIf { it.isNotBlank() }
+            ?.takeIf { it != sourceText() }
+            ?.let { sourceLabel -> add(sourceLabel) }
         message
-            ?.takeIf { availability != HeartRateAvailability.AVAILABLE }
+            ?.takeIf { it != statusText() }
             ?.takeIf { it.isNotBlank() }
             ?.let { message -> add(message) }
     }
     return details.joinToString(" · ")
+}
+
+private val currentReadingKinds = setOf(
+    HeartRateStateKind.DEVICE_READING,
+    HeartRateStateKind.MANUAL_READING
+)
+
+private fun HeartRateState.sourceText(): String {
+    return when (sourceKind) {
+        HeartRateSourceKind.DEVICE -> sourceLabel?.takeIf { it.isNotBlank() } ?: "设备数据"
+        HeartRateSourceKind.MANUAL -> "手动录入"
+        HeartRateSourceKind.NONE -> ""
+    }
+}
+
+private fun HeartRateState.staleStatusText(): String {
+    val source = sourceText().takeIf { it.isNotBlank() }
+    return if (source == null) {
+        "数据已过期"
+    } else {
+        "数据已过期 · $source"
+    }
 }

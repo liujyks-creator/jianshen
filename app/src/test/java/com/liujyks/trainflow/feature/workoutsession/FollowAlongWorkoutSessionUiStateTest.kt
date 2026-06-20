@@ -1,8 +1,9 @@
 package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
-import com.liujyks.trainflow.core.model.HeartRateAvailability
+import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.HeartRateStateKind
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
@@ -34,7 +35,7 @@ class FollowAlongWorkoutSessionUiStateTest {
         assertTrue(uiState.nextActionLabel.contains("下一动作"))
         assertTrue(uiState.shortCue.isNotBlank())
         assertEquals("-- bpm", uiState.heartRate.valueText)
-        assertEquals("未连接设备", uiState.heartRate.statusText)
+        assertEquals("未获取心率", uiState.heartRate.statusText)
         assertTrue(uiState.heartRate.boundaryText.contains("未接入真实设备"))
         assertTrue(uiState.progressFraction > 0f)
         assertTrue(uiState.immediateControls.any { control ->
@@ -80,14 +81,15 @@ class FollowAlongWorkoutSessionUiStateTest {
         ).state
         val uiState = engineState.toFollowAlongWorkoutSessionUiState(
             heartRateState = HeartRateState(
-                availability = HeartRateAvailability.AVAILABLE,
+                kind = HeartRateStateKind.DEVICE_READING,
+                sourceKind = HeartRateSourceKind.DEVICE,
                 bpm = 128,
-                message = "低层级心率占位"
+                sourceLabel = "设备数据"
             )
         )
 
         assertEquals("128 bpm", uiState.heartRate.valueText)
-        assertEquals("低层级心率占位", uiState.heartRate.statusText)
+        assertEquals("设备数据", uiState.heartRate.statusText)
     }
 
     @Test

@@ -881,10 +881,17 @@ interface HeartRateState {
 - `permission_unavailable` 表示未来 provider adapter 需要的权限不可用；E11.1 不申请真实健康、蓝牙或身体传感器权限。
 - `provider_unavailable` 表示 provider 被禁用、当前构建未接入或平台能力不可用。
 
+后续 adapter 路线只作为 E11.2 或独立设备阶段评估：
+
+- Apple Watch / iOS：通过 HealthKit + workout session adapter 读取并转换，不能把 HealthKit model 泄漏到 TrainFlow UI / history。
+- Huawei band / Huawei Health：先做 feasibility；可评估 Huawei Health Kit / Health Service Kit adapter，或在 iOS 上读取 Apple Health 中来自 Huawei Health 的 source data。
+- 通用心率设备：可评估标准 BLE Heart Rate Service adapter。
+- 所有设备路线都必须统一输出 TrainFlow `HeartRateState`，标注来源；手动数据必须是 `sourceKind: "manual"`，不得伪装成设备数据。
+
 ### 12.2 首版 UI 约束
 
 - 训练执行页消费 `HeartRateState`，不绑定具体手环 SDK、Health Connect、Wear OS、BLE 或厂商 SDK。
-- E11.1 只允许 disabled / mock / source-unavailable provider 抽象，不接真实设备，不实现手动输入 UI，不持久化心率记录。
+- E11.1 只允许 disabled / mock / source-unavailable provider 抽象，不接真实设备、HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK，不实现手动输入 UI，不持久化心率记录。
 - 没有设备数据且没有手动数据时，执行页、历史页或趋势入口显示“未获取心率”。
 - 手动输入是后续可选补充，不是使用训练记录或趋势页的必需前置。
 - `warningLevel` 口径废弃，不再通过 `HeartRateState` 表达医疗、危险、强告警或训练中断判断。

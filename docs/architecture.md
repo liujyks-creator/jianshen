@@ -337,10 +337,11 @@ interface HeartRateProvider {
 
 - 默认实现可以是 `DisabledHeartRateProvider`、mock provider 或 source-unavailable provider。
 - UI 可以展示未获取心率、设备已连接但无读数、设备读数、手动读数来源、过期读数、provider 不可用和权限不可用等状态。
-- E11.1 不申请真实健康、蓝牙或身体传感器权限，不实现手动输入 UI，不持久化心率，不绘制平均心率趋势。
+- E11.1 不申请真实健康、蓝牙或身体传感器权限，不实现手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK。
 - 不做实时心率预警闭环，不做医疗、危险或训练中断判断。
 - 不因没有设备或没有手动输入而阻塞训练闭环。
-- 后续 Health Connect、Wear OS、BLE 或厂商 SDK 只能作为 provider adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI 和历史统计不能直接依赖 SDK model。
+- 后续 Apple Watch / iOS 走 HealthKit + workout session adapter；Huawei band / Huawei Health 先做 feasibility，可评估 Huawei Health Kit / Health Service Kit adapter 或 iOS 上读取 Apple Health 中来自 Huawei Health 的 source data；通用心率设备可评估标准 BLE Heart Rate Service adapter。
+- 后续 Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 只能作为 provider adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI、训练执行引擎和历史统计不能直接依赖 SDK model。
 
 ### 8.4 媒体
 

@@ -2,9 +2,10 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
-import com.liujyks.trainflow.core.model.HeartRateAvailability
+import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateWarningLevel
+import com.liujyks.trainflow.core.model.HeartRateStateKind
+import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
@@ -15,84 +16,114 @@ import org.junit.Test
 
 class HeartRateDisplayUiStateTest {
     @Test
-    fun mapperCoversAllAvailabilityStatesWithNeutralCopy() {
+    fun mapperCoversSourceAwareStatesWithNeutralCopy() {
         val states = mapOf(
-            HeartRateAvailability.DISABLED to HeartRateState(HeartRateAvailability.DISABLED),
-            HeartRateAvailability.NOT_CONNECTED to HeartRateState(HeartRateAvailability.NOT_CONNECTED),
-            HeartRateAvailability.CONNECTING to HeartRateState(HeartRateAvailability.CONNECTING),
-            HeartRateAvailability.AVAILABLE to HeartRateState(
-                availability = HeartRateAvailability.AVAILABLE,
+            HeartRateStateKind.UNAVAILABLE to HeartRateState(
+                kind = HeartRateStateKind.UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.NONE,
+                unavailableReason = HeartRateUnavailableReason.NO_SOURCE
+            ),
+            HeartRateStateKind.DEVICE_CONNECTED_NO_READING to HeartRateState(
+                kind = HeartRateStateKind.DEVICE_CONNECTED_NO_READING,
+                sourceKind = HeartRateSourceKind.DEVICE,
+                sourceLabel = "训练手环"
+            ),
+            HeartRateStateKind.DEVICE_READING to HeartRateState(
+                kind = HeartRateStateKind.DEVICE_READING,
+                sourceKind = HeartRateSourceKind.DEVICE,
                 bpm = 126
             ),
-            HeartRateAvailability.STALE to HeartRateState(
-                availability = HeartRateAvailability.STALE,
+            HeartRateStateKind.MANUAL_READING to HeartRateState(
+                kind = HeartRateStateKind.MANUAL_READING,
+                sourceKind = HeartRateSourceKind.MANUAL,
+                bpm = 126
+            ),
+            HeartRateStateKind.STALE_READING to HeartRateState(
+                kind = HeartRateStateKind.STALE_READING,
+                sourceKind = HeartRateSourceKind.DEVICE,
                 bpm = 118
             ),
-            HeartRateAvailability.ERROR to HeartRateState(HeartRateAvailability.ERROR)
+            HeartRateStateKind.PERMISSION_UNAVAILABLE to HeartRateState(
+                kind = HeartRateStateKind.PERMISSION_UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.DEVICE
+            ),
+            HeartRateStateKind.PROVIDER_UNAVAILABLE to HeartRateState(
+                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.NONE
+            )
         ).mapValues { (_, state) -> state.toHeartRateDisplayUiState() }
 
-        assertEquals("心率显示已关闭", states.getValue(HeartRateAvailability.DISABLED).statusText)
-        assertEquals("未连接设备", states.getValue(HeartRateAvailability.NOT_CONNECTED).statusText)
-        assertEquals("等待数据", states.getValue(HeartRateAvailability.CONNECTING).statusText)
-        assertEquals("126 bpm", states.getValue(HeartRateAvailability.AVAILABLE).valueText)
-        assertEquals("演示心率状态", states.getValue(HeartRateAvailability.AVAILABLE).statusText)
-        assertEquals("118 bpm", states.getValue(HeartRateAvailability.STALE).valueText)
-        assertEquals("数据暂时中断", states.getValue(HeartRateAvailability.STALE).statusText)
-        assertEquals("心率状态暂不可用", states.getValue(HeartRateAvailability.ERROR).statusText)
-        assertTrue(states.getValue(HeartRateAvailability.NOT_CONNECTED).boundaryText.contains("未接入真实设备"))
-        assertTrue(states.getValue(HeartRateAvailability.NOT_CONNECTED).boundaryText.contains("不做医疗告警"))
-        assertTrue(states.getValue(HeartRateAvailability.AVAILABLE).isAvailable)
-        assertFalse(states.getValue(HeartRateAvailability.STALE).isAvailable)
+        assertEquals("-- bpm", states.getValue(HeartRateStateKind.UNAVAILABLE).valueText)
+        assertEquals("未获取心率", states.getValue(HeartRateStateKind.UNAVAILABLE).statusText)
+        assertEquals("-- bpm", states.getValue(HeartRateStateKind.DEVICE_CONNECTED_NO_READING).valueText)
+        assertEquals("设备已连接，等待读数", states.getValue(HeartRateStateKind.DEVICE_CONNECTED_NO_READING).statusText)
+        assertEquals("126 bpm", states.getValue(HeartRateStateKind.DEVICE_READING).valueText)
+        assertEquals("设备数据", states.getValue(HeartRateStateKind.DEVICE_READING).statusText)
+        assertEquals("126 bpm", states.getValue(HeartRateStateKind.MANUAL_READING).valueText)
+        assertEquals("手动录入", states.getValue(HeartRateStateKind.MANUAL_READING).statusText)
+        assertEquals("118 bpm", states.getValue(HeartRateStateKind.STALE_READING).valueText)
+        assertEquals("数据已过期 · 设备数据", states.getValue(HeartRateStateKind.STALE_READING).statusText)
+        assertEquals("权限不可用", states.getValue(HeartRateStateKind.PERMISSION_UNAVAILABLE).statusText)
+        assertEquals("来源不可用", states.getValue(HeartRateStateKind.PROVIDER_UNAVAILABLE).statusText)
+        assertTrue(states.getValue(HeartRateStateKind.UNAVAILABLE).boundaryText.contains("未接入真实设备"))
+        assertTrue(states.getValue(HeartRateStateKind.UNAVAILABLE).boundaryText.contains("不做医疗告警"))
+        assertTrue(states.getValue(HeartRateStateKind.DEVICE_READING).isAvailable)
+        assertTrue(states.getValue(HeartRateStateKind.MANUAL_READING).isAvailable)
+        assertFalse(states.getValue(HeartRateStateKind.STALE_READING).isAvailable)
     }
 
     @Test
-    fun measuredAtSourceIdAndMessageStayInAuxiliaryText() {
+    fun sourceMetadataAndMessageStayInAuxiliaryText() {
         val uiState = HeartRateState(
-            availability = HeartRateAvailability.STALE,
+            kind = HeartRateStateKind.STALE_READING,
+            sourceKind = HeartRateSourceKind.DEVICE,
             bpm = 116,
             measuredAt = "2026-06-03T14:20:00Z",
+            recordedAt = "2026-06-03T14:21:00Z",
             sourceId = "mock-provider",
-            message = "数据暂时中断"
+            sourceLabel = "开发模拟源",
+            message = "最后一次设备读数"
         ).toHeartRateDisplayUiState()
 
         assertEquals("116 bpm", uiState.valueText)
-        assertEquals("数据暂时中断", uiState.statusText)
+        assertEquals("数据已过期 · 开发模拟源", uiState.statusText)
         assertTrue(uiState.auxiliaryText.contains("时间 2026-06-03T14:20:00Z"))
+        assertTrue(uiState.auxiliaryText.contains("记录 2026-06-03T14:21:00Z"))
         assertTrue(uiState.auxiliaryText.contains("来源 mock-provider"))
-        assertTrue(uiState.auxiliaryText.contains("数据暂时中断"))
+        assertTrue(uiState.auxiliaryText.contains("最后一次设备读数"))
         assertFalse(uiState.isAvailable)
     }
 
     @Test
-    fun warningLevelDoesNotCreateAlarmCopyOrChangeAvailability() {
-        val attention = HeartRateState(
-            availability = HeartRateAvailability.AVAILABLE,
-            bpm = 130,
-            warningLevel = HeartRateWarningLevel.ATTENTION
+    fun sourceAwareStatesDoNotCreateAlarmCopyOrChangeControls() {
+        val device = HeartRateState(
+            kind = HeartRateStateKind.DEVICE_READING,
+            sourceKind = HeartRateSourceKind.DEVICE,
+            bpm = 130
         ).toHeartRateDisplayUiState()
-        val high = HeartRateState(
-            availability = HeartRateAvailability.AVAILABLE,
-            bpm = 130,
-            warningLevel = HeartRateWarningLevel.HIGH
+        val manual = HeartRateState(
+            kind = HeartRateStateKind.MANUAL_READING,
+            sourceKind = HeartRateSourceKind.MANUAL,
+            bpm = 130
         ).toHeartRateDisplayUiState()
         val forbiddenWords = listOf("危险心率", "异常心率", "过高", "热量", "强度建议")
 
-        assertEquals("演示心率状态", attention.statusText)
-        assertEquals(attention, high)
+        assertEquals("设备数据", device.statusText)
+        assertEquals("手动录入", manual.statusText)
         forbiddenWords.forEach { word ->
-            assertFalse(attention.combinedCopy().contains(word))
-            assertFalse(high.combinedCopy().contains(word))
+            assertFalse(device.combinedCopy().contains(word))
+            assertFalse(manual.combinedCopy().contains(word))
         }
     }
 
     @Test
     fun timedStrengthAndFollowAlongUseSameHeartRateMapperCopy() {
         val heartRateState = HeartRateState(
-            availability = HeartRateAvailability.AVAILABLE,
+            kind = HeartRateStateKind.DEVICE_READING,
+            sourceKind = HeartRateSourceKind.DEVICE,
             bpm = 124,
             measuredAt = "2026-06-03T14:30:00Z",
-            sourceId = "mock-provider",
-            message = "演示心率状态"
+            sourceId = "mock-provider"
         )
         val expected = heartRateState.toHeartRateDisplayUiState()
         val planState = buildDefaultPlanManagementState()
@@ -122,31 +153,44 @@ class HeartRateDisplayUiStateTest {
             TimedWorkoutEngine.create(timedPlan),
             WorkoutCommand.StartSession
         ).state
-        val notConnected = active.toTimedWorkoutSessionScreenState(
-            heartRateState = HeartRateState(HeartRateAvailability.NOT_CONNECTED)
-        )
-        val error = active.toTimedWorkoutSessionScreenState(
+        val noSource = active.toTimedWorkoutSessionScreenState(
             heartRateState = HeartRateState(
-                availability = HeartRateAvailability.ERROR,
-                warningLevel = HeartRateWarningLevel.HIGH,
-                message = "心率状态暂不可用"
+                kind = HeartRateStateKind.UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.NONE,
+                unavailableReason = HeartRateUnavailableReason.NO_SOURCE
+            )
+        )
+        val providerUnavailable = active.toTimedWorkoutSessionScreenState(
+            heartRateState = HeartRateState(
+                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.NONE,
+                message = "当前构建未接入来源"
             )
         )
 
-        assertEquals(notConnected.canPause, error.canPause)
-        assertEquals(notConnected.canResume, error.canResume)
-        assertEquals(notConnected.canSkip, error.canSkip)
-        assertEquals(notConnected.canExtendRest, error.canExtendRest)
-        assertEquals(notConnected.canEnd, error.canEnd)
-        assertEquals(notConnected.phaseLabel, error.phaseLabel)
+        assertEquals(noSource.canPause, providerUnavailable.canPause)
+        assertEquals(noSource.canResume, providerUnavailable.canResume)
+        assertEquals(noSource.canSkip, providerUnavailable.canSkip)
+        assertEquals(noSource.canExtendRest, providerUnavailable.canExtendRest)
+        assertEquals(noSource.canEnd, providerUnavailable.canEnd)
+        assertEquals(noSource.phaseLabel, providerUnavailable.phaseLabel)
     }
 
     @Test
     fun heartRateCopyAvoidsOutOfScopeTerms() {
-        val allCopy = HeartRateAvailability.entries.joinToString(" ") { availability ->
+        val allCopy = HeartRateStateKind.entries.joinToString(" ") { kind ->
             HeartRateState(
-                availability = availability,
-                bpm = if (availability == HeartRateAvailability.AVAILABLE) 120 else null,
+                kind = kind,
+                sourceKind = when (kind) {
+                    HeartRateStateKind.DEVICE_CONNECTED_NO_READING,
+                    HeartRateStateKind.DEVICE_READING,
+                    HeartRateStateKind.STALE_READING,
+                    HeartRateStateKind.PERMISSION_UNAVAILABLE -> HeartRateSourceKind.DEVICE
+                    HeartRateStateKind.MANUAL_READING -> HeartRateSourceKind.MANUAL
+                    HeartRateStateKind.UNAVAILABLE,
+                    HeartRateStateKind.PROVIDER_UNAVAILABLE -> HeartRateSourceKind.NONE
+                },
+                bpm = if (kind in currentReadingOrStaleKinds) 120 else null,
                 message = null
             ).toHeartRateDisplayUiState().combinedCopy()
         }
@@ -160,4 +204,10 @@ class HeartRateDisplayUiStateTest {
     private fun HeartRateDisplayUiState.combinedCopy(): String {
         return listOf(valueText, statusText, auxiliaryText).joinToString(" ")
     }
+
+    private val currentReadingOrStaleKinds = setOf(
+        HeartRateStateKind.DEVICE_READING,
+        HeartRateStateKind.MANUAL_READING,
+        HeartRateStateKind.STALE_READING
+    )
 }
