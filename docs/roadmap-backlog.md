@@ -1565,14 +1565,42 @@ stepsCompleted:
 - 计时、力量和基础跟练执行页共享同一心率 UI mapper，默认无来源显示 `-- bpm` / `未获取心率`，设备读数显示 `设备数据`，手动读数显示 `手动录入`，过期读数保留旧 bpm 并标注 `数据已过期`。
 - 本阶段未接 Health Connect、Wear OS、BLE、HealthKit、Huawei Health Kit / Health Service Kit 或厂商 SDK，未申请健康 / 蓝牙 / 身体传感器权限，未实现手动输入 UI，未持久化心率，未绘制平均心率趋势，未改变训练引擎、`WorkoutCommand` 或 `WorkoutEvent` 语义。
 
-### Story E11.2: 真实设备接入策略 / provider adapter planning
+### Story E11.2a: HUAWEI Band 9 on non-Huawei Android feasibility smoke
 
-真实设备、Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 接入另开 story 或独立阶段。进入前必须重新确认权限、数据来源、非医疗文案、设备支持范围、后台行为、失败状态和 provider adapter 映射。设备数据是后续心率趋势的优先来源；adapter 不能把 SDK model 泄漏到 UI 或历史统计。
+**状态:** Planned docs / smoke gate, not production device integration
 
-- Apple Watch / iOS：评估 HealthKit + workout session adapter。
-- Huawei band / Huawei Health：先做 feasibility，可能路径是 Huawei Health Kit / Health Service Kit adapter，或 iOS 上读取 Apple Health 中来自 Huawei Health 的 source data。
-- 通用心率设备：评估标准 BLE Heart Rate Service adapter。
-- 所有路线必须统一输出 TrainFlow `HeartRateState`，并保留 `sourceKind`、`sourceId` / `sourceLabel` 来源标注。
+作为开发者，
+我想先用当前真实设备条件验证 HUAWEI Band 9 在非华为 Android 上的第三方可用心率通道，
+以便决定后续是 BLE HRS adapter spike、Huawei SDK feasibility、历史同步，还是暂不接设备。
+
+**当前真实设备条件:**
+
+- 用户当前有 HUAWEI Band 9。
+- 手机不是华为手机。
+- 手机已安装华为运动健康。
+- 华为运动健康可以读取手环数据。
+- 这只证明华为运动健康能读设备数据，不证明 TrainFlow 第三方 App 可以实时读取心率。
+
+**验收标准:**
+
+- Then 下一步不直接做生产设备接入，只做 feasibility smoke。
+- Then 验证 Band 9 是否暴露标准 BLE Heart Rate Service `0x180D`。
+- Then 验证 Heart Rate Measurement characteristic `0x2A37` 是否可 notify。
+- Then 如果 BLE HRS 可用，后续优先拆 Android BLE HRS adapter spike。
+- Then 如果 BLE HRS 不可用，再验证 Huawei Health Kit / Health Service Kit 是否能在非华为 Android + Band 9 + HMS Core 条件下授权读取实时心率。
+- Then 如果只能通过华为运动健康查看或同步历史数据，则不作为执行页实时心率来源。
+- Then E11.2a 不持久化心率，不绘制平均心率趋势，不把 UI `HeartRateState` 当历史事实。
+- Then 设备数据必须经 `HeartRateProvider` adapter 输出统一 `HeartRateState`，并标注 `sourceKind`、`sourceId` / `sourceLabel`。
+- Then 不做医疗判断、危险告警、训练中断依据或康复结论。
+- Then 手动输入仍保留为 E11.3 可选项，不倒灌到 E11.2。
+
+**路线判定:**
+
+- BLE Heart Rate Service：标准 BLE HRS 仍是 Android-first 最通用的实时路线，但必须先确认 Band 9 是否暴露 HRS；Android 12+ 权限、扫描 / 配对 / 断连 / 重连 / 用户配置仍是主要风险。
+- Huawei Health Kit / Health Service Kit：官方生态存在，但实时心率、地区、账号、设备支持、权限申请、非华为手机兼容性都要验证；Band 9 当前只是 feasibility 样本，不直接承诺生产接入。
+- Health Connect：更适合历史摘要 / 趋势，例如 post-workout summaries / average heart-rate trend，不作为 E11.2a 实时执行页首选。
+- Apple Watch / HealthKit：仍保留为未来 iOS 第一优先路线；合理路线是 iOS app + watchOS companion，使用 HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder。当前 Android-first 阶段不进入 dev，且 Apple SDK model 不得泄漏到 TrainFlow UI / history / analytics。
+- 所有真实设备、Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 接入都必须另开 story 或独立阶段，并继续统一输出 TrainFlow `HeartRateState`。
 
 ### Story E11.3: 可选手动心率输入
 
@@ -1858,12 +1886,13 @@ stepsCompleted:
 20. E10.17：Stage Color Picker，为计时阶段编辑页提供推荐色 / 更多颜色选择、集中色板、可访问选中态、计划持久化恢复和 Timer Dial 阶段色消费。（Implemented）
 21. E10.18：Plan Edit Backfill，从计划详情进入计时 / 力量编辑器，回填已保存计划并保存回同一 plan id，同时保持历史 session snapshot 不回写。（Implemented）
 22. E11.1：Heart-rate source boundary / unavailable state refinement；先收口 source-aware UI/provider 边界，不接设备、不做手动输入、不持久化心率、不画平均心率趋势。（Implemented）
-23. E12.1：真实记录与基础统计。（Implemented）
-24. E12.2a：非心率历史图表与聚合趋势。（Implemented）
-25. E12.3：历史记录清理。（Implemented）
-26. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
-27. E12.2b：力量同类 set 趋势。（Implemented）
-28. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+23. E11.2a：HUAWEI Band 9 on non-Huawei Android feasibility smoke；先验证当前 Band 9 + 非华为 Android 条件下的 BLE HRS / Huawei SDK / 历史同步可行路线，不直接做生产设备接入。（Planned）
+24. E12.1：真实记录与基础统计。（Implemented）
+25. E12.2a：非心率历史图表与聚合趋势。（Implemented）
+26. E12.3：历史记录清理。（Implemented）
+27. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
+28. E12.2b：力量同类 set 趋势。（Implemented）
+29. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
 
@@ -1887,7 +1916,7 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、心率、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现；Android `HeartRateState` / `HeartRateProvider` / 执行页 UI mapper 已收口为 source-aware 状态，能表达无来源、设备等待读数、设备读数、手动读数、过期读数、provider 不可用和权限不可用。E11.1 仍未接真实设备、不实现手动输入、不申请真实健康 / 蓝牙 / 身体传感器权限、不持久化心率、不绘制平均心率趋势，也不做医疗 / 危险 / 训练中断判断。下一步仍是 E11.2 真实设备接入策略 / adapter feasibility，E11.3 可选手动心率输入。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现；Android `HeartRateState` / `HeartRateProvider` / 执行页 UI mapper 已收口为 source-aware 状态，能表达无来源、设备等待读数、设备读数、手动读数、过期读数、provider 不可用和权限不可用。E11.1 仍未接真实设备、不实现手动输入、不申请真实健康 / 蓝牙 / 身体传感器权限、不持久化心率、不绘制平均心率趋势，也不做医疗 / 危险 / 训练中断判断。下一步推荐 E11.2a HUAWEI Band 9 on non-Huawei Android feasibility smoke，基于当前 Band 9 + 非华为 Android + 华为运动健康可读数据的真实条件先验证第三方实时通道，再决定 BLE HRS / Huawei SDK / 历史同步 / 暂不接设备路线；E11.3 可选手动心率输入保持后置。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
@@ -1902,7 +1931,7 @@ E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性
 下一轮建议按用户测试优先级进入：
 
 ```text
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现；随后再按用户测试优先级进入 E13 Sound Cue System、E11.2 真实设备接入策略 / provider adapter planning、E11.3 可选手动心率输入或同日多轮分析。E11.2 必须先做 Apple Watch / iOS HealthKit + workout session adapter、Huawei Health feasibility 和 BLE Heart Rate Service adapter 的权限 / 来源 / 失败状态 / 非医疗文案评估，再决定是否接真实设备。E12 后续平均心率趋势必须依赖 E11 后续真实来源或手动记录，并继续消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现；随后再按用户测试优先级进入 E13 Sound Cue System、E11.2a HUAWEI Band 9 on non-Huawei Android feasibility smoke、E11.3 可选手动心率输入或同日多轮分析。E11.2a 必须先在当前 HUAWEI Band 9 + 非华为 Android + 华为运动健康可读数据条件下验证第三方实时通道：先看 Band 9 是否暴露 BLE HRS `0x180D` 与 `0x2A37 notify`，不可用时再验证 Huawei Health Kit / Health Service Kit 在非华为 Android + Band 9 + HMS Core 下的实时心率授权；若只能查看或同步历史数据，则不作为执行页实时来源。Apple Watch / iOS HealthKit + watchOS companion 仍保留为未来 iOS 第一优先路线；Health Connect 更适合历史摘要 / 趋势，不作为 E11.2a 实时执行页首选。E12 后续平均心率趋势必须依赖 E11 后续真实来源或手动记录，并继续消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：

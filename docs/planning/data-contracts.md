@@ -883,10 +883,22 @@ interface HeartRateState {
 
 后续 adapter 路线只作为 E11.2 或独立设备阶段评估：
 
-- Apple Watch / iOS：通过 HealthKit + workout session adapter 读取并转换，不能把 HealthKit model 泄漏到 TrainFlow UI / history。
-- Huawei band / Huawei Health：先做 feasibility；可评估 Huawei Health Kit / Health Service Kit adapter，或在 iOS 上读取 Apple Health 中来自 Huawei Health 的 source data。
-- 通用心率设备：可评估标准 BLE Heart Rate Service adapter。
+- Apple Watch / iOS：未来 iOS 第一优先路线是 iOS app + watchOS companion，通过 HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder 读取并转换，不能把 HealthKit model 泄漏到 TrainFlow UI / history / analytics；当前 Android-first 阶段不进入 dev。
+- HUAWEI Band 9 / Huawei Health：当前真实验证样本是 HUAWEI Band 9 + 非华为 Android 手机 + 已安装华为运动健康，且华为运动健康可以读取手环数据；这只证明华为运动健康能读设备数据，不证明 TrainFlow 第三方 App 可以实时读取心率。E11.2a 先做 feasibility smoke，不直接承诺生产接入。
+- 通用心率设备：标准 BLE Heart Rate Service 仍是 Android-first 最通用的实时路线；但当前设备条件下必须先确认 HUAWEI Band 9 是否暴露 BLE HRS `0x180D`，以及 Heart Rate Measurement characteristic `0x2A37` 是否可 notify，再决定是否进入 BLE adapter spike。
+- Huawei Health Kit / Health Service Kit：官方生态存在，但实时心率、地区、账号、设备支持、权限申请、非华为手机兼容性都要验证。若 Band 9 不暴露 BLE HRS，再验证 Huawei Health Kit / Health Service Kit 是否能在非华为 Android + Band 9 + HMS Core 条件下授权读取实时心率。
+- Health Connect：更适合历史摘要 / 趋势，例如 post-workout summaries 或 average heart-rate trend，不作为 E11.2a 实时执行页首选。
 - 所有设备路线都必须统一输出 TrainFlow `HeartRateState`，标注来源；手动数据必须是 `sourceKind: "manual"`，不得伪装成设备数据。
+
+E11.2a feasibility smoke 边界：
+
+- 不持久化心率，不绘制平均心率趋势，不把执行页瞬时 `HeartRateState` 当历史事实。
+- 如果 BLE HRS 可用，后续优先拆 Android BLE HRS adapter spike。
+- 如果 BLE HRS 不可用，再验证 Huawei Health Kit / Health Service Kit 的实时授权读取可行性。
+- 如果只能通过华为运动健康查看或同步历史数据，则不作为执行页实时心率来源。
+- 设备数据必须经 `HeartRateProvider` adapter 输出统一 `HeartRateState`；来源必须标注 `sourceKind`、`sourceId` / `sourceLabel`。
+- 不做医疗判断、危险告警、训练中断依据或康复结论。
+- 手动输入仍保留为 E11.3 可选项，不倒灌到 E11.2。
 
 ### 12.2 首版 UI 约束
 
@@ -925,6 +937,7 @@ interface HeartRateSample {
 ```
 
 - 设备数据是后续平均心率趋势的优先来源；手动数据只能作为明确标注来源的可选补充。
+- 未来任何持久化 sample / summary 都必须至少保留 `sourceKind`、`sourceLabel`、`sourceId`、`sampleCount`、`measuredAt` 和 `recordedAt` 边界；缺少这些边界时只能作为不可比较或不可绘制数据处理。
 - 无明确 `sourceKind`、无 `bpm` / `averageBpm`、无 `measuredAt` / `recordedAt` 或无 `sampleCount` 边界时，不绘制平均心率趋势。
 - 平均心率趋势不得从执行页瞬时 `HeartRateState` 反推，不得绘制假趋势。
 - 心率趋势不得输出医疗判断、危险告警、训练中断依据、康复结论或强弱判断。

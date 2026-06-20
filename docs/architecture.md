@@ -140,7 +140,8 @@ feature:settings
 
 - `HeartRateProvider` source-aware 抽象接口与 disabled / mock / source-unavailable 实现。
 - E11.1 只收口 provider boundary 和不可用状态表达，不绑定具体手环 SDK，不接 Health Connect、Wear OS、BLE 或厂商 SDK。
-- 后续真实设备接入必须通过 provider adapter 转换为 `HeartRateState`，不能把 SDK model 泄漏到 UI、训练执行引擎或历史统计。
+- 后续真实设备接入必须通过 provider adapter 转换为 `HeartRateState`，不能把 SDK model 泄漏到 UI、训练执行引擎、历史统计或 analytics。
+- E11.2a 下一步只做 HUAWEI Band 9 on non-Huawei Android feasibility smoke：当前条件是用户有 HUAWEI Band 9，手机不是华为手机，手机已安装华为运动健康，且华为运动健康可以读取手环数据；这不等价于 TrainFlow 第三方 App 可以实时读取心率。该 smoke 只决定后续 adapter 方向，不直接进入生产接入。
 
 ### 4.10 `ui:designsystem`
 
@@ -340,8 +341,12 @@ interface HeartRateProvider {
 - E11.1 不申请真实健康、蓝牙或身体传感器权限，不实现手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK。
 - 不做实时心率预警闭环，不做医疗、危险或训练中断判断。
 - 不因没有设备或没有手动输入而阻塞训练闭环。
-- 后续 Apple Watch / iOS 走 HealthKit + workout session adapter；Huawei band / Huawei Health 先做 feasibility，可评估 Huawei Health Kit / Health Service Kit adapter 或 iOS 上读取 Apple Health 中来自 Huawei Health 的 source data；通用心率设备可评估标准 BLE Heart Rate Service adapter。
-- 后续 Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 只能作为 provider adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI、训练执行引擎和历史统计不能直接依赖 SDK model。
+- E11.2a 不持久化心率，不绘制平均心率趋势，不把执行页瞬时 `HeartRateState` 当历史事实，不申请生产健康 / 蓝牙 / 身体传感器权限。
+- 后续 Apple Watch / iOS 保留为 iOS 第一优先路线，合理架构是 iOS app + watchOS companion + HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder；当前 Android-first 阶段不进入 dev，且 Apple SDK model 不能泄漏到 TrainFlow UI / history / analytics。
+- HUAWEI Band 9 当前只作为 feasibility 样本。先确认 Band 9 是否暴露标准 BLE Heart Rate Service `0x180D`，以及 Heart Rate Measurement characteristic `0x2A37` 是否可 notify；若可用，后续优先拆 Android BLE HRS adapter spike。
+- 若 BLE HRS 不可用，再验证 Huawei Health Kit / Health Service Kit 是否能在非华为 Android + Band 9 + HMS Core 条件下授权读取实时心率。Huawei 官方生态存在，但实时心率、地区、账号、设备支持、权限申请和非华为手机兼容性都必须验证，不直接承诺生产接入。
+- Health Connect 更适合历史摘要 / 趋势，例如 post-workout summaries 或 average heart-rate trend，不作为 E11.2a 实时执行页首选；如果只能通过华为运动健康查看或同步历史数据，则不作为执行页实时心率来源。
+- 后续 Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 只能作为 `HeartRateProvider` adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI、训练执行引擎、历史统计和 analytics 不能直接依赖 SDK model。
 
 ### 8.4 媒体
 
