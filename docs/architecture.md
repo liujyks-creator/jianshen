@@ -138,9 +138,9 @@ feature:settings
 
 ### 4.9 `core:health`
 
-- `HeartRateProvider` 抽象接口与 mock/disabled 实现。
-- 首版不绑定任何具体手环 SDK。
-- 后续可接 Health Connect、Wear OS 或设备厂商 SDK，但不能反向污染训练执行引擎。
+- `HeartRateProvider` source-aware 抽象接口与 disabled / mock / source-unavailable 实现。
+- E11.1 只收口 provider boundary 和不可用状态表达，不绑定具体手环 SDK，不接 Health Connect、Wear OS、BLE 或厂商 SDK。
+- 后续真实设备接入必须通过 provider adapter 转换为 `HeartRateState`，不能把 SDK model 泄漏到 UI、训练执行引擎或历史统计。
 
 ### 4.10 `ui:designsystem`
 
@@ -327,7 +327,7 @@ stateDiagram-v2
 
 ### 8.3 心率与健康数据
 
-首版只实现抽象状态和占位：
+首版只实现 source-aware 抽象状态和占位：
 
 ```kotlin
 interface HeartRateProvider {
@@ -335,10 +335,12 @@ interface HeartRateProvider {
 }
 ```
 
-- 默认实现可以是 `DisabledHeartRateProvider` 或 mock。
-- UI 可以展示未连接、连接中、正常、数据中断等状态。
-- 不做实时心率预警闭环。
-- 不因没有设备而阻塞训练闭环。
+- 默认实现可以是 `DisabledHeartRateProvider`、mock provider 或 source-unavailable provider。
+- UI 可以展示未获取心率、设备已连接但无读数、设备读数、手动读数来源、过期读数、provider 不可用和权限不可用等状态。
+- E11.1 不申请真实健康、蓝牙或身体传感器权限，不实现手动输入 UI，不持久化心率，不绘制平均心率趋势。
+- 不做实时心率预警闭环，不做医疗、危险或训练中断判断。
+- 不因没有设备或没有手动输入而阻塞训练闭环。
+- 后续 Health Connect、Wear OS、BLE 或厂商 SDK 只能作为 provider adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI 和历史统计不能直接依赖 SDK model。
 
 ### 8.4 媒体
 

@@ -839,32 +839,88 @@ type WorkoutEvent =
 
 ### 12.1 UI 状态接口
 
+`HeartRateState` 是训练执行页消费的 source-aware UI 抽象状态，不是历史趋势事实来源。
+
 ```ts
-type HeartRateAvailability =
-  | "disabled"
-  | "not_connected"
-  | "connecting"
-  | "available"
-  | "stale"
-  | "error";
+type HeartRateStateKind =
+  | "unavailable"
+  | "device_connected_no_reading"
+  | "device_reading"
+  | "manual_reading"
+  | "stale_reading"
+  | "permission_unavailable"
+  | "provider_unavailable";
+
+type HeartRateSourceKind = "none" | "device" | "manual";
+
+type HeartRateUnavailableReason =
+  | "no_source"
+  | "disabled_by_user"
+  | "not_configured";
 
 interface HeartRateState {
-  availability: HeartRateAvailability;
+  kind: HeartRateStateKind;
+  sourceKind: HeartRateSourceKind;
   bpm?: number;
   measuredAt?: string;
+  recordedAt?: string;
   sourceId?: string;
-  warningLevel?: "none" | "attention" | "high";
+  sourceLabel?: string;
+  unavailableReason?: HeartRateUnavailableReason;
   message?: string;
 }
 ```
 
+状态语义：
+
+- `unavailable` + `sourceKind: "none"` + `unavailableReason: "no_source"` 表示没有设备数据、没有手动数据，UI 显示“未获取心率”。
+- `device_connected_no_reading` 表示设备来源存在或已连接，但当前还没有可展示读数。
+- `device_reading` 表示来自设备或后续设备 adapter 的当前读数。
+- `manual_reading` 表示用户后续可选手动录入的读数，必须标注 `sourceKind: "manual"`，不得伪装成设备数据。
+- `stale_reading` 表示上一条明确来源读数已过期，可携带原来源和上次时间，但 UI 应弱化展示。
+- `permission_unavailable` 表示未来 provider adapter 需要的权限不可用；E11.1 不申请真实健康、蓝牙或身体传感器权限。
+- `provider_unavailable` 表示 provider 被禁用、当前构建未接入或平台能力不可用。
+
 ### 12.2 首版 UI 约束
 
-- 训练执行页消费 `HeartRateState`，不绑定具体手环 SDK。
-- 未连接设备时可以显示占位，也可以由用户偏好隐藏。
-- 首版允许 `warningLevel` 存在，但不要求实现医学化告警规则。
-- `HeartRateState` 是训练中 UI 消费的抽象状态，不等同于已持久化的历史心率记录；后续若用于趋势分析，必须另有明确来源和保存口径。
-- 心率来源以后以设备获取为优先，手动输入只是可选补充；没有设备数据且没有手动输入时，历史和趋势 UI 显示未获取心率。
+- 训练执行页消费 `HeartRateState`，不绑定具体手环 SDK、Health Connect、Wear OS、BLE 或厂商 SDK。
+- E11.1 只允许 disabled / mock / source-unavailable provider 抽象，不接真实设备，不实现手动输入 UI，不持久化心率记录。
+- 没有设备数据且没有手动数据时，执行页、历史页或趋势入口显示“未获取心率”。
+- 手动输入是后续可选补充，不是使用训练记录或趋势页的必需前置。
+- `warningLevel` 口径废弃，不再通过 `HeartRateState` 表达医疗、危险、强告警或训练中断判断。
+- `HeartRateState` 不得直接进入历史趋势事实；它只描述执行页当下可展示的来源、数值和不可用状态。
+
+### 12.3 后续持久化与平均心率趋势边界
+
+当前没有持久化心率记录模型。若后续要做平均心率趋势，必须另行设计 `WorkoutSession.heartRateSummary` 或独立 `heart_rate_samples` / `heart_rate_records`。
+
+```ts
+interface WorkoutSessionHeartRateSummary {
+  sourceKind: "device" | "manual";
+  averageBpm: number;
+  measuredAt?: string;
+  recordedAt: string;
+  sampleCount: number;
+  sourceId?: string;
+  sourceLabel?: string;
+}
+
+interface HeartRateSample {
+  sessionId: string;
+  sourceKind: "device" | "manual";
+  bpm: number;
+  measuredAt: string;
+  recordedAt: string;
+  sampleCount?: number;
+  sourceId?: string;
+  sourceLabel?: string;
+}
+```
+
+- 设备数据是后续平均心率趋势的优先来源；手动数据只能作为明确标注来源的可选补充。
+- 无明确 `sourceKind`、无 `bpm` / `averageBpm`、无 `measuredAt` / `recordedAt` 或无 `sampleCount` 边界时，不绘制平均心率趋势。
+- 平均心率趋势不得从执行页瞬时 `HeartRateState` 反推，不得绘制假趋势。
+- 心率趋势不得输出医疗判断、危险告警、训练中断依据、康复结论或强弱判断。
 
 ## 13. 恢复建议模型
 
