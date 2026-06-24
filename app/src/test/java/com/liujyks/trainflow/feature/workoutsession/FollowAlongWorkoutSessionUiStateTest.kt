@@ -1,9 +1,6 @@
 package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
-import com.liujyks.trainflow.core.model.HeartRateSourceKind
-import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
@@ -14,7 +11,7 @@ import org.junit.Test
 
 class FollowAlongWorkoutSessionUiStateTest {
     @Test
-    fun mapsCurrentActionMediaCountdownNextActionCueAndHeartRatePlaceholder() {
+    fun mapsCurrentActionMediaCountdownNextActionCueAndControls() {
         val plan = buildDefaultFollowAlongScreenState().plans.single().plan
         val engineState = TimedWorkoutEngine.dispatch(
             state = TimedWorkoutEngine.create(plan),
@@ -34,9 +31,6 @@ class FollowAlongWorkoutSessionUiStateTest {
         assertTrue(uiState.progressLabel.contains("步骤 1 /"))
         assertTrue(uiState.nextActionLabel.contains("下一动作"))
         assertTrue(uiState.shortCue.isNotBlank())
-        assertEquals("-- bpm", uiState.heartRate.valueText)
-        assertEquals("未获取心率", uiState.heartRate.statusText)
-        assertTrue(uiState.heartRate.boundaryText.contains("未接入真实设备"))
         assertTrue(uiState.progressFraction > 0f)
         assertTrue(uiState.immediateControls.any { control ->
             control.role == WorkoutImmediateControlRole.PAUSE_SESSION &&
@@ -70,26 +64,6 @@ class FollowAlongWorkoutSessionUiStateTest {
         assertTrue(labels.contains("要点"))
         assertTrue(labels.contains("常见错误"))
         assertTrue(uiState.detailRows.all { row -> row.text.isNotBlank() })
-    }
-
-    @Test
-    fun availableHeartRateStaysSecondaryAndAbstract() {
-        val plan = buildDefaultFollowAlongScreenState().plans.single().plan
-        val engineState = TimedWorkoutEngine.dispatch(
-            state = TimedWorkoutEngine.create(plan),
-            command = WorkoutCommand.StartSession
-        ).state
-        val uiState = engineState.toFollowAlongWorkoutSessionUiState(
-            heartRateState = HeartRateState(
-                kind = HeartRateStateKind.DEVICE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 128,
-                sourceLabel = "设备数据"
-            )
-        )
-
-        assertEquals("128 bpm", uiState.heartRate.valueText)
-        assertEquals("设备数据", uiState.heartRate.statusText)
     }
 
     @Test

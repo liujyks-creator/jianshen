@@ -7,10 +7,6 @@ import com.liujyks.trainflow.core.engine.StrengthWorkoutControlHistoryEvent
 import com.liujyks.trainflow.core.engine.StrengthWorkoutControlHistoryType
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
 import com.liujyks.trainflow.core.model.Exercise
-import com.liujyks.trainflow.core.model.HeartRateSourceKind
-import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
@@ -35,7 +31,6 @@ internal data class StrengthWorkoutSessionScreenState(
     val nextSetLabel: String,
     val confirmSummary: String?,
     val confirmation: StrengthSetConfirmationUiState?,
-    val heartRate: HeartRateDisplayUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
     val isTerminal: Boolean,
@@ -102,11 +97,6 @@ internal data class StrengthExerciseReplacementOptionUiState(
 )
 
 internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
-    heartRateState: HeartRateState = HeartRateState(
-        kind = HeartRateStateKind.UNAVAILABLE,
-        sourceKind = HeartRateSourceKind.NONE,
-        unavailableReason = HeartRateUnavailableReason.NO_SOURCE
-    ),
     exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise }
 ): StrengthWorkoutSessionScreenState {
     val exerciseById = exercises.associateBy { exercise -> exercise.id }
@@ -217,7 +207,6 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
             "按计划确认：${draft.defaultActualWeight.formatWeight()} · ${draft.defaultActualReps?.let { "$it 次" } ?: "未设次数"}"
         },
         confirmation = confirmation,
-        heartRate = heartRateState.toHeartRateDisplayUiState(),
         progressFraction = activeNumber.toFloat() / progressBase.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,

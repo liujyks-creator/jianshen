@@ -187,7 +187,7 @@ private fun FollowAlongWorkoutSessionScreen(
                 uiState = uiState,
                 onPrimaryToggle = if (uiState.canResume) onResume else onPause
             )
-            FollowAlongNextAndHeartRatePanel(uiState)
+            FollowAlongNextPanel(uiState)
             FollowAlongDetailPanel(uiState.detailRows)
             FollowAlongBoundaryPanel(uiState.boundaryCopy)
 
@@ -336,47 +336,13 @@ private fun FollowAlongCountdownPanel(
 }
 
 @Composable
-private fun FollowAlongNextAndHeartRatePanel(uiState: FollowAlongWorkoutSessionUiState) {
+private fun FollowAlongNextPanel(uiState: FollowAlongWorkoutSessionUiState) {
     FollowAlongDarkPanel {
         Text(
             text = uiState.nextActionLabel,
             style = MaterialTheme.typography.titleMedium,
             color = TrainFlowNeutral50
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "心率",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TrainFlowNeutral200
-                )
-                Text(
-                    text = uiState.heartRate.statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral500
-                )
-                if (uiState.heartRate.auxiliaryText.isNotBlank()) {
-                    Text(
-                        text = uiState.heartRate.auxiliaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TrainFlowNeutral500
-                    )
-                }
-                Text(
-                    text = uiState.heartRate.boundaryText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TrainFlowNeutral500
-                )
-            }
-            Text(
-                text = uiState.heartRate.valueText,
-                style = MaterialTheme.typography.titleLarge,
-                color = if (uiState.heartRate.isAvailable) TrainFlowAccent else TrainFlowNeutral200
-            )
-        }
     }
 }
 

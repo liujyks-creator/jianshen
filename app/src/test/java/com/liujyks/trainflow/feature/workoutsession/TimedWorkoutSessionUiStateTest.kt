@@ -4,10 +4,6 @@ import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
-import com.liujyks.trainflow.core.model.HeartRateSourceKind
-import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
@@ -134,26 +130,6 @@ class TimedWorkoutSessionUiStateTest {
         ).state
 
         assertFalse(completed.shouldTickTimedRouteClock())
-    }
-
-    @Test
-    fun heartRatePlaceholderStaysSecondaryAndAbstract() {
-        val plan = buildDefaultPlanManagementState().plans.first()
-        val started = TimedWorkoutEngine.dispatch(
-            TimedWorkoutEngine.create(plan),
-            WorkoutCommand.StartSession
-        ).state
-        val uiState = started.toTimedWorkoutSessionScreenState(
-            heartRateState = HeartRateState(
-                kind = HeartRateStateKind.UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.NONE,
-                unavailableReason = HeartRateUnavailableReason.NO_SOURCE
-            )
-        )
-
-        assertEquals("-- bpm", uiState.heartRate.valueText)
-        assertEquals("未获取心率", uiState.heartRate.statusText)
-        assertFalse(uiState.heartRate.isAvailable)
     }
 
     @Test

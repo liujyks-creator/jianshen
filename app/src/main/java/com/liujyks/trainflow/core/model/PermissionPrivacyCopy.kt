@@ -7,8 +7,8 @@ internal object PermissionPrivacyCopy {
     const val ACTIVE_WORKOUT_NOTIFICATION: String =
         "活跃训练通知只是训练状态摘要，不是 foreground service，不保证后台可靠计时或进程死亡恢复。"
 
-    const val HEART_RATE: String =
-        "心率当前是抽象状态 / 占位展示，未接入真实设备、手环、手表或健康数据；不做医疗告警、危险判断或训练强度判断。"
+    const val HEALTH_DATA: String =
+        "当前首版不显示心率、不录入心率、不统计心率，也未接入真实设备、手环、手表或健康数据；未来健康数据不得做医疗告警、危险判断或训练强度判断。"
 
     const val RECOVERY: String =
         "恢复建议基于训练动作 / 部位的基础放松映射，不是医疗诊断、康复治疗或疼痛处理建议。"
@@ -32,8 +32,8 @@ internal object PermissionPrivacyCopy {
             body = ACTIVE_WORKOUT_NOTIFICATION
         ),
         PermissionPrivacySection(
-            title = "心率",
-            body = HEART_RATE
+            title = "健康数据",
+            body = HEALTH_DATA
         ),
         PermissionPrivacySection(
             title = "恢复建议",

@@ -151,9 +151,6 @@ private fun HistoryScreen(
                 item {
                     ModeBreakdownCard(charts.modeBreakdown)
                 }
-                item {
-                    HeartRateUnavailableCard(charts.heartRateUnavailableText)
-                }
             }
 
             uiState.timedComparableRestTrendUiState?.let { trend ->
@@ -563,22 +560,6 @@ private fun ModeBreakdownRow(
                 .fillMaxWidth(row.percentLabel.removeSuffix("%").toFloatOrNull()?.div(100f)?.coerceIn(0f, 1f) ?: 0f)
                 .height(8.dp)
                 .background(color, RoundedCornerShape(999.dp))
-        )
-    }
-}
-
-@Composable
-private fun HeartRateUnavailableCard(message: String) {
-    HistoryCard {
-        Text(
-            text = "未获取心率",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TrainFlowNeutral700
         )
     }
 }

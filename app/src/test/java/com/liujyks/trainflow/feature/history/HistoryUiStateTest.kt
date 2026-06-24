@@ -1264,8 +1264,6 @@ class HistoryUiStateTest {
             ).aggregateChartsUiState
         )
 
-        assertEquals(null, charts.averageHeartRateTrend)
-        assertTrue(charts.heartRateUnavailableText.contains("未获取心率"))
         assertFalse(
             listOf(
                 charts.countTrend,

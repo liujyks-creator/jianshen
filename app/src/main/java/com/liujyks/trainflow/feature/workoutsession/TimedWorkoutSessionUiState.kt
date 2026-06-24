@@ -7,10 +7,6 @@ import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryEvent
 import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryType
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.Exercise
-import com.liujyks.trainflow.core.model.HeartRateSourceKind
-import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.TimedStageType
@@ -30,7 +26,6 @@ internal data class TimedWorkoutSessionScreenState(
     val nextStepLabel: String,
     val shortCue: String,
     val countdownReminder: TimedWorkoutCountdownReminderUiState,
-    val heartRate: HeartRateDisplayUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
     val isTerminal: Boolean,
@@ -84,11 +79,6 @@ internal enum class TimedWorkoutCountdownReminderType {
 }
 
 internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
-    heartRateState: HeartRateState = HeartRateState(
-        kind = HeartRateStateKind.UNAVAILABLE,
-        sourceKind = HeartRateSourceKind.NONE,
-        unavailableReason = HeartRateUnavailableReason.NO_SOURCE
-    ),
     exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise }
 ): TimedWorkoutSessionScreenState {
     val exerciseById = exercises.associateBy { exercise -> exercise.id }
@@ -185,7 +175,6 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         nextStepLabel = nextStepLabel,
         shortCue = shortCue,
         countdownReminder = countdownReminder,
-        heartRate = heartRateState.toHeartRateDisplayUiState(),
         progressFraction = when (status) {
             SessionStatus.COMPLETED -> 1f
             else -> (activeElapsedSec.toFloat() / totalPlannedDurationSec.toFloat()).coerceIn(0f, 1f)

@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -594,16 +593,7 @@ private fun TimedWorkoutExecutionScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            HeartRatePanel(
-                heartRate = uiState.heartRate,
-                compact = true,
-                modifier = Modifier.graphicsLayer {
-                    alpha = timerDialSupportingContentAlpha(morphProgress)
-                    translationY = 8.dp.toPx() * morphProgress
-                }
-            )
 
-            Spacer(modifier = Modifier.height(if (compact) 6.dp else 8.dp))
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 if (!uiState.isPaused || morphProgress < 1f) {
@@ -665,7 +655,6 @@ private fun TimedWorkoutTerminalScreen(
             uiState = uiState,
             onPrimaryToggle = {}
         )
-        HeartRatePanel(uiState.heartRate)
         TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
     }
 }
@@ -1008,73 +997,6 @@ private fun Int.formatReadyDuration(): String {
         minutes > 0 && seconds > 0 -> "约 ${minutes}分${seconds}秒"
         minutes > 0 -> "约 ${minutes}分钟"
         else -> "约 ${seconds}秒"
-    }
-}
-
-@Composable
-private fun HeartRatePanel(
-    heartRate: HeartRateDisplayUiState,
-    compact: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    val isBigType = LocalTrainFlowSkin.current.isBigType
-    DarkInfoPanel(
-        modifier = modifier,
-        contentPadding = if (compact) 12.dp else 16.dp,
-        verticalSpacing = if (compact) 6.dp else 8.dp
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "心率",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TrainFlowNeutral200
-                )
-                Text(
-                    text = heartRate.statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral500
-                )
-                if (!isBigType && !compact && heartRate.auxiliaryText.isNotBlank()) {
-                    Text(
-                        text = heartRate.auxiliaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TrainFlowNeutral500
-                    )
-                }
-                if (!isBigType) {
-                    Text(
-                        text = heartRate.boundaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TrainFlowNeutral500,
-                        maxLines = if (compact) 2 else 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Text(
-                text = heartRate.valueText,
-                modifier = Modifier.widthIn(min = if (isBigType || compact) 76.dp else 84.dp),
-                style = if (isBigType) {
-                    MaterialTheme.typography.titleMedium
-                } else {
-                    MaterialTheme.typography.titleLarge
-                },
-                color = if (heartRate.isAvailable) TrainFlowAccent else TrainFlowNeutral200,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                softWrap = false
-            )
-        }
     }
 }
 

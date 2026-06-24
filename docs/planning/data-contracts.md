@@ -641,11 +641,11 @@ E12.2b 力量同类 set 趋势口径：
 - 不得把原动作 block 和替换后动作 block 拼接为候选集合，也不得让替换动作自动并入原动作趋势；替换记录必须在趋势 UI 标注来源。
 - 趋势只展示 planned / actual weight、planned / actual reps、set kind、set order、actual rest 和 active duration 等可回顾字段；不判断强弱，不推荐加重量，不输出康复、医疗或训练中断结论。
 
-E12 后续心率趋势边界：
+E12 / E11.3 后续心率趋势边界：
 
-- 心率趋势只能消费已经保存到训练记录或分析数据源中的明确来源心率数据，不能直接把执行页瞬时 `HeartRateState` 当作历史趋势事实。
-- 心率来源优先级是设备获取优先，用户手动输入只是可选补充；手动输入不是平均心率趋势的必需前置。
-- 如果设备心率和手动心率都不存在，历史页和趋势页应显示未获取心率，不绘制假平均心率趋势。
+- E11.3 后首版不显示、不录入、不统计心率，也不规划平均心率趋势。
+- 如果未来重新进入健康设备阶段，心率趋势只能消费已经保存到训练记录或分析数据源中的明确来源心率数据，不能直接把执行页瞬时 `HeartRateState` 当作历史趋势事实。
+- 当前没有设备心率或手动心率 UI；历史页和趋势页不显示未获取心率占位，不绘制假平均心率趋势。
 - 所有心率趋势必须标注来源边界，不得做医疗判断、危险告警、训练中断依据或康复结论。
 
 ### 9.2 执行步骤
@@ -873,10 +873,10 @@ interface HeartRateState {
 
 状态语义：
 
-- `unavailable` + `sourceKind: "none"` + `unavailableReason: "no_source"` 表示没有设备数据、没有手动数据，UI 显示“未获取心率”。
+- `unavailable` + `sourceKind: "none"` + `unavailableReason: "no_source"` 表示没有设备数据、没有手动数据；E11.3 后当前生产 UI 不显示该状态。
 - `device_connected_no_reading` 表示设备来源存在或已连接，但当前还没有可展示读数。
 - `device_reading` 表示来自设备或后续设备 adapter 的当前读数。
-- `manual_reading` 表示用户后续可选手动录入的读数，必须标注 `sourceKind: "manual"`，不得伪装成设备数据。
+- `manual_reading` 表示未来可能重新设计的手动来源读数，必须标注 `sourceKind: "manual"`，不得伪装成设备数据；E11.3 后首版不提供手动输入。
 - `stale_reading` 表示上一条明确来源读数已过期，可携带原来源和上次时间，但 UI 应弱化展示。
 - `permission_unavailable` 表示未来 provider adapter 需要的权限不可用；E11.1 不申请真实健康、蓝牙或身体传感器权限。
 - `provider_unavailable` 表示 provider 被禁用、当前构建未接入或平台能力不可用。
@@ -888,7 +888,7 @@ interface HeartRateState {
 - 通用心率设备：标准 BLE Heart Rate Service 仍是 Android-first 最通用的实时路线；但当前设备条件下必须先确认 HUAWEI Band 9 是否暴露 BLE HRS `0x180D`，以及 Heart Rate Measurement characteristic `0x2A37` 是否可 notify，再决定是否进入 BLE adapter spike。
 - Huawei Health Kit / Health Service Kit：官方生态存在，但实时心率、地区、账号、设备支持、权限申请、非华为手机兼容性都要验证。若 Band 9 不暴露 BLE HRS，再验证 Huawei Health Kit / Health Service Kit 是否能在非华为 Android + Band 9 + HMS Core 条件下授权读取实时心率。
 - Health Connect：更适合历史摘要 / 趋势，例如 post-workout summaries 或 average heart-rate trend，不作为 E11.2a 实时执行页首选。
-- 所有设备路线都必须统一输出 TrainFlow `HeartRateState`，标注来源；手动数据必须是 `sourceKind: "manual"`，不得伪装成设备数据。
+- 所有未来设备路线都必须统一输出 TrainFlow `HeartRateState`，标注来源；如未来重新引入手动数据，必须是 `sourceKind: "manual"`，不得伪装成设备数据。
 
 E11.2a feasibility smoke 边界：
 
@@ -898,20 +898,20 @@ E11.2a feasibility smoke 边界：
 - 如果只能通过华为运动健康查看或同步历史数据，则不作为执行页实时心率来源。
 - 设备数据必须经 `HeartRateProvider` adapter 输出统一 `HeartRateState`；来源必须标注 `sourceKind`、`sourceId` / `sourceLabel`。
 - 不做医疗判断、危险告警、训练中断依据或康复结论。
-- 手动输入仍保留为 E11.3 可选项，不倒灌到 E11.2。
+- E11.3 已撤销首版手动输入，不倒灌到 E11.2。
 
 ### 12.2 首版 UI 约束
 
-- 训练执行页消费 `HeartRateState`，不绑定具体手环 SDK、Health Connect、Wear OS、BLE 或厂商 SDK。
-- E11.1 只允许 disabled / mock / source-unavailable provider 抽象，不接真实设备、HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK，不实现手动输入 UI，不持久化心率记录。
-- 没有设备数据且没有手动数据时，执行页、历史页或趋势入口显示“未获取心率”。
-- 手动输入是后续可选补充，不是使用训练记录或趋势页的必需前置。
+- E11.3 后训练执行页、历史页和趋势页不消费 `HeartRateState`，不绑定具体手环 SDK、Health Connect、Wear OS、BLE 或厂商 SDK。
+- E11.1 只允许 disabled / mock / source-unavailable provider 抽象，不接真实设备、HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK，不实现或保留手动输入 UI，不持久化心率记录。
+- 没有设备数据且没有手动数据时，执行页、历史页或趋势入口也不显示“未获取心率”占位；首版直接隐藏心率能力。
+- 手动输入已撤销，不作为训练记录或趋势页前置。
 - `warningLevel` 口径废弃，不再通过 `HeartRateState` 表达医疗、危险、强告警或训练中断判断。
 - `HeartRateState` 不得直接进入历史趋势事实；它只描述执行页当下可展示的来源、数值和不可用状态。
 
 ### 12.3 后续持久化与平均心率趋势边界
 
-当前没有持久化心率记录模型。若后续要做平均心率趋势，必须另行设计 `WorkoutSession.heartRateSummary` 或独立 `heart_rate_samples` / `heart_rate_records`。
+当前没有持久化心率记录模型，且 E11.3 后首版不再规划平均心率趋势。若未来重新进入健康设备阶段，必须另行设计 `WorkoutSession.heartRateSummary` 或独立 `heart_rate_samples` / `heart_rate_records`。
 
 ```ts
 interface WorkoutSessionHeartRateSummary {
@@ -936,7 +936,7 @@ interface HeartRateSample {
 }
 ```
 
-- 设备数据是后续平均心率趋势的优先来源；手动数据只能作为明确标注来源的可选补充。
+- 设备数据只能作为未来心率趋势的优先来源；手动数据如重新引入，只能作为明确标注来源的可选补充。
 - 未来任何持久化 sample / summary 都必须至少保留 `sourceKind`、`sourceLabel`、`sourceId`、`sampleCount`、`measuredAt` 和 `recordedAt` 边界；缺少这些边界时只能作为不可比较或不可绘制数据处理。
 - 无明确 `sourceKind`、无 `bpm` / `averageBpm`、无 `measuredAt` / `recordedAt` 或无 `sampleCount` 边界时，不绘制平均心率趋势。
 - 平均心率趋势不得从执行页瞬时 `HeartRateState` 反推，不得绘制假趋势。

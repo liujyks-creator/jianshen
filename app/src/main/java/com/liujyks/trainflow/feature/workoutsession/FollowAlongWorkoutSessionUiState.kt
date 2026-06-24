@@ -7,10 +7,6 @@ import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryEvent
 import com.liujyks.trainflow.core.engine.TimedWorkoutControlHistoryType
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.Exercise
-import com.liujyks.trainflow.core.model.HeartRateSourceKind
-import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.WorkoutCommand
@@ -29,7 +25,6 @@ internal data class FollowAlongWorkoutSessionUiState(
     val demoStatusLabel: String,
     val detailRows: List<FollowAlongWorkoutDetailRowUiState>,
     val boundaryCopy: String,
-    val heartRate: HeartRateDisplayUiState,
     val progressFraction: Float,
     val isPaused: Boolean,
     val isTerminal: Boolean,
@@ -66,11 +61,6 @@ internal fun FollowAlongWorkoutSessionControl.toWorkoutCommand(): WorkoutCommand
 }
 
 internal fun TimedWorkoutEngineState.toFollowAlongWorkoutSessionUiState(
-    heartRateState: HeartRateState = HeartRateState(
-        kind = HeartRateStateKind.UNAVAILABLE,
-        sourceKind = HeartRateSourceKind.NONE,
-        unavailableReason = HeartRateUnavailableReason.NO_SOURCE
-    ),
     exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise }
 ): FollowAlongWorkoutSessionUiState {
     val exerciseById = exercises.associateBy { exercise -> exercise.id }
@@ -161,7 +151,6 @@ internal fun TimedWorkoutEngineState.toFollowAlongWorkoutSessionUiState(
         demoStatusLabel = "演示占位 · 无真实媒体播放",
         detailRows = detailExercise.toDetailRows(),
         boundaryCopy = "基础跟练雏形：只从 E6.1 preset 启动，复用计时引擎和动作内容；不提供真实媒体播放、动作分析、音乐编排或自动口令。",
-        heartRate = heartRateState.toHeartRateDisplayUiState(),
         progressFraction = activeStepNumber.toFloat() / totalSteps.toFloat(),
         isPaused = status == SessionStatus.PAUSED,
         isTerminal = isTerminal,

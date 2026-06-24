@@ -23,7 +23,7 @@ class TrainingPreferencesUiStateTest {
         assertEquals(3, state.uiSkinOptions.size)
         assertEquals(7, state.permissionPrivacySections.size)
         assertTrue(state.permissionPrivacySections.any { section -> section.title == "通知权限" })
-        assertTrue(state.permissionPrivacySections.any { section -> section.title == "心率" })
+        assertTrue(state.permissionPrivacySections.any { section -> section.title == "健康数据" })
     }
 
     @Test
@@ -60,6 +60,7 @@ class TrainingPreferencesUiStateTest {
         assertTrue(copy.contains("关闭后训练仍可正常使用"))
         assertTrue(copy.contains("普通通知可能被系统延迟"))
         assertTrue(copy.contains("不是 foreground service"))
+        assertTrue(copy.contains("不显示心率"))
         assertTrue(copy.contains("未接入真实设备"))
         assertTrue(copy.contains("未实现语音控制"))
         assertFalse(copy.contains("后台可靠计时已完成"))

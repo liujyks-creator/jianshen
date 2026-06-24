@@ -230,9 +230,7 @@ internal data class WorkoutAggregateChartsUiState(
     val statusTrend: AggregateTrendChartUiState,
     val elapsedTrend: AggregateTrendChartUiState,
     val restTrend: AggregateTrendChartUiState,
-    val modeBreakdown: ModeBreakdownChartUiState,
-    val averageHeartRateTrend: AggregateTrendChartUiState?,
-    val heartRateUnavailableText: String
+    val modeBreakdown: ModeBreakdownChartUiState
 )
 
 internal data class AggregateTrendChartUiState(
@@ -673,9 +671,7 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         statusTrend = statusTrend,
         elapsedTrend = elapsedTrend,
         restTrend = restTrend,
-        modeBreakdown = toModeBreakdownChart(),
-        averageHeartRateTrend = null,
-        heartRateUnavailableText = "未获取心率：当前没有明确来源的设备心率或可选手动心率记录，因此不绘制心率趋势。"
+        modeBreakdown = toModeBreakdownChart()
     )
 }
 

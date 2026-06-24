@@ -300,8 +300,6 @@ private fun StrengthWorkoutSessionScreen(
                 onCancelSkipExercise = onCancelSkipExercise,
                 onConfirmSkipExercise = onConfirmSkipExercise
             )
-            StrengthHeartRatePanel(uiState.heartRate)
-
             if (uiState.isTerminal) {
                 StrengthTerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
             } else if (!skin.isBigType) {
@@ -913,53 +911,6 @@ private fun StrengthExerciseAdjustmentPanel(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun StrengthHeartRatePanel(heartRate: HeartRateDisplayUiState) {
-    val isBigType = LocalTrainFlowSkin.current.isBigType
-    StrengthDarkInfoPanel {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "心率",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TrainFlowNeutral200
-                )
-                Text(
-                    text = heartRate.statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral500
-                )
-                if (!isBigType && heartRate.auxiliaryText.isNotBlank()) {
-                    Text(
-                        text = heartRate.auxiliaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TrainFlowNeutral500
-                    )
-                }
-                if (!isBigType) {
-                    Text(
-                        text = heartRate.boundaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TrainFlowNeutral500
-                    )
-                }
-            }
-            Text(
-                text = heartRate.valueText,
-                style = if (isBigType) {
-                    MaterialTheme.typography.titleMedium
-                } else {
-                    MaterialTheme.typography.titleLarge
-                },
-                color = if (heartRate.isAvailable) TrainFlowAccent else TrainFlowNeutral200
-            )
         }
     }
 }

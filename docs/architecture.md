@@ -120,7 +120,7 @@ feature:settings
   - 默认临近结束提醒秒数。
   - 声音、震动、强化动画开关。
   - 力量训练本组计时默认模式。
-  - 心率占位显示偏好。
+  - 健康数据边界偏好预留；首版不显示心率占位。
 
 ### 4.7 `core:notifications`
 
@@ -337,10 +337,10 @@ interface HeartRateProvider {
 ```
 
 - 默认实现可以是 `DisabledHeartRateProvider`、mock provider 或 source-unavailable provider。
-- UI 可以展示未获取心率、设备已连接但无读数、设备读数、手动读数来源、过期读数、provider 不可用和权限不可用等状态。
-- E11.1 不申请真实健康、蓝牙或身体传感器权限，不实现手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK。
+- `HeartRateState` 可以表达未获取、设备已连接但无读数、设备读数、手动读数来源、过期读数、provider 不可用和权限不可用等状态，但 E11.3 后当前生产 UI、历史和统计不消费它。
+- E11.1 / E11.3 不申请真实健康、蓝牙或身体传感器权限，不实现或保留手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK。
 - 不做实时心率预警闭环，不做医疗、危险或训练中断判断。
-- 不因没有设备或没有手动输入而阻塞训练闭环。
+- 不因没有设备或没有手动输入而阻塞训练闭环；首版直接隐藏心率能力。
 - E11.2a 不持久化心率，不绘制平均心率趋势，不把执行页瞬时 `HeartRateState` 当历史事实，不申请生产健康 / 蓝牙 / 身体传感器权限。
 - 后续 Apple Watch / iOS 保留为 iOS 第一优先路线，合理架构是 iOS app + watchOS companion + HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder；当前 Android-first 阶段不进入 dev，且 Apple SDK model 不能泄漏到 TrainFlow UI / history / analytics。
 - HUAWEI Band 9 当前只作为 feasibility 样本。先确认 Band 9 是否暴露标准 BLE Heart Rate Service `0x180D`，以及 Heart Rate Measurement characteristic `0x2A37` 是否可 notify；若可用，后续优先拆 Android BLE HRS adapter spike。
@@ -439,7 +439,7 @@ interface HeartRateProvider {
 1. 最低 Android 版本与目标 Android SDK。
 2. 是否首版要求训练退到后台后仍持续准确计时。
 3. 首批动作内容是随包静态 JSON，还是 Room seed 数据。
-4. 是否在首版显示心率未连接占位，还是默认隐藏到设置中。
+4. 若未来重新进入健康设备阶段，是否恢复心率显示、放在何处、以及如何避免挤压训练主信息。
 5. 训练提醒是否只做普通通知，还是在后续版本增加精确提醒选项。
 6. 官方默认 UI 是否先只做浅色工作区 + 深色训练执行页，还是首版同时提供暗色主题。
 
