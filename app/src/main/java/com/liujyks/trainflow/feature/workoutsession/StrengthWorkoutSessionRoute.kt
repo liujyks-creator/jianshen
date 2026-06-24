@@ -253,6 +253,7 @@ private fun StrengthWorkoutSessionScreen(
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
+    val bottomControlsSpec = trainingExecutionBottomControlsSpec()
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -271,7 +272,7 @@ private fun StrengthWorkoutSessionScreen(
                     bottom = if (uiState.isTerminal) {
                         22.dp
                     } else {
-                        skin.tokens.executionControlReserveDp.dp
+                        bottomControlsSpec.fixedBottomContentReserve
                     }
                 ),
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
@@ -929,6 +930,7 @@ private fun StrengthSessionControls(
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
+    val controlsSpec = trainingExecutionBottomControlsSpec()
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = skin.tokens.primary,
@@ -938,8 +940,8 @@ private fun StrengthSessionControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = controlsSpec.verticalPadding),
+            verticalArrangement = Arrangement.spacedBy(controlsSpec.rowSpacing)
         ) {
             val canConfirmSet = uiState.canConfirmPlanned && confirmationValidation?.canConfirm == true
             Button(
@@ -957,13 +959,7 @@ private fun StrengthSessionControls(
                     uiState.canStartNextDuringRest,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (skin.isBigType) {
-                            Modifier.heightIn(min = skin.tokens.trainingButtonHeightDp.dp)
-                        } else {
-                            Modifier
-                        }
-                    ),
+                    .heightIn(min = controlsSpec.primaryButtonMinHeight),
                 shape = RoundedCornerShape(currentCardCorner()),
                 colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
@@ -989,7 +985,7 @@ private fun StrengthSessionControls(
                     enabled = uiState.canResume || uiState.canPause,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp),
+                        .heightIn(min = controlsSpec.secondaryButtonMinHeight),
                     shape = RoundedCornerShape(currentCardCorner())
                 ) {
                     Text(
@@ -1004,7 +1000,7 @@ private fun StrengthSessionControls(
                     enabled = uiState.canEnd,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                        .heightIn(min = controlsSpec.secondaryButtonMinHeight)
                 ) {
                     Text(
                         text = "结束训练",

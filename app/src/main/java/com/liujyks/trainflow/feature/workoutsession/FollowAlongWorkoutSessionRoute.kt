@@ -165,6 +165,7 @@ private fun FollowAlongWorkoutSessionScreen(
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
+    val bottomControlsSpec = trainingExecutionBottomControlsSpec()
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -177,7 +178,7 @@ private fun FollowAlongWorkoutSessionScreen(
                 .padding(horizontal = currentPageHorizontalPadding())
                 .padding(
                     top = if (skin.isBigType) 14.dp else 22.dp,
-                    bottom = if (uiState.isTerminal) 22.dp else skin.tokens.executionControlReserveDp.dp
+                    bottom = if (uiState.isTerminal) 22.dp else bottomControlsSpec.fixedBottomContentReserve
                 ),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -397,6 +398,7 @@ private fun FollowAlongControls(
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
+    val controlsSpec = trainingExecutionBottomControlsSpec()
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = skin.tokens.primary,
@@ -406,15 +408,15 @@ private fun FollowAlongControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = controlsSpec.verticalPadding),
+            verticalArrangement = Arrangement.spacedBy(controlsSpec.rowSpacing)
         ) {
             Button(
                 onClick = if (uiState.canResume) onResume else onPause,
                 enabled = uiState.canResume || uiState.canPause,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = if (skin.isBigType) skin.tokens.trainingButtonHeightDp.dp else 48.dp),
+                    .heightIn(min = controlsSpec.primaryButtonMinHeight),
                 shape = RoundedCornerShape(currentCardCorner()),
                 colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
             ) {
@@ -434,7 +436,7 @@ private fun FollowAlongControls(
                     enabled = uiState.canSkip,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp),
+                        .heightIn(min = controlsSpec.secondaryButtonMinHeight),
                     shape = RoundedCornerShape(currentCardCorner())
                 ) {
                     Text(
@@ -448,7 +450,7 @@ private fun FollowAlongControls(
                     enabled = uiState.canEnd,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
+                        .heightIn(min = controlsSpec.secondaryButtonMinHeight)
                 ) {
                     Text(
                         text = "结束训练",

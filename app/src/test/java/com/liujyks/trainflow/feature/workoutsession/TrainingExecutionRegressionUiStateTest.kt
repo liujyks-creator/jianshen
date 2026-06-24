@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.feature.workoutsession
 
+import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.media.WorkoutSoundCueAudioPolicy
@@ -222,21 +223,132 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
-    fun timedPausedMorphKeepsResumeHeartRatePlanTitleAndBottomActionSemantics() {
+    fun timedPausedMorphKeepsResumePlanTitleAndBottomActionSemanticsWithoutHeartRateUi() {
         val source = File(
             "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
         ).readText(Charsets.UTF_8)
 
         assertTrue(source.contains("TimedSessionTopBar(uiState = uiState)"))
         assertTrue(source.contains("text = uiState.planTitle"))
+        assertFalse(source.contains("text = \"WORKOUTS\""))
+        assertTrue(source.contains("timedExecutionLayoutSpec(compact)"))
+        assertTrue(source.contains("layoutSpec.topElasticWeight"))
+        assertTrue(source.contains("layoutSpec.bottomElasticWeight"))
         assertTrue(source.contains("TimerDialPauseMorph("))
+        assertTrue(source.contains("timerDialLayoutSpec.dialSizeDp.dp"))
         assertTrue(source.contains("PausedResumeCircle("))
         assertTrue(source.contains("contentDescription = \"继续训练"))
-        assertTrue(source.contains("HeartRatePanel("))
-        assertTrue(source.contains("heartRate = uiState.heartRate"))
+        assertFalse(source.contains("HeartRatePanel("))
+        assertFalse(source.contains("heartRate = uiState.heartRate"))
         assertTrue(source.contains("PausedBottomActionRow("))
         assertTrue(source.contains("contentDescription = \"返回阶段设定\""))
         assertTrue(source.contains("contentDescription = \"结束此次计时训练\""))
+
+        val timerDialSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimerDial.kt"
+        ).readText(Charsets.UTF_8)
+        assertTrue(timerDialSource.contains("Modifier.requiredSize(dialSize)"))
+    }
+
+    @Test
+    fun timedRestExtensionControlKeepsBottomButtonsStableDuringConfirmation() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val interactionSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedRestExtensionInteractionState.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(routeSource.contains("val controlHeight"))
+        assertTrue(routeSource.contains(".height(controlHeight)"))
+        assertTrue(routeSource.contains("targetState = restExtensionControl.buttonLabel"))
+        assertTrue(routeSource.contains("maxLines = 1"))
+        assertTrue(routeSource.contains("softWrap = false"))
+        assertTrue(routeSource.contains("textAlign = TextAlign.Center"))
+        assertTrue(routeSource.contains("contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)"))
+        assertTrue(interactionSource.contains("buttonLabel = \"确认+15s\""))
+        assertTrue(interactionSource.contains("buttonLabel = \"+15s\""))
+        assertFalse(interactionSource.contains("+15秒"))
+    }
+
+    @Test
+    fun timedExecutionLayoutSpecKeepsTimerDialPrimaryAfterHeartRateRemoval() {
+        val compact = timedExecutionLayoutSpec(compact = true)
+        val regular = timedExecutionLayoutSpec(compact = false)
+
+        assertTrue(compact.titleToTotalSpacer <= 18.dp)
+        assertTrue(compact.totalRemainingBlockHeight <= 90.dp)
+        assertTrue(compact.topElasticWeight < compact.bottomElasticWeight)
+        assertEquals(48.dp, compact.controlButtonMinHeight)
+
+        assertTrue(regular.titleToTotalSpacer <= 26.dp)
+        assertTrue(regular.totalRemainingBlockHeight <= 104.dp)
+        assertTrue(regular.topElasticWeight < regular.bottomElasticWeight)
+        assertEquals(48.dp, regular.controlButtonMinHeight)
+    }
+
+    @Test
+    fun sharedExecutionBottomControlsReserveProtectsFollowAlongAndStrengthContent() {
+        val specSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TrainingExecutionBottomControlsSpec.kt"
+        ).readText(Charsets.UTF_8)
+        val followAlongSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/FollowAlongWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val strengthSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(specSource.contains("primaryButtonMinHeight = maxOf(48.dp"))
+        assertTrue(specSource.contains("secondaryButtonMinHeight = maxOf(48.dp"))
+        assertTrue(specSource.contains("bottomSafeAreaReserve = 32.dp"))
+        assertTrue(specSource.contains("fixedBottomContentReserve"))
+
+        listOf(followAlongSource, strengthSource).forEach { source ->
+            assertTrue(source.contains("trainingExecutionBottomControlsSpec()"))
+            assertTrue(source.contains("bottomControlsSpec.fixedBottomContentReserve"))
+            assertTrue(source.contains(".navigationBarsPadding()"))
+            assertTrue(source.contains("controlsSpec.primaryButtonMinHeight"))
+            assertTrue(source.contains("controlsSpec.secondaryButtonMinHeight"))
+            assertTrue(source.contains("controlsSpec.verticalPadding"))
+            assertTrue(source.contains("controlsSpec.rowSpacing"))
+            assertFalse(source.contains("bottom = if (uiState.isTerminal) 22.dp else skin.tokens.executionControlReserveDp.dp"))
+        }
+
+        assertFalse(strengthSource.contains("if (skin.isBigType) {\n                            Modifier.heightIn"))
+    }
+
+    @Test
+    fun timedReadyRunningPausedRestAndRestExtensionStatesStayWithinExistingSemantics() {
+        val plan = buildDefaultPlanManagementState().plans.first()
+        var state = TimedWorkoutEngine.create(plan)
+        assertTrue(state.isTimedReadyStartGate())
+        assertEquals("准备开始", state.toTimedWorkoutSessionScreenState().currentTitle)
+
+        state = state.startTimedSessionFromReadyGate().state
+        val running = state.toTimedWorkoutSessionScreenState()
+        assertTrue(running.canPause)
+        assertTrue(running.canSkip)
+        assertFalse(running.canExtendRest)
+
+        val paused = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession)
+            .state
+            .toTimedWorkoutSessionScreenState()
+        assertTrue(paused.canResume)
+        assertFalse(paused.canExtendRest)
+
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+        val rest = state.toTimedWorkoutSessionScreenState()
+        assertTrue(rest.canExtendRest)
+        assertTrue(rest.canPause)
+        assertTrue(rest.canEnd)
+
+        val interactionSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedRestExtensionInteractionState.kt"
+        ).readText(Charsets.UTF_8)
+        assertTrue(interactionSource.contains("buttonLabel = \"确认+15s\""))
+        assertTrue(interactionSource.contains("buttonLabel = \"+15s\""))
     }
 
     @Test
@@ -308,9 +420,7 @@ class TrainingExecutionRegressionUiStateTest {
             canResume,
             canSkip,
             canExtendRest,
-            canEnd,
-            heartRate.statusText,
-            heartRate.valueText
+            canEnd
         )
     }
 
@@ -329,9 +439,7 @@ class TrainingExecutionRegressionUiStateTest {
             canPause,
             canResume,
             canEnd,
-            immediateControls.map { control -> control.role to control.placement },
-            heartRate.statusText,
-            heartRate.valueText
+            immediateControls.map { control -> control.role to control.placement }
         )
     }
 
