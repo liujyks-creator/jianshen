@@ -290,12 +290,16 @@ class TimerDialUiStateTest {
             val outerInnerEdge = spec.outerDiameterDp / 2f - spec.outerMaxStrokeDp / 2f
             val centerGap = innerRadius - spec.innerMarkerRadiusDp - centerRadius
             val outerGap = outerInnerEdge - (innerRadius + spec.innerMarkerRadiusDp)
+            val centerBaseRingGap = innerRadius - spec.innerBaseStrokeDp / 2f - centerRadius
+            val outerBaseRingGap = outerInnerEdge - (innerRadius + spec.innerBaseStrokeDp / 2f)
             val markerInternalGap = spec.innerMarkerBoundaryRadiusDp - spec.innerBaseDotRadiusDp
 
             assertTrue("${skin.id} base ring should sit under the thin total line", spec.innerBaseStrokeDp > spec.innerStrokeDp)
             assertTrue("${skin.id} base dots should stay lighter than numbered markers", spec.innerBaseDotRadiusDp < spec.innerMarkerRadiusDp)
-            assertTrue("${skin.id} marker should keep at least 3.5dp from center circle", centerGap >= 3.5f)
-            assertTrue("${skin.id} marker should keep at least 3.5dp from outer ring", outerGap >= 3.5f)
+            assertTrue("${skin.id} marker should keep visible space from center circle", centerGap >= 10f)
+            assertTrue("${skin.id} marker should keep visible space from outer ring", outerGap >= 10f)
+            assertTrue("${skin.id} wide base ring should not touch center circle", centerBaseRingGap >= 16f)
+            assertTrue("${skin.id} wide base ring should not touch outer ring", outerBaseRingGap >= 16f)
             assertTrue("${skin.id} marker internals should stay inside the base ring boundary", markerInternalGap >= 3.5f)
             assertTrue(
                 "${skin.id} completed dots should stay inside the base ring boundary",
@@ -575,7 +579,7 @@ class TimerDialUiStateTest {
             val spec = skin.timerDialLayoutSpec()
 
             assertTrue("${skin.id} dial should stay within its minimum height", spec.keepsDialInsideBounds())
-            assertTrue("${skin.id} inner ring should not overlap center", spec.centerClearanceDp >= 16f)
+            assertTrue("${skin.id} inner ring should not overlap center", spec.centerClearanceDp >= 48f)
             assertTrue("${skin.id} outer ring should leave a visible inner ring", spec.outerDiameterDp > spec.innerDiameterDp)
         }
     }

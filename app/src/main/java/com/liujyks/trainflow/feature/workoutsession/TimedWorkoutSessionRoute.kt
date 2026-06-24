@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -508,23 +509,23 @@ private fun TimedWorkoutExecutionScreen(
         val pausedLineHeight = if (compact) 64.sp else 76.sp
         val pausedTotalFontSize = if (compact) 34.sp else 40.sp
         val pausedTotalLineHeight = if (compact) 38.sp else 44.sp
-        val statusBlockHeight = if (compact) 120.dp else 146.dp
+        val layoutSpec = timedExecutionLayoutSpec(compact)
         val actionButtonSize = if (compact) 54.dp else 60.dp
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = currentPageHorizontalPadding())
-                .padding(top = if (compact) 18.dp else 26.dp, bottom = if (compact) 8.dp else 10.dp),
+                .padding(top = layoutSpec.topPadding, bottom = layoutSpec.bottomPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             TimedSessionTopBar(uiState = uiState)
 
-            Spacer(modifier = Modifier.height(if (compact) 32.dp else 44.dp))
+            Spacer(modifier = Modifier.height(layoutSpec.titleToTotalSpacer))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(statusBlockHeight),
+                    .height(layoutSpec.totalRemainingBlockHeight),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -579,7 +580,7 @@ private fun TimedWorkoutExecutionScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(if (compact) 0.18f else 0.24f))
+            Spacer(modifier = Modifier.weight(layoutSpec.topElasticWeight))
 
             TimerDialPauseMorph(
                 uiState = uiState,
@@ -591,9 +592,7 @@ private fun TimedWorkoutExecutionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.weight(1f))
-
-
+            Spacer(modifier = Modifier.weight(layoutSpec.bottomElasticWeight))
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 if (!uiState.isPaused || morphProgress < 1f) {
@@ -680,10 +679,15 @@ private fun TimerDialPauseMorph(
         animationSpec = timerDialTouchFeedbackSpec(reduceMotion),
         label = "TimedPausedResumeScale"
     )
-    val centerDialSize = if (compact) 184.dp else 232.dp
-    val morphDialSize = if (compact) 270.dp else 340.dp
+    val centerDialSize = if (compact) 176.dp else 232.dp
+    val timerDialLayoutSpec = LocalTrainFlowSkin.current.timerDialLayoutSpec()
+    val morphDialSize = maxOf(
+        if (compact) 300.dp else 340.dp,
+        timerDialLayoutSpec.dialSizeDp.dp
+    )
     val centerDialTimeSize = if (compact) 38.sp else 48.sp
     val centerDialTimeLineHeight = if (compact) 42.sp else 52.sp
+    val compactDialScale = if (compact) 0.92f else 1f
 
     Box(
         modifier = modifier
@@ -697,8 +701,8 @@ private fun TimerDialPauseMorph(
             modifier = Modifier.graphicsLayer {
                 alpha = timerDialRunningLayerAlpha(morphProgress) * 0.92f
                 val ringScale = timerDialRunningLayerScale(morphProgress)
-                scaleX = ringScale
-                scaleY = ringScale
+                scaleX = ringScale * compactDialScale
+                scaleY = ringScale * compactDialScale
             }
         )
         if (uiState.isPaused || morphProgress > 0f) {
@@ -718,34 +722,58 @@ private fun TimerDialPauseMorph(
     }
 }
 
+internal data class TimedExecutionLayoutSpec(
+    val topPadding: Dp,
+    val bottomPadding: Dp,
+    val titleToTotalSpacer: Dp,
+    val totalRemainingBlockHeight: Dp,
+    val topElasticWeight: Float,
+    val bottomElasticWeight: Float,
+    val controlButtonMinHeight: Dp
+)
+
+internal fun timedExecutionLayoutSpec(compact: Boolean): TimedExecutionLayoutSpec {
+    return if (compact) {
+        TimedExecutionLayoutSpec(
+            topPadding = 18.dp,
+            bottomPadding = 8.dp,
+            titleToTotalSpacer = 18.dp,
+            totalRemainingBlockHeight = 86.dp,
+            topElasticWeight = 0.2f,
+            bottomElasticWeight = 0.8f,
+            controlButtonMinHeight = 48.dp
+        )
+    } else {
+        TimedExecutionLayoutSpec(
+            topPadding = 26.dp,
+            bottomPadding = 10.dp,
+            titleToTotalSpacer = 26.dp,
+            totalRemainingBlockHeight = 104.dp,
+            topElasticWeight = 0.28f,
+            bottomElasticWeight = 0.82f,
+            controlButtonMinHeight = 48.dp
+        )
+    }
+}
+
 @Composable
 private fun TimedSessionTopBar(
     uiState: TimedWorkoutSessionScreenState,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Text(
+        text = uiState.planTitle,
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = uiState.planTitle,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-            color = TrainFlowError,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = "WORKOUTS",
-            modifier = Modifier.padding(start = 16.dp),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.End
-            ),
-            color = TrainFlowNeutral50,
-            maxLines = 1
-        )
-    }
+        style = MaterialTheme.typography.titleMedium.copy(
+            fontSize = 18.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Start
+        ),
+        color = TrainFlowNeutral50.copy(alpha = 0.88f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -1015,6 +1043,12 @@ private fun TimedSessionControls(
     verticalPadding: Dp = 12.dp
 ) {
     val skin = LocalTrainFlowSkin.current
+    val controlMinHeight = timedExecutionLayoutSpec(compact = skin.isBigType).controlButtonMinHeight
+    val controlHeight = if (skin.isBigType) {
+        maxOf(controlMinHeight, skin.tokens.secondaryButtonHeightDp.dp)
+    } else {
+        58.dp
+    }
     val restExtensionInteractionSource = remember { MutableInteractionSource() }
     val restExtensionPressed by restExtensionInteractionSource.collectIsPressedAsState()
     val restExtensionScale by animateFloatAsState(
@@ -1047,13 +1081,7 @@ private fun TimedSessionControls(
                     enabled = controlsEnabled && uiState.canSkip,
                     modifier = Modifier
                         .weight(1f)
-                        .then(
-                            if (skin.isBigType) {
-                                Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
-                            } else {
-                                Modifier
-                            }
-                        ),
+                        .height(controlHeight),
                     shape = RoundedCornerShape(8.dp)
                 )
                 OutlinedButton(
@@ -1062,33 +1090,41 @@ private fun TimedSessionControls(
                     interactionSource = restExtensionInteractionSource,
                     modifier = Modifier
                         .weight(1f)
-                        .graphicsLayer {
-                            scaleX = restExtensionScale
-                            scaleY = restExtensionScale
-                        }
-                        .then(
-                            if (skin.isBigType) {
-                                Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
-                            } else {
-                                Modifier
-                            }
-                        ),
-                    shape = RoundedCornerShape(8.dp)
+                        .height(controlHeight),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                 ) {
-                    Crossfade(
-                        targetState = restExtensionControl.buttonLabel,
-                        animationSpec = timedRestExtensionStateTransitionSpec(reduceMotion),
-                        label = "TimedRestExtensionLabel"
-                    ) { buttonLabel ->
-                        Text(
-                            text = buttonLabel,
-                            fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                            color = if (controlsEnabled && uiState.canExtendRest && restExtensionControl.buttonEnabled) {
-                                TrainFlowNeutral50
-                            } else {
-                                TrainFlowNeutral500
-                            }
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                scaleX = restExtensionScale
+                                scaleY = restExtensionScale
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Crossfade(
+                            targetState = restExtensionControl.buttonLabel,
+                            animationSpec = timedRestExtensionStateTransitionSpec(reduceMotion),
+                            label = "TimedRestExtensionLabel"
+                        ) { buttonLabel ->
+                            Text(
+                                text = buttonLabel,
+                                modifier = Modifier.fillMaxWidth(),
+                                fontSize = if (skin.isBigType) 15.sp else 13.sp,
+                                lineHeight = if (skin.isBigType) 17.sp else 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                textAlign = TextAlign.Center,
+                                color = if (controlsEnabled && uiState.canExtendRest && restExtensionControl.buttonEnabled) {
+                                    TrainFlowNeutral50
+                                } else {
+                                    TrainFlowNeutral500
+                                },
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip
+                            )
+                        }
                     }
                 }
                 TimedIconControlButton(
@@ -1098,13 +1134,7 @@ private fun TimedSessionControls(
                     enabled = controlsEnabled && uiState.canEnd,
                     modifier = Modifier
                         .weight(1f)
-                        .then(
-                            if (skin.isBigType) {
-                                Modifier.heightIn(min = skin.tokens.secondaryButtonHeightDp.dp)
-                            } else {
-                                Modifier
-                            }
-                        )
+                        .height(controlHeight)
                 )
             }
             restExtensionControl.helperText?.let { helperText ->

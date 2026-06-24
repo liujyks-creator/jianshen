@@ -30,7 +30,7 @@ class TimedRestExtensionInteractionStateTest {
         assertFalse(result.shouldDispatchExtendRest)
         assertEquals(0, restState.extendedRestSec)
         assertTrue(restState.restExtensionHistory.isEmpty())
-        assertEquals("确认 +15秒", uiState.buttonLabel)
+        assertEquals("确认+15s", uiState.buttonLabel)
         assertTrue(uiState.buttonEnabled)
     }
 
@@ -69,7 +69,7 @@ class TimedRestExtensionInteractionStateTest {
 
         assertEquals(15, restState.extendedRestSec)
         assertEquals(1, restState.restExtensionHistory.size)
-        assertEquals("已加 15秒", uiState.buttonLabel)
+        assertEquals("已加+15s", uiState.buttonLabel)
         assertFalse(uiState.buttonEnabled)
         assertEquals(1, uiState.extensionCount)
         assertEquals(15, uiState.cumulativeExtraRestSec)
@@ -84,7 +84,7 @@ class TimedRestExtensionInteractionStateTest {
         val expiredUi = armed.toRestExtensionControlUiState(restState, nowMillis = 3_001)
         val secondClickAfterExpiry = armed.onRestExtensionClick(restState, nowMillis = 3_001)
 
-        assertEquals("+15秒", expiredUi.buttonLabel)
+        assertEquals("+15s", expiredUi.buttonLabel)
         assertTrue(expiredUi.buttonEnabled)
         assertFalse(secondClickAfterExpiry.shouldDispatchExtendRest)
         assertTrue(restState.restExtensionHistory.isEmpty())
@@ -104,11 +104,11 @@ class TimedRestExtensionInteractionStateTest {
         interaction = confirmed.state
 
         assertEquals(
-            "已加 15秒",
+            "已加+15s",
             interaction.toRestExtensionControlUiState(restState, nowMillis = 1_900).buttonLabel
         )
         assertEquals(
-            "+15秒",
+            "+15s",
             interaction.toRestExtensionControlUiState(restState, nowMillis = 2_200).buttonLabel
         )
     }
@@ -153,9 +153,9 @@ class TimedRestExtensionInteractionStateTest {
         val cleared = armed.clearForCurrentEngineStep(nextRest, nowMillis = 1_500)
         val secondClick = cleared.onRestExtensionClick(nextRest, nowMillis = 1_500)
 
-        assertEquals("+15秒", cleared.toRestExtensionControlUiState(nextRest, nowMillis = 1_500).buttonLabel)
+        assertEquals("+15s", cleared.toRestExtensionControlUiState(nextRest, nowMillis = 1_500).buttonLabel)
         assertFalse(secondClick.shouldDispatchExtendRest)
-        assertEquals("确认 +15秒", secondClick.state.toRestExtensionControlUiState(nextRest, nowMillis = 1_500).buttonLabel)
+        assertEquals("确认+15s", secondClick.state.toRestExtensionControlUiState(nextRest, nowMillis = 1_500).buttonLabel)
     }
 
     @Test

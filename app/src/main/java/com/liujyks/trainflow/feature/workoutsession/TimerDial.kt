@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.CircleShape
@@ -179,7 +180,7 @@ internal fun TimerDial(
             },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(dialSize)) {
+        Canvas(modifier = Modifier.requiredSize(dialSize)) {
             val outerMaxStroke = layoutSpec.outerMaxStrokeDp.dp.toPx()
             val innerStroke = layoutSpec.innerStrokeDp.dp.toPx()
             val innerBaseStroke = layoutSpec.innerBaseStrokeDp.dp.toPx()

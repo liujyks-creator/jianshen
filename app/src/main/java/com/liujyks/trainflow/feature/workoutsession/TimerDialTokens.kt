@@ -159,15 +159,16 @@ internal fun TrainFlowSkin.timerDialLayoutSpec(): TimerDialLayoutSpec {
     return if (isBigType) {
         TimerDialLayoutSpec(
             dialSizeDp = 324,
-            centerSizeDp = 214,
+            centerSizeDp = 184,
             minHeightDp = 346,
-            innerInsetDp = 35f
+            innerInsetDp = 42f
         )
     } else {
         TimerDialLayoutSpec(
             dialSizeDp = 320,
-            centerSizeDp = 204,
-            minHeightDp = 342
+            centerSizeDp = 180,
+            minHeightDp = 342,
+            innerInsetDp = 42f
         )
     }
 }

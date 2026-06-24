@@ -24,7 +24,7 @@ internal data class TimedRestExtensionClickResult(
 )
 
 internal data class TimedRestExtensionControlUiState(
-    val buttonLabel: String = "+15秒",
+    val buttonLabel: String = "+15s",
     val buttonEnabled: Boolean = false,
     val helperText: String? = null,
     val extensionCount: Int = 0,
@@ -84,7 +84,7 @@ internal fun TimedRestExtensionInteractionState.toRestExtensionControlUiState(
 
     if (context.hitExtensionLimit) {
         return TimedRestExtensionControlUiState(
-            buttonLabel = "+15秒",
+            buttonLabel = "+15s",
             buttonEnabled = false,
             helperText = "已额外休息 1 分钟，需要更久可以暂停训练",
             extensionCount = context.extensionCount,
@@ -102,19 +102,19 @@ internal fun TimedRestExtensionInteractionState.toRestExtensionControlUiState(
 
     return when {
         successVisible -> TimedRestExtensionControlUiState(
-            buttonLabel = "已加 15秒",
+            buttonLabel = "已加+15s",
             buttonEnabled = false,
             extensionCount = context.extensionCount,
             cumulativeExtraRestSec = context.cumulativeExtraRestSec
         )
         pendingVisible -> TimedRestExtensionControlUiState(
-            buttonLabel = "确认 +15秒",
+            buttonLabel = "确认+15s",
             buttonEnabled = true,
             extensionCount = context.extensionCount,
             cumulativeExtraRestSec = context.cumulativeExtraRestSec
         )
         else -> TimedRestExtensionControlUiState(
-            buttonLabel = "+15秒",
+            buttonLabel = "+15s",
             buttonEnabled = true,
             extensionCount = context.extensionCount,
             cumulativeExtraRestSec = context.cumulativeExtraRestSec
