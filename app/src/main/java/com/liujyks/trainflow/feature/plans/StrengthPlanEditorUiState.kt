@@ -122,7 +122,21 @@ internal data class StrengthPlanExerciseUiState(
         get() {
             val weight = targetWeightKg?.takeIf { it > 0.0 }?.formatWeightKg() ?: "自重/待填重量"
             val sideSuffix = if (perSide) " · 每侧" else ""
-            return "$weight · ${repTarget.summary} · ${workingSets} 个正式组$sideSuffix"
+            return "$weight · ${repTarget.summary} · ${workingSets} 个正式组 · 休息${restAfterSetSec}秒$sideSuffix"
+        }
+
+    val setTargetsSummary: String
+        get() {
+            val kindSummary = setTargets
+                .groupBy { setTarget -> setTarget.kind }
+                .entries
+                .joinToString("，") { (kind, targets) -> "${kind.displayLabel()} ${targets.size}组" }
+            val first = setTargets.firstOrNull()
+            val firstTarget = first?.let { target ->
+                val weight = target.targetWeightKg?.formatWeightKg() ?: "自重/待填重量"
+                "$weight · ${target.repTarget.summary} · 休息${target.restAfterSec}秒"
+            } ?: "暂无目标组"
+            return "$kindSummary · $firstTarget"
         }
 
     fun toStrengthExerciseBlock(
@@ -161,6 +175,9 @@ internal data class StrengthSetTargetUiState(
     val targetWeightText: String
         get() = targetWeightRawText ?: targetWeightKg.formatWeightInput()
 
+    val restAfterText: String
+        get() = restAfterSec.toString()
+
     val label: String
         get() = when (kind) {
             StrengthSetKind.WARMUP -> "热身组 $order"
@@ -179,6 +196,15 @@ internal data class StrengthSetTargetUiState(
             repTarget = repTarget.toRepTarget(),
             restAfterSec = restAfterSec.takeIf { it > 0 }
         )
+    }
+}
+
+private fun StrengthSetKind.displayLabel(): String {
+    return when (this) {
+        StrengthSetKind.WARMUP -> "热身"
+        StrengthSetKind.WORKING -> "正式"
+        StrengthSetKind.DROP -> "递减"
+        StrengthSetKind.BACKOFF -> "退阶"
     }
 }
 
@@ -580,6 +606,27 @@ internal fun StrengthPlanEditorScreenState.updateSetFixedRepsText(
     }
 }
 
+internal fun StrengthPlanEditorScreenState.updateSetRestAfterText(
+    exerciseItemId: String,
+    setId: String,
+    input: String
+): StrengthPlanEditorScreenState {
+    val cleaned = input.sanitizeIntegerInput()
+    val parsed = cleaned.toIntOrNull()?.sanitizeStrengthDuration()
+    return updateExercise(exerciseItemId) { exercise ->
+        exercise.copy(
+            expandedSetTargets = true,
+            setTargets = exercise.setTargets.map { setTarget ->
+                if (setTarget.id == setId && parsed != null) {
+                    setTarget.copy(restAfterSec = parsed)
+                } else {
+                    setTarget
+                }
+            }
+        )
+    }
+}
+
 internal fun StrengthPlanEditorScreenState.setSetTargetsExpanded(
     exerciseItemId: String,
     expanded: Boolean
@@ -604,11 +651,65 @@ internal fun StrengthPlanEditorScreenState.addExercise(exerciseId: String): Stre
     )
 }
 
+internal fun StrengthPlanEditorScreenState.addCustomExercise(exerciseName: String): StrengthPlanEditorScreenState {
+    val cleanedName = exerciseName.trim()
+    if (cleanedName.isBlank()) return this
+    val baseExerciseId = "custom-strength-${cleanedName.toStableExerciseIdPart()}"
+    val exerciseId = nextUniqueExerciseId(baseExerciseId)
+    val exercise = StrengthPlanExerciseUiState(
+        id = "strength-editor-item-${exercises.size + 1}-$exerciseId",
+        exerciseId = exerciseId,
+        exerciseName = cleanedName,
+        shortCue = "按你的计划完成动作",
+        requiresWeightInput = false,
+        targetWeightKg = null,
+        repTarget = StrengthRepTargetUiState(),
+        workingSets = 3,
+        warmupSets = 0,
+        restAfterSetSec = 90,
+        perSide = false,
+        substitutions = emptyList(),
+        expandedSetTargets = false,
+        setTargets = emptyList()
+    )
+    return copy(
+        exercises = exercises + exercise.copy(setTargets = exercise.defaultSetTargets()),
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
 internal fun StrengthPlanEditorScreenState.removeExercise(exerciseItemId: String): StrengthPlanEditorScreenState {
     if (exercises.size <= 1) return this
 
     return copy(
         exercises = exercises.filterNot { it.id == exerciseItemId },
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
+internal fun StrengthPlanEditorScreenState.moveExercise(
+    fromIndex: Int,
+    toIndex: Int
+): StrengthPlanEditorScreenState {
+    if (fromIndex !in exercises.indices || toIndex !in exercises.indices || fromIndex == toIndex) {
+        return this
+    }
+    val movedExercises = exercises.withItemMoved(fromIndex, toIndex)
+    return copy(
+        exercises = movedExercises,
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
+internal fun StrengthPlanEditorScreenState.reorderExercises(exerciseIds: List<String>): StrengthPlanEditorScreenState {
+    if (exerciseIds.size != exercises.size || exerciseIds.toSet() != exercises.map { it.id }.toSet()) return this
+    if (exerciseIds == exercises.map { it.id }) return this
+    val exercisesById = exercises.associateBy { exercise -> exercise.id }
+    return copy(
+        exercises = exerciseIds.mapNotNull { exerciseId -> exercisesById[exerciseId] },
         savedPlan = null,
         statusMessage = null
     )
@@ -724,7 +825,7 @@ private fun StrengthExerciseBlock.toStrengthEditorExercise(
         restAfterSetSec = restAfterSet,
         perSide = safeSets.any { set -> set.side != null },
         substitutions = substitutions,
-        expandedSetTargets = true,
+        expandedSetTargets = false,
         setTargets = safeSets.map { set -> set.toStrengthSetTargetUiState() }
     )
 }
@@ -843,6 +944,29 @@ private fun StrengthPlanExerciseUiState.defaultSetTargets(): List<StrengthSetTar
     return warmupTargets + workingTargets
 }
 
+private fun StrengthPlanEditorScreenState.nextUniqueExerciseId(baseExerciseId: String): String {
+    val usedIds = exercises.map { exercise -> exercise.exerciseId }.toSet()
+    if (baseExerciseId !in usedIds) return baseExerciseId
+    return generateSequence(2) { suffix -> suffix + 1 }
+        .map { suffix -> "$baseExerciseId-$suffix" }
+        .first { exerciseId -> exerciseId !in usedIds }
+}
+
+private fun String.toStableExerciseIdPart(): String {
+    val ascii = lowercase()
+        .map { character ->
+            when {
+                character.isLetterOrDigit() -> character
+                character.isWhitespace() || character == '-' || character == '_' -> '-'
+                else -> '-'
+            }
+        }
+        .joinToString("")
+        .trim('-')
+        .replace(Regex("-+"), "-")
+    return ascii.ifBlank { "custom" }
+}
+
 private fun Double?.toWeightValueOrNull(): WeightValue? {
     val value = this?.takeIf { it > 0.0 } ?: return null
     return WeightValue(value = value, unit = WeightUnit.KG)
@@ -894,6 +1018,12 @@ private fun StrengthPlanEditorScreenState.validateStrengthDraft(): String? {
                 validateRepTarget(
                     exerciseName = "${exercise.exerciseName} ${setTarget.label}",
                     repTarget = setTarget.repTarget
+                )?.let { return it }
+                validateIntegerText(
+                    "${exercise.exerciseName} ${setTarget.label} 休息秒数",
+                    setTarget.restAfterText,
+                    min = 0,
+                    max = 3600
                 )?.let { return it }
             }
         }

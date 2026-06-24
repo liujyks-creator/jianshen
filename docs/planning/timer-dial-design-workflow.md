@@ -103,10 +103,10 @@ E10.11 已使用 `huashu-design` skill 做 3 个 HTML 高保真 Timer Dial 原�
 底部只保留少量图标操作：
 
 - 跳过 / 下一阶段。
-- `+15秒`（仅 active rest）。
+- `+15s`（仅 active rest；记录 / 总结可继续用中文秒数）。
 - 结束。
 
-E10.8 production controls 收敛为 `skip`、`+15秒`、`end`。Reset 只保留在 preview / demo 或未来命令设计讨论中；如果后续进入生产实现，需要先明确 `WorkoutCommand` 语义、二次确认、本次 session record 边界和回归测试。底部操作应使用图标和可访问标签表达，文字尽量少。结束训练仍需要二次确认。
+E10.8 production controls 收敛为 `skip`、`+15s`、`end`。Reset 只保留在 preview / demo 或未来命令设计讨论中；如果后续进入生产实现，需要先明确 `WorkoutCommand` 语义、二次确认、本次 session record 边界和回归测试。底部操作应使用图标和可访问标签表达，文字尽量少。结束训练仍需要二次确认。
 
 ## 6. 动效规格
 
@@ -290,18 +290,26 @@ E10.12 已把 E10.11 中的 `TrainFlow Official Fusion` 方向落到 Android Com
 
 ### E13.1 Timer Dial pause / resume morph 回归基准
 
-E13.1 sound cue/media fix 的用户确认版同时收口了计时执行页运行态、暂停态、声音和 App 图标的人工体验基准。后续修改 Timer Dial 动画、暂停页、底部控制、心率卡片或声音交互时，必须回看以下 4 个点，避免把用户已确认的体验回退：
+E13.1 sound cue/media fix 的用户确认版同时收口了计时执行页运行态、暂停态、声音和 App 图标的人工体验基准。E11.3 后心率卡片已撤销；后续修改 Timer Dial 动画、暂停页、底部控制或声音交互时，必须回看以下 4 个点，避免把用户已确认的体验回退：
 
 1. 运行 -> 暂停：Timer Dial 外圈、节点和进度弧应有向中心收束并落到暂停大圆盘的连续感，不能退回整屏硬切或只有 page crossfade。
 2. 暂停 -> 运行：暂停大圆盘应反向缩回并展开回 Timer Dial，运行态进度继续消费真实 engine / UI state，不伪造进度。
-3. 布局稳定性：左上角显示训练 / 计划名称，不显示阶段数字；心率卡片、底部按钮、总剩余时间和 Timer Dial 不互相挤压，底部按钮在真机上完整可见。
+3. 布局稳定性：左上角显示训练 / 计划名称，不显示阶段数字；不再出现心率卡片，底部按钮、总剩余时间和 Timer Dial 不互相挤压，底部按钮在真机上完整可见。
 4. 声音与倒计时不回归：剩余 N / ... / 1 秒播放 `countdown_beep1.mp3`，倒数到 0 后播放 `stage_bell_copper_clean.mp3`；声音继续走媒体音量，不 duck、不暂停或抢占外部音乐 / 视频。
 
 该基准是后续 animation polish / visual smoke 的验收输入，不要求每次都做新功能；若只调整视觉，也不得改变 `WorkoutCommand`、`WorkoutEvent`、engine、session record、raw 音频资源或心率数据源语义。
 
+E14.2 真机截图比例修复补充：E11.3 移除心率后，计时执行页不能继续保留心率时代的纵向弹性节奏。总剩余时间应作为辅助块，Timer Dial 上方弹性空间必须小于下方弹性空间，底部 `skip` / `+15s` / `end` 控制保持至少 `48dp` 点击高度并位于导航栏安全区上方；Timer Dial Canvas 必须保持正方形约束，不能被 compact parent 压成椭圆；rest extension 二段确认态使用 `确认+15s`，按钮外框不得因文字状态切换变高或挤压相邻按钮。详见 `docs/testing/e14-2-timer-dial-real-device-proportion-restore.md`。
+
+### E14 后续 UI 优化节奏
+
+E14.2 完成前，不应启动跨功能 UI 重做；Timer Dial 真机比例、同心圆和底部确认态必须先由用户真机截图确认稳定。确认后建议进入 E14.3 `UI quality audit and polish sequencing`，只做审计、截图矩阵和优先级，不直接重写页面。E14.4 以后再按功能分批做 UI polish：先训练执行页共性控件，再计划编辑 / 计划详情，再记录页图表与历史清理，最后动作库和跟练雏形。每批 UI 优化都必须保留当前训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record、心率撤销和健康数据边界。
+
+E14.4-2a 已确认计划编辑 / 详情 polish 采用方案 B，但计时目标编排 + TimerDial 圆环语义必须拆成独立 E14.4-2b。该 story 的方向是：计时计划使用外层目标编排和内层阶段两层结构；外层目标可新增、删除、拖动、重命名和设置颜色；内层阶段可新增、删除、拖动、重命名、设置时长和颜色；外层目标总时长由内部阶段时长求和；TimerDial 外圈按内部阶段时长占比分段表达。该工作会影响计划结构、编辑器层级和 TimerDial UI state / ring semantics，必须先规划 / 视觉确认，再代码实现，不得混入普通 E14.4-2 plan polish，也不得静默修改 Room schema、训练引擎、命令、事件、session record、声音语义或统计比较 key。
+
 ### E12 统计图表 / 历史趋势
 
-总统计、图表、计划趋势、平均心率趋势、同日多轮运动分析和历史记录清理进入 E12，不混入 E10.5 / E10.6 / E10.7 / E10.8 / E10.9。平均心率趋势只能消费明确来源的手动心率或后续真实设备数据，没有来源时不画假趋势。
+总统计、图表、计划趋势、同日多轮运动分析和历史记录清理进入 E12，不混入 E10.5 / E10.6 / E10.7 / E10.8 / E10.9。E11.3 后首版不再规划平均心率趋势。
 
 ## 9. 验收标准
 

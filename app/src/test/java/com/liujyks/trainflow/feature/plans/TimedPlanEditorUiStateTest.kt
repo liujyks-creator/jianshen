@@ -374,32 +374,109 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
-    fun moveStageKeepsWarmupAndCooldownAsFixedBoundaries() {
+    fun reorderStagesCommitsTemporaryDragOrderByIds() {
         val state = buildDefaultTimedPlanEditorState()
-        val initialStageIds = state.stages.map { it.id }
+        val reordered = state
+            .saveDraftPlan()
+            .reorderStages(listOf("stage-work", "stage-rest", "stage-warmup", "stage-custom", "stage-cooldown"))
 
-        assertEquals(initialStageIds, state.moveStage(fromIndex = 0, toIndex = 2).stages.map { it.id })
-        assertEquals(initialStageIds, state.moveStage(fromIndex = 4, toIndex = 2).stages.map { it.id })
-        assertFalse(state.canMoveStageDown("stage-warmup"))
-        assertFalse(state.canMoveStageUp("stage-cooldown"))
+        assertEquals(
+            listOf("stage-work", "stage-rest", "stage-warmup", "stage-custom", "stage-cooldown"),
+            reordered.stages.map { it.id }
+        )
+        assertNull(reordered.savedPlan)
+        assertNull(reordered.statusMessage)
     }
 
     @Test
-    fun addingBoundaryStagesKeepsEditorOrderAlignedWithExecutionOrder() {
+    fun reorderStagesIgnoresInvalidTemporaryDragOrder() {
+        val state = buildDefaultTimedPlanEditorState()
+        val initialStageIds = state.stages.map { it.id }
+
+        assertEquals(initialStageIds, state.reorderStages(listOf("stage-work", "stage-rest")).stages.map { it.id })
+        assertEquals(
+            initialStageIds,
+            state.reorderStages(listOf("stage-work", "stage-rest", "stage-warmup", "stage-custom", "missing"))
+                .stages
+                .map { it.id }
+        )
+    }
+
+    @Test
+    fun moveStageAllowsWarmupAndCooldownToMoveLikeRegularStages() {
+        val state = buildDefaultTimedPlanEditorState()
+        val warmupMoved = state.moveStage(fromIndex = 0, toIndex = 2)
+        val cooldownMoved = state.moveStage(fromIndex = 4, toIndex = 2)
+
+        assertEquals(
+            listOf("stage-work", "stage-rest", "stage-warmup", "stage-custom", "stage-cooldown"),
+            warmupMoved.stages.map { it.id }
+        )
+        assertEquals(
+            listOf("stage-warmup", "stage-work", "stage-cooldown", "stage-rest", "stage-custom"),
+            cooldownMoved.stages.map { it.id }
+        )
+        assertTrue(state.canMoveStageDown("stage-warmup"))
+        assertTrue(state.canMoveStageUp("stage-cooldown"))
+    }
+
+    @Test
+    fun addingStagesAppendsWithoutTreatingWarmupOrCooldownAsFixedBoundaries() {
         val state = buildDefaultTimedPlanEditorState()
             .addStage(TimedStageType.COOLDOWN)
             .addStage(TimedStageType.WARMUP)
             .addStage(TimedStageType.WORK)
 
-        assertEquals(TimedStageType.WARMUP, state.stages[0].stageType)
-        assertEquals(TimedStageType.WARMUP, state.stages[1].stageType)
-        assertEquals(TimedStageType.COOLDOWN, state.stages[state.stages.lastIndex - 1].stageType)
-        assertEquals(TimedStageType.COOLDOWN, state.stages.last().stageType)
+        assertEquals(
+            listOf(
+                TimedStageType.WARMUP,
+                TimedStageType.WORK,
+                TimedStageType.REST,
+                TimedStageType.CUSTOM,
+                TimedStageType.COOLDOWN,
+                TimedStageType.COOLDOWN,
+                TimedStageType.WARMUP,
+                TimedStageType.WORK
+            ),
+            state.stages.map { it.stageType }
+        )
         assertEquals(
             state.stages.filterNot { stage ->
                 stage.stageType == TimedStageType.WARMUP || stage.stageType == TimedStageType.COOLDOWN
             }.map { it.id },
-            state.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().single().items.map { it.id }
+            state.toWorkoutPlan().blocks.filterIsInstance<TimedCircuitBlock>().flatMap { it.items }.map { it.id }
+        )
+    }
+
+    @Test
+    fun workoutPlanBlocksFollowEditorOrderWhenWarmupOrCooldownMove() {
+        val state = buildDefaultTimedPlanEditorState()
+            .moveStage(fromIndex = 0, toIndex = 2)
+            .moveStage(fromIndex = 4, toIndex = 1)
+        val plan = state.toWorkoutPlan()
+
+        assertEquals(
+            listOf(
+                "timed-interval-stages",
+                "stage-cooldown",
+                "timed-interval-stages-2",
+                "stage-warmup",
+                "timed-interval-stages-3"
+            ),
+            plan.blocks.map { it.id }
+        )
+        assertEquals(listOf(1, 2, 3, 4, 5), plan.blocks.map { it.order })
+        assertEquals(
+            listOf("stage-work"),
+            plan.blocks.filterIsInstance<TimedCircuitBlock>().first().items.map { it.id }
+        )
+        assertEquals(
+            listOf("stage-rest"),
+            plan.blocks.filterIsInstance<TimedCircuitBlock>()[1].items.map { it.id }
+        )
+        assertEquals(
+            listOf("stage-custom"),
+            plan.blocks.filterIsInstance<TimedCircuitBlock>().last().items.map { it.id }
         )
     }
 

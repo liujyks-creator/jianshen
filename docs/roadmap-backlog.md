@@ -35,7 +35,7 @@ stepsCompleted:
 | `FR-040` 到 `FR-042` | 跟练雏形与内容扩展字段。 |
 | `FR-050` 到 `FR-054` | 动作库接口、字段、教学、能力标签、恢复与替代映射。 |
 | `FR-060` 到 `FR-062` | 训练控制命令与训练事件。 |
-| `FR-065` 到 `FR-068` | 心率展示位和抽象状态。 |
+| `FR-065` 到 `FR-068` | 心率与健康数据抽象边界；首版不显示、不录入、不统计心率。 |
 | `FR-070` 到 `FR-081` | 训练总结、历史趋势、主观反馈、恢复建议。 |
 
 ### 1.2 非功能需求
@@ -65,7 +65,7 @@ stepsCompleted:
 | M2 计时训练闭环 | 完成计时计划编辑、执行引擎、提醒事件和总结。 | 用户可完成一套计时训练。 |
 | M3 力量训练闭环 | 完成力量计划编辑、单组状态机、确认记录、休息与总结。 | 用户可完成一套力量训练并看到记录差异。 |
 | M4 历史、恢复与偏好 | 完成历史记录、趋势基础、恢复建议、提醒与训练偏好。 | 训练后可查看总结、恢复建议和基础历史。 |
-| M5 跟练雏形与心率占位 | 完成跟练雏形视图、媒体位、心率抽象状态展示。 | 跟练页不是空壳，心率占位不影响训练。 |
+| M5 跟练雏形与健康数据边界 | 完成跟练雏形视图、媒体位，并保留未来健康数据模型边界。 | 跟练页不是空壳；首版不因心率设备不可用而影响训练。 |
 | M6 MVP 硬化与验收 | 稳定性、权限说明、状态恢复、回归测试、alpha 包准备。 | MVP 验收清单通过，准备用户试用。 |
 
 ## 3. Epic 总览
@@ -78,7 +78,7 @@ stepsCompleted:
 | E3 | 计时训练执行闭环 | M2 |
 | E4 | 力量训练执行闭环 | M3 |
 | E5 | 训练总结、历史与恢复建议 | M4 |
-| E6 | 跟练雏形与心率占位 | M5 |
+| E6 | 跟练雏形与健康数据边界 | M5 |
 | E7 | 通知、声音、震动与偏好 | M2-M6 |
 | E8 | 设计系统、UI Shell 与开源定制边界 | M0-M6 |
 | E9 | MVP 验收与发布准备 | M6 |
@@ -681,7 +681,7 @@ stepsCompleted:
 
 **交付结果:**
 
-- `feature.workoutsession` 新增共享 `HeartRateDisplayUiState` / mapper，计时训练、力量训练和基础跟练执行页统一消费 `HeartRateState`。
+- E6.3 曾新增共享心率展示 mapper；E11.3 后生产执行页已撤下心率展示 UI，仅保留未来 `HeartRateState` / provider 模型边界。
 - 支持 disabled、not_connected、connecting、available、stale、error 六种旧 `HeartRateAvailability` baseline，available 可显示 bpm；E11.1 已把该 baseline 收口为 source-aware `HeartRateState`。
 - measuredAt、sourceId 和 message 只进入低层级辅助文案；E11.1 起废弃 `warningLevel` 口径，不通过心率状态驱动颜色、告警、训练规则、训练状态或主控按钮。
 - `core.health` 新增 `HeartRateProvider`、`DisabledHeartRateProvider` 和 `MockHeartRateProvider` 边界，仅输出抽象 `HeartRateState`，不接真实设备或平台 SDK。
@@ -938,7 +938,7 @@ stepsCompleted:
 - 新增 `docs/testing/mvp-acceptance-checklist.md`，逐项记录计时训练、基础跟练、力量训练、数字输入、记录/数据分析、心率、通知/声音/隐私、UI skin、状态恢复和 MVP 非目标的 Pass / Partial / Deferred / Out of Scope / Risk / Bug 结论。
 - 新增 `docs/testing/user-test-issue-template.md`，用于用户测试记录 P0/P1/P2/P3 和 Product Decision 问题。
 - 新增轻量验收证据测试，在 E9.3 当时记录计时/力量计划编辑页的 `立即开始（E3 接入）` / `开始力量训练（E4 接入）` 禁用状态，并记录计划编辑整数输入无法表达临时空值的当前 Bug；E9.4 已将这些测试更新为修复证据。
-- 记录用户反馈：计时训练后续可能应更接近纯间歇计时器；基础跟练后续应承担动作选择、动作编排和推荐；动作选择应进入独立页面；记录页后续需要总统计、图表、平均心率趋势和计划调整证据。
+- 记录用户反馈：计时训练后续可能应更接近纯间歇计时器；基础跟练后续应承担动作选择、动作编排和推荐；动作选择应进入独立页面；记录页后续需要总统计、图表和计划调整证据；平均心率趋势已随 E11.3 撤销。
 - 明确 E10/E11/E12 后续方向：E10 训练模式边界重构与统一动作选择页，E11 心率设备/健康数据策略，E12 数据分析趋势。
 - 本 story 未实现 E10 训练模式重构、统一动作选择页、完整跟练编排、真实 `WorkoutSession` 持久化、Room repository 业务闭环、foreground service、后台可靠计时、真实心率设备、Health Connect / Wear OS / BLE、语音或完整数据分析图表。
 
@@ -1031,7 +1031,7 @@ stepsCompleted:
 
 - 计时训练编辑页已从动作编排式入口改为纯阶段编辑：阶段包含名称、时间、类型、图标 key 和颜色；阶段卡提供内置颜色 swatch，阶段类型选择会同步图标 key；支持添加、复制、删除、右侧手柄长按拖拽排序，并保留上移和下移作为备用排序路径。
 - 拖拽排序只由阶段行右侧明确手柄触发；阶段名称输入、时间输入、类型选择、颜色 / 图标入口、复制 / 删除和行空白区域不触发排序，非手柄区域上下滑动继续滚动编辑页。
-- 热身固定在编辑列表开头，放松固定在末尾，中间的工作、休息和自定义阶段可排序；执行顺序与编辑页显示顺序保持一致。计划主题色 / 整体配色编辑仍留作后续 polish。
+- E14.4-2 排序补修后，热身和放松作为默认模板阶段也可移动；工作、休息、自定义、热身和放松都按编辑页显示顺序执行。拖动中按相邻卡片半高阈值计算目标槽位，用非拖动卡片让位来预览排序，松手后提交真实顺序。计划主题色 / 整体配色编辑仍留作后续 polish。
 - `TimedExerciseItem.exerciseId` 已改为可选，并新增 `TimedStageType`、`iconKey`、`colorHex` 以复用 `WorkoutPlan` / `TimedCircuitBlock` 表达纯 interval stage；跟练仍可继续用动作库 `exerciseId`。
 - `TimedWorkoutEngine` 已支持纯阶段展开，`stageType=rest` 会生成真实休息步骤；暂停 tick 不推进有效训练时间，并通过 `pausedElapsedSec` 累计暂停时长。
 - 计时训练执行页已改为大圆盘主视觉：顶部显示总剩余时间，中心显示阶段图标 key、阶段名和阶段倒计时，圆环显示整体进度与当前阶段进度，点击圆盘可暂停 / 继续；底部保留跳过、`+15秒` 和结束训练。
@@ -1533,24 +1533,20 @@ stepsCompleted:
 
 ## Epic E11: 心率数据源策略与设备接口边界
 
-目标：先收敛心率数据源、未获取状态和设备接口边界。心率来源以设备获取为优先，用户手动输入只是可选补充；如果设备数据和手动输入都不存在，训练记录和趋势页应显示未获取心率，不绘制假趋势。
+目标：收敛健康数据和设备接口边界，并在 HUAWEI Band 9 smoke 失败后撤掉首版心率 UI。首版不显示心率、不录入心率、不统计心率；底层 `HeartRateState` 仅作为未来平台适配边界保留。
 
 ### Story E11.1: Heart-rate source boundary / unavailable state refinement
 
-**状态:** Implemented in Android source-aware provider/model/UI boundary
+**状态:** Implemented as Android source-aware provider/model boundary; production UI no longer displays heart rate
 
 作为用户，
-我想在训练执行页清楚知道当前心率来源或不可用原因，
-以便没有心率来源时也不会被误导为已有心率数据。
+我想让健康数据边界保留在模型层，
+以便未来设备接入可以复用抽象状态，但当前训练执行页不展示不可用的心率能力。
 
 **验收标准:**
 
-- Then 执行页可通过 `HeartRateState` 表达 `unavailable / no_source`，显示“未获取心率”。
-- Then 执行页可表达设备已连接但无读数。
-- Then 执行页可表达设备数据来源状态。
-- Then 执行页可表达手动数据来源状态，但不实现手动输入 UI。
-- Then 执行页可表达 stale reading，并弱化过期读数。
-- Then 执行页可表达 provider unavailable 和 permission unavailable。
+- Then `HeartRateState` 可表达 `unavailable / no_source`、设备无读数、设备读数、手动读数、过期读数、provider unavailable 和 permission unavailable。
+- Then 当前生产执行页不显示心率卡片，也不显示“未获取心率”占位。
 - Then `HeartRateState` 必须携带 `sourceKind: none | device | manual`，手动数据不得伪装成设备数据。
 - Then 继续保留 source-aware `HeartRateProvider: Flow<HeartRateState>` 抽象。
 - Then 不接 Health Connect、Wear OS、BLE 或厂商 SDK。
@@ -1562,12 +1558,12 @@ stepsCompleted:
 
 - Android `HeartRateState` 已收口为 `kind + sourceKind` source-aware 模型，覆盖 no source、device connected no reading、device reading、manual reading、stale reading、permission unavailable 和 provider unavailable。
 - `DisabledHeartRateProvider` / `MockHeartRateProvider` 继续只输出抽象 TrainFlow 状态；mock 可表达设备、手动、过期和不可用状态，但不代表真实设备接入。
-- 计时、力量和基础跟练执行页共享同一心率 UI mapper，默认无来源显示 `-- bpm` / `未获取心率`，设备读数显示 `设备数据`，手动读数显示 `手动录入`，过期读数保留旧 bpm 并标注 `数据已过期`。
-- 本阶段未接 Health Connect、Wear OS、BLE、HealthKit、Huawei Health Kit / Health Service Kit 或厂商 SDK，未申请健康 / 蓝牙 / 身体传感器权限，未实现手动输入 UI，未持久化心率，未绘制平均心率趋势，未改变训练引擎、`WorkoutCommand` 或 `WorkoutEvent` 语义。
+- 当前生产执行页、历史页和趋势页不消费心率 UI mapper；心率抽象仅作为未来设备接入边界保留。
+- 本阶段未接 Health Connect、Wear OS、BLE、HealthKit、Huawei Health Kit / Health Service Kit 或厂商 SDK，未申请健康 / 蓝牙或身体传感器权限，未实现手动输入 UI，未持久化心率，未绘制平均心率趋势，未改变训练引擎、`WorkoutCommand` 或 `WorkoutEvent` 语义。
 
 ### Story E11.2a: HUAWEI Band 9 on non-Huawei Android feasibility smoke
 
-**状态:** Planned docs / smoke gate, not production device integration
+**状态:** Completed feasibility smoke; current real-device condition found no Band 9 BLE HRS / `0x2A37 notify` evidence; not production device integration
 
 作为开发者，
 我想先用当前真实设备条件验证 HUAWEI Band 9 在非华为 Android 上的第三方可用心率通道，
@@ -1592,29 +1588,47 @@ stepsCompleted:
 - Then E11.2a 不持久化心率，不绘制平均心率趋势，不把 UI `HeartRateState` 当历史事实。
 - Then 设备数据必须经 `HeartRateProvider` adapter 输出统一 `HeartRateState`，并标注 `sourceKind`、`sourceId` / `sourceLabel`。
 - Then 不做医疗判断、危险告警、训练中断依据或康复结论。
-- Then 手动输入仍保留为 E11.3 可选项，不倒灌到 E11.2。
+- Then 手动输入不倒灌到 E11.2；E11.3 后续基于 UI 变形反馈撤销首版手动心率输入。
 
 **路线判定:**
 
-- BLE Heart Rate Service：标准 BLE HRS 仍是 Android-first 最通用的实时路线，但必须先确认 Band 9 是否暴露 HRS；Android 12+ 权限、扫描 / 配对 / 断连 / 重连 / 用户配置仍是主要风险。
+- BLE Heart Rate Service：标准 BLE HRS 仍是 Android-first 最通用的实时路线，但当前 Band 9 smoke 未发现可用 HRS；Android 12+ 权限、扫描 / 配对 / 断连 / 重连 / 用户配置仍是后续设备 spike 的主要风险。
 - Huawei Health Kit / Health Service Kit：官方生态存在，但实时心率、地区、账号、设备支持、权限申请、非华为手机兼容性都要验证；Band 9 当前只是 feasibility 样本，不直接承诺生产接入。
 - Health Connect：更适合历史摘要 / 趋势，例如 post-workout summaries / average heart-rate trend，不作为 E11.2a 实时执行页首选。
 - Apple Watch / HealthKit：仍保留为未来 iOS 第一优先路线；合理路线是 iOS app + watchOS companion，使用 HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder。当前 Android-first 阶段不进入 dev，且 Apple SDK model 不得泄漏到 TrainFlow UI / history / analytics。
 - 所有真实设备、Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 接入都必须另开 story 或独立阶段，并继续统一输出 TrainFlow `HeartRateState`。
 
-### Story E11.3: 可选手动心率输入
+**交付结果:**
+
+- 已新增 `docs/testing/e11-2a-huawei-band9-feasibility-smoke.md` 记录当前 HUAWEI Band 9 + 非华为 Android + 华为运动健康可读数据条件下的 feasibility smoke。
+- 本轮 Codex 环境没有可用 ADB / GATT scan 入口，因此通过 debug-only APK 在用户手机侧 smoke；用户 2026-06-21 反馈新版 smoke APK 仍无法发现华为设备，当前没有 Band 9 暴露标准 BLE Heart Rate Service `0x180D` 或 Heart Rate Measurement `0x2A37 notify` 的物理证据；因此不能启动 Android BLE HRS adapter spike。
+- 官方资料只证明 Band 9 有心率传感器、支持 BLE、Huawei Health 可读取 / 展示心率；这不等价于 TrainFlow 第三方 App 可实时读取心率。
+- 当前路线建议是暂不接设备：用户 2026-06-21 反馈新版 smoke APK 仍无法发现华为设备，当前没有 `0x180D` / `0x2A37 notify` 或 bpm notify 证据，不进入 BLE adapter spike；后续若继续设备方向，应单独评估 Huawei SDK feasibility；MVP 不显示心率或未获取心率占位。Health Connect 只作为未来独立历史摘要 / 趋势候选。
+- 本阶段最终不保留生产训练页心率 UI、debug BLE smoke launcher、Gradle、main Android Manifest、资源、Room schema 或 `HeartRateProvider` 生产接入；未持久化心率，未绘制平均心率趋势，未实现或保留手动输入。
+
+### Story E11.3: 放弃首版心率显示、录入和统计
+
+**状态:** Implemented as removal / rollback; no first-version heart-rate display, manual input, or heart-rate statistics
 
 作为用户，
-我可以在没有设备数据时选择手动录入心率，
-以便把自测或外部设备读数作为可标注来源的回顾数据。
+我不希望不可用的心率能力挤压训练执行页，
+以便计时、力量和跟练页面保持稳定、清晰，并且历史统计不出现无意义的心率占位。
 
 **验收标准:**
 
-- Then 用户可选择手动录入心率，但手动输入不是使用心率趋势的必需前置。
-- Then 手动心率进入训练记录或后续分析数据源时必须标注来源。
-- Then UI 明确手动心率不是实时设备数据。
-- Then 手动心率不得伪装成设备数据。
+- Then 计时、力量和基础跟练执行页不显示心率卡片。
+- Then 不提供手动心率输入。
+- Then 记录页 / 趋势页不显示未获取心率占位，不绘制平均心率趋势。
+- Then 不新增心率持久化字段，不写入 `WorkoutSession`，不改 Room schema。
 - Then 不做医疗判断、危险告警或训练中断依据。
+
+**交付结果:**
+
+- 从计时、力量和基础跟练执行页撤下生产心率卡片和 E11.3 手动 bpm 输入，修复因心率输入造成的执行页 UI 变形。
+- 从历史聚合趋势撤下未获取心率占位和 `averageHeartRateTrend` 占位字段；历史页只保留真实非心率统计和趋势。
+- 删除 debug-only Band 9 HRS smoke launcher / BLE 权限入口，避免当前 APK 继续暴露已降级的心率调研入口。
+- 底层 `HeartRateState` / provider 边界暂时保留为未来架构扩展点，但当前 UI、记录和统计不消费它。
+- 本阶段未接真实设备、BLE、Huawei SDK、Health Connect、HealthKit、Wear OS 或任何健康权限，也未改变训练引擎、`WorkoutCommand`、`WorkoutEvent`、通知、声音或恢复建议语义。
 
 ## Epic E12: 真实记录、统计图表与趋势分析
 
@@ -1642,21 +1656,20 @@ stepsCompleted:
 - 新增 `WorkoutRecordStats` / `WorkoutRecordStatsUiState`，从真实 session list 推导训练总次数、completed / abandoned 分开计数、`totalElapsedSec`、`effectiveElapsedSec`、`pausedElapsedSec`、计划休息、实际休息、计时额外休息和计时 / 力量 / 跟练 mode breakdown。
 - 统计口径明确区分 planned rest、actual rest、extra rest、paused elapsed、total elapsed 和 effective elapsed；计时 extra rest 仅来自 `timedRestExtensionRecords.addedSec`，不并入 `pausedElapsedSec`。
 - 单次记录详情补充总用时、有效训练时间、暂停时间、计划休息、实际休息和额外休息；计划休息继续按历史 `WorkoutSession.planSnapshot` 计算，计划编辑不会回写历史统计。
-- 本阶段不实现 E12.2 图表趋势、平均心率趋势、同类趋势比较、真实心率设备、Health Connect、Wear OS、BLE、声音播放、云同步、账号体系、历史记录清理、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
+- 本阶段不实现 E12.2 图表趋势、同类趋势比较、真实心率设备、Health Connect、Wear OS、BLE、声音播放、云同步、账号体系、历史记录清理、foreground service、exact alarm、notification action、reset production command 或第四套 skin；平均心率趋势已随 E11.3 撤销。
 
 ### Story E12.2: 图表与趋势分析
 
 作为用户，
-我想查看计划趋势、平均心率趋势和力量/计时表现变化，
+我想查看计划趋势和力量/计时表现变化，
 以便做后续训练调整。
 
 **验收标准:**
 
-- Then 提供总统计图表、计划趋势和平均心率趋势。
+- Then 提供总统计图表、计划趋势和非心率表现趋势。
 - Then 分析时比较同类数据：同一计划、同一阶段、同一轮次或同一动作。
 - Then 不把某天第一轮和另一天最后一轮直接比较。
-- Then 平均心率趋势只消费后续真实来源设备心率或可选手动记录；没有明确来源时显示未获取心率，不画假趋势。
-- Then E12 平均心率趋势依赖 E11 后续真实来源或手动记录，不在 E11.1 中实现。
+- Then 首版不显示心率、不录入心率、不统计心率；E12 不提供未获取心率占位或平均心率趋势。
 - Then 不用不可比数据得出强弱、康复或医疗结论。
 
 ### Story E12.2a: Non-heart-rate history charts and aggregate trends
@@ -1677,13 +1690,13 @@ stepsCompleted:
 - Then mode breakdown 展示 timed / strength / follow_along 数量和占比。
 - Then 空记录或不足 2 个日期点时显示暂无趋势，不绘制假曲线。
 - Then planned rest 继续来自历史 `WorkoutSession.planSnapshot`，当前计划编辑不回写旧趋势。
-- Then 没有明确来源心率时显示未获取心率，不输出平均心率趋势数据。
+- Then 不输出心率占位或平均心率趋势数据。
 
 **交付结果:**
 
 - Android 记录页新增“非心率图表与聚合趋势”区，基于真实 Room session records 的 UI state mapper 推导图表数据。
 - 新增轻量 Compose 折线图和训练类型分布条，保持记录页浅色、克制、可读；样本不足时只显示空状态文案。
-- 单元测试覆盖真实 session list 聚合、completed / abandoned 分离、total / effective / paused 分离、planned / actual / extra rest 分离、mode breakdown、空记录 / 不足时间点、历史 planSnapshot 使用，以及无心率来源时不输出平均心率趋势数据。
+- 单元测试覆盖真实 session list 聚合、completed / abandoned 分离、total / effective / paused 分离、planned / actual / extra rest 分离、mode breakdown、空记录 / 不足时间点、历史 planSnapshot 使用，以及不输出心率占位或平均心率趋势数据。
 - 本阶段不实现设备心率获取、手动心率输入、持久化心率模型、E12.2b 力量同类 set 趋势、E12.2c 计时同类阶段 / 轮次深趋势、E12.3 历史记录清理、声音播放、云同步、账号体系、foreground service、exact alarm、notification action 或 reset production command。
 
 ### Story E12.2b: Strength comparable set trends
@@ -1827,7 +1840,7 @@ stepsCompleted:
 - 计时执行页用阶段自身 cue settings 触发最后 N 秒临近结束声音：剩余 N / ... / 1 秒 beep，倒数到 0 后的下阶段开始 bell；最后阶段没有下阶段时，在 session completed 的 0 秒边界同样 bell；开始训练的第一阶段不额外插入 bell。所有计时阶段都可触发临近结束提醒，阈值等于阶段时长时覆盖整个阶段，阈值超过阶段时长时按阶段全长裁剪覆盖。力量执行页继续用计划 cue settings 触发准备下一组和休息临近结束声音。
 - Android 播放层使用 `SoundPool` 与 `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` media audio attributes，走媒体音量通道，不请求 audio focus，不 duck，不暂停外部音乐 / 视频，并在 route dispose 时释放资源。
 - `app/src/main/res/raw/countdown_beep1.mp3` 和 `app/src/main/res/raw/stage_bell_copper_clean.mp3` 是 App 内提交资源副本；素材由用户确认为用户本人 / 项目内制作，授权用于 TrainFlow App 内短提示音分发。根目录 `countdown_beep1.mp3` 原文件和 `.local/audio/stage_bell_copper_clean.mp3` 原文件不得提交。计时临近结束按阈值 N 映射：剩余 N / ... / 1 秒播放 beep，倒数到 0 后的下阶段开始播放 bell；最后阶段完成时也在 0 秒边界 bell；开始训练的第一阶段不额外插入 bell。
-- 用户确认的 Timer Dial 交互回归基准：运行 -> 暂停应有圆环 / 节点 / 进度弧向中心暂停圆盘收束的连续 morph；暂停 -> 运行应反向展开并继续真实进度；左上角显示训练 / 计划名称而非阶段数字，心率卡片和底部按钮不挤压且按钮真机完整可见；倒计时和声音行为不得回归。
+- 用户确认的 Timer Dial 交互回归基准：运行 -> 暂停应有圆环 / 节点 / 进度弧向中心暂停圆盘收束的连续 morph；暂停 -> 运行应反向展开并继续真实进度；左上角显示训练 / 计划名称而非阶段数字；E11.3 后不再出现心率卡片，底部按钮真机完整可见；倒计时和声音行为不得回归。
 - 新增单元测试覆盖最后 N 秒映射、阶段切换映射、休息相关事件映射、声音关闭、重复事件去重和不请求 disruptive focus / duck / pause 的音频共存策略。
 - 本阶段未实现固定女声 cue、TTS、自动语音教练、notification action、foreground service、exact alarm、真实心率设备、云同步、账号体系或训练引擎语义变更。手机扬声器 / 蓝牙耳机 smoke 需要在可用设备上补记录。
 
@@ -1844,6 +1857,117 @@ stepsCompleted:
 - Then 固定女声 cue 是后续增强，不阻塞 E13.1 的短提示音和音频共存。
 - Then 不支持用户任意文本 TTS。
 - Then 不实现自动语音教练或语音控制。
+
+### Story E14.2: Timer Dial real-device proportion restore
+
+**状态:** Implemented in Android timed execution visual fix
+
+作为真机测试用户，
+我希望计时执行页的 Timer Dial 在小屏手机上仍保持同心圆、稳定间距和底部按钮对齐，
+以便训练中不被变形圆盘或跳动按钮干扰。
+
+**验收标准:**
+
+- Then E11.3 后不恢复心率显示、手动心率输入、未获取心率占位或平均心率趋势。
+- Then Timer Dial Canvas 在小屏 compact morph 容器内仍保持正方形，不被父容器压成椭圆。
+- Then 外圈、内圈、阶段 marker 和中心圆保持可读间距，中心圆不挤压底部按钮。
+- Then 顶部训练 / 计划名称可读但不占据过多纵向节奏，总剩余时间保持辅助层级。
+- Then 底部 `skip` / `+15s` / `end` 三按钮完整可见且至少 `48dp` 可点击高度。
+- Then `+15s` 第一次点击进入 `确认+15s` 待确认态时，三个按钮外框高度和位置不变化，文字不换行、不裁切、不挤压左右按钮。
+- Then 不改变训练引擎、`WorkoutCommand`、`WorkoutEvent`、rest extension recording、声音提示或 session record 语义。
+
+**交付结果:**
+
+- 计时执行页移除心率后的纵向比例重新收口：总剩余时间块变小，Timer Dial 上方弹性空间小于下方弹性空间，底部控制区保留导航栏安全区。
+- `TimerDial` Canvas 使用 required square size，`TimerDialPauseMorph` compact parent 高度不再小于 `timerDialLayoutSpec.dialSizeDp`，防止圆环在真机上变成椭圆。
+- `TimerDialTokens` 收窄中心圆与内圈 / 外圈关系，恢复 E10 风格三圆盘层级。
+- rest extension 底部确认态改用 `+15s` / `确认+15s` / `已加+15s`，三个按钮固定同高，触摸反馈只缩放中间内容。
+- 新增 / 更新回归测试覆盖无心率布局、底部按钮最小高度、Timer Dial 内部间距、正方形 Canvas / morph parent 约束和 `确认+15s` 稳定排版。
+- 真机截图触发记录见 `docs/testing/e14-2-timer-dial-real-device-proportion-restore.md`；本阶段未提交 `.local/verification`、APK、截图、日志、`deliverables/` 或 `人工/`。
+
+### Story E14.3: UI quality audit and polish sequencing
+
+**状态:** Completed docs-only audit
+
+作为产品维护者，
+我希望先审计各功能 UI 的问题和优先级，
+以便后续优化不演变成大范围 redesign 或训练语义变更。
+
+**验收标准:**
+
+- Then 先基于真机截图 / emulator smoke 列出计时执行、力量执行、计划编辑 / 详情、记录页、动作库和跟练雏形的 UI 问题清单。
+- Then 每个问题标注影响范围：阻塞训练、影响可读性、影响触控、视觉 polish 或未来增强。
+- Then 明确哪些 UI 问题必须在用户测试前修，哪些可以进入后续 polish。
+- Then 不在 audit 阶段修改训练引擎、`WorkoutCommand`、`WorkoutEvent`、Room schema、session record、心率边界或声音语义。
+
+**交付结果:**
+
+- 新增 `docs/testing/e14-3-ui-quality-audit.md`，记录 docs-only UI 审计范围、输入文档、代码页面、720x1280 emulator smoke 证据、E14.2 真机记录引用和各功能 UI 问题清单。
+- 每个问题按功能区域、状态 / 场景、问题描述、影响等级、建议修复批次、是否需要真机确认、是否需要测试或 source-pattern 回归约束标注。
+- 用户测试前优先项收敛为：跟练执行页倒计时不可被底部控制遮挡、力量确认 / 休息态小屏确认、计时执行页最新矩阵与 `确认+15s` 真机确认、计划编辑保存 / 开始入口可达性、计划空状态创建入口。
+- 本阶段未修改 UI 代码、训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema、声音语义或心率边界；截图保存在 `.local/smoke/e14-3-ui-audit/`，不进入 `.local/verification` 或 Git。
+
+### Story E14.4: Feature UI polish batches
+
+**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition story split out
+
+建议分批顺序：
+
+1. 训练执行页共性 polish：计时 / 力量 / 跟练的底部控制、暂停态、结束确认、触摸高度、文字裁切、小屏安全区和跟练倒计时遮挡问题。
+2. 计划编辑 / 计划详情 polish：保存入口、回填状态、阶段 / set 卡片密度、颜色选择、小屏滚动效率和计划空状态创建入口。
+3. 记录页数据分析和图表 polish：真实统计、非心率趋势卡片、额外休息趋势、历史清理确认和空状态层级。
+4. 动作库 / 动作详情 polish：筛选、详情可读性、替代动作入口和未来统一动作选择页准备。
+5. 跟练雏形 polish：只优化已存在的 partial flow，不伪装成完整课程平台。
+
+E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-only / mock-only 方案，至少包含当前问题、方案 A 保守修补、方案 B 结构优化、推荐选择、真机确认点和后续代码拆分；用户确认后，下一轮才允许进入 Kotlin / Compose / 测试实现。视觉方案阶段不得改生产代码、Room schema 或训练语义，不生成实现 APK。实现阶段再补对应回归测试或 smoke 记录，并生成 APK 给真机确认；不得恢复心率 UI、手动输入、平均心率趋势或新增真实设备接入，也不得改变训练引擎、命令、事件、session record 或 Room schema。
+
+**E14.4-1 交付结果:**
+
+- 新增 `docs/testing/e14-4-1-training-execution-common-polish.md`，记录训练执行页共性 polish 的输入、修复、守卫边界和回归约束。
+- 新增共享 `TrainingExecutionBottomControlsSpec`，统一力量和基础跟练执行页固定底部控制区的内容 reserve、导航栏安全区预留、主 / 次按钮最小高度、行间距和垂直 padding。
+- 基础跟练执行页的倒计时 / 当前内容不再被固定底部控制区遮挡，暂停 / 继续、跳过 / 下一步和结束训练仍即时可达；跟练仍保持 partial follow-along 边界，不伪装成完整课程平台。
+- 力量执行页 prepare / active / confirm / rest 状态使用稳定底部 reserve，确认本组和休息态内容不会被底部按钮挤压；开始本组、完成本组、确认本组、提前开始本组、暂停 / 继续和结束训练语义不变。
+- 计时执行页不重新设计 Timer Dial，保留 E14.2 的正圆 / 同心圆 / `+15s` / `确认+15s` 结果，并补 ready / running / paused / rest / rest-extension 语义回归。
+- 本批不恢复心率 UI、手动输入、未获取心率占位或平均心率趋势，不接真实设备，不改训练引擎、`WorkoutCommand`、`WorkoutEvent`、Room schema、session record 或声音提示语义。
+- 2026-06-22 用户真机确认 E14.4-1 四个重点项无问题：计时 ready / running / pause / rest / `确认+15s`、力量 prepare / active / confirm / rest、跟练倒计时 / 当前内容遮挡、三类执行页导航栏安全区和底部按钮可点性。
+
+**E14.4-2 视觉方案 gate / low-coupling implementation:**
+
+- `docs/testing/e14-4-2-plan-edit-detail-visual-proposal.md` 已完成 visual proposal，并在 E14.4-2a 确认采用方案 B：结构优化，但不做大 redesign。本阶段只做文档和只读代码 / mock 审计，不直接改代码。
+- 视觉方案覆盖计划空状态、计划列表 / 详情主操作、计时计划编辑、力量计划编辑、小屏输入后的保存 / 开始训练可达性。
+- 当前问题清单聚焦：空状态缺直接创建入口；计划详情开始训练层级过低；编辑页保存 / 开始入口只在长页面底部；阶段 / set 卡片默认密度高；部分预览文案偏工程契约。
+- 方案 A 为保守修补：补空状态 CTA、上移详情主操作、编辑页增加靠前保存 / 开始入口、清理预览文案。
+- 已确认的方案 B 为结构优化：计划详情采用可折叠计划播放列表；`开始训练`、编辑、复制和 `删除当前计划` 都归属当前展开计划卡片；计划颜色是用户手动设置的计划色，不从首个阶段或目标组推断；编辑页底部 sticky action 以绿色 `保存计划` 为主按钮、深色实心 `开始训练` 为次按钮；颜色选择复用推荐色 / 更多颜色大色板；力量目标组默认折叠，展开后设置重量、次数、休息和颜色；工程化预览文案替换为用户可读摘要。
+- E14.4-2 low-coupling implementation 已落地，并在用户 2026-06-23 真机截图反馈后完成 review fix：计划空状态直接创建计时 / 力量计划；计划管理改为默认折叠的计划播放列表；当前计划卡片内归属 `开始训练`、编辑、复制和 `删除当前计划`；计划色块使用安全默认展示，不新增计划级持久化字段；计时 / 力量编辑页新增底部 sticky `保存计划` / `开始训练`，且 `计划预览` 卡不再重复显示这两个按钮；计时阶段卡默认折叠并可展开编辑，但不新增两层计时结构；力量目标组默认折叠，展开后设置重量、次数、休息并展示颜色入口说明；工程化预览文案已替换为用户可读摘要。后续输入法真机截图补修确认：编辑数字字段时 sticky action 在 IME 可见期间隐藏，不再上浮到键盘上方遮挡表单，键盘收起后恢复。排序补修确认：力量动作 / 目标组卡片补拖动排序手柄并写入 block 顺序；计时阶段和力量动作拖拽按半卡阈值计算目标槽位，`热身` / `放松` 作为默认模板阶段可移动，保存顺序跟随编辑器最终顺序。
+- 2026-06-24 顶部拖拽截图补修确认：当第一张可见卡片被屏幕上沿裁切时，拖动按钮向下拖不应跳跃；实现上采用“手指锚定 + 占位预览 + 松手提交”模型：拖动中不把被拖卡片放入重排后的 `LazyColumn` 槽位，被拖卡片始终只按手指位移移动，其他卡片临时上移 / 下移预览目标占位，松手后才提交真实顺序。后续若丰富动画，只应装饰非拖动卡片的占位位移、阴影、透明度或拖动卡片浮层感，不应让被拖卡片脱离手指锚点，也不应恢复 active-drag 列表重排模型；详细交接记录在 `docs/testing/e14-4-2-plan-edit-detail-visual-proposal.md`。
+- 本轮仍未实现的低耦合后续项包括：计时阶段卡片密度继续细化、添加阶段 / 添加动作选择体验、计划颜色和力量目标组颜色的独立持久化决策；其中力量“添加动作”弹窗仍只是临时低耦合改良，需另开独立任务做搜索、分类、动作卡、空状态和自定义动作创建体验优化。这些都不得在 UI polish 中静默改 Room schema。
+- 必须拆出的范围：计时计划“外层目标编排 + 内层阶段 segment”两层结构、外层目标新增 / 删除 / 拖动 / 重命名 / 颜色、内层阶段新增 / 删除 / 拖动 / 重命名 / 时长 / 颜色、外层总时长由内层阶段求和、TimerDial 外圈按内部阶段时长占比分段。这些内容进入独立 **E14.4-2b Timed composition editor and TimerDial ring semantics**，先规划 / 视觉确认，再代码实现。
+- E14.4-2 implementation 仍不得恢复心率 UI、手动输入、平均心率趋势或真实设备接入，不得改训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema 或声音提示语义。若计划颜色或计时两层结构需要新的持久化字段，必须先拆数据 / persistence 决策 story。
+
+### Story E14.4-2b: Timed composition editor and TimerDial ring semantics
+
+**状态:** Split out; planning / visual confirmation required before code implementation
+
+作为计时训练用户，
+我想把计时计划组织为外层目标编排和内层阶段，
+以便既能按语义理解训练目标，也能让 TimerDial 外圈准确表达内部阶段时长比例。
+
+**验收标准:**
+
+- Given 进入该 story 的规划阶段，Then 先输出 docs-only / mock-only 视觉与数据边界方案，不直接写 Kotlin / Compose / Room / 测试代码，不生成实现 APK。
+- Given 计时计划编辑器设计，Then 外层目标编排支持新增、删除、拖动、重命名和设置颜色。
+- Given 外层目标编排展开，Then 内层阶段支持新增、删除、拖动、重命名、设置时长和设置颜色。
+- Then 外层目标总时长等于内部所有阶段时长之和。
+- Then 默认模板可以是 `热身 / 高强度工作 / 轮间休息 / 放松`，但用户可以清空后完全自定义。
+- Then 顶层主要展示不再依赖 `01 热身 / 02 高强度工作 / 03 轮间休息` 这类纯编号标签；内部阶段可保留 `01 开始 / 02 加速 / 03 休息` 等顺序编号。
+- Then TimerDial 外圈分段按内部阶段时长占比分割，而不是按外层目标等分或按固定视觉块分割。
+- Then story 在实现前必须明确是否影响 `WorkoutPlan` blocks、plan snapshot、统计比较 key、Room schema 或 TimerDial UI state；任何影响都必须有独立批准的规划结论。
+
+**边界:**
+
+- 不混入 E14.4-2 普通计划编辑 / 详情 polish。
+- 不静默修改训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema、声音提示语义或历史统计口径。
+- 不恢复心率显示、手动心率输入、未获取心率占位、平均心率趋势或真实设备接入。
 
 ## 5. FR 覆盖映射
 
@@ -1870,7 +1994,7 @@ stepsCompleted:
 4. E3.1 到 E3.4：计时训练闭环。
 5. E4.1 到 E4.4：力量训练闭环。
 6. E5.1 到 E5.4：总结、历史、恢复。
-7. E6.1 到 E6.3：跟练雏形与心率占位。
+7. E6.1 到 E6.3：跟练雏形与健康数据边界。
 8. E7.1 到 E7.3：提醒、声音、震动、偏好。
 9. E8.1 到 E8.4：设计系统、UI shell 和开源定制边界。
 10. E9.1 到 E9.4：硬化、验收与用户测试修复包。
@@ -1885,14 +2009,15 @@ stepsCompleted:
 19. E10.16：Motion Landing，把 E10.15 token 最小落地到计时训练 ready gate、center dial、Timer Dial 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source / snap 降级路径。（Implemented）
 20. E10.17：Stage Color Picker，为计时阶段编辑页提供推荐色 / 更多颜色选择、集中色板、可访问选中态、计划持久化恢复和 Timer Dial 阶段色消费。（Implemented）
 21. E10.18：Plan Edit Backfill，从计划详情进入计时 / 力量编辑器，回填已保存计划并保存回同一 plan id，同时保持历史 session snapshot 不回写。（Implemented）
-22. E11.1：Heart-rate source boundary / unavailable state refinement；先收口 source-aware UI/provider 边界，不接设备、不做手动输入、不持久化心率、不画平均心率趋势。（Implemented）
-23. E11.2a：HUAWEI Band 9 on non-Huawei Android feasibility smoke；先验证当前 Band 9 + 非华为 Android 条件下的 BLE HRS / Huawei SDK / 历史同步可行路线，不直接做生产设备接入。（Planned）
-24. E12.1：真实记录与基础统计。（Implemented）
-25. E12.2a：非心率历史图表与聚合趋势。（Implemented）
-26. E12.3：历史记录清理。（Implemented）
-27. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
-28. E12.2b：力量同类 set 趋势。（Implemented）
-29. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+22. E11.1：Heart-rate source boundary / unavailable state refinement；收口 source-aware provider/model 边界，不接设备、不做手动输入、不持久化心率、不画平均心率趋势。（Implemented; UI later hidden）
+23. E11.2a：HUAWEI Band 9 on non-Huawei Android feasibility smoke；已实现 debug-only smoke APK 入口并记录真实设备验证，当前用户手机仍无法发现华为设备，没有 BLE HRS `0x180D` / `0x2A37 notify` 证据，因此不进入 BLE adapter spike 或生产设备接入。（Completed; BLE HRS route downgraded）
+24. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
+25. E12.1：真实记录与基础统计。（Implemented）
+26. E12.2a：非心率历史图表与聚合趋势。（Implemented）
+27. E12.3：历史记录清理。（Implemented）
+28. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
+29. E12.2b：力量同类 set 趋势。（Implemented）
+30. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
 
 ## 7. 下一轮建议
 
@@ -1902,7 +2027,7 @@ stepsCompleted:
 E6.1 跟练雏形计划入口已合入 main。
 E6.2 基础跟练执行页已合入 main。
 E6.2 只支持 E6.1 内存态 preset 启动；E10.1 后，O-002 已收敛为跟练后续通过统一动作选择页编排，不再依赖计时计划切换为跟练视图。
-E6.3 心率抽象状态展示已合入 main。
+E6.3 心率抽象状态曾合入 main；E11.3 后生产执行页已不再显示心率位，仅保留未来模型边界。
 E7.1 训练提醒通知已合入 main。
 E7.2 活跃训练通知边界已合入 main。
 E7.3 训练偏好设置已合入 main。
@@ -1915,8 +2040,8 @@ E9.1 训练状态恢复与回归测试基线已合入 main。
 E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
-E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、心率、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现；Android `HeartRateState` / `HeartRateProvider` / 执行页 UI mapper 已收口为 source-aware 状态，能表达无来源、设备等待读数、设备读数、手动读数、过期读数、provider 不可用和权限不可用。E11.1 仍未接真实设备、不实现手动输入、不申请真实健康 / 蓝牙 / 身体传感器权限、不持久化心率、不绘制平均心率趋势，也不做医疗 / 危险 / 训练中断判断。下一步推荐 E11.2a HUAWEI Band 9 on non-Huawei Android feasibility smoke，基于当前 Band 9 + 非华为 Android + 华为运动健康可读数据的真实条件先验证第三方实时通道，再决定 BLE HRS / Huawei SDK / 历史同步 / 暂不接设备路线；E11.3 可选手动心率输入保持后置。
+E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、健康数据边界、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：当前 Band 9 + 非华为 Android + 华为运动健康可读数据条件下，新版 smoke APK 仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据，因此不进入 BLE adapter spike 或生产设备接入。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或平均心率趋势。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
@@ -1925,13 +2050,13 @@ E10.6 已记录 Timer Dial Figma / static visual variants：主文档为 `docs/p
 E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 Timer Dial UI state / visual tokens / Canvas component / preview demo，低风险接入计时执行页，展示外圈阶段结构、当前阶段推进、内圈总进度、中心自绘阶段符号和 paused / final countdown 状态；新增 state/tokens/semantics 单元测试。E10.7 仍是 prototype，不是最终生产集成，不改 Room/session repository、engine 语义、声音、统计、心率设备或第四套 skin。
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
-E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.mp3`、蓝牙耳机/扬声器 smoke、媒体音量通道和不抢占外部音乐视频；E12 平均心率趋势依赖 E11 后续真实设备来源或可选手动记录，不在 E11.1 中实现。
+E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.mp3`、蓝牙耳机/扬声器 smoke、媒体音量通道和不抢占外部音乐视频；首版不再规划平均心率趋势。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现；随后再按用户测试优先级进入 E13 Sound Cue System、E11.2a HUAWEI Band 9 on non-Huawei Android feasibility smoke、E11.3 可选手动心率输入或同日多轮分析。E11.2a 必须先在当前 HUAWEI Band 9 + 非华为 Android + 华为运动健康可读数据条件下验证第三方实时通道：先看 Band 9 是否暴露 BLE HRS `0x180D` 与 `0x2A37 notify`，不可用时再验证 Huawei Health Kit / Health Service Kit 在非华为 Android + Band 9 + HMS Core 下的实时心率授权；若只能查看或同步历史数据，则不作为执行页实时来源。Apple Watch / iOS HealthKit + watchOS companion 仍保留为未来 iOS 第一优先路线；Health Connect 更适合历史摘要 / 趋势，不作为 E11.2a 实时执行页首选。E12 后续平均心率趋势必须依赖 E11 后续真实来源或手动记录，并继续消费历史 `WorkoutSession.planSnapshot` 和真实 records，不要回填或改写历史计划结构；E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现并降级为未来底层边界；E11.2a HUAWEI Band 9 on non-Huawei Android feasibility smoke 已完成并降级 BLE HRS 路线：用户手机新版 smoke APK 仍无法发现华为设备，没有 Band 9 BLE HRS `0x180D` 与 `0x2A37 notify` 物理证据，不能进入 BLE adapter spike 或生产设备接入。E11.3 已撤销首版心率显示、录入和统计，后续若继续设备方向，应作为独立新阶段重新评估 Huawei SDK / Health Connect / HealthKit / BLE 的产品价值、权限和 UI 空间；当前 MVP 不显示心率、不录入心率、不绘制平均心率趋势。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` 阶段 `colorHex` 和 `StageColorPreset`，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：

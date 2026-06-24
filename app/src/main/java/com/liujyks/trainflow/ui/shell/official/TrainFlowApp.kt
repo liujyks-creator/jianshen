@@ -283,6 +283,12 @@ internal fun TrainFlowApp(
                             onEditPlan = { plan ->
                                 applyShellState(shellState.editPlan(plan))
                             },
+                            onCreateTimedPlan = {
+                                applyShellState(shellState.openTimedPlanEditorForCreate())
+                            },
+                            onCreateStrengthPlan = {
+                                applyShellState(shellState.openStrengthPlanEditorForCreate())
+                            },
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
@@ -319,6 +325,12 @@ internal fun TrainFlowApp(
                             onEditPlan = { plan ->
                                 applyShellState(shellState.editPlan(plan))
                             },
+                            onCreateTimedPlan = {
+                                applyShellState(shellState.openTimedPlanEditorForCreate())
+                            },
+                            onCreateStrengthPlan = {
+                                applyShellState(shellState.openStrengthPlanEditorForCreate())
+                            },
                             onStartTimedPlan = { plan ->
                                 applyShellState(shellState.startTimedSession(plan))
                             },
@@ -343,6 +355,12 @@ internal fun TrainFlowApp(
                     onDeletePlan = onDeleteWorkoutPlan,
                     onEditPlan = { plan ->
                         applyShellState(shellState.editPlan(plan))
+                    },
+                    onCreateTimedPlan = {
+                        applyShellState(shellState.openTimedPlanEditorForCreate())
+                    },
+                    onCreateStrengthPlan = {
+                        applyShellState(shellState.openStrengthPlanEditorForCreate())
                     },
                     onStartTimedPlan = { plan ->
                         applyShellState(shellState.startTimedSession(plan))

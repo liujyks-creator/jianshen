@@ -30,6 +30,7 @@ class PlanManagementUiStateTest {
         assertEquals(WorkoutMode.TIMED, items[0].mode)
         assertEquals("计时训练", items[0].modeLabel)
         assertEquals("计时", items[0].modeBadge)
+        assertEquals("#F44336", items[0].planColorHex)
         assertTrue(items[0].summary.contains("预计"))
         assertTrue(items[0].detailSummary.contains("阶段提醒"))
         assertTrue(items[0].reminderSummary.contains("训练提醒未设置"))
@@ -73,9 +74,10 @@ class PlanManagementUiStateTest {
         val recovered = empty.withPlans(listOf(savedTimedPlan))
 
         assertTrue(empty.isEmpty)
-        assertEquals("saved-timed", recovered.selectedPlanId)
-        assertEquals("saved-timed", recovered.selectedPlan?.id)
-        assertTrue(requireNotNull(recovered.selectedDetail).canStartTraining)
+        assertNull(recovered.selectedPlanId)
+        assertNull(recovered.selectedPlan)
+        assertNull(recovered.selectedDetail)
+        assertTrue(recovered.selectPlan("saved-timed").selectedDetail?.canStartTraining == true)
     }
 
     @Test
@@ -110,11 +112,50 @@ class PlanManagementUiStateTest {
         assertTrue(detail.editStatus.contains("本地计划"))
         assertTrue(detail.sections.any { section -> section.title == "动作与组" })
         assertTrue(detail.reminder.boundaryCopy.contains("普通通知"))
+        assertFalse(detail.sections.flatMap { it.rows }.joinToString().contains("manual_start"))
+    }
+
+    @Test
+    fun selectingCurrentPlanAgainCollapsesPlaylistDetail() {
+        val state = buildDefaultPlanManagementState()
+        val selectedId = state.plans.first().id
+        val expanded = state.selectPlan(selectedId)
+        val collapsed = expanded.selectPlan(selectedId)
+
+        assertNull(collapsed.selectedDetail)
+        assertFalse(collapsed.listItems.first { it.id == selectedId }.selected)
+        assertEquals(selectedId, expanded.selectedDetail?.id)
+        assertTrue(expanded.listItems.first { it.id == selectedId }.selected)
+    }
+
+    @Test
+    fun detailCopyUsesUserFacingPlanStructureTerms() {
+        val defaultState = buildDefaultPlanManagementState()
+        val timedDetailRows = requireNotNull(
+            defaultState.selectPlan(defaultState.plans.first().id).selectedDetail
+        )
+            .sections
+            .flatMap { it.rows }
+            .joinToString(" ")
+        val strengthDetailRows = buildDefaultPlanManagementState()
+            .selectPlan(buildDefaultPlanManagementState().plans[1].id)
+            .selectedDetail
+            .let(::requireNotNull)
+            .sections
+            .flatMap { it.rows }
+            .joinToString(" ")
+
+        assertTrue(timedDetailRows.contains("训练阶段"))
+        assertFalse(timedDetailRows.contains("interval stage"))
+        assertFalse(strengthDetailRows.contains("strength block"))
+        assertFalse(strengthDetailRows.contains("planned set"))
+        assertFalse(strengthDetailRows.contains("manual_start"))
     }
 
     @Test
     fun timedPlanDetailEnablesStartTrainingForE3SessionScreen() {
-        val state = buildDefaultPlanManagementState()
+        val defaultState = buildDefaultPlanManagementState()
+        val state = defaultState.selectPlan(defaultState.plans.first().id)
         val detail = requireNotNull(state.selectedDetail)
 
         assertEquals("计时训练", detail.modeLabel)
@@ -135,7 +176,11 @@ class PlanManagementUiStateTest {
             createdAt = "2026-06-14T01:00:00Z",
             updatedAt = "2026-06-14T01:00:00Z"
         )
-        val detail = requireNotNull(PlanManagementScreenState(plans = listOf(followAlong)).selectedDetail)
+        val detail = requireNotNull(
+            PlanManagementScreenState(plans = listOf(followAlong))
+                .selectPlan(followAlong.id)
+                .selectedDetail
+        )
 
         assertFalse(detail.canEditPlan)
         assertFalse(detail.canStartTraining)
@@ -183,6 +228,7 @@ class PlanManagementUiStateTest {
         val firstId = state.plans.first().id
         val secondId = state.plans[1].id
         val deleted = state
+            .selectPlan(firstId)
             .requestDeletePlan(firstId)
             .confirmDeletePlan()
 

@@ -8,6 +8,7 @@ import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
@@ -27,7 +28,7 @@ internal const val DefaultPlanManagementTimestamp = "2026-05-29T00:00:00Z"
 
 internal data class PlanManagementScreenState(
     val plans: List<WorkoutPlan>,
-    val selectedPlanId: String? = plans.firstOrNull()?.id,
+    val selectedPlanId: String? = null,
     val pendingDeletePlanId: String? = null,
     val statusMessage: String? = null,
     val notificationPermissionState: PlanReminderNotificationPermissionState =
@@ -44,10 +45,10 @@ internal data class PlanManagementScreenState(
         }
 
     val selectedPlan: WorkoutPlan?
-        get() = plans.firstOrNull { it.id == selectedPlanId } ?: plans.firstOrNull()
+        get() = plans.firstOrNull { it.id == selectedPlanId }
 
     val selectedDetail: PlanDetailUiState?
-        get() = selectedPlan?.toDetailState(notificationPermissionState)
+        get() = plans.firstOrNull { it.id == selectedPlanId }?.toDetailState(notificationPermissionState)
 
     val pendingDeletePlanTitle: String?
         get() = plans.firstOrNull { it.id == pendingDeletePlanId }?.title
@@ -59,6 +60,7 @@ internal data class PlanListItemUiState(
     val mode: WorkoutMode,
     val modeLabel: String,
     val modeBadge: String,
+    val planColorHex: String,
     val summary: String,
     val detailSummary: String,
     val reminderSummary: String,
@@ -72,6 +74,7 @@ internal data class PlanDetailUiState(
     val mode: WorkoutMode,
     val modeLabel: String,
     val modeBadge: String,
+    val planColorHex: String,
     val summary: String,
     val detailSummary: String,
     val metrics: List<PlanMetricUiState>,
@@ -131,6 +134,7 @@ internal fun buildDefaultPlanManagementState(
 internal fun PlanManagementScreenState.withPlans(plans: List<WorkoutPlan>): PlanManagementScreenState {
     val nextSelectedPlanId = when {
         plans.any { plan -> plan.id == selectedPlanId } -> selectedPlanId
+        selectedPlanId == null -> null
         else -> plans.firstOrNull()?.id
     }
     val nextPendingDeletePlanId = pendingDeletePlanId?.takeIf { pendingId ->
@@ -161,7 +165,7 @@ internal fun PlanManagementScreenState.selectPlan(planId: String): PlanManagemen
     if (plans.none { it.id == planId }) return this
 
     return copy(
-        selectedPlanId = planId,
+        selectedPlanId = if (selectedPlanId == planId) null else planId,
         pendingDeletePlanId = null,
         statusMessage = null
     )
@@ -261,6 +265,7 @@ internal fun PlanManagementScreenState.confirmDeletePlan(): PlanManagementScreen
     val deletedPlan = plans.firstOrNull { it.id == deleteId } ?: return copy(pendingDeletePlanId = null)
     val remainingPlans = plans.filterNot { it.id == deleteId }
     val nextSelectedPlanId = when {
+        selectedPlanId == null -> null
         selectedPlanId != deleteId && remainingPlans.any { it.id == selectedPlanId } -> selectedPlanId
         else -> remainingPlans.firstOrNull()?.id
     }
@@ -280,6 +285,7 @@ private fun WorkoutPlan.toListItem(selected: Boolean): PlanListItemUiState {
         mode = mode,
         modeLabel = mode.modeLabel(),
         modeBadge = mode.modeBadge(),
+        planColorHex = planDisplayColorHex(),
         summary = planSummary(),
         detailSummary = planDetailSummary(),
         reminderSummary = planReminderSummary(),
@@ -297,6 +303,7 @@ private fun WorkoutPlan.toDetailState(
         mode = mode,
         modeLabel = mode.modeLabel(),
         modeBadge = mode.modeBadge(),
+        planColorHex = planDisplayColorHex(),
         summary = planSummary(),
         detailSummary = planDetailSummary(),
         metrics = planMetrics(),
@@ -425,6 +432,10 @@ private fun WorkoutPlan.planDetailSummary(): String {
     }
 }
 
+private fun WorkoutPlan.planDisplayColorHex(): String {
+    return "#F44336"
+}
+
 private fun WorkoutPlan.planReminderSummary(): String {
     val reminder = reminder
     return if (reminder?.enabled == true && reminder.scheduleAt != null) {
@@ -467,13 +478,13 @@ private fun WorkoutPlan.timedDetailSections(): List<PlanDetailSectionUiState> {
             is WarmupBlock -> "热身 · ${block.durationSec?.formatDuration() ?: "按动作"}"
             is TimedCircuitBlock -> {
                 val stageNames = block.items.joinToString("、") { item -> item.exerciseLabel() }
-                "间歇阶段 · ${block.rounds} 轮 · $stageNames"
+                "训练阶段 · ${block.rounds} 轮 · $stageNames"
             }
 
             is StretchBlock -> "拉伸 · ${block.durationSec?.formatDuration() ?: "按动作"}"
             is RestBlock -> "休息 · ${block.durationSec.formatDuration()}"
             is CooldownBlock -> "冷却 · ${block.durationSec?.formatDuration() ?: "按动作"}"
-            is StrengthExerciseBlock -> "力量动作块 · ${block.exerciseLabel()}"
+            is StrengthExerciseBlock -> "力量动作 · ${block.exerciseLabel()}"
         }
     }
 
@@ -493,9 +504,9 @@ private fun WorkoutPlan.strengthDetailSections(): List<PlanDetailSectionUiState>
     val strengthBlocks = blocks.filterIsInstance<StrengthExerciseBlock>()
     val actionRows = strengthBlocks.map { block ->
         val setSummary = block.sets.groupBy { it.kind }.entries.joinToString("，") { (kind, sets) ->
-            "${kind.contractValue} ${sets.size}组"
+            "${kind.displayLabel()} ${sets.size}组"
         }
-        "${block.exerciseLabel()} · $setSummary · ${block.setTimerMode.contractValue}"
+        "${block.exerciseLabel()} · $setSummary"
     }
 
     return listOf(
@@ -508,6 +519,15 @@ private fun WorkoutPlan.strengthDetailSections(): List<PlanDetailSectionUiState>
             rows = actionRows
         )
     )
+}
+
+private fun StrengthSetKind.displayLabel(): String {
+    return when (this) {
+        StrengthSetKind.WARMUP -> "热身"
+        StrengthSetKind.WORKING -> "正式"
+        StrengthSetKind.DROP -> "递减"
+        StrengthSetKind.BACKOFF -> "退阶"
+    }
 }
 
 private fun WorkoutPlan.estimatedTimedDurationSec(): Int {

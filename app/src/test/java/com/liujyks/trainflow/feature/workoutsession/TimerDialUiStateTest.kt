@@ -12,6 +12,7 @@ import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
 import com.liujyks.trainflow.feature.plans.buildDefaultTimedPlanEditorState
+import com.liujyks.trainflow.feature.plans.selectPlan
 import com.liujyks.trainflow.ui.theme.SkinRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -112,7 +113,11 @@ class TimerDialUiStateTest {
     @Test
     fun planDetailReadyExecutionAndTimerDialConsumeBoundaryStageColors() {
         val plan = boundaryColoredEditorPlan()
-        val detail = requireNotNull(PlanManagementScreenState(plans = listOf(plan)).selectedDetail)
+        val detail = requireNotNull(
+            PlanManagementScreenState(plans = listOf(plan))
+                .selectPlan(plan.id)
+                .selectedDetail
+        )
         val ready = TimedWorkoutEngine.create(plan)
         val readyGate = requireNotNull(ready.toTimedReadyStartGateUiState())
         val started = ready.startTimedSessionFromReadyGate().state

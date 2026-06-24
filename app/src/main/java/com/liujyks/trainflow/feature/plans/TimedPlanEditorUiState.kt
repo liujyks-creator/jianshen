@@ -112,7 +112,7 @@ internal data class TimedPlanEditorScreenState(
         planId: String = sourcePlanId ?: "plan-timed-draft",
         timestamp: String = DefaultTimedPlanTimestamp
     ): WorkoutPlan {
-        val cueSafeState = constrainCueSettings().normalizeFixedBoundaryStages()
+        val cueSafeState = constrainCueSettings()
         val blocks = cueSafeState.toPlanBlocks()
         val cueSettings = CueSettings(
             actionEnding = cueSafeState.actionCue.toCountdownCue(),
@@ -509,8 +509,7 @@ internal fun TimedPlanEditorScreenState.updateStageType(
         },
         savedPlan = null,
         statusMessage = null
-    ).normalizeFixedBoundaryStages()
-        .constrainCueSettings()
+    ).constrainCueSettings()
 }
 
 internal fun TimedPlanEditorScreenState.updateStageColor(
@@ -590,12 +589,7 @@ internal fun TimedPlanEditorScreenState.moveStage(
     toIndex: Int
 ): TimedPlanEditorScreenState {
     if (fromIndex !in stages.indices || toIndex !in stages.indices || fromIndex == toIndex) return this
-    val movedStages = stages.toMutableList().also { list ->
-        val stage = list.removeAt(fromIndex)
-        list.add(toIndex, stage)
-    }
-    if (!movedStages.hasValidFixedBoundaryOrder()) return this
-
+    val movedStages = stages.withItemMoved(fromIndex, toIndex)
     return copy(
         stages = movedStages,
         savedPlan = null,
@@ -603,16 +597,25 @@ internal fun TimedPlanEditorScreenState.moveStage(
     )
 }
 
+internal fun TimedPlanEditorScreenState.reorderStages(stageIds: List<String>): TimedPlanEditorScreenState {
+    if (stageIds.size != stages.size || stageIds.toSet() != stages.map { it.id }.toSet()) return this
+    if (stageIds == stages.map { it.id }) return this
+    val stagesById = stages.associateBy { stage -> stage.id }
+    return copy(
+        stages = stageIds.mapNotNull { stageId -> stagesById[stageId] },
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
 internal fun TimedPlanEditorScreenState.canMoveStageUp(stageId: String): Boolean {
     val index = stages.indexOfFirst { stage -> stage.id == stageId }
-    return index > 0 && stages.withMovedStage(index, index - 1)?.hasValidFixedBoundaryOrder() == true
+    return index > 0
 }
 
 internal fun TimedPlanEditorScreenState.canMoveStageDown(stageId: String): Boolean {
     val index = stages.indexOfFirst { stage -> stage.id == stageId }
-    return index >= 0 &&
-        index < stages.lastIndex &&
-        stages.withMovedStage(index, index + 1)?.hasValidFixedBoundaryOrder() == true
+    return index >= 0 && index < stages.lastIndex
 }
 
 internal fun TimedPlanEditorScreenState.saveDraftPlan(
@@ -674,7 +677,7 @@ internal fun WorkoutPlan.toTimedPlanEditorState(
             "已载入已保存计划，可编辑后保存回同一个本地计划。"
         }
     )
-    return state.normalizeFixedBoundaryStages().constrainCueSettings()
+    return state.constrainCueSettings()
 }
 
 private fun PlanBlock.toTimedEditorStages(): List<TimedPlanEditorStageUiState> {
@@ -806,48 +809,58 @@ internal fun Int.formatDuration(): String {
 }
 
 private fun TimedPlanEditorScreenState.toPlanBlocks(): List<PlanBlock> {
-    val orderedStages = stages.normalizedFixedBoundaryOrder()
-    val repeatedStages = orderedStages.filterNot { stage ->
-        stage.stageType == TimedStageType.WARMUP || stage.stageType == TimedStageType.COOLDOWN
-    }
     val blocks = mutableListOf<PlanBlock>()
-    orderedStages.forEach { stage ->
-        when (stage.stageType) {
-            TimedStageType.WARMUP -> blocks += WarmupBlock(
-                id = stage.id,
-                order = blocks.size + 1,
-                title = stage.name,
-                durationSec = stage.durationSec,
-                items = listOf(stage.toTimedExerciseItem())
-            )
+    val circuitStages = mutableListOf<TimedPlanEditorStageUiState>()
+    var circuitSequence = 1
 
-            TimedStageType.COOLDOWN -> Unit
-            else -> Unit
-        }
-    }
-    if (repeatedStages.isNotEmpty()) {
+    fun flushCircuitStages() {
+        if (circuitStages.isEmpty()) return
         blocks += TimedCircuitBlock(
-            id = "timed-interval-stages",
+            id = if (circuitSequence == 1) {
+                "timed-interval-stages"
+            } else {
+                "timed-interval-stages-$circuitSequence"
+            },
             order = blocks.size + 1,
             title = "间歇阶段",
             rounds = rounds,
             restBetweenRoundsSec = restBetweenRoundsSec.takeIf { it > 0 },
-            items = repeatedStages.map { stage ->
-                stage.toTimedExerciseItem()
-            }
+            items = circuitStages.map { stage -> stage.toTimedExerciseItem() }
         )
+        circuitStages.clear()
+        circuitSequence += 1
     }
-    orderedStages.forEach { stage ->
-        if (stage.stageType == TimedStageType.COOLDOWN) {
-            blocks += CooldownBlock(
-                id = stage.id,
-                order = blocks.size + 1,
-                title = stage.name,
-                durationSec = stage.durationSec,
-                items = listOf(stage.toTimedExerciseItem())
-            )
+
+    stages.forEach { stage ->
+        when (stage.stageType) {
+            TimedStageType.WARMUP -> {
+                flushCircuitStages()
+                blocks += WarmupBlock(
+                    id = stage.id,
+                    order = blocks.size + 1,
+                    title = stage.name,
+                    durationSec = stage.durationSec,
+                    items = listOf(stage.toTimedExerciseItem())
+                )
+            }
+
+            TimedStageType.COOLDOWN -> {
+                flushCircuitStages()
+                blocks += CooldownBlock(
+                    id = stage.id,
+                    order = blocks.size + 1,
+                    title = stage.name,
+                    durationSec = stage.durationSec,
+                    items = listOf(stage.toTimedExerciseItem())
+                )
+            }
+
+            TimedStageType.WORK,
+            TimedStageType.REST,
+            TimedStageType.CUSTOM -> circuitStages += stage
         }
     }
+    flushCircuitStages()
     return blocks
 }
 
@@ -865,61 +878,7 @@ private fun TimedPlanEditorScreenState.nextGeneratedStageId(prefix: String): Pai
 private fun List<TimedPlanEditorStageUiState>.insertIndexForNewStage(
     stageType: TimedStageType
 ): Int {
-    return when (stageType) {
-        TimedStageType.WARMUP -> indexOfFirst { stage -> stage.stageType != TimedStageType.WARMUP }
-            .let { index -> if (index < 0) size else index }
-        TimedStageType.COOLDOWN -> size
-        TimedStageType.WORK,
-        TimedStageType.REST,
-        TimedStageType.CUSTOM -> indexOfFirst { stage -> stage.stageType == TimedStageType.COOLDOWN }
-            .let { index -> if (index < 0) size else index }
-    }
-}
-
-private fun TimedPlanEditorScreenState.normalizeFixedBoundaryStages(): TimedPlanEditorScreenState {
-    val normalized = stages.normalizedFixedBoundaryOrder()
-    return if (normalized == stages) this else copy(stages = normalized)
-}
-
-private fun List<TimedPlanEditorStageUiState>.normalizedFixedBoundaryOrder(): List<TimedPlanEditorStageUiState> {
-    return filter { stage -> stage.stageType == TimedStageType.WARMUP } +
-        filter { stage ->
-            stage.stageType != TimedStageType.WARMUP && stage.stageType != TimedStageType.COOLDOWN
-        } +
-        filter { stage -> stage.stageType == TimedStageType.COOLDOWN }
-}
-
-private fun List<TimedPlanEditorStageUiState>.withMovedStage(
-    fromIndex: Int,
-    toIndex: Int
-): List<TimedPlanEditorStageUiState>? {
-    if (fromIndex !in indices || toIndex !in indices || fromIndex == toIndex) return null
-    return toMutableList().also { list ->
-        val stage = list.removeAt(fromIndex)
-        list.add(toIndex, stage)
-    }
-}
-
-private fun List<TimedPlanEditorStageUiState>.hasValidFixedBoundaryOrder(): Boolean {
-    var seenMiddleStage = false
-    var seenCooldownStage = false
-    for (stage in this) {
-        when (stage.stageType) {
-            TimedStageType.WARMUP -> {
-                if (seenMiddleStage || seenCooldownStage) return false
-            }
-            TimedStageType.COOLDOWN -> {
-                seenCooldownStage = true
-            }
-            TimedStageType.WORK,
-            TimedStageType.REST,
-            TimedStageType.CUSTOM -> {
-                if (seenCooldownStage) return false
-                seenMiddleStage = true
-            }
-        }
-    }
-    return true
+    return size
 }
 
 private fun Int.sanitizeDuration(min: Int = 0): Int = coerceIn(min, 3600)

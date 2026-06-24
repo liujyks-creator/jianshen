@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -20,8 +22,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -61,7 +62,6 @@ import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import java.time.Instant
-import kotlin.math.roundToInt
 
 @Composable
 internal fun TimedPlanEditorRoute(
@@ -104,7 +104,7 @@ internal fun TimedPlanEditorRoute(
         onRemoveStage = { stageId -> uiState = uiState.removeStage(stageId) },
         onMoveStageUp = { stageId -> uiState = uiState.moveStageUp(stageId) },
         onMoveStageDown = { stageId -> uiState = uiState.moveStageDown(stageId) },
-        onMoveStage = { fromIndex, toIndex -> uiState = uiState.moveStage(fromIndex, toIndex) },
+        onReorderStages = { stageIds -> uiState = uiState.reorderStages(stageIds) },
         onAddStage = { type -> uiState = uiState.addStage(type) },
         onSaveDraft = {
             if (uiState.canSave) {
@@ -155,128 +155,191 @@ private fun TimedPlanEditorScreen(
     onRemoveStage: (String) -> Unit,
     onMoveStageUp: (String) -> Unit,
     onMoveStageDown: (String) -> Unit,
-    onMoveStage: (Int, Int) -> Unit,
+    onReorderStages: (List<String>) -> Unit,
     onAddStage: (TimedStageType) -> Unit,
     onSaveDraft: () -> Unit,
     onStartTimedPlan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val dragItemGapPx = with(LocalDensity.current) { 16.dp.roundToPx() }
     var draggedStageId by remember { mutableStateOf<String?>(null) }
-    var draggedStageStartIndex by remember { mutableStateOf<Int?>(null) }
+    var draggedStageOrderIds by remember { mutableStateOf<List<String>?>(null) }
+    var draggedStageStartIndex by remember { mutableStateOf(-1) }
+    var draggedStageTargetIndex by remember { mutableStateOf(-1) }
     var draggedStageOffsetY by remember { mutableStateOf(0f) }
     var draggedStageHeightPx by remember { mutableStateOf(1) }
     var colorPickerStage by remember { mutableStateOf<TimedPlanEditorStageUiState?>(null) }
+    var expandedStageIds by rememberSaveable(uiState.stages.map { it.id }.joinToString("|")) {
+        mutableStateOf(emptyList<String>())
+    }
 
     fun resetStageDrag() {
         draggedStageId = null
-        draggedStageStartIndex = null
+        draggedStageOrderIds = null
+        draggedStageStartIndex = -1
+        draggedStageTargetIndex = -1
         draggedStageOffsetY = 0f
         draggedStageHeightPx = 1
     }
 
-    fun finishStageDrag() {
-        val fromIndex = draggedStageStartIndex
+    fun updateStageDrag(deltaY: Float) {
         val stageId = draggedStageId
-        if (fromIndex != null && stageId != null && uiState.stages.getOrNull(fromIndex)?.id == stageId) {
-            val offsetRows = (draggedStageOffsetY / draggedStageHeightPx.coerceAtLeast(1)).roundToInt()
-            val toIndex = (fromIndex + offsetRows).coerceIn(uiState.stages.indices)
-            onMoveStage(fromIndex, toIndex)
+        val sourceOrderIds = draggedStageOrderIds
+        val startIndex = draggedStageStartIndex
+        draggedStageOffsetY += deltaY
+        if (stageId != null && sourceOrderIds != null && startIndex in sourceOrderIds.indices) {
+            if (sourceOrderIds[startIndex] == stageId) {
+                val toIndex = draggedItemTargetIndex(
+                    fromIndex = startIndex,
+                    dragOffsetPx = draggedStageOffsetY,
+                    itemHeightPx = draggedStageHeightPx,
+                    lastIndex = sourceOrderIds.lastIndex
+                )
+                draggedStageTargetIndex = toIndex
+            }
         }
+    }
+
+    fun finishStageDrag() {
+        draggedStageOrderIds
+            ?.withItemMoved(draggedStageStartIndex, draggedStageTargetIndex)
+            ?.let(onReorderStages)
         resetStageDrag()
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(TrainFlowSurfaceMuted)
-            .padding(horizontal = 20.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            TextButton(onClick = onBackToHome) {
-                Text(text = "返回训练首页")
+    val displayedStages = uiState.stages
+
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(TrainFlowSurfaceMuted)
+                .padding(horizontal = 20.dp, vertical = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                TextButton(onClick = onBackToHome) {
+                    Text(text = "返回训练首页")
+                }
+            }
+
+            item {
+                TimedPlanEditorHeader(uiState)
+            }
+
+            item {
+                PlanBasicsCard(
+                    uiState = uiState,
+                    onTitleChanged = onTitleChanged,
+                    onDescriptionChanged = onDescriptionChanged
+                )
+            }
+
+            item {
+                CircuitSettingsCard(
+                    uiState = uiState,
+                    onRoundsChanged = onRoundsChanged,
+                    onRestBetweenRoundsChanged = onRestBetweenRoundsChanged
+                )
+            }
+
+            item {
+                SectionTitle(text = "阶段编排")
+            }
+
+            itemsIndexed(displayedStages, key = { _, stage -> stage.id }) { index, stage ->
+                val stageExpanded = stage.id in expandedStageIds
+                val isStageDragging = draggedStageId == stage.id
+                val placeholderShiftY = if (isStageDragging) {
+                    0
+                } else {
+                    placeholderShiftForIndexPx(
+                        index = index,
+                        draggedIndex = draggedStageStartIndex,
+                        targetIndex = draggedStageTargetIndex,
+                        draggedItemHeightPx = draggedStageHeightPx,
+                        itemGapPx = dragItemGapPx
+                    )
+                }
+                TimedStageEditorCard(
+                    modifier = (if (isStageDragging) Modifier else Modifier.animateItem())
+                        .graphicsLayer { translationY = placeholderShiftY.toFloat() },
+                    stage = stage,
+                    index = index,
+                    totalCount = displayedStages.size,
+                    expanded = stageExpanded,
+                    onExpandedChanged = { expanded ->
+                        expandedStageIds = if (expanded) {
+                            (expandedStageIds + stage.id).distinct()
+                        } else {
+                            expandedStageIds - stage.id
+                        }
+                    },
+                    onNameChanged = { name -> onStageNameChanged(stage.id, name) },
+                    onDurationChanged = { seconds -> onStageDurationChanged(stage.id, seconds) },
+                    onStageTypeChanged = { type -> onStageTypeChanged(stage.id, type) },
+                    onOpenColorPicker = { colorPickerStage = stage },
+                    onCopy = { onCopyStage(stage.id) },
+                    onRemove = { onRemoveStage(stage.id) },
+                    onMoveUp = { onMoveStageUp(stage.id) },
+                    onMoveDown = { onMoveStageDown(stage.id) },
+                    canMoveUp = index > 0,
+                    canMoveDown = index < displayedStages.lastIndex,
+                    isDragging = isStageDragging,
+                    dragOffsetY = if (isStageDragging) {
+                        draggedStageOffsetY
+                    } else {
+                        0f
+                    },
+                    onDragStarted = { cardHeightPx ->
+                        draggedStageId = stage.id
+                        draggedStageOrderIds = displayedStages.map { displayedStage -> displayedStage.id }
+                        draggedStageStartIndex = index
+                        draggedStageTargetIndex = index
+                        draggedStageOffsetY = 0f
+                        draggedStageHeightPx = cardHeightPx.coerceAtLeast(1)
+                    },
+                    onDragChanged = ::updateStageDrag,
+                    onDragStopped = ::finishStageDrag,
+                    onDragCanceled = ::resetStageDrag
+                )
+            }
+
+            item {
+                AddTimedStageCard(onAddStage = onAddStage)
+            }
+
+            item {
+                CueSettingsCard(
+                    uiState = uiState,
+                    onActionCueThresholdChanged = onActionCueThresholdChanged,
+                    onRestCueThresholdChanged = onRestCueThresholdChanged,
+                    onActionCueEnabledChanged = onActionCueEnabledChanged,
+                    onRestCueEnabledChanged = onRestCueEnabledChanged,
+                    onSoundEnabledChanged = onSoundEnabledChanged,
+                    onVibrationEnabledChanged = onVibrationEnabledChanged,
+                    onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged
+                )
+            }
+
+            item {
+                SaveAndPreviewCard(
+                    uiState = uiState
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(PlanEditorStickyActionReserveHeight))
             }
         }
 
-        item {
-            TimedPlanEditorHeader(uiState)
-        }
-
-        item {
-            PlanBasicsCard(
-                uiState = uiState,
-                onTitleChanged = onTitleChanged,
-                onDescriptionChanged = onDescriptionChanged
-            )
-        }
-
-        item {
-            CircuitSettingsCard(
-                uiState = uiState,
-                onRoundsChanged = onRoundsChanged,
-                onRestBetweenRoundsChanged = onRestBetweenRoundsChanged
-            )
-        }
-
-        item {
-            SectionTitle(text = "阶段编排")
-        }
-
-        itemsIndexed(uiState.stages, key = { _, stage -> stage.id }) { index, stage ->
-            TimedStageEditorCard(
-                stage = stage,
-                index = index,
-                totalCount = uiState.stages.size,
-                onNameChanged = { name -> onStageNameChanged(stage.id, name) },
-                onDurationChanged = { seconds -> onStageDurationChanged(stage.id, seconds) },
-                onStageTypeChanged = { type -> onStageTypeChanged(stage.id, type) },
-                onOpenColorPicker = { colorPickerStage = stage },
-                onCopy = { onCopyStage(stage.id) },
-                onRemove = { onRemoveStage(stage.id) },
-                onMoveUp = { onMoveStageUp(stage.id) },
-                onMoveDown = { onMoveStageDown(stage.id) },
-                canMoveUp = uiState.canMoveStageUp(stage.id),
-                canMoveDown = uiState.canMoveStageDown(stage.id),
-                isDragging = draggedStageId == stage.id,
-                dragOffsetY = if (draggedStageId == stage.id) draggedStageOffsetY else 0f,
-                onDragStarted = { cardHeightPx ->
-                    draggedStageId = stage.id
-                    draggedStageStartIndex = uiState.stages.indexOfFirst { currentStage ->
-                        currentStage.id == stage.id
-                    }
-                    draggedStageOffsetY = 0f
-                    draggedStageHeightPx = cardHeightPx.coerceAtLeast(1)
-                },
-                onDragChanged = { draggedStageOffsetY += it },
-                onDragStopped = ::finishStageDrag,
-                onDragCanceled = ::resetStageDrag
-            )
-        }
-
-        item {
-            AddTimedStageCard(onAddStage = onAddStage)
-        }
-
-        item {
-            CueSettingsCard(
-                uiState = uiState,
-                onActionCueThresholdChanged = onActionCueThresholdChanged,
-                onRestCueThresholdChanged = onRestCueThresholdChanged,
-                onActionCueEnabledChanged = onActionCueEnabledChanged,
-                onRestCueEnabledChanged = onRestCueEnabledChanged,
-                onSoundEnabledChanged = onSoundEnabledChanged,
-                onVibrationEnabledChanged = onVibrationEnabledChanged,
-                onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged
-            )
-        }
-
-        item {
-            SaveAndPreviewCard(
-                uiState = uiState,
-                onSaveDraft = onSaveDraft,
-                onStartTimedPlan = onStartTimedPlan
-            )
-        }
+        PlanEditorStickyActions(
+            onSavePlan = onSaveDraft,
+            onStartTraining = onStartTimedPlan,
+            saveEnabled = uiState.canSave,
+            startEnabled = uiState.canStartTraining,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     colorPickerStage?.let { stage ->
@@ -306,7 +369,7 @@ private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "热身固定在开头，放松固定在最后；中间的工作、休息和自定义阶段可排序。计时训练不再选择动作库动作。",
+            text = "热身、工作、休息、自定义和放松都可拖动排序。计时训练不再选择动作库动作。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -370,9 +433,12 @@ private fun CircuitSettingsCard(
 
 @Composable
 private fun TimedStageEditorCard(
+    modifier: Modifier = Modifier,
     stage: TimedPlanEditorStageUiState,
     index: Int,
     totalCount: Int,
+    expanded: Boolean,
+    onExpandedChanged: (Boolean) -> Unit,
     onNameChanged: (String) -> Unit,
     onDurationChanged: (String) -> Unit,
     onStageTypeChanged: (TimedStageType) -> Unit,
@@ -404,7 +470,7 @@ private fun TimedStageEditorCard(
     }
 
     EditorCard(
-        modifier = Modifier
+        modifier = modifier
             .onSizeChanged { size -> cardHeightPx = size.height }
             .then(dragModifier)
     ) {
@@ -413,7 +479,9 @@ private fun TimedStageEditorCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onExpandedChanged(!expanded) },
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -425,10 +493,13 @@ private fun TimedStageEditorCard(
                     )
                 }
                 Text(
-                    text = "图标 ${stage.iconKey} · ${stage.durationSec.formatDuration()}",
+                    text = "图标 ${stage.iconKey} · ${stage.durationSec.formatDuration()} · ${if (expanded) "已展开" else "点按展开设置"}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            TextButton(onClick = { onExpandedChanged(!expanded) }) {
+                Text(if (expanded) "收起" else "展开")
             }
             StageDragHandle(
                 enabled = totalCount > 1,
@@ -440,48 +511,50 @@ private fun TimedStageEditorCard(
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = onMoveUp, enabled = canMoveUp) { Text("上移") }
-            TextButton(onClick = onMoveDown, enabled = canMoveDown) { Text("下移") }
-        }
+        if (expanded) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onMoveUp, enabled = canMoveUp) { Text("上移") }
+                TextButton(onClick = onMoveDown, enabled = canMoveDown) { Text("下移") }
+            }
 
-        OutlinedTextField(
-            value = stage.name,
-            onValueChange = onNameChanged,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("阶段名称") },
-            singleLine = true
-        )
-        NumberField(
-            label = "阶段秒数",
-            value = stage.durationText,
-            onValueChanged = onDurationChanged,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            TimedStageTypeOptions.forEach { option ->
-                FilterChip(
-                    selected = stage.stageType == option.stageType,
-                    onClick = { onStageTypeChanged(option.stageType) },
-                    label = { Text(option.label) }
-                )
+            OutlinedTextField(
+                value = stage.name,
+                onValueChange = onNameChanged,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("阶段名称") },
+                singleLine = true
+            )
+            NumberField(
+                label = "阶段秒数",
+                value = stage.durationText,
+                onValueChanged = onDurationChanged,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TimedStageTypeOptions.forEach { option ->
+                    FilterChip(
+                        selected = stage.stageType == option.stageType,
+                        onClick = { onStageTypeChanged(option.stageType) },
+                        label = { Text(option.label) }
+                    )
+                }
             }
-        }
-        Text(
-            text = "阶段类型会同步图标；热身 / 放松是固定边界阶段。",
-            style = MaterialTheme.typography.bodySmall,
-            color = TrainFlowNeutral700
-        )
-        StageColorPickerEntry(stage = stage, onOpenColorPicker = onOpenColorPicker)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
-                Text("复制")
-            }
-            OutlinedButton(onClick = onRemove, enabled = totalCount > 1, modifier = Modifier.weight(1f)) {
-                Text("删除")
+            Text(
+                text = "阶段类型会同步图标；热身 / 放松只是默认模板阶段，也可以移动位置。",
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral700
+            )
+            StageColorPickerEntry(stage = stage, onOpenColorPicker = onOpenColorPicker)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
+                    Text("复制")
+                }
+                OutlinedButton(onClick = onRemove, enabled = totalCount > 1, modifier = Modifier.weight(1f)) {
+                    Text("删除")
+                }
             }
         }
     }
@@ -661,7 +734,7 @@ private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
             }
         }
         Text(
-            text = "长按阶段卡右侧“拖动”手柄可拖拽排序；热身固定在开头，放松固定在最后，上移 / 下移保留为备用排序路径。",
+            text = "长按阶段卡右侧“拖动”手柄可拖拽排序；跨过相邻卡片一半高度时会实时换位，上移 / 下移保留为备用排序路径。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -719,11 +792,7 @@ private fun CueSettingsCard(
 }
 
 @Composable
-private fun SaveAndPreviewCard(
-    uiState: TimedPlanEditorScreenState,
-    onSaveDraft: () -> Unit,
-    onStartTimedPlan: () -> Unit
-) {
+private fun SaveAndPreviewCard(uiState: TimedPlanEditorScreenState) {
     EditorCard {
         SectionTitle(text = "计划预览")
         Text(
@@ -742,7 +811,7 @@ private fun SaveAndPreviewCard(
         uiState.savedPlan?.let { plan ->
             val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().singleOrNull()
             Text(
-                text = "WorkoutPlan: ${plan.mode.contractValue} · ${plan.blocks.size} 个 block · ${circuit?.items?.size ?: 0} 个 interval stage",
+                text = "已保存：计时训练 · ${circuit?.items?.size ?: 0} 个训练阶段 · ${circuit?.rounds ?: 1} 轮 · 预计 ${uiState.estimatedDurationSec.formatDuration()}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -753,25 +822,11 @@ private fun SaveAndPreviewCard(
             )
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = onSaveDraft,
-                enabled = uiState.canSave,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
-            ) {
-                Text(text = "保存计划")
-            }
-            Button(
-                onClick = onStartTimedPlan,
-                enabled = uiState.canStartTraining,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(text = "立即开始")
-            }
-        }
+        Text(
+            text = "保存和开始训练操作固定在底部操作区，预览卡仅用于确认计划摘要、校验状态和保存结果。",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral700
+        )
     }
 }
 

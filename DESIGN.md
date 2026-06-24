@@ -224,14 +224,14 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - **Success:** 保存成功、训练完成、校验通过。
 - **Warning:** 计划缺项、提醒权限缺失、动作内容待审核。
 - **Error:** 删除、无法保存、危险操作确认。
-- **Info:** 心率连接状态、设备说明、帮助提示。
+- **Info:** 设备说明、帮助提示和未来健康数据边界说明。
 
 ### Color Rules
 
 - 正文和关键倒计时必须满足 WCAG AA 对比度。
 - 不使用单一绿色铺满所有页面；绿色只承担确认和品牌路径。
 - 训练执行页中，`{colors.action}` 的使用要短促、有目的，避免整页橙色造成紧张。
-- 心率状态不能使用医疗化红色警报，除非未来有明确非医疗提示规则。
+- 未来若恢复健康数据展示，不得使用医疗化红色警报，除非有明确非医疗提示规则。
 
 ### Stage Colors
 
@@ -245,11 +245,13 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 
 ### Stage Color Picker
 
-- 阶段卡应展示当前色块和可打开的颜色选择入口；颜色选择器优先展示推荐色，再展示更多颜色。
+- 阶段卡、计时目标卡、力量目标组卡和计划详情卡应展示当前色块和可打开的颜色选择入口；颜色选择器优先展示推荐色，再展示更多颜色。
 - 色块尺寸应稳定，避免选中、hover、TalkBack 或文案变化导致布局跳动。
 - 选中态不能只靠颜色表达，必须至少包含外圈 / 描边、对勾和 TalkBack 文案。
 - 每个色块的可访问文案应包含颜色名称、推荐用途、高注意色状态和当前是否选中。
-- 色板可以使用 bottom sheet、dialog 或轻量 panel，但不能引入第四套 skin、远程主题、运行时插件市场或第三方皮肤安装。
+- 色板应优先使用可复用的大色板 bottom sheet / dialog / page-style panel，包含 `推荐色`、`更多颜色`、大色块和完成动作；编辑卡片不使用多个文字颜色选项挤占主编辑区域。
+- 计划颜色是用户手动设置的计划级颜色，不自动从首个阶段、目标编排或力量目标组推断。计划颜色默认可使用红色，并可通过计划列表 / 详情左侧色块或展开计划内的颜色入口修改；若实现需要新的持久化字段，必须先拆数据决策，不在 UI polish 中静默改 Room schema。
+- 色板不能引入第四套 skin、远程主题、运行时插件市场或第三方皮肤安装。
 
 ## Typography
 
@@ -271,7 +273,7 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 ### Typography Rules
 
 - 不使用负字距。
-- 训练执行页的主数字不能被心率、次级标签或装饰元素抢占。
+- 训练执行页的主数字不能被次级标签、未来健康数据或装饰元素抢占。
 - 中文文案优先短句，按钮文字优先动词短语。
 - 长说明放在详情页或展开层，不放在运动中的主控制区。
 
@@ -291,6 +293,9 @@ TrainFlow 使用 4px 基数，移动端页面默认横向 padding 为 `{spacing.
 ### Density
 
 - 编辑页可以信息更密，但必须有分组和折叠。
+- 计划详情可以采用可折叠计划播放列表；当前计划的开始、编辑、复制和删除操作必须归属展开计划卡片，避免用户误读删除范围。
+- 计划编辑页的保存和开始训练可以使用轻量 sticky bottom action。`保存计划` 是绿色主按钮；`开始训练` 是深色实心次按钮，不使用红色实心样式抢占保存层级。
+- 力量目标组默认折叠，折叠态展示目标组摘要；展开态再编辑重量、次数、休息和颜色。
 - 执行页信息密度必须低，最多同时强调一个主动作。
 - 记录和趋势页以可比较为主，不做营销式大卡片堆叠。
 
@@ -352,9 +357,9 @@ Chip 用于动作能力、部位、器械、难度、训练状态。Chip 不是�
 - 主倒计时或组耗时。
 - 下一动作或下一组。
 - 主控制按钮。
-- 辅助心率状态位。
+- 不再放置心率状态位；未来健康数据只能在不挤压主训练信息时重新评估。
 
-主倒计时和主按钮的层级永远高于心率和历史信息。
+主倒计时和主按钮的层级永远高于历史信息、说明和未来健康数据。
 
 E10.1 后，计时训练后续按纯间歇计时器处理，执行页主信息是当前阶段、阶段倒计时和大圆盘主控制区，不再要求展示动作库动作或动作详情入口。
 
@@ -370,7 +375,7 @@ Timer Dial 的设计结构：
 - 内圈表达按运动阶段数量推进的整次训练总进度，不画未经过底轨，只像画笔一样沿圆弧匀速画出已经过的部分。
 - 内圈 12 点位置用数字圆标显示总运动阶段数；一个运动阶段包含 work+rest，完成阶段节点显示数字或圆点。
 - 中心圆表达当前阶段图标、阶段编号或名称、当前阶段倒计时，并承担暂停 / 继续主交互。
-- E10.8 production 底部只保留跳过 / 下一阶段、`+15秒` 和结束等少量操作；结束训练仍需要二次确认。Reset 只属于 preview/demo 或未来命令设计，生产实现前必须明确 `WorkoutCommand`、确认和 session record 边界。
+- E10.8 production 底部只保留跳过 / 下一阶段、`+15s` 和结束等少量操作；结束训练仍需要二次确认。Reset 只属于 preview/demo 或未来命令设计，生产实现前必须明确 `WorkoutCommand`、确认和 session record 边界。
 
 Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度。阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒都应服从真实训练状态和用户 cue settings。休息延长后，当前 rest 外圈弧和内圈 work+rest cycle progress 必须单调、不倒退，并在 active tick 继续推进；paused、completed 和 abandoned 状态不继续动画。
 
@@ -378,12 +383,12 @@ Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能�
 
 ## Motion
 
-TrainFlow 的动效只服务训练节奏和可操作性，不作为炫技层。运动中的关键控制反馈优先于完整播放；用户二次点击、暂停、跳过、结束确认、`+15秒` 二段确认等操作不得被动画阻塞。
+TrainFlow 的动效只服务训练节奏和可操作性，不作为炫技层。运动中的关键控制反馈优先于完整播放；用户二次点击、暂停、跳过、结束确认、`+15s` 二段确认等操作不得被动画阻塞。
 
 ### Motion Tokens
 
 - **Touch feedback (`100ms`, range `80-120ms`):** 按下、松开、中心圆轻微响应、按钮轻微缩放。缩放建议为 `0.97`，只表达“已接收到触摸”，不制造弹跳表演。
-- **State transition (`160ms`, range `120-180ms`):** play/pause、`确认 +15秒` / `已加 15秒`、阶段颜色切换、marker 状态变化。用于状态确认，必须可被新状态立即打断。
+- **State transition (`160ms`, range `120-180ms`):** play/pause、`确认+15s` / `已加+15s`、阶段颜色切换、marker 状态变化。用于状态确认，必须可被新状态立即打断。
 - **Local layout transition (`220ms`, range `180-240ms`):** ready gate -> execution、paused -> active、局部控制显隐、训练页内部小范围布局切换。
 - **Page transition (`260ms`, range `220-300ms`):** 计划详情 -> ready gate、ready gate -> execution、execution -> summary。页面切换不应慢到让用户怀疑点击未生效。
 - **Continuous projection (`max 1000ms`):** Timer Dial 秒间连续进度可持续投影，但只消费 UI state / engine state，不更新真实倒计时、不写 session record、不改变 `WorkoutCommand` / `WorkoutEvent`。
@@ -394,12 +399,12 @@ TrainFlow 的动效只服务训练节奏和可操作性，不作为炫技层。�
 
 - 动画必须状态驱动、可中断。新 UI state 到达时，旧动画应取消或 snap 到新状态。
 - 动画不得驱动 engine state、倒计时、session record、暂停时长、额外休息记录或业务分析字段。
-- 训练中主控制的反馈必须比视觉完整播放优先；暂停 / 继续、跳过、结束、`+15秒` 确认等二次点击不能等待动画结束。
+- 训练中主控制的反馈必须比视觉完整播放优先；暂停 / 继续、跳过、结束、`+15s` 确认等二次点击不能等待动画结束。
 - reduce-motion 默认降级为 `0ms` snap，关闭非必要动效和 continuous projection；文案数字仍消费真实 UI state。
 - paused、completed、abandoned、ready gate 未启动等状态不得继续推进持续进度动画。
 - 最后 N 秒提醒可以更强，但仍应短促、克制，并遵守用户 cue settings；声音、震动和动画都消费 `WorkoutEvent` / UI state，不互相伪造事件。
 
-E10.16 已把 motion token 最小落地到计时训练关键交互：ready gate -> execution 使用局部布局切换；ready gate center circle、Timer Dial center dial 和 `+15秒` 使用短触摸反馈；Timer Dial play/pause glyph、marker / ring alpha、center color / border 和 `+15秒` label 使用 state transition。E10.16 review fix 后，Android root composition 会基于系统 animator / transition / window animation scale 提供 `LocalTrainFlowReduceMotion`；生产 ready/execution、ready touch、Timer Dial alpha / color / play-pause / touch、`+15秒` label / touch 和 final countdown pulse 都消费该值。reduce-motion 为 true 时，非必要 scale / pulse / fade snap 或关闭，Timer Dial continuous projection 不启动 frame loop，只显示 engine / UI state 的真实秒级进度。动效仍只消费 UI state / engine state，不驱动 engine、倒计时、session record、`WorkoutCommand`、`WorkoutEvent`、`pausedElapsedSec` 或 extra rest。E10.16 不实现完整无障碍设置系统、大型页面转场系统、Stage color picker、声音播放、统计图表、真实心率设备、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
+E10.16 已把 motion token 最小落地到计时训练关键交互：ready gate -> execution 使用局部布局切换；ready gate center circle、Timer Dial center dial 和 `+15s` 使用短触摸反馈；Timer Dial play/pause glyph、marker / ring alpha、center color / border 和 `+15s` label 使用 state transition。E14.2 后，rest extension 二段确认态文案为 `确认+15s`，触摸反馈只能缩放按钮内容或文字，不得改变底部三个按钮外框高度或挤压相邻按钮。E10.16 review fix 后，Android root composition 会基于系统 animator / transition / window animation scale 提供 `LocalTrainFlowReduceMotion`；生产 ready/execution、ready touch、Timer Dial alpha / color / play-pause / touch、`+15s` label / touch 和 final countdown pulse 都消费该值。reduce-motion 为 true 时，非必要 scale / pulse / fade snap 或关闭，Timer Dial continuous projection 不启动 frame loop，只显示 engine / UI state 的真实秒级进度。动效仍只消费 UI state / engine state，不驱动 engine、倒计时、session record、`WorkoutCommand`、`WorkoutEvent`、`pausedElapsedSec` 或 extra rest。E10.16 不实现完整无障碍设置系统、大型页面转场系统、Stage color picker、声音播放、统计图表、真实心率设备、foreground service、exact alarm、notification action、reset production command 或第四套 skin。
 
 ## Open Source UI Customization
 
@@ -413,6 +418,10 @@ TrainFlow 允许社区替换主题、首页布局、按钮位置和页面组合�
 
 推荐社区自定义集中在 UI shell、主题 token、组件样式和 feature 页面组合层。
 
+## UI Polish Handoff
+
+E14.4 起，任何功能级 UI 优化都必须先提交视觉方案，再进入代码实现。视觉方案阶段默认只产出 Markdown、mock、截图标注或 layout spec；必须包含当前问题、至少两个方案方向、推荐选择、真机确认点和后续实现拆分。未经过用户确认前，不改 Kotlin / Compose / Room / 测试代码，不生成实现 APK，也不把方案直接落到生产 UI。
+
 ## Do's and Don'ts
 
 ### Do
@@ -420,7 +429,7 @@ TrainFlow 允许社区替换主题、首页布局、按钮位置和页面组合�
 1. 训练中优先展示当前动作、时间、组目标和主控制。
 2. 所有颜色、字号、间距和圆角优先使用 token。
 3. 让高级设置可展开，但不阻塞开始训练。
-4. 保持心率、语音、媒体和 AI 能力的视觉层级克制。
+4. 保持健康数据、语音、媒体和 AI 能力的视觉层级克制。
 5. 开源主题可以有个性，但要保留运动中可读性。
 
 ### Don't
@@ -428,7 +437,7 @@ TrainFlow 允许社区替换主题、首页布局、按钮位置和页面组合�
 1. 不把首页做成营销落地页。
 2. 不用大面积装饰渐变或光斑遮蔽训练信息。
 3. 不在训练执行页同时强调多个主按钮。
-4. 不把心率展示写成医疗判断。
+4. 不把健康数据展示写成医疗判断。
 5. 不让社区 UI 改动绕开核心训练引擎。
 
 ### Correct Example

@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
@@ -49,8 +52,10 @@ import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowError
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
+import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 import com.liujyks.trainflow.ui.theme.TrainFlowSurfaceMuted
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.designsystem.TileFlowMetric
@@ -70,6 +75,8 @@ internal fun PlanManagementRoute(
     onPersistPlan: (WorkoutPlan) -> Unit = {},
     onDeletePlan: (String) -> Unit = {},
     onEditPlan: (WorkoutPlan) -> Unit = {},
+    onCreateTimedPlan: () -> Unit = {},
+    onCreateStrengthPlan: () -> Unit = {},
     onStartTimedPlan: (WorkoutPlan) -> Unit = {},
     onStartStrengthPlan: (WorkoutPlan) -> Unit = {},
     modifier: Modifier = Modifier
@@ -142,6 +149,8 @@ internal fun PlanManagementRoute(
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         },
+        onCreateTimedPlan = onCreateTimedPlan,
+        onCreateStrengthPlan = onCreateStrengthPlan,
         onStartTimedPlan = onStartTimedPlan,
         onStartStrengthPlan = onStartStrengthPlan,
         onEditPlan = onEditPlan,
@@ -184,6 +193,8 @@ private fun PlanManagementScreen(
     onSetPlanReminder: (String, String) -> Unit,
     onClearPlanReminder: (String) -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onCreateTimedPlan: () -> Unit,
+    onCreateStrengthPlan: () -> Unit,
     onStartTimedPlan: (WorkoutPlan) -> Unit,
     onStartStrengthPlan: (WorkoutPlan) -> Unit,
     onEditPlan: (WorkoutPlan) -> Unit,
@@ -209,39 +220,34 @@ private fun PlanManagementScreen(
 
         if (uiState.isEmpty) {
             item {
-                EmptyPlanStateCard()
+                EmptyPlanStateCard(
+                    onCreateTimedPlan = onCreateTimedPlan,
+                    onCreateStrengthPlan = onCreateStrengthPlan
+                )
             }
         } else {
             item {
-                SectionTitle(text = "计划列表")
+                SectionTitle(text = "计划播放列表")
             }
 
             items(uiState.listItems, key = { it.id }) { item ->
+                val detail = uiState.selectedDetail?.takeIf { detail -> detail.id == item.id }
+                val plan = uiState.plans.firstOrNull { plan -> plan.id == item.id }
                 PlanListCard(
                     item = item,
-                    onSelectPlan = { onSelectPlan(item.id) }
+                    detail = detail,
+                    plan = plan,
+                    reminderPresetOptions = reminderPresetOptions,
+                    onSelectPlan = { onSelectPlan(item.id) },
+                    onCopyPlan = { onCopyPlan(item.id) },
+                    onRequestDeletePlan = { onRequestDeletePlan(item.id) },
+                    onSetPlanReminder = { scheduleAt -> onSetPlanReminder(item.id, scheduleAt) },
+                    onClearPlanReminder = { onClearPlanReminder(item.id) },
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onEditPlan = onEditPlan,
+                    onStartTimedPlan = onStartTimedPlan,
+                    onStartStrengthPlan = onStartStrengthPlan
                 )
-            }
-
-            uiState.selectedDetail?.let { detail ->
-                item {
-                    SectionTitle(text = "计划详情")
-                }
-                item {
-                    PlanDetailCard(
-                        detail = detail,
-                        plan = uiState.selectedPlan,
-                        reminderPresetOptions = reminderPresetOptions,
-                        onCopyPlan = { onCopyPlan(detail.id) },
-                        onRequestDeletePlan = { onRequestDeletePlan(detail.id) },
-                        onSetPlanReminder = { scheduleAt -> onSetPlanReminder(detail.id, scheduleAt) },
-                        onClearPlanReminder = { onClearPlanReminder(detail.id) },
-                        onRequestNotificationPermission = onRequestNotificationPermission,
-                        onEditPlan = onEditPlan,
-                        onStartTimedPlan = onStartTimedPlan,
-                        onStartStrengthPlan = onStartStrengthPlan
-                    )
-                }
             }
         }
     }
@@ -285,7 +291,18 @@ private fun PlanManagementHeader(uiState: PlanManagementScreenState) {
 @Composable
 private fun PlanListCard(
     item: PlanListItemUiState,
-    onSelectPlan: () -> Unit
+    detail: PlanDetailUiState?,
+    plan: WorkoutPlan?,
+    reminderPresetOptions: List<PlanReminderPresetUiState>,
+    onSelectPlan: () -> Unit,
+    onCopyPlan: () -> Unit,
+    onRequestDeletePlan: () -> Unit,
+    onSetPlanReminder: (String) -> Unit,
+    onClearPlanReminder: () -> Unit,
+    onRequestNotificationPermission: () -> Unit,
+    onEditPlan: (WorkoutPlan) -> Unit,
+    onStartTimedPlan: (WorkoutPlan) -> Unit,
+    onStartStrengthPlan: (WorkoutPlan) -> Unit
 ) {
     val skin = LocalTrainFlowSkin.current
     Card(
@@ -312,20 +329,26 @@ private fun PlanListCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
+                Row(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = item.modeLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TrainFlowNeutral700
-                    )
+                    PlanColorSwatch(item.planColorHex)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = item.modeLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TrainFlowNeutral700
+                        )
+                    }
                 }
                 ModePill(
                     mode = item.mode,
@@ -357,12 +380,34 @@ private fun PlanListCard(
                     color = TrainFlowNeutral700
                 )
             }
+
+            Text(
+                text = if (item.selected) "收起计划" else "展开计划",
+                style = MaterialTheme.typography.labelLarge,
+                color = skin.tokens.accent
+            )
+
+            if (detail != null) {
+                ExpandedPlanContent(
+                    detail = detail,
+                    plan = plan,
+                    reminderPresetOptions = reminderPresetOptions,
+                    onCopyPlan = onCopyPlan,
+                    onRequestDeletePlan = onRequestDeletePlan,
+                    onSetPlanReminder = onSetPlanReminder,
+                    onClearPlanReminder = onClearPlanReminder,
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onEditPlan = onEditPlan,
+                    onStartTimedPlan = onStartTimedPlan,
+                    onStartStrengthPlan = onStartStrengthPlan
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun PlanDetailCard(
+private fun ExpandedPlanContent(
     detail: PlanDetailUiState,
     plan: WorkoutPlan?,
     reminderPresetOptions: List<PlanReminderPresetUiState>,
@@ -376,33 +421,7 @@ private fun PlanDetailCard(
     onStartStrengthPlan: (WorkoutPlan) -> Unit
 ) {
     val skin = LocalTrainFlowSkin.current
-    EditorCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = detail.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${detail.modeLabel} · ${detail.summary}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TrainFlowNeutral700
-                )
-            }
-            ModePill(
-                mode = detail.mode,
-                text = detail.modeBadge,
-                skin = skin
-            )
-        }
-
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (skin.isTileFlow) {
             TileFlowMetricStrip(detail.metrics.toTileFlowMetrics())
         }
@@ -420,10 +439,37 @@ private fun PlanDetailCard(
         )
 
         Text(
+            text = "计划颜色 · 默认红色展示。当前模型没有计划级持久化字段，颜色保存拆到后续数据决策。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+
+        Text(
             text = detail.editStatus,
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
+
+        Button(
+            onClick = {
+                if (plan != null) {
+                    when (plan.mode) {
+                        WorkoutMode.TIMED -> onStartTimedPlan(plan)
+                        WorkoutMode.STRENGTH -> onStartStrengthPlan(plan)
+                        WorkoutMode.FOLLOW_ALONG -> Unit
+                    }
+                }
+            },
+            enabled = detail.canStartTraining,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TrainFlowPrimary,
+                contentColor = TrainFlowNeutral50
+            )
+        ) {
+            Text(text = detail.startStatus)
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
@@ -453,25 +499,8 @@ private fun PlanDetailCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "删除计划", color = TrainFlowError)
+                Text(text = "删除当前计划", color = TrainFlowError)
             }
-        }
-
-        Button(
-            onClick = {
-                if (plan != null) {
-                    when (plan.mode) {
-                        WorkoutMode.TIMED -> onStartTimedPlan(plan)
-                        WorkoutMode.STRENGTH -> onStartStrengthPlan(plan)
-                        WorkoutMode.FOLLOW_ALONG -> Unit
-                    }
-                }
-            },
-            enabled = detail.canStartTraining,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Text(text = detail.startStatus)
         }
     }
 }
@@ -558,14 +587,52 @@ private fun DetailSection(section: PlanDetailSectionUiState) {
 }
 
 @Composable
-private fun EmptyPlanStateCard() {
+private fun EmptyPlanStateCard(
+    onCreateTimedPlan: () -> Unit,
+    onCreateStrengthPlan: () -> Unit
+) {
     EditorCard {
-        SectionTitle(text = "空状态")
+        SectionTitle(text = "还没有保存的计划")
         Text(
-            text = "还没有可管理的训练计划。保存计时或力量计划后，会在这里恢复并可直接启动训练。",
+            text = "可以直接创建计时计划或力量计划。跟练完整计划创建还没有进入首版，不提供假的完整入口。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = onCreateTimedPlan,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
+            ) {
+                Text(text = "创建计时计划")
+            }
+            Button(
+                onClick = onCreateStrengthPlan,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TrainFlowPrimary,
+                    contentColor = TrainFlowNeutral50
+                )
+            ) {
+                Text(text = "创建力量计划")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanColorSwatch(colorHex: String) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = colorHex.toComposeColor(defaultColor = TrainFlowError),
+        modifier = Modifier
+            .padding(top = 2.dp)
+            .size(width = 16.dp, height = 54.dp),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Box(contentAlignment = Alignment.Center) {}
     }
 }
 
@@ -596,7 +663,7 @@ private fun DeletePlanDialog(
     AlertDialog(
         onDismissRequest = onCancelDeletePlan,
         title = {
-            Text(text = "删除计划")
+            Text(text = "删除当前计划")
         },
         text = {
             Text(text = "确认删除本地计划「$title」？训练历史中的计划快照不会被改写。")
@@ -712,6 +779,11 @@ private fun mostReadableModePillContentColor(
             containerColor = containerColor
         )
     }
+}
+
+private fun String.toComposeColor(defaultColor: Color = TrainFlowAccent): Color {
+    return runCatching { Color(android.graphics.Color.parseColor(this)) }
+        .getOrElse { defaultColor }
 }
 
 @Composable

@@ -51,7 +51,8 @@ class StrengthPlanEditorUiStateTest {
         assertEquals(4, editedExercise.workingSets)
         assertEquals(1, editedExercise.warmupSets)
         assertEquals(150, editedExercise.restAfterSetSec)
-        assertTrue(editedExercise.expandedSetTargets)
+        assertFalse(editedExercise.expandedSetTargets)
+        assertTrue(editedExercise.setTargetsSummary.contains("休息150秒"))
         assertEquals(savedPlan.blocks.filterIsInstance<StrengthExerciseBlock>().first().substitutions, editedExercise.substitutions)
         assertEquals(68.0, requireNotNull(overriddenSet.targetWeight).value, 0.0)
         assertEquals(6, (requireNotNull(overriddenSet.repTarget) as RepTarget.Fixed).reps)
@@ -276,6 +277,20 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun expandedPerSetTargetCanOverrideRestWithoutChangingSchema() {
+        val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
+        val firstSetId = exercise.setTargets.first().id
+        val state = buildDefaultStrengthPlanEditorState()
+            .updateSetRestAfterText(exercise.id, firstSetId, "135")
+        val editedExercise = state.exercises.first()
+        val block = state.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>().first()
+
+        assertTrue(editedExercise.expandedSetTargets)
+        assertEquals("135", editedExercise.setTargets.first().restAfterText)
+        assertEquals(135, block.sets.first().restAfterSec)
+    }
+
+    @Test
     fun strengthNumericFieldsCanBeTemporarilyBlankAndThenReentered() {
         val exercise = buildDefaultStrengthPlanEditorState().exercises.first()
         val blankWeight = buildDefaultStrengthPlanEditorState().updateTargetWeightText(exercise.id, "")
@@ -445,6 +460,77 @@ class StrengthPlanEditorUiStateTest {
         assertEquals(added.exercises.size - 1, removed.exercises.size)
         assertEquals(removed.exercises.size, ignoredTimedOnly.exercises.size)
         assertFalse(ignoredTimedOnly.exercises.any { it.exerciseId == "jumping-jacks" })
+    }
+
+    @Test
+    fun addCustomStrengthExerciseCreatesPlanLocalStrengthBlock() {
+        val initial = buildDefaultStrengthPlanEditorState()
+        val added = initial.addCustomExercise("器械推肩")
+        val custom = added.exercises.last()
+        val block = added.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>().last()
+
+        assertEquals(initial.exercises.size + 1, added.exercises.size)
+        assertEquals("器械推肩", custom.exerciseName)
+        assertTrue(custom.exerciseId.startsWith("custom-strength-"))
+        assertEquals("按你的计划完成动作", custom.shortCue)
+        assertEquals(3, custom.workingSets)
+        assertEquals(90, custom.restAfterSetSec)
+        assertEquals(custom.exerciseId, block.exerciseId)
+        assertEquals("器械推肩", block.title)
+        assertNull(added.savedPlan)
+        assertNull(added.statusMessage)
+    }
+
+    @Test
+    fun addCustomStrengthExerciseKeepsDuplicateNamesUnique() {
+        val addedTwice = buildDefaultStrengthPlanEditorState()
+            .addCustomExercise("器械推肩")
+            .addCustomExercise("器械推肩")
+        val customIds = addedTwice.exercises
+            .filter { exercise -> exercise.exerciseName == "器械推肩" }
+            .map { exercise -> exercise.exerciseId }
+
+        assertEquals(2, customIds.size)
+        assertEquals(2, customIds.toSet().size)
+    }
+
+    @Test
+    fun moveExerciseReordersStrengthTargetsAndPlanBlockOrder() {
+        val initial = buildDefaultStrengthPlanEditorState()
+        val moved = initial.moveExercise(fromIndex = 1, toIndex = 0)
+        val blocks = moved.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>()
+
+        assertEquals(
+            listOf(initial.exercises[1].exerciseId, initial.exercises[0].exerciseId),
+            moved.exercises.map { it.exerciseId }
+        )
+        assertEquals(listOf(1, 2), blocks.map { it.order })
+        assertEquals(initial.exercises[1].exerciseId, blocks.first().exerciseId)
+        assertNull(moved.savedPlan)
+        assertNull(moved.statusMessage)
+    }
+
+    @Test
+    fun reorderExercisesCommitsTemporaryDragOrderByIds() {
+        val initial = buildDefaultStrengthPlanEditorState()
+        val reorderedIds = initial.exercises.map { it.id }.reversed()
+        val reordered = initial.saveDraftPlan().reorderExercises(reorderedIds)
+        val blocks = reordered.toWorkoutPlan().blocks.filterIsInstance<StrengthExerciseBlock>()
+
+        assertEquals(reorderedIds, reordered.exercises.map { it.id })
+        assertEquals(reordered.exercises.map { it.exerciseId }, blocks.map { it.exerciseId })
+        assertEquals(listOf(1, 2), blocks.map { it.order })
+        assertNull(reordered.savedPlan)
+        assertNull(reordered.statusMessage)
+    }
+
+    @Test
+    fun reorderExercisesIgnoresInvalidTemporaryDragOrder() {
+        val initial = buildDefaultStrengthPlanEditorState()
+        val initialIds = initial.exercises.map { it.id }
+
+        assertEquals(initialIds, initial.reorderExercises(initialIds.take(1)).exercises.map { it.id })
+        assertEquals(initialIds, initial.reorderExercises(listOf(initialIds.first(), "missing")).exercises.map { it.id })
     }
 
     @Test
