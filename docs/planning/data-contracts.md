@@ -375,7 +375,7 @@ E14.4-2b-2 决定正式采用两层 timed composition 作为长期数据方向�
 
 旧 `TimedCircuitBlock` / `TimedExerciseItem` 继续作为 legacy timed structure 兼容。旧计划打开时通过 compatibility wrapper 显示，查看不写回；只有用户明确保存 / 转换后，当前 `WorkoutPlan` 才写入 composition v2。既有 `WorkoutSession.planSnapshot` 一律不回写。
 
-E14.4-2b rollback status: 本节仅保留 visual / semantic gate 与 E14.4-2b-2 data model decision 的规划契约。E14.4-2b-3 本地 model / serializer / editor adapter 实现已 rolled back / not accepted，E14.4-2b-4 本地 editor UI implementation 已 stopped / rolled back / not accepted；当前 Android 生产基线没有已接受的 `TimedCircuitBlock.composition` Kotlin carrier、composition v2 serializer、COMPOSITION_V2 编辑 UI 或 `待执行映射` 入口。未来若重启，必须通过 template-based dev story 重新实现和 review；在此之前 `TimedWorkoutEngine`、TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义保持不变。
+E14.4-2b-3 restart status: 当前 Android 基线已接受 model / serializer / editor adapter foundation，但不继承此前已回滚实现。本轮新增独立 `TimedCompositionBlock` v2 payload、stage group / target / compatibility metadata、归一化和每个 stage group 最多 5 个 target 的规则；serializer 通过现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON round-trip v2 payload，同时保持 legacy timed JSON 不变。旧计划 wrapper 只生成未来 editor draft，默认 preserve source，不静默写回 v2；只有显式 export / conversion 才输出 composition v2。E14.4-2b-4 editor UI 仍未实现，当前 Android 生产基线没有 v2 编辑 UI 或 `待执行映射` 入口；`TimedWorkoutEngine`、TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义保持不变。
 
 概念结构：
 

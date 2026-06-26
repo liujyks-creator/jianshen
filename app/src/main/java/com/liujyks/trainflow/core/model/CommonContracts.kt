@@ -9,6 +9,7 @@ enum class WorkoutMode(val contractValue: String) {
 enum class PlanBlockKind(val contractValue: String) {
     WARMUP("warmup"),
     TIMED_CIRCUIT("timed_circuit"),
+    TIMED_COMPOSITION("timed_composition"),
     STRENGTH_EXERCISE("strength_exercise"),
     REST("rest"),
     STRETCH("stretch"),

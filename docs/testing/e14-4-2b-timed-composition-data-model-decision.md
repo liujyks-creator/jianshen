@@ -1,14 +1,14 @@
 # E14.4-2b-2 Timed Composition Data Model Decision
 
 **Date:** 2026-06-25
-**Status:** Decision accepted as planning; E14.4-2b-3 model / serializer / editor adapter implementation rolled back / not accepted; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted
+**Status:** Decision accepted as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted
 **Scope:** Timed composition persistence, compatibility, execution timeline semantics, TimerDial mapping, and E12 history trend impact
 
-**Process note:** Before restarting implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The existing E14.4-2b-3 / E14.4-2b-4 local work did not pass review gate and has been rolled back. Do not continue to E14.4-2b-5 / E14.4-2b-6 from that worktree state.
+**Process note:** Before any further implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local work did not pass review gate and has been rolled back. The accepted E14.4-2b-3 restart starts from the planning documents and implements only model / serializer / editor adapter foundation. Do not continue to E14.4-2b-5 / E14.4-2b-6 from the old rolled-back worktree state.
 
 ## Boundaries
 
-This document records the E14.4-2b-2 decision. The later E14.4-2b-3 / E14.4-2b-4 local implementation attempts are not accepted and have been rolled back; they must not be treated as completed implementation slices.
+This document records the E14.4-2b-2 decision. The later old E14.4-2b-3 / E14.4-2b-4 local implementation attempts are not accepted and have been rolled back; they must not be treated as completed implementation slices. The accepted E14.4-2b-3 restart implements only the foundation described below and does not authorize UI, engine, TimerDial, Room migration, command/event, session record, sound, or heart-rate behavior changes.
 
 This decision does not change `WorkoutCommand`, `WorkoutEvent`, sound cue semantics, session record semantics, `timedRestExtensionRecords`, heart-rate boundaries, or training interruption logic.
 
@@ -62,13 +62,14 @@ The recommended persistence strategy is **Option B: a versioned timed compositio
 
 Old single-layer `TimedCircuitBlock` plans remain supported through a compatibility wrapper. Opening or viewing an old plan must not rewrite it. Conversion to the new composition structure should happen only through an explicit user-visible save / conversion path.
 
-## E14.4-2b-3 Rolled Back / Not Accepted
+## E14.4-2b-3 Restart Implemented Foundation
 
-E14.4-2b-3 attempted the first production contract slice, but the local implementation was rolled back and is not accepted. The following items remain planning requirements for a future clean dev story rather than implemented facts:
+The prior local E14.4-2b-3 implementation was rolled back and is not accepted. The accepted restart reimplemented this slice from the committed process reset, E14.4-2b-1 visual planning, and E14.4-2b-2 data model decision. Implemented facts:
 
-- Kotlin model, serializer compatibility, editor adapter, and explicit conversion behavior require a new implementation story and review gate.
-- A future implementation may still evaluate a JSON carrier inside existing plan / snapshot storage, but the rolled-back code does not establish accepted production API.
-- Room schema, engine execution, TimerDial production behavior, history trend semantics, and migration code remain unchanged.
+- Kotlin model now includes versioned timed composition v2 payload types, stage groups, targets, compatibility metadata, normalization, derived duration, order normalization, and the max-5-targets-per-stage-group rule.
+- Serializer / deserializer round-trips v2 through existing `WorkoutPlan.blocks` JSON and `WorkoutSession.planSnapshot` JSON, while legacy timed plan JSON round-trip remains unchanged.
+- A pure editor draft adapter can wrap old single-layer timed plans for future editor reads, preserves old plans by default, and only writes v2 on explicit export / conversion.
+- Room schema, engine execution, TimerDial production behavior, history trend semantics, migration code, commands/events, session record semantics, sound semantics, and heart-rate UI/input/statistics remain unchanged.
 
 Timeline execution expansion, TimerDial outer-ring mapping, E12 trend-key use, and old snapshot rewriting remain unimplemented.
 
@@ -397,7 +398,7 @@ Plan snapshot principle:
 Recommended sequence:
 
 1. **E14.4-2b-3 serializer / model and editor adapter foundation**
-   Rolled back / not accepted. Restart through a fresh template-based dev story if this implementation work is resumed.
+   Restart implemented. Scope is limited to pure model, serializer, compatibility wrapper / editor draft adapter, and focused tests. It does not add UI, execution, TimerDial, Room migration, E12 trend-key consumption, or APK output.
 
 2. **E14.4-2b-4 editor UI implementation**
    Stopped and rolled back / not accepted. Do not continue from the prior local UI implementation.

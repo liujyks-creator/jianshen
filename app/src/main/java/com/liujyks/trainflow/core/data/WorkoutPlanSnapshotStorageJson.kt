@@ -18,6 +18,13 @@ import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.StretchBlock
+import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_CURRENT_VERSION
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionCompatibilityMeta
+import com.liujyks.trainflow.core.model.TimedCompositionCompatibilitySourceVersion
+import com.liujyks.trainflow.core.model.TimedCompositionStageGroup
+import com.liujyks.trainflow.core.model.TimedCompositionTarget
+import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedStageType
@@ -27,6 +34,7 @@ import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.core.model.normalized
 import com.liujyks.trainflow.core.model.normalizeStageColorHex
 
 internal fun WorkoutPlan.toPlanSnapshot(): WorkoutPlanSnapshot {
@@ -151,6 +159,19 @@ private fun PlanBlock.toJson(): JsonValue.Obj {
             "items" to items.map { item -> item.toJson() }.jsonArray()
         )
 
+        is TimedCompositionBlock -> normalized().let { block ->
+            jsonObject(
+                block.commonBlockFields(),
+                "compositionVersion" to block.compositionVersion.jsonNumber(),
+                "warmupSec" to block.warmupSec.jsonNumber(),
+                "cooldownSec" to block.cooldownSec.jsonNumber(),
+                "rounds" to block.rounds.jsonNumber(),
+                "restBetweenRoundsSec" to block.restBetweenRoundsSec.jsonNumber(),
+                "stageGroups" to block.stageGroups.map { group -> group.toJson() }.jsonArray(),
+                "compatibility" to block.compatibility?.toJson()
+            )
+        }
+
         is StrengthExerciseBlock -> jsonObject(
             commonBlockFields(),
             "exerciseId" to exerciseId.jsonString(),
@@ -168,6 +189,44 @@ private fun PlanBlock.commonBlockFields(): Map<String, JsonValue?> {
         "kind" to kind.contractValue.jsonString(),
         "title" to title?.jsonString(),
         "order" to order.jsonNumber()
+    )
+}
+
+private fun TimedCompositionStageGroup.toJson(): JsonValue.Obj {
+    return jsonObject(
+        "id" to id.jsonString(),
+        "order" to order.jsonNumber(),
+        "name" to name.jsonString(),
+        "colorHex" to colorHex.jsonString(),
+        "iconKey" to iconKey?.jsonString(),
+        "targets" to targets.map { target -> target.toJson() }.jsonArray(),
+        "cueSettings" to cueSettings?.toJson(),
+        "compatibility" to compatibility?.toJson()
+    )
+}
+
+private fun TimedCompositionTarget.toJson(): JsonValue.Obj {
+    return jsonObject(
+        "id" to id.jsonString(),
+        "order" to order.jsonNumber(),
+        "name" to name.jsonString(),
+        "kind" to kind.contractValue.jsonString(),
+        "durationSec" to durationSec.jsonNumber(),
+        "colorHex" to colorHex.jsonString(),
+        "iconKey" to iconKey?.jsonString(),
+        "cueSettings" to cueSettings?.toJson(),
+        "autoAdvance" to autoAdvance.jsonBool(),
+        "compatibility" to compatibility?.toJson()
+    )
+}
+
+private fun TimedCompositionCompatibilityMeta.toJson(): JsonValue.Obj {
+    return jsonObject(
+        "sourceVersion" to sourceVersion?.contractValue?.jsonString(),
+        "legacyBlockId" to legacyBlockId?.jsonString(),
+        "legacyItemId" to legacyItemId?.jsonString(),
+        "legacyStageType" to legacyStageType?.contractValue?.jsonString(),
+        "convertedAt" to convertedAt?.jsonString()
     )
 }
 
@@ -321,6 +380,26 @@ private fun JsonValue.toPlanBlock(): PlanBlock? {
             items = obj.timedItems()
         )
 
+        PlanBlockKind.TIMED_COMPOSITION -> {
+            if (obj.int("compositionVersion") != TIMED_COMPOSITION_CURRENT_VERSION) {
+                return null
+            }
+            TimedCompositionBlock(
+                id = id,
+                order = order,
+                title = title,
+                compositionVersion = obj.int("compositionVersion") ?: TIMED_COMPOSITION_CURRENT_VERSION,
+                warmupSec = obj.int("warmupSec") ?: 0,
+                cooldownSec = obj.int("cooldownSec") ?: 0,
+                rounds = obj.int("rounds") ?: 1,
+                restBetweenRoundsSec = obj.int("restBetweenRoundsSec") ?: 0,
+                stageGroups = obj.array("stageGroups")
+                    ?.mapNotNull { value -> value.toTimedCompositionStageGroup() }
+                    ?: emptyList(),
+                compatibility = obj.obj("compatibility")?.toTimedCompositionCompatibilityMeta()
+            ).normalized()
+        }
+
         PlanBlockKind.STRENGTH_EXERCISE -> StrengthExerciseBlock(
             id = id,
             order = order,
@@ -333,6 +412,47 @@ private fun JsonValue.toPlanBlock(): PlanBlock? {
                 ?: StrengthSetTimerMode.MANUAL_START
         )
     }
+}
+
+private fun JsonValue.toTimedCompositionStageGroup(): TimedCompositionStageGroup? {
+    val obj = this as? JsonValue.Obj ?: return null
+    return TimedCompositionStageGroup(
+        id = obj.string("id") ?: return null,
+        order = obj.int("order") ?: 0,
+        name = obj.string("name").orEmpty(),
+        colorHex = obj.string("colorHex").orEmpty(),
+        iconKey = obj.string("iconKey"),
+        targets = obj.array("targets")?.mapNotNull { value -> value.toTimedCompositionTarget() } ?: emptyList(),
+        cueSettings = obj.obj("cueSettings")?.toCueSettings(),
+        compatibility = obj.obj("compatibility")?.toTimedCompositionCompatibilityMeta()
+    ).normalized()
+}
+
+private fun JsonValue.toTimedCompositionTarget(): TimedCompositionTarget? {
+    val obj = this as? JsonValue.Obj ?: return null
+    val kind = obj.string("kind")?.let(::timedCompositionTargetKindFrom) ?: return null
+    return TimedCompositionTarget(
+        id = obj.string("id") ?: return null,
+        order = obj.int("order") ?: 0,
+        name = obj.string("name").orEmpty(),
+        kind = kind,
+        durationSec = obj.int("durationSec") ?: 0,
+        colorHex = obj.string("colorHex").orEmpty(),
+        iconKey = obj.string("iconKey"),
+        cueSettings = obj.obj("cueSettings")?.toCueSettings(),
+        autoAdvance = obj.boolean("autoAdvance") ?: true,
+        compatibility = obj.obj("compatibility")?.toTimedCompositionCompatibilityMeta()
+    ).normalized()
+}
+
+private fun JsonValue.Obj.toTimedCompositionCompatibilityMeta(): TimedCompositionCompatibilityMeta {
+    return TimedCompositionCompatibilityMeta(
+        sourceVersion = string("sourceVersion")?.let(::timedCompositionCompatibilitySourceVersionFrom),
+        legacyBlockId = string("legacyBlockId"),
+        legacyItemId = string("legacyItemId"),
+        legacyStageType = string("legacyStageType")?.let(::timedStageTypeFrom),
+        convertedAt = string("convertedAt")
+    )
 }
 
 private fun JsonValue.toTimedExerciseItem(): TimedExerciseItem? {
@@ -451,6 +571,18 @@ private fun planBlockKindFrom(value: String): PlanBlockKind? {
 
 private fun timedStageTypeFrom(value: String): TimedStageType {
     return TimedStageType.entries.firstOrNull { type -> type.contractValue == value } ?: TimedStageType.WORK
+}
+
+private fun timedCompositionTargetKindFrom(value: String): TimedCompositionTargetKind? {
+    return TimedCompositionTargetKind.entries.firstOrNull { kind -> kind.contractValue == value }
+}
+
+private fun timedCompositionCompatibilitySourceVersionFrom(
+    value: String
+): TimedCompositionCompatibilitySourceVersion? {
+    return TimedCompositionCompatibilitySourceVersion.entries.firstOrNull { source ->
+        source.contractValue == value
+    }
 }
 
 private fun exerciseSideFrom(value: String): ExerciseSide {

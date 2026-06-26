@@ -11,6 +11,7 @@ import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -485,6 +486,7 @@ private fun WorkoutPlan.timedDetailSections(): List<PlanDetailSectionUiState> {
             is RestBlock -> "休息 · ${block.durationSec.formatDuration()}"
             is CooldownBlock -> "冷却 · ${block.durationSec?.formatDuration() ?: "按动作"}"
             is StrengthExerciseBlock -> "力量动作 · ${block.exerciseLabel()}"
+            is TimedCompositionBlock -> "暂不展示的计划结构"
         }
     }
 
@@ -544,6 +546,7 @@ private fun WorkoutPlan.estimatedTimedDurationSec(): Int {
             is CooldownBlock -> block.durationSec ?: block.items.sumTimedItemsOnce()
             is RestBlock -> block.durationSec
             is StrengthExerciseBlock -> 0
+            is TimedCompositionBlock -> 0
         }
     }
 }
@@ -612,6 +615,8 @@ private fun List<PlanBlock>.duplicateForPlanCopy(planId: String): List<PlanBlock
                 id = blockId,
                 sets = block.sets.duplicateStrengthSets(blockId)
             )
+
+            is TimedCompositionBlock -> block
         }
     }
 }

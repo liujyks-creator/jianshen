@@ -1909,7 +1909,7 @@ stepsCompleted:
 
 ### Story E14.4: Feature UI polish batches
 
-**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition visual / semantic gate and data model decision retained; E14.4-2b-3 / E14.4-2b-4 implementation rolled back / not accepted
+**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition visual / semantic gate and data model decision retained; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI implementation still stopped / rolled back / not accepted
 
 建议分批顺序：
 
@@ -1946,9 +1946,9 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 ### Story E14.4-2b: Timed composition editor and TimerDial ring semantics
 
-**状态:** Visual / semantic gate retained; E14.4-2b-1 visual prototype / mock retained in `.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/index.html`; TimerDial existing UI overlay correction retained in `.local/smoke/e14-4-2b-timerdial-existing-ui-overlay/index.html`; E14.4-2b-2 data model decision retained in `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`; E14.4-2b-3 serializer / model and editor adapter implementation rolled back / not accepted; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted; do not continue E14.4-2b-5 / E14.4-2b-6 until a clean template-based restart passes review reset
+**状态:** Visual / semantic gate retained; E14.4-2b-1 visual prototype / mock retained in `.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/index.html`; TimerDial existing UI overlay correction retained in `.local/smoke/e14-4-2b-timerdial-existing-ui-overlay/index.html`; E14.4-2b-2 data model decision retained in `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`; E14.4-2b-3 restart serializer / model and editor adapter foundation implemented; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted; do not continue E14.4-2b-5 / E14.4-2b-6; next allowed step is E14.4-2b-4 editor UI visual/code gate from a fresh template-based story
 
-**流程纠偏:** 2026-06-26 已新增 `docs/testing/e14-4-2b-process-reset.md`。本地 E14.4-2b-3 / E14.4-2b-4 实现未通过 review gate，已回滚且未纳入当前已交付能力。后续不得直接进入 E14.4-2b-5 / E14.4-2b-6；必须先按 `DEV_STORY_PROMPT_TEMPLATE.md` / `CODE_REVIEW_PROMPT_TEMPLATE.md` 重新启动 template-based dev story、确认 visual gate、运行 Gradle 验证，并用本地虚拟测试环境 `C:/Users/25073/Desktop/jianshen/.local/android-sdk` 与默认 AVD `TrainFlow_Pixel_API_36` 尝试 adb smoke。Android UI / APK / 真机截图修复类任务的 smoke 证据只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification` 或提交 `.local/`。
+**流程纠偏:** 2026-06-26 已新增 `docs/testing/e14-4-2b-process-reset.md`。此前本地 E14.4-2b-3 / E14.4-2b-4 实现未通过 review gate，已回滚且未纳入当前已交付能力；本轮 E14.4-2b-3 restart 从已提交规划重新实现，仅覆盖 model / serializer / editor adapter foundation。后续不得直接进入 E14.4-2b-5 / E14.4-2b-6；必须先按 `DEV_STORY_PROMPT_TEMPLATE.md` / `CODE_REVIEW_PROMPT_TEMPLATE.md` 重新启动 E14.4-2b-4 editor UI visual/code gate、确认 visual gate、运行 Gradle 验证，并在需要 UI smoke 时使用本地虚拟测试环境 `C:/Users/25073/Desktop/jianshen/.local/android-sdk` 与默认 AVD `TrainFlow_Pixel_API_36`。Android UI / APK / 真机截图修复类任务的 smoke 证据只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification` 或提交 `.local/`。
 
 作为计时训练用户，
 我想在既有计时阶段内部扩展更多目标 / 小节，
@@ -2009,9 +2009,9 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 1. E14.4-2b-1 visual prototype / mock：已完成，用于验证当前编辑器内的阶段卡、阶段内部目标行、色块入口、拖拽区分、旧计划 wrapper 和 TimerDial ring sketch。
 2. E14.4-2b-2 data model decision：已完成，正式采用 versioned two-layer timed composition payload，优先存入 existing JSON，不改 Room table shape。
-3. E14.4-2b-3 serializer / model and editor adapter foundation：rolled back / not accepted。本地 Kotlin model / serializer / editor adapter 实现未通过 review gate，不作为当前代码基线；未来若重启，必须从 template-based dev story 重新实现并重新验证。
-4. E14.4-2b-4 editor UI implementation：stopped / rolled back / not accepted。本地 v2 editor-only UI 未通过 review gate，不作为当前代码基线；不得把 `待执行映射`、COMPOSITION_V2 UI 或 smoke plan 视为已交付能力。
-5. E14.4-2b-5 TimedWorkoutEngine timeline mapping：暂停，不得直接继续；只能在 E14.4-2b-3 / E14.4-2b-4 经干净重启、实现和 review gate 后再进入。
+3. E14.4-2b-3 serializer / model and editor adapter foundation：restart implemented。本轮只落地纯 model、现有 JSON serializer / deserializer、legacy wrapper / editor draft adapter 和 focused tests；不包含 UI、engine、TimerDial、Room migration、APK 或 smoke 输出。
+4. E14.4-2b-4 editor UI implementation：stopped / rolled back / not accepted。本地旧 v2 editor-only UI 未通过 review gate，不作为当前代码基线；不得把 `待执行映射`、composition v2 用户入口或 smoke plan 视为已交付能力。
+5. E14.4-2b-5 TimedWorkoutEngine timeline mapping：暂停，不得直接继续；只能在 E14.4-2b-4 editor UI visual/code gate 重新按模板启动并通过后，再以独立 story 评估是否进入。
 6. E14.4-2b-6 TimerDial mapping implementation：暂停，不得直接继续；只能在执行 timeline 和兼容边界通过后再进入。
 7. E14.4-2b-7 migration / compatibility / E12 tests：覆盖旧计划、旧 snapshot、新 composition、unsupported version、当前计划转换、serializer round-trip、timeline expansion、TimerDial mapping 和 E12 trend key。
 
@@ -2070,7 +2070,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 28. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
 29. E12.2b：力量同类 set 趋势。（Implemented）
 30. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
-31. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 serializer / model and editor adapter implementation rolled back / not accepted；E14.4-2b-4 editor UI implementation stopped / rolled back / not accepted。（Do not continue E14.4-2b-5/6; next allowed step is a clean template-based restart after review reset）
+31. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI implementation stopped / rolled back / not accepted。（Do not continue E14.4-2b-5/6; next allowed step is E14.4-2b-4 editor UI visual/code gate from a fresh template-based story）
 
 ## 7. 下一轮建议
 

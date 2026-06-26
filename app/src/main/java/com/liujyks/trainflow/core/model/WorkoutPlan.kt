@@ -87,6 +87,134 @@ data class TimedCircuitBlock(
     override val kind: PlanBlockKind = PlanBlockKind.TIMED_CIRCUIT
 }
 
+const val TIMED_COMPOSITION_CURRENT_VERSION = 2
+const val TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP = 5
+
+data class TimedCompositionBlock(
+    override val id: String,
+    override val order: Int,
+    override val title: String? = null,
+    val compositionVersion: Int = TIMED_COMPOSITION_CURRENT_VERSION,
+    val warmupSec: Int = 0,
+    val cooldownSec: Int = 0,
+    val rounds: Int,
+    val restBetweenRoundsSec: Int = 0,
+    val stageGroups: List<TimedCompositionStageGroup>,
+    val compatibility: TimedCompositionCompatibilityMeta? = null
+) : PlanBlock {
+    override val kind: PlanBlockKind = PlanBlockKind.TIMED_COMPOSITION
+}
+
+data class TimedCompositionStageGroup(
+    val id: String,
+    val order: Int,
+    val name: String,
+    val colorHex: String,
+    val iconKey: String? = null,
+    val targets: List<TimedCompositionTarget>,
+    val cueSettings: CueSettings? = null,
+    val compatibility: TimedCompositionCompatibilityMeta? = null
+) {
+    val durationSec: Int
+        get() = targets.sumOf { target -> target.durationSec }
+}
+
+data class TimedCompositionTarget(
+    val id: String,
+    val order: Int,
+    val name: String,
+    val kind: TimedCompositionTargetKind,
+    val durationSec: Int,
+    val colorHex: String,
+    val iconKey: String? = null,
+    val cueSettings: CueSettings? = null,
+    val autoAdvance: Boolean = true,
+    val compatibility: TimedCompositionCompatibilityMeta? = null
+)
+
+enum class TimedCompositionTargetKind(val contractValue: String) {
+    ACTION("action"),
+    REST("rest"),
+    CUSTOM("custom")
+}
+
+data class TimedCompositionCompatibilityMeta(
+    val sourceVersion: TimedCompositionCompatibilitySourceVersion? = null,
+    val legacyBlockId: String? = null,
+    val legacyItemId: String? = null,
+    val legacyStageType: TimedStageType? = null,
+    val convertedAt: String? = null
+)
+
+enum class TimedCompositionCompatibilitySourceVersion(val contractValue: String) {
+    LEGACY_TIMED_CIRCUIT("legacy_timed_circuit"),
+    V2("composition_v2")
+}
+
+fun TimedCompositionBlock.normalized(): TimedCompositionBlock {
+    return copy(
+        compositionVersion = TIMED_COMPOSITION_CURRENT_VERSION,
+        warmupSec = warmupSec.coerceAtLeast(0),
+        cooldownSec = cooldownSec.coerceAtLeast(0),
+        rounds = rounds.coerceAtLeast(1),
+        restBetweenRoundsSec = restBetweenRoundsSec.coerceAtLeast(0),
+        stageGroups = stageGroups
+            .sortedBy { group -> group.order }
+            .mapIndexedNotNull { index, group ->
+                group.normalized(index + 1)
+            }
+    )
+}
+
+fun TimedCompositionStageGroup.normalized(order: Int = this.order): TimedCompositionStageGroup? {
+    val safeTargets = targets
+        .sortedBy { target -> target.order }
+        .take(TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP)
+        .mapIndexed { index, target -> target.normalized(index + 1) }
+        .filter { target -> target.durationSec > 0 }
+
+    if (safeTargets.isEmpty()) return null
+
+    val fallbackStageType = safeTargets.first().kind.toTimedStageType()
+    return copy(
+        order = order,
+        name = name.trim().ifBlank { "Stage $order" },
+        colorHex = normalizeStageColorHex(colorHex, fallbackStageType),
+        targets = safeTargets
+    )
+}
+
+fun TimedCompositionTarget.normalized(order: Int = this.order): TimedCompositionTarget {
+    val fallbackStageType = kind.toTimedStageType()
+    return copy(
+        order = order,
+        name = name.trim().ifBlank { kind.defaultName },
+        durationSec = durationSec.coerceAtLeast(0),
+        colorHex = normalizeStageColorHex(colorHex, fallbackStageType),
+        iconKey = iconKey?.ifBlank { null },
+        autoAdvance = autoAdvance
+    )
+}
+
+fun TimedCompositionBlock.derivedRepeatedStageDurationSec(stageGroupId: String): Int? {
+    return stageGroups.firstOrNull { group -> group.id == stageGroupId }?.durationSec
+}
+
+private val TimedCompositionTargetKind.defaultName: String
+    get() = when (this) {
+        TimedCompositionTargetKind.ACTION -> "Action"
+        TimedCompositionTargetKind.REST -> "Rest"
+        TimedCompositionTargetKind.CUSTOM -> "Custom"
+    }
+
+private fun TimedCompositionTargetKind.toTimedStageType(): TimedStageType {
+    return when (this) {
+        TimedCompositionTargetKind.ACTION -> TimedStageType.WORK
+        TimedCompositionTargetKind.REST -> TimedStageType.REST
+        TimedCompositionTargetKind.CUSTOM -> TimedStageType.CUSTOM
+    }
+}
+
 data class TimedExerciseItem(
     val id: String,
     val exerciseId: String? = null,

@@ -13,6 +13,7 @@ import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
@@ -713,6 +714,7 @@ private fun PlanBlock.toTimedEditorStages(): List<TimedPlanEditorStageUiState> {
 
         is TimedCircuitBlock -> items.map { item -> item.toTimedEditorStage() }
         is StrengthExerciseBlock -> emptyList()
+        is TimedCompositionBlock -> emptyList()
     }
 }
 
