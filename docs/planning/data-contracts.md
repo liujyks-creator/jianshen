@@ -369,6 +369,107 @@ E10.2 约定：
 - 热身固定在编辑列表开头，放松固定在末尾，中间的工作、休息和自定义阶段可排序；执行结构应与编辑页显示顺序保持一致。
 - E10.2 仅补齐计时阶段颜色入口；计划主题色 / 整体配色编辑保留为后续 polish，不代表力量或跟练动作选择页已实现。
 
+### 6.1.2 E14.4-2b Timed Composition v2
+
+E14.4-2b-2 决定正式采用两层 timed composition 作为长期数据方向。第一阶段推荐把新结构作为 versioned payload 存入现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON，不新增 Room table / column；只有未来需要独立查询或规范化统计时，再拆 Room migration story。
+
+旧 `TimedCircuitBlock` / `TimedExerciseItem` 继续作为 legacy timed structure 兼容。旧计划打开时通过 compatibility wrapper 显示，查看不写回；只有用户明确保存 / 转换后，当前 `WorkoutPlan` 才写入 composition v2。既有 `WorkoutSession.planSnapshot` 一律不回写。
+
+E14.4-2b rollback status: 本节仅保留 visual / semantic gate 与 E14.4-2b-2 data model decision 的规划契约。E14.4-2b-3 本地 model / serializer / editor adapter 实现已 rolled back / not accepted，E14.4-2b-4 本地 editor UI implementation 已 stopped / rolled back / not accepted；当前 Android 生产基线没有已接受的 `TimedCircuitBlock.composition` Kotlin carrier、composition v2 serializer、COMPOSITION_V2 编辑 UI 或 `待执行映射` 入口。未来若重启，必须通过 template-based dev story 重新实现和 review；在此之前 `TimedWorkoutEngine`、TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义保持不变。
+
+概念结构：
+
+```ts
+interface TimedCompositionBlock extends PlanBlockBase {
+  kind: "timed_composition";
+  compositionVersion: 2;
+  warmupSec: number;
+  cooldownSec: number;
+  rounds: number;
+  restBetweenRoundsSec: number;
+  stageGroups: TimedCompositionStageGroup[];
+  compatibility?: TimedCompositionCompatibilityMeta;
+}
+
+interface TimedCompositionStageGroup {
+  id: string;
+  order: number;
+  name: string;
+  colorHex: string;
+  iconKey?: string;
+  targets: TimedCompositionTarget[];
+  cueSettings?: CueSettings;
+  compatibility?: TimedCompositionCompatibilityMeta;
+}
+
+type TimedCompositionTargetKind = "action" | "rest" | "custom";
+
+interface TimedCompositionTarget {
+  id: string;
+  order: number;
+  name: string;
+  kind: TimedCompositionTargetKind;
+  durationSec: number;
+  colorHex: string;
+  iconKey?: string;
+  cueSettings?: CueSettings;
+  autoAdvance?: boolean;
+  compatibility?: TimedCompositionCompatibilityMeta;
+}
+
+interface TimedCompositionCompatibilityMeta {
+  sourceVersion?: "legacy_timed_circuit" | "composition_v2";
+  legacyBlockId?: string;
+  legacyItemId?: string;
+  legacyStageType?: TimedStageType;
+  convertedAt?: string;
+}
+```
+
+Field rules:
+
+- `compositionVersion` is required and starts at `2`.
+- `warmupSec` and `cooldownSec` are top-level boundary durations; `0` means absent.
+- `rounds` and `restBetweenRoundsSec` remain top configuration, matching the E14.4-2b-1 editor direction.
+- `stageGroups` is the repeated stage composition inside each round.
+- Each stage group has stable `id`, `order`, `name`, `colorHex`, and `targets`.
+- Each target has stable `id`, `order`, `name`, `kind`, `durationSec`, and `colorHex`.
+- Stage total duration is always derived from `targets.sum(durationSec)`.
+- Each stage group supports at most 5 targets in the first implementation.
+- Global cue defaults remain in `PlanPreferences.cueSettings`; target-level `cueSettings` are the durable override. Stage-level `cueSettings` may serve as an optional default/template layer, resolved after global defaults and before target override.
+- `restBetweenRoundsSec` is not stored as a movable target. Execution expands it into synthetic between-round rest steps between rounds only.
+
+Execution mapping rules:
+
+- If `warmupSec > 0`, the timeline starts with one warmup stage.
+- Each round expands every `stageGroup` in order, then each target in that stage group.
+- `action` and `custom` targets map to timed work steps.
+- `rest` targets map to timed rest steps.
+- If `restBetweenRoundsSec > 0`, insert a between-round rest after each round except the last.
+- If `cooldownSec > 0`, append one cooldown stage after all rounds.
+- `+15s` still means extending the current active rest step; it does not insert a target, does not change the plan, and does not rewrite the snapshot.
+
+TimerDial mapping rules:
+
+- The production TimerDial UI is not redesigned.
+- Outer ring segments are derived from the current stage group targets by planned duration ratio.
+- Active target is the thick active arc; completed targets in the same stage instance become elapsed / thin arcs.
+- Rest extension keeps planned segment ratios stable and uses monotonic progress clamping rather than resizing the rest target segment.
+- Inner ring total stage count is:
+
+```ts
+(warmupSec > 0 ? 1 : 0)
+  + rounds * stageGroups.length
+  + (restBetweenRoundsSec > 0 ? Math.max(rounds - 1, 0) : 0)
+  + (cooldownSec > 0 ? 1 : 0)
+```
+
+E12 impact:
+
+- Timed comparable trend structure signatures must include `compositionVersion`, composition block id, stage group id, target id, target kind, round index, stage instance index, target order, and planned duration where relevant.
+- Legacy and composition v2 structures are not comparable by default. Show data-insufficient / structure-different copy unless a compatibility mapper proves equivalence.
+- E12 must continue to use each historical `WorkoutSession.planSnapshot`, not the current edited `WorkoutPlan`.
+
 ### 6.2 计时提醒设置
 
 ```ts

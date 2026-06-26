@@ -465,21 +465,55 @@ E10.2 已确认未实现：
 
 力量训练完整新版 UI 设计单独开启，不塞进 E10.3。该阶段可以重审力量训练信息架构、确认层、历史趋势入口和高级组设置，但仍必须保留 `WorkoutCommand`、`WorkoutEvent`、计划值预填实际记录和训练引擎边界。
 
-### E14.4-2b 计时目标编排与 TimerDial 圆环语义
+### E14.4-2b 阶段内部目标扩展与 TimerDial 外圈语义
 
-E14.4-2a 已确认计划编辑 / 详情 polish 采用方案 B，但不把计时目标编排 + TimerDial 圆环语义塞进普通 UI polish。后续 E14.4-2b 应先做 planning / visual confirmation，再进入代码实现。
+E14.4-2a 已确认计划编辑 / 详情 polish 采用方案 B，但不把阶段内部目标扩展 + TimerDial 外圈时间比例语义塞进普通 UI polish。E14.4-2b visual / semantic gate 与 E14.4-2b-2 data model decision 已完成，详见 `docs/testing/e14-4-2b-timed-composition-timerdial-semantics.md` 和 `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`；后续进入代码实现前应按 serializer / model、editor、engine timeline、TimerDial mapping 和 compatibility / E12 tests 拆分。
 
 确认方向：
 
-- 计时计划使用外层目标编排和内层阶段两层结构。
-- 外层目标编排可新增、删除、拖动、重命名和设置颜色。
-- 内层阶段可新增、删除、拖动、重命名、设置时长和设置颜色。
-- 外层目标总时长等于内部所有阶段时长之和。
-- 默认模板可以是 `热身 / 高强度工作 / 轮间休息 / 放松`，但用户可以清空后完全自定义。
-- 顶层主要展示不再依赖 `01 热身 / 02 高强度工作 / 03 轮间休息` 这类纯编号标签；内部阶段可保留顺序编号。
-- TimerDial 外圈按内部阶段时长占比分段表达。
+- 计时编辑器沿用当前 UI：轮次与轮间休息保持在上侧位置，阶段编排保持在下方。
+- 新增能力只在既有阶段内部扩展更多目标 / 小节。
+- 阶段内部目标可新增、删除、拖动、重命名、设置时长和设置颜色。
+- 阶段总时长等于内部所有目标时长之和。
+- 默认模板仍可以是 `热身 / 高强度工作 / 轮间休息 / 放松` 等阶段，但阶段内部可扩展顺序目标。
+- 颜色选择位置直接显示色块，不把中文颜色名作为主要选项文字。
+- TimerDial 保持原圆盘 UI，外圈按当前阶段内部目标时长占比分段表达。
 
-该 story 可能影响 `WorkoutPlan` blocks、计划快照、统计比较 key、TimerDial UI state 和持久化边界。未完成独立规划前，不得静默修改 Room schema、训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record 或声音语义。
+语义 gate 结论：
+
+- 已比较方案 A `UI-only compatibility wrapper`、方案 B `explicit timed composition model` 和方案 C `visual grouping only`。
+- 推荐方案 B 作为长期目标，但先用方案 A 做兼容 / 视觉验证层，避免没有迁移策略时直接改持久化。
+- TimerDial 保持当前已确认的圆盘 UI，只调整外圈语义：外圈表达当前阶段内部 targets，按 target planned duration ratio 分段；active target 用粗弧，已完成 target 退为细弧 / 已经过弧，阶段切换时外圈切换到下一个阶段内部结构。
+- TimerDial 内圈继续表达整次训练总进度；中心圆继续表达当前 active 目标 / 阶段、倒计时和暂停 / 继续主控制；12 点数字圆标暂时沿用现有总运动阶段数语义，不作为本轮重设计项。
+- `+15秒` 仍只延长当前 active rest step，不插入新阶段，不修改 `WorkoutPlan` 或 plan snapshot，不改变 `timedRestExtensionRecords` 语义；外圈和内圈 progress 必须保持 monotonic，不倒退。
+- 当前 `WorkoutPlan.blocks` / `TimedCircuitBlock` / `TimedExerciseItem` 可以近似表达旧计划 wrapper，但不足以稳定表达阶段内部目标 id、目标颜色、嵌套目标、计划快照和历史趋势比较 key。
+- 旧计划应通过 compatibility wrapper 打开，查看不自动改写；只有用户在未来 composition editor 中明确保存 / 转换后才写入新结构，既有 `WorkoutSession.planSnapshot` 不回写。
+
+数据模型决策结论：
+
+- 正式采用两层 timed composition 作为长期数据方向。
+- 推荐方案 B：新增 versioned timed composition payload，但优先仍存入现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON，不新增 Room table / column。
+- 概念结构包含 `compositionVersion`、`warmupSec`、`cooldownSec`、`rounds`、`restBetweenRoundsSec`、`stageGroups` 和内部 `targets`；stage / target 都需要稳定 id、order、name、color 和 duration。
+- 旧 `TimedCircuitBlock` / `TimedExerciseItem` 计划继续通过 compatibility wrapper 显示和执行，查看不写回；只有用户明确保存 / 转换时，当前 plan 才写入 composition v2。
+- `轮间休息` 继续作为顶层 round configuration，执行 timeline 中只插入轮与轮之间，最后一轮后不插入。
+- Target `action` / `custom` 映射 timed work，target `rest` 和 synthetic between-round rest 映射 timed rest；`+15秒` 仍只延长当前 active rest step，不插入新 target，不改 plan snapshot。
+- TimerDial 外圈按当前 stage group targets 的 planned duration ratio 分段，rest extension 不重算比例而使用 planned ratio + monotonic progress floor；内圈总阶段数按 warmup + rounds * stageGroups + between-round rests + cooldown 计算，12 点圆标稳定。
+- E12 timed comparable trend key 必须纳入 compositionVersion、composition block id、stageGroupId、targetId、targetKind、round / stage instance 和结构签名；旧结构和新结构默认不比较，除非 compatibility mapper 证明等价。
+- 仅扩展 JSON payload 时不需要 Room schema migration；若未来新增 entity / table / column，必须拆独立 migration story。
+
+后续拆分：
+
+1. E14.4-2b-1 visual prototype / mock。
+2. E14.4-2b-2 data model decision。（Completed）
+3. E14.4-2b-3 serializer / model and editor adapter foundation。（Rolled back / not accepted）
+4. E14.4-2b-4 editor UI implementation。（Stopped / rolled back / not accepted）
+5. E14.4-2b-5 TimedWorkoutEngine timeline mapping。
+6. E14.4-2b-6 TimerDial mapping implementation。
+7. E14.4-2b-7 migration / compatibility / E12 tests。
+
+E14.4-2b rollback note：E14.4-2b-3 本地 model / serializer / editor adapter 实现未通过 review gate，已 rolled back / not accepted；E14.4-2b-4 本地 editor UI implementation 已 stopped / rolled back / not accepted。当前生产基线没有已接受的 COMPOSITION_V2 draft 编辑 UI，也没有 `待执行映射` 计划详情入口。保留的只是 visual / semantic gate 和 E14.4-2b-2 data model decision；不得直接继续 E14.4-2b-5 / E14.4-2b-6，下一步只能在 review reset 干净后用 template-based dev story 重启。本 rollback 不改 `TimedWorkoutEngine`、TimerDial、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema 或声音语义。
+
+该 story 影响 `WorkoutPlan` blocks、计划快照、统计比较 key、TimerDial UI state 和持久化边界。实现时不得静默修改 Room schema、训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record 或声音语义；若仅扩展 JSON payload，不需要 Room schema migration，但仍必须做 serializer / compatibility 测试。
 
 ## 8. 禁止范围
 

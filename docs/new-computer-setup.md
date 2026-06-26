@@ -200,24 +200,26 @@ git push -u origin HEAD
 
 ## 10. 本项目相关技能
 
-本项目可选使用两个本地技能：
+本项目可选使用一个本地方法论技能：
 
 1. `skills/bmad-method`
-2. `skills/design-md`
 
-它们是当前电脑上的本地工作副本，用来辅助产品方法论和设计系统规划，不属于仓库交付内容。根目录 `.gitignore` 会忽略 `skills/`，不要把这些技能目录提交到 GitHub。
+它是当前电脑上的本地工作副本，用来辅助产品方法论、PRD/backlog/story/review 流程，不属于仓库交付内容。根目录 `.gitignore` 会忽略 `skills/`，不要把该技能目录提交到 GitHub。
 
-新电脑继续使用它们时，任选一种方式：
+新电脑继续使用它时，任选一种方式：
 
-1. 把技能复制到新电脑的项目目录 `skills/bmad-method` 和 `skills/design-md`。
-2. 把这些技能放进你自己的私有 skills 仓库，再在新电脑安装或同步到项目目录。
+1. 把技能复制到新电脑的项目目录 `skills/bmad-method`。
+2. 把该技能放进你自己的私有 skills 仓库，再在新电脑安装或同步到项目目录。
 3. 如果某个技能中的方法论确实需要长期沉淀进项目，只整理必要结论到 `docs/`，不要直接提交完整技能目录。
+
+UI、设计系统、主题、token、界面规则、高保真原型、视觉方案、视觉评审或设计变体类任务默认使用 Codex 环境中的 `huashu-design` skill（如可用），并继续以 `DESIGN.md` 和项目文档作为 TrainFlow 设计真源。
 
 对新 Codex 会话可以这样说明：
 
 ```text
-产品设计与规划阶段，如本项目目录下已存在 skills/bmad-method 和 skills/design-md，请先读取它们的 SKILL.md 再继续。
-如果技能不存在，先基于仓库 docs/planning 继续，不要阻塞开发。
+产品规划、架构规划、PRD/backlog/story/review 阶段，如本项目目录下已存在 skills/bmad-method，请先读取其 SKILL.md 再继续。
+UI、设计系统、主题、token、高保真原型、视觉方案或视觉评审阶段，如 huashu-design skill 可用，请先读取并遵循；同时读取 DESIGN.md 和相关项目文档。
+如果技能不存在，先基于仓库 docs/planning、DESIGN.md 和相关文档继续，不要阻塞开发。
 ```
 
 ## 11. 当前项目接力原则

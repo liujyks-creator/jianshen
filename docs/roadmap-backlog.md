@@ -1909,7 +1909,7 @@ stepsCompleted:
 
 ### Story E14.4: Feature UI polish batches
 
-**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition story split out
+**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition visual / semantic gate and data model decision retained; E14.4-2b-3 / E14.4-2b-4 implementation rolled back / not accepted
 
 建议分批顺序：
 
@@ -1941,27 +1941,79 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 - E14.4-2 low-coupling implementation 已落地，并在用户 2026-06-23 真机截图反馈后完成 review fix：计划空状态直接创建计时 / 力量计划；计划管理改为默认折叠的计划播放列表；当前计划卡片内归属 `开始训练`、编辑、复制和 `删除当前计划`；计划色块使用安全默认展示，不新增计划级持久化字段；计时 / 力量编辑页新增底部 sticky `保存计划` / `开始训练`，且 `计划预览` 卡不再重复显示这两个按钮；计时阶段卡默认折叠并可展开编辑，但不新增两层计时结构；力量目标组默认折叠，展开后设置重量、次数、休息并展示颜色入口说明；工程化预览文案已替换为用户可读摘要。后续输入法真机截图补修确认：编辑数字字段时 sticky action 在 IME 可见期间隐藏，不再上浮到键盘上方遮挡表单，键盘收起后恢复。排序补修确认：力量动作 / 目标组卡片补拖动排序手柄并写入 block 顺序；计时阶段和力量动作拖拽按半卡阈值计算目标槽位，`热身` / `放松` 作为默认模板阶段可移动，保存顺序跟随编辑器最终顺序。
 - 2026-06-24 顶部拖拽截图补修确认：当第一张可见卡片被屏幕上沿裁切时，拖动按钮向下拖不应跳跃；实现上采用“手指锚定 + 占位预览 + 松手提交”模型：拖动中不把被拖卡片放入重排后的 `LazyColumn` 槽位，被拖卡片始终只按手指位移移动，其他卡片临时上移 / 下移预览目标占位，松手后才提交真实顺序。后续若丰富动画，只应装饰非拖动卡片的占位位移、阴影、透明度或拖动卡片浮层感，不应让被拖卡片脱离手指锚点，也不应恢复 active-drag 列表重排模型；详细交接记录在 `docs/testing/e14-4-2-plan-edit-detail-visual-proposal.md`。
 - 本轮仍未实现的低耦合后续项包括：计时阶段卡片密度继续细化、添加阶段 / 添加动作选择体验、计划颜色和力量目标组颜色的独立持久化决策；其中力量“添加动作”弹窗仍只是临时低耦合改良，需另开独立任务做搜索、分类、动作卡、空状态和自定义动作创建体验优化。这些都不得在 UI polish 中静默改 Room schema。
-- 必须拆出的范围：计时计划“外层目标编排 + 内层阶段 segment”两层结构、外层目标新增 / 删除 / 拖动 / 重命名 / 颜色、内层阶段新增 / 删除 / 拖动 / 重命名 / 时长 / 颜色、外层总时长由内层阶段求和、TimerDial 外圈按内部阶段时长占比分段。这些内容进入独立 **E14.4-2b Timed composition editor and TimerDial ring semantics**，先规划 / 视觉确认，再代码实现。
+- 必须拆出的范围：计时阶段内部目标 / 小节扩展、内部目标新增 / 删除 / 拖动 / 重命名 / 时长 / 颜色、阶段总时长由内部目标时长求和、TimerDial 原圆盘 UI 的外圈按当前阶段内部目标时长占比分段。这些内容进入独立 **E14.4-2b Timed composition editor and TimerDial ring semantics**，先规划 / 视觉确认，再代码实现；轮次与轮间休息仍保持当前编辑器顶部位置，阶段编排仍在下方，不把本轮做成全新编辑器方向。
 - E14.4-2 implementation 仍不得恢复心率 UI、手动输入、平均心率趋势或真实设备接入，不得改训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema 或声音提示语义。若计划颜色或计时两层结构需要新的持久化字段，必须先拆数据 / persistence 决策 story。
 
 ### Story E14.4-2b: Timed composition editor and TimerDial ring semantics
 
-**状态:** Split out; planning / visual confirmation required before code implementation
+**状态:** Visual / semantic gate retained; E14.4-2b-1 visual prototype / mock retained in `.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/index.html`; TimerDial existing UI overlay correction retained in `.local/smoke/e14-4-2b-timerdial-existing-ui-overlay/index.html`; E14.4-2b-2 data model decision retained in `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`; E14.4-2b-3 serializer / model and editor adapter implementation rolled back / not accepted; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted; do not continue E14.4-2b-5 / E14.4-2b-6 until a clean template-based restart passes review reset
+
+**流程纠偏:** 2026-06-26 已新增 `docs/testing/e14-4-2b-process-reset.md`。本地 E14.4-2b-3 / E14.4-2b-4 实现未通过 review gate，已回滚且未纳入当前已交付能力。后续不得直接进入 E14.4-2b-5 / E14.4-2b-6；必须先按 `DEV_STORY_PROMPT_TEMPLATE.md` / `CODE_REVIEW_PROMPT_TEMPLATE.md` 重新启动 template-based dev story、确认 visual gate、运行 Gradle 验证，并用本地虚拟测试环境 `C:/Users/25073/Desktop/jianshen/.local/android-sdk` 与默认 AVD `TrainFlow_Pixel_API_36` 尝试 adb smoke。Android UI / APK / 真机截图修复类任务的 smoke 证据只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification` 或提交 `.local/`。
 
 作为计时训练用户，
-我想把计时计划组织为外层目标编排和内层阶段，
-以便既能按语义理解训练目标，也能让 TimerDial 外圈准确表达内部阶段时长比例。
+我想在既有计时阶段内部扩展更多目标 / 小节，
+以便保留当前轮次、轮间休息和阶段编排 UI，同时让 TimerDial 外圈准确表达当前阶段内部目标的时长比例。
 
 **验收标准:**
 
 - Given 进入该 story 的规划阶段，Then 先输出 docs-only / mock-only 视觉与数据边界方案，不直接写 Kotlin / Compose / Room / 测试代码，不生成实现 APK。
-- Given 计时计划编辑器设计，Then 外层目标编排支持新增、删除、拖动、重命名和设置颜色。
-- Given 外层目标编排展开，Then 内层阶段支持新增、删除、拖动、重命名、设置时长和设置颜色。
-- Then 外层目标总时长等于内部所有阶段时长之和。
-- Then 默认模板可以是 `热身 / 高强度工作 / 轮间休息 / 放松`，但用户可以清空后完全自定义。
-- Then 顶层主要展示不再依赖 `01 热身 / 02 高强度工作 / 03 轮间休息` 这类纯编号标签；内部阶段可保留 `01 开始 / 02 加速 / 03 休息` 等顺序编号。
-- Then TimerDial 外圈分段按内部阶段时长占比分割，而不是按外层目标等分或按固定视觉块分割。
+- Given 计时计划编辑器设计，Then 轮次与轮间休息仍保持在当前 UI 的上侧位置，阶段编排仍在下方。
+- Given 用户展开一个既有阶段，Then 阶段内部目标支持新增、删除、拖动、重命名、设置时长和设置颜色。
+- Then 阶段总时长等于内部所有目标时长之和。
+- Then 默认模板仍可以是 `热身 / 高强度工作 / 轮间休息 / 放松` 等阶段，但阶段内部可扩展 `01 开始 / 02 加速 / 03 休息` 等目标 / 小节。
+- Then 颜色选择位置直接显示色块，不把中文颜色名作为主要选项文字挤进编辑卡。
+- Then TimerDial 保持原 UI，外圈分段按当前阶段内部目标时长占比分割，而不是按阶段等分或按固定视觉块分割。
 - Then story 在实现前必须明确是否影响 `WorkoutPlan` blocks、plan snapshot、统计比较 key、Room schema 或 TimerDial UI state；任何影响都必须有独立批准的规划结论。
+
+**视觉 / 语义 gate 结论:**
+
+- 本轮只做 Markdown 规划与只读语义评估，未改 Kotlin / Compose / Room / 测试代码，未生成 APK。
+- 已比较三条路线：方案 A `UI-only compatibility wrapper`、方案 B `explicit timed composition model`、方案 C `visual grouping only`。
+- 推荐方向是方案 B 作为长期目标，但先用方案 A 做兼容 / 视觉验证层；不得把 UI wrapper 当作最终持久化语义。
+- TimerDial 保持当前已确认的圆盘 UI，只调整外圈语义：外圈表达当前阶段内部目标，并按 target planned duration ratio 分段；active 目标为粗弧，已完成目标退为细弧 / 已经过弧，阶段切换时外圈切换到下一个阶段内部结构。
+- TimerDial 内圈继续表达整次训练总进度；中心圆继续表达当前 active 目标 / 阶段、倒计时和暂停 / 继续主控制；12 点数字圆标暂时沿用现有总运动阶段数语义，不作为本轮重设计项。
+- `+15秒` 仍只延长当前 active rest step，不插入新阶段，不修改 `WorkoutPlan` 或 plan snapshot，不改变 `timedRestExtensionRecords` 语义；外圈和内圈 progress 必须保持 monotonic，不倒退。
+- 当前 `WorkoutPlan.blocks` / `TimedCircuitBlock` / `TimedExerciseItem` 可支持旧计划兼容 wrapper，但不足以稳定表达阶段内部目标 id、目标颜色、嵌套目标、计划快照和历史趋势比较 key。
+- 旧计划打开时建议自动包一层兼容目标展示；仅查看不改写，用户明确保存 / 转换后才写入未来新结构；既有 `WorkoutSession.planSnapshot` 不回写。
+
+**E14.4-2b-1 视觉原型结果:**
+
+- 新增本地 HTML mock：`.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/index.html`。
+- 重做完整视觉设计稿：`.local/smoke/e14-4-2b-complete-visual-design/index.html`。该稿合并编辑器总览、阶段展开、旧计划 compatibility wrapper 和既有 TimerDial 外圈语义，作为后续讨论主稿。
+- 原型覆盖 4 个视图 / 状态：阶段编排折叠长计划、阶段展开 + 内部目标、旧单层计划 compatibility wrapper、TimerDial 外圈语义草图。
+- 计时编辑器视觉推荐：沿用当前编辑器，但层级进一步明确为 `热身` / `放松`、`轮次` / `轮间休息` 合并进一个紧凑顶部设置卡，`阶段编排` 在下方且只表示轮内重复阶段；阶段默认折叠，展示阶段名称、颜色、总时长、展开状态和阶段拖拽入口；展开后再显示内部目标数量、内部目标的名称、时长、色块、折叠 / 展开设置入口、拖拽和编辑 / 复制 / 删除入口；阶段总时长明确由内部目标求和。
+- 阶段内部目标上限：每个重复阶段最多 5 个目标；默认建议为 2 个目标，即动作 + 休息，额外目标用于用户自定义训练节奏。
+- 用户复审修正：阶段卡片头部只显示阶段名和总时长，不展示目标数、目标名称或 `2:30 = 45s + ...` 这类求和公式；求和来源、目标数量和剩余可添加容量只放在展开细节或辅助说明中。
+- 文字防溢出规则：阶段名称软限制 10 个中文字符 / 20 个 ASCII 字符，目标名称软限制 6 个中文字符 / 14 个 ASCII 字符；列表行必须单行省略，操作列固定，未来实现应使用等价 `minmax(0, 1fr)` 的布局，避免按钮把长文字推出卡片边界。
+- 旧计划 wrapper 推荐：默认按 `stageType` 自动分组为热身 / 工作 / 休息 / 放松来帮助理解，但必须标注为视觉 wrapper；查看不自动改写旧 plan，保存 / 转换前旧计划数据不被静默改写。
+- TimerDial 推荐：保持原圆盘 UI，只让外圈表达当前阶段内的目标，并按时长占比分段；active 目标为粗弧，已完成目标退为细弧 / 已经过弧；内圈继续表达整次训练总阶段进度；中心圆显示当前目标 / 阶段、倒计时和暂停 / 继续。
+- TimerDial UI / 动画边界：HTML 圆盘只是外圈比例语义的简化示意，不是生产视觉或动画规格；不得改生产 TimerDial UI、Canvas 几何、中心圆、内圈、底部按钮、`TimerDialPauseMorph`、continuous progress、reduce-motion、final countdown、rest extension monotonic progress、center touch feedback 或 marker / ring / center color transitions。
+- 12 点数字圆标处理：它属于内圈总阶段 UI，与外圈无关；生产代码来源为 `totalWorkoutStageCount`。示例结构为热身 + 3 轮 x 2 阶段 + 2 次轮间休息 + 放松 = 10 个总阶段，所以 12 点圆标显示 `10`；当阶段 6 已完成、阶段 7 正在运行时，内圈表达 completed marker 与当前 progress brush。`当前目标序号 / 总数` 或 `当前阶段内目标数` 不进入本轮默认视觉。中心暂停图标不得用易误读为罗马数字的 `Ⅱ` 字符代替。
+- 外圈比例处理：外圈归一化表达当前阶段内部目标占比，不表达固定 60 秒；`动作 45s / 休息 15s` 和 `动作 90s / 休息 30s` 都显示为 3:1。
+- 原型仍是 docs / mock only，未改 Kotlin / Compose / Room / 测试代码，未生成 APK，也未改变 `WorkoutPlan`、`TimedCircuitBlock`、`TimedExerciseItem`、TimerDial 生产实现、训练引擎、命令、事件、session record、Room schema 或声音提示语义。
+- TimerDial 纠偏结果：上一版独立圆盘 mock 只保留“外圈按内部目标时长占比分段”的抽象语义，不再作为视觉方向；不得继承 appbar、手机壳、说明卡、小按钮、新圆盘比例或新页面布局。纠偏 mock 以用户提供的绿色中心圆正常 TimerDial 截图 `C:/Users/25073/Downloads/Screenshot_2026-06-21-22-30-15-56_168a3d1b6f3b71..jpg`、E14.2 描述和生产代码为当前视觉基准；最新完整稿仅在外圈叠加动作 / 休息目标比例示例，例如 `45s / 15s` 与 `90s / 30s` 都显示为 3:1。`.local/smoke/e14-2-runtime/running.png` 的黄色中心圆不是可继承基准。已补读 `TimerDial.kt`、`TimerDialTokens.kt`、`TimerDialUiState.kt` 和 `TimedWorkoutSessionRoute.kt`，确认现有 `OFFICIAL_FLOW` 圆盘尺寸关系、12 点数字圆标来源和 duration-based 外圈绘制方向。
+
+**E14.4-2b-2 数据模型决策结果:**
+
+- 新增 `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`，本轮仍为 docs-only / planning-only，未改 Kotlin / Compose / Room / 测试代码，未生成 APK。
+- 正式采用两层 timed composition model 作为长期数据方向：顶部 `warmupSec` / `cooldownSec` / `rounds` / `restBetweenRoundsSec`，下方 `stageGroups` 表达每轮内重复阶段，每个 stage group 内含最多 5 个 targets。
+- 推荐方案 B：新增 versioned timed composition payload，但优先仍存入现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON，不新增 Room table / column。
+- 概念字段包括 `compositionVersion`、`warmupSec`、`cooldownSec`、`rounds`、`restBetweenRoundsSec`、`stageGroups`、stage id / name / color / order、target id / name / kind / durationSec / color / order、cue settings 解析层级和 compatibility metadata。
+- 旧 `TimedCircuitBlock` / `TimedExerciseItem` 继续通过 compatibility wrapper 打开、查看和执行；查看不写回。用户只改旧结构可兼容字段时可保存回旧结构；新增 / 编辑真实内部 targets 或 per-target color 时，必须明确提示并转换当前 plan 为 composition v2。
+- 执行 timeline 结论：warmup 在 rounds 前；每轮展开 stageGroups 和 targets；between-round rest 只插入轮与轮之间，最后一轮后不插入；cooldown 在末尾；action / custom target 映射 timed work，rest target 和 synthetic round rest 映射 timed rest；`+15s` 仍只延长当前 active rest step。
+- TimerDial 结论：原生产 UI 不重做；外圈从当前 stage group targets 得到 planned duration ratio；active target 粗弧、completed target 细弧 / 已经过弧；rest extension 不重算比例，按 planned ratio 展示并用 monotonic progress floor 防倒退；内圈总阶段数按 warmup + rounds * stageGroups + between-round rests + cooldown 计算，12 点圆标稳定。
+- Room / serialization 结论：仅扩展 JSON payload 时不需要 Room schema migration，但必须做 serializer compatibility、unknown version fallback、old JSON parse、新 JSON round-trip 和 snapshot immutability 测试；若未来新增 entity / table / column，必须另拆 Room migration story。
+- E12 结论：timed comparable trend key 必须纳入 compositionVersion、composition block id、stageGroupId、targetId、targetKind、round / stage instance 和结构签名；旧结构和新结构默认不比较，除非 compatibility mapper 证明等价；E12 继续只消费每条历史 `WorkoutSession.planSnapshot`。
+
+**后续拆分建议:**
+
+1. E14.4-2b-1 visual prototype / mock：已完成，用于验证当前编辑器内的阶段卡、阶段内部目标行、色块入口、拖拽区分、旧计划 wrapper 和 TimerDial ring sketch。
+2. E14.4-2b-2 data model decision：已完成，正式采用 versioned two-layer timed composition payload，优先存入 existing JSON，不改 Room table shape。
+3. E14.4-2b-3 serializer / model and editor adapter foundation：rolled back / not accepted。本地 Kotlin model / serializer / editor adapter 实现未通过 review gate，不作为当前代码基线；未来若重启，必须从 template-based dev story 重新实现并重新验证。
+4. E14.4-2b-4 editor UI implementation：stopped / rolled back / not accepted。本地 v2 editor-only UI 未通过 review gate，不作为当前代码基线；不得把 `待执行映射`、COMPOSITION_V2 UI 或 smoke plan 视为已交付能力。
+5. E14.4-2b-5 TimedWorkoutEngine timeline mapping：暂停，不得直接继续；只能在 E14.4-2b-3 / E14.4-2b-4 经干净重启、实现和 review gate 后再进入。
+6. E14.4-2b-6 TimerDial mapping implementation：暂停，不得直接继续；只能在执行 timeline 和兼容边界通过后再进入。
+7. E14.4-2b-7 migration / compatibility / E12 tests：覆盖旧计划、旧 snapshot、新 composition、unsupported version、当前计划转换、serializer round-trip、timeline expansion、TimerDial mapping 和 E12 trend key。
 
 **边界:**
 
@@ -2018,6 +2070,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 28. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
 29. E12.2b：力量同类 set 趋势。（Implemented）
 30. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+31. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 serializer / model and editor adapter implementation rolled back / not accepted；E14.4-2b-4 editor UI implementation stopped / rolled back / not accepted。（Do not continue E14.4-2b-5/6; next allowed step is a clean template-based restart after review reset）
 
 ## 7. 下一轮建议
 

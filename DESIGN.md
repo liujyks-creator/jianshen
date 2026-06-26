@@ -250,7 +250,7 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 选中态不能只靠颜色表达，必须至少包含外圈 / 描边、对勾和 TalkBack 文案。
 - 每个色块的可访问文案应包含颜色名称、推荐用途、高注意色状态和当前是否选中。
 - 色板应优先使用可复用的大色板 bottom sheet / dialog / page-style panel，包含 `推荐色`、`更多颜色`、大色块和完成动作；编辑卡片不使用多个文字颜色选项挤占主编辑区域。
-- 计划颜色是用户手动设置的计划级颜色，不自动从首个阶段、目标编排或力量目标组推断。计划颜色默认可使用红色，并可通过计划列表 / 详情左侧色块或展开计划内的颜色入口修改；若实现需要新的持久化字段，必须先拆数据决策，不在 UI polish 中静默改 Room schema。
+- 计划颜色是用户手动设置的计划级颜色，不自动从首个阶段、阶段内部目标或力量目标组推断。计划颜色默认可使用红色，并可通过计划列表 / 详情左侧色块或展开计划内的颜色入口修改；若实现需要新的持久化字段，必须先拆数据决策，不在 UI polish 中静默改 Room schema。
 - 色板不能引入第四套 skin、远程主题、运行时插件市场或第三方皮肤安装。
 
 ## Typography
@@ -367,6 +367,8 @@ E10.1 后，计时训练后续按纯间歇计时器处理，执行页主信息�
 
 E10.5 后，计时训练大圆盘进一步收敛为 Timer Dial 圆盘视觉语言。Timer Dial 可以参考黑红高对比的运动现场感，但必须使用 TrainFlow 自己的 token、图标语义、弧线层级和动效规则，不复制外部 APK / 截图的代码、资源、图标、字体、音频、专有动画或逐像素视觉。
 
+E14.4-2b 后，计时训练阶段内目标扩展进入独立语义 gate：沿用当前计时编辑器结构，顶部轮次与轮间休息仍保持在当前位置，下面继续是阶段编排；新增能力只是在既有阶段内部扩展更多目标 / 小节。E14.4-2b-2 已决定该结构是长期数据方向，推荐作为 versioned timed composition payload 存入现有 `WorkoutPlan.blocks` JSON / `WorkoutSession.planSnapshot` JSON，先不新增 Room table / column。旧计划可使用 compatibility wrapper 展示和执行，但查看不得静默改写；只有用户明确保存 / 转换后，当前计划才写入 composition v2，历史 snapshot 不回写。E14.4-2b-3 / E14.4-2b-4 本地实现未通过 review gate，已 rolled back / not accepted；当前生产基线没有已接受的 COMPOSITION_V2 编辑 UI 或 `待执行映射` 入口。未来若重启 editor UI，仍应保持顶部紧凑编辑热身、放松、轮次和轮间休息，阶段编排只显示每轮内重复 stageGroups；阶段折叠头只显示色块、名称、派生总时长、展开入口和拖拽入口；展开后在阶段内目标标题行直接提供添加目标入口，并说明阶段总时长由目标时长相加得到。目标行必须把设置 / 收起入口和拖拽入口分开，操作列固定，名称单行省略；阶段和目标排序以拖拽手柄为主，不显示重复的上移 / 下移备用入口；每个阶段最多 5 个目标。v2 进入 ready gate 或 execution 前必须另起 template-based implementation story 并通过 review gate。
+
 Timer Dial 的设计结构：
 
 - 顶部显示本次训练总剩余时间，但低于中心倒计时层级。
@@ -376,6 +378,8 @@ Timer Dial 的设计结构：
 - 内圈 12 点位置用数字圆标显示总运动阶段数；一个运动阶段包含 work+rest，完成阶段节点显示数字或圆点。
 - 中心圆表达当前阶段图标、阶段编号或名称、当前阶段倒计时，并承担暂停 / 继续主交互。
 - E10.8 production 底部只保留跳过 / 下一阶段、`+15s` 和结束等少量操作；结束训练仍需要二次确认。Reset 只属于 preview/demo 或未来命令设计，生产实现前必须明确 `WorkoutCommand`、确认和 session record 边界。
+
+E14.4-2b 的下一版 Timer Dial 语义必须保持当前已确认的圆盘 UI：轮次 / 轮间休息、内圈总进度、中心圆暂停 / 继续和既有 12 点数字圆标不作为本轮重设计对象。增量只在外圈：当当前 stage group 包含多个内部 targets 时，外圈按这些 targets 的 planned duration ratio 分段，active target 为粗弧，已完成 target 退为细弧 / 已经过弧；切换到下一个 stage group 时，外圈切换到该 stage group 自己的 target 结构。内圈仍表达整次训练总进度；中心圆仍表达当前 active target / stage、阶段剩余时间和暂停 / 继续主控制。12 点数字圆标继续沿用整次执行 timeline 的总阶段数语义，按 warmup + rounds * stageGroups + between-round rests + cooldown 计算。该语义进入生产前必须通过独立实现 story 和兼容测试确认，不能混入普通 UI polish。
 
 Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度。阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒都应服从真实训练状态和用户 cue settings。休息延长后，当前 rest 外圈弧和内圈 work+rest cycle progress 必须单调、不倒退，并在 active tick 继续推进；paused、completed 和 abandoned 状态不继续动画。
 

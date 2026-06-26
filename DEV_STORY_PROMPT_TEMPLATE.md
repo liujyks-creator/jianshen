@@ -20,6 +20,7 @@ C:/Users/25073/Desktop/jianshen
 - 如确实需要新分支，只能在当前目录创建普通 git branch，并先说明原因。
 - 不提交 skills/、.local/、build 输出、日志、设备输出、node_modules、dist 或本地临时文件。
 - 本阶段完成后只推送阶段分支，不自行合入 main，除非主管理对话明确要求。
+- 根目录 APK、`countdown_beep1.mp3`、`deliverables/`、`人工/`、`.local/`、build 输出、截图、日志和设备输出都属于禁区文件，不得 stage / commit / push。
 
 Windows 文本编码规则：
 - 本仓库文本文件统一按 UTF-8 读取和写入。
@@ -47,6 +48,7 @@ Windows 文本编码规则：
 - git log --oneline --decorate -6
 - skills/ 是否仍未被 Git 跟踪
 - .local/ 是否仍未被 Git 跟踪
+- 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
 
 本地环境恢复：
 - 如果 `.local/env.ps1` 存在，先运行：
@@ -56,6 +58,20 @@ Windows 文本编码规则：
   - `.\gradlew.bat --version`
 - `.local/env.ps1` 只应设置当前 PowerShell 会话的 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT` 和 `PATH`，不得提交 `.local/`。
 - 如果 `.local/env.ps1` 不存在或 JDK/Android SDK 不可用，停止并报告，不要修改项目源码来硬编码本机路径。
+
+Android 虚拟测试环境（UI / APK / 真机截图修复 / smoke 类 Story 必查）：
+- 本项目默认虚拟测试环境位于当前仓库 `.local/` 下，不需要用户再次提醒：
+  - Android SDK: `C:/Users/25073/Desktop/jianshen/.local/android-sdk`
+  - adb: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/platform-tools/adb.exe`
+  - emulator: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/emulator/emulator.exe`
+  - AVD home: `C:/Users/25073/Desktop/jianshen/.local/android-avd`
+  - Android user home: `C:/Users/25073/Desktop/jianshen/.local/android-user`
+  - 默认 AVD: `TrainFlow_Pixel_API_36`
+- 如本 Story 涉及 Android UI、截图反馈、APK handoff、执行页/计划页/记录页视觉验证或交互 smoke，必须先读取并遵循 Android emulator QA skill（如可用），然后至少执行：
+  - `.\.local\android-sdk\platform-tools\adb.exe devices`
+  - `.\.local\android-sdk\emulator\emulator.exe -list-avds`
+- 若没有 online 设备但 `TrainFlow_Pixel_API_36` 存在，应尝试启动该 AVD 后再判断无法 smoke；若启动失败或设备保持 offline，报告具体原因，不要省略模拟测试说明。
+- smoke 截图、UI tree、logcat 只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification`，不得提交 `.local/`。
 
 必读状态文档：
 1. AGENTS.md
@@ -75,7 +91,8 @@ Windows 文本编码规则：
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
-- 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞开发。
+- 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；生成 UI 前仍必须读取 DESIGN.md 和项目文档，不得猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞开发。
+- 如 Android emulator QA skill 可用，Android UI / APK / smoke / 截图验证类任务先读取并遵循；如不可用，仍必须使用上方 `.local/android-sdk` 路径尝试 `adb devices` 和 AVD 检查。
 - skills/ 是本地辅助目录，不应提交。
 
 依赖阶段 / 模块：
@@ -123,6 +140,7 @@ Windows 文本编码规则：
 - .\gradlew.bat app:lintDebug
 - .\gradlew.bat app:check
 - git diff --cached --check
+- 如本 Story 涉及 Android UI / APK / 视觉修复 / 交互 smoke：使用 `TrainFlow_Pixel_API_36` 或已连接设备做 adb smoke，截图保存到 `.local/smoke/<Story ID>/`；如未运行，必须说明是 AVD 缺失、设备 offline、构建失败还是流程不涉及 UI。
 
 如果改 prototype 或前端共享配置，还必须运行：
 - npm.cmd run lint
@@ -143,6 +161,7 @@ Windows 文本编码规则：
 - git branch --show-current
 - git rev-parse --show-toplevel
 - 验证命令结果
+- Android 虚拟测试环境检查结果：`.local/android-sdk` / `TrainFlow_Pixel_API_36` / `adb devices` / smoke 截图路径或未运行原因
 - 是否符合允许范围
 - 是否触碰禁止范围
 - 是否保持状态不变量

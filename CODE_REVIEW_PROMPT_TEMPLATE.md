@@ -55,6 +55,21 @@ Windows 文本编码规则：
 - .local/ 必须保持 ignored，不得提交。
 - 不要把本机 JDK/SDK 路径写进项目源码。
 
+Android 虚拟测试环境（审查 UI / APK / smoke / 真机截图修复时必查）：
+- 默认虚拟测试环境路径：
+  - Android SDK: `C:/Users/25073/Desktop/jianshen/.local/android-sdk`
+  - adb: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/platform-tools/adb.exe`
+  - emulator: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/emulator/emulator.exe`
+  - AVD home: `C:/Users/25073/Desktop/jianshen/.local/android-avd`
+  - Android user home: `C:/Users/25073/Desktop/jianshen/.local/android-user`
+  - 默认 AVD: `TrainFlow_Pixel_API_36`
+- 如果 Story 涉及 Android UI、截图反馈、APK handoff、执行页/计划页/记录页视觉验证或交互 smoke，review 必须检查实现报告中是否使用上述环境做过 adb smoke；若未做，确认是否有明确原因。
+- Review 需要自行复核时，先读取并遵循 Android emulator QA skill（如可用），然后至少执行：
+  - `.\.local\android-sdk\platform-tools\adb.exe devices`
+  - `.\.local\android-sdk\emulator\emulator.exe -list-avds`
+- 若没有 online 设备但 `TrainFlow_Pixel_API_36` 存在，应尝试启动该 AVD 后再判定无法 smoke；若启动失败或设备保持 offline，报告具体原因。
+- smoke 截图、UI tree、logcat 只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification`，不得提交 `.local/`。
+
 审查前确认：
 - git fetch --prune origin
 - git status
@@ -89,7 +104,8 @@ Windows 文本编码规则：
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
-- 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞 review。
+- 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；审查 UI 时仍必须确认生成结果消费了 DESIGN.md 和项目文档，而不是猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞 review。
+- 如 Android emulator QA skill 可用，Android UI / APK / smoke / 截图验证类 review 先读取并遵循；如不可用，仍必须使用上方 `.local/android-sdk` 路径尝试 `adb devices` 和 AVD 检查。
 - skills/ 是本地辅助目录，不应提交。
 
 当前 Story 原目标：
@@ -136,7 +152,8 @@ Windows 文本编码规则：
 7. 测试是否覆盖关键状态、边界条件和契约映射。
 8. 文档更新是否准确，没有夸大完成范围。
 9. 是否引入后续阶段范围倒灌。
-10. 是否保持 skills/ 和 .local/ 不被提交。
+10. Android UI / APK 类 Story 是否使用 `.local/android-sdk` + `TrainFlow_Pixel_API_36` 或真实设备做过 smoke；若未做，原因是否可信。
+11. 是否保持 skills/ 和 .local/ 不被提交。
 
 建议验证：
 - .\gradlew.bat app:testDebugUnitTest
@@ -145,6 +162,7 @@ Windows 文本编码规则：
 - .\gradlew.bat app:check
 - git diff --cached --check
 - git diff --check main..<story branch>
+- 如 Story 涉及 Android UI / APK / 视觉修复 / 交互 smoke：复核实现报告中的 `.local/smoke/<Story ID>/` 截图路径，必要时用 `TrainFlow_Pixel_API_36` 或已连接设备重跑 adb smoke；如未运行，必须在 review 结论中说明原因和风险。
 
 如果只是 review，且未改 prototype 或前端共享配置，不需要运行：
 - npm.cmd run lint
@@ -189,6 +207,7 @@ Review 后处理规则：
   - 是否需要修复 commit
   - 是否可以进入下一阶段
   - 本轮是否运行验证以及结果
+  - Android 虚拟测试环境检查结果：`.local/android-sdk` / `TrainFlow_Pixel_API_36` / `adb devices` / smoke 截图路径或未运行原因
   - 是否确认没有触碰禁止范围
   - 是否确认 skills/ 和 .local/ 未提交
   - 是否确认 APK、countdown_beep1.mp3、deliverables/、人工/ 未提交

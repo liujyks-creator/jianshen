@@ -237,13 +237,34 @@ git commit -m "<short summary>"
 git push -u origin HEAD
 ```
 
-## 12. 本地技能
+## 12. 本地技能与 Codex QA 技能
 
-当前项目可选使用两个本地技能：
+当前项目可选使用一个本地方法论技能：
 
 1. `skills/bmad-method`
-2. `skills/design-md`
 
-它们是当前电脑的本地工作副本，不是仓库依赖，也不应提交到 GitHub。根目录 `.gitignore` 已忽略 `skills/`。
+它是当前电脑的本地工作副本，不是仓库依赖，也不应提交到 GitHub。根目录 `.gitignore` 已忽略 `skills/`。
 
-如果当前电脑存在这些技能，可在产品规划、架构规划、PRD/backlog 拆分或设计系统规划时先读取对应 `SKILL.md`。若不存在，继续以仓库文档为准，并把新的长期决策写回 `docs/planning/decision-log.md`。
+如果当前电脑存在 `skills/bmad-method/SKILL.md`，可在产品规划、架构规划、PRD/backlog 拆分和 review 前先读取并遵循。若不存在，继续以仓库文档为准，并把新的长期决策写回 `docs/planning/decision-log.md`。
+
+当前 Codex 环境还可能提供 `huashu-design` 和 Android emulator QA skill。涉及 UI、设计系统、主题、token、界面规则、高保真原型、视觉方案、视觉评审或设计变体时，应读取 `huashu-design`，并继续以 `DESIGN.md` 和项目文档作为 TrainFlow 设计真源；涉及 Android UI、APK、截图反馈、交互 smoke 或虚拟设备验证时，应读取 Android emulator QA skill，并使用下方固定 `.local` 虚拟测试环境路径。
+
+## 13. Android 虚拟测试环境
+
+当前开发电脑的默认 Android 虚拟测试环境固定在仓库 `.local/` 下。新 Story 提示词和 Review 提示词不得省略这些路径：
+
+- Android SDK: `C:/Users/25073/Desktop/jianshen/.local/android-sdk`
+- adb: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/platform-tools/adb.exe`
+- emulator: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/emulator/emulator.exe`
+- AVD home: `C:/Users/25073/Desktop/jianshen/.local/android-avd`
+- Android user home: `C:/Users/25073/Desktop/jianshen/.local/android-user`
+- 默认 AVD: `TrainFlow_Pixel_API_36`
+
+涉及 Android UI、执行页、计划页、记录页、APK handoff、真机截图反馈或 smoke 的任务，启动后必须先检查：
+
+```powershell
+.\.local\android-sdk\platform-tools\adb.exe devices
+.\.local\android-sdk\emulator\emulator.exe -list-avds
+```
+
+如果没有 online 设备但 `TrainFlow_Pixel_API_36` 存在，应尝试启动该 AVD 后再判定无法 smoke。截图、UI tree、logcat 只写入 `.local/smoke/<story-id>/`，不得写入 `.local/verification`，也不得提交 `.local/`。

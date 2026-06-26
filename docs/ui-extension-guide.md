@@ -103,7 +103,7 @@ Feature 页面可以调整布局，但必须通过 ViewModel 和 use case 与核
 计划编辑 / 计划详情类 UI polish 还应保留以下语义：
 
 - 计划详情可采用可折叠计划播放列表，但 `开始训练`、编辑、复制和 `删除当前计划` 必须归属当前展开计划卡片，不能放成像作用于全部计划的全局操作。
-- 计划颜色是用户手动设置的计划级颜色，不从首个阶段、目标编排或力量目标组自动推断；社区 layout 可以改变入口样式，但不能改变颜色来源语义。
+- 计划颜色是用户手动设置的计划级颜色，不从首个阶段、阶段内部目标或力量目标组自动推断；社区 layout 可以改变入口样式，但不能改变颜色来源语义。
 - 计时目标、计时内部阶段、力量目标组和计划颜色应复用同一类推荐色 / 更多颜色大色板交互，不能把颜色选择退化为多个难扫描的文字选项。
 - 若某类颜色当前没有持久化字段，UI 可以提供安全展示或后续入口说明，但不得为了 polish 静默新增 Room schema、改变 `WorkoutPlan` / `PlanBlock` 语义或把颜色硬塞进不相干字段。
 - 编辑页 sticky action 若存在，`保存计划` 是主确认动作，`开始训练` 是次级启动动作；不要用红色实心开始按钮盖过保存计划。
@@ -185,7 +185,9 @@ E11.3 后，首版训练执行页不显示心率位、不显示未获取心率�
 
 E14.4 起，功能级 UI polish 还必须先经过视觉方案 gate：先提交 docs-only / mock-only 方案，说明当前问题、方案 A / B、推荐方向、真机确认点和实现拆分；用户确认后，才进入生产代码实现、回归测试、APK 和真机确认。视觉方案阶段不得改 Kotlin / Compose / Room / 测试代码，不得生成实现 APK。
 
-E14.4-2 已确认采用方案 B 做计划编辑 / 详情结构优化，但计时目标编排 + TimerDial 圆环语义必须拆成独立 story 先规划 / 视觉确认。任何 UI shell 或社区 layout 都不得在普通 plan polish 中静默引入外层目标编排 + 内层阶段的新数据结构、Room schema 变更或 TimerDial 外圈语义变更。
+E14.4-2 已确认采用方案 B 做计划编辑 / 详情结构优化，但计时阶段内部目标扩展 + TimerDial 外圈时间比例语义必须拆成独立 story 先规划 / 视觉确认。任何 UI shell 或社区 layout 都不得在普通 plan polish 中静默引入阶段内部目标的新数据结构、Room schema 变更或 TimerDial 外圈语义变更。
+
+E14.4-2b visual / semantic gate 与 E14.4-2b-2 data model decision 已确认阶段内部目标结构是产品语义而不是普通视觉分组。E14.4-2b-3 / E14.4-2b-4 本地实现未通过 review gate，已 rolled back / not accepted；当前生产基线没有已接受的 COMPOSITION_V2 editor-only UI 或 `待执行映射` 入口。未来若重启，社区 UI 仍只能调整表现，不能改变以下语义：轮次与轮间休息仍保持当前编辑器上侧位置；阶段编排仍在下方，且只表示每轮内重复 stageGroups；长期数据方向是 versioned timed composition payload，优先存入现有 `WorkoutPlan.blocks` JSON / `WorkoutSession.planSnapshot` JSON；阶段总时长由内部目标时长求和；阶段折叠头不得塞入目标数、可添加容量或公式文案；展开后的阶段内目标标题行应直接提供添加目标入口，并说明阶段时长来自目标时长相加；目标行的设置 / 收起入口必须和拖拽入口分开；阶段和目标排序以拖拽手柄为主，不显示重复的上移 / 下移备用入口；每个阶段最多 5 个目标；颜色选择位置直接显示色块，不把中文颜色名作为主要选项文字。v2 不得进入 ready gate 或 execution，直到执行映射和 TimerDial mapping 独立 story 落地且通过 review gate。TimerDial 保持原圆盘 UI，若采用新版外圈语义，应表达当前 stage group 内部 targets 并按 planned duration ratio 分段；内圈继续表达整次训练总进度；中心圆继续表达当前 active target / stage 和暂停 / 继续主控制；12 点数字圆标沿用整次执行 timeline 的总阶段数语义，按 warmup + rounds * stageGroups + between-round rests + cooldown 计算；`+15秒` 仍只延长当前 active rest step，不插入新阶段或 target、不修改 plan snapshot、不改变 `timedRestExtensionRecords`。旧计划和旧 snapshot 必须通过兼容 adapter 解释，不能因为 UI skin 或 layout 打开页面就静默改写。
 
 ## 10. UI Skin Review Checklist
 
