@@ -70,19 +70,35 @@ internal fun TimerDial(
     val layoutSpec = skin.timerDialLayoutSpec()
     val currentStageColor = safeState.currentStageColorHex.toComposeColor(tokens.colorFor(safeState.currentStageType))
     val currentStageTextColor = safeState.currentStageTextColorHex.toComposeColor(tokens.textPrimary)
-    val smoothProgressKey = safeState.smoothProgressKey()
-    var smoothProgressElapsedNanos by remember(smoothProgressKey) { mutableLongStateOf(0L) }
-    LaunchedEffect(smoothProgressKey, reduceMotion) {
-        smoothProgressElapsedNanos = 0L
+    val smoothProgressIdentity = safeState.smoothProgressIdentity()
+    val smoothProgressAnchor = safeState.smoothProgressAnchor()
+    var smoothProgressFrameNanos by remember(smoothProgressIdentity, reduceMotion) { mutableLongStateOf(0L) }
+    var smoothProgressAnchorNanos by remember(smoothProgressIdentity, reduceMotion) { mutableLongStateOf(0L) }
+    LaunchedEffect(smoothProgressIdentity, reduceMotion) {
+        smoothProgressFrameNanos = 0L
+        smoothProgressAnchorNanos = 0L
         if (safeState.canProjectSmoothProgress(reduceMotion)) {
             val startedAtNanos = withFrameNanos { frameTimeNanos -> frameTimeNanos }
+            smoothProgressFrameNanos = startedAtNanos
+            smoothProgressAnchorNanos = startedAtNanos
             while (true) {
-                smoothProgressElapsedNanos = withFrameNanos { frameTimeNanos ->
-                    frameTimeNanos - startedAtNanos
-                }
+                smoothProgressFrameNanos = withFrameNanos { frameTimeNanos -> frameTimeNanos }
             }
         }
     }
+    LaunchedEffect(smoothProgressIdentity, smoothProgressAnchor, reduceMotion) {
+        if (safeState.canProjectSmoothProgress(reduceMotion)) {
+            val anchorNanos = smoothProgressFrameNanos.takeIf { frameNanos -> frameNanos > 0L }
+                ?: withFrameNanos { frameTimeNanos -> frameTimeNanos }
+            smoothProgressFrameNanos = anchorNanos
+            smoothProgressAnchorNanos = anchorNanos
+        } else {
+            smoothProgressFrameNanos = 0L
+            smoothProgressAnchorNanos = 0L
+        }
+    }
+    val smoothProgressElapsedNanos = (smoothProgressFrameNanos - smoothProgressAnchorNanos)
+        .coerceAtLeast(0L)
     val smoothProgressElapsedMillis = (smoothProgressElapsedNanos / 1_000_000L)
         .coerceAtMost(TimerDialSmoothProgressMaxMillis)
     val animatedTotalProgress = safeState.projectedTotalProgress(
@@ -404,30 +420,6 @@ internal fun TimerDial(
             }
         }
     }
-}
-
-private data class TimerDialSmoothProgressKey(
-    val totalProgress: Float,
-    val currentStageProgress: Float,
-    val currentStageRemainingSec: Int,
-    val currentSegmentId: String?,
-    val isPaused: Boolean,
-    val canTogglePause: Boolean,
-    val segmentSignature: String
-)
-
-private fun TimerDialUiState.smoothProgressKey(): TimerDialSmoothProgressKey {
-    return TimerDialSmoothProgressKey(
-        totalProgress = totalProgress,
-        currentStageProgress = currentStageProgress,
-        currentStageRemainingSec = currentStageRemainingSec,
-        currentSegmentId = stageSegments.firstOrNull { segment -> segment.isCurrent }?.id,
-        isPaused = isPaused,
-        canTogglePause = canTogglePause,
-        segmentSignature = stageSegments.joinToString(separator = "|") { segment ->
-            "${segment.id}:${segment.durationSec}:${segment.progress}:${segment.isCurrent}"
-        }
-    )
 }
 
 private fun pointOnCircle(

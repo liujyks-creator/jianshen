@@ -16,6 +16,7 @@ import com.liujyks.trainflow.feature.plans.selectPlan
 import com.liujyks.trainflow.ui.theme.SkinRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -409,6 +410,70 @@ class TimerDialUiStateTest {
         assertEquals(0.45f, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
         assertEquals(0.5f, dial.projectedStageProgress(elapsedMillis = 1_000), 0.0001f)
         assertEquals(0.5f, dial.projectedStageProgress(elapsedMillis = 2_500), 0.0001f)
+    }
+
+    @Test
+    fun smoothProgressIdentityStaysStableAcrossSameStageSecondTicks() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val beforeTick = state.toTimedWorkoutSessionScreenState().timerDial
+
+        state = TimedWorkoutEngine.tick(state, seconds = 1).state
+        val afterTick = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(TimerDialStageType.WORK, beforeTick.currentStageType)
+        assertEquals(TimerDialStageType.WORK, afterTick.currentStageType)
+        assertEquals(0.4f, beforeTick.currentStageProgress, 0.0001f)
+        assertEquals(0.5f, afterTick.currentStageProgress, 0.0001f)
+        assertEquals(6, beforeTick.currentStageRemainingSec)
+        assertEquals(5, afterTick.currentStageRemainingSec)
+        assertEquals(beforeTick.smoothProgressIdentity(), afterTick.smoothProgressIdentity())
+        assertNotEquals(beforeTick.smoothProgressAnchor(), afterTick.smoothProgressAnchor())
+    }
+
+    @Test
+    fun smoothProgressIdentityChangesWhenCurrentSegmentChanges() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 6)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 3).state
+        val beforeSwitch = state.toTimedWorkoutSessionScreenState().timerDial
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        val afterSwitch = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertEquals(TimerDialStageType.WORK, beforeSwitch.currentStageType)
+        assertEquals(TimerDialStageType.REST, afterSwitch.currentStageType)
+        assertNotEquals(beforeSwitch.smoothProgressIdentity(), afterSwitch.smoothProgressIdentity())
+    }
+
+    @Test
+    fun smoothProgressIdentityFreezesWhenPausedAndResumesOnSameSegment() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val activeDial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession).state
+        val pausedDial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ResumeSession).state
+        val resumedDial = state.toTimedWorkoutSessionScreenState().timerDial
+
+        assertTrue(activeDial.canProjectSmoothProgress(reduceMotion = false))
+        assertFalse(pausedDial.canProjectSmoothProgress(reduceMotion = false))
+        assertNotEquals(activeDial.smoothProgressIdentity(), pausedDial.smoothProgressIdentity())
+        assertEquals(activeDial.smoothProgressIdentity(), resumedDial.smoothProgressIdentity())
+        assertEquals(activeDial.currentStageProgress, resumedDial.currentStageProgress, 0.0001f)
     }
 
     @Test

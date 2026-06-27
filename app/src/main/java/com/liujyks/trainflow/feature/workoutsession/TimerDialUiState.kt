@@ -460,6 +460,46 @@ private fun Float.safeProgressOf(total: Float): Float {
 
 internal val TimerDialSmoothProgressMaxMillis = TrainFlowMotionTokens.ContinuousProjectionMaxDurationMillis
 
+internal data class TimerDialSmoothProgressIdentity(
+    val currentSegmentId: String?,
+    val isPaused: Boolean,
+    val canTogglePause: Boolean,
+    val isProjectable: Boolean,
+    val segmentStructureSignature: String
+)
+
+internal data class TimerDialSmoothProgressAnchor(
+    val totalProgress: Float,
+    val currentStageProgress: Float,
+    val totalRemainingSec: Int,
+    val currentStageRemainingSec: Int,
+    val segmentProgressSignature: String
+)
+
+internal fun TimerDialUiState.smoothProgressIdentity(): TimerDialSmoothProgressIdentity {
+    return TimerDialSmoothProgressIdentity(
+        currentSegmentId = stageSegments.firstOrNull { segment -> segment.isCurrent }?.id,
+        isPaused = isPaused,
+        canTogglePause = canTogglePause,
+        isProjectable = !isPaused && canTogglePause && currentStageRemainingSec > 0,
+        segmentStructureSignature = stageSegments.joinToString(separator = "|") { segment ->
+            "${segment.id}:${segment.stageType}:${segment.durationSec}:${segment.isCurrent}"
+        }
+    )
+}
+
+internal fun TimerDialUiState.smoothProgressAnchor(): TimerDialSmoothProgressAnchor {
+    return TimerDialSmoothProgressAnchor(
+        totalProgress = totalProgress,
+        currentStageProgress = currentStageProgress,
+        totalRemainingSec = totalRemainingSec,
+        currentStageRemainingSec = currentStageRemainingSec,
+        segmentProgressSignature = stageSegments.joinToString(separator = "|") { segment ->
+            "${segment.id}:${segment.progress}:${segment.isCurrent}"
+        }
+    )
+}
+
 internal fun TimerDialUiState.canProjectSmoothProgress(
     reduceMotion: Boolean = false
 ): Boolean {
