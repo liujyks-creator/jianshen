@@ -1,7 +1,7 @@
 # E14.4-2b-5 Engine Timeline Planning Gate
 
 **Date:** 2026-06-27
-**Status:** Docs-only planning gate complete; implementation not started
+**Status:** Docs-only planning gate complete; E14.4-2b-5a adapter-only implementation completed and awaiting review / commit gate
 
 ## Scope
 
@@ -83,7 +83,7 @@ Read-only source files inspected:
 
 ## Timeline Expansion Plan
 
-Future E14.4-2b-5a should introduce an adapter-owned deterministic timeline model. The adapter should normalize the v2 block first, reject unsupported `compositionVersion`, and produce steps from the immutable plan snapshot rather than from the mutable editor draft.
+E14.4-2b-5a has introduced an adapter-owned deterministic timeline model. The adapter rejects unsupported `compositionVersion`, consumes normalized v2 block data, and produces steps from the immutable v2 payload boundary rather than from the mutable editor draft.
 
 Recommended expansion order:
 
@@ -205,13 +205,14 @@ E12 timed comparable descriptors need a v2 branch before v2 sessions are compare
 ## Recommended Implementation Split
 
 1. **E14.4-2b-5a timeline adapter model/tests**
-   - Pure adapter model and tests only.
-   - Expand normalized v2 payload to deterministic timeline steps and stage instances.
-   - Cover warmup, rounds, stageGroups, targets, internal rest, between-round rest, cooldown, unsupported versions, empty structures, stable ids, and metadata.
-   - No engine integration and no TimerDial production mapping.
+   - Implemented as adapter-only.
+   - Adds a pure `TimedCompositionTimeline` / `TimedCompositionTimelineStep` model and `TimedCompositionTimelineAdapter`.
+   - Expands normalized v2 payload to deterministic timeline steps and stage instances.
+   - Covers warmup, rounds, stageGroups, targets, internal rest, between-round rest, cooldown, unsupported versions, zero-duration boundaries, stable ids, metadata, target / stage instance indexes, order normalization, max-5 target normalization, legacy non-input, and source-boundary guard tests.
+   - No engine integration, no TimerDial production mapping, no v2 start enablement, no Room / command / event / session record changes.
 
 2. **E14.4-2b-5b engine integration**
-   - Route v2 snapshots through the adapter-expanded timeline.
+   - Only after the E14.4-2b-5a review / commit gate, route v2 snapshots through the adapter-expanded timeline.
    - Keep legacy engine behavior unchanged.
    - Keep `WorkoutCommand` / `WorkoutEvent` unchanged unless a separately approved decision says otherwise.
    - Preserve `+15s` active-rest-only semantics and monotonic progress.

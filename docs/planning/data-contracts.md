@@ -381,6 +381,8 @@ E14.4-2b-4 restart status: 计时编辑 UI 已连接 editor draft adapter，保�
 
 E14.4-2b-5 planning gate status: `docs/testing/e14-4-2b-5-engine-timeline-planning-gate.md` 已完成 docs-only timeline planning。该 gate 只定义 future adapter expansion、stable metadata、legacy/v2 coexistence、rest extension、snapshot/record impact、TimerDial input 和 E12 impact，不实现 engine 或 TimerDial，不改 session record / Room schema。
 
+E14.4-2b-5a timeline adapter status: 当前 Android 基线已新增 pure `TimedCompositionTimeline` adapter model 和 focused unit tests。该 adapter 只接受 `TimedCompositionBlock` v2 payload，先校验 `compositionVersion == 2`，再消费 existing model normalization，展开 deterministic timeline steps / stage instances，并输出 stable metadata。它不接入 `TimedWorkoutEngine`、TimerDial、UI route、Room schema、`WorkoutCommand` / `WorkoutEvent` 或 session record model；legacy `TimedCircuitBlock` 仍继续走现有 engine path。
+
 概念结构：
 
 ```ts
@@ -453,9 +455,9 @@ Execution mapping rules:
 - If `cooldownSec > 0`, append one cooldown stage after all rounds.
 - `+15s` still means extending the current active rest step; it does not insert a target, does not change the plan, and does not rewrite the snapshot.
 
-Future adapter metadata rules:
+Adapter metadata rules:
 
-- v2 execution should expand through an adapter-owned deterministic timeline model before engine or TimerDial consumption.
+- v2 execution should expand through the adapter-owned deterministic timeline model before any future engine or TimerDial consumption.
 - Each executable step must carry metadata that can be reconstructed from `WorkoutSession.planSnapshot`: `compositionVersion`, `compositionBlockId`, deterministic `timelineStageId`, `timelineStageKind`, `stageGroupId`, `targetId`, `targetKind`, `roundIndex`, `stageGroupIndex`, `targetIndex`, `stageInstanceIndex`, `targetInstanceIndex`, `plannedDurationSec`, `displayName`, `colorHex`, optional `iconKey`, and resolved `cueSettings`.
 - `stageGroupId` / `targetId` are source ids for real stage groups and targets. Warmup, cooldown, and between-round rests use deterministic synthetic ids in the adapter timeline only; they must not be written back into the v2 payload as user-authored targets.
 - Step ids should be deterministic and include enough metadata to let session records and E12 descriptors reconstruct the same timeline from the historical snapshot.

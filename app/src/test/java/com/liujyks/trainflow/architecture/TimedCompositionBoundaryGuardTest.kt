@@ -39,6 +39,39 @@ class TimedCompositionBoundaryGuardTest {
         )
     }
 
+    @Test
+    fun timelineAdapterTermsStayOutOfEngineTimerDialAndRouteSources() {
+        val sourceRoot = sourceRoot()
+        val scannedPaths = listOf(
+            sourceRoot.resolve("core/engine"),
+            sourceRoot.resolve("feature/workoutsession"),
+            sourceRoot.resolve("feature/timer"),
+            sourceRoot.resolve("feature/plans/TimedPlanEditorRoute.kt"),
+            sourceRoot.resolve("feature/plans/PlanManagementRoute.kt"),
+            sourceRoot.resolve("feature/plans/PlanManagementUiState.kt")
+        )
+        val blockedTerms = listOf(
+            "TimedCompositionTimeline",
+            "TimedCompositionTimelineAdapter",
+            "timelineStageId",
+            "targetInstanceIndex"
+        )
+        val violations = scannedPaths.flatMap { path ->
+            val files = if (Files.isDirectory(path)) {
+                Files.walk(path).filter { file -> file.toString().endsWith(".kt") }.toList()
+            } else {
+                listOf(path)
+            }
+            files.flatMap { file -> blockedTerms.violationsIn(file) }
+        }
+
+        assertTrue(
+            "Timeline adapter terms must not enter engine, TimerDial, or route sources:\n" +
+                violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
     private fun List<String>.violationsIn(file: Path): List<String> {
         if (!Files.exists(file)) return emptyList()
         val text = Files.readAllBytes(file).toString(Charsets.UTF_8)
