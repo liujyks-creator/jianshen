@@ -12,6 +12,7 @@ import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -298,6 +299,8 @@ private fun WorkoutPlan.toListItem(selected: Boolean): PlanListItemUiState {
 private fun WorkoutPlan.toDetailState(
     notificationPermissionState: PlanReminderNotificationPermissionState
 ): PlanDetailUiState {
+    val hasTimedCompositionPayload = hasTimedCompositionPayload()
+    val timedCanStart = mode == WorkoutMode.TIMED && !hasTimedCompositionPayload
     return PlanDetailUiState(
         id = id,
         title = title,
@@ -311,12 +314,16 @@ private fun WorkoutPlan.toDetailState(
         sections = detailSections(),
         reminder = toReminderUiState(notificationPermissionState),
         editStatus = when (mode) {
-            WorkoutMode.TIMED -> "可编辑已保存的阶段、轮次、颜色、图标和提醒设置，并保存回同一个本地计划。"
+            WorkoutMode.TIMED -> if (hasTimedCompositionPayload) {
+                "可编辑已保存的阶段编排；执行映射完成前不会开放开始训练。"
+            } else {
+                "可编辑已保存的阶段、轮次、颜色、图标和提醒设置，并保存回同一个本地计划。"
+            }
             WorkoutMode.STRENGTH -> "可编辑已保存的动作、目标、组、休息和逐组计划，并保存回同一个本地计划。"
             WorkoutMode.FOLLOW_ALONG -> "跟练完整编排未进入本阶段，因此不提供假编辑入口。"
         },
         startStatus = when (mode) {
-            WorkoutMode.TIMED -> "开始计时训练"
+            WorkoutMode.TIMED -> if (hasTimedCompositionPayload) "待执行映射完成后可开始" else "开始计时训练"
             WorkoutMode.STRENGTH -> "开始力量训练"
             WorkoutMode.FOLLOW_ALONG -> "跟练计划保存待完整编排"
         },
@@ -326,7 +333,7 @@ private fun WorkoutPlan.toDetailState(
             WorkoutMode.FOLLOW_ALONG -> "待完整编排"
         },
         canEditPlan = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH,
-        canStartTraining = mode == WorkoutMode.TIMED || mode == WorkoutMode.STRENGTH
+        canStartTraining = timedCanStart || mode == WorkoutMode.STRENGTH
     )
 }
 
@@ -338,17 +345,35 @@ private fun WorkoutPlan.planMetrics(): List<PlanMetricUiState> {
     }
     return when (mode) {
         WorkoutMode.TIMED -> {
-            val circuits = blocks.filterIsInstance<TimedCircuitBlock>()
-            val restValues = circuits.flatMap { block ->
-                block.items.mapNotNull { it.restAfterSec } + listOfNotNull(block.restBetweenRoundsSec)
-            } + blocks.filterIsInstance<RestBlock>().map { it.durationSec }
-            listOf(
-                PlanMetricUiState("阶段", "${circuits.sumOf { it.items.size }} 个"),
-                PlanMetricUiState("轮次", "${circuits.sumOf { it.rounds }} 轮"),
-                PlanMetricUiState("时长", estimatedTimedDurationSec().formatDuration()),
-                PlanMetricUiState("休息", restValues.distinct().toMetricDuration()),
-                PlanMetricUiState("提醒", reminderValue)
-            )
+            val compositions = blocks.filterIsInstance<TimedCompositionBlock>()
+            if (compositions.isNotEmpty()) {
+                val restValues = compositions.flatMap { block ->
+                    block.stageGroups.flatMap { group ->
+                        group.targets
+                            .filter { target -> target.kind == TimedCompositionTargetKind.REST }
+                            .map { target -> target.durationSec }
+                    } + listOf(block.restBetweenRoundsSec)
+                }
+                listOf(
+                    PlanMetricUiState("阶段", "${compositions.sumOf { it.stageGroups.size }} 个"),
+                    PlanMetricUiState("轮次", "${compositions.sumOf { it.rounds }} 轮"),
+                    PlanMetricUiState("时长", estimatedTimedDurationSec().formatDuration()),
+                    PlanMetricUiState("休息", restValues.filter { it > 0 }.distinct().toMetricDuration()),
+                    PlanMetricUiState("提醒", reminderValue)
+                )
+            } else {
+                val circuits = blocks.filterIsInstance<TimedCircuitBlock>()
+                val restValues = circuits.flatMap { block ->
+                    block.items.mapNotNull { it.restAfterSec } + listOfNotNull(block.restBetweenRoundsSec)
+                } + blocks.filterIsInstance<RestBlock>().map { it.durationSec }
+                listOf(
+                    PlanMetricUiState("阶段", "${circuits.sumOf { it.items.size }} 个"),
+                    PlanMetricUiState("轮次", "${circuits.sumOf { it.rounds }} 轮"),
+                    PlanMetricUiState("时长", estimatedTimedDurationSec().formatDuration()),
+                    PlanMetricUiState("休息", restValues.distinct().toMetricDuration()),
+                    PlanMetricUiState("提醒", reminderValue)
+                )
+            }
         }
 
         WorkoutMode.STRENGTH -> {
@@ -398,9 +423,14 @@ private fun WorkoutMode.modeBadge(): String {
 private fun WorkoutPlan.planSummary(): String {
     return when (mode) {
         WorkoutMode.TIMED -> {
-            val circuitCount = blocks.filterIsInstance<TimedCircuitBlock>().sumOf { it.items.size }
-            val rounds = blocks.filterIsInstance<TimedCircuitBlock>().sumOf { it.rounds }
-            "$circuitCount 个阶段 · $rounds 轮 · 预计 ${estimatedTimedDurationSec().formatDuration()}"
+            val compositions = blocks.filterIsInstance<TimedCompositionBlock>()
+            if (compositions.isNotEmpty()) {
+                "${compositions.sumOf { it.stageGroups.size }} 个阶段 · ${compositions.sumOf { it.rounds }} 轮 · 预计 ${estimatedTimedDurationSec().formatDuration()}"
+            } else {
+                val circuitCount = blocks.filterIsInstance<TimedCircuitBlock>().sumOf { it.items.size }
+                val rounds = blocks.filterIsInstance<TimedCircuitBlock>().sumOf { it.rounds }
+                "$circuitCount 个阶段 · $rounds 轮 · 预计 ${estimatedTimedDurationSec().formatDuration()}"
+            }
         }
 
         WorkoutMode.STRENGTH -> {
@@ -415,10 +445,14 @@ private fun WorkoutPlan.planSummary(): String {
 private fun WorkoutPlan.planDetailSummary(): String {
     return when (mode) {
         WorkoutMode.TIMED -> {
-            val cue = preferences?.cueSettings
-            val actionCue = cue?.actionEnding?.thresholdSec?.let { "阶段提醒 ${it}秒" } ?: "阶段提醒未设"
-            val restCue = cue?.restEnding?.thresholdSec?.let { "休息提醒 ${it}秒" } ?: "休息提醒关闭"
-            "$actionCue · $restCue"
+            if (hasTimedCompositionPayload()) {
+                "阶段编排已保存 · 待执行映射"
+            } else {
+                val cue = preferences?.cueSettings
+                val actionCue = cue?.actionEnding?.thresholdSec?.let { "阶段提醒 ${it}秒" } ?: "阶段提醒未设"
+                val restCue = cue?.restEnding?.thresholdSec?.let { "休息提醒 ${it}秒" } ?: "休息提醒关闭"
+                "$actionCue · $restCue"
+            }
         }
 
         WorkoutMode.STRENGTH -> {
@@ -486,7 +520,10 @@ private fun WorkoutPlan.timedDetailSections(): List<PlanDetailSectionUiState> {
             is RestBlock -> "休息 · ${block.durationSec.formatDuration()}"
             is CooldownBlock -> "冷却 · ${block.durationSec?.formatDuration() ?: "按动作"}"
             is StrengthExerciseBlock -> "力量动作 · ${block.exerciseLabel()}"
-            is TimedCompositionBlock -> "暂不展示的计划结构"
+            is TimedCompositionBlock -> {
+                val groupRows = block.stageGroups.joinToString("、") { group -> group.name }
+                "阶段编排 · ${block.stageGroups.size} 个阶段 · ${block.rounds} 轮 · $groupRows"
+            }
         }
     }
 
@@ -546,9 +583,17 @@ private fun WorkoutPlan.estimatedTimedDurationSec(): Int {
             is CooldownBlock -> block.durationSec ?: block.items.sumTimedItemsOnce()
             is RestBlock -> block.durationSec
             is StrengthExerciseBlock -> 0
-            is TimedCompositionBlock -> 0
+            is TimedCompositionBlock -> {
+                val repeatedDuration = block.stageGroups.sumOf { group -> group.durationSec }
+                block.warmupSec + block.cooldownSec + repeatedDuration * block.rounds +
+                    block.restBetweenRoundsSec * (block.rounds - 1).coerceAtLeast(0)
+            }
         }
     }
+}
+
+private fun WorkoutPlan.hasTimedCompositionPayload(): Boolean {
+    return blocks.any { block -> block is TimedCompositionBlock }
 }
 
 private fun List<TimedExerciseItem>.sumTimedItemsOnce(): Int {

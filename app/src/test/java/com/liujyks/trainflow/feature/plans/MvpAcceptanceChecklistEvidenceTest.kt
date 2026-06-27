@@ -38,16 +38,18 @@ class MvpAcceptanceChecklistEvidenceTest {
             "src/main/java/com/liujyks/trainflow/feature/plans/StrengthPlanEditorRoute.kt"
         )
 
-        assertTrue(timedRoute.contains("计时训练不再选择动作库动作"))
+        assertTrue(timedRoute.contains("编辑计时计划"))
         assertTrue(strengthRoute.contains("可直接开始当前草稿，也可保存为本地计划后从计划详情再次启动"))
-        assertTrue(timedRoute.contains("长按阶段卡右侧"))
-        assertTrue(timedRoute.contains("上移 / 下移保留为备用排序路径"))
+        assertTrue(timedRoute.contains("BaseTimeAndRoundsCard"))
+        assertTrue(timedRoute.contains("startDisabledReason = uiState.startDisabledReason"))
         assertTrue(timedRoute.contains("onSaveTimedPlan"))
         assertTrue(strengthRoute.contains("onSaveStrengthPlan"))
         val stickyActions = sourceFile("src/main/java/com/liujyks/trainflow/feature/plans/PlanEditorStickyActions.kt")
         assertTrue(stickyActions.contains("保存计划"))
         assertTrue(stickyActions.contains("PlanEditorStickyActionReserveHeight"))
         assertTrue(stickyActions.contains("containerColor = TrainFlowPrimary"))
+        assertTrue(stickyActions.contains(".height(48.dp)"))
+        assertFalse(stickyActions.contains(".height(38.dp)"))
         assertFalse(timedRoute.contains("真实保存后续接入"))
         assertFalse(strengthRoute.contains("真实计划保存后续接入"))
         assertFalse(timedRoute.contains("训练执行引擎、真实保存和记录闭环留给后续 story"))
@@ -90,16 +92,25 @@ class MvpAcceptanceChecklistEvidenceTest {
     }
 
     @Test
-    fun timedStageCardsExposeCollapsedExpandedPatternWithoutCompositionModelChange() {
+    fun timedStageAndTargetCardsExposeAcceptedCompositionEditorPattern() {
         val timedRoute = sourceFile(
             "src/main/java/com/liujyks/trainflow/feature/plans/TimedPlanEditorRoute.kt"
         )
+        val editorState = sourceFile(
+            "src/main/java/com/liujyks/trainflow/feature/plans/TimedCompositionPlanEditorUiState.kt"
+        )
 
         assertTrue(timedRoute.contains("expandedStageIds"))
-        assertTrue(timedRoute.contains("点按展开设置"))
+        assertTrue(timedRoute.contains("expandedTargetIds"))
+        assertTrue(timedRoute.contains("TimedCompositionStageCard"))
+        assertTrue(timedRoute.contains("TimedCompositionTargetRow"))
         assertTrue(timedRoute.contains("if (expanded)"))
-        assertFalse(timedRoute.contains("outer target"))
-        assertFalse(timedRoute.contains("inner stage"))
+        assertTrue(editorState.contains("TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP"))
+        assertTrue(editorState.contains("EXPORT_V2_PAYLOAD"))
+        assertFalse(timedRoute.contains("2/5 目标"))
+        assertFalse(timedRoute.contains("动作 45s / 休息 15s"))
+        assertFalse(timedRoute.contains("可再加 3 个"))
+        assertFalse(timedRoute.contains("60s = 45s + 15s"))
     }
 
     @Test

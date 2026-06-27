@@ -1,8 +1,17 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -13,8 +22,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.model.WorkoutPlan
@@ -43,6 +57,8 @@ import com.liujyks.trainflow.feature.settings.defaultTrainingPreferencesScreenSt
 import com.liujyks.trainflow.feature.workoutsession.FollowAlongWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 
 @Composable
 internal fun TrainFlowApp(
@@ -398,21 +414,67 @@ private fun OfficialBottomBar(
     currentDestination: OfficialShellDestination,
     onDestinationSelected: (OfficialShellDestination) -> Unit
 ) {
-    NavigationBar {
-        officialShellNavigationEntries(currentDestination)
-            .forEach { entry ->
-                val destination = entry.destination
-                NavigationBarItem(
-                    selected = entry.selected,
-                    enabled = entry.enabled,
-                    onClick = { onDestinationSelected(destination) },
-                    icon = {
-                        Text(text = destination.shortLabel)
-                    },
-                    label = {
-                        Text(text = destination.label)
-                    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(horizontal = 18.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            officialShellNavigationEntries(currentDestination)
+                .forEach { entry ->
+                    val destination = entry.destination
+                    CompactBottomDestination(
+                        label = destination.label,
+                        shortLabel = destination.shortLabel,
+                        selected = entry.selected,
+                        enabled = entry.enabled,
+                        onClick = { onDestinationSelected(destination) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+        }
+    }
+}
+
+@Composable
+private fun CompactBottomDestination(
+    label: String,
+    shortLabel: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val contentColor = if (selected) TrainFlowPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = label }
+                .clickable(enabled = enabled, onClick = onClick),
+            shape = RoundedCornerShape(24.dp),
+            color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = shortLabel,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor
                 )
             }
+        }
     }
 }

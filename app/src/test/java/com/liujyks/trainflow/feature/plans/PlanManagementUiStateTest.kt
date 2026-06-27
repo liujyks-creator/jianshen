@@ -9,6 +9,7 @@ import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissi
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.ui.theme.SkinRegistry
 import java.time.Instant
 import java.time.ZoneId
@@ -163,6 +164,21 @@ class PlanManagementUiStateTest {
         assertTrue(detail.canEditPlan)
         assertEquals("编辑计时计划", detail.editActionLabel)
         assertEquals("开始计时训练", detail.startStatus)
+    }
+
+    @Test
+    fun timedCompositionPlanDetailKeepsStartTrainingDisabledUntilMappingExists() {
+        val v2Plan = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-plan")
+            .toWorkoutPlan(timestamp = "2026-06-27T01:00:00Z")
+        val state = PlanManagementScreenState(plans = listOf(v2Plan)).selectPlan(v2Plan.id)
+        val detail = requireNotNull(state.selectedDetail)
+
+        assertTrue(v2Plan.blocks.single() is TimedCompositionBlock)
+        assertTrue(detail.canEditPlan)
+        assertFalse(detail.canStartTraining)
+        assertEquals("待执行映射完成后可开始", detail.startStatus)
+        assertTrue(detail.detailSummary.contains("待执行映射"))
+        assertTrue(detail.sections.flatMap { it.rows }.joinToString(" ").contains("阶段编排"))
     }
 
     @Test

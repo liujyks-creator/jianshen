@@ -9,12 +9,12 @@ import org.junit.Test
 
 class TimedCompositionBoundaryGuardTest {
     @Test
-    fun compositionV2TermsStayOutOfExecutionTimerDialAndComposeRouteSources() {
+    fun compositionV2TermsStayOutOfExecutionAndTimerDialSources() {
         val sourceRoot = sourceRoot()
         val scannedPaths = listOf(
             sourceRoot.resolve("core/engine"),
             sourceRoot.resolve("feature/workoutsession"),
-            sourceRoot.resolve("feature/plans/TimedPlanEditorRoute.kt")
+            sourceRoot.resolve("feature/timer")
         )
         val blockedTerms = listOf(
             "TimedComposition",
@@ -33,7 +33,7 @@ class TimedCompositionBoundaryGuardTest {
         }
 
         assertTrue(
-            "Timed composition v2 terms must not enter execution, TimerDial, or Compose route sources:\n" +
+            "Timed composition v2 terms must not enter execution or TimerDial sources:\n" +
                 violations.joinToString("\n"),
             violations.isEmpty()
         )

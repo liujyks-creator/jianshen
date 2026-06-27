@@ -1,14 +1,14 @@
 # E14.4-2b-2 Timed Composition Data Model Decision
 
 **Date:** 2026-06-25
-**Status:** Decision accepted as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted
+**Status:** Decision accepted as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI visual/code gate implemented
 **Scope:** Timed composition persistence, compatibility, execution timeline semantics, TimerDial mapping, and E12 history trend impact
 
-**Process note:** Before any further implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local work did not pass review gate and has been rolled back. The accepted E14.4-2b-3 restart starts from the planning documents and implements only model / serializer / editor adapter foundation. Do not continue to E14.4-2b-5 / E14.4-2b-6 from the old rolled-back worktree state.
+**Process note:** Before any further implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local work did not pass review gate and has been rolled back. The accepted E14.4-2b-3 restart starts from the planning documents and implements only model / serializer / editor adapter foundation. The accepted E14.4-2b-4 restart implements only editor UI and editor draft adapter wiring. Do not continue to E14.4-2b-5 / E14.4-2b-6 from the old rolled-back worktree state or from the editor UI story.
 
 ## Boundaries
 
-This document records the E14.4-2b-2 decision. The later old E14.4-2b-3 / E14.4-2b-4 local implementation attempts are not accepted and have been rolled back; they must not be treated as completed implementation slices. The accepted E14.4-2b-3 restart implements only the foundation described below and does not authorize UI, engine, TimerDial, Room migration, command/event, session record, sound, or heart-rate behavior changes.
+This document records the E14.4-2b-2 decision. The later old E14.4-2b-3 / E14.4-2b-4 local implementation attempts are not accepted and have been rolled back; they must not be treated as completed implementation slices. The accepted E14.4-2b-3 restart implements only the foundation described below. The accepted E14.4-2b-4 restart implements only editor UI and editor draft adapter wiring. Neither slice authorizes engine, TimerDial, Room migration, command/event, session record, sound, or heart-rate behavior changes.
 
 This decision does not change `WorkoutCommand`, `WorkoutEvent`, sound cue semantics, session record semantics, `timedRestExtensionRecords`, heart-rate boundaries, or training interruption logic.
 
@@ -73,17 +73,21 @@ The prior local E14.4-2b-3 implementation was rolled back and is not accepted. T
 
 Timeline execution expansion, TimerDial outer-ring mapping, E12 trend-key use, and old snapshot rewriting remain unimplemented.
 
-## E14.4-2b-4 Stopped / Rolled Back / Not Accepted
+## E14.4-2b-4 Editor UI Visual/Code Gate
 
-E14.4-2b-4 attempted an editor-only UI over the draft contract, but the local implementation was stopped, rolled back, and is not accepted. The visual direction remains planning guidance only:
+E14.4-2b-4 restart implements the accepted editor-only UI over the draft contract:
 
-- future editor UI should keep top timing / rounds configuration separate from repeated stage groups;
-- future stage groups should default collapsed and show compact target editing after expansion;
-- each stage group should remain capped at 5 targets;
-- future v2 start must remain disabled until execution mapping exists;
-- legacy plan ordinary save must not silently convert to v2.
+- editor UI keeps top `热身` / `放松` / `轮次` / `轮间休息` in one compact `基础时间与轮次` card;
+- repeated stage groups live under `阶段编排`;
+- collapsed stage cards show only swatch, stage name, stage total duration, expand/collapse, and drag handle;
+- expanded stage cards expose stage name, color, derived total duration, target list, add target, copy, and delete;
+- target rows support collapsed / expanded settings, separate settings and drag handles, and the max-5-targets-per-stage rule;
+- save exports editor-side composition v2 payload through the draft adapter;
+- v2 `开始训练` remains disabled / gated until execution mapping exists;
+- plan detail also keeps saved v2 composition plans non-executable.
+- compact bottom navigation labels `训 / 计 / 动 / 录` are retained only as small-screen editor polish; destination and training semantics are unchanged.
 
-No accepted production code currently provides this editor UI.
+Deferred from this slice: complex drag animation, full large-palette reuse for all target colors, advanced cue settings, complete target-kind icon library, engine timeline expansion, TimerDial production mapping, session record semantics, Room schema migration, sound semantics, and heart-rate UI / input / statistics.
 
 ## Options Compared
 
@@ -400,8 +404,8 @@ Recommended sequence:
 1. **E14.4-2b-3 serializer / model and editor adapter foundation**
    Restart implemented. Scope is limited to pure model, serializer, compatibility wrapper / editor draft adapter, and focused tests. It does not add UI, execution, TimerDial, Room migration, E12 trend-key consumption, or APK output.
 
-2. **E14.4-2b-4 editor UI implementation**
-   Stopped and rolled back / not accepted. Do not continue from the prior local UI implementation.
+2. **E14.4-2b-4 editor UI visual/code gate**
+   Implemented as editor-only UI and editor draft adapter wiring. It does not authorize runtime execution, TimerDial production mapping, Room migration, E12 trend-key consumption, or APK release claims beyond the smoke evidence for this story.
 
 3. **E14.4-2b-5 TimedWorkoutEngine timeline mapping**
    Expand composition v2 into deterministic timeline steps, preserve ready gate, pause/resume, skip, final countdown, sound cue event semantics, and `+15s` active rest semantics.

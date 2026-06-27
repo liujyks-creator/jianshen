@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,8 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -49,11 +50,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.liujyks.trainflow.core.model.TimedCircuitBlock
-import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
@@ -77,8 +79,11 @@ internal fun TimedPlanEditorRoute(
     }
     var uiState by remember(initialPlan?.id) {
         mutableStateOf(
-            initialPlan?.toTimedPlanEditorState(defaults = planEditorDefaults)
-                ?: buildDefaultTimedPlanEditorState(defaults = planEditorDefaults)
+            initialPlan?.toTimedCompositionPlanEditorState(defaults = planEditorDefaults)
+                ?: buildDefaultTimedCompositionPlanEditorState(
+                    planId = draftPlanId,
+                    defaults = planEditorDefaults
+                )
         )
     }
 
@@ -87,45 +92,45 @@ internal fun TimedPlanEditorRoute(
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
         onDescriptionChanged = { uiState = uiState.updateDescription(it) },
+        onWarmupChanged = { uiState = uiState.updateWarmupText(it) },
+        onCooldownChanged = { uiState = uiState.updateCooldownText(it) },
         onRoundsChanged = { uiState = uiState.updateRoundsText(it) },
         onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRoundsText(it) },
-        onActionCueThresholdChanged = { uiState = uiState.updateActionCueThresholdText(it) },
-        onRestCueThresholdChanged = { uiState = uiState.updateRestCueThresholdText(it) },
-        onActionCueEnabledChanged = { uiState = uiState.updateActionCueEnabled(it) },
-        onRestCueEnabledChanged = { uiState = uiState.updateRestCueEnabled(it) },
-        onSoundEnabledChanged = { uiState = uiState.updateSoundEnabled(it) },
-        onVibrationEnabledChanged = { uiState = uiState.updateVibrationEnabled(it) },
-        onEmphasisAnimationEnabledChanged = { uiState = uiState.updateEmphasisAnimationEnabled(it) },
         onStageNameChanged = { stageId, name -> uiState = uiState.updateStageName(stageId, name) },
-        onStageDurationChanged = { stageId, seconds -> uiState = uiState.updateStageDurationText(stageId, seconds) },
-        onStageTypeChanged = { stageId, type -> uiState = uiState.updateStageType(stageId, type) },
         onStageColorChanged = { stageId, colorHex -> uiState = uiState.updateStageColor(stageId, colorHex) },
         onCopyStage = { stageId -> uiState = uiState.copyStage(stageId) },
         onRemoveStage = { stageId -> uiState = uiState.removeStage(stageId) },
-        onMoveStageUp = { stageId -> uiState = uiState.moveStageUp(stageId) },
-        onMoveStageDown = { stageId -> uiState = uiState.moveStageDown(stageId) },
         onReorderStages = { stageIds -> uiState = uiState.reorderStages(stageIds) },
-        onAddStage = { type -> uiState = uiState.addStage(type) },
+        onAddStage = { uiState = uiState.addStage() },
+        onAddTarget = { stageId -> uiState = uiState.addTarget(stageId) },
+        onRemoveTarget = { stageId, targetId -> uiState = uiState.removeTarget(stageId, targetId) },
+        onTargetNameChanged = { stageId, targetId, name ->
+            uiState = uiState.updateTargetName(stageId, targetId, name)
+        },
+        onTargetDurationChanged = { stageId, targetId, seconds ->
+            uiState = uiState.updateTargetDurationText(stageId, targetId, seconds)
+        },
+        onTargetColorChanged = { stageId, targetId, colorHex ->
+            uiState = uiState.updateTargetColor(stageId, targetId, colorHex)
+        },
+        onCopyTarget = { stageId, targetId ->
+            uiState = uiState.copyTarget(stageId, targetId)
+        },
+        onMoveTarget = { stageId, fromIndex, toIndex ->
+            uiState = uiState.moveTarget(stageId, fromIndex, toIndex)
+        },
         onSaveDraft = {
             if (uiState.canSave) {
-                val plan = uiState.toWorkoutPlan(
-                    planId = draftPlanId,
-                    timestamp = Instant.now().toString()
-                )
+                val plan = uiState.toWorkoutPlan(timestamp = Instant.now().toString())
                 onSaveTimedPlan(plan)
                 uiState = uiState.markPlanSaved(plan)
             } else {
-                uiState = uiState.saveDraftPlan(planId = draftPlanId)
+                uiState = uiState.saveDraftPlan()
             }
         },
         onStartTimedPlan = {
             if (uiState.canStartTraining) {
-                onStartTimedPlan(
-                    uiState.toWorkoutPlan(
-                        planId = uiState.sourcePlanId ?: "plan-timed-editor-start",
-                        timestamp = DefaultTimedPlanTimestamp
-                    )
-                )
+                onStartTimedPlan(uiState.toWorkoutPlan(timestamp = DefaultTimedPlanTimestamp))
             }
         },
         modifier = modifier
@@ -134,29 +139,27 @@ internal fun TimedPlanEditorRoute(
 
 @Composable
 private fun TimedPlanEditorScreen(
-    uiState: TimedPlanEditorScreenState,
+    uiState: TimedCompositionPlanEditorScreenState,
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
     onDescriptionChanged: (String) -> Unit,
+    onWarmupChanged: (String) -> Unit,
+    onCooldownChanged: (String) -> Unit,
     onRoundsChanged: (String) -> Unit,
     onRestBetweenRoundsChanged: (String) -> Unit,
-    onActionCueThresholdChanged: (String) -> Unit,
-    onRestCueThresholdChanged: (String) -> Unit,
-    onActionCueEnabledChanged: (Boolean) -> Unit,
-    onRestCueEnabledChanged: (Boolean) -> Unit,
-    onSoundEnabledChanged: (Boolean) -> Unit,
-    onVibrationEnabledChanged: (Boolean) -> Unit,
-    onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
     onStageNameChanged: (String, String) -> Unit,
-    onStageDurationChanged: (String, String) -> Unit,
-    onStageTypeChanged: (String, TimedStageType) -> Unit,
     onStageColorChanged: (String, String) -> Unit,
     onCopyStage: (String) -> Unit,
     onRemoveStage: (String) -> Unit,
-    onMoveStageUp: (String) -> Unit,
-    onMoveStageDown: (String) -> Unit,
     onReorderStages: (List<String>) -> Unit,
-    onAddStage: (TimedStageType) -> Unit,
+    onAddStage: () -> Unit,
+    onAddTarget: (String) -> Unit,
+    onRemoveTarget: (String, String) -> Unit,
+    onTargetNameChanged: (String, String, String) -> Unit,
+    onTargetDurationChanged: (String, String, String) -> Unit,
+    onTargetColorChanged: (String, String, String) -> Unit,
+    onCopyTarget: (String, String) -> Unit,
+    onMoveTarget: (String, Int, Int) -> Unit,
     onSaveDraft: () -> Unit,
     onStartTimedPlan: () -> Unit,
     modifier: Modifier = Modifier
@@ -168,8 +171,16 @@ private fun TimedPlanEditorScreen(
     var draggedStageTargetIndex by remember { mutableStateOf(-1) }
     var draggedStageOffsetY by remember { mutableStateOf(0f) }
     var draggedStageHeightPx by remember { mutableStateOf(1) }
-    var colorPickerStage by remember { mutableStateOf<TimedPlanEditorStageUiState?>(null) }
-    var expandedStageIds by rememberSaveable(uiState.stages.map { it.id }.joinToString("|")) {
+    var colorPickerStage by remember { mutableStateOf<TimedCompositionStageGroupEditorUiState?>(null) }
+    var colorPickerTarget by remember {
+        mutableStateOf<Pair<String, TimedCompositionTargetEditorUiState>?>(null)
+    }
+    var expandedStageIds by rememberSaveable(uiState.stageGroups.map { it.id }.joinToString("|")) {
+        mutableStateOf(emptyList<String>())
+    }
+    var expandedTargetIds by rememberSaveable(
+        uiState.stageGroups.flatMap { group -> group.targets.map { target -> target.id } }.joinToString("|")
+    ) {
         mutableStateOf(emptyList<String>())
     }
 
@@ -189,13 +200,12 @@ private fun TimedPlanEditorScreen(
         draggedStageOffsetY += deltaY
         if (stageId != null && sourceOrderIds != null && startIndex in sourceOrderIds.indices) {
             if (sourceOrderIds[startIndex] == stageId) {
-                val toIndex = draggedItemTargetIndex(
+                draggedStageTargetIndex = draggedItemTargetIndex(
                     fromIndex = startIndex,
                     dragOffsetPx = draggedStageOffsetY,
                     itemHeightPx = draggedStageHeightPx,
                     lastIndex = sourceOrderIds.lastIndex
                 )
-                draggedStageTargetIndex = toIndex
             }
         }
     }
@@ -207,24 +217,18 @@ private fun TimedPlanEditorScreen(
         resetStageDrag()
     }
 
-    val displayedStages = uiState.stages
+    val displayedStages = uiState.stageGroups
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(TrainFlowSurfaceMuted)
-                .padding(horizontal = 20.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 14.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                TextButton(onClick = onBackToHome) {
-                    Text(text = "返回训练首页")
-                }
-            }
-
-            item {
-                TimedPlanEditorHeader(uiState)
+                TimedPlanEditorHeader(onBackToHome = onBackToHome)
             }
 
             item {
@@ -236,15 +240,17 @@ private fun TimedPlanEditorScreen(
             }
 
             item {
-                CircuitSettingsCard(
+                BaseTimeAndRoundsCard(
                     uiState = uiState,
+                    onWarmupChanged = onWarmupChanged,
+                    onCooldownChanged = onCooldownChanged,
                     onRoundsChanged = onRoundsChanged,
                     onRestBetweenRoundsChanged = onRestBetweenRoundsChanged
                 )
             }
 
             item {
-                SectionTitle(text = "阶段编排")
+                SectionTitle(text = "阶段编排 · 轮内重复 · 默认折叠")
             }
 
             itemsIndexed(displayedStages, key = { _, stage -> stage.id }) { index, stage ->
@@ -261,13 +267,15 @@ private fun TimedPlanEditorScreen(
                         itemGapPx = dragItemGapPx
                     )
                 }
-                TimedStageEditorCard(
+
+                TimedCompositionStageCard(
                     modifier = (if (isStageDragging) Modifier else Modifier.animateItem())
                         .graphicsLayer { translationY = placeholderShiftY.toFloat() },
                     stage = stage,
                     index = index,
                     totalCount = displayedStages.size,
                     expanded = stageExpanded,
+                    expandedTargetIds = expandedTargetIds,
                     onExpandedChanged = { expanded ->
                         expandedStageIds = if (expanded) {
                             (expandedStageIds + stage.id).distinct()
@@ -275,22 +283,31 @@ private fun TimedPlanEditorScreen(
                             expandedStageIds - stage.id
                         }
                     },
+                    onTargetExpandedChanged = { targetId, expanded ->
+                        expandedTargetIds = if (expanded) {
+                            (expandedTargetIds + targetId).distinct()
+                        } else {
+                            expandedTargetIds - targetId
+                        }
+                    },
                     onNameChanged = { name -> onStageNameChanged(stage.id, name) },
-                    onDurationChanged = { seconds -> onStageDurationChanged(stage.id, seconds) },
-                    onStageTypeChanged = { type -> onStageTypeChanged(stage.id, type) },
                     onOpenColorPicker = { colorPickerStage = stage },
                     onCopy = { onCopyStage(stage.id) },
                     onRemove = { onRemoveStage(stage.id) },
-                    onMoveUp = { onMoveStageUp(stage.id) },
-                    onMoveDown = { onMoveStageDown(stage.id) },
-                    canMoveUp = index > 0,
-                    canMoveDown = index < displayedStages.lastIndex,
-                    isDragging = isStageDragging,
-                    dragOffsetY = if (isStageDragging) {
-                        draggedStageOffsetY
-                    } else {
-                        0f
+                    onAddTarget = { onAddTarget(stage.id) },
+                    canAddTarget = uiState.canAddTarget(stage.id),
+                    onRemoveTarget = { targetId -> onRemoveTarget(stage.id, targetId) },
+                    onTargetNameChanged = { targetId, name -> onTargetNameChanged(stage.id, targetId, name) },
+                    onTargetDurationChanged = { targetId, seconds ->
+                        onTargetDurationChanged(stage.id, targetId, seconds)
                     },
+                    onTargetColorPicker = { target -> colorPickerTarget = stage.id to target },
+                    onCopyTarget = { targetId -> onCopyTarget(stage.id, targetId) },
+                    onMoveTarget = { fromTargetIndex, toTargetIndex ->
+                        onMoveTarget(stage.id, fromTargetIndex, toTargetIndex)
+                    },
+                    isDragging = isStageDragging,
+                    dragOffsetY = if (isStageDragging) draggedStageOffsetY else 0f,
                     onDragStarted = { cardHeightPx ->
                         draggedStageId = stage.id
                         draggedStageOrderIds = displayedStages.map { displayedStage -> displayedStage.id }
@@ -310,22 +327,7 @@ private fun TimedPlanEditorScreen(
             }
 
             item {
-                CueSettingsCard(
-                    uiState = uiState,
-                    onActionCueThresholdChanged = onActionCueThresholdChanged,
-                    onRestCueThresholdChanged = onRestCueThresholdChanged,
-                    onActionCueEnabledChanged = onActionCueEnabledChanged,
-                    onRestCueEnabledChanged = onRestCueEnabledChanged,
-                    onSoundEnabledChanged = onSoundEnabledChanged,
-                    onVibrationEnabledChanged = onVibrationEnabledChanged,
-                    onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged
-                )
-            }
-
-            item {
-                SaveAndPreviewCard(
-                    uiState = uiState
-                )
+                SaveAndPreviewCard(uiState = uiState)
             }
 
             item {
@@ -338,13 +340,16 @@ private fun TimedPlanEditorScreen(
             onStartTraining = onStartTimedPlan,
             saveEnabled = uiState.canSave,
             startEnabled = uiState.canStartTraining,
+            startDisabledReason = uiState.startDisabledReason,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 
     colorPickerStage?.let { stage ->
-        StageColorPickerDialog(
-            stage = stage,
+        ColorPickerDialog(
+            title = "选择阶段颜色",
+            currentText = "${stage.name} 当前为 ${stage.toStageColorPickerUiState().selectedColorName}。",
+            picker = stage.toStageColorPickerUiState(),
             onDismiss = { colorPickerStage = null },
             onColorSelected = { colorHex ->
                 onStageColorChanged(stage.id, colorHex)
@@ -352,68 +357,121 @@ private fun TimedPlanEditorScreen(
             }
         )
     }
+    colorPickerTarget?.let { (stageId, target) ->
+        ColorPickerDialog(
+            title = "选择目标颜色",
+            currentText = "${target.name} 当前为 ${target.toStageColorPickerUiState().selectedColorName}。",
+            picker = target.toStageColorPickerUiState(),
+            onDismiss = { colorPickerTarget = null },
+            onColorSelected = { colorHex ->
+                onTargetColorChanged(stageId, target.id, colorHex)
+                colorPickerTarget = null
+            }
+        )
+    }
 }
 
 @Composable
-private fun TimedPlanEditorHeader(uiState: TimedPlanEditorScreenState) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusPill(text = "E10.2 纯间歇计时", color = TrainFlowAccent, contentColor = TrainFlowPrimary)
+private fun TimedPlanEditorHeader(onBackToHome: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable(onClick = onBackToHome),
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, TrainFlowNeutral100)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("‹", style = MaterialTheme.typography.headlineSmall, color = TrainFlowPrimary)
+            }
+        }
         Text(
-            text = "计时训练编辑",
-            style = MaterialTheme.typography.headlineLarge,
+            text = "编辑计时计划",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground
         )
-        Text(
-            text = uiState.summary,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = "热身、工作、休息、自定义和放松都可拖动排序。计时训练不再选择动作库动作。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TrainFlowNeutral700
-        )
+        Surface(
+            modifier = Modifier.size(48.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, TrainFlowNeutral100)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("•••", style = MaterialTheme.typography.titleLarge, color = TrainFlowPrimary)
+            }
+        }
     }
 }
 
 @Composable
 private fun PlanBasicsCard(
-    uiState: TimedPlanEditorScreenState,
+    uiState: TimedCompositionPlanEditorScreenState,
     onTitleChanged: (String) -> Unit,
     onDescriptionChanged: (String) -> Unit
 ) {
     EditorCard {
-        SectionTitle(text = "基础信息")
-        OutlinedTextField(
-            value = uiState.title,
-            onValueChange = onTitleChanged,
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("计划名称") },
-            singleLine = true
-        )
-        OutlinedTextField(
-            value = uiState.description,
-            onValueChange = onDescriptionChanged,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("计划描述") },
-            minLines = 2
-        )
-        Text(
-            text = "主题色 ${uiState.themeColorHex}，阶段颜色可在阶段卡中选择。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TrainFlowNeutral700
-        )
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = uiState.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "热身 + ${uiState.rounds} 轮 x ${uiState.stageGroups.size} 阶段 + ${uiState.rounds - 1} 次轮休 + 放松 · 总阶段 ${uiState.totalTimelineStageCount()}",
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TrainFlowNeutral700
+                )
+            }
+            StatusPill(text = "草稿", color = TrainFlowNeutral100, contentColor = TrainFlowPrimary)
+        }
     }
 }
 
 @Composable
-private fun CircuitSettingsCard(
-    uiState: TimedPlanEditorScreenState,
+private fun BaseTimeAndRoundsCard(
+    uiState: TimedCompositionPlanEditorScreenState,
+    onWarmupChanged: (String) -> Unit,
+    onCooldownChanged: (String) -> Unit,
     onRoundsChanged: (String) -> Unit,
     onRestBetweenRoundsChanged: (String) -> Unit
 ) {
     EditorCard {
-        SectionTitle(text = "轮次与轮间休息")
+        SectionTitle(text = "基础时间与轮次")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            NumberField(
+                label = "热身",
+                value = uiState.warmupText,
+                onValueChanged = onWarmupChanged,
+                modifier = Modifier.weight(1f)
+            )
+            NumberField(
+                label = "放松",
+                value = uiState.cooldownText,
+                onValueChanged = onCooldownChanged,
+                modifier = Modifier.weight(1f)
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(
                 label = "轮数",
@@ -422,7 +480,7 @@ private fun CircuitSettingsCard(
                 modifier = Modifier.weight(1f)
             )
             NumberField(
-                label = "轮间休息秒数",
+                label = "轮间休息",
                 value = uiState.restBetweenRoundsText,
                 onValueChanged = onRestBetweenRoundsChanged,
                 modifier = Modifier.weight(1f)
@@ -432,23 +490,27 @@ private fun CircuitSettingsCard(
 }
 
 @Composable
-private fun TimedStageEditorCard(
+private fun TimedCompositionStageCard(
     modifier: Modifier = Modifier,
-    stage: TimedPlanEditorStageUiState,
+    stage: TimedCompositionStageGroupEditorUiState,
     index: Int,
     totalCount: Int,
     expanded: Boolean,
+    expandedTargetIds: List<String>,
     onExpandedChanged: (Boolean) -> Unit,
+    onTargetExpandedChanged: (String, Boolean) -> Unit,
     onNameChanged: (String) -> Unit,
-    onDurationChanged: (String) -> Unit,
-    onStageTypeChanged: (TimedStageType) -> Unit,
     onOpenColorPicker: () -> Unit,
     onCopy: () -> Unit,
     onRemove: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
+    onAddTarget: () -> Unit,
+    canAddTarget: Boolean,
+    onRemoveTarget: (String) -> Unit,
+    onTargetNameChanged: (String, String) -> Unit,
+    onTargetDurationChanged: (String, String) -> Unit,
+    onTargetColorPicker: (TimedCompositionTargetEditorUiState) -> Unit,
+    onCopyTarget: (String) -> Unit,
+    onMoveTarget: (Int, Int) -> Unit,
     isDragging: Boolean,
     dragOffsetY: Float,
     onDragStarted: (Int) -> Unit,
@@ -476,145 +538,444 @@ private fun TimedStageEditorCard(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            ColorSwatchButton(
+                colorHex = stage.colorHex,
+                size = 34.dp,
+                contentDescription = "修改阶段颜色，当前 ${stage.colorHex}",
+                onClick = onOpenColorPicker
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onExpandedChanged(!expanded) },
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StageSwatch(stage.colorHex)
-                    Text(
-                        text = "${index + 1}. ${stage.typeLabel}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Text(
-                    text = "图标 ${stage.iconKey} · ${stage.durationSec.formatDuration()} · ${if (expanded) "已展开" else "点按展开设置"}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            TextButton(onClick = { onExpandedChanged(!expanded) }) {
-                Text(if (expanded) "收起" else "展开")
-            }
-            StageDragHandle(
-                enabled = totalCount > 1,
-                isDragging = isDragging,
-                onDragStarted = { onDragStarted(cardHeightPx) },
-                onDragChanged = onDragChanged,
-                onDragStopped = onDragStopped,
-                onDragCanceled = onDragCanceled
-            )
-        }
-
-        if (expanded) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onMoveUp, enabled = canMoveUp) { Text("上移") }
-                TextButton(onClick = onMoveDown, enabled = canMoveDown) { Text("下移") }
-            }
-
-            OutlinedTextField(
-                value = stage.name,
-                onValueChange = onNameChanged,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("阶段名称") },
-                singleLine = true
-            )
-            NumberField(
-                label = "阶段秒数",
-                value = stage.durationText,
-                onValueChanged = onDurationChanged,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TimedStageTypeOptions.forEach { option ->
-                    FilterChip(
-                        selected = stage.stageType == option.stageType,
-                        onClick = { onStageTypeChanged(option.stageType) },
-                        label = { Text(option.label) }
-                    )
-                }
-            }
-            Text(
-                text = "阶段类型会同步图标；热身 / 放松只是默认模板阶段，也可以移动位置。",
-                style = MaterialTheme.typography.bodySmall,
-                color = TrainFlowNeutral700
-            )
-            StageColorPickerEntry(stage = stage, onOpenColorPicker = onOpenColorPicker)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
-                    Text("复制")
-                }
-                OutlinedButton(onClick = onRemove, enabled = totalCount > 1, modifier = Modifier.weight(1f)) {
-                    Text("删除")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StageColorPickerEntry(
-    stage: TimedPlanEditorStageUiState,
-    onOpenColorPicker: () -> Unit
-) {
-    val picker = stage.toStageColorPickerUiState()
-
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = TrainFlowSurfaceMuted,
-        border = BorderStroke(1.dp, TrainFlowNeutral100),
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics {
-                contentDescription = "阶段颜色，${picker.selectedColorName}，${picker.selectedColorHex}"
-            }
-            .clickable(onClick = onOpenColorPicker)
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StageSwatch(stage.colorHex)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = "阶段颜色",
-                    style = MaterialTheme.typography.labelLarge,
+                    text = "阶段${index.toChineseOrdinal()}·${stage.name}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "${picker.selectedColorName} · ${picker.selectedColorHex}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral700
+                    text = stage.durationSec.formatSecondsLabel(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(
-                onClick = onOpenColorPicker,
-                modifier = Modifier.align(Alignment.CenterVertically)
+            Row(
+                modifier = Modifier.width(84.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("选择")
+                TogglePill(
+                    text = if (expanded) "收起" else "展开",
+                    onClick = { onExpandedChanged(!expanded) },
+                    modifier = Modifier.weight(1f)
+                )
+                StageDragHandle(
+                    enabled = totalCount > 1,
+                    isDragging = isDragging,
+                    onDragStarted = { onDragStarted(cardHeightPx) },
+                    onDragChanged = onDragChanged,
+                    onDragStopped = onDragStopped,
+                    onDragCanceled = onDragCanceled
+                )
+            }
+        }
+
+        if (expanded) {
+            Column(
+                modifier = Modifier.padding(start = 42.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CompactTextField(
+                    label = "阶段名称",
+                    value = stage.name,
+                    onValueChanged = onNameChanged,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DerivedDurationBar(
+                    label = "阶段总时长",
+                    value = stage.durationSec.formatSecondsLabel()
+                )
+                SectionTitle(text = "阶段内目标")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    stage.targets.forEachIndexed { targetIndex, target ->
+                        TimedCompositionTargetRow(
+                            target = target,
+                            index = targetIndex,
+                            totalCount = stage.targets.size,
+                            expanded = target.id in expandedTargetIds,
+                            onExpandedChanged = { targetExpanded ->
+                                onTargetExpandedChanged(target.id, targetExpanded)
+                            },
+                            onNameChanged = { name -> onTargetNameChanged(target.id, name) },
+                            onDurationChanged = { seconds -> onTargetDurationChanged(target.id, seconds) },
+                            onColorPicker = { onTargetColorPicker(target) },
+                            onCopy = { onCopyTarget(target.id) },
+                            onRemove = { onRemoveTarget(target.id) },
+                            canCopy = canAddTarget,
+                            canRemove = stage.targets.size > 1,
+                            onMove = { toIndex -> onMoveTarget(targetIndex, toIndex) }
+                        )
+                    }
+                }
+                CompactIconButton(
+                    symbol = "+",
+                    contentDescription = if (canAddTarget) "增加目标，最多 5 个" else "已达 5 个目标",
+                    onClick = onAddTarget,
+                    enabled = canAddTarget,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CompactIconButton(
+                        symbol = "⧉",
+                        contentDescription = "复制阶段，按相同参数新增阶段",
+                        onClick = onCopy,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactIconButton(
+                        symbol = "×",
+                        contentDescription = "删除阶段",
+                        onClick = onRemove,
+                        enabled = totalCount > 1,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StageSwatch(colorHex: String) {
+private fun TimedCompositionTargetRow(
+    target: TimedCompositionTargetEditorUiState,
+    index: Int,
+    totalCount: Int,
+    expanded: Boolean,
+    onExpandedChanged: (Boolean) -> Unit,
+    onNameChanged: (String) -> Unit,
+    onDurationChanged: (String) -> Unit,
+    onColorPicker: () -> Unit,
+    onCopy: () -> Unit,
+    onRemove: () -> Unit,
+    canCopy: Boolean,
+    canRemove: Boolean,
+    onMove: (Int) -> Unit
+) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ColorSwatchButton(
+                    colorHex = target.colorHex,
+                    size = 30.dp,
+                    contentDescription = "修改目标颜色，当前 ${target.colorHex}",
+                    onClick = onColorPicker
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onExpandedChanged(!expanded) },
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    Text(
+                        text = "${(index + 1).toString().padStart(2, '0')} ${target.name}",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Row(
+                    modifier = Modifier.width(124.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DurationPill(text = target.durationSec.formatSecondsLabel(), modifier = Modifier.weight(1f))
+                    TogglePill(
+                        text = if (expanded) "收起" else "设置",
+                        onClick = { onExpandedChanged(!expanded) },
+                        modifier = Modifier.width(42.dp)
+                    )
+                    TargetDragHandle(
+                        canMoveUp = index > 0,
+                        canMoveDown = index < totalCount - 1,
+                        onMoveUp = { onMove(index - 1) },
+                        onMoveDown = { onMove(index + 1) }
+                    )
+                }
+            }
+
+            if (expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 40.dp, end = 8.dp, bottom = 7.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        CompactTextField(
+                            label = "目标名称",
+                            value = target.name,
+                            onValueChanged = onNameChanged,
+                            modifier = Modifier.weight(1f)
+                        )
+                        NumberInputField(
+                            label = "时长",
+                            value = target.durationText,
+                            onValueChanged = onDurationChanged,
+                            modifier = Modifier.weight(0.78f)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.End)
+                    ) {
+                        CompactIconButton(
+                            symbol = "⧉",
+                            contentDescription = if (canCopy) {
+                                "复制目标，按相同参数新增到下方"
+                            } else {
+                                "已达 5 个目标，无法复制目标"
+                            },
+                            onClick = onCopy,
+                            enabled = canCopy,
+                            modifier = Modifier.width(52.dp)
+                        )
+                        CompactIconButton(
+                            symbol = "×",
+                            contentDescription = "删除目标",
+                            onClick = onRemove,
+                            enabled = canRemove,
+                            modifier = Modifier.width(52.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactIconButton(
+    symbol: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val contentColor = if (enabled) TrainFlowNeutral700 else TrainFlowNeutral700.copy(alpha = 0.42f)
+    Surface(
+        modifier = modifier
+            .height(38.dp)
+            .semantics { this.contentDescription = contentDescription }
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = symbol,
+                maxLines = 1,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactTextField(
+    label: String,
+    value: String,
+    onValueChanged: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.sizeIn(minHeight = 62.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = TrainFlowSurfaceMuted,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = TrainFlowNeutral700
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChanged,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun NumberInputField(
+    label: String,
+    value: String,
+    onValueChanged: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.sizeIn(minHeight = 62.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = TrainFlowSurfaceMuted,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = TrainFlowNeutral700
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = { input -> onValueChanged(input.sanitizeIntegerInput()) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+                Text(text = "秒", style = MaterialTheme.typography.labelLarge, color = TrainFlowNeutral700)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DerivedDurationBar(
+    label: String,
+    value: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFFF1FAF6),
+        border = BorderStroke(1.dp, Color(0xFFCFE8DC))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF18382C)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF18382C)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DurationPill(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.sizeIn(minHeight = 38.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun TogglePill(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .sizeIn(minHeight = 38.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFFEEF4F1)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF253A31)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatch(
+    colorHex: String,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
         color = colorHex.toComposeColor(),
-        modifier = Modifier
-            .padding(start = 10.dp, top = 10.dp, bottom = 10.dp)
-            .size(34.dp),
+        modifier = modifier.size(size),
         border = BorderStroke(1.dp, TrainFlowNeutral100)
     ) {
         Box(contentAlignment = Alignment.Center) {}
@@ -622,12 +983,34 @@ private fun StageSwatch(colorHex: String) {
 }
 
 @Composable
-private fun StageColorPickerDialog(
-    stage: TimedPlanEditorStageUiState,
+private fun ColorSwatchButton(
+    colorHex: String,
+    size: Dp,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = colorHex.toComposeColor(),
+        modifier = modifier
+            .size(size)
+            .semantics { this.contentDescription = contentDescription }
+            .clickable(onClick = onClick),
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Box(contentAlignment = Alignment.Center) {}
+    }
+}
+
+@Composable
+private fun ColorPickerDialog(
+    title: String,
+    currentText: String,
+    picker: StageColorPickerUiState,
     onDismiss: () -> Unit,
     onColorSelected: (String) -> Unit
 ) {
-    val picker = stage.toStageColorPickerUiState()
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -636,12 +1019,12 @@ private fun StageColorPickerDialog(
             }
         },
         title = {
-            Text("选择阶段颜色")
+            Text(title)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
-                    text = "${stage.name} 当前为 ${picker.selectedColorName}。",
+                    text = currentText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = TrainFlowNeutral700
                 )
@@ -693,14 +1076,14 @@ private fun StageColorSwatchButton(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(8.dp),
         color = option.hex.toComposeColor(),
         border = BorderStroke(
             width = if (option.selected) 3.dp else 1.dp,
             color = if (option.selected) TrainFlowPrimary else TrainFlowNeutral100
         ),
         modifier = Modifier
-            .size(50.dp)
+            .size(52.dp)
             .semantics {
                 contentDescription = option.contentDescription
                 stateDescription = if (option.selected) "已选中" else "未选中"
@@ -718,23 +1101,20 @@ private fun StageColorSwatchButton(
 }
 
 @Composable
-private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
+private fun AddTimedStageCard(onAddStage: () -> Unit) {
     EditorCard {
-        SectionTitle(text = "添加阶段")
         Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            TimedStageTypeOptions.forEach { option ->
-                FilterChip(
-                    selected = false,
-                    onClick = { onAddStage(option.stageType) },
-                    label = { Text("+ ${option.label}") }
-                )
+            SectionTitle(text = "添加阶段")
+            OutlinedButton(onClick = onAddStage) {
+                Text("+ 阶段")
             }
         }
         Text(
-            text = "长按阶段卡右侧“拖动”手柄可拖拽排序；跨过相邻卡片一半高度时会实时换位，上移 / 下移保留为备用排序路径。",
+            text = "阶段内最多 ${TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP} 个目标。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -742,57 +1122,7 @@ private fun AddTimedStageCard(onAddStage: (TimedStageType) -> Unit) {
 }
 
 @Composable
-private fun CueSettingsCard(
-    uiState: TimedPlanEditorScreenState,
-    onActionCueThresholdChanged: (String) -> Unit,
-    onRestCueThresholdChanged: (String) -> Unit,
-    onActionCueEnabledChanged: (Boolean) -> Unit,
-    onRestCueEnabledChanged: (Boolean) -> Unit,
-    onSoundEnabledChanged: (Boolean) -> Unit,
-    onVibrationEnabledChanged: (Boolean) -> Unit,
-    onEmphasisAnimationEnabledChanged: (Boolean) -> Unit
-) {
-    EditorCard {
-        SectionTitle(text = "临近结束提醒")
-        ToggleRow(
-            title = "阶段临近结束提醒",
-            checked = uiState.actionCue.enabled,
-            onCheckedChange = onActionCueEnabledChanged
-        )
-        NumberField(
-            label = "阶段提醒阈值秒数",
-            value = uiState.actionCue.thresholdText,
-            onValueChanged = onActionCueThresholdChanged,
-            modifier = Modifier.fillMaxWidth()
-        )
-        ToggleRow(
-            title = "休息临近结束提醒",
-            checked = uiState.restCue.enabled,
-            onCheckedChange = onRestCueEnabledChanged
-        )
-        NumberField(
-            label = "休息提醒阈值秒数",
-            value = uiState.restCue.thresholdText,
-            onValueChanged = onRestCueThresholdChanged,
-            modifier = Modifier.fillMaxWidth()
-        )
-        ToggleRow("声音", uiState.actionCue.soundEnabled && uiState.restCue.soundEnabled, onSoundEnabledChanged)
-        ToggleRow("震动", uiState.actionCue.vibrationEnabled && uiState.restCue.vibrationEnabled, onVibrationEnabledChanged)
-        ToggleRow(
-            "强化动画",
-            uiState.actionCue.emphasisAnimationEnabled && uiState.restCue.emphasisAnimationEnabled,
-            onEmphasisAnimationEnabledChanged
-        )
-        Text(
-            text = "固定阶段词 cue 仅保留边界；当前不实现语音、TTS 或音频资源。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TrainFlowNeutral700
-        )
-    }
-}
-
-@Composable
-private fun SaveAndPreviewCard(uiState: TimedPlanEditorScreenState) {
+private fun SaveAndPreviewCard(uiState: TimedCompositionPlanEditorScreenState) {
     EditorCard {
         SectionTitle(text = "计划预览")
         Text(
@@ -801,29 +1131,26 @@ private fun SaveAndPreviewCard(uiState: TimedPlanEditorScreenState) {
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
         )
+        Text(
+            text = "热身 ${uiState.warmupSec.formatDuration()} · 放松 ${uiState.cooldownSec.formatDuration()} · 轮间休息 ${uiState.restBetweenRoundsSec.formatDuration()}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         uiState.statusMessage?.let { message ->
             Text(message, style = MaterialTheme.typography.bodyMedium, color = TrainFlowNeutral700)
         }
         uiState.validationMessage?.let { message ->
             Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
-
         uiState.savedPlan?.let { plan ->
-            val circuit = plan.blocks.filterIsInstance<TimedCircuitBlock>().singleOrNull()
             Text(
-                text = "已保存：计时训练 · ${circuit?.items?.size ?: 0} 个训练阶段 · ${circuit?.rounds ?: 1} 轮 · 预计 ${uiState.estimatedDurationSec.formatDuration()}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "阶段提醒 ${plan.preferences?.cueSettings?.actionEnding?.thresholdSec} 秒；休息提醒 ${plan.preferences?.cueSettings?.restEnding?.thresholdSec} 秒。",
+                text = "已保存：${plan.title} · ${uiState.stageGroups.size} 个阶段 · ${uiState.rounds} 轮",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
         Text(
-            text = "保存和开始训练操作固定在底部操作区，预览卡仅用于确认计划摘要、校验状态和保存结果。",
+            text = "预览卡仅用于确认计划摘要，保存和开始训练操作固定在底部操作区。",
             style = MaterialTheme.typography.bodySmall,
             color = TrainFlowNeutral700
         )
@@ -847,25 +1174,6 @@ private fun NumberField(
 }
 
 @Composable
-private fun ToggleRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
 private fun StageDragHandle(
     enabled: Boolean,
     isDragging: Boolean,
@@ -881,7 +1189,7 @@ private fun StageDragHandle(
     }
     Surface(
         modifier = Modifier
-            .sizeIn(minWidth = 56.dp, minHeight = 48.dp)
+            .sizeIn(minWidth = 30.dp, minHeight = 38.dp)
             .semantics { contentDescription = "阶段拖拽排序手柄" }
             .stageDragHandleGestures(
                 enabled = enabled,
@@ -889,19 +1197,63 @@ private fun StageDragHandle(
                 onDragChanged = onDragChanged,
                 onDragStopped = onDragStopped,
                 onDragCanceled = onDragCanceled
-            ),
+        ),
         shape = RoundedCornerShape(8.dp),
-        color = containerColor,
-        border = BorderStroke(1.dp, TrainFlowNeutral100)
+        color = containerColor
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 11.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "拖动",
-                style = MaterialTheme.typography.labelMedium,
+                text = "≡",
+                style = MaterialTheme.typography.titleMedium,
                 color = if (enabled) TrainFlowNeutral700 else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetDragHandle(
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
+) {
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    Surface(
+        modifier = Modifier
+            .sizeIn(minWidth = 34.dp, minHeight = 44.dp)
+            .semantics { contentDescription = "目标拖拽排序手柄" }
+            .pointerInput(canMoveUp, canMoveDown) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { dragOffsetY = 0f },
+                    onDragEnd = {
+                        when {
+                            dragOffsetY < -24f && canMoveUp -> onMoveUp()
+                            dragOffsetY > 24f && canMoveDown -> onMoveDown()
+                        }
+                        dragOffsetY = 0f
+                    },
+                    onDragCancel = { dragOffsetY = 0f },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        dragOffsetY += dragAmount.y
+                    }
+                )
+            },
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "≡",
+                style = MaterialTheme.typography.titleLarge,
+                color = if (canMoveUp || canMoveDown) TrainFlowNeutral700 else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -935,13 +1287,13 @@ private fun EditorCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, TrainFlowNeutral100)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             content = content
         )
     }
@@ -971,6 +1323,33 @@ private fun StatusPill(
         )
     }
 }
+
+private fun Int.formatSecondsLabel(): String = "${this}s"
+
+private fun Int.toChineseOrdinal(): String {
+    return when (this + 1) {
+        1 -> "一"
+        2 -> "二"
+        3 -> "三"
+        4 -> "四"
+        5 -> "五"
+        6 -> "六"
+        7 -> "七"
+        8 -> "八"
+        9 -> "九"
+        10 -> "十"
+        else -> (this + 1).toString()
+    }
+}
+
+private fun TimedCompositionPlanEditorScreenState.totalTimelineStageCount(): Int {
+    return warmupSec.positiveStageCount() +
+        cooldownSec.positiveStageCount() +
+        (stageGroups.size * rounds) +
+        ((rounds - 1).coerceAtLeast(0) * restBetweenRoundsSec.positiveStageCount())
+}
+
+private fun Int.positiveStageCount(): Int = if (this > 0) 1 else 0
 
 private fun String.toComposeColor(defaultColor: Color = TrainFlowAccent): Color {
     return runCatching { Color(android.graphics.Color.parseColor(this)) }
