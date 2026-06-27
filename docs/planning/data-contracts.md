@@ -383,6 +383,8 @@ E14.4-2b-5 planning gate status: `docs/testing/e14-4-2b-5-engine-timeline-planni
 
 E14.4-2b-5a timeline adapter status: 当前 Android 基线已新增 pure `TimedCompositionTimeline` adapter model 和 focused unit tests。该 adapter 只接受 `TimedCompositionBlock` v2 payload，先校验 `compositionVersion == 2`，再消费 existing model normalization，展开 deterministic timeline steps / stage instances，并输出 stable metadata。它不接入 `TimedWorkoutEngine`、TimerDial、UI route、Room schema、`WorkoutCommand` / `WorkoutEvent` 或 session record model；legacy `TimedCircuitBlock` 仍继续走现有 engine path。
 
+E14.4-2b-5b engine integration planning status: `docs/testing/e14-4-2b-5b-engine-integration-planning-gate.md` 已完成 docs-only source-boundary audit。结论是未来最小 bridge 应放在 `TimedWorkoutEngine` 的 snapshot-to-step 构造边界，由 `TimedCompositionTimelineAdapter` 展开 v2 block，再转换为现有 `TimedSessionStep`；legacy `TimedCircuitBlock` 路径保持不变，v2 `开始训练` 仍需等 bridge tests / implementation gate 通过后才开放。第一版 bridge 不新增 Room 字段、不改 `WorkoutCommand` / `WorkoutEvent`、不改 session record model，也不做 TimerDial production mapping。
+
 概念结构：
 
 ```ts
@@ -463,6 +465,7 @@ Adapter metadata rules:
 - Step ids should be deterministic and include enough metadata to let session records and E12 descriptors reconstruct the same timeline from the historical snapshot.
 - Legacy timed plans continue through the current `TimedCircuitBlock` engine path. v2 plans remain not startable until adapter and engine integration are implemented.
 - Default contract decision: do not add persisted `SessionStepRecord`, `TimedRestExtensionRecord`, Room table, or Room column fields for v2 metadata in this gate. If a later implementation requires explicit persisted composition metadata beyond deterministic ids and snapshot reconstruction, split a separate migration / compatibility story first.
+- First bridge strategy: preserve adapter step ids as engine step ids where possible, map `compositionBlockId` to `TimedSessionStep.blockId`, and map real or synthetic v2 target ids to `TimedSessionStep.itemId` so rest-extension and E12 descriptors can reconstruct richer metadata from the historical snapshot.
 
 TimerDial mapping rules:
 

@@ -1,7 +1,7 @@
 # E14.4-2b-5 Engine Timeline Planning Gate
 
 **Date:** 2026-06-27
-**Status:** Docs-only planning gate complete; E14.4-2b-5a adapter-only implementation completed and awaiting review / commit gate
+**Status:** Docs-only planning gate complete; E14.4-2b-5a adapter-only implementation pushed as `6888e31`; E14.4-2b-5b engine integration planning gate documented separately
 
 ## Scope
 
@@ -205,14 +205,15 @@ E12 timed comparable descriptors need a v2 branch before v2 sessions are compare
 ## Recommended Implementation Split
 
 1. **E14.4-2b-5a timeline adapter model/tests**
-   - Implemented as adapter-only.
+   - Implemented and pushed as `6888e31`, adapter-only.
    - Adds a pure `TimedCompositionTimeline` / `TimedCompositionTimelineStep` model and `TimedCompositionTimelineAdapter`.
    - Expands normalized v2 payload to deterministic timeline steps and stage instances.
    - Covers warmup, rounds, stageGroups, targets, internal rest, between-round rest, cooldown, unsupported versions, zero-duration boundaries, stable ids, metadata, target / stage instance indexes, order normalization, max-5 target normalization, legacy non-input, and source-boundary guard tests.
    - No engine integration, no TimerDial production mapping, no v2 start enablement, no Room / command / event / session record changes.
 
-2. **E14.4-2b-5b engine integration**
-   - Only after the E14.4-2b-5a review / commit gate, route v2 snapshots through the adapter-expanded timeline.
+2. **E14.4-2b-5b engine integration planning**
+   - Documented in `docs/testing/e14-4-2b-5b-engine-integration-planning-gate.md`.
+   - Plan to route v2 snapshots through the adapter-expanded timeline at the engine construction boundary in a later implementation story.
    - Keep legacy engine behavior unchanged.
    - Keep `WorkoutCommand` / `WorkoutEvent` unchanged unless a separately approved decision says otherwise.
    - Preserve `+15s` active-rest-only semantics and monotonic progress.

@@ -1,7 +1,7 @@
 # E14.4-2b-5a Timeline Adapter Model / Tests
 
 **Date:** 2026-06-27
-**Status:** Implemented; awaiting code review / commit gate
+**Status:** Implemented and pushed as `6888e31`; closed for E14.4-2b-5b planning handoff
 
 ## Scope
 
@@ -86,4 +86,4 @@ Added focused unit coverage for:
 
 ## Boundary
 
-The adapter is a future engine-integration input only. E14.4-2b-5b must explicitly wire the existing engine to this timeline after a separate review / commit gate. E14.4-2b-6 TimerDial mapping must consume the adapter-expanded timeline later and must not parse raw v2 JSON directly.
+The adapter is a future engine-integration input only. E14.4-2b-5b documents how the existing engine should later consume this timeline without changing legacy execution, commands/events, records, or TimerDial in the planning gate. The next implementation step is E14.4-2b-5b-1 engine adapter bridge tests; E14.4-2b-6 TimerDial mapping must consume the adapter-expanded timeline later and must not parse raw v2 JSON directly.

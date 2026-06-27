@@ -1909,7 +1909,7 @@ stepsCompleted:
 
 ### Story E14.4: Feature UI polish batches
 
-**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition visual / semantic gate and data model decision retained; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate complete; E14.4-2b-5a timeline adapter model/tests implemented and awaiting review / commit gate; E14.4-2b-5b / 5c and E14.4-2b-6 not started
+**状态:** In progress; E14.4-1 training execution common polish implemented and real-device checked; E14.4-2 low-coupling plan edit / detail polish implemented; E14.4-2b timed composition visual / semantic gate and data model decision retained; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate complete; E14.4-2b-5a timeline adapter model/tests implemented and pushed as `6888e31`; E14.4-2b-5b engine integration planning gate complete; E14.4-2b-5b implementation / 5c and E14.4-2b-6 not started
 
 建议分批顺序：
 
@@ -1946,9 +1946,9 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 ### Story E14.4-2b: Timed composition editor and TimerDial ring semantics
 
-**状态:** Visual / semantic gate retained; E14.4-2b-1 visual prototype / mock retained in `.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/index.html`; TimerDial existing UI overlay correction retained in `.local/smoke/e14-4-2b-timerdial-existing-ui-overlay/index.html`; E14.4-2b-2 data model decision retained in `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`; E14.4-2b-3 restart serializer / model and editor adapter foundation implemented; E14.4-2b-4 editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate documented in `docs/testing/e14-4-2b-5-engine-timeline-planning-gate.md`; E14.4-2b-5a timeline adapter model/tests implemented as adapter-only and awaiting review / commit gate
+**状态:** Visual / semantic gate retained; E14.4-2b-1 visual prototype / mock retained in `.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/index.html`; TimerDial existing UI overlay correction retained in `.local/smoke/e14-4-2b-timerdial-existing-ui-overlay/index.html`; E14.4-2b-2 data model decision retained in `docs/testing/e14-4-2b-timed-composition-data-model-decision.md`; E14.4-2b-3 restart serializer / model and editor adapter foundation implemented; E14.4-2b-4 editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate documented in `docs/testing/e14-4-2b-5-engine-timeline-planning-gate.md`; E14.4-2b-5a timeline adapter model/tests implemented as adapter-only and pushed as `6888e31`; E14.4-2b-5b engine integration planning gate documented in `docs/testing/e14-4-2b-5b-engine-integration-planning-gate.md`
 
-**流程纠偏:** 2026-06-26 已新增 `docs/testing/e14-4-2b-process-reset.md`。此前本地 E14.4-2b-3 / E14.4-2b-4 实现未通过 review gate，已回滚且不得继承；后续 E14.4-2b-3 restart 已从已提交规划重新实现 model / serializer / editor adapter foundation，E14.4-2b-4 restart 已完成 editor UI 与 editor draft adapter 连接并推送，E14.4-2b-5 已完成 docs-only timeline planning / source-boundary audit，E14.4-2b-5a 已完成 adapter-only timeline model/tests。后续不得跳过 E14.4-2b-5a code review / commit gate 直接进入 engine integration 或 TimerDial production mapping。Android UI / APK / 真机截图修复类任务的 smoke 证据只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification` 或提交 `.local/`。
+**流程纠偏:** 2026-06-26 已新增 `docs/testing/e14-4-2b-process-reset.md`。此前本地 E14.4-2b-3 / E14.4-2b-4 实现未通过 review gate，已回滚且不得继承；后续 E14.4-2b-3 restart 已从已提交规划重新实现 model / serializer / editor adapter foundation，E14.4-2b-4 restart 已完成 editor UI 与 editor draft adapter 连接并推送，E14.4-2b-5 已完成 docs-only timeline planning / source-boundary audit，E14.4-2b-5a 已完成并推送 adapter-only timeline model/tests，E14.4-2b-5b 已完成 docs-only engine integration planning gate。后续不得跳过 E14.4-2b-5b-1 engine adapter bridge tests 直接进入 production engine enablement 或 TimerDial production mapping。Android UI / APK / 真机截图修复类任务的 smoke 证据只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification` 或提交 `.local/`。
 
 作为计时训练用户，
 我想在既有计时阶段内部扩展更多目标 / 小节，
@@ -2017,6 +2017,16 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 - TimerDial 后续只消费 adapter-expanded timeline 和当前 stage/target metadata；内圈总阶段数按 warmup + rounds * stageGroups + between-round rests + cooldown，外圈只按当前 stageGroup targets planned duration ratio，12 点数字圆标继续是内圈总阶段语义。
 - E12 records / trends 需要 v2 descriptor branch：trend key 区分 compositionVersion、composition block、stageGroupId、targetId、targetKind、round / stage / target instance 和结构签名；legacy 与 v2 默认不硬比。
 
+**E14.4-2b-5b engine integration planning gate 结果:**
+
+- 新增 `docs/testing/e14-4-2b-5b-engine-integration-planning-gate.md`，本轮只做 Markdown planning、只读 source-boundary audit、self-review 和验证，未改 Kotlin / Compose / Room / 测试代码，未生成 APK，未启动 AVD。
+- 当前 `TimedWorkoutEngine` 从 `WorkoutPlanSnapshot.toTimedSteps()` 展开 flat `TimedSessionStep`；legacy warmup / stretch / cooldown / rest / timed circuit block 有现有路径，`TimedCompositionBlock` 目前不会生成可执行 step，因此 v2 禁用开始训练仍正确。
+- v2 最小接入点应在 engine timeline construction boundary：对 `TimedCompositionBlock` 调用 `TimedCompositionTimelineAdapter`，再转换为现有 `TimedSessionStep`；route、TimerDial、record mapper 不直接解析 raw v2 JSON。
+- 第一版 bridge 保持 `WorkoutCommand` / `WorkoutEvent` 不变，不新增 Room schema / migration，不改 session record model，不做 TimerDial production mapping。
+- session record 兼容默认依赖 `WorkoutSession.planSnapshot` 原样保存 v2 JSON，并通过 deterministic adapter step ids 重建 v2 descriptors；rest extension 先通过 `TimedSessionStep.blockId` 携带 composition block id、`itemId` 携带 real/synthetic target id。
+- v2 start 只有在 bridge tests、legacy regression、unsupported-version fail-closed、rest extension、terminal record reconstructability 和 route gate 覆盖通过后才开放。下一步是 E14.4-2b-5b-1 engine adapter bridge tests，不直接进入 TimerDial mapping。
+- Rollback plan: 未来若 bridge 回归，只移除 / 禁用 v2 branch，legacy path 保持不变，v2 编辑可保留但继续禁用开始训练；无 schema 变更时不需要 Room rollback。
+
 **后续拆分建议:**
 
 1. E14.4-2b-1 visual prototype / mock：已完成，用于验证当前编辑器内的阶段卡、阶段内部目标行、色块入口、拖拽区分、旧计划 wrapper 和 TimerDial ring sketch。
@@ -2024,11 +2034,13 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 3. E14.4-2b-3 serializer / model and editor adapter foundation：restart implemented。本轮只落地纯 model、现有 JSON serializer / deserializer、legacy wrapper / editor draft adapter 和 focused tests；不包含 UI、engine、TimerDial、Room migration、APK 或 smoke 输出。
 4. E14.4-2b-4 editor UI visual/code gate：implemented。本轮只连接计时编辑页与 editor draft adapter，保存 editor-side v2 payload；阶段 / 目标颜色通过行首圆角色块打开颜色选择，目标展开态只展示目标名称、直接数字时长输入、复制和删除；复制目标会在当前目标后方插入同参数目标；`开始训练` 对 v2 draft 禁用并显示“待执行映射完成后可开始”。官方底部导航短标签 `训 / 计 / 动 / 录` 作为本轮小屏编辑 smoke 发现的 polish 保留，只压缩可见标签且不改变导航 / 训练语义。复杂拖拽动画、高级 cue 设置和 target kind 完整图标库延后。
 5. E14.4-2b-5 engine timeline planning gate：docs-only complete。本轮只定义 expansion、metadata、legacy/v2 coexistence、rest extension、snapshot/records、commands/events、TimerDial input 和 E12 impact，不实现 engine。
-6. E14.4-2b-5a timeline adapter model/tests：implemented, awaiting review / commit gate。本轮只做 pure adapter model 和 focused unit tests，把 normalized composition v2 payload 展开为 deterministic timeline steps / stage instances；不接 production engine、TimerDial 或 UI route。
-7. E14.4-2b-5b engine integration：只能在 5a review / commit gate 通过后接入 v2 adapter-expanded timeline，legacy path 不变，并保持 commands/events 不变。
-8. E14.4-2b-5c session record compatibility tests：验证 v2 snapshot 原样保存、actual step records 可重建、rest extension 可定位；若需要新 persisted metadata 字段，先拆 migration story。
-9. E14.4-2b-6 TimerDial mapping implementation：只能在 timeline 和兼容边界通过后进入；消费 adapter timeline，不重做 TimerDial UI。
-10. E14.4-2b-7 migration / compatibility / E12 trend polish：视 5c 结论覆盖旧计划、旧 snapshot、新 composition、unsupported version、当前计划转换、serializer round-trip、timeline expansion、TimerDial mapping 和 E12 trend key。
+6. E14.4-2b-5a timeline adapter model/tests：implemented and pushed as `6888e31`。本轮只做 pure adapter model 和 focused unit tests，把 normalized composition v2 payload 展开为 deterministic timeline steps / stage instances；不接 production engine、TimerDial 或 UI route。
+7. E14.4-2b-5b engine integration planning gate：docs-only complete。本轮只规划 engine bridge 接入点、v2 start 开放条件、legacy/v2 共存、records/rest extension 兼容、commands/events 不变、TimerDial 输入边界、E12 影响、拆分建议和 rollback；不实现 engine。
+8. E14.4-2b-5b-1 engine adapter bridge tests：下一步。先写 bridge tests / source-boundary tests，证明 adapter timeline 可以安全转换为 engine steps 且 legacy unaffected。
+9. E14.4-2b-5b-2 minimum engine bridge：只能在 5b-1 通过后接入 v2 adapter-expanded timeline，legacy path 不变，并保持 commands/events 不变。
+10. E14.4-2b-5c session record compatibility tests：验证 v2 snapshot 原样保存、actual step records 可重建、rest extension 可定位；若需要新 persisted metadata 字段，先拆 migration story。
+11. E14.4-2b-6 TimerDial mapping implementation：只能在 timeline 和兼容边界通过后进入；消费 adapter timeline，不重做 TimerDial UI。
+12. E14.4-2b-7 migration / compatibility / E12 trend polish：视 5c 结论覆盖旧计划、旧 snapshot、新 composition、unsupported version、当前计划转换、serializer round-trip、timeline expansion、TimerDial mapping 和 E12 trend key。
 
 **边界:**
 
@@ -2085,7 +2097,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 28. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
 29. E12.2b：力量同类 set 趋势。（Implemented）
 30. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
-31. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only。（Next: E14.4-2b-5a code review / commit gate）
+31. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only and pushed as `6888e31`；E14.4-2b-5b engine integration planning gate docs-only complete。（Next: E14.4-2b-5b-1 engine adapter bridge tests; do not jump to TimerDial mapping）
 
 ## 7. 下一轮建议
 
