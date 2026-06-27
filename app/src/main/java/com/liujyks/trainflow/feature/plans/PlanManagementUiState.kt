@@ -300,7 +300,9 @@ private fun WorkoutPlan.toDetailState(
     notificationPermissionState: PlanReminderNotificationPermissionState
 ): PlanDetailUiState {
     val hasTimedCompositionPayload = hasTimedCompositionPayload()
-    val timedCanStart = mode == WorkoutMode.TIMED && !hasTimedCompositionPayload
+    val startableTimedComposition = hasStartableTimedCompositionPayload()
+    val timedCanStart = mode == WorkoutMode.TIMED &&
+        (!hasTimedCompositionPayload || startableTimedComposition)
     return PlanDetailUiState(
         id = id,
         title = title,
@@ -315,7 +317,11 @@ private fun WorkoutPlan.toDetailState(
         reminder = toReminderUiState(notificationPermissionState),
         editStatus = when (mode) {
             WorkoutMode.TIMED -> if (hasTimedCompositionPayload) {
-                "可编辑已保存的阶段编排；执行映射完成前不会开放开始训练。"
+                if (startableTimedComposition) {
+                    "可编辑已保存的阶段编排，也可从当前计划开始计时训练。"
+                } else {
+                    "阶段编排暂无可执行步骤，编辑后再开始训练。"
+                }
             } else {
                 "可编辑已保存的阶段、轮次、颜色、图标和提醒设置，并保存回同一个本地计划。"
             }
@@ -323,7 +329,11 @@ private fun WorkoutPlan.toDetailState(
             WorkoutMode.FOLLOW_ALONG -> "跟练完整编排未进入本阶段，因此不提供假编辑入口。"
         },
         startStatus = when (mode) {
-            WorkoutMode.TIMED -> if (hasTimedCompositionPayload) "待执行映射完成后可开始" else "开始计时训练"
+            WorkoutMode.TIMED -> if (!hasTimedCompositionPayload || startableTimedComposition) {
+                "开始计时训练"
+            } else {
+                "阶段编排暂无可执行步骤"
+            }
             WorkoutMode.STRENGTH -> "开始力量训练"
             WorkoutMode.FOLLOW_ALONG -> "跟练计划保存待完整编排"
         },
@@ -446,7 +456,11 @@ private fun WorkoutPlan.planDetailSummary(): String {
     return when (mode) {
         WorkoutMode.TIMED -> {
             if (hasTimedCompositionPayload()) {
-                "阶段编排已保存 · 待执行映射"
+                if (hasStartableTimedCompositionPayload()) {
+                    "阶段编排已保存 · 可开始计时训练"
+                } else {
+                    "阶段编排暂无可执行步骤"
+                }
             } else {
                 val cue = preferences?.cueSettings
                 val actionCue = cue?.actionEnding?.thresholdSec?.let { "阶段提醒 ${it}秒" } ?: "阶段提醒未设"

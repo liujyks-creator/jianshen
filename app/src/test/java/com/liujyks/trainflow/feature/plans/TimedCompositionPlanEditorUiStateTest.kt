@@ -12,7 +12,7 @@ import org.junit.Test
 
 class TimedCompositionPlanEditorUiStateTest {
     @Test
-    fun defaultCompositionEditorExportsV2PayloadAndKeepsStartGateClosed() {
+    fun defaultCompositionEditorExportsV2PayloadAndAllowsStartAfterBridge() {
         val state = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-editor")
             .updateTitle("阶段间歇")
             .updateWarmupText("120")
@@ -23,8 +23,8 @@ class TimedCompositionPlanEditorUiStateTest {
         val block = plan.blocks.single() as TimedCompositionBlock
 
         assertTrue(state.canSave)
-        assertFalse(state.canStartTraining)
-        assertEquals("待执行映射完成后可开始", state.startDisabledReason)
+        assertTrue(state.canStartTraining)
+        assertNull(state.startDisabledReason)
         assertEquals(WorkoutMode.TIMED, plan.mode)
         assertEquals("阶段间歇", plan.title)
         assertEquals(2, block.compositionVersion)
@@ -128,14 +128,25 @@ class TimedCompositionPlanEditorUiStateTest {
     }
 
     @Test
-    fun saveDraftMarksV2PlanSavedWithoutOpeningStartGate() {
+    fun saveDraftMarksV2PlanSavedAndKeepsStartAvailable() {
         val saved = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-editor")
             .saveDraftPlan(timestamp = "2026-06-27T01:00:00Z")
         val plan = requireNotNull(saved.savedPlan)
 
         assertTrue(plan.blocks.single() is TimedCompositionBlock)
-        assertFalse(saved.canStartTraining)
+        assertTrue(saved.canStartTraining)
+        assertNull(saved.startDisabledReason)
         assertNotNull(saved.statusMessage)
-        assertTrue(requireNotNull(saved.statusMessage).contains("执行映射完成后可开始"))
+        assertTrue(requireNotNull(saved.statusMessage).contains("可以从当前阶段编排开始训练"))
+    }
+
+    @Test
+    fun unsupportedCompositionEditorSourceStillFailsClosedForStart() {
+        val unsupported = buildDefaultTimedCompositionPlanEditorState(planId = "unsupported-source")
+            .copy(source = TimedCompositionEditorDraftSource.UNSUPPORTED)
+
+        assertTrue(unsupported.canSave)
+        assertFalse(unsupported.canStartTraining)
+        assertEquals("当前阶段编排暂无可执行步骤。", unsupported.startDisabledReason)
     }
 }

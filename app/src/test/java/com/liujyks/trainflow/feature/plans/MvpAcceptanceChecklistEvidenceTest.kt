@@ -131,6 +131,24 @@ class MvpAcceptanceChecklistEvidenceTest {
     }
 
     @Test
+    fun v2StartGateDoesNotRestoreOldDebugOrSmokeSeedEntries() {
+        val forbiddenTerms = listOf(
+            "COMPOSITION" + "_V2",
+            "TimedCompositionEditor" + "SmokePlanId",
+            "withTimedCompositionEditor" + "SmokePlan",
+            "initialSelected" + "PlanId",
+            "午间 " + "18 分钟间歇"
+        )
+        val sourceText = listOf(File("src/main"), File("src/test"))
+            .flatMap { root -> root.walkTopDown().filter { file -> file.isFile } }
+            .joinToString("\n") { file -> file.readText() }
+
+        forbiddenTerms.forEach { term ->
+            assertFalse("Unexpected old smoke/debug entry: $term", sourceText.contains(term))
+        }
+    }
+
+    @Test
     fun integerNumberFieldParsingCanRepresentBlankDraftInput() {
         val timedRoute = sourceFile(
             "src/main/java/com/liujyks/trainflow/feature/plans/TimedPlanEditorRoute.kt"

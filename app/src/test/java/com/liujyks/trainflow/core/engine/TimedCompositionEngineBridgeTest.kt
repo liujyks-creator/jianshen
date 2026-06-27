@@ -213,7 +213,7 @@ class TimedCompositionEngineBridgeTest {
     }
 
     @Test
-    fun v2StartGateRemainsDisabledUntilBridgeImplementationOpensIt() {
+    fun v2StartGateOpensAfterMinimumEngineBridge() {
         val v2Plan = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-start-gate")
             .toWorkoutPlan(timestamp = "2026-06-27T01:00:00Z")
         val detail = PlanManagementScreenState(plans = listOf(v2Plan))
@@ -222,8 +222,8 @@ class TimedCompositionEngineBridgeTest {
 
         assertTrue(v2Plan.blocks.single() is TimedCompositionBlock)
         assertTrue(requireNotNull(detail).canEditPlan)
-        assertFalse(detail.canStartTraining)
-        assertEquals("待执行映射完成后可开始", detail.startStatus)
+        assertTrue(detail.canStartTraining)
+        assertEquals("开始计时训练", detail.startStatus)
     }
 
     private fun activeStateAt(

@@ -167,7 +167,7 @@ class PlanManagementUiStateTest {
     }
 
     @Test
-    fun timedCompositionPlanDetailKeepsStartTrainingDisabledUntilMappingExists() {
+    fun timedCompositionPlanDetailEnablesStartTrainingAfterBridge() {
         val v2Plan = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-plan")
             .toWorkoutPlan(timestamp = "2026-06-27T01:00:00Z")
         val state = PlanManagementScreenState(plans = listOf(v2Plan)).selectPlan(v2Plan.id)
@@ -175,10 +175,50 @@ class PlanManagementUiStateTest {
 
         assertTrue(v2Plan.blocks.single() is TimedCompositionBlock)
         assertTrue(detail.canEditPlan)
-        assertFalse(detail.canStartTraining)
-        assertEquals("待执行映射完成后可开始", detail.startStatus)
-        assertTrue(detail.detailSummary.contains("待执行映射"))
+        assertTrue(detail.canStartTraining)
+        assertEquals("开始计时训练", detail.startStatus)
+        assertTrue(detail.detailSummary.contains("可开始计时训练"))
         assertTrue(detail.sections.flatMap { it.rows }.joinToString(" ").contains("阶段编排"))
+    }
+
+    @Test
+    fun emptyTimedCompositionPlanDetailFailsClosedForStart() {
+        val v2Plan = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-empty")
+            .toWorkoutPlan(timestamp = "2026-06-27T01:00:00Z")
+        val emptyBlock = (v2Plan.blocks.single() as TimedCompositionBlock).copy(
+            warmupSec = 0,
+            cooldownSec = 0,
+            restBetweenRoundsSec = 0,
+            stageGroups = emptyList()
+        )
+        val emptyPlan = v2Plan.copy(blocks = listOf(emptyBlock))
+        val detail = requireNotNull(
+            PlanManagementScreenState(plans = listOf(emptyPlan))
+                .selectPlan(emptyPlan.id)
+                .selectedDetail
+        )
+
+        assertTrue(detail.canEditPlan)
+        assertFalse(detail.canStartTraining)
+        assertEquals("阶段编排暂无可执行步骤", detail.startStatus)
+        assertEquals("阶段编排暂无可执行步骤", detail.detailSummary)
+    }
+
+    @Test
+    fun unsupportedTimedCompositionPlanDetailFailsClosedForStart() {
+        val v2Plan = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-unsupported")
+            .toWorkoutPlan(timestamp = "2026-06-27T01:00:00Z")
+        val unsupportedBlock = (v2Plan.blocks.single() as TimedCompositionBlock).copy(compositionVersion = 99)
+        val unsupportedPlan = v2Plan.copy(blocks = listOf(unsupportedBlock))
+        val detail = requireNotNull(
+            PlanManagementScreenState(plans = listOf(unsupportedPlan))
+                .selectPlan(unsupportedPlan.id)
+                .selectedDetail
+        )
+
+        assertFalse(detail.canStartTraining)
+        assertEquals("阶段编排暂无可执行步骤", detail.startStatus)
+        assertTrue(detail.editStatus.contains("编辑后再开始训练"))
     }
 
     @Test

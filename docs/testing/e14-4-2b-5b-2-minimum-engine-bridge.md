@@ -73,6 +73,8 @@ Results:
 
 ## Next Step
 
-Next is **E14.4-2b-5b-3 v2 start gate enablement and smoke planning / implementation gate**.
+E14.4-2b-5b-3 follow-up has now opened the editor and plan detail start gate for adapter-expandable v2 plans, while unsupported and empty v2 payloads still fail closed.
+
+Next is **E14.4-2b-5c session record compatibility tests / smoke review**.
 
 Do not jump directly to E14.4-2b-6 TimerDial mapping. TimerDial should only consume adapter-derived timeline metadata after the v2 start gate and record compatibility path are accepted.

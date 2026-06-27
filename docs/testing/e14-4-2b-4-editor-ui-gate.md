@@ -24,6 +24,8 @@ Implemented:
 - Saved v2 plans remain editable from plan detail but cannot start execution from plan detail.
 - Bottom navigation keeps compact labels `训 / 计 / 动 / 录` as a small-screen polish found during the editor smoke pass; full content descriptions remain, and navigation / training semantics are unchanged.
 
+Follow-up: E14.4-2b-5b-3 replaces this temporary disabled start gate with an adapter-expandable check after the minimum engine bridge. Valid v2 drafts / saved plans can start; unsupported or empty v2 payloads still fail closed.
+
 Deferred:
 
 - Complex target drag animation.
@@ -45,4 +47,4 @@ This slice does not implement:
 
 ## Next Step
 
-Review / commit the E14.4-2b-5 docs-only planning gate, then enter E14.4-2b-5a timeline adapter model/tests. Do not skip directly to engine integration or TimerDial production mapping.
+E14.4-2b-5 through E14.4-2b-5b-3 have now completed the timeline planning, adapter model, minimum engine bridge, and v2 start gate enablement path. Next is E14.4-2b-5c session record compatibility tests / smoke review. Do not skip directly to TimerDial production mapping.

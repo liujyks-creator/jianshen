@@ -56,9 +56,17 @@ internal data class TimedCompositionPlanEditorScreenState(
     val canSave: Boolean
         get() = validationMessage == null
 
-    val canStartTraining: Boolean = false
+    val canStartTraining: Boolean
+        get() = canSave &&
+            source != TimedCompositionEditorDraftSource.UNSUPPORTED &&
+            toWorkoutPlan().hasStartableTimedCompositionPayload()
 
-    val startDisabledReason: String = "待执行映射完成后可开始"
+    val startDisabledReason: String?
+        get() = if (canStartTraining) {
+            null
+        } else {
+            validationMessage ?: "当前阶段编排暂无可执行步骤。"
+        }
 
     val repeatedDurationSec: Int
         get() = stageGroups.sumOf { group -> group.durationSec }
@@ -650,9 +658,9 @@ internal fun TimedCompositionPlanEditorScreenState.markPlanSaved(
         source = TimedCompositionEditorDraftSource.V2_PAYLOAD,
         requiresExplicitConversionForV2 = false,
         statusMessage = if (isEditingExistingPlan) {
-            "已更新「${plan.title}」；执行映射完成前不会开放开始训练。"
+            "已更新「${plan.title}」，可以从当前阶段编排开始训练。"
         } else {
-            "已保存「${plan.title}」到本地计划；执行映射完成后可开始。"
+            "已保存「${plan.title}」到本地计划，可以从当前阶段编排开始训练。"
         }
     )
 }
