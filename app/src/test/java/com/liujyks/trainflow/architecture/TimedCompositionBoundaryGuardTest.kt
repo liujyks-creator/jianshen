@@ -9,7 +9,7 @@ import org.junit.Test
 
 class TimedCompositionBoundaryGuardTest {
     @Test
-    fun compositionV2TermsStayOutOfExecutionAndTimerDialSources() {
+    fun compositionV2TermsStayLimitedToModelEditorAndMinimumEngineBridgeSources() {
         val sourceRoot = sourceRoot()
         val scannedPaths = listOf(
             sourceRoot.resolve("core/engine"),
@@ -23,19 +23,26 @@ class TimedCompositionBoundaryGuardTest {
             "timed_composition",
             "composition_v2"
         )
+        val allowedRelativePaths = setOf("core/engine/TimedWorkoutEngine.kt")
         val violations = scannedPaths.flatMap { path ->
-            path.kotlinFiles().flatMap { file -> blockedTerms.violationsIn(file) }
+            path.kotlinFiles().flatMap { file ->
+                if (file.relativeToSourceRoot(sourceRoot) in allowedRelativePaths) {
+                    emptyList()
+                } else {
+                    blockedTerms.violationsIn(file)
+                }
+            }
         }
 
         assertTrue(
-            "Timed composition v2 terms must not enter execution or TimerDial sources:\n" +
+            "Timed composition v2 terms must stay out of unintended execution or TimerDial sources:\n" +
                 violations.joinToString("\n"),
             violations.isEmpty()
         )
     }
 
     @Test
-    fun timelineAdapterTermsStayOutOfEngineTimerDialAndRouteSources() {
+    fun timelineAdapterTermsStayLimitedToAdapterAndMinimumEngineBridgeSources() {
         val sourceRoot = sourceRoot()
         val scannedPaths = listOf(
             sourceRoot.resolve("core/engine"),
@@ -51,12 +58,19 @@ class TimedCompositionBoundaryGuardTest {
             "timelineStageId",
             "targetInstanceIndex"
         )
+        val allowedRelativePaths = setOf("core/engine/TimedWorkoutEngine.kt")
         val violations = scannedPaths.flatMap { path ->
-            path.kotlinFiles().flatMap { file -> blockedTerms.violationsIn(file) }
+            path.kotlinFiles().flatMap { file ->
+                if (file.relativeToSourceRoot(sourceRoot) in allowedRelativePaths) {
+                    emptyList()
+                } else {
+                    blockedTerms.violationsIn(file)
+                }
+            }
         }
 
         assertTrue(
-            "Timeline adapter terms must not enter engine, TimerDial, or route sources:\n" +
+            "Timeline adapter terms must stay out of unintended engine, TimerDial, or route sources:\n" +
                 violations.joinToString("\n"),
             violations.isEmpty()
         )
@@ -132,6 +146,10 @@ class TimedCompositionBoundaryGuardTest {
         } else {
             listOf(this)
         }
+    }
+
+    private fun Path.relativeToSourceRoot(sourceRoot: Path): String {
+        return sourceRoot.relativize(this).toString().replace('\\', '/')
     }
 
     private fun sourceRoot(): Path {

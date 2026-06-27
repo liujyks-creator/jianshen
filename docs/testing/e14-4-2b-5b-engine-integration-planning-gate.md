@@ -1,7 +1,7 @@
 # E14.4-2b-5b Engine Integration Planning Gate
 
 **Date:** 2026-06-27
-**Status:** Docs-only planning gate complete; no engine, UI route, TimerDial, Room, or test implementation
+**Status:** Docs-only planning gate complete; E14.4-2b-5b-1 tests and E14.4-2b-5b-2 minimum bridge implemented in follow-up slices
 
 ## Scope
 
@@ -260,7 +260,23 @@ Result:
 - Bridge expectation tests intentionally fail red because production `TimedWorkoutEngine` still returns no executable steps for `TimedCompositionBlock`.
 - Legacy timed engine behavior, unsupported / empty v2 fail-closed behavior, v2 start disabled state, and source-boundary guard checks remain green.
 - Production engine, route start gate, TimerDial, Room schema, session record model, `WorkoutCommand`, and `WorkoutEvent` remain unchanged.
-- The next gate is E14.4-2b-5b-2 minimum engine bridge implementation.
+- The next gate was E14.4-2b-5b-2 minimum engine bridge implementation.
+
+## Follow-Up: E14.4-2b-5b-2 Minimum Engine Bridge
+
+E14.4-2b-5b-2 implemented the minimum bridge described by this planning gate. See `docs/testing/e14-4-2b-5b-2-minimum-engine-bridge.md`.
+
+Result:
+
+- `TimedWorkoutEngine` now calls `TimedCompositionTimelineAdapter` only at the engine timeline construction boundary for `TimedCompositionBlock`.
+- Adapter timeline steps map into existing `TimedSessionStep` without adding Room fields, session record fields, commands, or events.
+- V2 warmup / action / custom / rest / synthetic between-round rest / cooldown steps become executable engine steps with deterministic adapter-derived ids.
+- V2 rest target and synthetic between-round rest steps are rest-extendable; work, warmup, and cooldown remain non-rest-extendable.
+- Legacy `TimedCircuitBlock` execution remains unchanged.
+- The route / editor v2 start gate remains disabled for this slice.
+- TimerDial production mapping remains unimplemented.
+
+The next gate is E14.4-2b-5b-3 v2 start gate enablement and smoke planning / implementation gate. It must not include TimerDial mapping.
 
 ## Rollback Plan
 

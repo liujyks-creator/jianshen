@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-27
 **Nature:** Test-first implementation gate
-**Status:** Focused bridge expectation tests added; expected red until the minimum engine bridge is implemented.
+**Status:** Focused bridge expectation tests added; original red gate consumed by E14.4-2b-5b-2 minimum engine bridge.
 
 ## Scope
 
@@ -57,7 +57,7 @@ Expected mapping:
 - Rest extension applies only to rest target and synthetic between-round rest steps.
 - Work, warmup, and cooldown steps do not accept rest extension.
 
-## Expected Red Result
+## Original Red Result
 
 Focused command:
 
@@ -85,7 +85,23 @@ Expected green coverage in the same focused run:
 - Saved v2 plan start gate remains disabled in plan management state.
 - Added source-boundary guard tests pass.
 
-Because this is an intentional test-first red gate, the full unit suite is not claimed green until E14.4-2b-5b-2 implements the minimum bridge.
+Because this was an intentional test-first red gate, the full unit suite was not claimed green until E14.4-2b-5b-2 implemented the minimum bridge.
+
+## Follow-Up Implementation Result
+
+E14.4-2b-5b-2 implemented the minimum bridge in `TimedWorkoutEngine` and kept the existing route start gate disabled.
+
+Result after the bridge:
+
+- The focused command now passes.
+- V2 `TimedCompositionBlock` plans expand through `TimedCompositionTimelineAdapter` at the engine timeline construction boundary.
+- Adapter step ids become engine step ids.
+- `compositionBlockId` maps to `TimedSessionStep.blockId`.
+- Real target ids and synthetic boundary / between-round rest target ids map to `TimedSessionStep.itemId`.
+- V2 rest target and synthetic between-round rest steps are rest-extendable.
+- V2 warmup, work, custom, and cooldown steps are not rest-extendable.
+- Legacy timed plans continue through the existing `TimedCircuitBlock` path.
+- Unsupported / empty v2 structures fail closed without falling back into legacy timed execution.
 
 ## Boundary Result
 
@@ -103,4 +119,4 @@ The source-boundary tests keep timeline adapter terms limited to the core adapte
 
 ## Next Step
 
-Next story should be **E14.4-2b-5b-2 minimum engine bridge implementation**. It may make the red bridge tests pass by adding the smallest production bridge at the engine timeline construction boundary while keeping legacy behavior, route start gate, commands/events, records, Room schema, and TimerDial mapping unchanged unless a separate gate approves them.
+Next story should be **E14.4-2b-5b-3 v2 start gate enablement and smoke planning / implementation gate**. It must still avoid TimerDial mapping until the separate E14.4-2b-6 story.

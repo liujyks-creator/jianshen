@@ -11,6 +11,11 @@ import com.liujyks.trainflow.core.model.SessionStep
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStep
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStepKind
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineTargetKind
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
@@ -510,6 +515,7 @@ object TimedWorkoutEngine {
                 )
             )
             is TimedCircuitBlock -> circuitSteps(globalCues)
+            is TimedCompositionBlock -> compositionSteps(globalCues)
             else -> emptyList()
         }
     }
@@ -584,6 +590,61 @@ object TimedWorkoutEngine {
 
             itemSteps + roundRest
         }
+    }
+
+    private fun TimedCompositionBlock.compositionSteps(
+        globalCues: CueSettings?
+    ): List<TimedSessionStep> {
+        val timeline = runCatching {
+            TimedCompositionTimelineAdapter.expand(this)
+        }.getOrElse {
+            return emptyList()
+        }
+
+        val timelineRoundCount = timeline.steps
+            .mapNotNull { step -> step.roundIndex }
+            .maxOrNull()
+            ?: rounds.coerceAtLeast(1)
+
+        return timeline.steps.mapNotNull { step ->
+            step.toTimedSessionStep(roundCount = timelineRoundCount, globalCues = globalCues)
+        }
+    }
+
+    private fun TimedCompositionTimelineStep.toTimedSessionStep(
+        roundCount: Int,
+        globalCues: CueSettings?
+    ): TimedSessionStep? {
+        if (plannedDurationSec <= 0) {
+            return null
+        }
+        val isRestStep = stepKind == TimedCompositionTimelineStepKind.REST
+        val cue = if (isRestStep) {
+            cueSettings?.restEnding ?: globalCues?.restEnding
+        } else {
+            cueSettings?.actionEnding ?: globalCues?.actionEnding
+        }.effectiveCue(plannedDurationSec)
+
+        return TimedSessionStep(
+            id = id,
+            kind = if (isRestStep) TimedSessionStepKind.REST else TimedSessionStepKind.WORK,
+            sessionStepKind = if (isRestStep) {
+                SessionStepKind.TIMED_REST
+            } else {
+                SessionStepKind.TIMED_WORK
+            },
+            blockId = compositionBlockId,
+            itemId = targetId,
+            title = displayName,
+            durationSec = plannedDurationSec,
+            round = roundIndex,
+            roundCount = roundIndex?.let { roundCount },
+            stageType = targetKind.toTimedStageType(),
+            iconKey = iconKey,
+            colorHex = colorHex,
+            endingCue = cue,
+            endingCueThresholdSec = cue?.thresholdSec
+        )
     }
 
     private fun TimedExerciseItem.toWorkAndRestSteps(
@@ -730,6 +791,17 @@ object TimedWorkoutEngine {
             PlanBlockKind.WARMUP -> TimedStageType.WARMUP
             PlanBlockKind.STRETCH, PlanBlockKind.COOLDOWN -> TimedStageType.COOLDOWN
             else -> TimedStageType.WORK
+        }
+    }
+
+    private fun TimedCompositionTimelineTargetKind.toTimedStageType(): TimedStageType {
+        return when (this) {
+            TimedCompositionTimelineTargetKind.ACTION -> TimedStageType.WORK
+            TimedCompositionTimelineTargetKind.REST -> TimedStageType.REST
+            TimedCompositionTimelineTargetKind.CUSTOM -> TimedStageType.CUSTOM
+            TimedCompositionTimelineTargetKind.WARMUP -> TimedStageType.WARMUP
+            TimedCompositionTimelineTargetKind.COOLDOWN -> TimedStageType.COOLDOWN
+            TimedCompositionTimelineTargetKind.BETWEEN_ROUND_REST -> TimedStageType.REST
         }
     }
 }
