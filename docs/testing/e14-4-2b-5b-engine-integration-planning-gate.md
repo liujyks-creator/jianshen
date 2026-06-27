@@ -251,6 +251,17 @@ Legacy and v2 structures are not comparable by default. A compatibility mapper m
    - Consume adapter-derived timeline metadata after engine/record compatibility is accepted.
    - Do not jump directly here from this gate.
 
+## Follow-Up: E14.4-2b-5b-1 Test Gate
+
+E14.4-2b-5b-1 converted the bridge planning conditions into focused expectation tests and source-boundary guards. See `docs/testing/e14-4-2b-5b-1-engine-adapter-bridge-tests.md`.
+
+Result:
+
+- Bridge expectation tests intentionally fail red because production `TimedWorkoutEngine` still returns no executable steps for `TimedCompositionBlock`.
+- Legacy timed engine behavior, unsupported / empty v2 fail-closed behavior, v2 start disabled state, and source-boundary guard checks remain green.
+- Production engine, route start gate, TimerDial, Room schema, session record model, `WorkoutCommand`, and `WorkoutEvent` remain unchanged.
+- The next gate is E14.4-2b-5b-2 minimum engine bridge implementation.
+
 ## Rollback Plan
 
 If the later engine bridge causes regression:
