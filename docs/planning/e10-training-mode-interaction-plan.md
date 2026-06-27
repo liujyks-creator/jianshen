@@ -505,13 +505,16 @@ E14.4-2a 已确认计划编辑 / 详情 polish 采用方案 B，但不把阶段�
 
 1. E14.4-2b-1 visual prototype / mock。
 2. E14.4-2b-2 data model decision。（Completed）
-3. E14.4-2b-3 serializer / model and editor adapter foundation。（Rolled back / not accepted）
-4. E14.4-2b-4 editor UI implementation。（Stopped / rolled back / not accepted）
-5. E14.4-2b-5 TimedWorkoutEngine timeline mapping。
-6. E14.4-2b-6 TimerDial mapping implementation。
-7. E14.4-2b-7 migration / compatibility / E12 tests。
+3. E14.4-2b-3 serializer / model and editor adapter foundation。（Restart implemented / pushed；旧本地实现 rolled back / not accepted）
+4. E14.4-2b-4 editor UI visual/code gate。（Restart implemented / pushed；旧本地实现 stopped / rolled back / not accepted）
+5. E14.4-2b-5 engine timeline planning gate。（Docs-only complete；不实现 engine）
+6. E14.4-2b-5a timeline adapter model/tests。
+7. E14.4-2b-5b engine integration。
+8. E14.4-2b-5c session record compatibility tests。
+9. E14.4-2b-6 TimerDial mapping implementation。
+10. E14.4-2b-7 migration / compatibility / E12 trend polish if needed。
 
-E14.4-2b rollback note：E14.4-2b-3 本地 model / serializer / editor adapter 实现未通过 review gate，已 rolled back / not accepted；E14.4-2b-4 本地 editor UI implementation 已 stopped / rolled back / not accepted。当前生产基线没有已接受的 COMPOSITION_V2 draft 编辑 UI，也没有 `待执行映射` 计划详情入口。保留的只是 visual / semantic gate 和 E14.4-2b-2 data model decision；不得直接继续 E14.4-2b-5 / E14.4-2b-6，下一步只能在 review reset 干净后用 template-based dev story 重启。本 rollback 不改 `TimedWorkoutEngine`、TimerDial、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema 或声音语义。
+E14.4-2b rollback / restart note：E14.4-2b-3 / E14.4-2b-4 的旧本地 model / serializer / editor / UI 实现未通过 review gate，已 rolled back / not accepted；restart 版已重新完成并推送。当前生产基线已有 accepted v2 model / serializer / editor adapter foundation 和 editor UI visual/code gate，但 v2 计划仍以 `待执行映射完成后可开始` 禁用开始训练。E14.4-2b-5 已完成 docs-only planning gate，只允许后续先进入 E14.4-2b-5a timeline adapter model/tests；不得跳过 5a 直接修改 `TimedWorkoutEngine`、TimerDial、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema 或声音语义。
 
 该 story 影响 `WorkoutPlan` blocks、计划快照、统计比较 key、TimerDial UI state 和持久化边界。实现时不得静默修改 Room schema、训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record 或声音语义；若仅扩展 JSON payload，不需要 Room schema migration，但仍必须做 serializer / compatibility 测试。
 

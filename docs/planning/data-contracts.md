@@ -375,7 +375,11 @@ E14.4-2b-2 决定正式采用两层 timed composition 作为长期数据方向�
 
 旧 `TimedCircuitBlock` / `TimedExerciseItem` 继续作为 legacy timed structure 兼容。旧计划打开时通过 compatibility wrapper 显示，查看不写回；只有用户明确保存 / 转换后，当前 `WorkoutPlan` 才写入 composition v2。既有 `WorkoutSession.planSnapshot` 一律不回写。
 
-E14.4-2b-3 restart status: 当前 Android 基线已接受 model / serializer / editor adapter foundation，但不继承此前已回滚实现。本轮新增独立 `TimedCompositionBlock` v2 payload、stage group / target / compatibility metadata、归一化和每个 stage group 最多 5 个 target 的规则；serializer 通过现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON round-trip v2 payload，同时保持 legacy timed JSON 不变。旧计划 wrapper 只生成未来 editor draft，默认 preserve source，不静默写回 v2；只有显式 export / conversion 才输出 composition v2。E14.4-2b-4 editor UI 仍未实现，当前 Android 生产基线没有 v2 编辑 UI 或 `待执行映射` 入口；`TimedWorkoutEngine`、TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义保持不变。
+E14.4-2b-3 restart status: 当前 Android 基线已接受 model / serializer / editor adapter foundation，但不继承此前已回滚实现。本轮新增独立 `TimedCompositionBlock` v2 payload、stage group / target / compatibility metadata、归一化和每个 stage group 最多 5 个 target 的规则；serializer 通过现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON round-trip v2 payload，同时保持 legacy timed JSON 不变。旧计划 wrapper 只生成 editor draft，默认 preserve source，不静默写回 v2；只有显式 export / conversion 才输出 composition v2。
+
+E14.4-2b-4 restart status: 计时编辑 UI 已连接 editor draft adapter，保存 editor-side v2 payload；v2 draft 和计划详情的 `开始训练` 均保持禁用，文案为 `待执行映射完成后可开始`。`TimedWorkoutEngine`、TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义保持不变。
+
+E14.4-2b-5 planning gate status: `docs/testing/e14-4-2b-5-engine-timeline-planning-gate.md` 已完成 docs-only timeline planning。该 gate 只定义 future adapter expansion、stable metadata、legacy/v2 coexistence、rest extension、snapshot/record impact、TimerDial input 和 E12 impact，不实现 engine 或 TimerDial，不改 session record / Room schema。
 
 概念结构：
 
@@ -449,6 +453,15 @@ Execution mapping rules:
 - If `cooldownSec > 0`, append one cooldown stage after all rounds.
 - `+15s` still means extending the current active rest step; it does not insert a target, does not change the plan, and does not rewrite the snapshot.
 
+Future adapter metadata rules:
+
+- v2 execution should expand through an adapter-owned deterministic timeline model before engine or TimerDial consumption.
+- Each executable step must carry metadata that can be reconstructed from `WorkoutSession.planSnapshot`: `compositionVersion`, `compositionBlockId`, deterministic `timelineStageId`, `timelineStageKind`, `stageGroupId`, `targetId`, `targetKind`, `roundIndex`, `stageGroupIndex`, `targetIndex`, `stageInstanceIndex`, `targetInstanceIndex`, `plannedDurationSec`, `displayName`, `colorHex`, optional `iconKey`, and resolved `cueSettings`.
+- `stageGroupId` / `targetId` are source ids for real stage groups and targets. Warmup, cooldown, and between-round rests use deterministic synthetic ids in the adapter timeline only; they must not be written back into the v2 payload as user-authored targets.
+- Step ids should be deterministic and include enough metadata to let session records and E12 descriptors reconstruct the same timeline from the historical snapshot.
+- Legacy timed plans continue through the current `TimedCircuitBlock` engine path. v2 plans remain not startable until adapter and engine integration are implemented.
+- Default contract decision: do not add persisted `SessionStepRecord`, `TimedRestExtensionRecord`, Room table, or Room column fields for v2 metadata in this gate. If a later implementation requires explicit persisted composition metadata beyond deterministic ids and snapshot reconstruction, split a separate migration / compatibility story first.
+
 TimerDial mapping rules:
 
 - The production TimerDial UI is not redesigned.
@@ -469,6 +482,8 @@ E12 impact:
 - Timed comparable trend structure signatures must include `compositionVersion`, composition block id, stage group id, target id, target kind, round index, stage instance index, target order, and planned duration where relevant.
 - Legacy and composition v2 structures are not comparable by default. Show data-insufficient / structure-different copy unless a compatibility mapper proves equivalence.
 - E12 must continue to use each historical `WorkoutSession.planSnapshot`, not the current edited `WorkoutPlan`.
+- Planned rest for v2 must be derived from historical v2 snapshots, including internal `rest` targets and synthetic between-round rests.
+- Extra rest for v2 binds to the active rest target id or deterministic synthetic between-round rest id. It must not create a new target and must not change planned rest.
 
 ### 6.2 计时提醒设置
 

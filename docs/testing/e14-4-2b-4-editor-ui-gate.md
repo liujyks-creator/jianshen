@@ -1,7 +1,7 @@
 # E14.4-2b-4 Editor UI Visual/Code Gate
 
 **Date:** 2026-06-27
-**Status:** Implemented; awaiting code review / commit gate
+**Status:** Implemented and pushed as `d8d784d`; closed for E14.4-2b-5 planning handoff
 
 ## Scope
 
@@ -45,4 +45,4 @@ This slice does not implement:
 
 ## Next Step
 
-Run E14.4-2b-4 code review / commit gate. Do not directly enter E14.4-2b-5 or E14.4-2b-6.
+Review / commit the E14.4-2b-5 docs-only planning gate, then enter E14.4-2b-5a timeline adapter model/tests. Do not skip directly to engine integration or TimerDial production mapping.

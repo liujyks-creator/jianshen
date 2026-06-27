@@ -1,14 +1,14 @@
 # E14.4-2b Timed Composition Editor And TimerDial Ring Semantics
 
 **Date:** 2026-06-24
-**Status:** Visual / semantic gate retained; E14.4-2b-1 visual prototype retained; E14.4-2b-2 data model decision retained as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 editor UI implementation stopped and rolled back / not accepted; TimerDial visual correction overlay retained
+**Status:** Visual / semantic gate retained; E14.4-2b-1 visual prototype retained; E14.4-2b-2 data model decision retained as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 restart editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate completed as docs-only; TimerDial visual correction overlay retained
 **Scope:** Timed two-level composition, TimerDial ring semantics, data impact, compatibility, and implementation split
 
-**Process note:** Before further implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local Kotlin / Compose / test implementation did not pass review gate and has been rolled back to the visual-gate baseline. E14.4-2b-3 was restarted cleanly and now covers only model / serializer / editor adapter foundation. Do not continue to E14.4-2b-5 / E14.4-2b-6; the next allowed step is E14.4-2b-4 editor UI visual/code gate from a fresh template-based story.
+**Process note:** Before further implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local Kotlin / Compose / test implementation did not pass review gate and has been rolled back to the visual-gate baseline. Restarted E14.4-2b-3 covers only model / serializer / editor adapter foundation, and restarted E14.4-2b-4 covers only the editor UI visual/code gate. E14.4-2b-5 is now closed only as a docs-only timeline planning gate; engine integration and TimerDial production mapping remain forbidden until later split stories.
 
 ## Boundaries
 
-This document is retained as the visual / semantic gate plus visual artifact record. The prior E14.4-2b-3 model / serializer / editor adapter implementation and E14.4-2b-4 editor-only Compose UI implementation were local, did not pass review gate, and are not accepted product code. The accepted E14.4-2b-3 restart adds only the data foundation and compatibility adapter; it does not implement Compose editor UI, TimerDial production mapping, or execution timeline mapping.
+This document is retained as the visual / semantic gate plus visual artifact record. The prior E14.4-2b-3 model / serializer / editor adapter implementation and E14.4-2b-4 editor-only Compose UI implementation were local, did not pass review gate, and are not accepted product code. The accepted E14.4-2b-3 restart adds only the data foundation and compatibility adapter; the accepted E14.4-2b-4 restart adds only the editor UI visual/code gate and keeps v2 start disabled. Neither restart implements TimerDial production mapping or execution timeline mapping.
 
 This gate intentionally does not change Kotlin, Compose, Room, tests, workout engines, `WorkoutCommand`, `WorkoutEvent`, session record semantics, sound cue semantics, history deletion, plan snapshot records, or APK output.
 
@@ -47,20 +47,21 @@ The prior E14.4-2b-3 local implementation attempted the durable payload foundati
 - explicit export / conversion is required before a legacy plan writes composition v2;
 - execution, TimerDial, Compose editor UI, `WorkoutCommand`, `WorkoutEvent`, session record, Room schema, sound semantics, and heart-rate UI/input/statistics remain untouched.
 
-## E14.4-2b-4 Stopped / Rolled Back / Not Accepted
+## E14.4-2b-4 Restart Implemented Editor UI Gate
 
-The prior E14.4-2b-4 local editor UI implementation was stopped, rolled back, and is not accepted. It must not be described as completed, implemented, or ready for continuation.
+The prior E14.4-2b-4 local editor UI implementation was stopped, rolled back, and is not accepted. A later clean restart implemented only the editor UI visual/code gate and was pushed as `d8d784d`; it must not be treated as engine or TimerDial support.
 
-Retained visual direction:
+Accepted restart boundary:
 
 - keep the current timed editor structure;
 - keep warmup / cooldown / rounds / between-round rest as top configuration;
 - keep repeated stage composition below that configuration;
-- allow future repeated stages to expand into compact internal targets;
-- cap future internal targets at 5 per repeated stage;
-- keep future v2 start disabled until explicit engine timeline and TimerDial mapping stories exist.
+- allow repeated stages to expand into compact internal targets;
+- cap internal targets at 5 per repeated stage;
+- save editor-side v2 payload;
+- keep v2 start disabled until explicit engine timeline and TimerDial mapping stories exist.
 
-No accepted production code currently implements these v2 editor semantics.
+No accepted production code currently implements v2 engine execution or TimerDial mapping.
 
 ## E14.4-2b-1 Visual Prototype Result
 
@@ -743,13 +744,16 @@ Recommended story split:
 | E14.4-2b-1 visual prototype / mock | Validate current-stage cards, internal target rows, color swatch-only entries, drag separation, current top round / round-rest placement, and TimerDial outer-ring segmentation sketch. | Can use `.local/smoke/e14-4-2b-timed-composition-timerdial-semantics/`; no production code. |
 | E14.4-2b-2 data model decision | Completed: chose versioned timed composition payload inside existing plan/snapshot JSON first. | Updated data contracts and decision log. |
 | E14.4-2b-3 serializer / model and editor adapter foundation | Restart implemented. | Model / serializer / compatibility draft adapter only; no UI, engine, TimerDial, Room migration, APK, or smoke output. |
-| E14.4-2b-4 editor UI implementation | Stopped and rolled back / not accepted. | Do not continue from the prior local implementation. |
-| E14.4-2b-5 TimedWorkoutEngine timeline mapping | Expand composition v2 into timeline steps. | Preserve command, event, sound cue, ready gate, pause, skip, and `+15s` semantics. |
+| E14.4-2b-4 editor UI visual/code gate | Restart implemented and pushed. | Saves editor-side v2 payload and keeps v2 start disabled. |
+| E14.4-2b-5 engine timeline planning gate | Docs-only complete. | Plans expansion, stable metadata, legacy/v2 coexistence, rest extension, records, commands/events, TimerDial input, and E12 impact. |
+| E14.4-2b-5a timeline adapter model/tests | Expand composition v2 into deterministic timeline steps in a pure adapter. | No production engine or TimerDial mapping. |
+| E14.4-2b-5b engine integration | Wire v2 snapshots to the adapter-expanded timeline. | Preserve command, event, sound cue, ready gate, pause, skip, and `+15s` semantics. |
+| E14.4-2b-5c session record compatibility tests | Verify v2 snapshot, actual step records, rest extension records, and E12 descriptors remain reconstructable. | Split migration if explicit persisted metadata fields become necessary. |
 | E14.4-2b-6 TimerDial mapping implementation | Keep the original TimerDial UI and map only the outer ring to the active stage's internal targets by duration ratio. | Must preserve pause freeze, terminal freeze, reduce-motion, final countdown, and rest extension monotonic progress. |
-| E14.4-2b-7 migration / compatibility / E12 tests | Cover old plans, old snapshots, new composition, unsupported versions, current plan conversion, serializer round-trip, timeline expansion, TimerDial mapping, and E12 trend keys. | Required before shipping persisted composition. |
+| E14.4-2b-7 migration / compatibility / E12 trend polish | Cover old plans, old snapshots, new composition, unsupported versions, current plan conversion, serializer round-trip, timeline expansion, TimerDial mapping, and E12 trend keys if not already covered. | Required before any schema or broad trend behavior change. |
 
 Future v2 editor work must remain editor-only until explicit engine timeline and TimerDial mapping stories wire those paths. Do not fake execution or TimerDial support.
 
 ## Gate Conclusion
 
-This gate retains two-layer timed composition as a product and planning direction. E14.4-2b-2 remains the accepted data model planning decision. E14.4-2b-3 has been restarted and implemented only as a model / serializer / editor adapter foundation. E14.4-2b-4 local UI implementation remains stopped / rolled back / not accepted; the next allowed step is E14.4-2b-4 editor UI visual/code gate from a fresh template-based story, not E14.4-2b-5 / E14.4-2b-6 continuation.
+This gate retains two-layer timed composition as a product and planning direction. E14.4-2b-2 remains the accepted data model planning decision. E14.4-2b-3 has been restarted and implemented only as a model / serializer / editor adapter foundation. E14.4-2b-4 has been restarted and implemented only as an editor UI visual/code gate. E14.4-2b-5 has now completed a docs-only engine timeline planning gate; the next allowed implementation step is E14.4-2b-5a timeline adapter model/tests, not direct engine integration or E14.4-2b-6 TimerDial continuation.
