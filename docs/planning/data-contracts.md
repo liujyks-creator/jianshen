@@ -391,6 +391,15 @@ E14.4-2b-6 TimerDial mapping status: `docs/testing/e14-4-2b-6-timerdial-mapping-
 
 E14.4-2b closeout status: `docs/testing/e14-4-2b-closeout.md` 已将 timed composition editor + engine + records + TimerDial mapping 链路标记为 completed / closed。未覆盖的 reduce-motion mapping smoke、单独 3 / 4 target visual captures、E12 records/trends polish 和其他 UI polish 是后续非阻塞独立任务。
 
+E14.6 stage style / icon planning status: `docs/testing/e14-6-real-device-timerdial-feedback-planning.md` 已记录真机反馈拆分。E14.6-3 后续需要把阶段样式和图标视为 contract-level planning，而不是普通视觉装饰：
+
+- `TimedCompositionStageGroup.iconKey`、`TimedCompositionTarget.iconKey`、`colorHex` 继续作为可保存的阶段 / 目标样式输入。
+- `warmupSec`、`cooldownSec` 和 synthetic between-round rest 虽然当前不是用户编辑的 targets，但在执行和 TimerDial 上都是 stage-like surfaces；它们应通过默认 stage style token 解析颜色和内置图标。
+- `rounds` 只是重复结构和计数，不需要自己的颜色，也不应伪装为阶段样式字段。
+- 第一版 icon 只支持项目内置白色图标集，通过稳定 `iconKey` 引用；用户上传图片、自定义图片库或远程图标资源不进入当前版本，应列为 post-MVP / later story。
+- 若未来要让 warmup / cooldown / between-round rest 的颜色或图标成为用户可编辑持久化字段，应先拆 model / serializer decision story。仅扩展现有 JSON payload 不自动要求 Room table / column migration；新增 Room 字段必须另拆 migration story。
+- 无效 `iconKey` 必须回退到阶段类型默认图标或安全 fallback，且不影响 engine、session record、`WorkoutCommand` 或 `WorkoutEvent` 语义。
+
 概念结构：
 
 ```ts

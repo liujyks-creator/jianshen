@@ -323,6 +323,18 @@ E14.4-2b-6 TimerDial mapping 链路已完成：planning gate 见 `docs/testing/e
 
 E14.5 continuous progress 与 E14.4-2b-6 mapping 是两个独立完成的链路：E14.5 只修复 smooth progress identity / anchor split，E14.4-2b-6 只改变 v2 outer-ring mapping source。二者不能在后续任务中混为同一修复范围。E14.4-2b closeout 已记录在 `docs/testing/e14-4-2b-closeout.md`；后续 reduce-motion mapping smoke、单独 3 / 4 target captures、E12 records/trends polish 或其他 UI polish 均需另开任务。
 
+### E14.6 Real-device TimerDial feedback planning
+
+E14.6 已把 2026-06-28 真机视频 / 截图反馈收口为 docs-only planning gate，详见 `docs/testing/e14-6-real-device-timerdial-feedback-planning.md`。用户提供的视频和截图保留在 `C:/Users/25073/Downloads/`，本仓库不复制、不提交、不把下载目录素材作为 Git 资产。
+
+E14.6 后续拆为三个独立 story，优先级如下：
+
+1. E14.6-1 TimerDial progress rebound fix：normal motion 下外圈 / 当前 active segment 不应每秒前跳再回弹；目标是单调、连续、状态驱动的视觉进度。该 story 不改 outer-ring semantic mapping、Canvas geometry、stage count、engine timeline、Room、session records、`WorkoutCommand`、`WorkoutEvent` 或 E14.4-2b mapping 数据源。
+2. E14.6-2 Completion recap page redesign：训练完成后进入“本次数据统计复盘页面”，顶部明确完成并带克制庆祝，中部复用现有训练总结 / 数据总览 / session summary，底部返回。该 story 不改变 `WorkoutSession` 语义，不混入 E12 records / trends polish，不恢复心率。
+3. E14.6-3 Stage style system planning / design：热身、放松和轮间休息都是阶段并支持颜色；轮数只是结构计数，不需要颜色；阶段 / 目标支持内置白色 icon key，第一版不支持用户上传图片、自定义图片库或远程图标资源。
+
+内部阶段圆环下的浅色承托圆环可以在未来 visual polish 中单独加粗，但不应和 E14.6-1 progress rebound fix 混为同一实现。E14.6 planning gate 不写 Kotlin / Compose / Room / tests，不生成 APK，不启动 AVD。
+
 ### E12 统计图表 / 历史趋势
 
 总统计、图表、计划趋势、同日多轮运动分析和历史记录清理进入 E12，不混入 E10.5 / E10.6 / E10.7 / E10.8 / E10.9。E11.3 后首版不再规划平均心率趋势。

@@ -242,6 +242,7 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 默认体验保持克制，不鼓励同一计划堆叠大量高饱和或高注意色。红、深橙、橙、琥珀、柠黄绿等高注意色应明确标记，用于工作、爆发或提醒感阶段。
 - 执行页深色背景下，阶段色填充 Timer Dial 中心圆时，圆内文字和图标必须使用 preset `textColor` 或安全 fallback 保持高对比。
 - 非法 `colorHex` 必须回退到阶段默认安全色，不应导致计划详情、ready gate 或执行页崩溃。
+- E14.6-3 规划补充：热身、放松和轮间休息都应按阶段处理并支持颜色；轮数只是结构计数，不需要自己的颜色。
 
 ### Stage Color Picker
 
@@ -252,6 +253,16 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 色板应优先使用可复用的大色板 bottom sheet / dialog / page-style panel，包含 `推荐色`、`更多颜色`、大色块和完成动作；编辑卡片不使用多个文字颜色选项挤占主编辑区域。
 - 计划颜色是用户手动设置的计划级颜色，不自动从首个阶段、阶段内部目标或力量目标组推断。计划颜色默认可使用红色，并可通过计划列表 / 详情左侧色块或展开计划内的颜色入口修改；若实现需要新的持久化字段，必须先拆数据决策，不在 UI polish 中静默改 Room schema。
 - 色板不能引入第四套 skin、远程主题、运行时插件市场或第三方皮肤安装。
+
+### Stage Icons
+
+阶段图标用于快速识别当前训练阶段或目标，不是动作教学图。第一版只使用项目提供的内置白色图标集，通过稳定 `iconKey` 引用，并叠加在阶段色中心圆或阶段色块上。
+
+- 热身、工作、休息、放松、自定义、轮间休息和 composition target 都应有默认图标 fallback。
+- 阶段 / 目标可保存 `iconKey`；无效或缺失的 key 回退到阶段类型默认图标，不影响训练执行。
+- 图标和阶段色必须一起满足对比度；深色执行页中优先使用白色或 `StageColorPreset.textColor`。
+- 第一版不支持用户上传图片、自定义图片库或远程图标资源。自定义图片只作为 post-MVP / later story，并且必须先明确存储、权限、备份和开源定制边界。
+- 图标不能承诺动作内容指导、AI 纠错、语音教练或健康设备能力。
 
 ## Typography
 
@@ -363,11 +374,20 @@ Chip 用于动作能力、部位、器械、难度、训练状态。Chip 不是�
 
 E10.1 后，计时训练后续按纯间歇计时器处理，执行页主信息是当前阶段、阶段倒计时和大圆盘主控制区，不再要求展示动作库动作或动作详情入口。
 
+### Completion Recap Page
+
+训练完成后应进入“本次数据统计复盘页面”，而不是继续停在执行页大圆盘加卡片的完成态。完成页仍属于训练闭环，但信息层级从“控制训练”切换为“确认完成并回看本次数据”。
+
+- 顶部使用克制但有庆祝感的完成效果，并明确标注已完成。
+- 中部复用已有训练总结、数据总览和 session summary，不编造尚未实现的趋势或健康数据。
+- 底部提供返回入口，保持小屏和导航栏安全区可达。
+- 完成页不得改变 `WorkoutSession` 语义，不得把 E12 records / trends polish 混入完成态重设计。
+
 ### Timer Dial
 
 E10.5 后，计时训练大圆盘进一步收敛为 Timer Dial 圆盘视觉语言。Timer Dial 可以参考黑红高对比的运动现场感，但必须使用 TrainFlow 自己的 token、图标语义、弧线层级和动效规则，不复制外部 APK / 截图的代码、资源、图标、字体、音频、专有动画或逐像素视觉。
 
-E14.4-2b 后，计时训练阶段内目标扩展进入独立语义 gate：沿用当前计时编辑器结构，顶部轮次与轮间休息仍保持在当前位置，下面继续是阶段编排；新增能力只是在既有阶段内部扩展更多目标 / 小节。E14.4-2b-2 已决定该结构是长期数据方向，推荐作为 versioned timed composition payload 存入现有 `WorkoutPlan.blocks` JSON / `WorkoutSession.planSnapshot` JSON，先不新增 Room table / column。旧计划可使用 compatibility wrapper 展示和执行，但查看不得静默改写；只有用户明确保存 / 转换后，当前计划才写入 composition v2，历史 snapshot 不回写。E14.4-2b-3 / E14.4-2b-4 本地实现未通过 review gate，已 rolled back / not accepted；当前生产基线没有已接受的 COMPOSITION_V2 编辑 UI 或 `待执行映射` 入口。未来若重启 editor UI，仍应保持顶部紧凑编辑热身、放松、轮次和轮间休息，阶段编排只显示每轮内重复 stageGroups；阶段折叠头只显示色块、名称、派生总时长、展开入口和拖拽入口；展开后在阶段内目标标题行直接提供添加目标入口，并说明阶段总时长由目标时长相加得到。目标行必须把设置 / 收起入口和拖拽入口分开，操作列固定，名称单行省略；阶段和目标排序以拖拽手柄为主，不显示重复的上移 / 下移备用入口；每个阶段最多 5 个目标。v2 进入 ready gate 或 execution 前必须另起 template-based implementation story 并通过 review gate。
+E14.4-2b 后，计时训练阶段内目标扩展已作为独立语义链路完成并关闭。当前基线采用 versioned timed composition payload 存入现有 `WorkoutPlan.blocks` JSON / `WorkoutSession.planSnapshot` JSON，不新增 Room table / column；旧计划通过 compatibility wrapper 展示和执行，查看不得静默改写。E14.4-2b-3 到 6c 已完成 editor-side composition v2 payload、adapter-expanded deterministic timeline、minimum engine bridge、adapter-expandable start gate、session record compatibility、TimerDial production mapping 和 smoke / visual QA review。后续不再继续 E14.4-2b implementation；reduce-motion mapping smoke、单独 3 / 4 target captures、E12 records/trends polish 或其他 UI polish 都必须另开任务。
 
 Timer Dial 的设计结构：
 
@@ -382,6 +402,8 @@ Timer Dial 的设计结构：
 E14.4-2b 的下一版 Timer Dial 语义必须保持当前已确认的圆盘 UI：轮次 / 轮间休息、内圈总进度、中心圆暂停 / 继续和既有 12 点数字圆标不作为本轮重设计对象。增量只在外圈：当当前 stage group 包含多个内部 targets 时，外圈按这些 targets 的 planned duration ratio 分段，active target 为粗弧，已完成 target 退为细弧 / 已经过弧；切换到下一个 stage group 时，外圈切换到该 stage group 自己的 target 结构。内圈仍表达整次训练总进度；中心圆仍表达当前 active target / stage、阶段剩余时间和暂停 / 继续主控制。12 点数字圆标继续沿用整次执行 timeline 的总阶段数语义，按 warmup + rounds * stageGroups + between-round rests + cooldown 计算。该语义进入生产前必须通过独立实现 story 和兼容测试确认，不能混入普通 UI polish。
 
 Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度。阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒都应服从真实训练状态和用户 cue settings。休息延长后，当前 rest 外圈弧和内圈 work+rest cycle progress 必须单调、不倒退，并在 active tick 继续推进；paused、completed 和 abandoned 状态不继续动画。
+
+E14.6 真机反馈补充：如果 normal motion 下外圈或当前 active segment 出现每秒前跳再回弹，必须拆 E14.6-1 单独修复。该修复只处理 progress monotonic / continuous behavior，不改 outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。内部阶段圆环下的浅色承托圆环可以在后续 visual polish 中稍微加粗，但不得和 progress rebound fix 混为同一代码修复，除非后续 story 明确允许。
 
 后续可以探索赛博霓虹、Official Flow、Tile Flow 和 Big Type 的 Timer Dial 适配，但 MVP 不新增第四套 skin。先定义圆盘语言，再讨论它如何融入 TrainFlow 风格。
 
