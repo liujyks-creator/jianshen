@@ -141,4 +141,4 @@ Smoke coverage:
 
 ## Next
 
-Continue with E14.4-2b-6 TimerDial mapping only through its own planning gate. Do not mix outer-ring semantic mapping with the continuous animation fix.
+E14.4-2b-6 TimerDial mapping planning gate is now documented separately. Continue with E14.4-2b-6a TimerDial mapping model/state tests, and keep the E14.5 smooth-progress identity / anchor split independent from any outer-ring semantic mapping.

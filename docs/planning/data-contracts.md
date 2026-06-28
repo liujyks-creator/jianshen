@@ -377,13 +377,17 @@ E14.4-2b-2 决定正式采用两层 timed composition 作为长期数据方向�
 
 E14.4-2b-3 restart status: 当前 Android 基线已接受 model / serializer / editor adapter foundation，但不继承此前已回滚实现。本轮新增独立 `TimedCompositionBlock` v2 payload、stage group / target / compatibility metadata、归一化和每个 stage group 最多 5 个 target 的规则；serializer 通过现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON round-trip v2 payload，同时保持 legacy timed JSON 不变。旧计划 wrapper 只生成 editor draft，默认 preserve source，不静默写回 v2；只有显式 export / conversion 才输出 composition v2。
 
-E14.4-2b-4 restart status: 计时编辑 UI 已连接 editor draft adapter，保存 editor-side v2 payload；v2 draft 和计划详情的 `开始训练` 均保持禁用，文案为 `待执行映射完成后可开始`。`TimedWorkoutEngine`、TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义保持不变。
+E14.4-2b-4 restart status: 计时编辑 UI 已连接 editor draft adapter，保存 editor-side v2 payload；当时 v2 draft 和计划详情的 `开始训练` 均保持禁用，文案为 `待执行映射完成后可开始`。该 start gate 后续已由 E14.4-2b-5b-3 替换为 adapter-expandable / fail-closed 判定。TimerDial、Room schema、session record、`WorkoutCommand`、`WorkoutEvent` 和声音语义仍保持不变。
 
 E14.4-2b-5 planning gate status: `docs/testing/e14-4-2b-5-engine-timeline-planning-gate.md` 已完成 docs-only timeline planning。该 gate 只定义 future adapter expansion、stable metadata、legacy/v2 coexistence、rest extension、snapshot/record impact、TimerDial input 和 E12 impact，不实现 engine 或 TimerDial，不改 session record / Room schema。
 
 E14.4-2b-5a timeline adapter status: 当前 Android 基线已新增 pure `TimedCompositionTimeline` adapter model 和 focused unit tests。该 adapter 只接受 `TimedCompositionBlock` v2 payload，先校验 `compositionVersion == 2`，再消费 existing model normalization，展开 deterministic timeline steps / stage instances，并输出 stable metadata。它不接入 `TimedWorkoutEngine`、TimerDial、UI route、Room schema、`WorkoutCommand` / `WorkoutEvent` 或 session record model；legacy `TimedCircuitBlock` 仍继续走现有 engine path。
 
-E14.4-2b-5b engine integration planning status: `docs/testing/e14-4-2b-5b-engine-integration-planning-gate.md` 已完成 docs-only source-boundary audit。结论是未来最小 bridge 应放在 `TimedWorkoutEngine` 的 snapshot-to-step 构造边界，由 `TimedCompositionTimelineAdapter` 展开 v2 block，再转换为现有 `TimedSessionStep`；legacy `TimedCircuitBlock` 路径保持不变，v2 `开始训练` 仍需等 bridge tests / implementation gate 通过后才开放。第一版 bridge 不新增 Room 字段、不改 `WorkoutCommand` / `WorkoutEvent`、不改 session record model，也不做 TimerDial production mapping。
+E14.4-2b-5b engine integration planning status: `docs/testing/e14-4-2b-5b-engine-integration-planning-gate.md` 已完成 docs-only source-boundary audit，后续 E14.4-2b-5b-2 已按该结论实现 minimum bridge。最小 bridge 放在 `TimedWorkoutEngine` 的 snapshot-to-step 构造边界，由 `TimedCompositionTimelineAdapter` 展开 v2 block，再转换为现有 `TimedSessionStep`；legacy `TimedCircuitBlock` 路径保持不变。第一版 bridge 不新增 Room 字段、不改 `WorkoutCommand` / `WorkoutEvent`、不改 session record model，也不做 TimerDial production mapping。
+
+E14.4-2b-5c session record compatibility status: 当前 Android 基线已验证 v2 execution 可以生成既有 `WorkoutSession` / step records / rest extension records，并可通过 immutable `WorkoutSession.planSnapshot` + deterministic adapter step ids 重建 v2 timeline metadata。真实 v2 rest target 与 synthetic between-round rest 继续使用既有 `TimedRestExtensionRecord` 结构；legacy timed records 保持不变。该结论不要求 Room migration 或 session record model change。
+
+E14.4-2b-6 TimerDial mapping planning status: `docs/testing/e14-4-2b-6-timerdial-mapping-planning-gate.md` 已完成 docs-only source-boundary audit。该 gate 只规划 v2 adapter timeline 如何映射到 TimerDial UI state、inner ring total stage count、outer ring 1-5 targets planned ratio、boundary fallback、rest extension 和 continuous progress boundary；不实现 production TimerDial mapping，不改 engine / timeline adapter / session record / Room schema。
 
 概念结构：
 
@@ -463,16 +467,23 @@ Adapter metadata rules:
 - Each executable step must carry metadata that can be reconstructed from `WorkoutSession.planSnapshot`: `compositionVersion`, `compositionBlockId`, deterministic `timelineStageId`, `timelineStageKind`, `stageGroupId`, `targetId`, `targetKind`, `roundIndex`, `stageGroupIndex`, `targetIndex`, `stageInstanceIndex`, `targetInstanceIndex`, `plannedDurationSec`, `displayName`, `colorHex`, optional `iconKey`, and resolved `cueSettings`.
 - `stageGroupId` / `targetId` are source ids for real stage groups and targets. Warmup, cooldown, and between-round rests use deterministic synthetic ids in the adapter timeline only; they must not be written back into the v2 payload as user-authored targets.
 - Step ids should be deterministic and include enough metadata to let session records and E12 descriptors reconstruct the same timeline from the historical snapshot.
-- Legacy timed plans continue through the current `TimedCircuitBlock` engine path. v2 plans remain not startable until adapter and engine integration are implemented.
+- Legacy timed plans continue through the current `TimedCircuitBlock` engine path. Adapter-expandable v2 plans can start through the minimum engine bridge; unsupported-version or empty v2 timelines fail closed.
 - Default contract decision: do not add persisted `SessionStepRecord`, `TimedRestExtensionRecord`, Room table, or Room column fields for v2 metadata in this gate. If a later implementation requires explicit persisted composition metadata beyond deterministic ids and snapshot reconstruction, split a separate migration / compatibility story first.
 - First bridge strategy: preserve adapter step ids as engine step ids where possible, map `compositionBlockId` to `TimedSessionStep.blockId`, and map real or synthetic v2 target ids to `TimedSessionStep.itemId` so rest-extension and E12 descriptors can reconstruct richer metadata from the historical snapshot.
 
 TimerDial mapping rules:
 
 - The production TimerDial UI is not redesigned.
-- Outer ring segments are derived from the current stage group targets by planned duration ratio.
-- Active target is the thick active arc; completed targets in the same stage instance become elapsed / thin arcs.
+- Current production mapping remains legacy work/rest-cycle based until E14.4-2b-6b implements the v2 mapper.
+- For v2 repeated stage groups, outer ring segments are derived from the current stage group targets by planned duration ratio.
+- The outer ring must support 1-5 targets: one target is a full ring, two targets split by duration ratio, and three to five targets split by each target's `plannedDurationSec`.
+- `action`, `custom`, and `rest` targets all participate in the target-ratio set.
+- Active target is highlighted / active; completed targets in the same stage instance become elapsed / completed; future targets remain planned / future.
+- Target color wins first, then stage group color, then the existing stage-type or safe default color.
+- Warmup, cooldown, and synthetic between-round rest are not stage group targets. Their outer ring should use single-segment current-stage / legacy-like fallback semantics.
 - Rest extension keeps planned segment ratios stable and uses monotonic progress clamping rather than resizing the rest target segment.
+- `+15s` must not insert a target, must not create a sixth segment, must not rewrite the plan snapshot, and must not require a session record model change.
+- E14.5 smooth progress identity must remain stable across same-target second ticks; tick-updated progress and remaining time belong to anchor inputs, not identity.
 - Inner ring total stage count is:
 
 ```ts
