@@ -83,6 +83,7 @@ class TimedCompositionBoundaryGuardTest {
             "architecture/TimedCompositionBoundaryGuardTest.kt",
             "core/model/TimedCompositionTimelineAdapterTest.kt",
             "core/engine/TimedCompositionEngineBridgeTest.kt",
+            "feature/workoutsession/TimerDialCompositionMappingTest.kt",
             "feature/workoutsession/TimedCompositionSessionRecordCompatibilityTest.kt"
         )
         val guardedTerms = listOf(
@@ -102,7 +103,7 @@ class TimedCompositionBoundaryGuardTest {
 
         assertTrue(
             "Timeline adapter terms in tests must stay limited to adapter tests, boundary guard, " +
-                "bridge expectation, and session record compatibility test files:\n" +
+                "bridge expectation, TimerDial mapping expectation, and session record compatibility test files:\n" +
                 violations.joinToString("\n"),
             violations.isEmpty()
         )
