@@ -73,6 +73,14 @@ Covered paths:
 - Logcat fatal / app crash search returned no matches.
 - AVD was closed after smoke and `adb devices` was empty.
 
+## E14.6-2c Review Note
+
+E14.6-2c re-reviewed this smoke evidence in `docs/testing/e14-6-2c-completion-recap-smoke-visual-qa.md`.
+
+The E14.6-2b UI tree evidence remains useful for semantic / interaction coverage: completed, abandoned / early-ended, rest extension, skipped, pause summary, recap details, bottom return, forbidden UI terms, and focused fatal scan were covered.
+
+However, the E14.6-2b `.png` files are not valid PNG images and cannot support screenshot-level visual QA. A supplemental E14.6-2c attempt installed the existing debug APK without rebuilding, but current TrainFlow screenshots were black and the full recap path could not be rerun. Treat E14.6-2 screenshot-level visual QA as not yet accepted until a future binary-safe screenshot recapture produces inspectable completion recap images.
+
 ## Verification
 
 Passed:
@@ -103,5 +111,5 @@ Boundary checks passed:
 
 ## Next
 
-- E14.6-2c completion recap smoke / visual QA review gate.
-- Or E14.6-3 stage style / icon planning.
+- E14.6-2d completion recap screenshot evidence recapture.
+- Or E14.6-3 stage style / icon planning if the current screenshot evidence limitation is explicitly accepted.
