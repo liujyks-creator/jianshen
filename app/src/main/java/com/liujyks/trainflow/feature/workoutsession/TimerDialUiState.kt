@@ -723,6 +723,21 @@ internal fun TimerDialUiState.canProjectSmoothProgress(
     return !reduceMotion && !isPaused && canTogglePause && currentStageRemainingSec > 0
 }
 
+internal fun TimerDialUiState.shouldHoldInitialSmoothProgress(
+    reduceMotion: Boolean = false
+): Boolean {
+    if (!canProjectSmoothProgress(reduceMotion)) {
+        return false
+    }
+
+    val activeSegmentProgress = stageSegments
+        .firstOrNull { segment -> segment.isCurrent }
+        ?.progress
+        ?: currentStageProgress
+    return activeSegmentProgress.clampedProgress() <= 0f &&
+        currentStageProgress.clampedProgress() <= 0f
+}
+
 internal fun timerDialSmoothProgressElapsedMillis(
     frameNanos: Long,
     anchorNanos: Long,
@@ -741,13 +756,18 @@ internal fun TimerDialUiState.monotonicDisplayedProgress(
     reduceMotion: Boolean = false,
     previousDisplayed: TimerDialDisplayedProgress? = null
 ): TimerDialDisplayedProgress {
+    val projectionElapsedMillis = if (shouldHoldInitialSmoothProgress(reduceMotion)) {
+        0L
+    } else {
+        elapsedMillis
+    }
     val projected = TimerDialDisplayedProgress(
         totalProgress = projectedTotalProgress(
-            elapsedMillis = elapsedMillis,
+            elapsedMillis = projectionElapsedMillis,
             reduceMotion = reduceMotion
         ),
         currentStageProgress = projectedStageProgress(
-            elapsedMillis = elapsedMillis,
+            elapsedMillis = projectionElapsedMillis,
             reduceMotion = reduceMotion
         )
     )

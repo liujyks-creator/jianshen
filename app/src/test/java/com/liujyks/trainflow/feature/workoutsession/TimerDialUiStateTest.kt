@@ -433,6 +433,48 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun displayedProgressHoldsAtStageStartUntilFirstEngineTick() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+        val initialDial = state.toTimedWorkoutSessionScreenState().timerDial
+        val initialDisplayed = initialDial.monotonicDisplayedProgress(elapsedMillis = 500)
+
+        assertTrue(initialDial.shouldHoldInitialSmoothProgress())
+        assertTrue(initialDial.projectedStageProgress(elapsedMillis = 500) > initialDial.currentStageProgress)
+        assertEquals(initialDial.currentStageProgress, initialDisplayed.currentStageProgress, 0.0001f)
+        assertEquals(initialDial.totalProgress, initialDisplayed.totalProgress, 0.0001f)
+
+        state = TimedWorkoutEngine.tick(state, seconds = 1).state
+        val afterTickDial = state.toTimedWorkoutSessionScreenState().timerDial
+        val afterTickDisplayed = afterTickDial.monotonicDisplayedProgress(elapsedMillis = 500)
+
+        assertFalse(afterTickDial.shouldHoldInitialSmoothProgress())
+        assertTrue(afterTickDisplayed.currentStageProgress > afterTickDial.currentStageProgress)
+    }
+
+    @Test
+    fun displayedProgressHoldsAfterSkipIntoNextStageUntilFirstEngineTick() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
+
+        val skippedDial = state.toTimedWorkoutSessionScreenState().timerDial
+        val skippedDisplayed = skippedDial.monotonicDisplayedProgress(elapsedMillis = 500)
+
+        assertEquals(TimerDialStageType.REST, skippedDial.currentStageType)
+        assertEquals(0f, skippedDial.currentStageProgress, 0.0001f)
+        assertTrue(skippedDial.shouldHoldInitialSmoothProgress())
+        assertTrue(skippedDial.projectedStageProgress(elapsedMillis = 500) > skippedDial.currentStageProgress)
+        assertEquals(skippedDial.currentStageProgress, skippedDisplayed.currentStageProgress, 0.0001f)
+        assertEquals(skippedDial.totalProgress, skippedDisplayed.totalProgress, 0.0001f)
+    }
+
+    @Test
     fun smoothProgressIdentityStaysStableAcrossSameStageSecondTicks() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
