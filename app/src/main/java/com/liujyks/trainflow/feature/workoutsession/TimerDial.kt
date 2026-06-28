@@ -25,8 +25,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -74,13 +76,26 @@ internal fun TimerDial(
     val smoothProgressAnchor = safeState.smoothProgressAnchor()
     var smoothProgressFrameNanos by remember(smoothProgressIdentity, reduceMotion) { mutableLongStateOf(0L) }
     var smoothProgressAnchorNanos by remember(smoothProgressIdentity, reduceMotion) { mutableLongStateOf(0L) }
+    var appliedSmoothProgressAnchor by remember(smoothProgressIdentity, reduceMotion) {
+        mutableStateOf(smoothProgressAnchor)
+    }
+    var previousDisplayedProgress by remember(smoothProgressIdentity, reduceMotion) {
+        mutableStateOf(
+            safeState.monotonicDisplayedProgress(
+                elapsedMillis = 0L,
+                reduceMotion = reduceMotion
+            )
+        )
+    }
     LaunchedEffect(smoothProgressIdentity, reduceMotion) {
         smoothProgressFrameNanos = 0L
         smoothProgressAnchorNanos = 0L
+        appliedSmoothProgressAnchor = smoothProgressAnchor
         if (safeState.canProjectSmoothProgress(reduceMotion)) {
             val startedAtNanos = withFrameNanos { frameTimeNanos -> frameTimeNanos }
             smoothProgressFrameNanos = startedAtNanos
             smoothProgressAnchorNanos = startedAtNanos
+            appliedSmoothProgressAnchor = smoothProgressAnchor
             while (true) {
                 smoothProgressFrameNanos = withFrameNanos { frameTimeNanos -> frameTimeNanos }
             }
@@ -92,23 +107,28 @@ internal fun TimerDial(
                 ?: withFrameNanos { frameTimeNanos -> frameTimeNanos }
             smoothProgressFrameNanos = anchorNanos
             smoothProgressAnchorNanos = anchorNanos
+            appliedSmoothProgressAnchor = smoothProgressAnchor
         } else {
             smoothProgressFrameNanos = 0L
             smoothProgressAnchorNanos = 0L
+            appliedSmoothProgressAnchor = smoothProgressAnchor
         }
     }
-    val smoothProgressElapsedNanos = (smoothProgressFrameNanos - smoothProgressAnchorNanos)
-        .coerceAtLeast(0L)
-    val smoothProgressElapsedMillis = (smoothProgressElapsedNanos / 1_000_000L)
-        .coerceAtMost(TimerDialSmoothProgressMaxMillis)
-    val animatedTotalProgress = safeState.projectedTotalProgress(
-        elapsedMillis = smoothProgressElapsedMillis,
-        reduceMotion = reduceMotion
+    val smoothProgressElapsedMillis = timerDialSmoothProgressElapsedMillis(
+        frameNanos = smoothProgressFrameNanos,
+        anchorNanos = smoothProgressAnchorNanos,
+        anchorApplied = appliedSmoothProgressAnchor == smoothProgressAnchor
     )
-    val animatedStageProgress = safeState.projectedStageProgress(
+    val displayedProgress = safeState.monotonicDisplayedProgress(
         elapsedMillis = smoothProgressElapsedMillis,
-        reduceMotion = reduceMotion
+        reduceMotion = reduceMotion,
+        previousDisplayed = previousDisplayedProgress
     )
+    SideEffect {
+        previousDisplayedProgress = displayedProgress
+    }
+    val animatedTotalProgress = displayedProgress.totalProgress
+    val animatedStageProgress = displayedProgress.currentStageProgress
     val finalPulse by animateFloatAsState(
         targetValue = timerDialFinalPulseTarget(
             isFinalCountdown = safeState.isFinalCountdown,

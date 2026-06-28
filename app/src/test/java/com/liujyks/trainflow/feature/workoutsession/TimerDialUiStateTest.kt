@@ -413,6 +413,26 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun pendingAnchorUpdateDoesNotReuseStaleProjectionElapsed() {
+        assertEquals(
+            0L,
+            timerDialSmoothProgressElapsedMillis(
+                frameNanos = 2_000_000_000L,
+                anchorNanos = 1_000_000_000L,
+                anchorApplied = false
+            )
+        )
+        assertEquals(
+            TimerDialSmoothProgressMaxMillis,
+            timerDialSmoothProgressElapsedMillis(
+                frameNanos = 2_000_000_000L,
+                anchorNanos = 1_000_000_000L,
+                anchorApplied = true
+            )
+        )
+    }
+
+    @Test
     fun smoothProgressIdentityStaysStableAcrossSameStageSecondTicks() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
@@ -436,6 +456,37 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun sameStageAnchorUpdateCannotReduceDisplayedActiveProgress() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val beforeTick = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedBeforeTick = TimerDialDisplayedProgress(
+            totalProgress = beforeTick.projectedTotalProgress(elapsedMillis = 1_000),
+            currentStageProgress = beforeTick.projectedStageProgress(elapsedMillis = 1_000)
+        )
+
+        state = TimedWorkoutEngine.tick(state, seconds = 1).state
+        val afterTick = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedAfterTick = afterTick.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = displayedBeforeTick
+        )
+
+        assertEquals(beforeTick.smoothProgressIdentity(), afterTick.smoothProgressIdentity())
+        assertTrue(displayedAfterTick.currentStageProgress >= displayedBeforeTick.currentStageProgress)
+        assertTrue(displayedAfterTick.totalProgress >= displayedBeforeTick.totalProgress)
+        assertEquals(
+            displayedAfterTick.currentStageProgress,
+            afterTick.stageSegments.single { segment -> segment.isCurrent }.progress,
+            0.0001f
+        )
+    }
+
+    @Test
     fun smoothProgressIdentityChangesWhenCurrentSegmentChanges() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 6)),
@@ -451,6 +502,31 @@ class TimerDialUiStateTest {
         assertEquals(TimerDialStageType.WORK, beforeSwitch.currentStageType)
         assertEquals(TimerDialStageType.REST, afterSwitch.currentStageType)
         assertNotEquals(beforeSwitch.smoothProgressIdentity(), afterSwitch.smoothProgressIdentity())
+    }
+
+    @Test
+    fun stageIdentityChangeCanResetDisplayedProgress() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 6)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 3).state
+        val beforeSwitch = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedBeforeSwitch = beforeSwitch.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = null
+        )
+
+        state = TimedWorkoutEngine.tick(state, seconds = 2).state
+        val afterSwitch = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedAfterSwitch = afterSwitch.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = null
+        )
+
+        assertNotEquals(beforeSwitch.smoothProgressIdentity(), afterSwitch.smoothProgressIdentity())
+        assertTrue(displayedAfterSwitch.currentStageProgress < displayedBeforeSwitch.currentStageProgress)
     }
 
     @Test
@@ -504,6 +580,28 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun reduceMotionDisplayedProgressRemainsDiscreteEvenWithPreviousFloor() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayed = dial.monotonicDisplayedProgress(
+            elapsedMillis = 500,
+            reduceMotion = true,
+            previousDisplayed = TimerDialDisplayedProgress(
+                totalProgress = 0.8f,
+                currentStageProgress = 0.8f
+            )
+        )
+
+        assertEquals(dial.currentStageProgress, displayed.currentStageProgress, 0.0001f)
+        assertEquals(dial.totalProgress, displayed.totalProgress, 0.0001f)
+    }
+
+    @Test
     fun smoothProjectionFreezesWhenPaused() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
@@ -520,6 +618,29 @@ class TimerDialUiStateTest {
     }
 
     @Test
+    fun pausedDisplayedProgressFreezeIgnoresPreviousRunningFloor() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayed = dial.monotonicDisplayedProgress(
+            elapsedMillis = 500,
+            previousDisplayed = TimerDialDisplayedProgress(
+                totalProgress = 0.8f,
+                currentStageProgress = 0.8f
+            )
+        )
+
+        assertTrue(dial.isPaused)
+        assertEquals(dial.currentStageProgress, displayed.currentStageProgress, 0.0001f)
+        assertEquals(dial.totalProgress, displayed.totalProgress, 0.0001f)
+    }
+
+    @Test
     fun smoothProjectionFreezesWhenCompleted() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 0)),
@@ -532,6 +653,32 @@ class TimerDialUiStateTest {
         assertFalse(dial.canTogglePause)
         assertEquals(dial.currentStageProgress, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
         assertEquals(dial.totalProgress, dial.projectedTotalProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
+    fun terminalDisplayedProgressFreezeIgnoresPreviousRunningFloor() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 4).state
+        state = TimedWorkoutEngine.dispatch(
+            state,
+            WorkoutCommand.EndSession(reason = "user_requested")
+        ).state
+        val dial = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayed = dial.monotonicDisplayedProgress(
+            elapsedMillis = 500,
+            previousDisplayed = TimerDialDisplayedProgress(
+                totalProgress = 0.8f,
+                currentStageProgress = 0.8f
+            )
+        )
+
+        assertFalse(dial.canTogglePause)
+        assertEquals(dial.currentStageProgress, displayed.currentStageProgress, 0.0001f)
+        assertEquals(dial.totalProgress, displayed.totalProgress, 0.0001f)
     }
 
     @Test
@@ -565,6 +712,32 @@ class TimerDialUiStateTest {
 
         assertEquals(4f / 15f, dial.totalProgress, 0.0001f)
         assertEquals(4.5f / 15f, dial.projectedTotalProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
+    fun restExtensionDisplayedProgressDoesNotMoveBackwardFromPreviousProjection() {
+        var state = TimedWorkoutEngine.dispatch(
+            TimedWorkoutEngine.create(timerDialPlan(workSec = 4, restSec = 10)),
+            WorkoutCommand.StartSession
+        ).state
+
+        state = TimedWorkoutEngine.tick(state, seconds = 9).state
+        val beforeExtension = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedBeforeExtension = beforeExtension.monotonicDisplayedProgress(
+            elapsedMillis = 1_000,
+            previousDisplayed = null
+        )
+
+        state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.ExtendRest(seconds = 15)).state
+        val afterExtension = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedAfterExtension = afterExtension.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = displayedBeforeExtension
+        )
+
+        assertEquals(beforeExtension.smoothProgressIdentity(), afterExtension.smoothProgressIdentity())
+        assertTrue(displayedAfterExtension.currentStageProgress >= displayedBeforeExtension.currentStageProgress)
+        assertTrue(displayedAfterExtension.totalProgress >= displayedBeforeExtension.totalProgress)
     }
 
     @Test

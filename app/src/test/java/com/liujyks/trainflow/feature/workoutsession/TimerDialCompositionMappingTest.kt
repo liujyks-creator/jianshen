@@ -328,6 +328,45 @@ class TimerDialCompositionMappingTest {
     }
 
     @Test
+    fun v2ActiveSegmentDisplayedProgressIsMonotonicAcrossSecondTick() {
+        val block = compositionBlock(
+            stageGroups = listOf(
+                stageGroup(
+                    id = "monotonic",
+                    order = 1,
+                    targets = listOf(
+                        actionTarget(id = "work", durationSec = 60),
+                        restTarget(id = "rest", durationSec = 20, order = 2)
+                    )
+                )
+            )
+        )
+
+        val beforeTick = block.expectedDialFor(
+            activeProgress = 0.25f,
+            currentRemainingSec = 45,
+            selectActiveStep = { step -> step.targetId == "work" }
+        )
+        val displayedBeforeTick = TimerDialDisplayedProgress(
+            totalProgress = beforeTick.projectedTotalProgress(elapsedMillis = 1_000),
+            currentStageProgress = beforeTick.projectedStageProgress(elapsedMillis = 1_000)
+        )
+        val afterTick = block.expectedDialFor(
+            activeProgress = 0.25f,
+            currentRemainingSec = 44,
+            selectActiveStep = { step -> step.targetId == "work" }
+        )
+        val displayedAfterTick = afterTick.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = displayedBeforeTick
+        )
+
+        assertEquals(beforeTick.smoothProgressIdentity(), afterTick.smoothProgressIdentity())
+        assertTrue(displayedAfterTick.currentStageProgress >= displayedBeforeTick.currentStageProgress)
+        assertTrue(displayedAfterTick.totalProgress >= displayedBeforeTick.totalProgress)
+    }
+
+    @Test
     fun legacyTimedPlanKeepsExistingWorkRestCycleSemantics() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(legacyTimedPlan()),

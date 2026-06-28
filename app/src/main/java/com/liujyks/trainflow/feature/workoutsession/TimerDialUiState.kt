@@ -688,6 +688,11 @@ internal data class TimerDialSmoothProgressAnchor(
     val segmentProgressSignature: String
 )
 
+internal data class TimerDialDisplayedProgress(
+    val totalProgress: Float,
+    val currentStageProgress: Float
+)
+
 internal fun TimerDialUiState.smoothProgressIdentity(): TimerDialSmoothProgressIdentity {
     return TimerDialSmoothProgressIdentity(
         currentSegmentId = stageSegments.firstOrNull { segment -> segment.isCurrent }?.id,
@@ -716,6 +721,51 @@ internal fun TimerDialUiState.canProjectSmoothProgress(
     reduceMotion: Boolean = false
 ): Boolean {
     return !reduceMotion && !isPaused && canTogglePause && currentStageRemainingSec > 0
+}
+
+internal fun timerDialSmoothProgressElapsedMillis(
+    frameNanos: Long,
+    anchorNanos: Long,
+    anchorApplied: Boolean
+): Long {
+    if (!anchorApplied) {
+        return 0L
+    }
+
+    return ((frameNanos - anchorNanos).coerceAtLeast(0L) / 1_000_000L)
+        .coerceAtMost(TimerDialSmoothProgressMaxMillis)
+}
+
+internal fun TimerDialUiState.monotonicDisplayedProgress(
+    elapsedMillis: Long,
+    reduceMotion: Boolean = false,
+    previousDisplayed: TimerDialDisplayedProgress? = null
+): TimerDialDisplayedProgress {
+    val projected = TimerDialDisplayedProgress(
+        totalProgress = projectedTotalProgress(
+            elapsedMillis = elapsedMillis,
+            reduceMotion = reduceMotion
+        ),
+        currentStageProgress = projectedStageProgress(
+            elapsedMillis = elapsedMillis,
+            reduceMotion = reduceMotion
+        )
+    )
+
+    if (!canProjectSmoothProgress(reduceMotion) || previousDisplayed == null) {
+        return projected
+    }
+
+    return TimerDialDisplayedProgress(
+        totalProgress = maxOf(
+            previousDisplayed.totalProgress.clampedProgress(),
+            projected.totalProgress.clampedProgress()
+        ),
+        currentStageProgress = maxOf(
+            previousDisplayed.currentStageProgress.clampedProgress(),
+            projected.currentStageProgress.clampedProgress()
+        )
+    )
 }
 
 internal fun TimerDialUiState.projectedStageProgress(

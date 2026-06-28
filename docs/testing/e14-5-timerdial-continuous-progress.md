@@ -141,4 +141,6 @@ Smoke coverage:
 
 ## Next
 
-E14.4-2b-6 TimerDial mapping planning gate is now documented separately. Continue with E14.4-2b-6a TimerDial mapping model/state tests, and keep the E14.5 smooth-progress identity / anchor split independent from any outer-ring semantic mapping.
+E14.6-1 closed the real-device rebound follow-up on top of this E14.5 identity / anchor split. E14.5 stopped the frame loop from restarting every second; E14.6-1 additionally prevents a fresh tick anchor from being projected with stale elapsed frame time and clamps same-identity displayed progress to remain monotonic.
+
+Continue with E14.6-2 Completion recap page redesign planning / visual gate, and keep TimerDial progress projection independent from completion recap, stage style, and outer-ring semantic mapping work.

@@ -183,7 +183,8 @@ class TimerDialMotionTest {
 
         assertTrue(dialSource.contains("val reduceMotion = LocalTrainFlowReduceMotion.current"))
         assertTrue(dialSource.contains("safeState.canProjectSmoothProgress(reduceMotion)"))
-        assertTrue(dialSource.contains("projectedTotalProgress("))
+        assertTrue(dialSource.contains("timerDialSmoothProgressElapsedMillis("))
+        assertTrue(dialSource.contains("monotonicDisplayedProgress("))
         assertTrue(dialSource.contains("reduceMotion = reduceMotion"))
         assertTrue(dialSource.contains("timerDialFinalPulseAnimationSpec(reduceMotion)"))
         assertTrue(dialSource.contains("timerDialMarkerRingStateTransitionSpec(reduceMotion)"))
