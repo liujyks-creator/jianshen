@@ -1,16 +1,29 @@
 # E14.4-2b Timed Composition Editor And TimerDial Ring Semantics
 
 **Date:** 2026-06-24
-**Status:** Visual / semantic gate retained; E14.4-2b-1 visual prototype retained; E14.4-2b-2 data model decision retained as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 restart editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate completed as docs-only; E14.4-2b-5a timeline adapter model/tests implemented; E14.4-2b-5b engine bridge implemented through split gates; E14.4-2b-5c session record compatibility verified; E14.4-2b-6 TimerDial mapping planning gate completed docs-only; TimerDial visual correction overlay retained
+**Status:** Completed / closed; visual / semantic gate retained; E14.4-2b-1 visual prototype retained; E14.4-2b-2 data model decision retained as planning; E14.4-2b-3 restart model / serializer / editor adapter foundation implemented; E14.4-2b-4 restart editor UI visual/code gate implemented; E14.4-2b-5 engine timeline planning gate completed as docs-only; E14.4-2b-5a timeline adapter model/tests implemented; E14.4-2b-5b engine bridge implemented through split gates; E14.4-2b-5c session record compatibility verified; E14.4-2b-6 through E14.4-2b-6c TimerDial mapping tests / production mapper / smoke visual QA completed; TimerDial visual correction overlay retained
 **Scope:** Timed two-level composition, TimerDial ring semantics, data impact, compatibility, and implementation split
 
-**Process note:** Before further implementation work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local Kotlin / Compose / test implementation did not pass review gate and has been rolled back to the visual-gate baseline. Restarted E14.4-2b-3 covers only model / serializer / editor adapter foundation, and restarted E14.4-2b-4 covers only the editor UI visual/code gate. E14.4-2b-5 / 5a / 5b / 5c have since closed the timeline, bridge, start gate, and session-record compatibility path. E14.4-2b-6 is closed only as a docs-only TimerDial mapping planning gate; TimerDial production mapping remains forbidden until the 6a test-first split is accepted.
+**Process note:** Before any future related work, read `docs/testing/e14-4-2b-process-reset.md`. The prior E14.4-2b-3 / E14.4-2b-4 local Kotlin / Compose / test implementation did not pass review gate and has been rolled back to the visual-gate baseline. Restarted E14.4-2b-3 covers only model / serializer / editor adapter foundation, and restarted E14.4-2b-4 covers only the editor UI visual/code gate. E14.4-2b-5 / 5a / 5b / 5c closed the timeline, bridge, start gate, and session-record compatibility path. E14.4-2b-6 / 6a / 6b / 6c closed the TimerDial mapping planning, expectations, production mapper, and smoke / visual QA path. E14.5 continuous progress remains an independent completed fix.
 
 ## Boundaries
 
-This document is retained as the visual / semantic gate plus visual artifact record. The prior E14.4-2b-3 model / serializer / editor adapter implementation and E14.4-2b-4 editor-only Compose UI implementation were local, did not pass review gate, and are not accepted product code. The accepted E14.4-2b-3 restart adds only the data foundation and compatibility adapter; the accepted E14.4-2b-4 restart adds only the editor UI visual/code gate. Later split gates added the adapter timeline, minimum engine bridge, v2 start gate, and session record compatibility coverage. None of those gates implements TimerDial production mapping.
+This document is retained as the visual / semantic gate plus visual artifact record. The prior E14.4-2b-3 model / serializer / editor adapter implementation and E14.4-2b-4 editor-only Compose UI implementation were local, did not pass review gate, and are not accepted product code. The accepted E14.4-2b-3 restart adds only the data foundation and compatibility adapter; the accepted E14.4-2b-4 restart adds only the editor UI visual/code gate. Later split gates added the adapter timeline, minimum engine bridge, v2 start gate, session record compatibility coverage, TimerDial production mapping, and smoke / visual QA review.
 
-This gate intentionally does not change Kotlin, Compose, Room, tests, workout engines, `WorkoutCommand`, `WorkoutEvent`, session record semantics, sound cue semantics, history deletion, plan snapshot records, or APK output.
+This original visual / semantic gate intentionally did not change Kotlin, Compose, Room, tests, workout engines, `WorkoutCommand`, `WorkoutEvent`, session record semantics, sound cue semantics, history deletion, plan snapshot records, or APK output. Later implementation slices are documented in their own E14.4-2b testing notes.
+
+## Final Closeout Note
+
+Final closeout is recorded in `docs/testing/e14-4-2b-closeout.md`.
+
+E14.4-2b is now completed / closed:
+
+- Timed composition v2 editor, adapter timeline, minimum engine bridge, start gate, session record compatibility, TimerDial production mapping, and smoke / visual QA are complete.
+- TimerDial outer ring maps active v2 stage-group targets by planned duration ratio for 1-5 targets.
+- Inner ring and the 12 o'clock number marker continue to express whole-workout stage count.
+- `+15s` rest extension does not recalculate planned ratios, insert targets, rewrite snapshots, or require session record model changes.
+- Legacy timed plans keep legacy execution, TimerDial, and record semantics.
+- Follow-up reduce-motion smoke, optional 3 / 4 target captures, E12 records/trends polish, and other UI polish are non-blocking separate tasks.
 
 This gate also keeps the E11.3 health boundary: no heart-rate UI, no manual heart-rate input, no unavailable heart-rate placeholder, no average heart-rate trend, no BLE / Huawei SDK / Health Connect / HealthKit / Wear OS integration, and no medical warning or training interruption logic.
 
@@ -745,7 +758,7 @@ docs/testing/e14-4-2b-6-timerdial-mapping-planning-gate.md
 
 Accepted mapping plan:
 
-- Current production TimerDial mapping remains legacy work/rest-cycle based; v2 outer-ring mapping is not implemented yet.
+- Original planning result: current production TimerDial mapping remained legacy work/rest-cycle based before E14.4-2b-6b. Follow-up result: E14.4-2b-6b implemented the v2 production mapper and E14.4-2b-6c accepted the smoke / visual QA evidence.
 - Existing `TimerDialUiState` already expresses total progress, current stage progress, outer segments, inner marker data, the 12 o'clock total-count marker, center countdown / pause control content, and E14.5 smooth identity / anchor inputs.
 - V2 mapping inputs should come from adapter-expanded timeline metadata, including `timelineStageId`, `timelineStageKind`, `stageInstanceIndex`, `targetInstanceIndex`, `stageGroupId`, `targetId`, `targetKind`, `roundIndex`, `stageGroupIndex`, `targetIndex`, `plannedDurationSec`, `displayName`, `colorHex`, and work/rest flags.
 - Inner ring continues to express total stage progress for the whole workout.
@@ -773,13 +786,13 @@ Recommended story split:
 | E14.4-2b-5b engine integration | Implemented through split gates. | Preserves command, event, sound cue, ready gate, pause, skip, and `+15s` semantics. |
 | E14.4-2b-5c session record compatibility tests | Implemented. | Verified v2 snapshot, actual step records, rest extension records, and history mapper compatibility without new persisted metadata. |
 | E14.4-2b-6 TimerDial mapping planning gate | Docs-only complete. | Planned current state, v2 inputs, inner count, outer 1-5 target ratio, fallback stages, rest extension, E14.5 boundary, tests, split, and rollback. |
-| E14.4-2b-6a TimerDial mapping model/state tests | Next. | Test first; no direct production mapping changes. |
-| E14.4-2b-6b TimerDial production mapping implementation | Keep the original TimerDial UI and map only the outer ring to the active stage's internal targets by duration ratio. | Must preserve pause freeze, terminal freeze, reduce-motion, final countdown, E14.5 identity, and rest extension monotonic progress. |
-| E14.4-2b-6c smoke / visual QA | Verify rendered behavior. | Cover v2 1 target, 2 targets, 3-5 targets, work/rest/custom, between-round rest, warmup, cooldown, legacy plan, pause/resume, rest extension, and reduce-motion. |
-| E14.4-2b-7 migration / compatibility / E12 trend polish | Cover old plans, old snapshots, new composition, unsupported versions, current plan conversion, serializer round-trip, timeline expansion, TimerDial mapping, and E12 trend keys if not already covered. | Required before any schema or broad trend behavior change. |
+| E14.4-2b-6a TimerDial mapping model/state tests | Implemented. | Test-first expectations proved v2 inner / outer mapping, legacy preservation, rest extension monotonic behavior, and E14.5 identity non-regression. |
+| E14.4-2b-6b TimerDial production mapping implementation | Implemented. | Kept the original TimerDial UI and mapped only the outer ring to the active stage's internal targets by duration ratio. |
+| E14.4-2b-6c smoke / visual QA | Implemented. | Accepted existing 6b evidence for v2 1 target, 2 targets, 5-target max-density, rest extension, boundary fallback, legacy, continuous progress, pause / resume, and forbidden UI text scan. |
+| E14.4-2b-7 migration / compatibility / E12 trend polish | Not required for E14.4-2b closeout. | 5c / 6c found no blocker requiring Room migration or session record model change. Any E12 trend-key polish should be a separate future story. |
 
-Future v2 TimerDial work must start with E14.4-2b-6a tests. Do not fake TimerDial support and do not jump straight to production mapping.
+Future v2 TimerDial work should treat 6a / 6b / 6c as the accepted baseline. Do not reopen E14.4-2b unless a new regression or explicitly scoped follow-up requires it.
 
 ## Gate Conclusion
 
-This gate retains two-layer timed composition as a product and planning direction. E14.4-2b-2 remains the accepted data model planning decision. E14.4-2b-3 has been restarted and implemented only as a model / serializer / editor adapter foundation. E14.4-2b-4 has been restarted and implemented only as an editor UI visual/code gate. E14.4-2b-5 through E14.4-2b-5c have closed the adapter timeline, engine bridge, v2 start, and session record compatibility path. E14.4-2b-6 has now completed a docs-only TimerDial mapping planning gate; the next allowed step is E14.4-2b-6a TimerDial mapping model/state tests, not direct production TimerDial mapping.
+This gate retains two-layer timed composition as a product and planning direction. E14.4-2b-2 remains the accepted data model planning decision. E14.4-2b-3 has been restarted and implemented only as a model / serializer / editor adapter foundation. E14.4-2b-4 has been restarted and implemented only as an editor UI visual/code gate. E14.4-2b-5 through E14.4-2b-5c have closed the adapter timeline, engine bridge, v2 start, and session record compatibility path. E14.4-2b-6 through E14.4-2b-6c have closed TimerDial mapping planning, model/state tests, production mapper, and smoke / visual QA. The E14.4-2b chain is now completed / closed; next work should be E12 records/trends polish or another UI polish story, not more E14.4-2b implementation.

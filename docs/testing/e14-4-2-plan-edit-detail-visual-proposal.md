@@ -85,7 +85,7 @@ Still deferred:
 - Plan color persistence and editable plan-color picker require a data / persistence decision before any schema or model work.
 - Persisted strength target-group color also remains deferred because the current `StrengthSetPlan` model has no color field.
 - Strength add-action selection needs a dedicated design/implementation task: the current modal selector is only a low-coupling replacement for the cramped horizontal chips. A later task should design a richer picker with search, categories, clearer action-library cards, better custom-action creation, and small-screen validation.
-- E14.4-2b timed composition editor and TimerDial ring semantics remain unimplemented.
+- Historical at the time of this proposal: E14.4-2b timed composition editor and TimerDial ring semantics were deferred. Superseded by `docs/testing/e14-4-2b-closeout.md`, where the editor + engine + records + TimerDial mapping chain is completed / closed.
 
 ## E14.4-2a Confirmation Result
 
