@@ -352,6 +352,53 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun timedTerminalCompletedStateUsesDedicatedRecapPageWithoutLargeTimerDial() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val shellSource = File(
+            "src/main/java/com/liujyks/trainflow/ui/shell/official/TrainFlowApp.kt"
+        ).readText(Charsets.UTF_8)
+        val recapScreenSource = routeSource
+            .substringAfter("private fun TimedWorkoutCompletionRecapScreen")
+            .substringBefore("private fun TimerDialPauseMorph")
+
+        assertTrue(routeSource.contains("TimedWorkoutCompletionRecapScreen("))
+        assertTrue(routeSource.contains("onReturnToTrainingHome"))
+        assertTrue(routeSource.contains("CompletionRecapHero("))
+        assertTrue(routeSource.contains("text = \"本次复盘\""))
+        assertTrue(routeSource.contains("text = \"返回训练首页\""))
+        assertTrue(shellSource.contains("onReturnToTrainingHome = {"))
+        assertTrue(shellSource.contains(".selectDestination(OfficialShellDestination.TRAINING)"))
+        assertTrue(routeSource.contains("TimedRecapKeyMetrics(summary = uiState.summary)"))
+        assertTrue(routeSource.contains("TimedSessionSummaryPanel("))
+        assertTrue(routeSource.contains("showMetrics = false"))
+        assertFalse(routeSource.contains("private fun TimedWorkoutTerminalScreen"))
+        assertFalse(routeSource.contains("private fun MainCountdownPanel"))
+        assertFalse(recapScreenSource.contains("TimerDial("))
+    }
+
+    @Test
+    fun timedCompletionRecapKeepsSummaryDetailsAndAbandonedToneSeparated() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val heroSource = routeSource
+            .substringAfter("private fun CompletionRecapHero")
+            .substringBefore("private fun CompletionRecapBadge")
+
+        assertTrue(routeSource.contains("summary.metricItems.take(4)"))
+        assertTrue(routeSource.contains("SummaryDetail(label = \"跳过内容\", text = summary.skippedSummary)"))
+        assertTrue(routeSource.contains("SummaryDetail(label = \"休息延长\", text = summary.restExtensionSummary)"))
+        assertTrue(routeSource.contains("SummaryDetail(label = \"结束状态\", text = summary.earlyEndSummary)"))
+        assertTrue(routeSource.contains("text = uiState.terminalSummary.orEmpty()"))
+        assertTrue(heroSource.contains("val showCelebration = isCompleted"))
+        assertTrue(heroSource.contains("val statusLabel = if (isCompleted) \"已完成\" else \"已结束\""))
+        assertTrue(heroSource.contains("本次训练已提前结束"))
+        assertFalse(heroSource.contains("已完成\" else \"已完成"))
+    }
+
+    @Test
     fun builtInSkinSwitchingKeepsTrainingSemanticStateAndControlContract() {
         val plans = buildDefaultPlanManagementState().plans
         val timedState = TimedWorkoutEngine.dispatch(

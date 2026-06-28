@@ -108,6 +108,7 @@ internal fun TimedWorkoutSessionRoute(
     plan: WorkoutPlan,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    onReturnToTrainingHome: () -> Unit = onBackToPlans,
     onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -268,6 +269,7 @@ internal fun TimedWorkoutSessionRoute(
                     result.command?.let(::dispatch)
                 },
                 onBackToPlans = onBackToPlans,
+                onReturnToTrainingHome = onReturnToTrainingHome,
                 onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
                 reduceMotion = reduceMotion,
                 modifier = modifier
@@ -436,6 +438,7 @@ private fun TimedWorkoutSessionScreen(
     onCancelEnd: () -> Unit,
     onConfirmEnd: () -> Unit,
     onBackToPlans: () -> Unit,
+    onReturnToTrainingHome: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
@@ -447,10 +450,11 @@ private fun TimedWorkoutSessionScreen(
             .background(skin.tokens.primary)
     ) {
         if (uiState.isTerminal) {
-            TimedWorkoutTerminalScreen(
+            TimedWorkoutCompletionRecapScreen(
                 uiState = uiState,
-                onBackToPlans = onBackToPlans,
+                onReturnToTrainingHome = onReturnToTrainingHome,
                 onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                reduceMotion = reduceMotion,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -635,26 +639,45 @@ private fun TimedWorkoutExecutionScreen(
 }
 
 @Composable
-private fun TimedWorkoutTerminalScreen(
+private fun TimedWorkoutCompletionRecapScreen(
     uiState: TimedWorkoutSessionScreenState,
-    onBackToPlans: () -> Unit,
+    onReturnToTrainingHome: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
-    Column(
-        modifier = modifier
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = currentPageHorizontalPadding())
-            .padding(top = if (skin.isBigType) 14.dp else 22.dp, bottom = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
-    ) {
-        SessionHeader(uiState)
-        MainCountdownPanel(
-            uiState = uiState,
-            onPrimaryToggle = {}
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = currentPageHorizontalPadding())
+                .padding(
+                    top = if (skin.isBigType) 18.dp else 26.dp,
+                    bottom = if (skin.isBigType) 144.dp else 128.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
+        ) {
+            CompletionRecapHero(
+                uiState = uiState,
+                reduceMotion = reduceMotion
+            )
+            TimedRecapKeyMetrics(summary = uiState.summary)
+            TimedRecapSessionOverview(uiState = uiState)
+            uiState.summary?.let { summary ->
+                TimedSessionSummaryPanel(
+                    summary = summary,
+                    onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                    showMetrics = false
+                )
+            }
+        }
+
+        CompletionRecapBottomAction(
+            onReturnToTrainingHome = onReturnToTrainingHome,
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
-        TerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
     }
 }
 
@@ -980,36 +1003,212 @@ private fun String?.toPausedStageColor(): Color {
 }
 
 @Composable
-private fun SessionHeader(uiState: TimedWorkoutSessionScreenState) {
-    val skin = LocalTrainFlowSkin.current
-    Text(
-        text = uiState.totalRemainingText,
-        modifier = Modifier.fillMaxWidth(),
-        style = MaterialTheme.typography.headlineLarge.copy(
-            fontSize = if (skin.isBigType) 62.sp else 54.sp,
-            lineHeight = if (skin.isBigType) 64.sp else 56.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center
-        ),
-        color = TrainFlowNeutral50
+private fun CompletionRecapHero(
+    uiState: TimedWorkoutSessionScreenState,
+    reduceMotion: Boolean
+) {
+    val isCompleted = uiState.summary?.tone == TimedWorkoutSummaryTone.COMPLETED
+    val showCelebration = isCompleted
+    var entryStarted by remember(showCelebration, reduceMotion) {
+        mutableStateOf(!showCelebration || reduceMotion)
+    }
+    LaunchedEffect(showCelebration, reduceMotion) {
+        if (showCelebration && !reduceMotion) {
+            entryStarted = true
+        }
+    }
+    val entryProgress by animateFloatAsState(
+        targetValue = if (entryStarted) 1f else 0f,
+        animationSpec = timedRouteLocalLayoutTransitionSpec(reduceMotion),
+        label = "CompletionRecapEntry"
     )
+    val statusLabel = if (isCompleted) "已完成" else "已结束"
+    val headline = if (isCompleted) "本次训练已完成" else "本次训练已提前结束"
+    val supportingText = if (isCompleted) {
+        "先把呼吸放慢，再看本次数据。"
+    } else {
+        "已保留本次可用记录，下面是提前结束前的进度。"
+    }
+    DarkInfoPanel(contentPadding = 20.dp, verticalSpacing = 14.dp) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CompletionRecapBadge(
+                completed = isCompleted,
+                progress = if (reduceMotion || !showCelebration) 1f else entryProgress,
+                modifier = Modifier.graphicsLayer {
+                    val animatedProgress = if (reduceMotion || !showCelebration) 1f else entryProgress
+                    alpha = animatedProgress
+                    val badgeScale = 0.94f + (0.06f * animatedProgress)
+                    scaleX = badgeScale
+                    scaleY = badgeScale
+                }
+            )
+            SessionPill(
+                text = statusLabel,
+                containerColor = if (isCompleted) {
+                    TrainFlowAccent.copy(alpha = 0.18f)
+                } else {
+                    TrainFlowNeutral200.copy(alpha = 0.12f)
+                },
+                contentColor = if (isCompleted) TrainFlowAccent else TrainFlowNeutral200
+            )
+            Text(
+                text = "本次复盘",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center
+                ),
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.titleMedium.copy(textAlign = TextAlign.Center),
+                color = TrainFlowNeutral100
+            )
+            Text(
+                text = uiState.planTitle,
+                style = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center),
+                color = TrainFlowNeutral200,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.Center),
+                color = TrainFlowNeutral500
+            )
+        }
+    }
 }
 
 @Composable
-private fun MainCountdownPanel(
-    uiState: TimedWorkoutSessionScreenState,
-    onPrimaryToggle: () -> Unit,
+private fun CompletionRecapBadge(
+    completed: Boolean,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val safeProgress = progress.coerceIn(0f, 1f)
+    Canvas(
+        modifier = modifier
+            .size(92.dp)
+            .semantics {
+                contentDescription = if (completed) "训练已完成" else "训练已提前结束"
+            }
+    ) {
+        val radius = size.minDimension / 2f
+        if (completed) {
+            drawCircle(
+                color = TrainFlowAccent.copy(alpha = 0.14f * safeProgress),
+                radius = radius * (0.82f + 0.12f * safeProgress)
+            )
+            drawCircle(
+                color = TrainFlowAccent.copy(alpha = 0.18f),
+                radius = radius * 0.58f
+            )
+            drawCircle(
+                color = TrainFlowAccent,
+                radius = radius * 0.42f
+            )
+            val stroke = 5.dp.toPx()
+            drawLine(
+                color = TrainFlowPrimary,
+                start = Offset(size.width * 0.34f, size.height * 0.50f),
+                end = Offset(size.width * 0.45f, size.height * 0.61f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = TrainFlowPrimary,
+                start = Offset(size.width * 0.45f, size.height * 0.61f),
+                end = Offset(size.width * 0.68f, size.height * 0.38f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        } else {
+            drawCircle(
+                color = TrainFlowNeutral200.copy(alpha = 0.12f),
+                radius = radius * 0.82f
+            )
+            drawCircle(
+                color = TrainFlowNeutral500.copy(alpha = 0.34f),
+                radius = radius * 0.42f
+            )
+            drawLine(
+                color = TrainFlowNeutral50.copy(alpha = 0.78f),
+                start = Offset(size.width * 0.35f, size.height * 0.50f),
+                end = Offset(size.width * 0.65f, size.height * 0.50f),
+                strokeWidth = 5.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimedRecapKeyMetrics(summary: TimedWorkoutSummaryUiState?) {
+    if (summary == null) return
+
+    DarkInfoPanel(contentPadding = 16.dp, verticalSpacing = 12.dp) {
+        Text(
+            text = "关键数据摘要",
+            style = MaterialTheme.typography.titleMedium,
+            color = TrainFlowNeutral50
+        )
+        SummaryMetricGrid(summary.metricItems.take(4))
+    }
+}
+
+@Composable
+private fun TimedRecapSessionOverview(uiState: TimedWorkoutSessionScreenState) {
+    DarkInfoPanel(contentPadding = 16.dp, verticalSpacing = 8.dp) {
+        Text(
+            text = "会话概览",
+            style = MaterialTheme.typography.titleMedium,
+            color = TrainFlowNeutral50
+        )
+        Text(
+            text = uiState.terminalSummary.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral100
+        )
+    }
+}
+
+@Composable
+private fun CompletionRecapBottomAction(
+    onReturnToTrainingHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
-    Column(
+    Surface(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(if (skin.isBigType) 10.dp else 12.dp)
+        color = skin.tokens.primary,
+        shadowElevation = 12.dp
     ) {
-        TimerDial(
-            state = uiState.timerDial,
-            onTogglePause = onPrimaryToggle
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = 14.dp)
+        ) {
+            Button(
+                onClick = onReturnToTrainingHome,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.accent)
+            ) {
+                Text(
+                    text = "返回训练首页",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = skin.tokens.primary
+                )
+            }
+        }
     }
 }
 
@@ -1257,43 +1456,12 @@ private fun TimedControlHistoryPanel(uiState: TimedWorkoutSessionScreenState) {
 }
 
 @Composable
-private fun TerminalPanel(
-    uiState: TimedWorkoutSessionScreenState,
-    onBackToPlans: () -> Unit,
-    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
-) {
-    val skin = LocalTrainFlowSkin.current
-    DarkInfoPanel {
-        Text(
-            text = uiState.terminalTitle.orEmpty(),
-            style = MaterialTheme.typography.headlineSmall,
-            color = TrainFlowNeutral50
-        )
-        Text(
-            text = uiState.terminalSummary.orEmpty(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = TrainFlowNeutral200
-        )
-        uiState.summary?.let { summary ->
-            TimedSessionSummaryPanel(summary, onOpenRecoveryRecommendation)
-        }
-        Button(
-            onClick = onBackToPlans,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.accent)
-        ) {
-            Text(text = "返回计划", color = skin.tokens.primary)
-        }
-    }
-}
-
-@Composable
 private fun TimedSessionSummaryPanel(
     summary: TimedWorkoutSummaryUiState,
-    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    showMetrics: Boolean = true
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    DarkInfoPanel(contentPadding = 16.dp, verticalSpacing = 10.dp) {
         Text(
             text = summary.title,
             style = MaterialTheme.typography.titleMedium,
@@ -1302,12 +1470,14 @@ private fun TimedSessionSummaryPanel(
                 TimedWorkoutSummaryTone.ABANDONED -> TrainFlowNeutral200
             }
         )
-        SummaryMetricGrid(summary.metricItems)
-        Text(
-            text = summary.durationSemanticsNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = TrainFlowNeutral500
-        )
+        if (showMetrics) {
+            SummaryMetricGrid(summary.metricItems)
+            Text(
+                text = summary.durationSemanticsNote,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500
+            )
+        }
         SummaryDetail(label = "跳过内容", text = summary.skippedSummary)
         SummaryDetail(label = "休息延长", text = summary.restExtensionSummary)
         SummaryDetail(label = "结束状态", text = summary.earlyEndSummary)

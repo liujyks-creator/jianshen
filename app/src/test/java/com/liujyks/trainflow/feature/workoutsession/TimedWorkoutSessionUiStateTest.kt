@@ -146,6 +146,7 @@ class TimedWorkoutSessionUiStateTest {
         val uiState = completed.toTimedWorkoutSessionScreenState()
 
         assertTrue(uiState.isTerminal)
+        assertEquals("已完成", uiState.phaseLabel)
         assertEquals("计时训练完成", uiState.terminalTitle)
         assertEquals(
             "已完成 ${completed.completedStepCount} / ${completed.steps.size} 步。" +
@@ -352,6 +353,7 @@ class TimedWorkoutSessionUiStateTest {
         val terminalSummary = requireNotNull(uiState.terminalSummary)
 
         assertTrue(uiState.isTerminal)
+        assertEquals("已结束", uiState.phaseLabel)
         assertEquals("计时训练已提前结束", uiState.terminalTitle)
         assertTrue(terminalSummary.contains("提前结束"))
         assertTrue(terminalSummary.contains("原因：用户主动结束"))

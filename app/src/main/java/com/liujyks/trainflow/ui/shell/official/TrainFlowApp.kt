@@ -285,6 +285,13 @@ internal fun TrainFlowApp(
                             onOpenRecoveryRecommendation = { recommendation ->
                                 applyShellState(shellState.openRecoveryRecommendation(recommendation))
                             },
+                            onReturnToTrainingHome = {
+                                applyShellState(
+                                    shellState
+                                        .finishTimedSession()
+                                        .selectDestination(OfficialShellDestination.TRAINING)
+                                )
+                            },
                             onRecordWorkoutSession = onRecordWorkoutSession,
                             modifier = Modifier.padding(innerPadding)
                         )
