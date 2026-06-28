@@ -433,29 +433,39 @@ class TimerDialUiStateTest {
     }
 
     @Test
-    fun displayedProgressHoldsAtStageStartUntilFirstEngineTick() {
+    fun firstTickAnchorCatchesUpFromPreviousDisplayWithoutJumpingToOneSecondProgress() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
             WorkoutCommand.StartSession
         ).state
         val initialDial = state.toTimedWorkoutSessionScreenState().timerDial
-        val initialDisplayed = initialDial.monotonicDisplayedProgress(elapsedMillis = 500)
-
-        assertTrue(initialDial.shouldHoldInitialSmoothProgress())
-        assertTrue(initialDial.projectedStageProgress(elapsedMillis = 500) > initialDial.currentStageProgress)
-        assertEquals(initialDial.currentStageProgress, initialDisplayed.currentStageProgress, 0.0001f)
-        assertEquals(initialDial.totalProgress, initialDisplayed.totalProgress, 0.0001f)
+        val initialDisplayed = initialDial.monotonicDisplayedProgress(elapsedMillis = 0)
 
         state = TimedWorkoutEngine.tick(state, seconds = 1).state
         val afterTickDial = state.toTimedWorkoutSessionScreenState().timerDial
-        val afterTickDisplayed = afterTickDial.monotonicDisplayedProgress(elapsedMillis = 500)
+        val displayedAtTickAnchor = afterTickDial.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = initialDisplayed
+        )
+        val displayedHalfSecondAfterTick = afterTickDial.monotonicDisplayedProgress(
+            elapsedMillis = 500,
+            previousDisplayed = initialDisplayed
+        )
+        val displayedOneSecondAfterTick = afterTickDial.monotonicDisplayedProgress(
+            elapsedMillis = 1_000,
+            previousDisplayed = initialDisplayed
+        )
 
-        assertFalse(afterTickDial.shouldHoldInitialSmoothProgress())
-        assertTrue(afterTickDisplayed.currentStageProgress > afterTickDial.currentStageProgress)
+        assertEquals(0f, initialDisplayed.currentStageProgress, 0.0001f)
+        assertEquals(0.1f, afterTickDial.currentStageProgress, 0.0001f)
+        assertEquals(initialDisplayed.currentStageProgress, displayedAtTickAnchor.currentStageProgress, 0.0001f)
+        assertTrue(displayedHalfSecondAfterTick.currentStageProgress > initialDisplayed.currentStageProgress)
+        assertTrue(displayedHalfSecondAfterTick.currentStageProgress < afterTickDial.currentStageProgress)
+        assertEquals(afterTickDial.currentStageProgress, displayedOneSecondAfterTick.currentStageProgress, 0.0001f)
     }
 
     @Test
-    fun displayedProgressHoldsAfterSkipIntoNextStageUntilFirstEngineTick() {
+    fun skipIntoNextStageCatchesUpFromPreviousDisplayWithoutJumpingToOneSecondProgress() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(timerDialPlan(workSec = 10, restSec = 5)),
             WorkoutCommand.StartSession
@@ -464,14 +474,25 @@ class TimerDialUiStateTest {
         state = TimedWorkoutEngine.dispatch(state, WorkoutCommand.SkipStep).state
 
         val skippedDial = state.toTimedWorkoutSessionScreenState().timerDial
-        val skippedDisplayed = skippedDial.monotonicDisplayedProgress(elapsedMillis = 500)
+        val skippedDisplayed = skippedDial.monotonicDisplayedProgress(elapsedMillis = 0)
+        state = TimedWorkoutEngine.tick(state, seconds = 1).state
+        val afterTickDial = state.toTimedWorkoutSessionScreenState().timerDial
+        val displayedAtTickAnchor = afterTickDial.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = skippedDisplayed
+        )
+        val displayedHalfSecondAfterTick = afterTickDial.monotonicDisplayedProgress(
+            elapsedMillis = 500,
+            previousDisplayed = skippedDisplayed
+        )
 
         assertEquals(TimerDialStageType.REST, skippedDial.currentStageType)
         assertEquals(0f, skippedDial.currentStageProgress, 0.0001f)
-        assertTrue(skippedDial.shouldHoldInitialSmoothProgress())
-        assertTrue(skippedDial.projectedStageProgress(elapsedMillis = 500) > skippedDial.currentStageProgress)
-        assertEquals(skippedDial.currentStageProgress, skippedDisplayed.currentStageProgress, 0.0001f)
-        assertEquals(skippedDial.totalProgress, skippedDisplayed.totalProgress, 0.0001f)
+        assertEquals(TimerDialStageType.REST, afterTickDial.currentStageType)
+        assertEquals(0.2f, afterTickDial.currentStageProgress, 0.0001f)
+        assertEquals(skippedDisplayed.currentStageProgress, displayedAtTickAnchor.currentStageProgress, 0.0001f)
+        assertTrue(displayedHalfSecondAfterTick.currentStageProgress > skippedDisplayed.currentStageProgress)
+        assertTrue(displayedHalfSecondAfterTick.currentStageProgress < afterTickDial.currentStageProgress)
     }
 
     @Test

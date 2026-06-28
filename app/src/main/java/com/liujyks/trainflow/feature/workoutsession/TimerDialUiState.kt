@@ -723,21 +723,6 @@ internal fun TimerDialUiState.canProjectSmoothProgress(
     return !reduceMotion && !isPaused && canTogglePause && currentStageRemainingSec > 0
 }
 
-internal fun TimerDialUiState.shouldHoldInitialSmoothProgress(
-    reduceMotion: Boolean = false
-): Boolean {
-    if (!canProjectSmoothProgress(reduceMotion)) {
-        return false
-    }
-
-    val activeSegmentProgress = stageSegments
-        .firstOrNull { segment -> segment.isCurrent }
-        ?.progress
-        ?: currentStageProgress
-    return activeSegmentProgress.clampedProgress() <= 0f &&
-        currentStageProgress.clampedProgress() <= 0f
-}
-
 internal fun timerDialSmoothProgressElapsedMillis(
     frameNanos: Long,
     anchorNanos: Long,
@@ -756,18 +741,17 @@ internal fun TimerDialUiState.monotonicDisplayedProgress(
     reduceMotion: Boolean = false,
     previousDisplayed: TimerDialDisplayedProgress? = null
 ): TimerDialDisplayedProgress {
-    val projectionElapsedMillis = if (shouldHoldInitialSmoothProgress(reduceMotion)) {
-        0L
-    } else {
-        elapsedMillis
-    }
+    val anchor = TimerDialDisplayedProgress(
+        totalProgress = totalProgress.clampedProgress(),
+        currentStageProgress = currentStageProgress.clampedProgress()
+    )
     val projected = TimerDialDisplayedProgress(
         totalProgress = projectedTotalProgress(
-            elapsedMillis = projectionElapsedMillis,
+            elapsedMillis = elapsedMillis,
             reduceMotion = reduceMotion
         ),
         currentStageProgress = projectedStageProgress(
-            elapsedMillis = projectionElapsedMillis,
+            elapsedMillis = elapsedMillis,
             reduceMotion = reduceMotion
         )
     )
@@ -777,15 +761,37 @@ internal fun TimerDialUiState.monotonicDisplayedProgress(
     }
 
     return TimerDialDisplayedProgress(
-        totalProgress = maxOf(
-            previousDisplayed.totalProgress.clampedProgress(),
-            projected.totalProgress.clampedProgress()
+        totalProgress = catchUpDisplayedProgress(
+            previousProgress = previousDisplayed.totalProgress,
+            anchorProgress = anchor.totalProgress,
+            projectedProgress = projected.totalProgress
         ),
-        currentStageProgress = maxOf(
-            previousDisplayed.currentStageProgress.clampedProgress(),
-            projected.currentStageProgress.clampedProgress()
+        currentStageProgress = catchUpDisplayedProgress(
+            previousProgress = previousDisplayed.currentStageProgress,
+            anchorProgress = anchor.currentStageProgress,
+            projectedProgress = projected.currentStageProgress
         )
     )
+}
+
+private fun catchUpDisplayedProgress(
+    previousProgress: Float,
+    anchorProgress: Float,
+    projectedProgress: Float
+): Float {
+    val previous = previousProgress.clampedProgress()
+    val anchor = anchorProgress.clampedProgress()
+    val projected = projectedProgress.clampedProgress()
+
+    if (previous >= anchor) {
+        return maxOf(previous, projected)
+    }
+
+    val projectedDelta = (projected - anchor).coerceAtLeast(0f)
+    return (previous + projectedDelta)
+        .clampedProgress()
+        .coerceAtLeast(previous)
+        .coerceAtMost(projected)
 }
 
 internal fun TimerDialUiState.projectedStageProgress(

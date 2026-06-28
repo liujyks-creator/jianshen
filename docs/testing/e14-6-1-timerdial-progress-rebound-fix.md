@@ -49,6 +49,8 @@ E14.5 correctly separated TimerDial smooth-progress identity from tick-updated a
 
 On a real device this looked like the active ring jumping forward once per second and then returning.
 
+Follow-up real-device feedback after the first E14.6-1 fix found a separate start / skip edge: the first engine tick after starting a stage could arrive a few tenths of a second after the user action, while the displayed progress had been held at the previous value. The display then snapped directly to the one-second anchor, which felt like a short forward lunge even though later ticks were stable.
+
 ## Production Fix
 
 Changed production files:
@@ -63,6 +65,7 @@ The fix adds an explicit displayed-progress layer:
 - Compute displayed total progress and current-stage progress through `monotonicDisplayedProgress(...)`.
 - Within the same smooth identity, displayed active progress is clamped to `max(previousDisplayed, projectedOrAnchored)`.
 - The clamp is reset by identity boundaries rather than by ordinary one-second ticks.
+- For the start / skip first-tick edge, when a new same-identity anchor is ahead of the currently displayed value, the normal-motion path now catches up from `previousDisplayed + projectedDelta` instead of snapping to the one-second anchor. Reduce motion, pause, and terminal states still bypass continuous catch-up.
 
 ## Reset Boundaries
 
@@ -83,6 +86,7 @@ Updated tests cover:
 - Pause and terminal freeze boundaries still hold.
 - Reduce motion remains discrete and does not use continuous projection.
 - Rest extension does not move displayed progress backward.
+- Start and skip first-tick anchors catch up smoothly from the previous displayed value instead of jumping to the one-second anchor.
 
 Changed test files:
 
@@ -159,6 +163,12 @@ Smoke observations:
 - Logcat crash scan returned no matches.
 - Legacy / simple timed plan was not separately captured in this smoke because the current default local entry is the v2 timed composition path; legacy behavior remains covered by focused tests and old-entry search.
 - AVD was shut down after smoke; final `adb devices` returned an empty device list.
+
+Follow-up smoke for the start / skip first-tick catch-up was captured at:
+
+`.local/smoke/e14-6-1-start-skip-anchor-catchup/`
+
+Result: passed on AVD `TrainFlow_Pixel_API_36`. The smoke captured start and skip screenrecords, screenshot sequences, UI trees, and logcat tail. The active outer ring advanced monotonically in the running screenshot sequence, forbidden UI tree terms returned no matches, logcat crash scan returned no matches, and the AVD was shut down with `adb devices` empty.
 
 ## Boundaries Preserved
 
