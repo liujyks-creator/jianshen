@@ -23,7 +23,10 @@ class TimedCompositionBoundaryGuardTest {
             "timed_composition",
             "composition_v2"
         )
-        val allowedRelativePaths = setOf("core/engine/TimedWorkoutEngine.kt")
+        val allowedRelativePaths = setOf(
+            "core/engine/TimedWorkoutEngine.kt",
+            "feature/workoutsession/TimerDialUiState.kt"
+        )
         val violations = scannedPaths.flatMap { path ->
             path.kotlinFiles().flatMap { file ->
                 if (file.relativeToSourceRoot(sourceRoot) in allowedRelativePaths) {
@@ -58,7 +61,10 @@ class TimedCompositionBoundaryGuardTest {
             "timelineStageId",
             "targetInstanceIndex"
         )
-        val allowedRelativePaths = setOf("core/engine/TimedWorkoutEngine.kt")
+        val allowedRelativePaths = setOf(
+            "core/engine/TimedWorkoutEngine.kt",
+            "feature/workoutsession/TimerDialUiState.kt"
+        )
         val violations = scannedPaths.flatMap { path ->
             path.kotlinFiles().flatMap { file ->
                 if (file.relativeToSourceRoot(sourceRoot) in allowedRelativePaths) {

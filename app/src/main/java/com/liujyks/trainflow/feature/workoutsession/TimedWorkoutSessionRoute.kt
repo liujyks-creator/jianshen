@@ -171,7 +171,7 @@ internal fun TimedWorkoutSessionRoute(
         applyEngineResult(engineState.startTimedSessionFromReadyGate())
     }
 
-    val uiState = engineState.toTimedWorkoutSessionScreenState()
+    val uiState = engineState.toTimedWorkoutSessionScreenState(plan = plan)
     val readyGate = engineState.toTimedReadyStartGateUiState()
     val restExtensionControl = restExtensionInteractionState.toRestExtensionControlUiState(
         engineState = engineState,

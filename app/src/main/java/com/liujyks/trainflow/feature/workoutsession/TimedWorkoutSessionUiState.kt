@@ -10,6 +10,7 @@ import com.liujyks.trainflow.core.model.Exercise
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.normalizeStageColorHex
 
 internal data class TimedWorkoutSessionScreenState(
@@ -79,7 +80,8 @@ internal enum class TimedWorkoutCountdownReminderType {
 }
 
 internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
-    exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise }
+    exercises: List<Exercise> = FirstActionExerciseFixtures.entries.map { it.exercise },
+    plan: WorkoutPlan? = null
 ): TimedWorkoutSessionScreenState {
     val exerciseById = exercises.associateBy { exercise -> exercise.id }
     val current = currentStep
@@ -199,7 +201,7 @@ internal fun TimedWorkoutEngineState.toTimedWorkoutSessionScreenState(
         terminalSummary = terminalSummary,
         summary = toTimedWorkoutSummaryUiState(exercises)
     )
-    return screenState.copy(timerDial = toTimerDialUiState(screenState))
+    return screenState.copy(timerDial = toTimerDialUiState(screenState, planBlocks = plan?.blocks.orEmpty()))
 }
 
 private fun TimedWorkoutEngineState.currentStepElapsedSec(step: TimedSessionStep): Int {

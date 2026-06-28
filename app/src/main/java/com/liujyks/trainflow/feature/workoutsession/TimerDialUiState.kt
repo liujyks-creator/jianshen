@@ -3,7 +3,14 @@ package com.liujyks.trainflow.feature.workoutsession
 import com.liujyks.trainflow.core.engine.TimedSessionStep
 import com.liujyks.trainflow.core.engine.TimedSessionStepKind
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
+import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionTimeline
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStageKind
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStep
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineTargetKind
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.normalizeStageColorHex
 import com.liujyks.trainflow.core.model.stageTextColorHexFor
@@ -146,7 +153,8 @@ internal fun TimerDialUiState.innerMarkerData(): List<TimerDialInnerMarkerUiStat
 
 internal fun TimedWorkoutEngineState.toTimerDialUiState(
     screenState: TimedWorkoutSessionScreenState,
-    visualVariant: TimerDialVisualVariant = ProductionTimerDialVisualVariant
+    visualVariant: TimerDialVisualVariant = ProductionTimerDialVisualVariant,
+    planBlocks: List<PlanBlock> = emptyList()
 ): TimerDialUiState {
     val totalPlannedDurationSec = steps.sumOf { step -> step.durationSec }.coerceAtLeast(1)
     val current = currentStep
@@ -162,6 +170,16 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         currentStepIndex < 0 -> totalPlannedDurationSec
         else -> remainingSec + steps.drop(currentStepIndex + 1).sumOf { step -> step.durationSec }
     }
+    timerDialCompositionMapping(
+        screenState = screenState,
+        currentStepProgress = currentStepProgress,
+        totalRemainingSec = totalRemainingSec,
+        visualVariant = visualVariant,
+        planBlocks = planBlocks
+    )?.let { mapping ->
+        return mapping
+    }
+
     val currentIndex = if (currentStepIndex >= 0) {
         (currentStepIndex + 1).coerceAtMost(steps.size)
     } else {
@@ -205,13 +223,207 @@ internal fun TimedWorkoutEngineState.toTimerDialUiState(
         currentStageIconKey = screenState.stageIconKey,
         currentStageTimeText = screenState.timerText,
         totalRemainingText = screenState.totalRemainingText,
-        centerActionLabel = when {
-            screenState.canResume -> "继续训练"
-            screenState.canPause -> "暂停训练"
-            else -> "当前不可切换"
-        },
+        centerActionLabel = centerActionLabel(screenState),
         canTogglePause = screenState.canPause || screenState.canResume
     ).clamped()
+}
+
+private fun TimedWorkoutEngineState.timerDialCompositionMapping(
+    screenState: TimedWorkoutSessionScreenState,
+    currentStepProgress: Float,
+    totalRemainingSec: Int,
+    visualVariant: TimerDialVisualVariant,
+    planBlocks: List<PlanBlock>
+): TimerDialUiState? {
+    val sourceBlocks = planBlocks.filterIsInstance<TimedCompositionBlock>()
+    if (sourceBlocks.isEmpty()) {
+        return null
+    }
+
+    val current = currentStep
+    if (current == null) {
+        if (status != SessionStatus.COMPLETED) return null
+        val completedTimeline = sourceBlocks
+            .asSequence()
+            .mapNotNull { block -> block.safeTimerDialTimeline()?.let { timeline -> block to timeline } }
+            .firstOrNull { (_, timeline) -> timeline.steps.isNotEmpty() }
+            ?: return null
+        val totalStageCount = completedTimeline.second.stageInstanceCount
+        return TimerDialUiState(
+            totalRemainingSec = 0,
+            totalProgress = 1f,
+            currentStageProgress = 1f,
+            currentStageType = TimerDialStageType.WORK,
+            currentStageLabel = screenState.currentTitle,
+            currentStageIndex = totalStageCount,
+            currentStageRemainingSec = 0,
+            isPaused = false,
+            isFinalCountdown = false,
+            totalWorkoutStageCount = totalStageCount,
+            completedWorkoutStageCount = totalStageCount,
+            stageSegments = emptyList(),
+            visualVariant = visualVariant,
+            currentStageColorHex = normalizeStageColorHex(screenState.stageColorHex, TimedStageType.WORK),
+            currentStageTextColorHex = stageTextColorHexFor(screenState.stageColorHex, TimedStageType.WORK),
+            currentStageIconKey = screenState.stageIconKey,
+            currentStageTimeText = screenState.timerText,
+            totalRemainingText = screenState.totalRemainingText,
+            centerActionLabel = centerActionLabel(screenState),
+            canTogglePause = screenState.canPause || screenState.canResume
+        ).clamped()
+    }
+
+    val match = sourceBlocks
+        .asSequence()
+        .mapNotNull { block ->
+            val timeline = block.safeTimerDialTimeline() ?: return@mapNotNull null
+            val activeStep = timeline.steps.firstOrNull { step ->
+                step.id == current.id && step.compositionBlockId == current.blockId
+            } ?: return@mapNotNull null
+            TimerDialCompositionMatch(
+                sourceBlock = block,
+                timeline = timeline,
+                activeStep = activeStep
+            )
+        }
+        .firstOrNull()
+        ?: return null
+
+    val segments = match.timerDialSegments(currentStepProgress = currentStepProgress)
+    val activeStageProgress = segments.weightedProgress()
+    val totalStageCount = match.timeline.stageInstanceCount.coerceAtLeast(1)
+    val completedStageCount = if (status == SessionStatus.COMPLETED) {
+        totalStageCount
+    } else {
+        (match.activeStep.stageInstanceIndex - 1).coerceAtLeast(0)
+    }
+    val currentStageType = match.activeStep.timerDialStageType()
+    val currentColorHex = match.activeStep.timerDialColorHex(match.sourceBlock)
+
+    return TimerDialUiState(
+        totalRemainingSec = if (status == SessionStatus.COMPLETED) 0 else totalRemainingSec,
+        totalProgress = when (status) {
+            SessionStatus.COMPLETED -> 1f
+            else -> (completedStageCount.toFloat() + activeStageProgress) / totalStageCount.toFloat()
+        },
+        currentStageProgress = currentStepProgress,
+        currentStageType = currentStageType,
+        currentStageLabel = screenState.currentTitle,
+        currentStageIndex = match.activeStep.stageInstanceIndex,
+        currentStageRemainingSec = if (status == SessionStatus.COMPLETED) 0 else remainingSec,
+        isPaused = status == SessionStatus.PAUSED,
+        isFinalCountdown = screenState.countdownReminder.isActive &&
+            screenState.countdownReminder.emphasisAnimationEnabled &&
+            status == SessionStatus.ACTIVE,
+        totalWorkoutStageCount = totalStageCount,
+        completedWorkoutStageCount = completedStageCount,
+        stageSegments = segments,
+        visualVariant = visualVariant,
+        currentStageColorHex = currentColorHex,
+        currentStageTextColorHex = stageTextColorHexFor(currentColorHex, currentStageType.toTimedStageType()),
+        currentStageIconKey = match.activeStep.iconKey ?: screenState.stageIconKey,
+        currentStageTimeText = screenState.timerText,
+        totalRemainingText = screenState.totalRemainingText,
+        centerActionLabel = centerActionLabel(screenState),
+        canTogglePause = screenState.canPause || screenState.canResume
+    ).clamped()
+}
+
+private data class TimerDialCompositionMatch(
+    val sourceBlock: TimedCompositionBlock,
+    val timeline: TimedCompositionTimeline,
+    val activeStep: TimedCompositionTimelineStep
+)
+
+private fun TimedCompositionBlock.safeTimerDialTimeline(): TimedCompositionTimeline? {
+    return runCatching { TimedCompositionTimelineAdapter.expand(this) }.getOrNull()
+}
+
+private fun TimerDialCompositionMatch.timerDialSegments(
+    currentStepProgress: Float
+): List<TimerDialStageSegmentUiState> {
+    val stageSteps = if (activeStep.timelineStageKind == TimedCompositionTimelineStageKind.STAGE_GROUP) {
+        timeline.steps.filter { step -> step.timelineStageId == activeStep.timelineStageId }
+    } else {
+        listOf(activeStep)
+    }
+
+    return stageSteps.map { step ->
+        val progress = when {
+            step.targetInstanceIndex < activeStep.targetInstanceIndex -> 1f
+            step.id == activeStep.id -> currentStepProgress
+            else -> 0f
+        }
+        step.toTimerDialStageSegment(
+            sourceBlock = sourceBlock,
+            progress = progress,
+            isCurrent = step.id == activeStep.id
+        )
+    }
+}
+
+private fun TimedCompositionTimelineStep.toTimerDialStageSegment(
+    sourceBlock: TimedCompositionBlock,
+    progress: Float,
+    isCurrent: Boolean
+): TimerDialStageSegmentUiState {
+    val stageType = timerDialStageType()
+    return TimerDialStageSegmentUiState(
+        id = id,
+        label = displayName,
+        stageType = stageType,
+        durationSec = plannedDurationSec,
+        progress = progress,
+        isCurrent = isCurrent,
+        colorHex = timerDialColorHex(sourceBlock)
+    ).clamped()
+}
+
+private fun TimedCompositionTimelineStep.timerDialColorHex(sourceBlock: TimedCompositionBlock): String {
+    val stageType = timerDialStageType().toTimedStageType()
+    if (timelineStageKind != TimedCompositionTimelineStageKind.STAGE_GROUP) {
+        return normalizeStageColorHex(colorHex, stageType)
+    }
+
+    val group = sourceBlock.stageGroups.firstOrNull { group -> group.id == stageGroupId }
+    val target = group?.targets?.firstOrNull { target -> target.id == targetId }
+    val targetColorHex = target?.colorHex
+    val groupColorHex = group?.colorHex
+    return when {
+        isValidColorHex(targetColorHex) -> normalizeStageColorHex(targetColorHex, stageType)
+        isValidColorHex(groupColorHex) -> normalizeStageColorHex(groupColorHex, stageType)
+        else -> stageType.defaultColorHex
+    }
+}
+
+private fun TimedCompositionTimelineStep.timerDialStageType(): TimerDialStageType {
+    return when (targetKind) {
+        TimedCompositionTimelineTargetKind.ACTION -> TimerDialStageType.WORK
+        TimedCompositionTimelineTargetKind.REST -> TimerDialStageType.REST
+        TimedCompositionTimelineTargetKind.CUSTOM -> TimerDialStageType.CUSTOM
+        TimedCompositionTimelineTargetKind.WARMUP -> TimerDialStageType.WARMUP
+        TimedCompositionTimelineTargetKind.COOLDOWN -> TimerDialStageType.COOLDOWN
+        TimedCompositionTimelineTargetKind.BETWEEN_ROUND_REST -> TimerDialStageType.REST
+    }
+}
+
+private fun List<TimerDialStageSegmentUiState>.weightedProgress(): Float {
+    val totalDurationSec = sumOf { segment -> segment.durationSec.coerceAtLeast(0) }
+    if (totalDurationSec <= 0) return 0f
+
+    val elapsedSec = sumOf { segment ->
+        segment.durationSec.coerceAtLeast(0).toDouble() *
+            segment.progress.clampedProgress().toDouble()
+    }
+    return (elapsedSec / totalDurationSec.toDouble()).toFloat().clampedProgress()
+}
+
+private fun centerActionLabel(screenState: TimedWorkoutSessionScreenState): String {
+    return when {
+        screenState.canResume -> "继续训练"
+        screenState.canPause -> "暂停训练"
+        else -> "当前不可切换"
+    }
 }
 
 internal fun TimerDialUiState.accessibilityDescription(): String {
