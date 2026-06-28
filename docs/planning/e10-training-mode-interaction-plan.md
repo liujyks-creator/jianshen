@@ -1,8 +1,8 @@
 # E10 训练模式边界与执行页交互计划
 
-**状态:** E10.1 决策记录；E10.2-E10.9 已落地；E10.9 用户测试反馈计划已记录
+**状态:** E10.1 决策记录；E10.2-E10.9 已落地；E10.9 用户测试反馈计划已记录；E14.6-2 完成复盘页边界已补充
 **日期:** 2026-06-13
-**范围:** 产品边界、执行页交互原则、后续 story 拆分、用户测试反馈分流、E10.2-E10.9 实现结果、Timer Dial 视觉修复 / 计划保存 / huashu 原型 / 音频 / 统计后续边界
+**范围:** 产品边界、执行页交互原则、后续 story 拆分、用户测试反馈分流、E10.2-E10.9 实现结果、Timer Dial 视觉修复 / 计划保存 / huashu 原型 / 音频 / 统计后续边界，以及 E14.6-2 completed terminal recap page 边界
 **仍不包含:** 本轮不实现生产 Timer Dial 修复、计划保存、huashu 原型、心率设备、语音、TTS、音频资源接入、统计图表、力量 / 跟练完整新版 UI
 
 ## 1. E10.1 结论
@@ -517,6 +517,28 @@ E14.4-2a 已确认计划编辑 / 详情 polish 采用方案 B，但不把阶段�
 E14.4-2b rollback / restart note：E14.4-2b-3 / E14.4-2b-4 的旧本地 model / serializer / editor / UI 实现未通过 review gate，已 rolled back / not accepted；restart 版已重新完成并推送。当前生产基线已有 accepted v2 model / serializer / editor adapter foundation 和 editor UI visual/code gate，但 v2 计划仍以 `待执行映射完成后可开始` 禁用开始训练。E14.4-2b-5 已完成 docs-only planning gate，只允许后续先进入 E14.4-2b-5a timeline adapter model/tests；不得跳过 5a 直接修改 `TimedWorkoutEngine`、TimerDial、`WorkoutCommand`、`WorkoutEvent`、session record、Room schema 或声音语义。
 
 该 story 影响 `WorkoutPlan` blocks、计划快照、统计比较 key、TimerDial UI state 和持久化边界。实现时不得静默修改 Room schema、训练引擎、`WorkoutCommand`、`WorkoutEvent`、session record 或声音语义；若仅扩展 JSON payload，不需要 Room schema migration，但仍必须做 serializer / compatibility 测试。
+
+### E14.6-2 训练完成复盘页
+
+E14.6-2 completion recap page redesign planning / visual gate 已确认：训练完成后的 `completed` terminal state 应切换到独立“本次数据统计复盘页面”，不再继续停留在大 TimerDial 执行页和完成卡片上。
+
+确认方向：
+
+- `ready`、`running`、`paused` 和 `rest` 仍是 execution page；只有 terminal presentation 切换到 recap page。
+- 顶部明确 `已完成`，使用克制庆祝感，例如完成徽章、check 或轻量 halo，不做营销页。
+- 中部复用现有 timed / strength summary、session recap 和数据总览，不引入假趋势、健康数据或 E12 新实现。
+- rest extension、skipped、pause summary 和 early-end 内容只能来自既有 summary / session record 映射，不补造当前 UI state 未暴露的数据。
+- 底部主动作推荐 `返回训练首页`；`查看记录` 只作为低层级文字次入口候选，第一版不应与返回形成两个主按钮。
+- `abandoned` 可复用同一 recap shell，但必须标注 `已结束` / `提前结束`，不显示 completed celebration，也不说 `已完成`。
+- 大 TimerDial 不作为 completed 主视觉；若保留圆盘元素，只能作为小型完成徽章或训练类型标识。
+- reduce-motion 时关闭或 snap 庆祝动效，保留静态完成状态。
+
+边界：
+
+- 不改变 `WorkoutSession`、plan snapshot、`timedRestExtensionRecords`、Room schema、训练引擎、`WorkoutCommand`、`WorkoutEvent` 或声音语义。
+- 不进入 E14.6-3 stage color/icon system。
+- 不进入 E12 records / trends implementation。
+- 不恢复心率显示、手动心率输入、未获取心率占位或平均心率趋势。
 
 ## 8. 禁止范围
 

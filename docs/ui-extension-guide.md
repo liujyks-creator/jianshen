@@ -130,7 +130,7 @@ E10.1 后，计时训练回归纯间歇计时器。下表中计时训练的“�
 
 E10.5 后，计时训练执行页的 Timer Dial 圆盘视觉语言可以被 skin 或社区 layout 适配，但只能改变表现，不能改变训练语义。外圈阶段弧线、内圈总进度、中心倒计时、暂停 / 继续、跳过 / 下一阶段和结束训练都必须来自计时训练 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度或绕过 `WorkoutCommand`。
 
-E14.6 后，完成训练不应继续停在执行页大圆盘和执行态卡片上；完成态应进入“本次数据统计复盘页面”，顶部明确完成并有克制庆祝感，中部复用既有训练总结 / 数据总览 / session summary，底部提供返回入口。该页面仍不得改 `WorkoutSession`、session records、E12 trends、心率边界或训练命令 / 事件语义。
+E14.6-2 后，完成训练不应继续停在执行页大圆盘和执行态卡片上；completed terminal state 应进入“本次数据统计复盘页面”。页面顶部明确 `已完成` 并有克制庆祝感，中部先展示关键数据摘要，再复用既有训练总结 / 数据总览 / session summary，rest extension、skipped、pause 和 early-end 信息只能来自既有 summary / session record 映射，底部主动作推荐 `返回训练首页`。`查看记录` 只能作为低层级次入口候选，不能与返回形成两个主按钮。大 TimerDial 不应作为 completed 主视觉；如保留圆盘元素，只能作为小型完成徽章或训练类型标识。`abandoned` 可复用 recap shell，但必须是 `已结束` / `提前结束` 语气，不显示 completed celebration。该页面仍不得改 `WorkoutSession`、session records、E12 trends、E14.6-3 stage color/icon system、心率边界或训练命令 / 事件语义。
 
 任何训练执行页变体都必须展示：
 
@@ -226,6 +226,8 @@ E14.6-1 若修复 TimerDial normal motion 下外圈 / active segment 的每秒�
 - 当前首版是否没有心率卡片、未获取心率占位或手动心率输入；未来健康数据不得高于当前动作、倒计时、组目标和主按钮。
 - Timer Dial 是否仍显示顶部总剩余时间、外圈阶段结构、内圈总进度、中心当前阶段倒计时和少量底部图标操作。
 - Timer Dial 的阶段弧线推进、总进度推进、暂停态和最后 N 秒提醒是否由真实 engine state 驱动。
+- Completed terminal state 是否已离开大 TimerDial 执行页，进入本次数据统计复盘页，并保留底部返回。
+- Abandoned / ended early 是否没有被误标为 `已完成` 或显示 completed celebration。
 - 跟练雏形是否仍复用计时流程和动作内容，没有暗示完整课程平台。
 
 ### 10.4 权限和健康边界
