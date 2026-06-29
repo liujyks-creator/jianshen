@@ -391,11 +391,12 @@ E14.4-2b-6 TimerDial mapping status: `docs/testing/e14-4-2b-6-timerdial-mapping-
 
 E14.4-2b closeout status: `docs/testing/e14-4-2b-closeout.md` 已将 timed composition editor + engine + records + TimerDial mapping 链路标记为 completed / closed。未覆盖的 reduce-motion mapping smoke、单独 3 / 4 target visual captures、E12 records/trends polish 和其他 UI polish 是后续非阻塞独立任务。
 
-E14.6 stage style / icon planning status: `docs/testing/e14-6-real-device-timerdial-feedback-planning.md` 已记录真机反馈拆分，`docs/testing/e14-6-3-stage-style-icon-planning.md` 已完成 contract-level planning。E14.6-3a data contract / model decision 已记录在 `docs/testing/e14-6-3a-stage-style-data-contract-decision.md`。阶段样式不是普通装饰；style 概念由颜色和稳定内置 `iconKey` 组成。
+E14.6 stage style / icon planning status: `docs/testing/e14-6-real-device-timerdial-feedback-planning.md` 已记录真机反馈拆分，`docs/testing/e14-6-3-stage-style-icon-planning.md` 已完成 contract-level planning。E14.6-3a data contract / model decision 已记录在 `docs/testing/e14-6-3a-stage-style-data-contract-decision.md`，E14.6-3b model / serializer tests 已记录在 `docs/testing/e14-6-3b-stage-style-model-serializer-tests.md`。阶段样式不是普通装饰；style 概念由颜色和稳定内置 `iconKey` 组成。
 
 - `TimedCompositionStageGroup.iconKey`、`TimedCompositionTarget.iconKey`、`colorHex` 继续作为可保存的阶段 / 目标样式输入。
 - Legacy `TimedExerciseItem.iconKey` 和 `TimedExerciseItem.colorHex` 继续作为旧计时阶段样式输入。
 - E14.6-3a 选择 Option A：复用现有 stage group / target flat fields，仅在 versioned timed composition JSON payload 内为 boundary stages 增加可选 `warmupStyle`、`cooldownStyle` 和 `restBetweenRoundsStyle`。
+- E14.6-3b 已在 Android model / JSON serializer 中落地 `TimedStageStyle` 和这三个 boundary style 字段；plan blocks JSON 与 session snapshot JSON 均可 round-trip，old v2 payload missing fields 继续有效。
 - `warmupSec`、`cooldownSec` 和 synthetic between-round rest 虽然不是用户编辑的 targets，但在执行和 TimerDial 上都是 stage-like surfaces；缺少 boundary style 字段时继续通过默认 stage style token 解析颜色和内置图标。
 - `rounds` 只是重复结构和计数，不需要自己的颜色或图标，也不应伪装为阶段样式字段。
 - 颜色 fallback 顺序为 active target style -> parent stage group style -> boundary stage style -> stage / target kind safe default -> final safe fallback。
@@ -482,6 +483,8 @@ Field rules:
 - `restBetweenRoundsSec` is not stored as a movable target. Execution expands it into synthetic between-round rest steps between rounds only.
 - `colorHex` accepts only `#[0-9A-Fa-f]{6}` and should normalize to uppercase; invalid or blank values are treated as missing and resolved through defaults.
 - `iconKey` accepts only known built-in keys. Unknown, blank, malformed, URL-like, path-like, resource-like, SVG-like, or uploaded-asset-like values are treated as missing and resolved through defaults.
+- Android `TimedStageStyle` normalization stores valid colors uppercase and drops invalid colors to `null`; known built-in `iconKey` values are preserved, unknown / asset-like values become `null`.
+- E14.6-3b does not change Room schema, TimerDial production consumption, editor UI, resources, images, SVG, session record model, `WorkoutCommand`, or `WorkoutEvent`.
 
 Execution mapping rules:
 

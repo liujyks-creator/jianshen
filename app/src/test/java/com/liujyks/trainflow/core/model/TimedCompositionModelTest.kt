@@ -2,6 +2,7 @@ package com.liujyks.trainflow.core.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TimedCompositionModelTest {
@@ -12,9 +13,12 @@ class TimedCompositionModelTest {
             order = 3,
             compositionVersion = 99,
             warmupSec = -10,
+            warmupStyle = TimedStageStyle(colorHex = "#f2b84b", iconKey = "warmup"),
             cooldownSec = 45,
+            cooldownStyle = TimedStageStyle(colorHex = "bad", iconKey = "moon.svg"),
             rounds = 0,
             restBetweenRoundsSec = -5,
+            restBetweenRoundsStyle = TimedStageStyle(colorHex = "#2fbf8f", iconKey = "recover_breathe"),
             stageGroups = listOf(
                 stageGroup(id = "later", order = 20, targetCount = 6),
                 stageGroup(id = "earlier", order = 10, targetCount = 2, colorHex = "not-a-color")
@@ -23,9 +27,15 @@ class TimedCompositionModelTest {
 
         assertEquals(TIMED_COMPOSITION_CURRENT_VERSION, block.compositionVersion)
         assertEquals(0, block.warmupSec)
+        assertEquals(TimedStageStyle(colorHex = "#F2B84B", iconKey = "warmup"), block.warmupStyle)
         assertEquals(45, block.cooldownSec)
+        assertNull(block.cooldownStyle)
         assertEquals(1, block.rounds)
         assertEquals(0, block.restBetweenRoundsSec)
+        assertEquals(
+            TimedStageStyle(colorHex = "#2FBF8F", iconKey = "recover_breathe"),
+            block.restBetweenRoundsStyle
+        )
         assertEquals(listOf("earlier", "later"), block.stageGroups.map { group -> group.id })
         assertEquals(listOf(1, 2), block.stageGroups.map { group -> group.order })
         assertEquals(TimedStageType.WORK.defaultColorHex, block.stageGroups.first().colorHex)
@@ -75,6 +85,53 @@ class TimedCompositionModelTest {
         assertNotNull(group.targets.first().compatibility ?: true)
     }
 
+    @Test
+    fun stageGroupAndTargetIconKeysNormalizeToBuiltInContract() {
+        val block = TimedCompositionBlock(
+            id = "composition",
+            order = 1,
+            rounds = 1,
+            stageGroups = listOf(
+                TimedCompositionStageGroup(
+                    id = "main",
+                    order = 1,
+                    name = "Main",
+                    colorHex = TimedStageType.WORK.defaultColorHex,
+                    iconKey = "sprint",
+                    targets = listOf(
+                        target(
+                            id = "valid-icon",
+                            order = 1,
+                            durationSec = 30,
+                            iconKey = "speed_up"
+                        ),
+                        target(
+                            id = "asset-icon",
+                            order = 2,
+                            durationSec = 15,
+                            iconKey = "icons/rest.svg"
+                        )
+                    )
+                ),
+                TimedCompositionStageGroup(
+                    id = "bad-icon-group",
+                    order = 2,
+                    name = "Bad Icon",
+                    colorHex = TimedStageType.REST.defaultColorHex,
+                    iconKey = "uploaded_asset_1",
+                    targets = listOf(
+                        target(id = "rest", order = 1, kind = TimedCompositionTargetKind.REST, durationSec = 20)
+                    )
+                )
+            )
+        ).normalized()
+
+        assertEquals("sprint", block.stageGroups[0].iconKey)
+        assertEquals("speed_up", block.stageGroups[0].targets[0].iconKey)
+        assertNull(block.stageGroups[0].targets[1].iconKey)
+        assertNull(block.stageGroups[1].iconKey)
+    }
+
     private fun stageGroup(
         id: String,
         order: Int,
@@ -96,7 +153,8 @@ class TimedCompositionModelTest {
         id: String,
         order: Int,
         kind: TimedCompositionTargetKind = TimedCompositionTargetKind.ACTION,
-        durationSec: Int
+        durationSec: Int,
+        iconKey: String? = null
     ): TimedCompositionTarget {
         return TimedCompositionTarget(
             id = id,
@@ -105,6 +163,7 @@ class TimedCompositionModelTest {
             kind = kind,
             durationSec = durationSec,
             colorHex = TimedStageType.WORK.defaultColorHex,
+            iconKey = iconKey,
             compatibility = TimedCompositionCompatibilityMeta(
                 sourceVersion = TimedCompositionCompatibilitySourceVersion.V2
             )

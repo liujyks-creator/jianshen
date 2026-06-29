@@ -90,15 +90,36 @@ data class TimedCircuitBlock(
 const val TIMED_COMPOSITION_CURRENT_VERSION = 2
 const val TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP = 5
 
+data class TimedStageStyle(
+    val colorHex: String? = null,
+    val iconKey: String? = null
+)
+
+enum class TimedStageIconKey(val contractValue: String) {
+    WARMUP("warmup"),
+    WORK("work"),
+    SPEED_UP("speed_up"),
+    SPRINT("sprint"),
+    REST("rest"),
+    RECOVER_BREATHE("recover_breathe"),
+    COOLDOWN("cooldown"),
+    STRENGTH("strength"),
+    MOBILITY("mobility"),
+    CUSTOM("custom")
+}
+
 data class TimedCompositionBlock(
     override val id: String,
     override val order: Int,
     override val title: String? = null,
     val compositionVersion: Int = TIMED_COMPOSITION_CURRENT_VERSION,
     val warmupSec: Int = 0,
+    val warmupStyle: TimedStageStyle? = null,
     val cooldownSec: Int = 0,
+    val cooldownStyle: TimedStageStyle? = null,
     val rounds: Int,
     val restBetweenRoundsSec: Int = 0,
+    val restBetweenRoundsStyle: TimedStageStyle? = null,
     val stageGroups: List<TimedCompositionStageGroup>,
     val compatibility: TimedCompositionCompatibilityMeta? = null
 ) : PlanBlock {
@@ -155,9 +176,12 @@ fun TimedCompositionBlock.normalized(): TimedCompositionBlock {
     return copy(
         compositionVersion = TIMED_COMPOSITION_CURRENT_VERSION,
         warmupSec = warmupSec.coerceAtLeast(0),
+        warmupStyle = warmupStyle.normalized(),
         cooldownSec = cooldownSec.coerceAtLeast(0),
+        cooldownStyle = cooldownStyle.normalized(),
         rounds = rounds.coerceAtLeast(1),
         restBetweenRoundsSec = restBetweenRoundsSec.coerceAtLeast(0),
+        restBetweenRoundsStyle = restBetweenRoundsStyle.normalized(),
         stageGroups = stageGroups
             .sortedBy { group -> group.order }
             .mapIndexedNotNull { index, group ->
@@ -180,6 +204,7 @@ fun TimedCompositionStageGroup.normalized(order: Int = this.order): TimedComposi
         order = order,
         name = name.trim().ifBlank { "Stage $order" },
         colorHex = normalizeStageColorHex(colorHex, fallbackStageType),
+        iconKey = normalizeTimedStageIconKey(iconKey),
         targets = safeTargets
     )
 }
@@ -191,7 +216,7 @@ fun TimedCompositionTarget.normalized(order: Int = this.order): TimedComposition
         name = name.trim().ifBlank { kind.defaultName },
         durationSec = durationSec.coerceAtLeast(0),
         colorHex = normalizeStageColorHex(colorHex, fallbackStageType),
-        iconKey = iconKey?.ifBlank { null },
+        iconKey = normalizeTimedStageIconKey(iconKey),
         autoAdvance = autoAdvance
     )
 }
@@ -213,6 +238,31 @@ private fun TimedCompositionTargetKind.toTimedStageType(): TimedStageType {
         TimedCompositionTargetKind.REST -> TimedStageType.REST
         TimedCompositionTargetKind.CUSTOM -> TimedStageType.CUSTOM
     }
+}
+
+fun TimedStageStyle?.normalized(): TimedStageStyle? {
+    val normalizedColor = this?.colorHex?.normalizeStageColorHexOrNull()
+    val normalizedIcon = normalizeTimedStageIconKey(this?.iconKey)
+    return if (normalizedColor == null && normalizedIcon == null) {
+        null
+    } else {
+        TimedStageStyle(
+            colorHex = normalizedColor,
+            iconKey = normalizedIcon
+        )
+    }
+}
+
+fun normalizeTimedStageIconKey(iconKey: String?): String? {
+    val value = iconKey?.trim()?.takeIf { candidate -> candidate.isNotBlank() } ?: return null
+    if (!TimedStageIconKeyFormat.matches(value)) return null
+    return value.takeIf { candidate ->
+        TimedStageIconKey.entries.any { key -> key.contractValue == candidate }
+    }
+}
+
+fun isKnownTimedStageIconKey(iconKey: String?): Boolean {
+    return normalizeTimedStageIconKey(iconKey) != null
 }
 
 data class TimedExerciseItem(
@@ -241,6 +291,8 @@ enum class TimedStageType(
     COOLDOWN("cooldown", "放松", "cooldown", "#65A9FF"),
     CUSTOM("custom", "自定义", "custom", "#A8B3BE")
 }
+
+private val TimedStageIconKeyFormat = Regex("[a-z][a-z0-9_]*")
 
 data class CueSettings(
     val actionEnding: CountdownCue? = null,

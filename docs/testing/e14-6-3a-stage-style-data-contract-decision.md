@@ -1,7 +1,7 @@
 # E14.6-3a Stage Style Data Contract Decision
 
 **Date:** 2026-06-29
-**Status:** Decision complete; ready for model / serializer tests
+**Status:** Decision complete; E14.6-3b model / serializer tests implemented
 **Nature:** docs-only / data-contract decision / model-boundary planning
 
 ## Scope
@@ -231,12 +231,12 @@ This story only reserves the fact that custom image work is separate; it does no
 
 Recommended split:
 
-1. **E14.6-3b model / serializer tests**
-   - Add `StageStyle` and boundary style fields to the versioned composition payload.
-   - Cover JSON round-trip for plan blocks and session snapshots.
-   - Cover missing / invalid color and icon fallback.
-   - Cover legacy timed plans and composition v2 plans without boundary fields.
-   - Confirm Room version remains unchanged unless a future story explicitly chooses a new table / column.
+1. **E14.6-3b model / serializer tests** - completed
+   - Implemented `TimedStageStyle` and the optional boundary style fields in the versioned composition payload.
+   - Covered JSON round-trip for plan blocks and session snapshots.
+   - Covered missing / invalid color and icon normalization.
+   - Covered legacy timed plans and composition v2 plans without boundary fields.
+   - Confirmed no Room schema / resource / TimerDial production changes were needed. See `docs/testing/e14-6-3b-stage-style-model-serializer-tests.md`.
 
 2. **E14.6-3c editor style picker UI**
    - Add stage / target / boundary style picker UI.

@@ -12,6 +12,7 @@ import com.liujyks.trainflow.core.model.TimedCompositionStageGroup
 import com.liujyks.trainflow.core.model.TimedCompositionTarget
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -22,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -63,13 +65,21 @@ class TimedCompositionStorageJsonTest {
         assertEquals(WorkoutMode.TIMED, restored.mode)
         assertEquals(2, block.compositionVersion)
         assertEquals(90, block.warmupSec)
+        assertEquals(TimedStageStyle(colorHex = "#F2B84B", iconKey = "warmup"), block.warmupStyle)
         assertEquals(60, block.cooldownSec)
+        assertEquals(TimedStageStyle(colorHex = "#65A9FF", iconKey = "cooldown"), block.cooldownStyle)
         assertEquals(3, block.rounds)
         assertEquals(30, block.restBetweenRoundsSec)
+        assertEquals(
+            TimedStageStyle(colorHex = "#2FBF8F", iconKey = "recover_breathe"),
+            block.restBetweenRoundsStyle
+        )
         assertEquals("group-main", group.id)
         assertEquals(60, group.durationSec)
+        assertEquals("work", group.iconKey)
         assertEquals(listOf(TimedCompositionTargetKind.ACTION, TimedCompositionTargetKind.REST), group.targets.map { it.kind })
         assertEquals(listOf("work-target", "rest-target"), group.targets.map { it.id })
+        assertEquals(listOf("speed_up", "rest"), group.targets.map { it.iconKey })
     }
 
     @Test
@@ -100,12 +110,36 @@ class TimedCompositionStorageJsonTest {
         assertEquals("composition-plan", snapshot.planId)
         assertEquals("Composition Snapshot", snapshot.title)
         assertEquals(2, block.compositionVersion)
+        assertEquals(TimedStageStyle(colorHex = "#F2B84B", iconKey = "warmup"), block.warmupStyle)
+        assertEquals(TimedStageStyle(colorHex = "#65A9FF", iconKey = "cooldown"), block.cooldownStyle)
+        assertEquals(
+            TimedStageStyle(colorHex = "#2FBF8F", iconKey = "recover_breathe"),
+            block.restBetweenRoundsStyle
+        )
         assertEquals("Main", block.stageGroups.single().name)
         assertEquals(60, block.stageGroups.single().durationSec)
     }
 
     @Test
+    fun oldV2PayloadWithoutBoundaryStyleStillDecodes() {
+        val blocks = oldV2PayloadWithoutStyle().toPlanBlocksStorage()
+        val block = blocks.single() as TimedCompositionBlock
+
+        assertEquals(2, block.compositionVersion)
+        assertEquals(30, block.warmupSec)
+        assertEquals(20, block.cooldownSec)
+        assertEquals(10, block.restBetweenRoundsSec)
+        assertEquals("group-main", block.stageGroups.single().id)
+        assertEquals("work-target", block.stageGroups.single().targets.single().id)
+        assertNull(block.warmupStyle)
+        assertNull(block.cooldownStyle)
+        assertNull(block.restBetweenRoundsStyle)
+    }
+
+    @Test
     fun legacyTimedPlanBlocksKeepLegacyJsonShapeOnRoundTrip() = runBlocking {
+        val legacyJson = legacyPlan().blocks.toPlanBlocksStorageJson()
+
         planRepository.upsertPlan(legacyPlan())
 
         val restored = requireNotNull(planRepository.getPlan("legacy-plan"))
@@ -115,6 +149,9 @@ class TimedCompositionStorageJsonTest {
         assertTrue(restored.blocks.last() is CooldownBlock)
         assertFalse(restored.blocks.any { block -> block is TimedCompositionBlock })
         assertEquals("Legacy Plan", restored.title)
+        assertFalse(legacyJson.contains("warmupStyle"))
+        assertFalse(legacyJson.contains("cooldownStyle"))
+        assertFalse(legacyJson.contains("restBetweenRoundsStyle"))
     }
 
     private fun compositionPlan(): WorkoutPlan {
@@ -129,15 +166,22 @@ class TimedCompositionStorageJsonTest {
                     order = 1,
                     title = "V2",
                     warmupSec = 90,
+                    warmupStyle = TimedStageStyle(colorHex = "#f2b84b", iconKey = "warmup"),
                     cooldownSec = 60,
+                    cooldownStyle = TimedStageStyle(colorHex = "#65a9ff", iconKey = "cooldown"),
                     rounds = 3,
                     restBetweenRoundsSec = 30,
+                    restBetweenRoundsStyle = TimedStageStyle(
+                        colorHex = "#2fbf8f",
+                        iconKey = "recover_breathe"
+                    ),
                     stageGroups = listOf(
                         TimedCompositionStageGroup(
                             id = "group-main",
                             order = 1,
                             name = "Main",
                             colorHex = TimedStageType.WORK.defaultColorHex,
+                            iconKey = "work",
                             targets = listOf(
                                 TimedCompositionTarget(
                                     id = "work-target",
@@ -145,7 +189,8 @@ class TimedCompositionStorageJsonTest {
                                     name = "Work",
                                     kind = TimedCompositionTargetKind.ACTION,
                                     durationSec = 40,
-                                    colorHex = TimedStageType.WORK.defaultColorHex
+                                    colorHex = TimedStageType.WORK.defaultColorHex,
+                                    iconKey = "speed_up"
                                 ),
                                 TimedCompositionTarget(
                                     id = "rest-target",
@@ -153,7 +198,8 @@ class TimedCompositionStorageJsonTest {
                                     name = "Rest",
                                     kind = TimedCompositionTargetKind.REST,
                                     durationSec = 20,
-                                    colorHex = TimedStageType.REST.defaultColorHex
+                                    colorHex = TimedStageType.REST.defaultColorHex,
+                                    iconKey = "rest"
                                 )
                             )
                         )
@@ -163,6 +209,43 @@ class TimedCompositionStorageJsonTest {
             createdAt = "2026-06-26T09:00:00Z",
             updatedAt = "2026-06-26T09:00:00Z"
         )
+    }
+
+    private fun oldV2PayloadWithoutStyle(): String {
+        return """
+            [
+              {
+                "id": "composition-block",
+                "kind": "timed_composition",
+                "title": "Old V2",
+                "order": 1,
+                "compositionVersion": 2,
+                "warmupSec": 30,
+                "cooldownSec": 20,
+                "rounds": 2,
+                "restBetweenRoundsSec": 10,
+                "stageGroups": [
+                  {
+                    "id": "group-main",
+                    "order": 1,
+                    "name": "Main",
+                    "colorHex": "#F26B4F",
+                    "targets": [
+                      {
+                        "id": "work-target",
+                        "order": 1,
+                        "name": "Work",
+                        "kind": "action",
+                        "durationSec": 40,
+                        "colorHex": "#F26B4F",
+                        "autoAdvance": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
     }
 
     private fun legacyPlan(): WorkoutPlan {

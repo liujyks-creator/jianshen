@@ -27,6 +27,7 @@ import com.liujyks.trainflow.core.model.TimedCompositionTarget
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WeightUnit
@@ -164,9 +165,12 @@ private fun PlanBlock.toJson(): JsonValue.Obj {
                 block.commonBlockFields(),
                 "compositionVersion" to block.compositionVersion.jsonNumber(),
                 "warmupSec" to block.warmupSec.jsonNumber(),
+                "warmupStyle" to block.warmupStyle?.toJson(),
                 "cooldownSec" to block.cooldownSec.jsonNumber(),
+                "cooldownStyle" to block.cooldownStyle?.toJson(),
                 "rounds" to block.rounds.jsonNumber(),
                 "restBetweenRoundsSec" to block.restBetweenRoundsSec.jsonNumber(),
+                "restBetweenRoundsStyle" to block.restBetweenRoundsStyle?.toJson(),
                 "stageGroups" to block.stageGroups.map { group -> group.toJson() }.jsonArray(),
                 "compatibility" to block.compatibility?.toJson()
             )
@@ -202,6 +206,13 @@ private fun TimedCompositionStageGroup.toJson(): JsonValue.Obj {
         "targets" to targets.map { target -> target.toJson() }.jsonArray(),
         "cueSettings" to cueSettings?.toJson(),
         "compatibility" to compatibility?.toJson()
+    )
+}
+
+private fun TimedStageStyle.toJson(): JsonValue.Obj {
+    return jsonObject(
+        "colorHex" to colorHex?.jsonString(),
+        "iconKey" to iconKey?.jsonString()
     )
 }
 
@@ -390,9 +401,12 @@ private fun JsonValue.toPlanBlock(): PlanBlock? {
                 title = title,
                 compositionVersion = obj.int("compositionVersion") ?: TIMED_COMPOSITION_CURRENT_VERSION,
                 warmupSec = obj.int("warmupSec") ?: 0,
+                warmupStyle = obj.obj("warmupStyle")?.toTimedStageStyle(),
                 cooldownSec = obj.int("cooldownSec") ?: 0,
+                cooldownStyle = obj.obj("cooldownStyle")?.toTimedStageStyle(),
                 rounds = obj.int("rounds") ?: 1,
                 restBetweenRoundsSec = obj.int("restBetweenRoundsSec") ?: 0,
+                restBetweenRoundsStyle = obj.obj("restBetweenRoundsStyle")?.toTimedStageStyle(),
                 stageGroups = obj.array("stageGroups")
                     ?.mapNotNull { value -> value.toTimedCompositionStageGroup() }
                     ?: emptyList(),
@@ -412,6 +426,13 @@ private fun JsonValue.toPlanBlock(): PlanBlock? {
                 ?: StrengthSetTimerMode.MANUAL_START
         )
     }
+}
+
+private fun JsonValue.Obj.toTimedStageStyle(): TimedStageStyle? {
+    return TimedStageStyle(
+        colorHex = string("colorHex"),
+        iconKey = string("iconKey")
+    ).normalized()
 }
 
 private fun JsonValue.toTimedCompositionStageGroup(): TimedCompositionStageGroup? {

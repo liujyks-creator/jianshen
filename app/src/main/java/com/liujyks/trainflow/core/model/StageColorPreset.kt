@@ -76,7 +76,7 @@ fun stageTextColorHexFor(
     return stageColorPresetFor(normalized)?.textColor ?: "#FFFFFF"
 }
 
-private fun String?.normalizeStageColorHexOrNull(): String? {
+internal fun String?.normalizeStageColorHexOrNull(): String? {
     val value = this?.trim() ?: return null
     return value
         .takeIf { candidate -> StageColorHexRegex.matches(candidate) }
