@@ -407,8 +407,9 @@ internal fun TimerDial(
                 ) { isPaused ->
                     TimerDialCenterGlyph(
                         isPaused = isPaused,
+                        iconKey = safeState.currentStageIconKey,
                         stageType = safeState.currentStageType,
-                        color = currentStageTextColor,
+                        color = Color.White,
                         size = glyphSize
                     )
                 }
@@ -498,6 +499,7 @@ private fun String.toComposeColor(defaultColor: Color): Color {
 @Composable
 private fun TimerDialCenterGlyph(
     isPaused: Boolean,
+    iconKey: String,
     stageType: TimerDialStageType,
     color: Color,
     size: Dp
@@ -505,7 +507,7 @@ private fun TimerDialCenterGlyph(
     if (isPaused) {
         TimerDialResumeGlyph(color = color, size = size)
     } else {
-        TimerDialStageGlyph(stageType = stageType, color = color, size = size)
+        TimerDialStageGlyph(iconKey = iconKey, stageType = stageType, color = color, size = size)
     }
 }
 
@@ -527,14 +529,16 @@ private fun TimerDialResumeGlyph(
 
 @Composable
 private fun TimerDialStageGlyph(
+    iconKey: String,
     stageType: TimerDialStageType,
     color: Color,
     size: Dp
 ) {
     Canvas(modifier = Modifier.size(size)) {
         val stroke = 3.dp.toPx()
-        when (stageType) {
-            TimerDialStageType.WARMUP -> {
+        val resolvedIconKey = iconKey.timerDialIconKey(stageType)
+        when (resolvedIconKey) {
+            "warmup" -> {
                 drawCircle(color = color, radius = size.toPx() * 0.22f)
                 listOf(0f, 90f, 180f, 270f).forEach { angle ->
                     val radians = Math.toRadians(angle.toDouble())
@@ -550,7 +554,7 @@ private fun TimerDialStageGlyph(
                     drawLine(color = color, start = start, end = end, strokeWidth = stroke)
                 }
             }
-            TimerDialStageType.WORK -> {
+            "work" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(size.toPx() * 0.34f, size.toPx() * 0.12f)
                     lineTo(size.toPx() * 0.68f, size.toPx() * 0.45f)
@@ -562,7 +566,47 @@ private fun TimerDialStageGlyph(
                 }
                 drawPath(path, color)
             }
-            TimerDialStageType.REST -> {
+            "speed_up" -> {
+                listOf(0.3f, 0.5f, 0.7f).forEach { y ->
+                    drawLine(
+                        color = color,
+                        start = Offset(size.toPx() * 0.22f, size.toPx() * y),
+                        end = Offset(size.toPx() * 0.7f, size.toPx() * y),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round
+                    )
+                }
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(size.toPx() * 0.66f, size.toPx() * 0.22f)
+                    lineTo(size.toPx() * 0.86f, size.toPx() * 0.5f)
+                    lineTo(size.toPx() * 0.66f, size.toPx() * 0.78f)
+                }
+                drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+            }
+            "sprint" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(size.toPx() * 0.26f, size.toPx() * 0.16f)
+                    lineTo(size.toPx() * 0.78f, size.toPx() * 0.5f)
+                    lineTo(size.toPx() * 0.26f, size.toPx() * 0.84f)
+                    close()
+                }
+                drawPath(path, color)
+                drawLine(
+                    color = color,
+                    start = Offset(size.toPx() * 0.16f, size.toPx() * 0.32f),
+                    end = Offset(size.toPx() * 0.38f, size.toPx() * 0.32f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.toPx() * 0.16f, size.toPx() * 0.68f),
+                    end = Offset(size.toPx() * 0.38f, size.toPx() * 0.68f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
+            "rest" -> {
                 drawLine(
                     color = color,
                     start = Offset(size.toPx() * 0.38f, size.toPx() * 0.22f),
@@ -578,7 +622,28 @@ private fun TimerDialStageGlyph(
                     cap = StrokeCap.Round
                 )
             }
-            TimerDialStageType.COOLDOWN -> {
+            "recover_breathe" -> {
+                drawArc(
+                    color = color,
+                    startAngle = 205f,
+                    sweepAngle = 130f,
+                    useCenter = false,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+                drawArc(
+                    color = color,
+                    startAngle = 25f,
+                    sweepAngle = 130f,
+                    useCenter = false,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+                drawCircle(
+                    color = color,
+                    radius = size.toPx() * 0.08f,
+                    center = Offset(size.toPx() * 0.5f, size.toPx() * 0.5f)
+                )
+            }
+            "cooldown" -> {
                 drawArc(
                     color = color,
                     startAngle = 30f,
@@ -592,7 +657,46 @@ private fun TimerDialStageGlyph(
                     center = Offset(size.toPx() * 0.5f, size.toPx() * 0.5f)
                 )
             }
-            TimerDialStageType.CUSTOM -> {
+            "strength" -> {
+                drawLine(
+                    color = color,
+                    start = Offset(size.toPx() * 0.18f, size.toPx() * 0.5f),
+                    end = Offset(size.toPx() * 0.82f, size.toPx() * 0.5f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+                listOf(0.26f, 0.36f, 0.64f, 0.74f).forEach { x ->
+                    drawLine(
+                        color = color,
+                        start = Offset(size.toPx() * x, size.toPx() * 0.34f),
+                        end = Offset(size.toPx() * x, size.toPx() * 0.66f),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+            "mobility" -> {
+                drawCircle(
+                    color = color,
+                    radius = size.toPx() * 0.3f,
+                    style = Stroke(width = stroke)
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.toPx() * 0.5f, size.toPx() * 0.2f),
+                    end = Offset(size.toPx() * 0.5f, size.toPx() * 0.8f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.toPx() * 0.2f, size.toPx() * 0.5f),
+                    end = Offset(size.toPx() * 0.8f, size.toPx() * 0.5f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
+            else -> {
                 drawCircle(
                     color = color,
                     radius = size.toPx() * 0.34f,
@@ -601,5 +705,31 @@ private fun TimerDialStageGlyph(
                 drawCircle(color = color, radius = size.toPx() * 0.08f)
             }
         }
+    }
+}
+
+private fun String.timerDialIconKey(stageType: TimerDialStageType): String {
+    return when (trim()) {
+        "warmup",
+        "work",
+        "speed_up",
+        "sprint",
+        "rest",
+        "recover_breathe",
+        "cooldown",
+        "strength",
+        "mobility",
+        "custom" -> trim()
+        else -> stageType.defaultTimerDialIconKey()
+    }
+}
+
+private fun TimerDialStageType.defaultTimerDialIconKey(): String {
+    return when (this) {
+        TimerDialStageType.WARMUP -> "warmup"
+        TimerDialStageType.WORK -> "work"
+        TimerDialStageType.REST -> "rest"
+        TimerDialStageType.COOLDOWN -> "cooldown"
+        TimerDialStageType.CUSTOM -> "custom"
     }
 }

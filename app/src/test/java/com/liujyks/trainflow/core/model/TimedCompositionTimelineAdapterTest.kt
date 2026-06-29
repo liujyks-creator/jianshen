@@ -238,6 +238,44 @@ class TimedCompositionTimelineAdapterTest {
     }
 
     @Test
+    fun carriesBoundaryStylesAsPassiveStepMetadata() {
+        val timeline = TimedCompositionTimelineAdapter.expand(
+            compositionBlock(
+                warmupSec = 10,
+                warmupStyle = TimedStageStyle(colorHex = "#00BCD4", iconKey = "mobility"),
+                cooldownSec = 12,
+                cooldownStyle = TimedStageStyle(colorHex = "#FFC107", iconKey = "cooldown"),
+                rounds = 2,
+                restBetweenRoundsSec = 8,
+                restBetweenRoundsStyle = TimedStageStyle(colorHex = "#8BC34A", iconKey = "recover_breathe"),
+                stageGroups = listOf(stageGroup(id = "group", order = 1, targets = listOf(actionTarget())))
+            )
+        )
+
+        val warmup = timeline.steps.single { step -> step.isWarmup }
+        val betweenRoundRest = timeline.steps.single { step -> step.isBetweenRoundRest }
+        val cooldown = timeline.steps.single { step -> step.isCooldown }
+
+        assertEquals("#00BCD4", warmup.colorHex)
+        assertEquals("mobility", warmup.iconKey)
+        assertEquals("#8BC34A", betweenRoundRest.colorHex)
+        assertEquals("recover_breathe", betweenRoundRest.iconKey)
+        assertEquals("#FFC107", cooldown.colorHex)
+        assertEquals("cooldown", cooldown.iconKey)
+        assertEquals(
+            listOf(
+                "composition:warmup:t1",
+                "composition:r1:g1:group:t1:action",
+                "composition:r1:between-round-rest:t1",
+                "composition:r2:g1:group:t1:action",
+                "composition:cooldown:t1"
+            ),
+            timeline.steps.map { step -> step.id }
+        )
+        assertEquals(listOf(10, 30, 8, 30, 12), timeline.steps.map { step -> step.plannedDurationSec })
+    }
+
+    @Test
     fun targetAndStageInstanceIndexesAreStableAcrossBoundaryAndTargetSteps() {
         val timeline = TimedCompositionTimelineAdapter.expand(
             compositionBlock(
@@ -349,9 +387,12 @@ class TimedCompositionTimelineAdapterTest {
         id: String = "composition",
         compositionVersion: Int = TIMED_COMPOSITION_CURRENT_VERSION,
         warmupSec: Int = 0,
+        warmupStyle: TimedStageStyle? = null,
         cooldownSec: Int = 0,
+        cooldownStyle: TimedStageStyle? = null,
         rounds: Int = 1,
         restBetweenRoundsSec: Int = 0,
+        restBetweenRoundsStyle: TimedStageStyle? = null,
         stageGroups: List<TimedCompositionStageGroup>
     ): TimedCompositionBlock {
         return TimedCompositionBlock(
@@ -360,9 +401,12 @@ class TimedCompositionTimelineAdapterTest {
             title = "Composition",
             compositionVersion = compositionVersion,
             warmupSec = warmupSec,
+            warmupStyle = warmupStyle,
             cooldownSec = cooldownSec,
+            cooldownStyle = cooldownStyle,
             rounds = rounds,
             restBetweenRoundsSec = restBetweenRoundsSec,
+            restBetweenRoundsStyle = restBetweenRoundsStyle,
             stageGroups = stageGroups
         )
     }

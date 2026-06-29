@@ -11,6 +11,7 @@ import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineStageKind
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineStep
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -205,6 +206,152 @@ class TimerDialCompositionMappingTest {
     }
 
     @Test
+    fun targetAndStageGroupStylesDriveOuterSegmentsAndCenterIcon() {
+        val block = compositionBlock(
+            stageGroups = listOf(
+                stageGroup(
+                    id = "styles",
+                    order = 1,
+                    colorHex = "#00BCD4",
+                    iconKey = "speed_up",
+                    targets = listOf(
+                        actionTarget(
+                            id = "target-style",
+                            durationSec = 10,
+                            colorHex = "#FFC107",
+                            iconKey = "sprint"
+                        ),
+                        restTarget(
+                            id = "stage-style",
+                            durationSec = 10,
+                            order = 2,
+                            colorHex = "bad-target"
+                        ),
+                        customTarget(
+                            id = "invalid-target-icon",
+                            durationSec = 10,
+                            order = 3,
+                            colorHex = "bad-custom",
+                            iconKey = "icons/custom.svg"
+                        )
+                    )
+                )
+            )
+        )
+
+        val targetDial = block.expectedDialFor(
+            activeProgress = 0.1f,
+            selectActiveStep = { step -> step.targetId == "target-style" }
+        )
+        val stageFallbackDial = block.expectedDialFor(
+            activeProgress = 0.1f,
+            selectActiveStep = { step -> step.targetId == "stage-style" }
+        )
+        val invalidIconDial = block.expectedDialFor(
+            activeProgress = 0.1f,
+            selectActiveStep = { step -> step.targetId == "invalid-target-icon" }
+        )
+
+        assertEquals(listOf("#FFC107", "#00BCD4", "#00BCD4"), targetDial.stageSegments.map { it.colorHex })
+        assertEquals("#FFC107", targetDial.currentStageColorHex)
+        assertEquals("sprint", targetDial.currentStageIconKey)
+        assertEquals("#00BCD4", stageFallbackDial.currentStageColorHex)
+        assertEquals("speed_up", stageFallbackDial.currentStageIconKey)
+        assertEquals("#00BCD4", invalidIconDial.currentStageColorHex)
+        assertEquals("speed_up", invalidIconDial.currentStageIconKey)
+    }
+
+    @Test
+    fun invalidStageGroupStylesFallBackToTypeDefaultsWithoutAffectingSegmentRatios() {
+        val block = compositionBlock(
+            stageGroups = listOf(
+                stageGroup(
+                    id = "fallback",
+                    order = 1,
+                    colorHex = "bad-group",
+                    iconKey = "uploaded_asset_1",
+                    targets = listOf(
+                        customTarget(
+                            id = "custom",
+                            durationSec = 25,
+                            colorHex = "bad-target",
+                            iconKey = "file:///tmp/icon.svg"
+                        ),
+                        actionTarget(
+                            id = "work",
+                            order = 2,
+                            durationSec = 15,
+                            colorHex = "bad-work",
+                            iconKey = "bad-icon"
+                        )
+                    )
+                )
+            )
+        )
+
+        val customDial = block.expectedDialFor(
+            activeProgress = 0.2f,
+            selectActiveStep = { step -> step.targetId == "custom" }
+        )
+
+        assertEquals(listOf(25, 15), customDial.stageSegments.map { segment -> segment.durationSec })
+        assertEquals(
+            listOf(TimedStageType.CUSTOM.defaultColorHex, TimedStageType.WORK.defaultColorHex),
+            customDial.stageSegments.map { segment -> segment.colorHex }
+        )
+        assertEquals(TimedStageType.CUSTOM.defaultColorHex, customDial.currentStageColorHex)
+        assertEquals(TimedStageType.CUSTOM.defaultIconKey, customDial.currentStageIconKey)
+    }
+
+    @Test
+    fun boundaryStylesDriveSingleFallbackSegmentColorAndCenterIcon() {
+        val block = compositionBlock(
+            warmupSec = 20,
+            warmupStyle = TimedStageStyle(colorHex = "#00BCD4", iconKey = "mobility"),
+            cooldownSec = 40,
+            cooldownStyle = TimedStageStyle(colorHex = "#FFC107", iconKey = "moon.svg"),
+            rounds = 2,
+            restBetweenRoundsSec = 20,
+            restBetweenRoundsStyle = TimedStageStyle(colorHex = "bad-rest", iconKey = "recover_breathe"),
+            stageGroups = listOf(
+                stageGroup(
+                    id = "main",
+                    order = 1,
+                    targets = listOf(actionTarget(id = "work", durationSec = 40))
+                )
+            )
+        )
+
+        val warmupDial = block.expectedDialFor(
+            activeProgress = 0.25f,
+            selectActiveStep = { step -> step.timelineStageKind == TimedCompositionTimelineStageKind.WARMUP }
+        )
+        val roundRestDial = block.expectedDialFor(
+            activeProgress = 0.5f,
+            selectActiveStep = { step -> step.timelineStageKind == TimedCompositionTimelineStageKind.BETWEEN_ROUND_REST }
+        )
+        val cooldownDial = block.expectedDialFor(
+            activeProgress = 0.75f,
+            selectActiveStep = { step -> step.timelineStageKind == TimedCompositionTimelineStageKind.COOLDOWN }
+        )
+
+        assertFallbackSegment(warmupDial, TimerDialStageType.WARMUP, 20, 0.25f, completedStages = 0)
+        assertEquals("#00BCD4", warmupDial.currentStageColorHex)
+        assertEquals("#00BCD4", warmupDial.stageSegments.single().colorHex)
+        assertEquals("mobility", warmupDial.currentStageIconKey)
+
+        assertFallbackSegment(roundRestDial, TimerDialStageType.REST, 20, 0.5f, completedStages = 2)
+        assertEquals(TimedStageType.REST.defaultColorHex, roundRestDial.currentStageColorHex)
+        assertEquals(TimedStageType.REST.defaultColorHex, roundRestDial.stageSegments.single().colorHex)
+        assertEquals("recover_breathe", roundRestDial.currentStageIconKey)
+
+        assertFallbackSegment(cooldownDial, TimerDialStageType.COOLDOWN, 40, 0.75f, completedStages = 4)
+        assertEquals("#FFC107", cooldownDial.currentStageColorHex)
+        assertEquals("#FFC107", cooldownDial.stageSegments.single().colorHex)
+        assertEquals(TimedStageType.COOLDOWN.defaultIconKey, cooldownDial.currentStageIconKey)
+    }
+
+    @Test
     fun boundaryAndBetweenRoundRestStagesUseSingleCurrentStageFallbackSegment() {
         val block = compositionBlock(
             warmupSec = 20,
@@ -288,6 +435,8 @@ class TimerDialCompositionMappingTest {
         )
         assertEquals(5, afterExtension.stageSegments.size)
         assertEquals(15, afterExtension.stageSegments.single { segment -> segment.isCurrent }.durationSec)
+        assertEquals(beforeExtension.stageSegments.map { segment -> segment.colorHex }, afterExtension.stageSegments.map { it.colorHex })
+        assertEquals(beforeExtension.currentStageIconKey, afterExtension.currentStageIconKey)
         assertTrue(afterExtension.totalProgress >= beforeExtension.totalProgress)
         assertTrue(
             afterExtension.stageSegments.single { segment -> segment.isCurrent }.progress >=
@@ -383,6 +532,8 @@ class TimerDialCompositionMappingTest {
         assertEquals(listOf(TimerDialStageType.WORK, TimerDialStageType.REST), dial.stageSegments.map { it.stageType })
         assertEquals(listOf(1f, 5f / 15f), dial.stageSegments.map { segment -> segment.progress })
         assertEquals(listOf(false, true), dial.stageSegments.map { segment -> segment.isCurrent })
+        assertEquals(TimedStageType.REST.defaultColorHex, dial.currentStageColorHex)
+        assertEquals(TimedStageType.REST.defaultIconKey, dial.currentStageIconKey)
     }
 
     private fun assertFallbackSegment(
@@ -455,9 +606,12 @@ class TimerDialCompositionMappingTest {
     private fun compositionBlock(
         id: String = "composition",
         warmupSec: Int = 0,
+        warmupStyle: TimedStageStyle? = null,
         cooldownSec: Int = 0,
+        cooldownStyle: TimedStageStyle? = null,
         rounds: Int = 1,
         restBetweenRoundsSec: Int = 0,
+        restBetweenRoundsStyle: TimedStageStyle? = null,
         stageGroups: List<TimedCompositionStageGroup>
     ): TimedCompositionBlock {
         return TimedCompositionBlock(
@@ -466,9 +620,12 @@ class TimerDialCompositionMappingTest {
             title = "Composition",
             compositionVersion = TIMED_COMPOSITION_CURRENT_VERSION,
             warmupSec = warmupSec,
+            warmupStyle = warmupStyle,
             cooldownSec = cooldownSec,
+            cooldownStyle = cooldownStyle,
             rounds = rounds,
             restBetweenRoundsSec = restBetweenRoundsSec,
+            restBetweenRoundsStyle = restBetweenRoundsStyle,
             stageGroups = stageGroups
         )
     }
@@ -477,6 +634,7 @@ class TimerDialCompositionMappingTest {
         id: String,
         order: Int,
         colorHex: String = TimedStageType.WORK.defaultColorHex,
+        iconKey: String? = null,
         targets: List<TimedCompositionTarget>
     ): TimedCompositionStageGroup {
         return TimedCompositionStageGroup(
@@ -484,6 +642,7 @@ class TimerDialCompositionMappingTest {
             order = order,
             name = id,
             colorHex = colorHex,
+            iconKey = iconKey,
             targets = targets
         )
     }
@@ -492,7 +651,8 @@ class TimerDialCompositionMappingTest {
         id: String,
         durationSec: Int = 30,
         order: Int = 1,
-        colorHex: String = TimedStageType.WORK.defaultColorHex
+        colorHex: String = TimedStageType.WORK.defaultColorHex,
+        iconKey: String? = null
     ): TimedCompositionTarget {
         return target(
             id = id,
@@ -500,7 +660,8 @@ class TimerDialCompositionMappingTest {
             name = id,
             kind = TimedCompositionTargetKind.ACTION,
             durationSec = durationSec,
-            colorHex = colorHex
+            colorHex = colorHex,
+            iconKey = iconKey
         )
     }
 
@@ -508,7 +669,8 @@ class TimerDialCompositionMappingTest {
         id: String,
         durationSec: Int = 15,
         order: Int = 1,
-        colorHex: String = TimedStageType.REST.defaultColorHex
+        colorHex: String = TimedStageType.REST.defaultColorHex,
+        iconKey: String? = null
     ): TimedCompositionTarget {
         return target(
             id = id,
@@ -516,7 +678,8 @@ class TimerDialCompositionMappingTest {
             name = id,
             kind = TimedCompositionTargetKind.REST,
             durationSec = durationSec,
-            colorHex = colorHex
+            colorHex = colorHex,
+            iconKey = iconKey
         )
     }
 
@@ -524,7 +687,8 @@ class TimerDialCompositionMappingTest {
         id: String,
         durationSec: Int = 20,
         order: Int = 1,
-        colorHex: String = TimedStageType.CUSTOM.defaultColorHex
+        colorHex: String = TimedStageType.CUSTOM.defaultColorHex,
+        iconKey: String? = null
     ): TimedCompositionTarget {
         return target(
             id = id,
@@ -532,7 +696,8 @@ class TimerDialCompositionMappingTest {
             name = id,
             kind = TimedCompositionTargetKind.CUSTOM,
             durationSec = durationSec,
-            colorHex = colorHex
+            colorHex = colorHex,
+            iconKey = iconKey
         )
     }
 
@@ -542,7 +707,8 @@ class TimerDialCompositionMappingTest {
         name: String,
         kind: TimedCompositionTargetKind,
         durationSec: Int,
-        colorHex: String
+        colorHex: String,
+        iconKey: String? = null
     ): TimedCompositionTarget {
         return TimedCompositionTarget(
             id = id,
@@ -550,7 +716,8 @@ class TimerDialCompositionMappingTest {
             name = name,
             kind = kind,
             durationSec = durationSec,
-            colorHex = colorHex
+            colorHex = colorHex,
+            iconKey = iconKey
         )
     }
 

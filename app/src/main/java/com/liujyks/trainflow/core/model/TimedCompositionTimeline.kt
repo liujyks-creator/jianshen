@@ -77,13 +77,14 @@ object TimedCompositionTimelineAdapter {
         val builder = TimelineBuilder(normalizedBlock)
 
         if (normalizedBlock.warmupSec > 0) {
+            val warmupStyle = normalizedBlock.warmupStyle
             builder.addBoundaryStep(
                 stageKind = TimedCompositionTimelineStageKind.WARMUP,
                 targetKind = TimedCompositionTimelineTargetKind.WARMUP,
                 plannedDurationSec = normalizedBlock.warmupSec,
                 displayName = TimedStageType.WARMUP.displayName,
-                colorHex = TimedStageType.WARMUP.defaultColorHex,
-                iconKey = TimedStageType.WARMUP.defaultIconKey
+                colorHex = warmupStyle?.colorHex ?: TimedStageType.WARMUP.defaultColorHex,
+                iconKey = warmupStyle?.iconKey ?: TimedStageType.WARMUP.defaultIconKey
             )
         }
 
@@ -102,13 +103,14 @@ object TimedCompositionTimelineAdapter {
         }
 
         if (normalizedBlock.cooldownSec > 0) {
+            val cooldownStyle = normalizedBlock.cooldownStyle
             builder.addBoundaryStep(
                 stageKind = TimedCompositionTimelineStageKind.COOLDOWN,
                 targetKind = TimedCompositionTimelineTargetKind.COOLDOWN,
                 plannedDurationSec = normalizedBlock.cooldownSec,
                 displayName = TimedStageType.COOLDOWN.displayName,
-                colorHex = TimedStageType.COOLDOWN.defaultColorHex,
-                iconKey = TimedStageType.COOLDOWN.defaultIconKey
+                colorHex = cooldownStyle?.colorHex ?: TimedStageType.COOLDOWN.defaultColorHex,
+                iconKey = cooldownStyle?.iconKey ?: TimedStageType.COOLDOWN.defaultIconKey
             )
         }
 
@@ -200,6 +202,7 @@ private class TimelineBuilder(
         val stageInstanceIndex = nextStageInstanceIndex++
         val timelineStageId = "${block.id}:r$roundIndex:between-round-rest"
         val targetId = "$timelineStageId:target"
+        val restStyle = block.restBetweenRoundsStyle
         mutableSteps += TimedCompositionTimelineStep(
             id = "$timelineStageId:t1",
             stepKind = TimedCompositionTimelineStepKind.REST,
@@ -217,8 +220,8 @@ private class TimelineBuilder(
             targetIndex = 1,
             plannedDurationSec = block.restBetweenRoundsSec,
             displayName = TimedStageType.REST.displayName,
-            colorHex = TimedStageType.REST.defaultColorHex,
-            iconKey = TimedStageType.REST.defaultIconKey
+            colorHex = restStyle?.colorHex ?: TimedStageType.REST.defaultColorHex,
+            iconKey = restStyle?.iconKey ?: TimedStageIconKey.RECOVER_BREATHE.contractValue
         )
     }
 }

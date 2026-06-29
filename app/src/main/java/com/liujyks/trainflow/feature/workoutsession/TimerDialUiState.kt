@@ -11,7 +11,10 @@ import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineStageKind
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineStep
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineTargetKind
+import com.liujyks.trainflow.core.model.TimedStageIconKey
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.normalizeTimedStageIconKey
 import com.liujyks.trainflow.core.model.normalizeStageColorHex
 import com.liujyks.trainflow.core.model.stageTextColorHexFor
 import com.liujyks.trainflow.ui.theme.TrainFlowMotionTokens
@@ -299,6 +302,7 @@ private fun TimedWorkoutEngineState.timerDialCompositionMapping(
     }
     val currentStageType = match.activeStep.timerDialStageType()
     val currentColorHex = match.activeStep.timerDialColorHex(match.sourceBlock)
+    val currentIconKey = match.activeStep.timerDialIconKey(match.sourceBlock)
 
     return TimerDialUiState(
         totalRemainingSec = if (status == SessionStatus.COMPLETED) 0 else totalRemainingSec,
@@ -321,7 +325,7 @@ private fun TimedWorkoutEngineState.timerDialCompositionMapping(
         visualVariant = visualVariant,
         currentStageColorHex = currentColorHex,
         currentStageTextColorHex = stageTextColorHexFor(currentColorHex, currentStageType.toTimedStageType()),
-        currentStageIconKey = match.activeStep.iconKey ?: screenState.stageIconKey,
+        currentStageIconKey = currentIconKey,
         currentStageTimeText = screenState.timerText,
         totalRemainingText = screenState.totalRemainingText,
         centerActionLabel = centerActionLabel(screenState),
@@ -382,7 +386,12 @@ private fun TimedCompositionTimelineStep.toTimerDialStageSegment(
 private fun TimedCompositionTimelineStep.timerDialColorHex(sourceBlock: TimedCompositionBlock): String {
     val stageType = timerDialStageType().toTimedStageType()
     if (timelineStageKind != TimedCompositionTimelineStageKind.STAGE_GROUP) {
-        return normalizeStageColorHex(colorHex, stageType)
+        val boundaryColorHex = boundaryStyle(sourceBlock)?.colorHex
+        return when {
+            isValidColorHex(boundaryColorHex) -> normalizeStageColorHex(boundaryColorHex, stageType)
+            isValidColorHex(colorHex) -> normalizeStageColorHex(colorHex, stageType)
+            else -> stageType.defaultColorHex
+        }
     }
 
     val group = sourceBlock.stageGroups.firstOrNull { group -> group.id == stageGroupId }
@@ -392,7 +401,45 @@ private fun TimedCompositionTimelineStep.timerDialColorHex(sourceBlock: TimedCom
     return when {
         isValidColorHex(targetColorHex) -> normalizeStageColorHex(targetColorHex, stageType)
         isValidColorHex(groupColorHex) -> normalizeStageColorHex(groupColorHex, stageType)
+        isValidColorHex(colorHex) -> normalizeStageColorHex(colorHex, stageType)
         else -> stageType.defaultColorHex
+    }
+}
+
+private fun TimedCompositionTimelineStep.timerDialIconKey(sourceBlock: TimedCompositionBlock): String {
+    val stageType = timerDialStageType().toTimedStageType()
+    if (timelineStageKind != TimedCompositionTimelineStageKind.STAGE_GROUP) {
+        return normalizeTimedStageIconKey(boundaryStyle(sourceBlock)?.iconKey)
+            ?: normalizeTimedStageIconKey(iconKey)
+            ?: boundaryDefaultIconKey()
+            ?: normalizeTimedStageIconKey(stageType.defaultIconKey)
+            ?: TimedStageIconKey.CUSTOM.contractValue
+    }
+
+    val group = sourceBlock.stageGroups.firstOrNull { group -> group.id == stageGroupId }
+    val target = group?.targets?.firstOrNull { target -> target.id == targetId }
+    return normalizeTimedStageIconKey(target?.iconKey)
+        ?: normalizeTimedStageIconKey(group?.iconKey)
+        ?: normalizeTimedStageIconKey(iconKey)
+        ?: normalizeTimedStageIconKey(stageType.defaultIconKey)
+        ?: TimedStageIconKey.CUSTOM.contractValue
+}
+
+private fun TimedCompositionTimelineStep.boundaryStyle(sourceBlock: TimedCompositionBlock): TimedStageStyle? {
+    return when (timelineStageKind) {
+        TimedCompositionTimelineStageKind.WARMUP -> sourceBlock.warmupStyle
+        TimedCompositionTimelineStageKind.COOLDOWN -> sourceBlock.cooldownStyle
+        TimedCompositionTimelineStageKind.BETWEEN_ROUND_REST -> sourceBlock.restBetweenRoundsStyle
+        TimedCompositionTimelineStageKind.STAGE_GROUP -> null
+    }
+}
+
+private fun TimedCompositionTimelineStep.boundaryDefaultIconKey(): String? {
+    return when (timelineStageKind) {
+        TimedCompositionTimelineStageKind.WARMUP -> TimedStageType.WARMUP.defaultIconKey
+        TimedCompositionTimelineStageKind.COOLDOWN -> TimedStageType.COOLDOWN.defaultIconKey
+        TimedCompositionTimelineStageKind.BETWEEN_ROUND_REST -> TimedStageIconKey.RECOVER_BREATHE.contractValue
+        TimedCompositionTimelineStageKind.STAGE_GROUP -> null
     }
 }
 

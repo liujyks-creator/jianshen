@@ -208,6 +208,36 @@ class TimerDialMotionTest {
     }
 
     @Test
+    fun centerGlyphConsumesCurrentIconKeyWithBuiltInWhiteCanvasDrawing() {
+        val dialSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimerDial.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(dialSource.contains("iconKey = safeState.currentStageIconKey"))
+        assertTrue(dialSource.contains("TimerDialStageGlyph(iconKey = iconKey"))
+        assertTrue(dialSource.contains("color = Color.White"))
+        listOf(
+            "\"warmup\"",
+            "\"work\"",
+            "\"speed_up\"",
+            "\"sprint\"",
+            "\"rest\"",
+            "\"recover_breathe\"",
+            "\"cooldown\"",
+            "\"strength\"",
+            "\"mobility\"",
+            "\"custom\""
+        ).forEach { key ->
+            assertTrue("Missing built-in TimerDial icon key $key", dialSource.contains(key))
+        }
+        assertFalse(dialSource.contains("painterResource("))
+        assertFalse(dialSource.contains("Image("))
+        assertFalse(dialSource.contains("ImageBitmap"))
+        assertFalse(dialSource.contains("drawImage("))
+        assertFalse(dialSource.contains("R.drawable"))
+    }
+
+    @Test
     fun executionBottomControlsKeepNavigationBarSafePadding() {
         val routeSource = File(
             "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimedWorkoutSessionRoute.kt"
