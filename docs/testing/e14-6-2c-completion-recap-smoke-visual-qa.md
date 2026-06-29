@@ -1,7 +1,7 @@
 # E14.6-2c Completion Recap Smoke / Visual QA Review Gate
 
 **Date:** 2026-06-29
-**Status:** Review complete; semantic / interaction smoke reviewed; visual pixel QA blocked by evidence quality
+**Status:** Review complete; semantic / interaction smoke reviewed; visual pixel QA blocked by evidence quality at the time of this gate; follow-up resolved by E14.6-2d
 
 ## Scope
 
@@ -49,6 +49,12 @@ Supplemental evidence path, created only because the E14.6-2b PNG files were not
 ```
 
 No `.local/` evidence was staged or committed.
+
+## E14.6-2d Follow-Up
+
+E14.6-2d later recaptured valid screenshot evidence in `docs/testing/e14-6-2d-completion-recap-screenshot-recapture.md`.
+
+This document remains the historical review gate explaining why E14.6-2c could not accept screenshot-level visual QA. The blocker is now resolved by E14.6-2d, which captured binary-safe, valid, non-black completed recap screenshots plus an abandoned recap shell from the current runnable app state.
 
 ## Startup And Device Checks
 
@@ -146,9 +152,11 @@ Result: pass for this docs-only review.
 
 ## Product Acceptance
 
-E14.6-2b cannot be closed as screenshot-level visual QA accepted from the available evidence.
+At the time of this E14.6-2c gate, E14.6-2b could not be closed as screenshot-level visual QA accepted from the available evidence.
 
 The UI-tree smoke evidence supports the semantic / interaction shape of the completion recap page, including completed, abandoned, rest extension, skipped, pause, details scroll, and bottom return. However, the visual QA gate remains blocked until valid completion recap screenshots are recaptured from a current runnable app state.
+
+E14.6-2d completed that recapture and closed the screenshot-level blocker.
 
 ## Follow-Up Story
 
@@ -157,6 +165,8 @@ Recommended follow-up before treating E14.6-2 visual QA as fully closed:
 ```text
 E14.6-2d Completion recap screenshot evidence recapture
 ```
+
+Resolved by `docs/testing/e14-6-2d-completion-recap-screenshot-recapture.md`.
 
 Acceptance for the follow-up:
 

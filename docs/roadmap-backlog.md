@@ -2116,7 +2116,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 - E14.4-2b timed composition editor + engine + records + TimerDial mapping 链路已完成并关闭，详见 `docs/testing/e14-4-2b-closeout.md`。
 - 未覆盖但不阻塞关闭的后续项：reduce-motion TimerDial mapping smoke、单独 3 / 4 target visual captures、E12 records/trends polish、其他 UI polish。
-- 下一步不再继续 E14.4-2b implementation；2026-06-28 真机反馈已拆入 E14.6 planning gate，E14.6-1 TimerDial progress rebound fix 已完成，E14.6-2 Completion recap page redesign planning / visual gate、E14.6-2b Compose implementation 和 E14.6-2c smoke / visual QA review gate 已完成；E14.6-2c 记录 screenshot-level visual QA 证据阻塞，后续建议 E14.6-2d screenshot evidence recapture 或在接受该限制后进入 E14.6-3 planning。
+- 下一步不再继续 E14.4-2b implementation；2026-06-28 真机反馈已拆入 E14.6 planning gate，E14.6-1 TimerDial progress rebound fix 已完成，E14.6-2 Completion recap page redesign planning / visual gate、E14.6-2b Compose implementation、E14.6-2c smoke / visual QA review gate 和 E14.6-2d screenshot evidence recapture 已完成；E14.6-2 screenshot-level visual QA 已由有效非黑屏截图补齐并收口，后续进入 E14.6-3 planning。
 
 **边界:**
 
@@ -2202,9 +2202,9 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 **实现拆分建议:**
 
 1. E14.6-2b Compose implementation：已实现 dedicated completion recap page，复用 summary UI state 和 session summary，完成/放弃终态分 tone，不改记录语义。
-2. E14.6-2c smoke / visual QA review gate：已复查既有 smoke 证据；UI tree 语义 / 交互覆盖可用，但截图证据损坏，visual pixel QA 未收口。
-3. E14.6-2d screenshot evidence recapture：后续只补有效截图证据和视觉复核；不改记录语义、Room、commands、events、TimerDial、E12、E14.6-3 或心率边界。
-4. E14.6-2a static visual mock 只在仍需要截图级视觉确认时补充；当前规划方向足够进入 2b。
+2. E14.6-2c smoke / visual QA review gate：已复查既有 smoke 证据；UI tree 语义 / 交互覆盖可用，但截图证据损坏，visual pixel QA 当时未收口。
+3. E14.6-2d screenshot evidence recapture：已补有效截图证据和视觉复核；不改记录语义、Room、commands、events、TimerDial、E12、E14.6-3 或心率边界。
+4. E14.6-2a static visual mock 不再作为 E14.6-2 收口阻塞项；2d 已补齐当前 app 的截图级视觉确认。
 
 ### Story E14.6-2b: Completion recap page Compose implementation
 
@@ -2241,7 +2241,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 ### Story E14.6-2c: Completion recap smoke / visual QA review gate
 
-**状态:** Review complete; screenshot-level visual QA blocked by evidence quality, recorded in `docs/testing/e14-6-2c-completion-recap-smoke-visual-qa.md`
+**状态:** Review complete; screenshot-level visual QA was blocked by evidence quality at this gate and later resolved by E14.6-2d, recorded in `docs/testing/e14-6-2c-completion-recap-smoke-visual-qa.md`
 
 作为准备收口完成页体验的团队，
 我希望复查 E14.6-2b 的 smoke 证据、UI tree、视觉层级和边界，
@@ -2260,8 +2260,40 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 **结论:**
 
 - Semantic / interaction smoke evidence is accepted from E14.6-2b UI trees.
-- Screenshot-level visual QA is not accepted from the available evidence.
-- E14.6-2 后续需要 E14.6-2d completion recap screenshot evidence recapture，或在明确接受该证据限制后再进入 E14.6-3 planning。
+- Screenshot-level visual QA was not accepted from the E14.6-2c evidence.
+- E14.6-2d later recaptured valid screenshot evidence and closed this blocker.
+
+**边界:**
+
+- No Kotlin / Compose / Room / production test changes.
+- No session record semantic change.
+- No Room schema / migration change.
+- No `WorkoutCommand` or `WorkoutEvent` change.
+- No TimerDial progress / mapping / geometry change.
+- No E12 records / trends polish.
+- No E14.6-3 stage color / icon implementation.
+- No heart-rate UI / manual input / trend restoration.
+
+### Story E14.6-2d: Completion recap screenshot evidence recapture
+
+**状态:** Completed; screenshot evidence recaptured and visual QA accepted, recorded in `docs/testing/e14-6-2d-completion-recap-screenshot-recapture.md`
+
+作为收口完成页体验的团队，
+我希望重新采集有效的 completion recap 页面截图证据，
+以便把 E14.6-2b 的 UI tree 语义覆盖补成可打开、非黑屏、可视觉评审的截图证据。
+
+**诊断结果:**
+
+- E14.6-2b 的 16 个 PNG 都不是零字节，但文件头为 `FF FE FD FF 50 00 4E 00 ...`，不是有效 PNG signature，判断为 text / UTF-16-style binary corruption。
+- E14.6-2c 的 TrainFlow current screenshots 是有效 PNG 但全黑；系统 Home 截图正常、UI tree 仍有 TrainFlow home、logcat 无 fatal / ANR。2d 新 AVD 会话未复现该黑屏，当前判断为 transient emulator / Surface / capture timing 或旧 runnable state 问题，不是 production recap 渲染阻塞。
+- 2d 使用 `adb shell screencap -p /sdcard/<name>.png` + `adb pull` 重新采集，避免 stdout text redirection 破坏二进制 PNG。
+
+**验收结果:**
+
+- Completed recap top / summary / details PNG 均为有效 `720x1280` PNG，非黑屏，可打开并显示 `已完成`、`本次复盘`、关键数据摘要、scrolled recap details 和 bottom `返回训练首页`。
+- Abandoned / early-ended shell PNG 有效且非黑屏，显示 `已结束` / `本次训练已提前结束`，不显示 completed celebration。
+- UI tree、logcat tail、PNG validation 和 AVD shutdown evidence 已写入 `.local/smoke/e14-6-2d-completion-recap-screenshot-recapture/`，但不提交 `.local/`。
+- E14.6-2 screenshot-level visual QA 已收口。
 
 **边界:**
 
@@ -2328,7 +2360,8 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 33. E14.6-1：TimerDial progress rebound fix，修复 normal motion 下一秒 tick anchor handoff 造成的 active ring / active segment forward-then-back rebound。（Implemented; followed by E14.6-2 planning）
 34. E14.6-2：Completion recap page redesign planning / visual gate，确认 completed 终态进入“本次数据统计复盘页面”：顶部克制庆祝 + `已完成`，中部复用现有 summary / recap / session 数据，底部主动作推荐 `返回训练首页`，不保留大 TimerDial 作为主视觉，不改 session record 语义。（Planning complete; E14.6-2b implemented）
 35. E14.6-2b：Completion recap page Compose implementation，计时训练 completed / abandoned 终态进入独立复盘 shell，复用现有 summary / recap 内容并完成 Android smoke。（Implemented; E14.6-2c reviewed evidence）
-36. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此 screenshot-level visual QA 未收口。（Review complete; Next: E14.6-2d screenshot evidence recapture or E14.6-3 planning with accepted limitation）
+36. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此该 gate 未收口 screenshot-level visual QA。（Review complete; resolved by E14.6-2d）
+37. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; Next: E14.6-3 stage style / icon planning）
 
 ## 7. 下一轮建议
 
@@ -2362,13 +2395,13 @@ E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 T
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
 E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.mp3`、蓝牙耳机/扬声器 smoke、媒体音量通道和不抢占外部音乐视频；首版不再规划平均心率趋势。
-E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复 normal motion 外圈 / active segment progress rebound；E14.6-2 completion recap page redesign planning / visual gate 已完成 docs-only 规划；E14.6-2b 已实现计时训练 completed / abandoned 独立复盘页面，复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`，不保留大 TimerDial 作为完成页主视觉，不改 session record 语义；E14.6-2c 已完成 docs-only smoke / visual QA review，UI tree 语义与交互覆盖可用，但 screenshot-level visual QA 因证据质量未收口。后续优先 E14.6-2d completion recap screenshot evidence recapture；也可在接受该证据限制后进入 E14.6-3 阶段颜色 / 内置白色图标系统规划。
+E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复 normal motion 外圈 / active segment progress rebound；E14.6-2 completion recap page redesign planning / visual gate 已完成 docs-only 规划；E14.6-2b 已实现计时训练 completed / abandoned 独立复盘页面，复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`，不保留大 TimerDial 作为完成页主视觉，不改 session record 语义；E14.6-2c 已完成 docs-only smoke / visual QA review，UI tree 语义与交互覆盖可用但 screenshot-level visual QA 因证据质量未收口；E14.6-2d 已补采有效非黑屏截图并关闭该证据阻塞。后续进入 E14.6-3 阶段颜色 / 内置白色图标系统规划。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-E14.6-2 Completion recap page redesign planning / visual gate 已完成；E14.6-2b Compose implementation 已完成；E14.6-2c smoke / visual QA review gate 已完成 docs-only 复查。当前 completed / abandoned terminal presentation 的 UI tree 已切换到独立复盘 shell：completed 进入“本次数据统计复盘页面”，顶部 `已完成` + 克制庆祝，中部复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`；abandoned / early-ended 标记 `已结束` / `提前结束` 且不显示完成庆祝。E14.6-2c 发现 E14.6-2b PNG 证据损坏，补证据当前截图全黑，因此 screenshot-level visual QA 未收口。后续不得回到 TimerDial progress rebound、outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。下一步建议 E14.6-2d completion recap screenshot evidence recapture；也可在明确接受该证据限制后进入 E14.6-3 stage style system planning / design；继续保持心率撤销和 E12 records / trends 独立边界。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` / composition 阶段 `colorHex`、`iconKey` 和 fallback token，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+E14.6-2 Completion recap page redesign planning / visual gate 已完成；E14.6-2b Compose implementation 已完成；E14.6-2c smoke / visual QA review gate 已完成 docs-only 复查；E14.6-2d completion recap screenshot evidence recapture 已补齐有效非黑屏截图证据。当前 completed / abandoned terminal presentation 已切换到独立复盘 shell：completed 进入“本次数据统计复盘页面”，顶部 `已完成` + 克制庆祝，中部复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`；abandoned / early-ended 标记 `已结束` / `提前结束` 且不显示完成庆祝。E14.6-2c 发现的 E14.6-2b PNG 证据损坏和补证据当前截图全黑问题已由 E14.6-2d 诊断并补证据收口。后续不得回到 TimerDial progress rebound、outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。下一步建议 E14.6-3 stage style system planning / design；继续保持心率撤销和 E12 records / trends 独立边界。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` / composition 阶段 `colorHex`、`iconKey` 和 fallback token，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
