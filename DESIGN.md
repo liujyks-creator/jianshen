@@ -243,6 +243,7 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 执行页深色背景下，阶段色填充 Timer Dial 中心圆时，圆内文字和图标必须使用 preset `textColor` 或安全 fallback 保持高对比。
 - 非法 `colorHex` 必须回退到阶段默认安全色，不应导致计划详情、ready gate 或执行页崩溃。
 - E14.6-3 规划补充：热身、放松和轮间休息都应按阶段处理并支持颜色；轮数只是结构计数，不需要自己的颜色。
+- E14.6-3a 数据契约决策补充：composition v2 的 boundary stage 可选样式字段为 `warmupStyle`、`cooldownStyle` 和 `restBetweenRoundsStyle`，每个字段只包含可选 `colorHex` 与可选 `iconKey`，随 `WorkoutPlan.blocks` / `WorkoutSession.planSnapshot` JSON 保存；不新增 Room migration。
 - Timer Dial 色彩解析遵守 target color 优先，其次 stage group color，再到 warmup / cooldown / between-round rest 默认色，最后回退到阶段类型安全色。默认推荐色必须足够少，避免外圈在 1-5 targets 场景下变成噪声。
 
 ### Stage Color Picker
@@ -264,6 +265,7 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 阶段 / 目标可保存 `iconKey`；无效或缺失的 key 回退到阶段类型默认图标，不影响训练执行。
 - 推荐首批 key 覆盖 `warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility` 和 `custom`。
 - 计划数据只保存 icon key，不保存图片路径、SVG 路径、vector path、资源路径、URL 或上传资产引用。
+- `iconKey` 应是已知内置 key；未知、空值、URL-like、path-like、resource-like、SVG-like 或上传资产-like 值都按缺失处理，最终安全回退到类型默认 icon 或 `custom`。
 - 图标和阶段色必须一起满足对比度；深色执行页中优先使用白色或 `StageColorPreset.textColor`。
 - 第一版不支持用户上传图片、自定义图片库或远程图标资源。自定义图片只作为 post-MVP / later story，并且必须先明确存储、权限、备份和开源定制边界。
 - 图标不能承诺动作内容指导、AI 纠错、语音教练或健康设备能力。
@@ -415,7 +417,7 @@ Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能�
 
 E14.6 真机反馈补充：如果 normal motion 下外圈或当前 active segment 出现每秒前跳再回弹，必须拆 E14.6-1 单独修复。该修复只处理 progress monotonic / continuous behavior，不改 outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。内部阶段圆环下的浅色承托圆环可以在后续 visual polish 中稍微加粗，但不得和 progress rebound fix 混为同一代码修复，除非后续 story 明确允许。
 
-E14.6-3 stage style / icon planning 补充：Timer Dial 中心圆图标使用 active target `iconKey`，缺失时回退到 stage group icon，再回退到 warmup / cooldown / between-round rest 或阶段类型默认 icon；中心圆和外圈颜色使用 target -> stageGroup -> boundary default -> type default fallback。Warmup、cooldown 和 synthetic between-round rest 即使不是 stageGroup targets，也应拥有自己的默认颜色和 icon。轮数不产生颜色或 icon。该规划不得改变 E14.4-2b-6 的外圈 planned-ratio 语义、内圈总阶段语义、12 点数字圆标、`+15s` rest extension 语义或 E14.5 continuous projection 边界。
+E14.6-3 / E14.6-3a stage style / icon planning 补充：Timer Dial 中心圆图标使用 active target `iconKey`，缺失时回退到 stage group icon，再回退到 `warmupStyle` / `cooldownStyle` / `restBetweenRoundsStyle` 或阶段类型默认 icon；中心圆和外圈颜色使用 target -> stageGroup -> boundary style -> type default fallback。Warmup、cooldown 和 synthetic between-round rest 即使不是 stageGroup targets，也应拥有自己的默认颜色和 icon。轮数不产生颜色或 icon。该规划不得改变 E14.4-2b-6 的外圈 planned-ratio 语义、内圈总阶段语义、12 点数字圆标、`+15s` rest extension 语义或 E14.5 continuous projection 边界。
 
 后续可以探索赛博霓虹、Official Flow、Tile Flow 和 Big Type 的 Timer Dial 适配，但 MVP 不新增第四套 skin。先定义圆盘语言，再讨论它如何融入 TrainFlow 风格。
 

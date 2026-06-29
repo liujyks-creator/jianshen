@@ -391,31 +391,40 @@ E14.4-2b-6 TimerDial mapping status: `docs/testing/e14-4-2b-6-timerdial-mapping-
 
 E14.4-2b closeout status: `docs/testing/e14-4-2b-closeout.md` 已将 timed composition editor + engine + records + TimerDial mapping 链路标记为 completed / closed。未覆盖的 reduce-motion mapping smoke、单独 3 / 4 target visual captures、E12 records/trends polish 和其他 UI polish 是后续非阻塞独立任务。
 
-E14.6 stage style / icon planning status: `docs/testing/e14-6-real-device-timerdial-feedback-planning.md` 已记录真机反馈拆分，`docs/testing/e14-6-3-stage-style-icon-planning.md` 已完成 contract-level planning。阶段样式不是普通装饰；style 概念由颜色和稳定内置 `iconKey` 组成。
+E14.6 stage style / icon planning status: `docs/testing/e14-6-real-device-timerdial-feedback-planning.md` 已记录真机反馈拆分，`docs/testing/e14-6-3-stage-style-icon-planning.md` 已完成 contract-level planning。E14.6-3a data contract / model decision 已记录在 `docs/testing/e14-6-3a-stage-style-data-contract-decision.md`。阶段样式不是普通装饰；style 概念由颜色和稳定内置 `iconKey` 组成。
 
 - `TimedCompositionStageGroup.iconKey`、`TimedCompositionTarget.iconKey`、`colorHex` 继续作为可保存的阶段 / 目标样式输入。
 - Legacy `TimedExerciseItem.iconKey` 和 `TimedExerciseItem.colorHex` 继续作为旧计时阶段样式输入。
-- `warmupSec`、`cooldownSec` 和 synthetic between-round rest 虽然当前不是用户编辑的 targets，但在执行和 TimerDial 上都是 stage-like surfaces；第一版可通过默认 stage style token 解析颜色和内置图标。
+- E14.6-3a 选择 Option A：复用现有 stage group / target flat fields，仅在 versioned timed composition JSON payload 内为 boundary stages 增加可选 `warmupStyle`、`cooldownStyle` 和 `restBetweenRoundsStyle`。
+- `warmupSec`、`cooldownSec` 和 synthetic between-round rest 虽然不是用户编辑的 targets，但在执行和 TimerDial 上都是 stage-like surfaces；缺少 boundary style 字段时继续通过默认 stage style token 解析颜色和内置图标。
 - `rounds` 只是重复结构和计数，不需要自己的颜色或图标，也不应伪装为阶段样式字段。
-- 颜色 fallback 顺序为 active target -> parent stage group -> boundary stage default -> stage / target kind safe default -> final safe fallback。
-- Icon fallback 顺序为 active target -> parent stage group -> boundary / type default -> `custom`。
-- 第一版 icon 只支持项目内置白色图标集，通过稳定 `iconKey` 引用；不得保存图片路径、SVG 路径、资源路径、URL 或上传资产引用。
+- 颜色 fallback 顺序为 active target style -> parent stage group style -> boundary stage style -> stage / target kind safe default -> final safe fallback。
+- Icon fallback 顺序为 active target style -> parent stage group style -> boundary stage style -> boundary / type default -> `custom`。
+- 第一版 icon 只支持项目内置白色图标集，通过稳定 `iconKey` 引用；不得保存图片路径、SVG 路径、资源路径、本地文件路径、URL 或上传资产引用。
 - 推荐内置 key 至少覆盖 `warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility` 和 `custom`。
 - 用户上传图片、自定义图片库、裁剪、存储、备份、版权处理和远程 icon pack 不进入当前版本，应列为 post-MVP / later story。
-- 若未来要让 warmup / cooldown / between-round rest 的颜色或图标成为用户可编辑持久化字段，应先拆 E14.6-3a model / serializer decision story。仅扩展现有 JSON payload 不自动要求 Room table / column migration；新增 Room 字段必须另拆 migration story。
-- 无效 `iconKey` 必须回退到阶段类型默认图标或安全 fallback，且不影响 engine、session record、`WorkoutCommand` 或 `WorkoutEvent` 语义。
+- E14.6-3a 不建议 Room migration。Style 持久化继续走现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON；新增 Room 字段必须另拆 migration story。
+- 无效 `colorHex` 必须回退到阶段默认安全色；无效 `iconKey` 必须视为缺失并回退到阶段类型默认图标或最终 `custom`，且不影响 engine、session record、`WorkoutCommand` 或 `WorkoutEvent` 语义。
 - `WorkoutSession.planSnapshot` 应保存训练开始时的 style 输入；用户后续编辑当前计划不得回写历史 snapshot 或重算历史样式。
 
 概念结构：
 
 ```ts
+interface StageStyle {
+  colorHex?: string;
+  iconKey?: string;
+}
+
 interface TimedCompositionBlock extends PlanBlockBase {
   kind: "timed_composition";
   compositionVersion: 2;
   warmupSec: number;
+  warmupStyle?: StageStyle;
   cooldownSec: number;
+  cooldownStyle?: StageStyle;
   rounds: number;
   restBetweenRoundsSec: number;
+  restBetweenRoundsStyle?: StageStyle;
   stageGroups: TimedCompositionStageGroup[];
   compatibility?: TimedCompositionCompatibilityMeta;
 }
@@ -459,7 +468,9 @@ Field rules:
 
 - `compositionVersion` is required and starts at `2`.
 - `warmupSec` and `cooldownSec` are top-level boundary durations; `0` means absent.
+- `warmupStyle` and `cooldownStyle` are optional boundary style fields; if missing, resolver uses boundary defaults.
 - `rounds` and `restBetweenRoundsSec` remain top configuration, matching the E14.4-2b-1 editor direction.
+- `restBetweenRoundsStyle` is optional boundary style for synthetic between-round rest only; it is not a movable target and does not create round style.
 - `stageGroups` is the repeated stage composition inside each round.
 - Each stage group has stable `id`, `order`, `name`, `colorHex`, and `targets`.
 - Each stage group may have stable `iconKey`; missing or invalid keys resolve through the stage / boundary fallback.
@@ -469,6 +480,8 @@ Field rules:
 - Each stage group supports at most 5 targets in the first implementation.
 - Global cue defaults remain in `PlanPreferences.cueSettings`; target-level `cueSettings` are the durable override. Stage-level `cueSettings` may serve as an optional default/template layer, resolved after global defaults and before target override.
 - `restBetweenRoundsSec` is not stored as a movable target. Execution expands it into synthetic between-round rest steps between rounds only.
+- `colorHex` accepts only `#[0-9A-Fa-f]{6}` and should normalize to uppercase; invalid or blank values are treated as missing and resolved through defaults.
+- `iconKey` accepts only known built-in keys. Unknown, blank, malformed, URL-like, path-like, resource-like, SVG-like, or uploaded-asset-like values are treated as missing and resolved through defaults.
 
 Execution mapping rules:
 

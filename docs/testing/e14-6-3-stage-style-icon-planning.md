@@ -111,9 +111,9 @@ Existing timed models already contain style fields in the places that matter for
 - Composition v2 `TimedCompositionStageGroup` has `colorHex` and `iconKey?: string`.
 - Composition v2 `TimedCompositionTarget` has `colorHex` and `iconKey?: string`.
 
-Current top-level `warmupSec`, `cooldownSec`, and `restBetweenRoundsSec` are durations, not user-authored target rows. They should resolve to default stage style tokens in the next implementation. If the product later wants user-editable boundary-stage styles for warmup, cooldown, or between-round rest, split E14.6-3a first to decide JSON payload shape, serializer compatibility, and legacy fallback.
+Current top-level `warmupSec`, `cooldownSec`, and `restBetweenRoundsSec` are durations, not user-authored target rows. E14.6-3a has now decided the JSON payload shape for user-editable boundary-stage styles: keep existing stage group / target `colorHex` and `iconKey` fields, and add optional `warmupStyle`, `cooldownStyle`, and `restBetweenRoundsStyle` objects inside the versioned timed composition payload only. Each style object contains optional `colorHex` and optional `iconKey`.
 
-No Room migration is recommended for the first style/icon implementation. Style should remain inside existing plan JSON / snapshot JSON where fields already exist, or in default style resolution for boundary stages. Adding a Room table or column requires a separate migration story.
+No Room migration is recommended for the first style/icon implementation. Style should remain inside existing plan JSON / snapshot JSON, including the new boundary style fields when present. Adding a Room table or column requires a separate migration story.
 
 WorkoutSession snapshots should preserve whatever style existed at training start. Historical records must not be restyled from an edited current plan unless a future story explicitly adds a historical style migration.
 
@@ -148,9 +148,9 @@ TimerDial consumption should preserve the accepted E14.4-2b-6 semantics:
 
 Style consumption:
 
-- Center circle icon uses the active target `iconKey` when present, else the active stage group icon, else the boundary / type default.
-- Center circle fill uses the active target color when present, else stage group color, else boundary / type default.
-- Warmup, cooldown, and between-round rest use their own default color and icon even when they are synthetic timeline steps.
+- Center circle icon uses the active target `iconKey` when present, else the active stage group icon, else boundary style, else the boundary / type default.
+- Center circle fill uses the active target color when present, else stage group color, else boundary style, else boundary / type default.
+- Warmup, cooldown, and between-round rest use their persisted boundary style when present and valid; otherwise they use their own default color and icon even when they are synthetic timeline steps.
 - Outer ring segments use resolved style color for targets and fallback stages.
 - Missing or invalid style data must not crash drawing or change training execution.
 
@@ -174,19 +174,23 @@ The current documentation may reserve an interface direction, but this round doe
 
 Recommended split:
 
-1. **E14.6-3a data contract / model decision**
-   - Decide whether boundary stages only use defaults or get persisted `style` payload fields.
-   - Decide exact icon key enum / registry contract.
-   - Confirm serializer and legacy fallback rules.
-   - Confirm no Room migration unless a new persisted table / column is explicitly chosen.
+1. **E14.6-3a data contract / model decision** - completed
+   - Decision: persist optional `warmupStyle`, `cooldownStyle`, and `restBetweenRoundsStyle` in the versioned composition JSON payload.
+   - Decision: keep existing stage group / target fields flat for compatibility.
+   - Decision: no Room migration unless a future story explicitly adds a new table / column.
 
-2. **E14.6-3b editor UI style picker**
+2. **E14.6-3b model / serializer tests**
+   - Add boundary style fields and focused round-trip / fallback tests.
+   - Keep legacy timed plans and old snapshots valid.
+   - Confirm invalid color / icon fallback and no resource-path or uploaded-image persistence.
+
+3. **E14.6-3c editor UI style picker**
    - Implement the stage / target style picker with swatches + icon grid.
    - Preserve drag / expand / style-entry separation.
    - Add editor UI and accessibility tests.
 
-3. **E14.6-3c TimerDial consumption / visual QA**
-   - Resolve style from active target / stage / boundary defaults.
+4. **E14.6-3d TimerDial consumption / visual QA**
+   - Resolve style from active target / stage group / boundary style / boundary defaults.
    - Verify warmup, cooldown, between-round rest, 1-5 targets, legacy fallback, invalid color, and invalid icon behavior.
    - Capture visual QA evidence after implementation.
 
