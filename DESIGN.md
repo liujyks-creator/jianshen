@@ -243,14 +243,16 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 - 执行页深色背景下，阶段色填充 Timer Dial 中心圆时，圆内文字和图标必须使用 preset `textColor` 或安全 fallback 保持高对比。
 - 非法 `colorHex` 必须回退到阶段默认安全色，不应导致计划详情、ready gate 或执行页崩溃。
 - E14.6-3 规划补充：热身、放松和轮间休息都应按阶段处理并支持颜色；轮数只是结构计数，不需要自己的颜色。
+- Timer Dial 色彩解析遵守 target color 优先，其次 stage group color，再到 warmup / cooldown / between-round rest 默认色，最后回退到阶段类型安全色。默认推荐色必须足够少，避免外圈在 1-5 targets 场景下变成噪声。
 
 ### Stage Color Picker
 
 - 阶段卡、计时目标卡、力量目标组卡和计划详情卡应展示当前色块和可打开的颜色选择入口；颜色选择器优先展示推荐色，再展示更多颜色。
+- E14.6-3 后，阶段 / 目标样式入口可以在同一 panel 中同时选择颜色和内置 icon，但拖拽手柄、展开 / 收起和样式入口必须分开，避免误触。
 - 色块尺寸应稳定，避免选中、hover、TalkBack 或文案变化导致布局跳动。
 - 选中态不能只靠颜色表达，必须至少包含外圈 / 描边、对勾和 TalkBack 文案。
 - 每个色块的可访问文案应包含颜色名称、推荐用途、高注意色状态和当前是否选中。
-- 色板应优先使用可复用的大色板 bottom sheet / dialog / page-style panel，包含 `推荐色`、`更多颜色`、大色块和完成动作；编辑卡片不使用多个文字颜色选项挤占主编辑区域。
+- 色板应优先使用可复用的大色板 bottom sheet / dialog / page-style panel，包含 `推荐色`、`更多颜色`、大色块、icon grid 和完成动作；编辑卡片不使用多个文字颜色选项或图标长文字列表挤占主编辑区域。
 - 计划颜色是用户手动设置的计划级颜色，不自动从首个阶段、阶段内部目标或力量目标组推断。计划颜色默认可使用红色，并可通过计划列表 / 详情左侧色块或展开计划内的颜色入口修改；若实现需要新的持久化字段，必须先拆数据决策，不在 UI polish 中静默改 Room schema。
 - 色板不能引入第四套 skin、远程主题、运行时插件市场或第三方皮肤安装。
 
@@ -260,6 +262,8 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 
 - 热身、工作、休息、放松、自定义、轮间休息和 composition target 都应有默认图标 fallback。
 - 阶段 / 目标可保存 `iconKey`；无效或缺失的 key 回退到阶段类型默认图标，不影响训练执行。
+- 推荐首批 key 覆盖 `warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility` 和 `custom`。
+- 计划数据只保存 icon key，不保存图片路径、SVG 路径、vector path、资源路径、URL 或上传资产引用。
 - 图标和阶段色必须一起满足对比度；深色执行页中优先使用白色或 `StageColorPreset.textColor`。
 - 第一版不支持用户上传图片、自定义图片库或远程图标资源。自定义图片只作为 post-MVP / later story，并且必须先明确存储、权限、备份和开源定制边界。
 - 图标不能承诺动作内容指导、AI 纠错、语音教练或健康设备能力。
@@ -410,6 +414,8 @@ E14.4-2b 的下一版 Timer Dial 语义必须保持当前已确认的圆盘 UI�
 Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度。阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒都应服从真实训练状态和用户 cue settings。休息延长后，当前 rest 外圈弧和内圈 work+rest cycle progress 必须单调、不倒退，并在 active tick 继续推进；paused、completed 和 abandoned 状态不继续动画。
 
 E14.6 真机反馈补充：如果 normal motion 下外圈或当前 active segment 出现每秒前跳再回弹，必须拆 E14.6-1 单独修复。该修复只处理 progress monotonic / continuous behavior，不改 outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。内部阶段圆环下的浅色承托圆环可以在后续 visual polish 中稍微加粗，但不得和 progress rebound fix 混为同一代码修复，除非后续 story 明确允许。
+
+E14.6-3 stage style / icon planning 补充：Timer Dial 中心圆图标使用 active target `iconKey`，缺失时回退到 stage group icon，再回退到 warmup / cooldown / between-round rest 或阶段类型默认 icon；中心圆和外圈颜色使用 target -> stageGroup -> boundary default -> type default fallback。Warmup、cooldown 和 synthetic between-round rest 即使不是 stageGroup targets，也应拥有自己的默认颜色和 icon。轮数不产生颜色或 icon。该规划不得改变 E14.4-2b-6 的外圈 planned-ratio 语义、内圈总阶段语义、12 点数字圆标、`+15s` rest extension 语义或 E14.5 continuous projection 边界。
 
 后续可以探索赛博霓虹、Official Flow、Tile Flow 和 Big Type 的 Timer Dial 适配，但 MVP 不新增第四套 skin。先定义圆盘语言，再讨论它如何融入 TrainFlow 风格。
 

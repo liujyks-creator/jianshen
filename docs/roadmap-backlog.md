@@ -2116,7 +2116,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 - E14.4-2b timed composition editor + engine + records + TimerDial mapping 链路已完成并关闭，详见 `docs/testing/e14-4-2b-closeout.md`。
 - 未覆盖但不阻塞关闭的后续项：reduce-motion TimerDial mapping smoke、单独 3 / 4 target visual captures、E12 records/trends polish、其他 UI polish。
-- 下一步不再继续 E14.4-2b implementation；2026-06-28 真机反馈已拆入 E14.6 planning gate，E14.6-1 TimerDial progress rebound fix 已完成，E14.6-2 Completion recap page redesign planning / visual gate、E14.6-2b Compose implementation、E14.6-2c smoke / visual QA review gate 和 E14.6-2d screenshot evidence recapture 已完成；E14.6-2 screenshot-level visual QA 已由有效非黑屏截图补齐并收口，后续进入 E14.6-3 planning。
+- 下一步不再继续 E14.4-2b implementation；2026-06-28 真机反馈已拆入 E14.6 planning gate，E14.6-1 TimerDial progress rebound fix 已完成，E14.6-2 Completion recap page redesign planning / visual gate、E14.6-2b Compose implementation、E14.6-2c smoke / visual QA review gate 和 E14.6-2d screenshot evidence recapture 已完成；E14.6-2 screenshot-level visual QA 已由有效非黑屏截图补齐并收口；E14.6-3 stage style / icon planning 已完成，后续拆 E14.6-3a / 3b / 3c 或按用户优先级进入 E12。
 
 **边界:**
 
@@ -2306,6 +2306,44 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 - No E14.6-3 stage color / icon implementation.
 - No heart-rate UI / manual input / trend restoration.
 
+### Story E14.6-3: Stage style / icon planning
+
+**状态:** Planning complete; docs-only plan recorded in `docs/testing/e14-6-3-stage-style-icon-planning.md`
+
+作为计时训练用户，
+我希望热身、放松、轮间休息、普通阶段和阶段内目标都能拥有清晰的阶段样式，
+以便 TimerDial 中心圆和外圈能用颜色与内置图标准确表达当前训练状态，而不是只让重复阶段有样式。
+
+**规划结论:**
+
+- Stage style 是 contract-level 概念，由颜色和稳定内置 `iconKey` 组成。
+- 热身、放松、轮间休息、普通 stage group 和内部 targets 都可以解析 style。
+- 轮数只是重复结构和计数，不需要颜色或 icon。
+- 第一版只提供项目内置白色单色 icon key；不保存图片路径、SVG 路径、资源路径、URL 或上传资产引用。
+- 推荐内置 key 至少覆盖 `warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility` 和 `custom`。
+- 颜色 fallback 为 active target -> parent stage group -> warmup / cooldown / between-round rest default -> type safe default。
+- Icon fallback 为 active target -> parent stage group -> boundary / type default -> `custom`。
+- 现有 legacy timed `TimedExerciseItem` 和 composition v2 stage group / target 已有 `colorHex` / `iconKey` 保存路径；warmup / cooldown / synthetic between-round rest 当前先走默认 style token。
+- 若未来要让 warmup / cooldown / between-round rest 成为用户可编辑持久化样式，先拆 E14.6-3a data contract / model decision；新增 Room table / column 必须另拆 migration story。
+- 用户上传图片、自定义图片库、裁剪、存储、备份、版权处理和远程 icon pack 均为 post-MVP / later story。
+
+**后续拆分:**
+
+1. E14.6-3a data contract / model decision。
+2. E14.6-3b editor UI style picker。
+3. E14.6-3c TimerDial consumption / visual QA。
+4. TimerDial visual polish follow-up：内部阶段圆环下浅色承托圆环可单独加粗，但不混入 style/icon data planning。
+
+**边界:**
+
+- No Kotlin / Compose / Room / production test changes in this planning story.
+- No icon picker implementation.
+- No resource, SVG, image, or icon asset files.
+- No user-uploaded image support.
+- No TimerDial production change or Canvas geometry change.
+- No E12 records / trends polish.
+- No heart-rate UI / manual input / trend restoration.
+
 ## 5. FR 覆盖映射
 
 | FR | 覆盖 Epic/Story |
@@ -2361,7 +2399,8 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 34. E14.6-2：Completion recap page redesign planning / visual gate，确认 completed 终态进入“本次数据统计复盘页面”：顶部克制庆祝 + `已完成`，中部复用现有 summary / recap / session 数据，底部主动作推荐 `返回训练首页`，不保留大 TimerDial 作为主视觉，不改 session record 语义。（Planning complete; E14.6-2b implemented）
 35. E14.6-2b：Completion recap page Compose implementation，计时训练 completed / abandoned 终态进入独立复盘 shell，复用现有 summary / recap 内容并完成 Android smoke。（Implemented; E14.6-2c reviewed evidence）
 36. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此该 gate 未收口 screenshot-level visual QA。（Review complete; resolved by E14.6-2d）
-37. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; Next: E14.6-3 stage style / icon planning）
+37. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; followed by E14.6-3 planning）
+38. E14.6-3：Stage style / icon planning，确认阶段样式由颜色和内置 `iconKey` 组成，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon，第一版只使用项目内置白色 icon key，用户上传图片列为 post-MVP。（Planning complete; Next: E14.6-3a / 3b / 3c split or E12 by priority）
 
 ## 7. 下一轮建议
 
@@ -2395,13 +2434,13 @@ E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 T
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
 E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.mp3`、蓝牙耳机/扬声器 smoke、媒体音量通道和不抢占外部音乐视频；首版不再规划平均心率趋势。
-E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复 normal motion 外圈 / active segment progress rebound；E14.6-2 completion recap page redesign planning / visual gate 已完成 docs-only 规划；E14.6-2b 已实现计时训练 completed / abandoned 独立复盘页面，复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`，不保留大 TimerDial 作为完成页主视觉，不改 session record 语义；E14.6-2c 已完成 docs-only smoke / visual QA review，UI tree 语义与交互覆盖可用但 screenshot-level visual QA 因证据质量未收口；E14.6-2d 已补采有效非黑屏截图并关闭该证据阻塞。后续进入 E14.6-3 阶段颜色 / 内置白色图标系统规划。
+E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复 normal motion 外圈 / active segment progress rebound；E14.6-2 completion recap page redesign planning / visual gate 已完成 docs-only 规划；E14.6-2b 已实现计时训练 completed / abandoned 独立复盘页面，复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`，不保留大 TimerDial 作为完成页主视觉，不改 session record 语义；E14.6-2c 已完成 docs-only smoke / visual QA review，UI tree 语义与交互覆盖可用但 screenshot-level visual QA 因证据质量未收口；E14.6-2d 已补采有效非黑屏截图并关闭该证据阻塞；E14.6-3 已完成阶段样式 / 内置白色图标系统规划。后续可按 E14.6-3a data contract / model decision、E14.6-3b editor UI style picker、E14.6-3c TimerDial consumption / visual QA 拆分，或按用户优先级进入 E12 records / trends polish。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-E14.6-2 Completion recap page redesign planning / visual gate 已完成；E14.6-2b Compose implementation 已完成；E14.6-2c smoke / visual QA review gate 已完成 docs-only 复查；E14.6-2d completion recap screenshot evidence recapture 已补齐有效非黑屏截图证据。当前 completed / abandoned terminal presentation 已切换到独立复盘 shell：completed 进入“本次数据统计复盘页面”，顶部 `已完成` + 克制庆祝，中部复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`；abandoned / early-ended 标记 `已结束` / `提前结束` 且不显示完成庆祝。E14.6-2c 发现的 E14.6-2b PNG 证据损坏和补证据当前截图全黑问题已由 E14.6-2d 诊断并补证据收口。后续不得回到 TimerDial progress rebound、outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。下一步建议 E14.6-3 stage style system planning / design；继续保持心率撤销和 E12 records / trends 独立边界。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` / composition 阶段 `colorHex`、`iconKey` 和 fallback token，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+E14.6-2 Completion recap page redesign planning / visual gate 已完成；E14.6-2b Compose implementation 已完成；E14.6-2c smoke / visual QA review gate 已完成 docs-only 复查；E14.6-2d completion recap screenshot evidence recapture 已补齐有效非黑屏截图证据；E14.6-3 stage style / icon planning 已完成。当前 completed / abandoned terminal presentation 已切换到独立复盘 shell：completed 进入“本次数据统计复盘页面”，顶部 `已完成` + 克制庆祝，中部复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`；abandoned / early-ended 标记 `已结束` / `提前结束` 且不显示完成庆祝。阶段样式规划确认 style = color + built-in `iconKey`，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon；第一版只用项目内置白色 icon key，用户上传图片列为 post-MVP。后续不得回到 TimerDial progress rebound、outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。下一步建议 E14.6-3a data contract / model decision、E14.6-3b editor UI style picker、E14.6-3c TimerDial consumption / visual QA；也可按用户优先级进入 E12 records / trends polish。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` / composition 阶段 `colorHex`、`iconKey` 和 fallback token，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：

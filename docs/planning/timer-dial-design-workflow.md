@@ -331,9 +331,11 @@ E14.6 后续拆为三个独立 story，优先级如下：
 
 1. E14.6-1 TimerDial progress rebound fix：normal motion 下外圈 / 当前 active segment 不应每秒前跳再回弹；目标是单调、连续、状态驱动的视觉进度。该 story 不改 outer-ring semantic mapping、Canvas geometry、stage count、engine timeline、Room、session records、`WorkoutCommand`、`WorkoutEvent` 或 E14.4-2b mapping 数据源。
 2. E14.6-2 Completion recap page redesign：训练完成后进入“本次数据统计复盘页面”，顶部明确完成并带克制庆祝，中部复用现有训练总结 / 数据总览 / session summary，底部返回。该 story 不改变 `WorkoutSession` 语义，不混入 E12 records / trends polish，不恢复心率。
-3. E14.6-3 Stage style system planning / design：热身、放松和轮间休息都是阶段并支持颜色；轮数只是结构计数，不需要颜色；阶段 / 目标支持内置白色 icon key，第一版不支持用户上传图片、自定义图片库或远程图标资源。
+3. E14.6-3 Stage style system planning / design：热身、放松和轮间休息都是阶段并支持颜色；轮数只是结构计数，不需要颜色或图标；阶段 / 目标支持内置白色 icon key，第一版不支持用户上传图片、自定义图片库、远程图标资源或图片路径持久化。
 
-内部阶段圆环下的浅色承托圆环可以在未来 visual polish 中单独加粗，但不应和 E14.6-1 progress rebound fix 混为同一实现。E14.6 planning gate 不写 Kotlin / Compose / Room / tests，不生成 APK，不启动 AVD。
+E14.6-3 planning 结论记录在 `docs/testing/e14-6-3-stage-style-icon-planning.md`。TimerDial 消费 style 时保持 E14.4-2b-6 mapping：外圈仍按当前 stage group targets 的 planned duration ratio 分段；内圈仍表达整次训练总阶段进度；12 点数字圆标仍表达 warmup + rounds * stageGroups + between-round rests + cooldown。中心圆 icon 使用 active target `iconKey`，缺失时回退到 stage group，再回退到 warmup / cooldown / between-round rest 或阶段类型默认 icon；外圈 / 中心颜色使用 target -> stageGroup -> boundary default -> type default fallback。Warmup、cooldown 和 synthetic between-round rest 即使不是 targets，也应在视觉上拥有自己的默认颜色和 icon。`+15s` 不插入 target、不增加第 6 段、不改 snapshot、不改变 rest-extension record。
+
+内部阶段圆环下的浅色承托圆环可以在未来 visual polish 中单独加粗，但不应和 E14.6-1 progress rebound fix 或 E14.6-3 style data planning 混为同一实现。E14.6 planning gate 不写 Kotlin / Compose / Room / tests，不生成 APK，不启动 AVD。
 
 ### E12 统计图表 / 历史趋势
 

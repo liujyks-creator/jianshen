@@ -4,6 +4,8 @@
 **Status:** Planning complete; implementation split into follow-up stories
 **Nature:** docs-only / planning-only / real-device feedback triage
 
+**Follow-up status:** E14.6-1, E14.6-2, E14.6-2b, E14.6-2c, and E14.6-2d are closed. E14.6-3 stage style / icon planning is now recorded in `docs/testing/e14-6-3-stage-style-icon-planning.md`.
+
 ## Scope
 
 This gate records real-device TimerDial feedback and splits it into follow-up stories. It does not implement fixes.
@@ -94,6 +96,17 @@ Target:
 - First version provides a project-owned built-in white icon set. Icons render on the stage color in the center circle or on stage color blocks.
 - User-uploaded custom images are not part of the first version. Reserve an interface / setting path for later, but place upload / custom image support in a post-MVP or later story.
 - Style tokens and icon keys should be documented before implementation, including default fallback behavior for warmup, cooldown, between-round rest, action / custom / rest targets, and invalid color / icon keys.
+
+E14.6-3 planning result:
+
+- Style means color plus stable built-in `iconKey`.
+- First built-in key set should cover at least `warmup`, `work`, `speed_up`, `sprint`, `rest`, `recover_breathe`, `cooldown`, `strength`, `mobility`, and `custom`.
+- Stored data keeps icon keys, not image paths, vector paths, resource paths, URLs, or uploaded assets.
+- Color fallback should be active target -> parent stage group -> warmup / cooldown / between-round rest default -> type safe default.
+- Icon fallback should be active target -> parent stage group -> boundary / type default -> `custom`.
+- Existing repeated stage / target models already carry `colorHex` / `iconKey`; warmup / cooldown / between-round rest should first use default style token resolution.
+- If user-editable persisted style for warmup / cooldown / between-round rest is desired, split E14.6-3a data contract / model decision before implementation.
+- Recommended follow-up split is E14.6-3a data contract / model decision, E14.6-3b editor UI style picker, and E14.6-3c TimerDial consumption / visual QA.
 
 Boundaries:
 
