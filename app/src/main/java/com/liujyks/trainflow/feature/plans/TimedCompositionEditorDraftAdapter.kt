@@ -10,6 +10,7 @@ import com.liujyks.trainflow.core.model.TimedCompositionStageGroup
 import com.liujyks.trainflow.core.model.TimedCompositionTarget
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -36,6 +37,9 @@ internal data class TimedCompositionEditorDraft(
     val cooldownSec: Int,
     val rounds: Int,
     val restBetweenRoundsSec: Int,
+    val warmupStyle: TimedStageStyle? = null,
+    val cooldownStyle: TimedStageStyle? = null,
+    val restBetweenRoundsStyle: TimedStageStyle? = null,
     val stageGroups: List<TimedCompositionStageGroupDraft>,
     val source: TimedCompositionEditorDraftSource,
     val sourcePlan: WorkoutPlan,
@@ -80,9 +84,12 @@ internal data class TimedCompositionEditorDraft(
             order = 1,
             title = title.trim().ifBlank { sourcePlan.title },
             warmupSec = warmupSec,
+            warmupStyle = warmupStyle,
             cooldownSec = cooldownSec,
+            cooldownStyle = cooldownStyle,
             rounds = rounds,
             restBetweenRoundsSec = restBetweenRoundsSec,
+            restBetweenRoundsStyle = restBetweenRoundsStyle,
             stageGroups = stageGroups.map { group -> group.toModel() },
             compatibility = TimedCompositionCompatibilityMeta(
                 sourceVersion = sourceVersion,
@@ -177,6 +184,9 @@ private fun TimedCompositionBlock.toDraft(plan: WorkoutPlan): TimedCompositionEd
         cooldownSec = cooldownSec,
         rounds = rounds,
         restBetweenRoundsSec = restBetweenRoundsSec,
+        warmupStyle = warmupStyle,
+        cooldownStyle = cooldownStyle,
+        restBetweenRoundsStyle = restBetweenRoundsStyle,
         stageGroups = stageGroups.map { group -> group.toDraft() },
         source = TimedCompositionEditorDraftSource.V2_PAYLOAD,
         sourcePlan = plan,

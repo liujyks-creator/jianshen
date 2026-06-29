@@ -5,10 +5,14 @@ import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP
 import com.liujyks.trainflow.core.model.TimedCompositionCompatibilityMeta
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
+import com.liujyks.trainflow.core.model.TimedStageIconKey
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.normalized
 import com.liujyks.trainflow.core.model.normalizeStageColorHex
+import com.liujyks.trainflow.core.model.normalizeTimedStageIconKey
 import com.liujyks.trainflow.core.model.stageColorPresetFor
 import com.liujyks.trainflow.core.model.stageTextColorHexFor
 
@@ -29,6 +33,9 @@ internal data class TimedCompositionPlanEditorScreenState(
     val roundsRawText: String? = null,
     val restBetweenRoundsSec: Int,
     val restBetweenRoundsRawText: String? = null,
+    val warmupStyle: TimedStageStyle? = null,
+    val cooldownStyle: TimedStageStyle? = null,
+    val restBetweenRoundsStyle: TimedStageStyle? = null,
     val stageGroups: List<TimedCompositionStageGroupEditorUiState>,
     val source: TimedCompositionEditorDraftSource,
     val sourcePlan: WorkoutPlan,
@@ -90,6 +97,9 @@ internal data class TimedCompositionPlanEditorScreenState(
             cooldownSec = cooldownSec,
             rounds = rounds,
             restBetweenRoundsSec = restBetweenRoundsSec,
+            warmupStyle = warmupStyle.normalized(),
+            cooldownStyle = cooldownStyle.normalized(),
+            restBetweenRoundsStyle = restBetweenRoundsStyle.normalized(),
             stageGroups = stageGroups.mapIndexed { index, group -> group.toDraft(order = index + 1) },
             source = source,
             sourcePlan = sourcePlan,
@@ -184,6 +194,45 @@ internal val TimedCompositionTargetKind.defaultColorHex: String
 internal val TimedCompositionTargetKind.defaultIconKey: String
     get() = defaultStageType.defaultIconKey
 
+internal enum class TimedCompositionBoundaryStyleTarget(
+    val displayLabel: String,
+    val fallbackStageType: TimedStageType,
+    val defaultIconKey: String
+) {
+    WARMUP(
+        displayLabel = "热身",
+        fallbackStageType = TimedStageType.WARMUP,
+        defaultIconKey = TimedStageType.WARMUP.defaultIconKey
+    ),
+    COOLDOWN(
+        displayLabel = "放松",
+        fallbackStageType = TimedStageType.COOLDOWN,
+        defaultIconKey = TimedStageType.COOLDOWN.defaultIconKey
+    ),
+    REST_BETWEEN_ROUNDS(
+        displayLabel = "轮间休息",
+        fallbackStageType = TimedStageType.REST,
+        defaultIconKey = TimedStageIconKey.RECOVER_BREATHE.contractValue
+    )
+}
+
+internal data class StageIconOptionUiState(
+    val key: String,
+    val label: String,
+    val selected: Boolean,
+    val contentDescription: String
+)
+
+internal data class StageStylePickerUiState(
+    val selectedColorHex: String,
+    val selectedColorName: String,
+    val selectedTextColorHex: String,
+    val selectedIconKey: String,
+    val selectedIconLabel: String,
+    val colorPicker: StageColorPickerUiState,
+    val iconOptions: List<StageIconOptionUiState>
+)
+
 internal fun buildDefaultTimedCompositionPlanEditorState(
     planId: String = "plan-timed-draft",
     defaults: PlanEditorDefaults = PlanEditorDefaults(),
@@ -256,6 +305,9 @@ internal fun WorkoutPlan.toTimedCompositionPlanEditorState(
         cooldownSec = draft.cooldownSec.coerceIn(0, MaxTimedCompositionDurationSec),
         rounds = draft.rounds.coerceIn(1, MaxTimedCompositionRounds),
         restBetweenRoundsSec = draft.restBetweenRoundsSec.coerceIn(0, MaxTimedCompositionDurationSec),
+        warmupStyle = draft.warmupStyle.normalized(),
+        cooldownStyle = draft.cooldownStyle.normalized(),
+        restBetweenRoundsStyle = draft.restBetweenRoundsStyle.normalized(),
         stageGroups = groups,
         source = draft.source,
         sourcePlan = draft.sourcePlan,
@@ -334,6 +386,21 @@ internal fun TimedCompositionPlanEditorScreenState.updateRestBetweenRoundsText(
     )
 }
 
+internal fun TimedCompositionPlanEditorScreenState.updateBoundaryStageStyle(
+    target: TimedCompositionBoundaryStyleTarget,
+    style: TimedStageStyle
+): TimedCompositionPlanEditorScreenState {
+    val normalized = style.normalized()
+    return when (target) {
+        TimedCompositionBoundaryStyleTarget.WARMUP -> copy(warmupStyle = normalized)
+        TimedCompositionBoundaryStyleTarget.COOLDOWN -> copy(cooldownStyle = normalized)
+        TimedCompositionBoundaryStyleTarget.REST_BETWEEN_ROUNDS -> copy(restBetweenRoundsStyle = normalized)
+    }.copy(
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
 internal fun TimedCompositionPlanEditorScreenState.updateStageName(
     stageId: String,
     name: String
@@ -357,6 +424,27 @@ internal fun TimedCompositionPlanEditorScreenState.updateStageColor(
             if (group.id == stageId) {
                 val fallbackType = group.targets.firstOrNull()?.kind?.defaultStageType ?: TimedStageType.CUSTOM
                 group.copy(colorHex = normalizeStageColorHex(colorHex, fallbackType))
+            } else {
+                group
+            }
+        },
+        savedPlan = null,
+        statusMessage = null
+    )
+}
+
+internal fun TimedCompositionPlanEditorScreenState.updateStageStyle(
+    stageId: String,
+    style: TimedStageStyle
+): TimedCompositionPlanEditorScreenState {
+    return copy(
+        stageGroups = stageGroups.map { group ->
+            if (group.id == stageId) {
+                val fallbackType = group.targets.firstOrNull()?.kind?.defaultStageType ?: TimedStageType.CUSTOM
+                group.copy(
+                    colorHex = normalizeStageColorHex(style.colorHex, fallbackType),
+                    iconKey = normalizeTimedStageIconKey(style.iconKey)
+                )
             } else {
                 group
             }
@@ -631,6 +719,19 @@ internal fun TimedCompositionPlanEditorScreenState.updateTargetColor(
     }
 }
 
+internal fun TimedCompositionPlanEditorScreenState.updateTargetStyle(
+    stageId: String,
+    targetId: String,
+    style: TimedStageStyle
+): TimedCompositionPlanEditorScreenState {
+    return updateTarget(stageId, targetId) { target ->
+        target.copy(
+            colorHex = normalizeStageColorHex(style.colorHex, target.kind.defaultStageType),
+            iconKey = normalizeTimedStageIconKey(style.iconKey)
+        )
+    }
+}
+
 internal fun TimedCompositionPlanEditorScreenState.canAddTarget(stageId: String): Boolean {
     return stageGroups
         .firstOrNull { group -> group.id == stageId }
@@ -668,23 +769,101 @@ internal fun TimedCompositionPlanEditorScreenState.markPlanSaved(
 internal fun TimedCompositionStageGroupEditorUiState.toStageColorPickerUiState(): StageColorPickerUiState {
     val fallbackType = targets.firstOrNull()?.kind?.defaultStageType ?: TimedStageType.CUSTOM
     val selectedHex = normalizeStageColorHex(colorHex, fallbackType)
-    val selectedPreset = stageColorPresetFor(selectedHex)
-    return StageColorPickerUiState(
-        selectedColorHex = selectedHex,
-        selectedColorName = selectedPreset?.name ?: "自定义颜色",
-        selectedTextColorHex = stageTextColorHexFor(selectedHex, fallbackType),
-        recommendedColors = com.liujyks.trainflow.core.model.RecommendedStageColorPresets.map { preset ->
-            preset.toEditorColorOption(selectedHex)
-        },
-        moreColors = com.liujyks.trainflow.core.model.MoreStageColorPresets.map { preset ->
-            preset.toEditorColorOption(selectedHex)
-        }
-    )
+    return buildStageColorPickerUiState(selectedHex, fallbackType)
 }
 
 internal fun TimedCompositionTargetEditorUiState.toStageColorPickerUiState(): StageColorPickerUiState {
     val fallbackType = kind.defaultStageType
     val selectedHex = normalizeStageColorHex(colorHex, fallbackType)
+    return buildStageColorPickerUiState(selectedHex, fallbackType)
+}
+
+internal fun TimedCompositionPlanEditorScreenState.boundaryStageStyle(
+    target: TimedCompositionBoundaryStyleTarget
+): TimedStageStyle {
+    val explicitStyle = when (target) {
+        TimedCompositionBoundaryStyleTarget.WARMUP -> warmupStyle
+        TimedCompositionBoundaryStyleTarget.COOLDOWN -> cooldownStyle
+        TimedCompositionBoundaryStyleTarget.REST_BETWEEN_ROUNDS -> restBetweenRoundsStyle
+    }
+    return TimedStageStyle(
+        colorHex = normalizeStageColorHex(explicitStyle?.colorHex, target.fallbackStageType),
+        iconKey = normalizeTimedStageIconKey(explicitStyle?.iconKey) ?: target.defaultIconKey
+    )
+}
+
+internal fun TimedCompositionPlanEditorScreenState.toBoundaryStylePickerUiState(
+    target: TimedCompositionBoundaryStyleTarget
+): StageStylePickerUiState {
+    val style = boundaryStageStyle(target)
+    return buildStageStylePickerUiState(
+        selectedHex = style.colorHex,
+        fallbackType = target.fallbackStageType,
+        selectedIconKey = style.iconKey,
+        fallbackIconKey = target.defaultIconKey
+    )
+}
+
+internal fun TimedCompositionStageGroupEditorUiState.toStageStylePickerUiState(): StageStylePickerUiState {
+    val fallbackType = targets.firstOrNull()?.kind?.defaultStageType ?: TimedStageType.CUSTOM
+    return buildStageStylePickerUiState(
+        selectedHex = colorHex,
+        fallbackType = fallbackType,
+        selectedIconKey = iconKey,
+        fallbackIconKey = fallbackType.defaultIconKey
+    )
+}
+
+internal fun TimedCompositionTargetEditorUiState.toStageStylePickerUiState(): StageStylePickerUiState {
+    val fallbackType = kind.defaultStageType
+    return buildStageStylePickerUiState(
+        selectedHex = colorHex,
+        fallbackType = fallbackType,
+        selectedIconKey = iconKey,
+        fallbackIconKey = kind.defaultIconKey
+    )
+}
+
+internal fun stageStyleIconLabel(iconKey: String?): String {
+    val key = normalizeTimedStageIconKey(iconKey)
+    return StageStyleIconLabels.firstOrNull { option -> option.key == key }?.label ?: "自定义"
+}
+
+private fun buildStageStylePickerUiState(
+    selectedHex: String?,
+    fallbackType: TimedStageType,
+    selectedIconKey: String?,
+    fallbackIconKey: String
+): StageStylePickerUiState {
+    val selectedColorHex = normalizeStageColorHex(selectedHex, fallbackType)
+    val normalizedIconKey = normalizeTimedStageIconKey(selectedIconKey) ?: fallbackIconKey
+    val iconOptions = StageStyleIconLabels.map { option ->
+        val selected = option.key == normalizedIconKey
+        StageIconOptionUiState(
+            key = option.key,
+            label = option.label,
+            selected = selected,
+            contentDescription = buildString {
+                if (selected) append("已选中，")
+                append("图标 ${option.label}")
+            }
+        )
+    }
+    return StageStylePickerUiState(
+        selectedColorHex = selectedColorHex,
+        selectedColorName = stageColorPresetFor(selectedColorHex)?.name ?: "自定义颜色",
+        selectedTextColorHex = stageTextColorHexFor(selectedColorHex, fallbackType),
+        selectedIconKey = normalizedIconKey,
+        selectedIconLabel = stageStyleIconLabel(normalizedIconKey),
+        colorPicker = buildStageColorPickerUiState(selectedColorHex, fallbackType),
+        iconOptions = iconOptions
+    )
+}
+
+private fun buildStageColorPickerUiState(
+    selectedHex: String,
+    fallbackType: TimedStageType
+): StageColorPickerUiState {
     val selectedPreset = stageColorPresetFor(selectedHex)
     return StageColorPickerUiState(
         selectedColorHex = selectedHex,
@@ -719,6 +898,24 @@ private fun com.liujyks.trainflow.core.model.StageColorPreset.toEditorColorOptio
         }
     )
 }
+
+private data class StageStyleIconLabel(
+    val key: String,
+    val label: String
+)
+
+private val StageStyleIconLabels: List<StageStyleIconLabel> = listOf(
+    StageStyleIconLabel(TimedStageIconKey.WARMUP.contractValue, "热身"),
+    StageStyleIconLabel(TimedStageIconKey.WORK.contractValue, "工作"),
+    StageStyleIconLabel(TimedStageIconKey.SPEED_UP.contractValue, "加速"),
+    StageStyleIconLabel(TimedStageIconKey.SPRINT.contractValue, "冲刺"),
+    StageStyleIconLabel(TimedStageIconKey.REST.contractValue, "休息"),
+    StageStyleIconLabel(TimedStageIconKey.RECOVER_BREATHE.contractValue, "呼吸"),
+    StageStyleIconLabel(TimedStageIconKey.COOLDOWN.contractValue, "放松"),
+    StageStyleIconLabel(TimedStageIconKey.STRENGTH.contractValue, "力量"),
+    StageStyleIconLabel(TimedStageIconKey.MOBILITY.contractValue, "灵活"),
+    StageStyleIconLabel(TimedStageIconKey.CUSTOM.contractValue, "自定义")
+)
 
 private fun TimedCompositionPlanEditorScreenState.updateTarget(
     stageId: String,

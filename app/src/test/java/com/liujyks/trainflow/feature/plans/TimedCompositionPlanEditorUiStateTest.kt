@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.plans
 
 import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.WorkoutMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,6 +56,82 @@ class TimedCompositionPlanEditorUiStateTest {
         assertEquals("冲刺", target.name)
         assertEquals(50, target.durationSec)
         assertEquals(TimedCompositionTargetKind.CUSTOM, target.kind)
+    }
+
+    @Test
+    fun boundaryStageStylesUpdateWarmupCooldownAndRestBetweenRoundsThroughSave() {
+        val saved = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-editor")
+            .updateBoundaryStageStyle(
+                TimedCompositionBoundaryStyleTarget.WARMUP,
+                TimedStageStyle(colorHex = "#00bcd4", iconKey = "mobility")
+            )
+            .updateBoundaryStageStyle(
+                TimedCompositionBoundaryStyleTarget.COOLDOWN,
+                TimedStageStyle(colorHex = "#ffc107", iconKey = "cooldown")
+            )
+            .updateBoundaryStageStyle(
+                TimedCompositionBoundaryStyleTarget.REST_BETWEEN_ROUNDS,
+                TimedStageStyle(colorHex = "#2fbf8f", iconKey = "recover_breathe")
+            )
+            .saveDraftPlan(timestamp = "2026-06-28T01:00:00Z")
+        val block = requireNotNull(saved.savedPlan).blocks.single() as TimedCompositionBlock
+
+        assertEquals(TimedStageStyle(colorHex = "#00BCD4", iconKey = "mobility"), block.warmupStyle)
+        assertEquals(TimedStageStyle(colorHex = "#FFC107", iconKey = "cooldown"), block.cooldownStyle)
+        assertEquals(
+            TimedStageStyle(colorHex = "#2FBF8F", iconKey = "recover_breathe"),
+            block.restBetweenRoundsStyle
+        )
+    }
+
+    @Test
+    fun roundsDoNotExposeBoundaryStyleTarget() {
+        assertEquals(
+            listOf(
+                TimedCompositionBoundaryStyleTarget.WARMUP,
+                TimedCompositionBoundaryStyleTarget.COOLDOWN,
+                TimedCompositionBoundaryStyleTarget.REST_BETWEEN_ROUNDS
+            ),
+            TimedCompositionBoundaryStyleTarget.entries.toList()
+        )
+    }
+
+    @Test
+    fun stageGroupAndTargetStyleUpdatesColorAndIcon() {
+        val initial = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-editor")
+        val stageId = initial.stageGroups.first().id
+        val targetId = initial.stageGroups.first().targets.first().id
+        val edited = initial
+            .updateStageStyle(stageId, TimedStageStyle(colorHex = "#ffc107", iconKey = "sprint"))
+            .updateTargetStyle(
+                stageId = stageId,
+                targetId = targetId,
+                style = TimedStageStyle(colorHex = "#2fbf8f", iconKey = "recover_breathe")
+            )
+        val block = edited.toWorkoutPlan().blocks.single() as TimedCompositionBlock
+        val group = block.stageGroups.first()
+        val target = group.targets.first()
+
+        assertEquals("#FFC107", group.colorHex)
+        assertEquals("sprint", group.iconKey)
+        assertEquals("#2FBF8F", target.colorHex)
+        assertEquals("recover_breathe", target.iconKey)
+    }
+
+    @Test
+    fun stylePickerUsesSwatchesAndChineseIconLabels() {
+        val initial = buildDefaultTimedCompositionPlanEditorState(planId = "timed-composition-editor")
+        val stagePicker = initial.stageGroups.first().toStageStylePickerUiState()
+        val boundaryPicker = initial.toBoundaryStylePickerUiState(
+            TimedCompositionBoundaryStyleTarget.REST_BETWEEN_ROUNDS
+        )
+
+        assertTrue(stagePicker.colorPicker.recommendedColors.isNotEmpty())
+        assertTrue(stagePicker.colorPicker.moreColors.isNotEmpty())
+        assertEquals("工作", stagePicker.selectedIconLabel)
+        assertEquals("呼吸", boundaryPicker.selectedIconLabel)
+        assertFalse(stagePicker.iconOptions.any { option -> option.label == option.key || "_" in option.label })
+        assertEquals("加速", stagePicker.iconOptions.first { option -> option.key == "speed_up" }.label)
     }
 
     @Test

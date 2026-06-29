@@ -5,12 +5,14 @@ import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,6 +30,9 @@ class TimedCompositionEditorDraftAdapterTest {
         assertEquals(45, draft.cooldownSec)
         assertEquals(3, draft.rounds)
         assertEquals(30, draft.restBetweenRoundsSec)
+        assertNull(draft.warmupStyle)
+        assertNull(draft.cooldownStyle)
+        assertNull(draft.restBetweenRoundsStyle)
         assertEquals(listOf("legacy-circuit-work", "legacy-circuit-custom"), draft.stageGroups.map { group -> group.id })
         assertEquals(listOf(TimedCompositionTargetKind.ACTION, TimedCompositionTargetKind.REST), draft.stageGroups.first().targets.map { target -> target.kind })
         assertEquals(60, draft.stageGroups.first().durationSec)
@@ -68,9 +73,15 @@ class TimedCompositionEditorDraftAdapterTest {
                     id = "composition",
                     order = 1,
                     warmupSec = 20,
+                    warmupStyle = TimedStageStyle(colorHex = "#F2B84B", iconKey = "warmup"),
                     cooldownSec = 25,
+                    cooldownStyle = TimedStageStyle(colorHex = "#65A9FF", iconKey = "cooldown"),
                     rounds = 2,
                     restBetweenRoundsSec = 10,
+                    restBetweenRoundsStyle = TimedStageStyle(
+                        colorHex = "#2FBF8F",
+                        iconKey = "recover_breathe"
+                    ),
                     stageGroups = listOf(
                         com.liujyks.trainflow.core.model.TimedCompositionStageGroup(
                             id = "group",
@@ -101,8 +112,25 @@ class TimedCompositionEditorDraftAdapterTest {
         assertEquals(TimedCompositionEditorDraftSource.V2_PAYLOAD, draft.source)
         assertFalse(draft.requiresExplicitConversionForV2)
         assertEquals(115, draft.estimatedDurationSec)
+        assertEquals(TimedStageStyle(colorHex = "#F2B84B", iconKey = "warmup"), draft.warmupStyle)
+        assertEquals(TimedStageStyle(colorHex = "#65A9FF", iconKey = "cooldown"), draft.cooldownStyle)
+        assertEquals(
+            TimedStageStyle(colorHex = "#2FBF8F", iconKey = "recover_breathe"),
+            draft.restBetweenRoundsStyle
+        )
         assertSame(plan, preserved)
         assertTrue(preserved.blocks.single() is TimedCompositionBlock)
+
+        val exportedBlock = draft.toWorkoutPlan(
+            exportMode = TimedCompositionEditorDraftExportMode.EXPORT_V2_PAYLOAD,
+            timestamp = "2026-06-28T01:00:00Z"
+        ).blocks.single() as TimedCompositionBlock
+        assertEquals(TimedStageStyle(colorHex = "#F2B84B", iconKey = "warmup"), exportedBlock.warmupStyle)
+        assertEquals(TimedStageStyle(colorHex = "#65A9FF", iconKey = "cooldown"), exportedBlock.cooldownStyle)
+        assertEquals(
+            TimedStageStyle(colorHex = "#2FBF8F", iconKey = "recover_breathe"),
+            exportedBlock.restBetweenRoundsStyle
+        )
     }
 
     private fun legacyPlan(): WorkoutPlan {

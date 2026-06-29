@@ -1,10 +1,12 @@
 package com.liujyks.trainflow.feature.plans
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,7 +43,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -56,7 +63,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_GROUP
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.stageColorPresetFor
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
@@ -96,8 +105,11 @@ internal fun TimedPlanEditorRoute(
         onCooldownChanged = { uiState = uiState.updateCooldownText(it) },
         onRoundsChanged = { uiState = uiState.updateRoundsText(it) },
         onRestBetweenRoundsChanged = { uiState = uiState.updateRestBetweenRoundsText(it) },
+        onBoundaryStyleChanged = { target, style ->
+            uiState = uiState.updateBoundaryStageStyle(target, style)
+        },
         onStageNameChanged = { stageId, name -> uiState = uiState.updateStageName(stageId, name) },
-        onStageColorChanged = { stageId, colorHex -> uiState = uiState.updateStageColor(stageId, colorHex) },
+        onStageStyleChanged = { stageId, style -> uiState = uiState.updateStageStyle(stageId, style) },
         onCopyStage = { stageId -> uiState = uiState.copyStage(stageId) },
         onRemoveStage = { stageId -> uiState = uiState.removeStage(stageId) },
         onReorderStages = { stageIds -> uiState = uiState.reorderStages(stageIds) },
@@ -110,8 +122,8 @@ internal fun TimedPlanEditorRoute(
         onTargetDurationChanged = { stageId, targetId, seconds ->
             uiState = uiState.updateTargetDurationText(stageId, targetId, seconds)
         },
-        onTargetColorChanged = { stageId, targetId, colorHex ->
-            uiState = uiState.updateTargetColor(stageId, targetId, colorHex)
+        onTargetStyleChanged = { stageId, targetId, style ->
+            uiState = uiState.updateTargetStyle(stageId, targetId, style)
         },
         onCopyTarget = { stageId, targetId ->
             uiState = uiState.copyTarget(stageId, targetId)
@@ -147,8 +159,9 @@ private fun TimedPlanEditorScreen(
     onCooldownChanged: (String) -> Unit,
     onRoundsChanged: (String) -> Unit,
     onRestBetweenRoundsChanged: (String) -> Unit,
+    onBoundaryStyleChanged: (TimedCompositionBoundaryStyleTarget, TimedStageStyle) -> Unit,
     onStageNameChanged: (String, String) -> Unit,
-    onStageColorChanged: (String, String) -> Unit,
+    onStageStyleChanged: (String, TimedStageStyle) -> Unit,
     onCopyStage: (String) -> Unit,
     onRemoveStage: (String) -> Unit,
     onReorderStages: (List<String>) -> Unit,
@@ -157,7 +170,7 @@ private fun TimedPlanEditorScreen(
     onRemoveTarget: (String, String) -> Unit,
     onTargetNameChanged: (String, String, String) -> Unit,
     onTargetDurationChanged: (String, String, String) -> Unit,
-    onTargetColorChanged: (String, String, String) -> Unit,
+    onTargetStyleChanged: (String, String, TimedStageStyle) -> Unit,
     onCopyTarget: (String, String) -> Unit,
     onMoveTarget: (String, Int, Int) -> Unit,
     onSaveDraft: () -> Unit,
@@ -171,10 +184,9 @@ private fun TimedPlanEditorScreen(
     var draggedStageTargetIndex by remember { mutableStateOf(-1) }
     var draggedStageOffsetY by remember { mutableStateOf(0f) }
     var draggedStageHeightPx by remember { mutableStateOf(1) }
-    var colorPickerStage by remember { mutableStateOf<TimedCompositionStageGroupEditorUiState?>(null) }
-    var colorPickerTarget by remember {
-        mutableStateOf<Pair<String, TimedCompositionTargetEditorUiState>?>(null)
-    }
+    var stylePickerBoundaryTarget by remember { mutableStateOf<TimedCompositionBoundaryStyleTarget?>(null) }
+    var stylePickerStageId by remember { mutableStateOf<String?>(null) }
+    var stylePickerTargetRef by remember { mutableStateOf<Pair<String, String>?>(null) }
     var expandedStageIds by rememberSaveable(uiState.stageGroups.map { it.id }.joinToString("|")) {
         mutableStateOf(emptyList<String>())
     }
@@ -245,7 +257,8 @@ private fun TimedPlanEditorScreen(
                     onWarmupChanged = onWarmupChanged,
                     onCooldownChanged = onCooldownChanged,
                     onRoundsChanged = onRoundsChanged,
-                    onRestBetweenRoundsChanged = onRestBetweenRoundsChanged
+                    onRestBetweenRoundsChanged = onRestBetweenRoundsChanged,
+                    onBoundaryStylePicker = { target -> stylePickerBoundaryTarget = target }
                 )
             }
 
@@ -291,7 +304,7 @@ private fun TimedPlanEditorScreen(
                         }
                     },
                     onNameChanged = { name -> onStageNameChanged(stage.id, name) },
-                    onOpenColorPicker = { colorPickerStage = stage },
+                    onOpenStylePicker = { stylePickerStageId = stage.id },
                     onCopy = { onCopyStage(stage.id) },
                     onRemove = { onRemoveStage(stage.id) },
                     onAddTarget = { onAddTarget(stage.id) },
@@ -301,7 +314,7 @@ private fun TimedPlanEditorScreen(
                     onTargetDurationChanged = { targetId, seconds ->
                         onTargetDurationChanged(stage.id, targetId, seconds)
                     },
-                    onTargetColorPicker = { target -> colorPickerTarget = stage.id to target },
+                    onTargetStylePicker = { target -> stylePickerTargetRef = stage.id to target.id },
                     onCopyTarget = { targetId -> onCopyTarget(stage.id, targetId) },
                     onMoveTarget = { fromTargetIndex, toTargetIndex ->
                         onMoveTarget(stage.id, fromTargetIndex, toTargetIndex)
@@ -345,29 +358,44 @@ private fun TimedPlanEditorScreen(
         )
     }
 
-    colorPickerStage?.let { stage ->
-        ColorPickerDialog(
-            title = "选择阶段颜色",
-            currentText = "${stage.name} 当前为 ${stage.toStageColorPickerUiState().selectedColorName}。",
-            picker = stage.toStageColorPickerUiState(),
-            onDismiss = { colorPickerStage = null },
-            onColorSelected = { colorHex ->
-                onStageColorChanged(stage.id, colorHex)
-                colorPickerStage = null
-            }
+    stylePickerBoundaryTarget?.let { target ->
+        val picker = uiState.toBoundaryStylePickerUiState(target)
+        StageStylePickerDialog(
+            title = "阶段样式",
+            currentText = "${target.displayLabel}当前为 ${picker.selectedColorName} · ${picker.selectedIconLabel}。",
+            picker = picker,
+            onDismiss = { stylePickerBoundaryTarget = null },
+            onStyleSelected = { style -> onBoundaryStyleChanged(target, style) }
         )
     }
-    colorPickerTarget?.let { (stageId, target) ->
-        ColorPickerDialog(
-            title = "选择目标颜色",
-            currentText = "${target.name} 当前为 ${target.toStageColorPickerUiState().selectedColorName}。",
-            picker = target.toStageColorPickerUiState(),
-            onDismiss = { colorPickerTarget = null },
-            onColorSelected = { colorHex ->
-                onTargetColorChanged(stageId, target.id, colorHex)
-                colorPickerTarget = null
-            }
-        )
+    stylePickerStageId?.let { stageId ->
+        val stage = uiState.stageGroups.firstOrNull { candidate -> candidate.id == stageId }
+        if (stage != null) {
+            val picker = stage.toStageStylePickerUiState()
+            StageStylePickerDialog(
+                title = "阶段样式",
+                currentText = "${stage.name} 当前为 ${picker.selectedColorName} · ${picker.selectedIconLabel}。",
+                picker = picker,
+                onDismiss = { stylePickerStageId = null },
+                onStyleSelected = { style -> onStageStyleChanged(stage.id, style) }
+            )
+        }
+    }
+    stylePickerTargetRef?.let { (stageId, targetId) ->
+        val target = uiState.stageGroups
+            .firstOrNull { stage -> stage.id == stageId }
+            ?.targets
+            ?.firstOrNull { candidate -> candidate.id == targetId }
+        if (target != null) {
+            val picker = target.toStageStylePickerUiState()
+            StageStylePickerDialog(
+                title = "目标样式",
+                currentText = "${target.name} 当前为 ${picker.selectedColorName} · ${picker.selectedIconLabel}。",
+                picker = picker,
+                onDismiss = { stylePickerTargetRef = null },
+                onStyleSelected = { style -> onTargetStyleChanged(stageId, target.id, style) }
+            )
+        }
     }
 }
 
@@ -454,7 +482,8 @@ private fun BaseTimeAndRoundsCard(
     onWarmupChanged: (String) -> Unit,
     onCooldownChanged: (String) -> Unit,
     onRoundsChanged: (String) -> Unit,
-    onRestBetweenRoundsChanged: (String) -> Unit
+    onRestBetweenRoundsChanged: (String) -> Unit,
+    onBoundaryStylePicker: (TimedCompositionBoundaryStyleTarget) -> Unit
 ) {
     EditorCard {
         SectionTitle(text = "基础时间与轮次")
@@ -486,6 +515,19 @@ private fun BaseTimeAndRoundsCard(
                 modifier = Modifier.weight(1f)
             )
         }
+        SectionTitle(text = "阶段样式")
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TimedCompositionBoundaryStyleTarget.entries.forEach { target ->
+                val style = uiState.boundaryStageStyle(target)
+                StyleEntryButton(
+                    label = target.displayLabel,
+                    style = style,
+                    contentDescription = "修改${target.displayLabel}阶段样式，当前${stageStyleColorLabel(style.colorHex)}，图标${stageStyleIconLabel(style.iconKey)}",
+                    onClick = { onBoundaryStylePicker(target) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
     }
 }
 
@@ -500,7 +542,7 @@ private fun TimedCompositionStageCard(
     onExpandedChanged: (Boolean) -> Unit,
     onTargetExpandedChanged: (String, Boolean) -> Unit,
     onNameChanged: (String) -> Unit,
-    onOpenColorPicker: () -> Unit,
+    onOpenStylePicker: () -> Unit,
     onCopy: () -> Unit,
     onRemove: () -> Unit,
     onAddTarget: () -> Unit,
@@ -508,7 +550,7 @@ private fun TimedCompositionStageCard(
     onRemoveTarget: (String) -> Unit,
     onTargetNameChanged: (String, String) -> Unit,
     onTargetDurationChanged: (String, String) -> Unit,
-    onTargetColorPicker: (TimedCompositionTargetEditorUiState) -> Unit,
+    onTargetStylePicker: (TimedCompositionTargetEditorUiState) -> Unit,
     onCopyTarget: (String) -> Unit,
     onMoveTarget: (Int, Int) -> Unit,
     isDragging: Boolean,
@@ -541,11 +583,11 @@ private fun TimedCompositionStageCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ColorSwatchButton(
-                colorHex = stage.colorHex,
+            StyleSwatchButton(
+                style = TimedStageStyle(colorHex = stage.colorHex, iconKey = stage.iconKey),
                 size = 34.dp,
-                contentDescription = "修改阶段颜色，当前 ${stage.colorHex}",
-                onClick = onOpenColorPicker
+                contentDescription = "修改阶段样式，当前${stageStyleColorLabel(stage.colorHex)}，图标${stageStyleIconLabel(stage.iconKey)}",
+                onClick = onOpenStylePicker
             )
             Column(
                 modifier = Modifier
@@ -619,7 +661,7 @@ private fun TimedCompositionStageCard(
                             },
                             onNameChanged = { name -> onTargetNameChanged(target.id, name) },
                             onDurationChanged = { seconds -> onTargetDurationChanged(target.id, seconds) },
-                            onColorPicker = { onTargetColorPicker(target) },
+                            onStylePicker = { onTargetStylePicker(target) },
                             onCopy = { onCopyTarget(target.id) },
                             onRemove = { onRemoveTarget(target.id) },
                             canCopy = canAddTarget,
@@ -664,7 +706,7 @@ private fun TimedCompositionTargetRow(
     onExpandedChanged: (Boolean) -> Unit,
     onNameChanged: (String) -> Unit,
     onDurationChanged: (String) -> Unit,
-    onColorPicker: () -> Unit,
+    onStylePicker: () -> Unit,
     onCopy: () -> Unit,
     onRemove: () -> Unit,
     canCopy: Boolean,
@@ -687,11 +729,11 @@ private fun TimedCompositionTargetRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ColorSwatchButton(
-                    colorHex = target.colorHex,
+                StyleSwatchButton(
+                    style = TimedStageStyle(colorHex = target.colorHex, iconKey = target.iconKey),
                     size = 30.dp,
-                    contentDescription = "修改目标颜色，当前 ${target.colorHex}",
-                    onClick = onColorPicker
+                    contentDescription = "修改目标样式，当前${stageStyleColorLabel(target.colorHex)}，图标${stageStyleIconLabel(target.iconKey)}",
+                    onClick = onStylePicker
                 )
                 Column(
                     modifier = Modifier
@@ -967,29 +1009,15 @@ private fun TogglePill(
 }
 
 @Composable
-private fun ColorSwatch(
-    colorHex: String,
-    size: Dp,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = colorHex.toComposeColor(),
-        modifier = modifier.size(size),
-        border = BorderStroke(1.dp, TrainFlowNeutral100)
-    ) {
-        Box(contentAlignment = Alignment.Center) {}
-    }
-}
-
-@Composable
-private fun ColorSwatchButton(
-    colorHex: String,
+private fun StyleSwatchButton(
+    style: TimedStageStyle,
     size: Dp,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colorHex = style.colorHex ?: "#A8B3BE"
+    val iconKey = style.iconKey ?: "custom"
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = colorHex.toComposeColor(),
@@ -999,17 +1027,78 @@ private fun ColorSwatchButton(
             .clickable(onClick = onClick),
         border = BorderStroke(1.dp, TrainFlowNeutral100)
     ) {
-        Box(contentAlignment = Alignment.Center) {}
+        Box(contentAlignment = Alignment.Center) {
+            StageStyleIconGlyph(
+                iconKey = iconKey,
+                modifier = Modifier.size(size * 0.62f)
+            )
+        }
     }
 }
 
 @Composable
-private fun ColorPickerDialog(
+private fun StyleEntryButton(
+    label: String,
+    style: TimedStageStyle,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .sizeIn(minHeight = 54.dp)
+            .semantics { this.contentDescription = contentDescription }
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, TrainFlowNeutral100)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StyleSwatchButton(
+                style = style,
+                size = 34.dp,
+                contentDescription = contentDescription,
+                onClick = onClick
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${stageStyleColorLabel(style.colorHex)} · ${stageStyleIconLabel(style.iconKey)}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "设置",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = TrainFlowPrimary
+            )
+        }
+    }
+}
+
+@Composable
+private fun StageStylePickerDialog(
     title: String,
     currentText: String,
-    picker: StageColorPickerUiState,
+    picker: StageStylePickerUiState,
     onDismiss: () -> Unit,
-    onColorSelected: (String) -> Unit
+    onStyleSelected: (TimedStageStyle) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1022,7 +1111,12 @@ private fun ColorPickerDialog(
             Text(title)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .sizeIn(maxHeight = 720.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 Text(
                     text = currentText,
                     style = MaterialTheme.typography.bodyMedium,
@@ -1030,13 +1124,30 @@ private fun ColorPickerDialog(
                 )
                 StageColorSection(
                     title = "推荐色",
-                    options = picker.recommendedColors,
-                    onColorSelected = onColorSelected
+                    options = picker.colorPicker.recommendedColors,
+                    onColorSelected = { colorHex ->
+                        onStyleSelected(
+                            TimedStageStyle(colorHex = colorHex, iconKey = picker.selectedIconKey)
+                        )
+                    }
+                )
+                StageIconSection(
+                    options = picker.iconOptions,
+                    selectedColorHex = picker.selectedColorHex,
+                    onIconSelected = { iconKey ->
+                        onStyleSelected(
+                            TimedStageStyle(colorHex = picker.selectedColorHex, iconKey = iconKey)
+                        )
+                    }
                 )
                 StageColorSection(
                     title = "更多颜色",
-                    options = picker.moreColors,
-                    onColorSelected = onColorSelected
+                    options = picker.colorPicker.moreColors,
+                    onColorSelected = { colorHex ->
+                        onStyleSelected(
+                            TimedStageStyle(colorHex = colorHex, iconKey = picker.selectedIconKey)
+                        )
+                    }
                 )
             }
         }
@@ -1096,6 +1207,160 @@ private fun StageColorSwatchButton(
                 style = MaterialTheme.typography.labelLarge,
                 color = option.textColor.toComposeColor(defaultColor = TrainFlowPrimary)
             )
+        }
+    }
+}
+
+@Composable
+private fun StageIconSection(
+    options: List<StageIconOptionUiState>,
+    selectedColorHex: String,
+    onIconSelected: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "内置图标",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.chunked(5).forEach { rowOptions ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowOptions.forEach { option ->
+                        StageIconOptionButton(
+                            option = option,
+                            selectedColorHex = selectedColorHex,
+                            onClick = { onIconSelected(option.key) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StageIconOptionButton(
+    option: StageIconOptionUiState,
+    selectedColorHex: String,
+    onClick: () -> Unit
+) {
+    val containerColor = if (option.selected) {
+        selectedColorHex.toComposeColor()
+    } else {
+        TrainFlowNeutral700
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = containerColor,
+        border = BorderStroke(
+            width = if (option.selected) 3.dp else 1.dp,
+            color = if (option.selected) TrainFlowPrimary else TrainFlowNeutral100
+        ),
+        modifier = Modifier
+            .size(52.dp)
+            .semantics {
+                contentDescription = option.contentDescription
+                stateDescription = if (option.selected) "已选中" else "未选中"
+            }
+            .clickable(onClick = onClick)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            StageStyleIconGlyph(
+                iconKey = option.key,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StageStyleIconGlyph(
+    iconKey: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.White
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val strokeWidth = (w * 0.1f).coerceAtLeast(2f)
+        val stroke = Stroke(
+            width = strokeWidth,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+        when (iconKey) {
+            "warmup" -> {
+                drawLine(color, Offset(w * 0.5f, h * 0.14f), Offset(w * 0.5f, h * 0.86f), strokeWidth)
+                drawLine(color, Offset(w * 0.18f, h * 0.5f), Offset(w * 0.82f, h * 0.5f), strokeWidth)
+                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
+            }
+
+            "work" -> {
+                val path = Path().apply {
+                    moveTo(w * 0.28f, h * 0.18f)
+                    lineTo(w * 0.78f, h * 0.5f)
+                    lineTo(w * 0.28f, h * 0.82f)
+                    close()
+                }
+                drawPath(path, color)
+            }
+
+            "speed_up" -> {
+                drawLine(color, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.7f, h * 0.32f), strokeWidth)
+                drawLine(color, Offset(w * 0.34f, h * 0.5f), Offset(w * 0.82f, h * 0.5f), strokeWidth)
+                drawLine(color, Offset(w * 0.5f, h * 0.68f), Offset(w * 0.82f, h * 0.68f), strokeWidth)
+            }
+
+            "sprint" -> {
+                val path = Path().apply {
+                    moveTo(w * 0.58f, h * 0.1f)
+                    lineTo(w * 0.28f, h * 0.52f)
+                    lineTo(w * 0.54f, h * 0.52f)
+                    lineTo(w * 0.38f, h * 0.9f)
+                    lineTo(w * 0.76f, h * 0.42f)
+                    lineTo(w * 0.5f, h * 0.42f)
+                    close()
+                }
+                drawPath(path, color)
+            }
+
+            "rest" -> {
+                drawLine(color, Offset(w * 0.26f, h * 0.24f), Offset(w * 0.74f, h * 0.24f), strokeWidth)
+                drawLine(color, Offset(w * 0.74f, h * 0.24f), Offset(w * 0.28f, h * 0.76f), strokeWidth)
+                drawLine(color, Offset(w * 0.28f, h * 0.76f), Offset(w * 0.74f, h * 0.76f), strokeWidth)
+            }
+
+            "recover_breathe" -> {
+                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.38f, h * 0.5f), style = stroke)
+                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.62f, h * 0.5f), style = stroke)
+                drawLine(color, Offset(w * 0.2f, h * 0.5f), Offset(w * 0.8f, h * 0.5f), strokeWidth * 0.72f)
+            }
+
+            "cooldown" -> {
+                drawLine(color, Offset(w * 0.5f, h * 0.16f), Offset(w * 0.5f, h * 0.84f), strokeWidth)
+                drawLine(color, Offset(w * 0.24f, h * 0.58f), Offset(w * 0.5f, h * 0.84f), strokeWidth)
+                drawLine(color, Offset(w * 0.76f, h * 0.58f), Offset(w * 0.5f, h * 0.84f), strokeWidth)
+            }
+
+            "strength" -> {
+                drawLine(color, Offset(w * 0.22f, h * 0.5f), Offset(w * 0.78f, h * 0.5f), strokeWidth)
+                drawLine(color, Offset(w * 0.22f, h * 0.32f), Offset(w * 0.22f, h * 0.68f), strokeWidth)
+                drawLine(color, Offset(w * 0.78f, h * 0.32f), Offset(w * 0.78f, h * 0.68f), strokeWidth)
+                drawLine(color, Offset(w * 0.34f, h * 0.38f), Offset(w * 0.34f, h * 0.62f), strokeWidth)
+                drawLine(color, Offset(w * 0.66f, h * 0.38f), Offset(w * 0.66f, h * 0.62f), strokeWidth)
+            }
+
+            "mobility" -> {
+                drawCircle(color, radius = w * 0.32f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
+                drawLine(color, Offset(w * 0.5f, h * 0.18f), Offset(w * 0.5f, h * 0.82f), strokeWidth)
+                drawLine(color, Offset(w * 0.18f, h * 0.5f), Offset(w * 0.82f, h * 0.5f), strokeWidth)
+            }
+
+            else -> {
+                drawCircle(color, radius = w * 0.26f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
+                drawCircle(color, radius = w * 0.06f, center = Offset(w * 0.5f, h * 0.5f))
+            }
         }
     }
 }
@@ -1350,6 +1615,10 @@ private fun TimedCompositionPlanEditorScreenState.totalTimelineStageCount(): Int
 }
 
 private fun Int.positiveStageCount(): Int = if (this > 0) 1 else 0
+
+private fun stageStyleColorLabel(colorHex: String?): String {
+    return stageColorPresetFor(colorHex)?.name ?: "自定义颜色"
+}
 
 private fun String.toComposeColor(defaultColor: Color = TrainFlowAccent): Color {
     return runCatching { Color(android.graphics.Color.parseColor(this)) }
