@@ -1812,6 +1812,33 @@ stepsCompleted:
 - 新增 / 更新单元测试覆盖只消费真实 strength sessions、排除 timed / follow_along、sourceSetPlanId 优先比较、source 缺失 fallback、不同 exerciseId / setOrder / setKind 不混比、替换动作标注且不并入原动作、planned / actual 分离、active duration / actual rest / effort 展示、字段不足不造样本、删除后剩余记录自然刷新，以及不输出强弱判断、加重量建议、心率趋势或计时趋势变更。
 - 本阶段不实现平均心率趋势、设备心率获取、手动心率输入、Health Connect、Wear OS、BLE、声音播放、云同步、账号体系、foreground service、exact alarm、notification action 或 reset production command；不修改训练执行引擎、`WorkoutCommand`、`WorkoutEvent`、Room schema、`WorkoutSession.planSnapshot` 或历史删除语义。
 
+### Story E12.4: Records / trends polish planning and visual gate
+
+**状态:** Planning / audit / visual gate complete; implementation pending main-thread confirmation
+
+作为训练记录用户，
+我想在记录页先看到清晰的最近训练、可信统计和可比较趋势，
+以便理解每次训练记录和长期变化，而不是被不可比图表或过长卡片流干扰。
+
+**验收标准:**
+
+- Then 本阶段只输出规划、审计和视觉方案，不改 Kotlin / Compose / Room / app resources / tests，不生成 APK。
+- Then 审计当前 records / history / trends 源码与测试，明确已有真实数据能力和 UI 问题。
+- Then 明确 legacy timed session、timed composition v2 session 和 strength session 的记录解释与趋势比较边界。
+- Then 明确 completed / abandoned、skipped、pause、rest extension、planned rest、actual rest 和 extra rest 的语义。
+- Then legacy timed 与 v2 timed composition 默认不硬比；没有可证明等价 mapper 时，不把不同结构画成同一趋势。
+- Then v2 timed composition 的趋势 key 设计考虑 `compositionVersion`、block / stage group / target id、`targetKind`、round / stage / target instance、planned duration 和 structure signature。
+- Then 图表方案包含轴线、单位、legend、空状态和数据不足状态。
+- Then 不恢复 heart-rate UI、手动输入、平均心率趋势，不新增设备接入、医学判断、危险告警或训练中断判断。
+
+**交付结果:**
+
+- 新增 `docs/testing/e12-records-trends-polish-planning-visual-gate.md`，记录输入文档 / skill、源码审计、当前能力、主要缺口、数据语义、信息架构、图表 UI、视觉方向、implementation split 和后置项。
+- 新增本地视觉预览 `.local/smoke/e12-records-trends-polish-visual-gate/index.html`；该文件仅用于本机视觉确认，不提交 Git。
+- 审计确认当前 `feature.history.HistoryUiState` 已有真实 Room session 基础统计、非心率聚合趋势、legacy timed comparable rest、strength comparable set 和 cleanup，但 v2 timed composition 目前只通过 compatibility tests 保证历史记录可读不崩，尚未按 `TimedCompositionTimelineAdapter` metadata 形成可比趋势分组。
+- 推荐后续 implementation 拆为 v2 timed record interpretation、legacy/v2 trend key hardening、records page IA polish、chart axis / empty state polish 和 screenshot-level visual QA。
+- 本阶段不新增 accepted decision；`docs/planning/decision-log.md`、`docs/planning/data-contracts.md`、`DESIGN.md` 和 `docs/ui-extension-guide.md` 暂不变更，等待主对话确认视觉方案和实现切分。
+
 ## Epic E13: 声音提示、固定女声 cue 与音频共存
 
 目标：建立悦耳、克制、不打断其他 App 的训练音频提示。
@@ -2505,20 +2532,21 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 27. E12.3：历史记录清理。（Implemented）
 28. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
 29. E12.2b：力量同类 set 趋势。（Implemented）
-30. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
-31. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only and pushed as `6888e31`；E14.4-2b-5b engine integration planning gate docs-only complete；E14.4-2b-5b-1 engine adapter bridge tests added as a test-first red gate；E14.4-2b-5b-2 minimum engine bridge implemented；E14.4-2b-5b-3 v2 start gate enablement + smoke implemented；E14.4-2b-5c session record compatibility tests / smoke review implemented；E14.5 TimerDial continuous progress fix complete；E14.4-2b-6 TimerDial mapping planning gate docs-only complete；E14.4-2b-6a TimerDial mapping model/state tests complete；E14.4-2b-6b production mapping implementation complete；E14.4-2b-6c smoke / visual QA review gate complete；E14.4-2b closeout complete。
-32. E14.6：Real-device TimerDial feedback planning gate，拆出 E14.6-1 progress rebound fix、E14.6-2 completion recap page redesign、E14.6-3 stage style system planning / design。（Planning complete）
-33. E14.6-1：TimerDial progress rebound fix，修复 normal motion 下一秒 tick anchor handoff 造成的 active ring / active segment forward-then-back rebound。（Implemented; followed by E14.6-2 planning）
-34. E14.6-2：Completion recap page redesign planning / visual gate，确认 completed 终态进入“本次数据统计复盘页面”：顶部克制庆祝 + `已完成`，中部复用现有 summary / recap / session 数据，底部主动作推荐 `返回训练首页`，不保留大 TimerDial 作为主视觉，不改 session record 语义。（Planning complete; E14.6-2b implemented）
-35. E14.6-2b：Completion recap page Compose implementation，计时训练 completed / abandoned 终态进入独立复盘 shell，复用现有 summary / recap 内容并完成 Android smoke。（Implemented; E14.6-2c reviewed evidence）
-36. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此该 gate 未收口 screenshot-level visual QA。（Review complete; resolved by E14.6-2d）
-37. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; followed by E14.6-3 planning）
-38. E14.6-3：Stage style / icon planning，确认阶段样式由颜色和内置 `iconKey` 组成，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon，第一版只使用项目内置白色 icon key，用户上传图片列为 post-MVP。（Planning complete）
-39. E14.6-3a：Stage style data contract / model decision，选择 Option A：复用 composition v2 stage group / target 现有 `colorHex` / `iconKey`，只在 versioned timed composition JSON payload 中增加 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle`，不做 Room migration，legacy plans 和 old snapshots 通过 resolver defaults 有效。（Decision complete; E14.6-3b implemented）
-40. E14.6-3b：Stage style model / serializer tests，将 boundary style payload 落到 Kotlin model、plan / snapshot JSON serializer 和 focused tests，验证 valid / invalid color、known / unknown icon、asset-like icon rejection、v2 plan / session snapshot round-trip、old v2 missing fields、legacy JSON unaffected、Room unchanged 和 no resources / no UI / no TimerDial boundary。（Implemented; followed by E14.6-3c）
-41. E14.6-3c：Editor style picker UI，把 E14.6-3b payload 暴露到 timed composition editor，支持 warmup / cooldown / restBetweenRounds、stage group 和 target 的颜色 + 内置 iconKey 选择；rounds 无 style；复用色板、使用 Compose Canvas 内置 icon grid，不新增资源 / 上传路径 / TimerDial consumption / Room 变更。（Implemented; followed by E14.6-3d）
-42. E14.6-3d：TimerDial style consumption / visual QA，把 saved v2 stage style 消费到 TimerDial 外圈颜色和中心白色 built-in Canvas icon，保持 planned duration ratio、boundary fallback、legacy fallback、rest extension monotonic progress 和 continuous progress identity。（Implemented; followed by E14.6-3e）
-43. E14.6-3e：Stage style / TimerDial visual QA closeout，复查 E14.6-3d smoke 的 PNG / XML / logcat / scan 证据，确认 editor picker、TimerDial style consumption、boundary fallback、legacy timed、rest extension、continuous progress、资源 / 上传 / heart-rate 禁区均无阻塞；非阻塞 follow-up 仅保留 reduce-motion style-specific smoke、3 / 4 target 截图、dedicated legacy screenshot、显式 adb-after artifact 和承托环厚度 polish。（Review complete; Next: E12 records / trends polish or independent polish）
+30. E12.4：Records / trends polish planning and visual gate；审计现有记录页数据能力、legacy/v2 timed composition 和 strength trend 语义，提出 records IA、chart axis / legend / empty state 和 implementation split。（Planning / visual gate complete; implementation pending confirmation）
+31. E13：声音提醒、固定女声 cue、蓝牙/扬声器 smoke 和音频共存。
+32. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only and pushed as `6888e31`；E14.4-2b-5b engine integration planning gate docs-only complete；E14.4-2b-5b-1 engine adapter bridge tests added as a test-first red gate；E14.4-2b-5b-2 minimum engine bridge implemented；E14.4-2b-5b-3 v2 start gate enablement + smoke implemented；E14.4-2b-5c session record compatibility tests / smoke review implemented；E14.5 TimerDial continuous progress fix complete；E14.4-2b-6 TimerDial mapping planning gate docs-only complete；E14.4-2b-6a TimerDial mapping model/state tests complete；E14.4-2b-6b production mapping implementation complete；E14.4-2b-6c smoke / visual QA review gate complete；E14.4-2b closeout complete。
+33. E14.6：Real-device TimerDial feedback planning gate，拆出 E14.6-1 progress rebound fix、E14.6-2 completion recap page redesign、E14.6-3 stage style system planning / design。（Planning complete）
+34. E14.6-1：TimerDial progress rebound fix，修复 normal motion 下一秒 tick anchor handoff 造成的 active ring / active segment forward-then-back rebound。（Implemented; followed by E14.6-2 planning）
+35. E14.6-2：Completion recap page redesign planning / visual gate，确认 completed 终态进入“本次数据统计复盘页面”：顶部克制庆祝 + `已完成`，中部复用现有 summary / recap / session 数据，底部主动作推荐 `返回训练首页`，不保留大 TimerDial 作为主视觉，不改 session record 语义。（Planning complete; E14.6-2b implemented）
+36. E14.6-2b：Completion recap page Compose implementation，计时训练 completed / abandoned 终态进入独立复盘 shell，复用现有 summary / recap 内容并完成 Android smoke。（Implemented; E14.6-2c reviewed evidence）
+37. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此该 gate 未收口 screenshot-level visual QA。（Review complete; resolved by E14.6-2d）
+38. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; followed by E14.6-3 planning）
+39. E14.6-3：Stage style / icon planning，确认阶段样式由颜色和内置 `iconKey` 组成，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon，第一版只使用项目内置白色 icon key，用户上传图片列为 post-MVP。（Planning complete）
+40. E14.6-3a：Stage style data contract / model decision，选择 Option A：复用 composition v2 stage group / target 现有 `colorHex` / `iconKey`，只在 versioned timed composition JSON payload 中增加 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle`，不做 Room migration，legacy plans 和 old snapshots 通过 resolver defaults 有效。（Decision complete; E14.6-3b implemented）
+41. E14.6-3b：Stage style model / serializer tests，将 boundary style payload 落到 Kotlin model、plan / snapshot JSON serializer 和 focused tests，验证 valid / invalid color、known / unknown icon、asset-like icon rejection、v2 plan / session snapshot round-trip、old v2 missing fields、legacy JSON unaffected、Room unchanged 和 no resources / no UI / no TimerDial boundary。（Implemented; followed by E14.6-3c）
+42. E14.6-3c：Editor style picker UI，把 E14.6-3b payload 暴露到 timed composition editor，支持 warmup / cooldown / restBetweenRounds、stage group 和 target 的颜色 + 内置 iconKey 选择；rounds 无 style；复用色板、使用 Compose Canvas 内置 icon grid，不新增资源 / 上传路径 / TimerDial consumption / Room 变更。（Implemented; followed by E14.6-3d）
+43. E14.6-3d：TimerDial style consumption / visual QA，把 saved v2 stage style 消费到 TimerDial 外圈颜色和中心白色 built-in Canvas icon，保持 planned duration ratio、boundary fallback、legacy fallback、rest extension monotonic progress 和 continuous progress identity。（Implemented; followed by E14.6-3e）
+44. E14.6-3e：Stage style / TimerDial visual QA closeout，复查 E14.6-3d smoke 的 PNG / XML / logcat / scan 证据，确认 editor picker、TimerDial style consumption、boundary fallback、legacy timed、rest extension、continuous progress、资源 / 上传 / heart-rate 禁区均无阻塞；非阻塞 follow-up 仅保留 reduce-motion style-specific smoke、3 / 4 target 截图、dedicated legacy screenshot、显式 adb-after artifact 和承托环厚度 polish。（Review complete; followed by E12 records / trends polish planning gate）
 
 ## 7. 下一轮建议
 
