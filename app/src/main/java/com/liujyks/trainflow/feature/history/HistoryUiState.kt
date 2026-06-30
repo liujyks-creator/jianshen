@@ -10,6 +10,11 @@ import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStageKind
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStep
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStepKind
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
@@ -526,9 +531,8 @@ private fun WorkoutSession.toDetailState(source: HistoryRecordSource): HistorySe
 private fun WorkoutSession.timedDetailRows(): List<HistorySummaryRowUiState> {
     val completedSteps = stepHistory.count { record -> !record.skipped }
     val skippedSteps = stepHistory.count { record -> record.skipped }
-    val plannedSteps = planSnapshot.blocks.filterIsInstance<TimedCircuitBlock>()
-        .sumOf { block -> block.items.size * block.rounds }
-    return listOf(
+    val plannedSteps = planSnapshot.plannedTimedStepCount()
+    val baseRows = listOf(
         HistorySummaryRowUiState("总用时", durationSec().formatDuration(), "来自 totalElapsedSec；缺失时回退 step records"),
         HistorySummaryRowUiState("有效训练时间", effectiveDurationSec().formatDuration(), "来自 effectiveElapsedSec；不包含暂停时间"),
         HistorySummaryRowUiState("暂停时间", pausedDurationSec().formatDuration(), "来自 pausedElapsedSec；不包含额外休息"),
@@ -541,6 +545,110 @@ private fun WorkoutSession.timedDetailRows(): List<HistorySummaryRowUiState> {
         ),
         HistorySummaryRowUiState("完成步骤", "$completedSteps / ${plannedSteps.coerceAtLeast(completedSteps + skippedSteps)}", "包含热身、拉伸或计时步骤记录"),
         HistorySummaryRowUiState("跳过内容", "$skippedSteps 步", if (skippedSteps == 0) "没有跳过内容" else "仅记录跳过事实，不做表现判断")
+    )
+    return baseRows + timedCompositionDetailRows()
+}
+
+private data class TimedCompositionExpandedBlock(
+    val block: TimedCompositionBlock,
+    val steps: List<TimedCompositionTimelineStep>
+)
+
+private fun WorkoutSession.timedCompositionDetailRows(): List<HistorySummaryRowUiState> {
+    val expandedBlocks = planSnapshot.timedCompositionExpandedBlocks()
+    if (expandedBlocks.isEmpty()) return emptyList()
+
+    val steps = expandedBlocks.flatMap { block -> block.steps }
+    val stageGroupCount = expandedBlocks.sumOf { expanded -> expanded.block.stageGroups.size }
+    val targetCount = expandedBlocks.sumOf { expanded ->
+        expanded.block.stageGroups.sumOf { group -> group.targets.size }
+    }
+    val targetSummary = expandedBlocks
+        .flatMap { expanded ->
+            expanded.block.stageGroups.map { group ->
+                val targetLabels = group.targets.joinToString(" / ") { target ->
+                    "${target.name}(${target.id}:${target.kind.contractValue})"
+                }
+                "${group.name}(${group.id})：$targetLabels"
+            }
+        }
+        .joinToString("；")
+    val boundaryRestSteps = steps.filter { step ->
+        step.timelineStageKind == TimedCompositionTimelineStageKind.BETWEEN_ROUND_REST
+    }
+    val extensionSummary = timedRestExtensionRecords.toTimedCompositionRestExtensionSummary(
+        descriptors = planSnapshot.toTimedComparableRestDescriptors()
+            .filter { descriptor -> descriptor.key.family == TimedTrendKeyFamily.TIMED_COMPOSITION }
+    )
+
+    return buildList {
+        add(
+            HistorySummaryRowUiState(
+                label = "v2 编排",
+                value = "composition v2 · ${steps.size} 步",
+                helper = "从历史 planSnapshot 展开；stageGroup $stageGroupCount 个，target $targetCount 个，不用当前可编辑计划反推旧记录。"
+            )
+        )
+        add(
+            HistorySummaryRowUiState(
+                label = "v2 阶段 / 目标",
+                value = targetSummary.ifBlank { "暂无 stageGroup target" },
+                helper = "按 stageGroupId、targetId 和 targetKind 解释阶段内部目标。"
+            )
+        )
+        if (boundaryRestSteps.isNotEmpty()) {
+            add(
+                HistorySummaryRowUiState(
+                    label = "v2 boundary rest",
+                    value = boundaryRestSteps.sumOf { step -> step.plannedDurationSec }.formatDuration(),
+                    helper = boundaryRestSteps.joinToString("；") { step ->
+                        "round ${step.roundIndex} · ${step.timelineStageKind.contractValue} · target ${step.targetId} · planned ${step.plannedDurationSec.formatDuration()}"
+                    }
+                )
+            )
+        }
+        extensionSummary?.let { summary ->
+            add(summary)
+        }
+    }
+}
+
+private fun WorkoutPlanSnapshot.timedCompositionExpandedBlocks(): List<TimedCompositionExpandedBlock> {
+    return blocks.sortedBy { block -> block.order }
+        .filterIsInstance<TimedCompositionBlock>()
+        .mapNotNull { block ->
+            val steps = block.expandedCompositionStepsOrEmpty()
+            if (steps.isEmpty()) {
+                null
+            } else {
+                TimedCompositionExpandedBlock(block = block, steps = steps)
+            }
+        }
+}
+
+private fun List<TimedRestExtensionRecord>.toTimedCompositionRestExtensionSummary(
+    descriptors: List<TimedComparableRestDescriptor>
+): HistorySummaryRowUiState? {
+    if (isEmpty() || descriptors.isEmpty()) return null
+    val descriptorByStepId = descriptors.associateBy { descriptor -> descriptor.stepId }
+    val mapped = mapNotNull { record ->
+        val descriptor = descriptorByStepId[record.stepId] ?: return@mapNotNull null
+        if (record.stepIndex != descriptor.stepIndex) return@mapNotNull null
+        if (record.roundIndex != descriptor.roundIndex) return@mapNotNull null
+        if (record.restStageId != descriptor.restStageId) return@mapNotNull null
+        val descriptorPrevious = descriptor.previousStageId
+        if (descriptorPrevious != null && record.previousStageId != descriptorPrevious) return@mapNotNull null
+        record to descriptor
+    }
+    if (mapped.isEmpty()) return null
+
+    return HistorySummaryRowUiState(
+        label = "v2 额外休息定位",
+        value = mapped.sumOf { pair -> pair.first.addedSec.coerceAtLeast(0) }.formatDuration(),
+        helper = mapped.joinToString("；") { (record, descriptor) ->
+            val family = descriptor.key.timelineStageKind ?: descriptor.key.targetKind.orEmpty()
+            "${descriptor.restStageTitle} +${record.addedSec.formatDuration()} -> target ${descriptor.restStageId} · $family"
+        }
     )
 }
 
@@ -686,8 +794,11 @@ private fun List<WorkoutSession>.toTimedComparableRestTrendUiState(): TimedCompa
         .filter { group -> group.size >= 2 }
         .sortedWith(
             compareBy<List<TimedComparableRestSample>>(
+                { group -> group.first().key.family.ordinal },
                 { group -> group.first().descriptor.structureSignature },
-                { group -> group.first().descriptor.roundIndex },
+                { group -> group.first().descriptor.roundIndex ?: 0 },
+                { group -> group.first().key.stageGroupIndex ?: 0 },
+                { group -> group.first().key.targetIndex ?: 0 },
                 { group -> group.first().descriptor.stepIndex }
             )
         )
@@ -698,11 +809,11 @@ private fun List<WorkoutSession>.toTimedComparableRestTrendUiState(): TimedCompa
     )
     return TimedComparableRestTrendUiState(
         title = "计时同类阶段与额外休息趋势",
-        description = "只比较同一历史计划结构下的计时休息阶段；planned rest 来自 planSnapshot，actual rest 来自 step records，extra rest 只来自 timedRestExtensionRecords.addedSec。",
+        description = "legacy timed 与 composition v2 使用分离 trend key；只比较同一历史计划结构下的计时休息阶段，planned rest 来自 planSnapshot，actual rest 来自 step records，extra rest 只来自 timedRestExtensionRecords.addedSec。",
         groups = comparableGroups,
         dataQualityRows = fallbackRows,
         emptyMessage = if (comparableGroups.isEmpty()) {
-            "暂无可比计时阶段趋势；至少需要 2 条同一计划结构、同一阶段类型、同一顺序、同一轮次和同一休息关系的真实计时记录。"
+            "暂无可比计时阶段趋势；至少需要 2 条同一 family、同一计划结构、同一阶段类型、同一顺序、同一轮次和同一休息关系的真实计时记录。"
         } else {
             null
         }
@@ -717,14 +828,31 @@ private data class TimedComparableRestSample(
     val extraRestSec: Int
 )
 
+private enum class TimedTrendKeyFamily(val contractValue: String) {
+    LEGACY_TIMED("legacy_timed"),
+    TIMED_COMPOSITION("timed_composition_v2")
+}
+
 private data class TimedComparableRestKey(
+    val family: TimedTrendKeyFamily,
     val structureSignature: String,
-    val stageType: TimedStageType,
-    val stageOrder: Int,
-    val roundIndex: Int,
+    val plannedDurationSec: Int,
     val restStageId: String,
-    val previousStageId: String,
-    val stepIndex: Int
+    val previousStageId: String?,
+    val stepIndex: Int,
+    val legacyStageType: TimedStageType? = null,
+    val legacyStageOrder: Int? = null,
+    val roundIndex: Int? = null,
+    val compositionVersion: Int? = null,
+    val compositionBlockId: String? = null,
+    val timelineStageKind: String? = null,
+    val stageGroupId: String? = null,
+    val targetId: String? = null,
+    val targetKind: String? = null,
+    val stageGroupIndex: Int? = null,
+    val targetIndex: Int? = null,
+    val stageInstanceIndex: Int? = null,
+    val targetInstanceIndex: Int? = null
 )
 
 private data class TimedComparableRestDescriptor(
@@ -732,10 +860,10 @@ private data class TimedComparableRestDescriptor(
     val structureSignature: String,
     val stepId: String,
     val stepIndex: Int,
-    val roundIndex: Int,
+    val roundIndex: Int?,
     val restStageId: String,
     val restStageTitle: String,
-    val previousStageId: String,
+    val previousStageId: String?,
     val previousStageTitle: String,
     val plannedRestSec: Int
 )
@@ -837,6 +965,15 @@ private fun WorkoutPlanSnapshot.toTimedComparableRestDescriptors(): List<TimedCo
                     }
                 }
             }
+            is TimedCompositionBlock -> {
+                val steps = block.expandedCompositionStepsOrEmpty()
+                descriptors += steps.toTimedCompositionRestDescriptors(
+                    structureSignature = structureSignature,
+                    compositionBlockId = block.id,
+                    baseStepIndex = stepIndex
+                )
+                stepIndex += steps.size
+            }
             is com.liujyks.trainflow.core.model.WarmupBlock -> {
                 stepIndex += block.timedStepCount()
             }
@@ -850,6 +987,55 @@ private fun WorkoutPlanSnapshot.toTimedComparableRestDescriptors(): List<TimedCo
         }
     }
     return descriptors
+}
+
+private fun TimedCompositionBlock.expandedCompositionStepsOrEmpty(): List<TimedCompositionTimelineStep> {
+    return runCatching { TimedCompositionTimelineAdapter.expand(this).steps }.getOrDefault(emptyList())
+}
+
+private fun List<TimedCompositionTimelineStep>.toTimedCompositionRestDescriptors(
+    structureSignature: String,
+    compositionBlockId: String,
+    baseStepIndex: Int
+): List<TimedComparableRestDescriptor> {
+    return mapIndexedNotNull { localIndex, step ->
+        if (step.stepKind != TimedCompositionTimelineStepKind.REST) return@mapIndexedNotNull null
+        val globalStepIndex = baseStepIndex + localIndex
+        val previousWorkStep = take(localIndex).lastOrNull { candidate ->
+            candidate.stepKind == TimedCompositionTimelineStepKind.WORK
+        }
+        val key = TimedComparableRestKey(
+            family = TimedTrendKeyFamily.TIMED_COMPOSITION,
+            structureSignature = structureSignature,
+            plannedDurationSec = step.plannedDurationSec.coerceAtLeast(0),
+            restStageId = step.targetId,
+            previousStageId = previousWorkStep?.targetId,
+            stepIndex = globalStepIndex,
+            roundIndex = step.roundIndex,
+            compositionVersion = step.compositionVersion,
+            compositionBlockId = compositionBlockId,
+            timelineStageKind = step.timelineStageKind.contractValue,
+            stageGroupId = step.stageGroupId,
+            targetId = step.targetId,
+            targetKind = step.targetKind.contractValue,
+            stageGroupIndex = step.stageGroupIndex,
+            targetIndex = step.targetIndex,
+            stageInstanceIndex = step.stageInstanceIndex,
+            targetInstanceIndex = step.targetInstanceIndex
+        )
+        TimedComparableRestDescriptor(
+            key = key,
+            structureSignature = structureSignature,
+            stepId = step.id,
+            stepIndex = globalStepIndex,
+            roundIndex = step.roundIndex,
+            restStageId = step.targetId,
+            restStageTitle = step.displayName,
+            previousStageId = previousWorkStep?.targetId,
+            previousStageTitle = previousWorkStep?.displayName ?: "前序阶段不足",
+            plannedRestSec = step.plannedDurationSec.coerceAtLeast(0)
+        )
+    }
 }
 
 private fun timedRestDescriptorOrNull(
@@ -866,13 +1052,15 @@ private fun timedRestDescriptorOrNull(
     val previousStageId = previousStage?.id ?: return null
     val previousStageTitle = previousStage.stageTitle()
     val key = TimedComparableRestKey(
+        family = TimedTrendKeyFamily.LEGACY_TIMED,
         structureSignature = structureSignature,
-        stageType = TimedStageType.REST,
-        stageOrder = stageOrder,
-        roundIndex = roundIndex,
+        plannedDurationSec = plannedRestSec.coerceAtLeast(0),
         restStageId = restStageId,
         previousStageId = previousStageId,
-        stepIndex = stepIndex
+        stepIndex = stepIndex,
+        legacyStageType = TimedStageType.REST,
+        legacyStageOrder = stageOrder,
+        roundIndex = roundIndex
     )
     return TimedComparableRestDescriptor(
         key = key,
@@ -908,6 +1096,32 @@ private fun List<WorkoutSession>.toTimedComparableRestDataQualityRows(
             helper = "$nonTimedCount 条 strength / follow_along 记录没有进入本计时阶段趋势。"
         )
     }
+    val legacyTimedCount = count { session ->
+        session.mode == WorkoutMode.TIMED &&
+            session.planSnapshot.blocks.any { block -> block is TimedCircuitBlock }
+    }
+    val v2TimedCount = count { session ->
+        session.mode == WorkoutMode.TIMED &&
+            session.planSnapshot.blocks.any { block -> block is TimedCompositionBlock }
+    }
+    if (legacyTimedCount > 0 && v2TimedCount > 0) {
+        rows += TimedComparableRestDataQualityRowUiState(
+            label = "legacy / v2 趋势已隔离",
+            helper = "$legacyTimedCount 条 legacy timed 与 $v2TimedCount 条 composition v2 默认不合并；没有等价 mapper 时不共享同一趋势 key。"
+        )
+    }
+    val unsupportedV2Count = count { session ->
+        session.mode == WorkoutMode.TIMED &&
+            session.planSnapshot.blocks
+                .filterIsInstance<TimedCompositionBlock>()
+                .any { block -> block.expandedCompositionStepsOrEmpty().isEmpty() }
+    }
+    if (unsupportedV2Count > 0) {
+        rows += TimedComparableRestDataQualityRowUiState(
+            label = "v2 编排暂不可解释",
+            helper = "$unsupportedV2Count 条 composition v2 snapshot 无法安全展开或没有可执行 step，保留记录但不进入可比趋势。"
+        )
+    }
     val malformedExtraRestCount = filter { session -> session.mode == WorkoutMode.TIMED }
         .sumOf { session -> session.timedRestExtensionRecords.count { record -> !record.hasComparableRestKey() } }
     if (malformedExtraRestCount > 0) {
@@ -941,14 +1155,64 @@ private fun List<TimedComparableRestSample>.toTimedComparableRestTrendGroup(): T
                 plannedRestLabel = sample.descriptor.plannedRestSec.formatDuration(),
                 actualRestLabel = sample.actualRestSec.formatDuration(),
                 extraRestLabel = sample.extraRestSec.formatDuration(),
-                positionLabel = "round ${sample.descriptor.roundIndex} · step ${sample.descriptor.stepIndex} · rest ${sample.descriptor.restStageId} · prev ${sample.descriptor.previousStageId}"
+                positionLabel = sample.descriptor.positionLabel()
             )
         }
     return TimedComparableRestTrendGroupUiState(
-        title = "轮 ${descriptor.roundIndex} · ${descriptor.previousStageTitle} 后 ${descriptor.restStageTitle}",
-        ruleLabel = "同一结构签名 · 同一 REST 阶段 · 同一顺序 · 同一轮次 · 同一 rest/work 关系",
+        title = descriptor.groupTitle(),
+        ruleLabel = descriptor.ruleLabel(),
         rows = rows
     )
+}
+
+private fun TimedComparableRestDescriptor.groupTitle(): String {
+    return when (key.family) {
+        TimedTrendKeyFamily.LEGACY_TIMED -> {
+            "轮 ${roundIndex ?: 0} · ${previousStageTitle} 后 $restStageTitle"
+        }
+        TimedTrendKeyFamily.TIMED_COMPOSITION -> {
+            val roundLabel = roundIndex?.let { round -> "轮 $round · " }.orEmpty()
+            if (key.timelineStageKind == TimedCompositionTimelineStageKind.BETWEEN_ROUND_REST.contractValue) {
+                "composition v2 · ${roundLabel}轮间休息"
+            } else {
+                "composition v2 · ${roundLabel}${previousStageTitle} 后 $restStageTitle"
+            }
+        }
+    }
+}
+
+private fun TimedComparableRestDescriptor.ruleLabel(): String {
+    return when (key.family) {
+        TimedTrendKeyFamily.LEGACY_TIMED ->
+            "legacy timed · 同一结构签名 · 同一 REST 阶段 · 同一顺序 · 同一轮次 · 同一 rest/work 关系"
+
+        TimedTrendKeyFamily.TIMED_COMPOSITION ->
+            "composition v2 · 同一 compositionVersion / block / stageGroup / target / targetKind / round / index / plannedDuration / structure signature；不与 legacy timed 合并"
+    }
+}
+
+private fun TimedComparableRestDescriptor.positionLabel(): String {
+    return when (key.family) {
+        TimedTrendKeyFamily.LEGACY_TIMED -> {
+            "family ${key.family.contractValue} · round ${roundIndex ?: 0} · step $stepIndex · rest $restStageId · prev ${previousStageId.orEmpty()}"
+        }
+        TimedTrendKeyFamily.TIMED_COMPOSITION -> buildList {
+            add("family ${key.family.contractValue}")
+            add("compositionVersion ${key.compositionVersion}")
+            add("block ${key.compositionBlockId}")
+            add("stageKind ${key.timelineStageKind}")
+            add("stageGroup ${key.stageGroupId}")
+            add("target ${key.targetId}")
+            add("targetKind ${key.targetKind}")
+            add("round ${key.roundIndex ?: 0}")
+            add("stageGroupIndex ${key.stageGroupIndex ?: 0}")
+            add("targetIndex ${key.targetIndex ?: 0}")
+            add("stageInstance ${key.stageInstanceIndex ?: 0}")
+            add("targetInstance ${key.targetInstanceIndex ?: 0}")
+            add("planned ${key.plannedDurationSec.formatDuration()}")
+            add("signature ${key.structureSignature}")
+        }.joinToString(" · ")
+    }
 }
 
 private fun WorkoutPlanSnapshot.timedStructureSignature(): String {
@@ -961,6 +1225,7 @@ private fun WorkoutPlanSnapshot.timedStructureSignature(): String {
                 }
                 "circuit:${block.id}:${block.rounds}:${block.restBetweenRoundsSec ?: 0}:$items"
             }
+            is TimedCompositionBlock -> block.timedCompositionStructureSignature()
             is com.liujyks.trainflow.core.model.WarmupBlock -> "warmup:${block.id}:${block.durationSec ?: 0}:${block.items.timedItemsSignature()}"
             is com.liujyks.trainflow.core.model.StretchBlock -> "stretch:${block.id}:${block.durationSec ?: 0}:${block.items.timedItemsSignature()}"
             is com.liujyks.trainflow.core.model.CooldownBlock -> "cooldown:${block.id}:${block.durationSec ?: 0}:${block.items.timedItemsSignature()}"
@@ -969,10 +1234,58 @@ private fun WorkoutPlanSnapshot.timedStructureSignature(): String {
     }
 }
 
+private fun TimedCompositionBlock.timedCompositionStructureSignature(): String {
+    val steps = expandedCompositionStepsOrEmpty()
+    if (steps.isEmpty()) {
+        return "composition_v2:$id:$compositionVersion:unsupported_or_empty"
+    }
+    return steps.joinToString(
+        prefix = "composition_v2:$id:$compositionVersion:",
+        separator = ","
+    ) { step ->
+        listOf(
+            step.timelineStageKind.contractValue,
+            step.stageGroupId,
+            step.targetId,
+            step.targetKind.contractValue,
+            step.roundIndex ?: 0,
+            step.stageGroupIndex ?: 0,
+            step.targetIndex,
+            step.stageInstanceIndex,
+            step.targetInstanceIndex,
+            step.plannedDurationSec
+        ).joinToString(":")
+    }
+}
+
 private fun List<TimedExerciseItem>.timedItemsSignature(): String {
     return joinToString(",") { item ->
         "${item.id}:${item.stageType.contractValue}:${item.workDurationSec}:${item.restAfterSec ?: 0}"
     }
+}
+
+private fun WorkoutPlanSnapshot.plannedTimedStepCount(): Int {
+    return blocks.sumOf { block ->
+        when (block) {
+            is RestBlock -> if (block.durationSec > 0) 1 else 0
+            is TimedCircuitBlock -> block.timedStepCount()
+            is TimedCompositionBlock -> block.expandedCompositionStepsOrEmpty().size
+            is com.liujyks.trainflow.core.model.WarmupBlock -> block.timedStepCount()
+            is com.liujyks.trainflow.core.model.StretchBlock -> block.timedStepCount()
+            is com.liujyks.trainflow.core.model.CooldownBlock -> block.timedStepCount()
+            else -> 0
+        }
+    }
+}
+
+private fun TimedCircuitBlock.timedStepCount(): Int {
+    val perRoundCount = items.timedStepCount()
+    val betweenRoundCount = if ((restBetweenRoundsSec ?: 0) > 0) {
+        (rounds - 1).coerceAtLeast(0)
+    } else {
+        0
+    }
+    return perRoundCount * rounds.coerceAtLeast(0) + betweenRoundCount
 }
 
 private fun List<TimedExerciseItem>.timedStepCount(): Int {
@@ -1642,6 +1955,7 @@ private fun WorkoutSession.plannedRestSec(): Int {
         when (block) {
             is RestBlock -> block.durationSec
             is TimedCircuitBlock -> block.plannedTimedRestSec()
+            is TimedCompositionBlock -> block.plannedTimedCompositionRestSec()
             else -> 0
         }
     } + planSnapshot.plannedStrengthRestSec()
@@ -1667,6 +1981,12 @@ private fun TimedCircuitBlock.plannedTimedRestSec(): Int {
     }
     val betweenRounds = (rounds - 1).coerceAtLeast(0) * (restBetweenRoundsSec ?: 0)
     return perRoundRest * rounds.coerceAtLeast(0) + betweenRounds
+}
+
+private fun TimedCompositionBlock.plannedTimedCompositionRestSec(): Int {
+    return expandedCompositionStepsOrEmpty()
+        .filter { step -> step.stepKind == TimedCompositionTimelineStepKind.REST }
+        .sumOf { step -> step.plannedDurationSec.coerceAtLeast(0) }
 }
 
 private fun WorkoutPlanSnapshot.plannedStrengthRestSec(): Int {

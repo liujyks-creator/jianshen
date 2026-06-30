@@ -12,6 +12,12 @@ import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionStageGroup
+import com.liujyks.trainflow.core.model.TimedCompositionTarget
+import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStep
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
@@ -598,6 +604,180 @@ class HistoryUiStateTest {
 
         assertTrue(trend.groups.isEmpty())
         assertTrue(trend.dataQualityRows.any { row -> row.label == "暂无阶段级样本" })
+    }
+
+    @Test
+    fun v2TimedSessionDetailRowsInterpretStageGroupsTargetsAndBoundaryRest() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                comparableTimedCompositionSession(
+                    id = "v2-detail",
+                    startedAt = "2026-06-08T09:00:00Z",
+                    rounds = 2,
+                    restBetweenRoundsSec = 6,
+                    targetRestActualSec = 4,
+                    betweenRoundRestActualSec = 6,
+                    extraTargetRestAdds = listOf(15),
+                    extraBetweenRoundRestAdds = listOf(15)
+                )
+            )
+        )
+
+        val rows = requireNotNull(state.selectedDetail).rows.associateBy { row -> row.label }
+
+        assertEquals("14秒", requireNotNull(rows["计划休息"]).value)
+        assertTrue(requireNotNull(rows["v2 编排"]).value.contains("composition v2"))
+        assertTrue(requireNotNull(rows["v2 编排"]).helper.contains("stageGroup 1 个"))
+        assertTrue(requireNotNull(rows["v2 编排"]).helper.contains("target 2 个"))
+        assertTrue(requireNotNull(rows["v2 阶段 / 目标"]).value.contains("Main group(group-main)"))
+        assertTrue(requireNotNull(rows["v2 阶段 / 目标"]).value.contains("Action target(target-action:action)"))
+        assertTrue(requireNotNull(rows["v2 阶段 / 目标"]).value.contains("Rest target(target-rest:rest)"))
+        assertTrue(requireNotNull(rows["v2 boundary rest"]).helper.contains("between_round_rest"))
+        assertTrue(requireNotNull(rows["v2 boundary rest"]).helper.contains("composition-v2:r1:between-round-rest:target"))
+        assertEquals("30秒", requireNotNull(rows["v2 额外休息定位"]).value)
+        assertTrue(requireNotNull(rows["v2 额外休息定位"]).helper.contains("target target-rest"))
+        assertTrue(requireNotNull(rows["v2 额外休息定位"]).helper.contains("target composition-v2:r1:between-round-rest:target"))
+    }
+
+    @Test
+    fun v2TimedComparableRestTrendUsesCompositionKeyFields() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedCompositionSession(
+                        id = "v2-target-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        rounds = 1,
+                        restBetweenRoundsSec = 0,
+                        targetRestActualSec = 4,
+                        extraTargetRestAdds = listOf(15)
+                    ),
+                    comparableTimedCompositionSession(
+                        id = "v2-target-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        rounds = 1,
+                        restBetweenRoundsSec = 0,
+                        targetRestActualSec = 6
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        val group = trend.groups.single()
+        val position = group.rows.first().positionLabel
+
+        assertTrue(group.ruleLabel.contains("composition v2"))
+        assertTrue(group.ruleLabel.contains("不与 legacy timed 合并"))
+        assertEquals(listOf("4秒", "6秒"), group.rows.map { row -> row.actualRestLabel })
+        assertEquals(listOf("15秒", "0秒"), group.rows.map { row -> row.extraRestLabel })
+        assertTrue(position.contains("family timed_composition_v2"))
+        assertTrue(position.contains("compositionVersion 2"))
+        assertTrue(position.contains("block composition-v2"))
+        assertTrue(position.contains("stageGroup group-main"))
+        assertTrue(position.contains("target target-rest"))
+        assertTrue(position.contains("targetKind rest"))
+        assertTrue(position.contains("round 1"))
+        assertTrue(position.contains("stageGroupIndex 1"))
+        assertTrue(position.contains("targetIndex 2"))
+        assertTrue(position.contains("planned 4秒"))
+        assertTrue(position.contains("signature composition_v2:composition-v2:2"))
+    }
+
+    @Test
+    fun v2BetweenRoundRestTrendUsesBoundaryRestKeyAndExtensionMapping() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedCompositionSession(
+                        id = "v2-boundary-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        rounds = 2,
+                        restBetweenRoundsSec = 6,
+                        targets = listOf(compositionActionTarget()),
+                        betweenRoundRestActualSec = 8,
+                        extraBetweenRoundRestAdds = listOf(15)
+                    ),
+                    comparableTimedCompositionSession(
+                        id = "v2-boundary-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        rounds = 2,
+                        restBetweenRoundsSec = 6,
+                        targets = listOf(compositionActionTarget()),
+                        betweenRoundRestActualSec = 6
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        val group = trend.groups.single()
+        val position = group.rows.first().positionLabel
+
+        assertTrue(group.title.contains("轮间休息"))
+        assertEquals(listOf("8秒", "6秒"), group.rows.map { row -> row.actualRestLabel })
+        assertEquals(listOf("15秒", "0秒"), group.rows.map { row -> row.extraRestLabel })
+        assertTrue(position.contains("stageKind between_round_rest"))
+        assertTrue(position.contains("target composition-v2:r1:between-round-rest:target"))
+        assertTrue(position.contains("targetKind between_round_rest"))
+        assertTrue(position.contains("stageGroupIndex 0"))
+        assertTrue(position.contains("targetIndex 1"))
+        assertTrue(position.contains("planned 6秒"))
+    }
+
+    @Test
+    fun legacyAndV2TimedSessionsDoNotMergeIntoSameComparableTrend() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "legacy-single",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 20
+                    ),
+                    comparableTimedCompositionSession(
+                        id = "v2-single",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        rounds = 1,
+                        restBetweenRoundsSec = 0,
+                        targetRestActualSec = 20
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+
+        assertTrue(trend.groups.isEmpty())
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "legacy / v2 趋势已隔离" })
+        assertTrue(requireNotNull(trend.emptyMessage).contains("同一 family"))
+    }
+
+    @Test
+    fun strengthComparableTrendStillBuildsWhenV2TimedSessionsArePresent() {
+        val trend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "strength-with-v2-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        actualKg = 60.0
+                    ),
+                    comparableStrengthSession(
+                        id = "strength-with-v2-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        actualKg = 62.5
+                    ),
+                    comparableTimedCompositionSession(
+                        id = "v2-not-strength",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        rounds = 1,
+                        restBetweenRoundsSec = 0,
+                        targetRestActualSec = 4
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertEquals(1, trend.groups.size)
+        assertTrue(trend.groups.single().ruleLabel.contains("sourceSetPlanId"))
+        assertTrue(trend.dataQualityRows.any { row -> row.label == "已排除非力量记录" })
     }
 
     @Test
@@ -1871,6 +2051,142 @@ class HistoryUiStateTest {
                         eventElapsedSec = 40 + index
                     )
                 }
+        )
+    }
+
+    private fun comparableTimedCompositionSession(
+        id: String,
+        startedAt: String,
+        rounds: Int,
+        restBetweenRoundsSec: Int,
+        targets: List<TimedCompositionTarget> = listOf(
+            compositionActionTarget(),
+            compositionRestTarget()
+        ),
+        targetRestActualSec: Int = 4,
+        betweenRoundRestActualSec: Int = restBetweenRoundsSec,
+        extraTargetRestAdds: List<Int> = emptyList(),
+        extraBetweenRoundRestAdds: List<Int> = emptyList()
+    ): WorkoutSession {
+        val block = TimedCompositionBlock(
+            id = "composition-v2",
+            order = 1,
+            title = "Composition v2",
+            warmupSec = 3,
+            cooldownSec = 2,
+            rounds = rounds,
+            restBetweenRoundsSec = restBetweenRoundsSec,
+            stageGroups = listOf(
+                TimedCompositionStageGroup(
+                    id = "group-main",
+                    order = 1,
+                    name = "Main group",
+                    colorHex = TimedStageType.WORK.defaultColorHex,
+                    targets = targets
+                )
+            )
+        )
+        val steps = TimedCompositionTimelineAdapter.expand(block).steps
+        val stepHistory = steps.map { step ->
+            SessionStepRecord(
+                stepId = step.id,
+                kind = if (step.isRest) SessionStepKind.TIMED_REST else SessionStepKind.TIMED_WORK,
+                startedAt = startedAt,
+                endedAt = startedAt,
+                actualDurationSec = when {
+                    step.targetKind.contractValue == TimedCompositionTargetKind.REST.contractValue -> targetRestActualSec
+                    step.timelineStageKind.contractValue == "between_round_rest" -> betweenRoundRestActualSec
+                    else -> step.plannedDurationSec
+                }
+            )
+        }
+        val targetRestStep = steps.firstOrNull { step ->
+            step.targetKind.contractValue == TimedCompositionTargetKind.REST.contractValue
+        }
+        val betweenRoundRestStep = steps.firstOrNull { step ->
+            step.timelineStageKind.contractValue == "between_round_rest"
+        }
+        val restExtensions = buildList {
+            targetRestStep?.let { step ->
+                addAll(step.restExtensionRecordsFor(id, steps, extraTargetRestAdds))
+            }
+            betweenRoundRestStep?.let { step ->
+                addAll(step.restExtensionRecordsFor(id, steps, extraBetweenRoundRestAdds))
+            }
+        }
+
+        return WorkoutSession(
+            id = id,
+            planId = "plan-comparable-composition-v2",
+            mode = WorkoutMode.TIMED,
+            planSnapshot = WorkoutPlanSnapshot(
+                title = "可比 v2 计时记录",
+                mode = WorkoutMode.TIMED,
+                blocks = listOf(block)
+            ),
+            status = SessionStatus.COMPLETED,
+            startedAt = startedAt,
+            endedAt = startedAt,
+            totalElapsedSec = stepHistory.sumOf { record -> record.actualDurationSec ?: 0 },
+            effectiveElapsedSec = stepHistory.sumOf { record -> record.actualDurationSec ?: 0 },
+            pausedElapsedSec = 0,
+            stepHistory = stepHistory,
+            timedRestExtensionRecords = restExtensions
+        )
+    }
+
+    private fun TimedCompositionTimelineStep.restExtensionRecordsFor(
+        sessionId: String,
+        steps: List<TimedCompositionTimelineStep>,
+        additions: List<Int>
+    ): List<TimedRestExtensionRecord> {
+        val stepIndex = steps.indexOfFirst { step -> step.id == id }
+        val previousWorkStep = steps.take(stepIndex).lastOrNull { step -> !step.isRest }
+        return additions.runningFold(0) { total, added -> total + added }
+            .drop(1)
+            .mapIndexed { index, cumulative ->
+                TimedRestExtensionRecord(
+                    id = "$sessionId-${id}-extra-$index",
+                    stepId = id,
+                    stepIndex = stepIndex,
+                    roundIndex = roundIndex,
+                    restStageId = targetId,
+                    restStageTitle = displayName,
+                    previousStageId = previousWorkStep?.targetId,
+                    previousStageTitle = previousWorkStep?.displayName,
+                    addedSec = additions[index],
+                    plannedRestSec = plannedDurationSec,
+                    restElapsedBeforeExtensionSec = 1,
+                    extensionAtRemainingSec = plannedDurationSec - 1,
+                    cumulativeExtraRestSec = cumulative,
+                    eventElapsedSec = stepIndex + index
+                )
+            }
+    }
+
+    private fun compositionActionTarget(
+        durationSec: Int = 5
+    ): TimedCompositionTarget {
+        return TimedCompositionTarget(
+            id = "target-action",
+            order = 1,
+            name = "Action target",
+            kind = TimedCompositionTargetKind.ACTION,
+            durationSec = durationSec,
+            colorHex = TimedStageType.WORK.defaultColorHex
+        )
+    }
+
+    private fun compositionRestTarget(
+        durationSec: Int = 4
+    ): TimedCompositionTarget {
+        return TimedCompositionTarget(
+            id = "target-rest",
+            order = 2,
+            name = "Rest target",
+            kind = TimedCompositionTargetKind.REST,
+            durationSec = durationSec,
+            colorHex = TimedStageType.REST.defaultColorHex
         )
     }
 

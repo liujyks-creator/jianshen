@@ -89,6 +89,7 @@ class TimedCompositionBoundaryGuardTest {
             "architecture/TimedCompositionBoundaryGuardTest.kt",
             "core/model/TimedCompositionTimelineAdapterTest.kt",
             "core/engine/TimedCompositionEngineBridgeTest.kt",
+            "feature/history/HistoryUiStateTest.kt",
             "feature/workoutsession/TimerDialCompositionMappingTest.kt",
             "feature/workoutsession/TimedCompositionSessionRecordCompatibilityTest.kt"
         )
@@ -109,7 +110,8 @@ class TimedCompositionBoundaryGuardTest {
 
         assertTrue(
             "Timeline adapter terms in tests must stay limited to adapter tests, boundary guard, " +
-                "bridge expectation, TimerDial mapping expectation, and session record compatibility test files:\n" +
+                "bridge expectation, history record interpretation, TimerDial mapping expectation, " +
+                "and session record compatibility test files:\n" +
                 violations.joinToString("\n"),
             violations.isEmpty()
         )

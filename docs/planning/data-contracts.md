@@ -535,6 +535,10 @@ E12 impact:
 - E12 must continue to use each historical `WorkoutSession.planSnapshot`, not the current edited `WorkoutPlan`.
 - Planned rest for v2 must be derived from historical v2 snapshots, including internal `rest` targets and synthetic between-round rests.
 - Extra rest for v2 binds to the active rest target id or deterministic synthetic between-round rest id. It must not create a new target and must not change planned rest.
+- E12-1 implemented record interpretation foundation keeps trend key families separated: legacy timed uses `legacy_timed`; composition v2 uses `timed_composition_v2`.
+- Composition v2 comparable rest keys include `compositionVersion`, composition block id, timeline stage kind, `stageGroupId`, `targetId`, `targetKind`, `roundIndex`, `stageGroupIndex`, `targetIndex`, `stageInstanceIndex`, `targetInstanceIndex`, `plannedDurationSec`, and an ordered structure signature from the adapter-expanded historical snapshot.
+- Composition v2 detail rows may surface stageGroup / target summaries, boundary rest descriptors, and rest-extension positioning, but unsupported / empty adapter timelines or incomplete rest-extension location fields remain non-comparable records rather than guessed trends.
+- Strength comparable set trend keys remain governed by E12.2b `exerciseId`, `sourceSetPlanId`, replacement-source, planned / actual separation, and data-insufficient rules; timed composition v2 keys do not loosen strength comparability.
 
 ### 6.2 计时提醒设置
 
