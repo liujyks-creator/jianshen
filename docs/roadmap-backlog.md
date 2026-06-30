@@ -2116,7 +2116,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 - E14.4-2b timed composition editor + engine + records + TimerDial mapping 链路已完成并关闭，详见 `docs/testing/e14-4-2b-closeout.md`。
 - 未覆盖但不阻塞关闭的后续项：reduce-motion TimerDial mapping smoke、单独 3 / 4 target visual captures、E12 records/trends polish、其他 UI polish。
-- 下一步不再继续 E14.4-2b implementation；2026-06-28 真机反馈已拆入 E14.6 planning gate，E14.6-1 TimerDial progress rebound fix 已完成，E14.6-2 Completion recap page redesign planning / visual gate、E14.6-2b Compose implementation、E14.6-2c smoke / visual QA review gate 和 E14.6-2d screenshot evidence recapture 已完成；E14.6-2 screenshot-level visual QA 已由有效非黑屏截图补齐并收口；E14.6-3 stage style / icon planning、E14.6-3a data contract / model decision、E14.6-3b model / serializer tests、E14.6-3c editor style picker UI 和 E14.6-3d TimerDial style consumption / visual QA 已完成，后续拆 E14.6-3e visual QA closeout 或按用户优先级进入 E12。
+- 下一步不再继续 E14.4-2b implementation；2026-06-28 真机反馈已拆入 E14.6 planning gate，E14.6-1 TimerDial progress rebound fix 已完成，E14.6-2 Completion recap page redesign planning / visual gate、E14.6-2b Compose implementation、E14.6-2c smoke / visual QA review gate 和 E14.6-2d screenshot evidence recapture 已完成；E14.6-2 screenshot-level visual QA 已由有效非黑屏截图补齐并收口；E14.6-3 stage style / icon planning、E14.6-3a data contract / model decision、E14.6-3b model / serializer tests、E14.6-3c editor style picker UI、E14.6-3d TimerDial style consumption / visual QA 和 E14.6-3e visual QA closeout 已完成，后续按用户优先级进入 E12 或其他独立 polish。
 
 **边界:**
 
@@ -2334,7 +2334,8 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 2. E14.6-3b model / serializer tests。（Completed; see `docs/testing/e14-6-3b-stage-style-model-serializer-tests.md`）
 3. E14.6-3c editor UI style picker。（Completed; see `docs/testing/e14-6-3c-editor-style-picker-ui.md`）
 4. E14.6-3d TimerDial consumption / visual QA。（Completed; see `docs/testing/e14-6-3d-timerdial-style-consumption.md`）
-5. E14.6-3e TimerDial visual QA closeout / polish follow-up：内部阶段圆环下浅色承托圆环可单独加粗，但不混入 style/icon data planning。
+5. E14.6-3e TimerDial visual QA closeout。（Completed; see `docs/testing/e14-6-3e-stage-style-timerdial-visual-qa.md`）
+6. Optional TimerDial visual polish：内部阶段圆环下浅色承托圆环可单独加粗，但不混入 style/icon data planning。
 
 **边界:**
 
@@ -2430,6 +2431,32 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 - No E12 records / trends polish or heart-rate UI restoration.
 - No resource, image, SVG, upload, file picker, gallery, URL, or asset-path support.
 
+### Story E14.6-3e: Stage style / TimerDial visual QA closeout
+
+**状态:** Review complete; docs-only closeout recorded in `docs/testing/e14-6-3e-stage-style-timerdial-visual-qa.md`
+
+作为发布前复查者，
+我希望基于 E14.6-3d 的 smoke 证据确认 stage style / icon 链路能收口，
+以便下一轮可以切到 E12 records / trends polish 或其他独立 polish，而不是继续扩张 E14.6-3 数据链路。
+
+**复查结论:**
+
+- `.local/smoke/e14-6-3d-timerdial-style-consumption/` 的 PNG / XML / logcat / scan 证据足以支持 closeout。
+- Editor style picker 已覆盖 warmup、cooldown、restBetweenRounds、stage group 和 target 的 color + built-in `iconKey` 保存链路。
+- TimerDial 已消费 target -> stageGroup -> boundary -> type fallback style：外圈颜色、中心高对比 built-in Canvas icon、boundary fallback 均有代表截图或 focused test 覆盖。
+- Warmup、rest target、styled work target、between-round rest、cooldown、pause / resume 和 `确认+15s` 均有复查证据。
+- TimerDial visual QA 通过：圆盘保持正圆 / 同心，外圈多色 segment 可读不过花，中心 icon 不压迫倒计时，boundary style 不像错误 fallback。
+- Legacy timed、rest extension no-sixth-segment / no-ratio-recompute / no-rebound、E14.5 continuous progress 和 E14.6-1 rebound fix 由 focused tests / prior smoke 继续守住。
+- No-motion / reduce-motion style-specific smoke、单独 3 / 4 target 截图、dedicated legacy screenshot、显式 `adb-devices-after` artifact 和承托环厚度 polish 均记录为非阻塞 follow-up。
+
+**边界:**
+
+- No Kotlin / Compose / Room / production test / resource changes in this closeout.
+- No TimerDial Canvas geometry, dial dimensions, layout ratio, engine timeline, rest extension semantics, session record, `WorkoutCommand`, or `WorkoutEvent` change.
+- No E12 records / trends polish in this closeout.
+- No heart-rate UI / manual input / trend restoration.
+- No resource, image, SVG, upload, file picker, gallery, URL, or asset-path support.
+
 ## 5. FR 覆盖映射
 
 | FR | 覆盖 Epic/Story |
@@ -2490,7 +2517,8 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 39. E14.6-3a：Stage style data contract / model decision，选择 Option A：复用 composition v2 stage group / target 现有 `colorHex` / `iconKey`，只在 versioned timed composition JSON payload 中增加 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle`，不做 Room migration，legacy plans 和 old snapshots 通过 resolver defaults 有效。（Decision complete; E14.6-3b implemented）
 40. E14.6-3b：Stage style model / serializer tests，将 boundary style payload 落到 Kotlin model、plan / snapshot JSON serializer 和 focused tests，验证 valid / invalid color、known / unknown icon、asset-like icon rejection、v2 plan / session snapshot round-trip、old v2 missing fields、legacy JSON unaffected、Room unchanged 和 no resources / no UI / no TimerDial boundary。（Implemented; followed by E14.6-3c）
 41. E14.6-3c：Editor style picker UI，把 E14.6-3b payload 暴露到 timed composition editor，支持 warmup / cooldown / restBetweenRounds、stage group 和 target 的颜色 + 内置 iconKey 选择；rounds 无 style；复用色板、使用 Compose Canvas 内置 icon grid，不新增资源 / 上传路径 / TimerDial consumption / Room 变更。（Implemented; followed by E14.6-3d）
-42. E14.6-3d：TimerDial style consumption / visual QA，把 saved v2 stage style 消费到 TimerDial 外圈颜色和中心白色 built-in Canvas icon，保持 planned duration ratio、boundary fallback、legacy fallback、rest extension monotonic progress 和 continuous progress identity。（Implemented; Next: E14.6-3e visual QA closeout, or E12 by priority）
+42. E14.6-3d：TimerDial style consumption / visual QA，把 saved v2 stage style 消费到 TimerDial 外圈颜色和中心白色 built-in Canvas icon，保持 planned duration ratio、boundary fallback、legacy fallback、rest extension monotonic progress 和 continuous progress identity。（Implemented; followed by E14.6-3e）
+43. E14.6-3e：Stage style / TimerDial visual QA closeout，复查 E14.6-3d smoke 的 PNG / XML / logcat / scan 证据，确认 editor picker、TimerDial style consumption、boundary fallback、legacy timed、rest extension、continuous progress、资源 / 上传 / heart-rate 禁区均无阻塞；非阻塞 follow-up 仅保留 reduce-motion style-specific smoke、3 / 4 target 截图、dedicated legacy screenshot、显式 adb-after artifact 和承托环厚度 polish。（Review complete; Next: E12 records / trends polish or independent polish）
 
 ## 7. 下一轮建议
 
@@ -2524,13 +2552,13 @@ E10.7 已实现 Timer Dial Compose prototype：`feature.workoutsession` 新增 T
 E10.8 已实现 Timer Dial production integration / animation polish：计时训练生产页默认使用 Official Flow Timer Dial；外圈只展示当前一次运动+休息周期，内圈展示整次训练总进度；中心圆负责暂停 / 继续，底部跳过和结束使用图标，结束仍需二次确认，`+15秒` 仅延长当前休息 15 秒。已完成 unit / assemble / lint / check 和 720x1280 emulator active / paused / rest smoke；最后 N 秒视觉截图窗口仍留作 review 关注点。
 E10.9 已实现 Timer Dial reference polish / continuous progress / user-test APK：`r-design.md` 作为参考桥接文档纳入分支；Timer Dial active 状态下用 Compose frame clock 做最多当前 1 秒的连续进度投影，文案数字仍按秒更新；paused / completed / abandoned 不推进；`+15秒` rest extension 后进度不倒退；production controls 仍是 skip、`+15秒`、end。E10.9 是 Timer Dial 参考风格与连续动画 polish，不进入 E11/E12/E13。
 E10.10 已完成计时/力量计划本地持久化和保存入口真实可用性检查；E10.11 已使用 `huashu-design` 做 3 个 HTML 高保真 Timer Dial 原型方向；E10.12 已将 E10.11 `TrainFlow Official Fusion` 方向落到 Android Compose 生产 Timer Dial：处理视觉减字、总剩余时间居中放大、圆盘放大、线条层级、底层宽圆环、动态浅点和中心圆简化，并保留 E10.9 continuous progress、pause freeze、terminal freeze 和 rest extension monotonic progress；E10.13 已实现 Ready Start Gate，计时训练从编辑页或计划详情进入后先显示极简启动界面，点击中心圆才真正 `StartSession`，ready 状态不 tick、不触发 feedback、不写 abandoned；E10.14 已实现并收口 Rest Extension Semantics And Recording，`+15秒` 只延长当前休息阶段，不插入新阶段、不改计划、不污染暂停时长，生产 UI 使用二段式确认、2 秒确认窗口、确认成功短反馈和每个 rest step 4 次 / 60 秒上限，并将每次确认成功的额外休息保存为真实 session record；E10.15 已定义 motion timing rules 和集中 token，明确触摸反馈、状态切换、局部布局、页面切换、continuous projection、可中断和 reduce-motion 边界，且不让动画驱动 engine / records / commands / events；E10.16 已将 motion token 最小落地到计时训练 ready gate、center dial、Timer Dial marker / ring / center color 状态变化和 `+15秒` 二段确认反馈，并补齐生产 reduce-motion source，reduce-motion 时 ready/execution snap、非必要 scale / pulse 关闭、Timer Dial continuous projection 不启动 frame loop，同时保持 ready/start、pause/resume、rest extension、session record 和业务语义不变；E10.17 已完成 Stage Color Picker，计时阶段编辑页可从推荐色 / 更多颜色中选择阶段色，保存后通过本地计划持久化恢复并被 Timer Dial 外圈 / 中心圆消费，非法色回退阶段默认安全色，选中态包含对勾、外圈和 TalkBack 语义；E10.18 已完成 Plan Edit Backfill，计划详情可进入计时 / 力量编辑器并回填已保存计划，保存回同一个本地 plan id，保留原 reminder / preferences，并对编辑保存后的 reminder 执行取消 + 重调度或清理，跟练不暴露假的完整编辑入口，既有 `WorkoutSession.planSnapshot` 不回写；E12.1、E12.2a、E12.3、E12.2c 和 E12.2b 已覆盖真实基础统计、非心率聚合趋势、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势；E13 处理 `countdown_beep1.mp3`、`.local/audio/stage_bell_copper_clean.mp3`、蓝牙耳机/扬声器 smoke、媒体音量通道和不抢占外部音乐视频；首版不再规划平均心率趋势。
-E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复 normal motion 外圈 / active segment progress rebound；E14.6-2 completion recap page redesign planning / visual gate 已完成 docs-only 规划；E14.6-2b 已实现计时训练 completed / abandoned 独立复盘页面，复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`，不保留大 TimerDial 作为完成页主视觉，不改 session record 语义；E14.6-2c 已完成 docs-only smoke / visual QA review，UI tree 语义与交互覆盖可用但 screenshot-level visual QA 因证据质量未收口；E14.6-2d 已补采有效非黑屏截图并关闭该证据阻塞；E14.6-3 已完成阶段样式 / 内置白色图标系统规划；E14.6-3a 已完成 stage style data contract / model decision，boundary style 字段只进入 versioned composition JSON，不做 Room migration；E14.6-3b 已完成 model / serializer / focused tests；E14.6-3c 已完成 editor style picker UI；E14.6-3d 已完成 TimerDial style consumption / visual QA。后续可按 E14.6-3e visual QA closeout，或按用户优先级进入 E12 records / trends polish。
+E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复 normal motion 外圈 / active segment progress rebound；E14.6-2 completion recap page redesign planning / visual gate 已完成 docs-only 规划；E14.6-2b 已实现计时训练 completed / abandoned 独立复盘页面，复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`，不保留大 TimerDial 作为完成页主视觉，不改 session record 语义；E14.6-2c 已完成 docs-only smoke / visual QA review，UI tree 语义与交互覆盖可用但 screenshot-level visual QA 因证据质量未收口；E14.6-2d 已补采有效非黑屏截图并关闭该证据阻塞；E14.6-3 已完成阶段样式 / 内置白色图标系统规划；E14.6-3a 已完成 stage style data contract / model decision，boundary style 字段只进入 versioned composition JSON，不做 Room migration；E14.6-3b 已完成 model / serializer / focused tests；E14.6-3c 已完成 editor style picker UI；E14.6-3d 已完成 TimerDial style consumption / visual QA；E14.6-3e 已完成 stage style / TimerDial visual QA closeout。后续建议进入 E12 records / trends polish 或其他独立 polish。
 ```
 
 下一轮建议按用户测试优先级进入：
 
 ```text
-E14.6-2 Completion recap page redesign planning / visual gate 已完成；E14.6-2b Compose implementation 已完成；E14.6-2c smoke / visual QA review gate 已完成 docs-only 复查；E14.6-2d completion recap screenshot evidence recapture 已补齐有效非黑屏截图证据；E14.6-3 stage style / icon planning 已完成；E14.6-3a stage style data contract / model decision 已完成；E14.6-3b stage style model / serializer tests 已完成；E14.6-3c editor style picker UI 已完成；E14.6-3d TimerDial style consumption / visual QA 已完成。当前 completed / abandoned terminal presentation 已切换到独立复盘 shell：completed 进入“本次数据统计复盘页面”，顶部 `已完成` + 克制庆祝，中部复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`；abandoned / early-ended 标记 `已结束` / `提前结束` 且不显示完成庆祝。阶段样式规划确认 style = color + built-in `iconKey`，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon；第一版只用项目内置白色 icon key，用户上传图片列为 post-MVP。E14.6-3a 决定 boundary style 只以 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle` 存入 versioned composition JSON payload，不改 Room schema，legacy plans 和旧 snapshots 通过 resolver defaults 有效；E14.6-3c 将这些字段和既有 stage group / target `colorHex` / `iconKey` 暴露到 timed composition editor picker，E14.6-3d 已让 TimerDial 消费 outer color 与 center icon。后续不得回到 TimerDial progress rebound、outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。下一步建议 E14.6-3e visual QA closeout；也可按用户优先级进入 E12 records / trends polish。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` / composition 阶段 `colorHex`、`iconKey` 和 fallback token，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
+E14.6-2 Completion recap page redesign planning / visual gate 已完成；E14.6-2b Compose implementation 已完成；E14.6-2c smoke / visual QA review gate 已完成 docs-only 复查；E14.6-2d completion recap screenshot evidence recapture 已补齐有效非黑屏截图证据；E14.6-3 stage style / icon planning 已完成；E14.6-3a stage style data contract / model decision 已完成；E14.6-3b stage style model / serializer tests 已完成；E14.6-3c editor style picker UI 已完成；E14.6-3d TimerDial style consumption / visual QA 已完成；E14.6-3e stage style / TimerDial visual QA closeout 已完成。当前 completed / abandoned terminal presentation 已切换到独立复盘 shell：completed 进入“本次数据统计复盘页面”，顶部 `已完成` + 克制庆祝，中部复用现有 summary / recap / session 数据，底部主动作 `返回训练首页`；abandoned / early-ended 标记 `已结束` / `提前结束` 且不显示完成庆祝。阶段样式规划确认 style = color + built-in `iconKey`，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon；第一版只用项目内置白色 icon key，用户上传图片列为 post-MVP。E14.6-3a 决定 boundary style 只以 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle` 存入 versioned composition JSON payload，不改 Room schema，legacy plans 和旧 snapshots 通过 resolver defaults 有效；E14.6-3c 将这些字段和既有 stage group / target `colorHex` / `iconKey` 暴露到 timed composition editor picker，E14.6-3d 已让 TimerDial 消费 outer color 与 center icon，E14.6-3e 已完成 smoke evidence closeout。后续不得回到 TimerDial progress rebound、outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。下一步建议进入 E12 records / trends polish 或其他独立 polish。E10.17 已提供阶段颜色持久化和执行页消费路径，后续颜色 polish 仍只应消费 `WorkoutPlan` / composition 阶段 `colorHex`、`iconKey` 和 fallback token，不改变训练语义；E10.18 已补齐计划编辑回填，后续统计和历史页仍必须消费 `WorkoutSession.planSnapshot` 而不是用编辑后的当前计划反推旧训练。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
