@@ -28,14 +28,24 @@ import com.liujyks.trainflow.core.model.WorkoutSession
 internal data class HistoryScreenState(
     val sessions: List<WorkoutSession>,
     val selectedSessionId: String? = sessions.firstOrNull()?.id,
+    val modeFilter: HistoryModeFilter = HistoryModeFilter.ALL,
+    val statusFilter: HistoryStatusFilter = HistoryStatusFilter.ALL,
     val recordSource: HistoryRecordSource = HistoryRecordSource.PERSISTED,
     val pendingCleanupTarget: HistoryCleanupTarget? = null,
     val statusMessage: String? = null
 ) {
     val isEmpty: Boolean = sessions.isEmpty()
 
+    val filteredSessions: List<WorkoutSession>
+        get() = sessions.filter { session ->
+            modeFilter.matches(session) && statusFilter.matches(session)
+        }
+
+    val filtersUiState: HistoryFiltersUiState
+        get() = toFiltersUiState()
+
     val dateGroups: List<HistoryDateGroupUiState>
-        get() = sessions
+        get() = filteredSessions
             .sortedByDescending { session -> session.dateKey }
             .groupBy { session -> session.dateKey }
             .map { (date, sessionsOnDate) ->
@@ -57,26 +67,29 @@ internal data class HistoryScreenState(
             null
         }
 
+    val overviewUiState: HistoryOverviewUiState?
+        get() = recordStats?.toOverviewUiState()
+
     val recordStatsUiState: WorkoutRecordStatsUiState?
         get() = recordStats?.toUiState()
 
     val aggregateChartsUiState: WorkoutAggregateChartsUiState?
-        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
-            sessions.toWorkoutAggregateChartsUiState()
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && filteredSessions.isNotEmpty()) {
+            filteredSessions.toWorkoutAggregateChartsUiState()
         } else {
             null
         }
 
     val timedComparableRestTrendUiState: TimedComparableRestTrendUiState?
-        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
-            sessions.toTimedComparableRestTrendUiState()
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && filteredSessions.isNotEmpty()) {
+            filteredSessions.toTimedComparableRestTrendUiState()
         } else {
             null
         }
 
     val strengthComparableSetTrendUiState: StrengthComparableSetTrendUiState?
-        get() = if (recordSource == HistoryRecordSource.PERSISTED && sessions.isNotEmpty()) {
-            sessions.toStrengthComparableSetTrendUiState()
+        get() = if (recordSource == HistoryRecordSource.PERSISTED && filteredSessions.isNotEmpty()) {
+            filteredSessions.toStrengthComparableSetTrendUiState()
         } else {
             null
         }
@@ -113,22 +126,65 @@ internal data class HistoryScreenState(
         get() = if (isEmpty) {
             emptyStateDescription
         } else {
-            "${sessions.size} 条本地记录 · 支持按日期、详情和基础记录参考查看"
+            "${sessions.size} 条本地记录 · 先看概览，再按筛选查看最近训练、详情和趋势"
         }
 
     val boundaryNote: String
         get() = when (recordSource) {
-            HistoryRecordSource.PERSISTED -> "当前读取本地 Room session records；仍不生成自动训练建议、医疗结论或心率判断。"
+            HistoryRecordSource.PERSISTED -> "当前读取本地 Room session records；只展示已保存的训练结果，不生成结论性判断。"
             HistoryRecordSource.EXAMPLE -> "当前为 preview / 测试示例记录；生产记录页优先读取本地 Room session records。"
         }
 
     private val selectedSession: WorkoutSession?
-        get() = sessions.firstOrNull { session -> session.id == selectedSessionId } ?: sessions.firstOrNull()
+        get() = filteredSessions.firstOrNull { session -> session.id == selectedSessionId } ?: filteredSessions.firstOrNull()
 }
 
 internal enum class HistoryRecordSource {
     PERSISTED,
     EXAMPLE
+}
+
+internal enum class HistoryModeFilter(
+    val label: String,
+    val helper: String
+) {
+    ALL("全部类型", "timed / strength / follow-along"),
+    TIMED("计时", "legacy timed 与 composition v2 分开解释"),
+    STRENGTH("力量", "只看力量组记录与同类 set"),
+    FOLLOW_ALONG("跟练", "首版跟练记录保持基础说明");
+
+    fun matches(session: WorkoutSession): Boolean {
+        return when (this) {
+            ALL -> true
+            TIMED -> session.mode == WorkoutMode.TIMED
+            STRENGTH -> session.mode == WorkoutMode.STRENGTH
+            FOLLOW_ALONG -> session.mode == WorkoutMode.FOLLOW_ALONG
+        }
+    }
+}
+
+internal enum class HistoryStatusFilter(
+    val label: String,
+    val helper: String
+) {
+    ALL("全部状态", "completed 与 abandoned 都保留"),
+    COMPLETED("已完成", "正常完成的训练"),
+    ABANDONED("提前结束", "abandoned 仍参与记录回顾");
+
+    fun matches(session: WorkoutSession): Boolean {
+        return when (this) {
+            ALL -> true
+            COMPLETED -> session.status == SessionStatus.COMPLETED
+            ABANDONED -> session.status == SessionStatus.ABANDONED
+        }
+    }
+}
+
+internal enum class HistoryTone {
+    SUCCESS,
+    WARNING,
+    INFO,
+    NEUTRAL
 }
 
 internal sealed interface HistoryCleanupTarget {
@@ -175,6 +231,44 @@ internal data class HistoryCleanupConfirmationResult(
     val target: HistoryCleanupTarget?
 )
 
+internal data class HistoryOverviewUiState(
+    val title: String,
+    val description: String,
+    val metrics: List<HistoryOverviewMetricUiState>
+)
+
+internal data class HistoryOverviewMetricUiState(
+    val label: String,
+    val value: String,
+    val helper: String,
+    val tone: HistoryTone = HistoryTone.NEUTRAL
+)
+
+internal data class HistoryFiltersUiState(
+    val title: String,
+    val description: String,
+    val modeOptions: List<HistoryModeFilterOptionUiState>,
+    val statusOptions: List<HistoryStatusFilterOptionUiState>,
+    val resultLabel: String,
+    val emptyMessage: String?
+)
+
+internal data class HistoryModeFilterOptionUiState(
+    val filter: HistoryModeFilter,
+    val label: String,
+    val helper: String,
+    val count: Int,
+    val selected: Boolean
+)
+
+internal data class HistoryStatusFilterOptionUiState(
+    val filter: HistoryStatusFilter,
+    val label: String,
+    val helper: String,
+    val count: Int,
+    val selected: Boolean
+)
+
 internal data class HistoryDateGroupUiState(
     val dateLabel: String,
     val items: List<HistorySessionListItemUiState>
@@ -187,9 +281,16 @@ internal data class HistorySessionListItemUiState(
     val modeLabel: String,
     val title: String,
     val statusLabel: String,
+    val statusTone: HistoryTone,
     val durationLabel: String,
     val keySummary: String,
+    val flags: List<HistorySessionFlagUiState>,
     val selected: Boolean
+)
+
+internal data class HistorySessionFlagUiState(
+    val label: String,
+    val tone: HistoryTone = HistoryTone.NEUTRAL
 )
 
 internal data class HistorySessionDetailUiState(
@@ -243,11 +344,45 @@ internal data class AggregateTrendChartUiState(
     val description: String,
     val dateLabels: List<String>,
     val series: List<AggregateTrendSeriesUiState>,
-    val emptyMessage: String? = null
+    val emptyMessage: String? = null,
+    val xAxisLabel: String = "X 轴：startedAt 日期",
+    val yAxisLabel: String = "Y 轴：数值",
+    val unitLabel: String = "",
+    val stateLabel: String? = null
 ) {
     val hasDrawableTrend: Boolean
         get() = emptyMessage == null && dateLabels.size >= 2 && series.any { trendSeries ->
             trendSeries.points.size >= 2
+        }
+
+    val legendRows: List<AggregateTrendLegendRowUiState>
+        get() = series.map { trendSeries ->
+            AggregateTrendLegendRowUiState(
+                label = trendSeries.label,
+                latestValue = trendSeries.points.lastOrNull()?.valueLabel.orEmpty()
+            )
+        }
+
+    val yAxisTickLabels: List<String>
+        get() {
+            val maxValue = series.flatMap { trendSeries -> trendSeries.points }
+                .maxOfOrNull { point -> point.value }
+                ?.coerceAtLeast(0)
+                ?: 0
+            if (maxValue == 0) return listOf("0$unitLabel")
+            val midpoint = maxValue / 2
+            return listOf(
+                "0$unitLabel",
+                midpoint.axisValueLabel(unitLabel),
+                maxValue.axisValueLabel(unitLabel)
+            )
+        }
+
+    val xAxisTickLabels: List<String>
+        get() = when {
+            dateLabels.isEmpty() -> emptyList()
+            dateLabels.size == 1 -> dateLabels
+            else -> listOf(dateLabels.first(), dateLabels.last())
         }
 }
 
@@ -260,6 +395,11 @@ internal data class AggregateTrendPointUiState(
     val dateLabel: String,
     val value: Int,
     val valueLabel: String
+)
+
+internal data class AggregateTrendLegendRowUiState(
+    val label: String,
+    val latestValue: String
 )
 
 internal data class ModeBreakdownChartUiState(
@@ -293,6 +433,7 @@ internal data class BasicTrendRowUiState(
 internal data class TimedComparableRestTrendUiState(
     val title: String,
     val description: String,
+    val groupingRows: List<TrendGroupingExplanationUiState>,
     val groups: List<TimedComparableRestTrendGroupUiState>,
     val dataQualityRows: List<TimedComparableRestDataQualityRowUiState>,
     val emptyMessage: String? = null
@@ -321,9 +462,15 @@ internal data class TimedComparableRestDataQualityRowUiState(
 internal data class StrengthComparableSetTrendUiState(
     val title: String,
     val description: String,
+    val groupingRows: List<TrendGroupingExplanationUiState>,
     val groups: List<StrengthComparableSetTrendGroupUiState>,
     val dataQualityRows: List<StrengthComparableSetDataQualityRowUiState>,
     val emptyMessage: String? = null
+)
+
+internal data class TrendGroupingExplanationUiState(
+    val label: String,
+    val helper: String
 )
 
 internal data class StrengthComparableSetTrendGroupUiState(
@@ -363,6 +510,14 @@ internal fun buildHistoryScreenState(sessions: List<WorkoutSession>): HistoryScr
 internal fun HistoryScreenState.selectSession(sessionId: String): HistoryScreenState {
     if (sessions.none { session -> session.id == sessionId }) return this
     return copy(selectedSessionId = sessionId)
+}
+
+internal fun HistoryScreenState.applyModeFilter(filter: HistoryModeFilter): HistoryScreenState {
+    return copy(modeFilter = filter)
+}
+
+internal fun HistoryScreenState.applyStatusFilter(filter: HistoryStatusFilter): HistoryScreenState {
+    return copy(statusFilter = filter)
 }
 
 internal fun HistoryScreenState.requestCleanup(target: HistoryCleanupTarget): HistoryScreenState {
@@ -498,9 +653,45 @@ private fun WorkoutSession.toListItem(selected: Boolean): HistorySessionListItem
         modeLabel = mode.modeLabel,
         title = planSnapshot.title,
         statusLabel = status.statusLabel,
+        statusTone = status.statusTone,
         durationLabel = durationSec().formatDuration(),
         keySummary = keySummary(),
+        flags = sessionFlags(),
         selected = selected
+    )
+}
+
+private fun HistoryScreenState.toFiltersUiState(): HistoryFiltersUiState {
+    val filteredCount = filteredSessions.size
+    val modeOptions = HistoryModeFilter.entries.map { filter ->
+        HistoryModeFilterOptionUiState(
+            filter = filter,
+            label = filter.label,
+            helper = filter.helper,
+            count = sessions.count { session -> filter.matches(session) },
+            selected = filter == modeFilter
+        )
+    }
+    val statusOptions = HistoryStatusFilter.entries.map { filter ->
+        HistoryStatusFilterOptionUiState(
+            filter = filter,
+            label = filter.label,
+            helper = filter.helper,
+            count = sessions.count { session -> modeFilter.matches(session) && filter.matches(session) },
+            selected = filter == statusFilter
+        )
+    }
+    return HistoryFiltersUiState(
+        title = "筛选",
+        description = "筛选只影响最近训练、选中详情和下方趋势；概览摘要始终展示全部本地记录。",
+        modeOptions = modeOptions,
+        statusOptions = statusOptions,
+        resultLabel = "当前筛选 $filteredCount / ${sessions.size} 条记录",
+        emptyMessage = if (sessions.isNotEmpty() && filteredCount == 0) {
+            "当前筛选没有匹配训练；不会补假记录或假趋势。"
+        } else {
+            null
+        }
     )
 }
 
@@ -546,7 +737,43 @@ private fun WorkoutSession.timedDetailRows(): List<HistorySummaryRowUiState> {
         HistorySummaryRowUiState("完成步骤", "$completedSteps / ${plannedSteps.coerceAtLeast(completedSteps + skippedSteps)}", "包含热身、拉伸或计时步骤记录"),
         HistorySummaryRowUiState("跳过内容", "$skippedSteps 步", if (skippedSteps == 0) "没有跳过内容" else "仅记录跳过事实，不做表现判断")
     )
-    return baseRows + timedCompositionDetailRows()
+    return baseRows + timedLegacyDetailRows() + timedCompositionDetailRows()
+}
+
+private fun WorkoutSession.timedLegacyDetailRows(): List<HistorySummaryRowUiState> {
+    val legacyBlocks = planSnapshot.blocks.filterIsInstance<TimedCircuitBlock>()
+    if (legacyBlocks.isEmpty()) return emptyList()
+    val circuitCount = legacyBlocks.size
+    val workStepCount = legacyBlocks.sumOf { block ->
+        block.items.count { item -> item.stageType != TimedStageType.REST && item.workDurationSec > 0 } *
+            block.rounds.coerceAtLeast(0)
+    }
+    val restStepCount = legacyBlocks.sumOf { block ->
+        val itemRestCount = block.items.count { item ->
+            item.stageType == TimedStageType.REST && item.workDurationSec > 0 ||
+                item.stageType != TimedStageType.REST && (item.restAfterSec ?: 0) > 0
+        } * block.rounds.coerceAtLeast(0)
+        val roundRestCount = if ((block.restBetweenRoundsSec ?: 0) > 0) {
+            (block.rounds - 1).coerceAtLeast(0)
+        } else {
+            0
+        }
+        itemRestCount + roundRestCount
+    }
+    val structure = legacyBlocks.joinToString("；") { block ->
+        val stages = block.items.joinToString(" / ") { item ->
+            val rest = item.restAfterSec?.takeIf { sec -> sec > 0 }?.let { sec -> " + 休息 ${sec.formatDuration()}" }.orEmpty()
+            "${item.stageTitle()} ${item.workDurationSec.formatDuration()}$rest"
+        }
+        "${block.rounds} 轮 · $stages"
+    }
+    return listOf(
+        HistorySummaryRowUiState(
+            label = "legacy timed 解释",
+            value = "$circuitCount 个 TimedCircuitBlock · work $workStepCount · rest $restStepCount",
+            helper = "按 legacy step/rest 顺序解释：$structure"
+        )
+    )
 }
 
 private data class TimedCompositionExpandedBlock(
@@ -657,6 +884,7 @@ private fun WorkoutSession.strengthDetailRows(): List<HistorySummaryRowUiState> 
     val totalReps = strengthSetRecords.sumOf { record -> record.actualReps ?: 0 }
     val totalLoad = strengthSetRecords.totalLoadKg()
     val replaced = strengthSetRecords.count { record -> record.substitutedFromExerciseId != null }
+    val actionSummary = strengthSetRecords.toStrengthActionSummary()
     return listOf(
         HistorySummaryRowUiState("总用时", durationSec().formatDuration(), "来自 totalElapsedSec；缺失时回退组记录"),
         HistorySummaryRowUiState("有效训练时间", effectiveDurationSec().formatDuration(), "来自 effectiveElapsedSec；力量训练不把暂停计入有效时间"),
@@ -664,6 +892,7 @@ private fun WorkoutSession.strengthDetailRows(): List<HistorySummaryRowUiState> 
         HistorySummaryRowUiState("计划休息", plannedRestSec().formatDuration(), "来自本次训练保存的 plan snapshot"),
         HistorySummaryRowUiState("实际休息", actualRestSec().formatDuration(), "来自 strength set records 的 actualRestAfterSec"),
         HistorySummaryRowUiState("确认组数", "${strengthSetRecords.size} / $plannedSets", "计划值和实际值保持区分"),
+        HistorySummaryRowUiState("动作与组", actionSummary.first, actionSummary.second),
         HistorySummaryRowUiState("总次数", "$totalReps 次", "来自已确认 strength set records"),
         HistorySummaryRowUiState("训练容量", totalLoad.formatLoad(), "按实际重量 * 实际次数轻量汇总"),
         HistorySummaryRowUiState("替换记录", "$replaced 组", "只记录替换来源，不生成自动建议")
@@ -675,18 +904,57 @@ private fun WorkoutSession.keySummary(): String {
         WorkoutMode.TIMED -> {
             val completed = stepHistory.count { record -> !record.skipped }
             val skipped = stepHistory.count { record -> record.skipped }
-            "完成 $completed 步 · 跳过 $skipped 步"
+            val extra = extraRestSec().takeIf { sec -> sec > 0 }?.let { sec -> " · 额外休息 +${sec.formatDuration()}" }.orEmpty()
+            "完成 $completed 步 · 跳过 $skipped 步$extra"
         }
 
         WorkoutMode.STRENGTH -> {
             val setCount = strengthSetRecords.size
             val reps = strengthSetRecords.sumOf { record -> record.actualReps ?: 0 }
             val replaced = strengthSetRecords.count { record -> record.substitutedFromExerciseId != null }
-            "确认 $setCount 组 · $reps 次 · 替换 $replaced 组"
+            val rest = actualRestSec().takeIf { sec -> sec > 0 }?.let { sec -> " · 休息 ${sec.formatDuration()}" }.orEmpty()
+            "确认 $setCount 组 · $reps 次 · 替换 $replaced 组$rest"
         }
 
         WorkoutMode.FOLLOW_ALONG -> "跟练历史后续接入"
     }
+}
+
+private fun WorkoutSession.sessionFlags(): List<HistorySessionFlagUiState> {
+    return buildList {
+        add(HistorySessionFlagUiState(status.statusLabel, status.statusTone))
+        val skippedSteps = stepHistory.count { record -> record.skipped }
+        if (skippedSteps > 0) {
+            add(HistorySessionFlagUiState("跳过 $skippedSteps 步", HistoryTone.WARNING))
+        }
+        val pausedSec = pausedDurationSec()
+        if (pausedSec > 0) {
+            add(HistorySessionFlagUiState("暂停 ${pausedSec.formatDuration()}", HistoryTone.INFO))
+        }
+        val extraRestSec = extraRestSec()
+        if (extraRestSec > 0) {
+            add(HistorySessionFlagUiState("额外休息 +${extraRestSec.formatDuration()}", HistoryTone.INFO))
+        }
+        val actualRestSec = actualRestSec()
+        if (actualRestSec > 0) {
+            add(HistorySessionFlagUiState("实际休息 ${actualRestSec.formatDuration()}", HistoryTone.NEUTRAL))
+        }
+    }
+}
+
+private fun List<StrengthSetRecord>.toStrengthActionSummary(): Pair<String, String> {
+    if (isEmpty()) return "暂无确认组" to "没有 strength set records；不补假动作、重量、次数或休息。"
+    val grouped = groupBy { record -> record.exerciseId }
+    val value = grouped.entries.joinToString("；") { (exerciseId, records) ->
+        "${exerciseId.exerciseName()} ${records.size} 组"
+    }
+    val helper = take(4).joinToString("；") { record ->
+        val weight = record.actualWeight.formatWeight()
+        val reps = record.actualReps?.let { reps -> "$reps 次" } ?: "未记录次数"
+        val rest = record.actualRestAfterSec?.let { sec -> "休息 ${sec.formatDuration()}" } ?: "休息未记录"
+        "第 ${record.setOrder} 组 $weight · $reps · $rest"
+    }
+    return value to helper
 }
 
 private fun List<WorkoutSession>.toWorkoutRecordStats(): WorkoutRecordStats {
@@ -709,7 +977,7 @@ private fun List<WorkoutSession>.toWorkoutRecordStats(): WorkoutRecordStats {
 private fun WorkoutRecordStats.toUiState(): WorkoutRecordStatsUiState {
     return WorkoutRecordStatsUiState(
         title = "真实记录基础统计",
-        description = "从本地 Room session records 汇总；只做总量和 mode breakdown，不做医疗判断。",
+        description = "从本地 Room session records 汇总；只做总量和 mode breakdown，不做结论性判断。",
         rows = listOf(
             HistorySummaryRowUiState(
                 "训练总次数",
@@ -733,6 +1001,24 @@ private fun WorkoutRecordStats.toUiState(): WorkoutRecordStatsUiState {
     )
 }
 
+private fun WorkoutRecordStats.toOverviewUiState(): HistoryOverviewUiState {
+    return HistoryOverviewUiState(
+        title = "概览摘要",
+        description = "全部本地训练记录的轻量总览；completed / abandoned、有效时间、暂停和额外休息分开显示。",
+        metrics = listOf(
+            HistoryOverviewMetricUiState("记录", "$totalCount 次", "全部本地 WorkoutSession"),
+            HistoryOverviewMetricUiState("completed", "$completedCount 次", "正常完成", HistoryTone.SUCCESS),
+            HistoryOverviewMetricUiState("abandoned", "$abandonedCount 次", "提前结束仍可回顾", HistoryTone.WARNING),
+            HistoryOverviewMetricUiState("总用时", totalElapsedSec.formatDuration(), "totalElapsedSec"),
+            HistoryOverviewMetricUiState("有效", effectiveElapsedSec.formatDuration(), "effectiveElapsedSec"),
+            HistoryOverviewMetricUiState("暂停", pausedElapsedSec.formatDuration(), "pausedElapsedSec", HistoryTone.INFO),
+            HistoryOverviewMetricUiState("计划休息", plannedRestSec.formatDuration(), "历史 planSnapshot"),
+            HistoryOverviewMetricUiState("实际休息", actualRestSec.formatDuration(), "step / set records"),
+            HistoryOverviewMetricUiState("额外休息", extraRestSec.formatDuration(), "timedRestExtensionRecords", HistoryTone.INFO)
+        )
+    )
+}
+
 private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggregateChartsUiState {
     val daily = toDailyAggregates()
     val notEnoughMessage = "暂无趋势；至少需要 2 个 startedAt 日期点，当前不绘制假曲线。"
@@ -740,12 +1026,16 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         title = "训练总次数趋势",
         description = "按 startedAt 日期聚合真实 WorkoutSession 数量。",
         notEnoughMessage = notEnoughMessage,
+        yAxisLabel = "Y 轴：训练次数",
+        unitLabel = "次",
         series = listOf("训练总次数" to { aggregate -> aggregate.totalCount })
     ) { value -> "$value 次" }
     val statusTrend = daily.toTrendChart(
         title = "完成 / 提前结束趋势",
         description = "completed 和 abandoned 分开显示，不合并为单一状态。",
         notEnoughMessage = notEnoughMessage,
+        yAxisLabel = "Y 轴：记录数",
+        unitLabel = "次",
         series = listOf(
             "completed" to { aggregate -> aggregate.completedCount },
             "abandoned" to { aggregate -> aggregate.abandonedCount }
@@ -755,6 +1045,8 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         title = "用时趋势",
         description = "totalElapsedSec、effectiveElapsedSec 和 pausedElapsedSec 分开统计。",
         notEnoughMessage = notEnoughMessage,
+        yAxisLabel = "Y 轴：时间",
+        unitLabel = "秒",
         series = listOf(
             "总用时" to { aggregate -> aggregate.totalElapsedSec },
             "有效训练时间" to { aggregate -> aggregate.effectiveElapsedSec },
@@ -765,6 +1057,8 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         title = "休息趋势",
         description = "planned rest 来自历史 planSnapshot；actual rest 来自执行记录；extra rest 独立显示。",
         notEnoughMessage = notEnoughMessage,
+        yAxisLabel = "Y 轴：休息时间",
+        unitLabel = "秒",
         series = listOf(
             "计划休息" to { aggregate -> aggregate.plannedRestSec },
             "实际休息" to { aggregate -> aggregate.actualRestSec },
@@ -772,7 +1066,7 @@ private fun List<WorkoutSession>.toWorkoutAggregateChartsUiState(): WorkoutAggre
         )
     ) { value -> value.formatDuration() }
     return WorkoutAggregateChartsUiState(
-        title = "非心率图表与聚合趋势",
+        title = "记录图表与聚合趋势",
         description = "只消费真实持久化 session list；统计和图表不回写历史计划、session 或 plan snapshot。",
         pointCount = daily.size,
         countTrend = countTrend,
@@ -810,6 +1104,16 @@ private fun List<WorkoutSession>.toTimedComparableRestTrendUiState(): TimedCompa
     return TimedComparableRestTrendUiState(
         title = "计时同类阶段与额外休息趋势",
         description = "legacy timed 与 composition v2 使用分离 trend key；只比较同一历史计划结构下的计时休息阶段，planned rest 来自 planSnapshot，actual rest 来自 step records，extra rest 只来自 timedRestExtensionRecords.addedSec。",
+        groupingRows = listOf(
+            TrendGroupingExplanationUiState(
+                label = TimedTrendKeyFamily.LEGACY_TIMED.contractValue,
+                helper = "legacy TimedCircuitBlock / TimedExerciseItem 只按 legacy step/rest、轮次、顺序和前序阶段比较。"
+            ),
+            TrendGroupingExplanationUiState(
+                label = TimedTrendKeyFamily.TIMED_COMPOSITION.contractValue,
+                helper = "composition v2 先由 TimedCompositionTimelineAdapter 从历史 planSnapshot 展开 stageGroup / target / boundary rest，再按 v2 key 比较；不与 legacy overlay。"
+            )
+        ),
         groups = comparableGroups,
         dataQualityRows = fallbackRows,
         emptyMessage = if (comparableGroups.isEmpty()) {
@@ -1339,6 +1643,12 @@ private fun List<WorkoutSession>.toStrengthComparableSetTrendUiState(): Strength
     return StrengthComparableSetTrendUiState(
         title = "力量同类 set 趋势",
         description = "只比较同一 exerciseId 下的真实 strength set records；优先用 sourceSetPlanId，同类来源缺失时才降级到 setOrder + setKind。planned 与 actual 分开展示，不输出强弱判断或加重量建议。",
+        groupingRows = listOf(
+            TrendGroupingExplanationUiState(
+                label = "strength_comparable_set",
+                helper = "同一 exerciseId + sourceSetPlanId 优先；sourceSetPlanId 缺失时才用 setOrder + setKind，替换动作保持独立标注。"
+            )
+        ),
         groups = comparableGroups,
         dataQualityRows = dataQualityRows,
         emptyMessage = if (comparableGroups.isEmpty()) {
@@ -1586,7 +1896,7 @@ private fun List<WorkoutSession>.toHistoryCleanupUiState(): HistoryCleanupUiStat
         }
     return HistoryCleanupUiState(
         title = "历史记录清理",
-        description = "只清理真实本地 WorkoutSession 记录；不会删除训练计划、动作库、fixture、preview 或心率来源。",
+        description = "只清理真实本地 WorkoutSession 记录；不会删除训练计划、动作库、fixture 或 preview 数据。",
         allOption = HistoryCleanupOptionUiState(
             label = "清除全部历史",
             helper = "$size 条本地 WorkoutSession；基础统计和图表会随剩余记录自动刷新。",
@@ -1658,6 +1968,8 @@ private fun List<DailyWorkoutAggregate>.toTrendChart(
     title: String,
     description: String,
     notEnoughMessage: String,
+    yAxisLabel: String,
+    unitLabel: String,
     series: List<Pair<String, (DailyWorkoutAggregate) -> Int>>,
     valueLabel: (Int) -> String
 ): AggregateTrendChartUiState {
@@ -1668,13 +1980,18 @@ private fun List<DailyWorkoutAggregate>.toTrendChart(
             description = description,
             dateLabels = dateLabels,
             series = emptyList(),
-            emptyMessage = notEnoughMessage
+            emptyMessage = notEnoughMessage,
+            yAxisLabel = yAxisLabel,
+            unitLabel = unitLabel,
+            stateLabel = if (dateLabels.isEmpty()) "空状态" else "数据不足"
         )
     }
     return AggregateTrendChartUiState(
         title = title,
         description = description,
         dateLabels = dateLabels,
+        yAxisLabel = yAxisLabel,
+        unitLabel = unitLabel,
         series = series.map { (label, selector) ->
             AggregateTrendSeriesUiState(
                 label = label,
@@ -1910,6 +2227,15 @@ private val SessionStatus.statusLabel: String
         SessionStatus.PAUSED -> "已暂停"
     }
 
+private val SessionStatus.statusTone: HistoryTone
+    get() = when (this) {
+        SessionStatus.COMPLETED -> HistoryTone.SUCCESS
+        SessionStatus.ABANDONED -> HistoryTone.WARNING
+        SessionStatus.READY,
+        SessionStatus.ACTIVE,
+        SessionStatus.PAUSED -> HistoryTone.INFO
+    }
+
 private fun WorkoutSession.durationSec(): Int {
     totalElapsedSec?.let { elapsed -> return elapsed.coerceAtLeast(0) }
     return when (mode) {
@@ -2081,4 +2407,12 @@ private fun Int.percentLabel(count: Int): String {
     if (this <= 0) return "0%"
     val percent = count * 100 / this
     return "$percent%"
+}
+
+private fun Int.axisValueLabel(unitLabel: String): String {
+    return if (unitLabel.isBlank()) {
+        toString()
+    } else {
+        "$this$unitLabel"
+    }
 }

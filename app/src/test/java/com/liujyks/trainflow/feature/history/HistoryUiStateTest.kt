@@ -1726,6 +1726,290 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun overviewSummaryIncludesCompletionElapsedPauseAndRestExtensionMetrics() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                timedSession(
+                    id = "overview-timed-abandoned",
+                    status = SessionStatus.ABANDONED,
+                    totalElapsedSec = 100,
+                    effectiveElapsedSec = 80,
+                    pausedElapsedSec = 20,
+                    actualRestSec = 25,
+                    extraRestAdds = listOf(15),
+                    plannedRestSec = 30
+                ),
+                strengthSession(
+                    id = "overview-strength-completed",
+                    status = SessionStatus.COMPLETED,
+                    startedAt = "2026-06-09T10:00:00Z",
+                    records = emptyList(),
+                    totalElapsedSec = 50,
+                    effectiveElapsedSec = 45,
+                    pausedElapsedSec = 5
+                )
+            )
+        )
+
+        val metrics = requireNotNull(state.overviewUiState).metrics.associateBy { metric -> metric.label }
+
+        assertEquals("2 次", requireNotNull(metrics["记录"]).value)
+        assertEquals("1 次", requireNotNull(metrics["completed"]).value)
+        assertEquals("1 次", requireNotNull(metrics["abandoned"]).value)
+        assertEquals("2分30秒", requireNotNull(metrics["总用时"]).value)
+        assertEquals("2分5秒", requireNotNull(metrics["有效"]).value)
+        assertEquals("25秒", requireNotNull(metrics["暂停"]).value)
+        assertEquals("15秒", requireNotNull(metrics["额外休息"]).value)
+    }
+
+    @Test
+    fun filterStatesProduceExpectedRecentSessionGroups() {
+        val state = buildDefaultHistoryScreenState()
+            .applyModeFilter(HistoryModeFilter.TIMED)
+            .applyStatusFilter(HistoryStatusFilter.ABANDONED)
+
+        val items = state.dateGroups.flatMap { group -> group.items }
+
+        assertEquals(listOf("history-timed-2026-05-27"), items.map { item -> item.id })
+        assertTrue(state.filtersUiState.resultLabel.contains("1 / 4"))
+        assertTrue(state.filtersUiState.modeOptions.single { option -> option.filter == HistoryModeFilter.TIMED }.selected)
+        assertTrue(state.filtersUiState.statusOptions.single { option -> option.filter == HistoryStatusFilter.ABANDONED }.selected)
+    }
+
+    @Test
+    fun recentListItemsExposeStatusPauseSkippedRestExtensionAndModeSummaries() {
+        val state = buildHistoryScreenState(
+            sessions = listOf(
+                comparableTimedSession(
+                    id = "recent-timed",
+                    startedAt = "2026-06-10T09:00:00Z",
+                    actualRestSec = 20,
+                    extraRestAdds = listOf(15),
+                    pausedElapsedSec = 30
+                ),
+                defaultHistorySessions().single { session -> session.id == "history-timed-2026-05-27" },
+                comparableTimedCompositionSession(
+                    id = "recent-v2",
+                    startedAt = "2026-06-09T09:00:00Z",
+                    rounds = 1,
+                    restBetweenRoundsSec = 0,
+                    targetRestActualSec = 4
+                ),
+                strengthSession(
+                    id = "recent-strength",
+                    status = SessionStatus.COMPLETED,
+                    startedAt = "2026-06-08T10:00:00Z",
+                    records = listOf(
+                        strengthSetRecord(
+                            id = "recent-strength-set",
+                            actualWeight = WeightValue(50.0, WeightUnit.KG),
+                            actualReps = 8,
+                            actualRestAfterSec = 60
+                        )
+                    )
+                )
+            )
+        )
+
+        val items = state.dateGroups.flatMap { group -> group.items }.associateBy { item -> item.id }
+        val timed = requireNotNull(items["recent-timed"])
+        val skipped = requireNotNull(items["history-timed-2026-05-27"])
+        val v2 = requireNotNull(items["recent-v2"])
+        val strength = requireNotNull(items["recent-strength"])
+
+        assertTrue(timed.flags.any { flag -> flag.label == "暂停 30秒" })
+        assertTrue(timed.flags.any { flag -> flag.label == "额外休息 +15秒" })
+        assertTrue(skipped.flags.any { flag -> flag.label.contains("跳过") })
+        assertEquals("计时训练", v2.modeLabel)
+        assertTrue(strength.keySummary.contains("确认 1 组"))
+        assertTrue(strength.flags.any { flag -> flag.label == "实际休息 1分" })
+    }
+
+    @Test
+    fun selectedDetailsDistinguishLegacyTimedV2CompositionAndStrength() {
+        val legacy = comparableTimedSession(
+            id = "detail-legacy",
+            startedAt = "2026-06-10T09:00:00Z",
+            actualRestSec = 20
+        )
+        val v2 = comparableTimedCompositionSession(
+            id = "detail-v2",
+            startedAt = "2026-06-09T09:00:00Z",
+            rounds = 2,
+            restBetweenRoundsSec = 6,
+            targetRestActualSec = 4,
+            betweenRoundRestActualSec = 6
+        )
+        val strength = strengthSession(
+            id = "detail-strength",
+            status = SessionStatus.COMPLETED,
+            startedAt = "2026-06-08T10:00:00Z",
+            records = listOf(
+                strengthSetRecord(
+                    id = "detail-strength-set",
+                    actualWeight = WeightValue(50.0, WeightUnit.KG),
+                    actualReps = 8,
+                    actualRestAfterSec = 60
+                )
+            ),
+            plannedSetCount = 1
+        )
+
+        val baseState = buildHistoryScreenState(listOf(legacy, v2, strength))
+
+        val legacyRows = requireNotNull(baseState.selectSession("detail-legacy").selectedDetail).rows.associateBy { row -> row.label }
+        val v2Rows = requireNotNull(baseState.selectSession("detail-v2").selectedDetail).rows.associateBy { row -> row.label }
+        val strengthRows = requireNotNull(baseState.selectSession("detail-strength").selectedDetail).rows.associateBy { row -> row.label }
+
+        assertTrue(requireNotNull(legacyRows["legacy timed 解释"]).helper.contains("legacy step/rest"))
+        assertTrue(requireNotNull(v2Rows["v2 阶段 / 目标"]).helper.contains("stageGroupId"))
+        assertTrue(requireNotNull(v2Rows["v2 boundary rest"]).helper.contains("between_round_rest"))
+        assertTrue(requireNotNull(strengthRows["动作与组"]).value.contains("杠铃卧推 1 组"))
+        assertTrue(requireNotNull(strengthRows["动作与组"]).helper.contains("50 kg"))
+        assertTrue(requireNotNull(strengthRows["动作与组"]).helper.contains("休息 1分"))
+    }
+
+    @Test
+    fun chartStateExposesAxesUnitsLegendEmptyAndInsufficientStates() {
+        val drawableCharts = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "chart-one",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    ),
+                    timedSession(
+                        id = "chart-two",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-09T09:00:00Z",
+                        totalElapsedSec = 50,
+                        effectiveElapsedSec = 50,
+                        pausedElapsedSec = 0,
+                        actualRestSec = 10,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 10
+                    )
+                )
+            ).aggregateChartsUiState
+        )
+        val countTrend = drawableCharts.countTrend
+
+        assertEquals("X 轴：startedAt 日期", countTrend.xAxisLabel)
+        assertEquals("Y 轴：训练次数", countTrend.yAxisLabel)
+        assertEquals("次", countTrend.unitLabel)
+        assertEquals(listOf("2026-06-08", "2026-06-09"), countTrend.xAxisTickLabels)
+        assertEquals("训练总次数", countTrend.legendRows.single().label)
+        assertEquals("1 次", countTrend.legendRows.single().latestValue)
+
+        val insufficient = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "chart-insufficient",
+                        status = SessionStatus.COMPLETED,
+                        startedAt = "2026-06-08T09:00:00Z",
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    )
+                )
+            ).aggregateChartsUiState
+        ).countTrend
+
+        assertEquals("数据不足", insufficient.stateLabel)
+        assertFalse(insufficient.hasDrawableTrend)
+        assertTrue(requireNotNull(insufficient.emptyMessage).contains("不绘制假曲线"))
+
+        val empty = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    timedSession(
+                        id = "chart-empty",
+                        status = SessionStatus.COMPLETED,
+                        totalElapsedSec = 100,
+                        effectiveElapsedSec = 80,
+                        pausedElapsedSec = 20,
+                        actualRestSec = 25,
+                        extraRestAdds = emptyList(),
+                        plannedRestSec = 30
+                    ).copy(startedAt = null, endedAt = null)
+                )
+            ).aggregateChartsUiState
+        ).countTrend
+
+        assertEquals("空状态", empty.stateLabel)
+        assertTrue(empty.xAxisTickLabels.isEmpty())
+        assertTrue(requireNotNull(empty.emptyMessage).contains("至少需要 2 个 startedAt 日期点"))
+    }
+
+    @Test
+    fun trendGroupingExplanationsKeepLegacyV2AndStrengthSeparate() {
+        val timedTrend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableTimedSession(
+                        id = "group-legacy-one",
+                        startedAt = "2026-06-08T09:00:00Z",
+                        actualRestSec = 20
+                    ),
+                    comparableTimedSession(
+                        id = "group-legacy-two",
+                        startedAt = "2026-06-09T09:00:00Z",
+                        actualRestSec = 24
+                    ),
+                    comparableTimedCompositionSession(
+                        id = "group-v2-one",
+                        startedAt = "2026-06-10T09:00:00Z",
+                        rounds = 1,
+                        restBetweenRoundsSec = 0,
+                        targetRestActualSec = 4
+                    ),
+                    comparableTimedCompositionSession(
+                        id = "group-v2-two",
+                        startedAt = "2026-06-11T09:00:00Z",
+                        rounds = 1,
+                        restBetweenRoundsSec = 0,
+                        targetRestActualSec = 5
+                    )
+                )
+            ).timedComparableRestTrendUiState
+        )
+        val strengthTrend = requireNotNull(
+            buildHistoryScreenState(
+                sessions = listOf(
+                    comparableStrengthSession(
+                        id = "group-strength-one",
+                        startedAt = "2026-06-08T18:00:00Z",
+                        actualKg = 60.0
+                    ),
+                    comparableStrengthSession(
+                        id = "group-strength-two",
+                        startedAt = "2026-06-09T18:00:00Z",
+                        actualKg = 62.5
+                    )
+                )
+            ).strengthComparableSetTrendUiState
+        )
+
+        assertEquals(listOf("legacy_timed", "timed_composition_v2"), timedTrend.groupingRows.map { row -> row.label })
+        assertTrue(timedTrend.groupingRows.single { row -> row.label == "timed_composition_v2" }.helper.contains("stageGroup / target / boundary rest"))
+        assertTrue(timedTrend.groups.any { group -> group.ruleLabel.contains("legacy timed") })
+        assertTrue(timedTrend.groups.any { group -> group.ruleLabel.contains("composition v2") })
+        assertEquals(listOf("strength_comparable_set"), strengthTrend.groupingRows.map { row -> row.label })
+        assertTrue(strengthTrend.groupingRows.single().helper.contains("sourceSetPlanId"))
+    }
+
+    @Test
     fun historyCopyDoesNotUseMedicalOrOverConclusiveLanguage() {
         val state = buildDefaultHistoryScreenState()
         val realTimedState = buildHistoryScreenState(
@@ -1762,10 +2046,31 @@ class HistoryUiStateTest {
             state.dateGroups.flatMap { group -> group.items }.forEach { item ->
                 append(item.keySummary)
                 append(item.statusLabel)
+                item.flags.forEach { flag -> append(flag.label) }
             }
             state.selectedDetail?.rows?.forEach { row ->
                 append(row.helper)
                 append(row.value)
+            }
+            state.overviewUiState?.let { overview ->
+                append(overview.title)
+                append(overview.description)
+                overview.metrics.forEach { metric ->
+                    append(metric.label)
+                    append(metric.value)
+                    append(metric.helper)
+                }
+            }
+            append(state.filtersUiState.title)
+            append(state.filtersUiState.description)
+            append(state.filtersUiState.resultLabel)
+            state.filtersUiState.modeOptions.forEach { option ->
+                append(option.label)
+                append(option.helper)
+            }
+            state.filtersUiState.statusOptions.forEach { option ->
+                append(option.label)
+                append(option.helper)
             }
             append(state.actionTrend.title)
             append(state.actionTrend.description)
@@ -1790,6 +2095,10 @@ class HistoryUiStateTest {
             realTimedState.timedComparableRestTrendUiState?.let { trend ->
                 append(trend.title)
                 append(trend.description)
+                trend.groupingRows.forEach { row ->
+                    append(row.label)
+                    append(row.helper)
+                }
                 trend.groups.forEach { group ->
                     append(group.title)
                     append(group.ruleLabel)
@@ -1805,6 +2114,10 @@ class HistoryUiStateTest {
             realStrengthState.strengthComparableSetTrendUiState?.let { trend ->
                 append(trend.title)
                 append(trend.description)
+                trend.groupingRows.forEach { row ->
+                    append(row.label)
+                    append(row.helper)
+                }
                 trend.groups.forEach { group ->
                     append(group.title)
                     append(group.ruleLabel)

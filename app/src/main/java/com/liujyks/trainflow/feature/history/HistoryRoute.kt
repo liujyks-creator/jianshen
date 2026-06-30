@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,10 +35,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.WorkoutSession
@@ -69,6 +74,12 @@ internal fun HistoryRoute(
         onSelectSession = { sessionId ->
             uiState = uiState.selectSession(sessionId)
         },
+        onSelectModeFilter = { filter ->
+            uiState = uiState.applyModeFilter(filter)
+        },
+        onSelectStatusFilter = { filter ->
+            uiState = uiState.applyStatusFilter(filter)
+        },
         onRequestCleanup = { target ->
             uiState = uiState.requestCleanup(target)
         },
@@ -93,6 +104,8 @@ internal fun HistoryRoute(
 private fun HistoryScreen(
     uiState: HistoryScreenState,
     onSelectSession: (String) -> Unit,
+    onSelectModeFilter: (HistoryModeFilter) -> Unit,
+    onSelectStatusFilter: (HistoryStatusFilter) -> Unit,
     onRequestCleanup: (HistoryCleanupTarget) -> Unit,
     onConfirmCleanup: () -> Unit,
     onCancelCleanup: () -> Unit,
@@ -120,60 +133,111 @@ private fun HistoryScreen(
                 EmptyHistoryCard(uiState)
             }
         } else {
-            uiState.recordStatsUiState?.let { stats ->
+            uiState.overviewUiState?.let { overview ->
                 item {
-                    SectionTitle("基础统计")
+                    SectionTitle("概览摘要")
                 }
                 item {
-                    StatsCard(stats)
-                }
-            }
-
-            uiState.aggregateChartsUiState?.let { charts ->
-                item {
-                    SectionTitle("聚合趋势")
-                }
-                item {
-                    AggregateChartsHeader(charts)
-                }
-                item {
-                    TrendChartCard(charts.countTrend)
-                }
-                item {
-                    TrendChartCard(charts.statusTrend)
-                }
-                item {
-                    TrendChartCard(charts.elapsedTrend)
-                }
-                item {
-                    TrendChartCard(charts.restTrend)
-                }
-                item {
-                    ModeBreakdownCard(charts.modeBreakdown)
+                    OverviewSummaryCard(overview)
                 }
             }
 
-            uiState.timedComparableRestTrendUiState?.let { trend ->
-                item {
-                    SectionTitle("计时同类阶段")
-                }
-                item {
-                    TimedComparableRestTrendCard(trend)
-                }
+            item {
+                SectionTitle("筛选区")
+            }
+            item {
+                HistoryFiltersCard(
+                    filters = uiState.filtersUiState,
+                    onSelectModeFilter = onSelectModeFilter,
+                    onSelectStatusFilter = onSelectStatusFilter
+                )
             }
 
-            uiState.strengthComparableSetTrendUiState?.let { trend ->
+            if (uiState.filteredSessions.isEmpty()) {
                 item {
-                    SectionTitle("力量同类 set")
+                    FilteredEmptyCard(uiState.filtersUiState)
+                }
+            } else {
+                item {
+                    SectionTitle("最近训练")
+                }
+                uiState.dateGroups.forEach { group ->
+                    item {
+                        DateGroupHeader(group.dateLabel)
+                    }
+                    items(group.items, key = { item -> item.id }) { item ->
+                        HistorySessionCard(
+                            item = item,
+                            onClick = { onSelectSession(item.id) }
+                        )
+                    }
+                }
+
+                uiState.selectedDetail?.let { detail ->
+                    item {
+                        SectionTitle("选中训练详情")
+                    }
+                    item {
+                        HistoryDetailCard(detail)
+                    }
+                }
+
+                uiState.aggregateChartsUiState?.let { charts ->
+                    item {
+                        SectionTitle("趋势区")
+                    }
+                    item {
+                        AggregateChartsHeader(charts)
+                    }
+                    item {
+                        TrendChartCard(charts.countTrend)
+                    }
+                    item {
+                        TrendChartCard(charts.statusTrend)
+                    }
+                    item {
+                        TrendChartCard(charts.elapsedTrend)
+                    }
+                    item {
+                        TrendChartCard(charts.restTrend)
+                    }
+                    item {
+                        ModeBreakdownCard(charts.modeBreakdown)
+                    }
+                }
+
+                uiState.timedComparableRestTrendUiState?.let { trend ->
+                    item {
+                        SectionTitle("计时趋势分组")
+                    }
+                    item {
+                        TimedComparableRestTrendCard(trend)
+                    }
+                }
+
+                uiState.strengthComparableSetTrendUiState?.let { trend ->
+                    item {
+                        SectionTitle("力量趋势分组")
+                    }
+                    item {
+                        StrengthComparableSetTrendCard(trend)
+                    }
+                }
+
+                item {
+                    SectionTitle("力量参考趋势")
                 }
                 item {
-                    StrengthComparableSetTrendCard(trend)
+                    TrendCard(uiState.actionTrend)
+                }
+                item {
+                    TrendCard(uiState.volumeTrend)
                 }
             }
 
             uiState.cleanupUiState?.let { cleanup ->
                 item {
-                    SectionTitle("历史清理")
+                    SectionTitle("历史管理")
                 }
                 item {
                     HistoryCleanupCard(
@@ -181,40 +245,6 @@ private fun HistoryScreen(
                         onRequestCleanup = onRequestCleanup
                     )
                 }
-            }
-
-            item {
-                SectionTitle("按日期")
-            }
-            uiState.dateGroups.forEach { group ->
-                item {
-                    DateGroupHeader(group.dateLabel)
-                }
-                items(group.items, key = { item -> item.id }) { item ->
-                    HistorySessionCard(
-                        item = item,
-                        onClick = { onSelectSession(item.id) }
-                    )
-                }
-            }
-
-            uiState.selectedDetail?.let { detail ->
-                item {
-                    SectionTitle("单次记录")
-                }
-                item {
-                    HistoryDetailCard(detail)
-                }
-            }
-
-            item {
-                SectionTitle("记录参考")
-            }
-            item {
-                TrendCard(uiState.actionTrend)
-            }
-            item {
-                TrendCard(uiState.volumeTrend)
             }
         }
     }
@@ -224,6 +254,214 @@ private fun HistoryScreen(
             dialog = dialog,
             onConfirmCleanup = onConfirmCleanup,
             onCancelCleanup = onCancelCleanup
+        )
+    }
+}
+
+@Composable
+private fun OverviewSummaryCard(overview: HistoryOverviewUiState) {
+    HistoryCard {
+        Text(
+            text = overview.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = overview.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        overview.metrics.chunked(2).forEach { rowMetrics ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                rowMetrics.forEach { metric ->
+                    OverviewMetricCell(
+                        metric = metric,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowMetrics.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewMetricCell(
+    metric: HistoryOverviewMetricUiState,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = toneColor(metric.tone).copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, toneColor(metric.tone).copy(alpha = 0.22f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = metric.label,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral700,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = metric.value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = metric.helper,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun HistoryFiltersCard(
+    filters: HistoryFiltersUiState,
+    onSelectModeFilter: (HistoryModeFilter) -> Unit,
+    onSelectStatusFilter: (HistoryStatusFilter) -> Unit
+) {
+    HistoryCard {
+        Text(
+            text = filters.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = filters.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        Text(
+            text = filters.resultLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        FilterOptionGroup(title = "类型") {
+            filters.modeOptions.forEach { option ->
+                FilterOptionButton(
+                    label = "${option.label} ${option.count}",
+                    helper = option.helper,
+                    selected = option.selected,
+                    onClick = { onSelectModeFilter(option.filter) }
+                )
+            }
+        }
+        FilterOptionGroup(title = "状态") {
+            filters.statusOptions.forEach { option ->
+                FilterOptionButton(
+                    label = "${option.label} ${option.count}",
+                    helper = option.helper,
+                    selected = option.selected,
+                    onClick = { onSelectStatusFilter(option.filter) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterOptionGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun FilterOptionButton(
+    label: String,
+    helper: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = if (selected) {
+        ButtonDefaults.buttonColors(
+            containerColor = TrainFlowPrimary,
+            contentColor = TrainFlowNeutral50
+        )
+    } else {
+        ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
+    }
+    val content: @Composable RowScope.() -> Unit = {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = helper,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (selected) TrainFlowNeutral200 else TrainFlowNeutral500,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+    if (selected) {
+        Button(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = colors,
+            content = content
+        )
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = colors,
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun FilteredEmptyCard(filters: HistoryFiltersUiState) {
+    HistoryCard {
+        Text(
+            text = "当前筛选无记录",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = filters.emptyMessage.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -396,19 +634,32 @@ private fun TrendChartCard(chart: AggregateTrendChartUiState) {
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
+        ChartAxisLabels(chart)
         if (!chart.hasDrawableTrend) {
+            chart.stateLabel?.let { stateLabel ->
+                StatusPill(
+                    text = stateLabel,
+                    color = TrainFlowNeutral100,
+                    contentColor = TrainFlowNeutral700
+                )
+            }
             Text(
                 text = chart.emptyMessage.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            TrendLineCanvas(chart)
-            chart.series.forEachIndexed { index, series ->
+            TrendLinePlot(chart)
+            Text(
+                text = "Legend · 最新值",
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral500
+            )
+            chart.legendRows.forEachIndexed { index, legend ->
                 TrendLegendRow(
                     color = chartColor(index),
-                    label = series.label,
-                    latestValue = series.points.lastOrNull()?.valueLabel.orEmpty()
+                    label = legend.label,
+                    latestValue = legend.latestValue
                 )
             }
         }
@@ -416,16 +667,80 @@ private fun TrendChartCard(chart: AggregateTrendChartUiState) {
 }
 
 @Composable
-private fun TrendLineCanvas(chart: AggregateTrendChartUiState) {
+private fun ChartAxisLabels(chart: AggregateTrendChartUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = chart.xAxisLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+        Text(
+            text = "${chart.yAxisLabel}${if (chart.unitLabel.isBlank()) "" else "（${chart.unitLabel}）"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = TrainFlowNeutral500
+        )
+    }
+}
+
+@Composable
+private fun TrendLinePlot(chart: AggregateTrendChartUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(132.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                chart.yAxisTickLabels.reversed().forEach { label ->
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TrainFlowNeutral500,
+                        maxLines = 1
+                    )
+                }
+            }
+            TrendLineCanvas(
+                chart = chart,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            chart.xAxisTickLabels.forEach { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral500,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendLineCanvas(
+    chart: AggregateTrendChartUiState,
+    modifier: Modifier = Modifier
+) {
     val maxValue = chart.series
         .flatMap { series -> series.points }
         .maxOfOrNull { point -> point.value }
         ?.coerceAtLeast(1)
         ?: 1
     Canvas(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .height(118.dp)
     ) {
         val left = 8.dp.toPx()
         val right = size.width - 8.dp.toPx()
@@ -433,6 +748,21 @@ private fun TrendLineCanvas(chart: AggregateTrendChartUiState) {
         val bottom = size.height - 20.dp.toPx()
         val chartWidth = (right - left).coerceAtLeast(1f)
         val chartHeight = (bottom - top).coerceAtLeast(1f)
+        listOf(0f, 0.5f, 1f).forEach { ratio ->
+            val y = bottom - chartHeight * ratio
+            drawLine(
+                color = TrainFlowNeutral100,
+                start = Offset(left, y),
+                end = Offset(right, y),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
+        drawLine(
+            color = TrainFlowNeutral200,
+            start = Offset(left, top),
+            end = Offset(left, bottom),
+            strokeWidth = 1.dp.toPx()
+        )
         drawLine(
             color = TrainFlowNeutral200,
             start = Offset(left, bottom),
@@ -577,6 +907,7 @@ private fun TimedComparableRestTrendCard(trend: TimedComparableRestTrendUiState)
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
+        TrendGroupingRows(trend.groupingRows)
         if (trend.groups.isEmpty()) {
             Text(
                 text = trend.emptyMessage.orEmpty(),
@@ -672,6 +1003,7 @@ private fun StrengthComparableSetTrendCard(trend: StrengthComparableSetTrendUiSt
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
+        TrendGroupingRows(trend.groupingRows)
         if (trend.groups.isEmpty()) {
             Text(
                 text = trend.emptyMessage.orEmpty(),
@@ -766,6 +1098,26 @@ private fun StrengthComparableSetTrendRow(row: StrengthComparableSetTrendRowUiSt
     }
 }
 
+@Composable
+private fun TrendGroupingRows(rows: List<TrendGroupingExplanationUiState>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "分组说明",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        rows.forEach { row ->
+            SummaryRow(
+                HistorySummaryRowUiState(
+                    label = row.label,
+                    value = "独立分组",
+                    helper = row.helper
+                )
+            )
+        }
+    }
+}
+
 private fun chartColor(index: Int): Color {
     return listOf(
         TrainFlowAccent,
@@ -773,6 +1125,15 @@ private fun chartColor(index: Int): Color {
         TrainFlowFocus,
         TrainFlowNeutral500
     )[index % 4]
+}
+
+private fun toneColor(tone: HistoryTone): Color {
+    return when (tone) {
+        HistoryTone.SUCCESS -> TrainFlowAccent
+        HistoryTone.WARNING -> TrainFlowAction
+        HistoryTone.INFO -> TrainFlowFocus
+        HistoryTone.NEUTRAL -> TrainFlowNeutral700
+    }
 }
 
 @Composable
@@ -821,8 +1182,8 @@ private fun HistorySessionCard(
         )
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -834,27 +1195,83 @@ private fun HistorySessionCard(
                 ) {
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${item.modeLabel} · ${item.statusLabel} · ${item.durationLabel}",
+                        text = "${item.dateLabel} · ${item.modeLabel} · ${item.durationLabel}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TrainFlowNeutral700
+                        color = TrainFlowNeutral700,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                ModePill(
-                    text = item.modeBadge,
-                    color = if (item.modeBadge == "力量") TrainFlowAction else TrainFlowAccent
+                StatusPill(
+                    text = item.statusLabel,
+                    color = toneColor(item.statusTone).copy(alpha = 0.16f),
+                    contentColor = toneColor(item.statusTone)
                 )
             }
             Text(
                 text = item.keySummary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
+            FlagPillRows(item)
         }
+    }
+}
+
+@Composable
+private fun FlagPillRows(item: HistorySessionListItemUiState) {
+    val pills = listOf(
+        HistorySessionFlagUiState(item.modeBadge, if (item.modeBadge == "力量") HistoryTone.WARNING else HistoryTone.SUCCESS)
+    ) + item.flags
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        pills.take(4).chunked(2).forEach { rowPills ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                rowPills.forEach { pill ->
+                    FlagPill(
+                        flag = pill,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowPills.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlagPill(
+    flag: HistorySessionFlagUiState,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = toneColor(flag.tone).copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, toneColor(flag.tone).copy(alpha = 0.22f))
+    ) {
+        Text(
+            text = flag.label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = toneColor(flag.tone),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1065,6 +1482,8 @@ private fun HistoryRoutePreview() {
         HistoryScreen(
             uiState = buildDefaultHistoryScreenState(),
             onSelectSession = {},
+            onSelectModeFilter = {},
+            onSelectStatusFilter = {},
             onRequestCleanup = {},
             onConfirmCleanup = {},
             onCancelCleanup = {},

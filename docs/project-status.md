@@ -1,10 +1,12 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-06-30
+**状态日期:** 2026-07-01
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
+
+2026-07-01 E12-2 records IA / chart UI polish 已实现并验证通过，详见 `docs/testing/e12-2-records-ia-chart-ui-polish.md`。本轮把记录页重排为概览摘要 -> 筛选区 -> 最近训练 -> 选中详情 -> 趋势区 -> 历史管理：概览汇总 total / completed / abandoned / effective / pause / planned rest / actual rest / extra rest；筛选只影响最近训练、详情和趋势；最近列表增加状态 tone 与 skipped / pause / rest extension / actual rest flags；详情区分别解释 legacy timed step/rest、timed composition v2 stageGroup / target / boundary rest，以及 strength 动作 / 组 / kg / 次数 / 休息。趋势图补齐 X/Y 轴、单位、tick、Legend、空状态和数据不足状态，并继续保持 `legacy_timed`、`timed_composition_v2`、`strength_comparable_set` 分组隔离。Focused history / record / trend / timed composition tests、full unit、assembleDebug、lintDebug、Android smoke、禁区扫描和 diff / boundary checks 均通过；未改 Room schema / migration、training engine、TimerDial、`WorkoutCommand`、`WorkoutEvent`、session record 存储语义，也未恢复 heart-rate UI / 输入 / 平均趋势或接入 BLE / Huawei / Health Connect / HealthKit / Wear OS。下一步建议转入 E13 声音提示 / 音频共存，或按用户测试优先级做其他独立 polish。
 
 2026-06-30 E12-1 records data semantics + v2 interpretation foundation 已实现并验证通过，详见 `docs/testing/e12-1-records-data-semantics-v2-foundation.md`。本轮只做记录页 / history / trends 的数据语义基础：`HistoryUiState` 可从历史 `WorkoutSession.planSnapshot` 通过 `TimedCompositionTimelineAdapter` 解释 timed composition v2 的 stageGroup / target / boundary rest / rest extension 语义，并为 v2 comparable rest 生成独立 `timed_composition_v2` trend key。Legacy timed 继续使用 `legacy_timed` key，默认不与 v2 合并；没有等价 mapper 时只显示隔离 / 数据不足说明。Strength comparable set trend 语义保持不放宽，completion recap 继续复用既有 summary。本轮不做 records page 视觉重排、不画复杂图表、不改 Room schema、training engine、TimerDial、`WorkoutCommand` 或 `WorkoutEvent`，不恢复 heart-rate UI / 输入 / 平均心率趋势，也不接 BLE / Huawei / Health Connect / HealthKit / Wear OS。Focused history / record / trend / timed composition tests、full unit、assembleDebug、lintDebug、diff / boundary checks 和 Android path check 均通过；未改 visible UI，因此未启动 AVD smoke。下一步建议进入 E12-2 records IA / chart UI polish。
 

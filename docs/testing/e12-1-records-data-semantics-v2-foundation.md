@@ -75,7 +75,7 @@ The timed composition boundary guard now explicitly allows `HistoryUiStateTest` 
 - `git diff --check` passed with only expected Git CRLF working-copy warnings.
 - Room schema / migration diff check returned `NO_ROOM_SCHEMA_OR_MIGRATION_DIFF`.
 - TimerDial / workoutsession execution / engine / `WorkoutCommand` / `WorkoutEvent` diff check returned `NO_TIMERDIAL_ENGINE_COMMAND_EVENT_DIFF`.
-- `design-md` search returned no matches.
+- Forbidden design-skill search returned no matches.
 - Heart-rate and health-device term searches only matched existing boundary documents, existing history no-heart-rate tests, or this slice's explicit "not added" notes; no new production UI, input, trend, or integration was added.
 - Android path check: `adb.exe=True`, `emulator.exe=True`, and `TrainFlow_Pixel_API_36` listed after loading `.local\env.ps1`.
 - UI smoke was not run because this slice changed record interpretation / UI state and tests only, not visible Compose rendering or records page layout.
