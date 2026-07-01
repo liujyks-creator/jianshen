@@ -34,6 +34,11 @@ internal object WorkoutSoundCueDispatcher {
                 cue = cue,
                 source = WorkoutSoundCueSource.STAGE_TRANSITION
             )
+            is WorkoutEvent.StrengthSetStarted -> stageTransitionRequest(
+                eventKey = "strength_set_started:${event.exerciseId}:${event.setPlanId.orEmpty()}",
+                cue = cue,
+                source = WorkoutSoundCueSource.STAGE_TRANSITION
+            )
             is WorkoutEvent.NextExerciseReady -> stageTransitionRequest(
                 eventKey = "next_exercise_ready:${event.exerciseId}",
                 cue = cue,

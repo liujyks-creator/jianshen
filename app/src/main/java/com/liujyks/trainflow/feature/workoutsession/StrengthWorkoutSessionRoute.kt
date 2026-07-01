@@ -53,6 +53,7 @@ import com.liujyks.trainflow.core.media.WorkoutSoundCueController
 import com.liujyks.trainflow.core.media.WorkoutSoundCueDispatcher
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
@@ -99,11 +100,18 @@ internal fun StrengthWorkoutSessionRoute(
         AndroidActiveWorkoutNotificationController(context.applicationContext)
     }
 
-    fun applyEngineResult(result: StrengthWorkoutEngineResult) {
+    fun applyEngineResult(
+        result: StrengthWorkoutEngineResult,
+        isTickResult: Boolean = false
+    ) {
+        val previousState = engineState
         engineState = result.state
         result.events.dispatchStrengthWorkoutSoundCues(
             cueSettings = plan.preferences?.cueSettings,
-            soundCueController = soundCueController
+            soundCueController = soundCueController,
+            autoAfterRestTransition = isTickResult &&
+                previousState.currentStepKind == SessionStepKind.STRENGTH_REST &&
+                result.state.currentStepKind == SessionStepKind.STRENGTH_ACTIVE_SET
         )
     }
 
@@ -112,7 +120,7 @@ internal fun StrengthWorkoutSessionRoute(
         while (true) {
             delay(1000)
             if (engineState.status == SessionStatus.ACTIVE || engineState.status == SessionStatus.PAUSED) {
-                applyEngineResult(StrengthWorkoutEngine.tick(engineState))
+                applyEngineResult(StrengthWorkoutEngine.tick(engineState), isTickResult = true)
             }
         }
     }
@@ -218,12 +226,27 @@ internal fun StrengthWorkoutSessionRoute(
 
 private fun List<WorkoutEvent>.dispatchStrengthWorkoutSoundCues(
     cueSettings: CueSettings?,
-    soundCueController: WorkoutSoundCueController
+    soundCueController: WorkoutSoundCueController,
+    autoAfterRestTransition: Boolean = false
 ) {
     forEach { event ->
-        val cue = WorkoutSoundCueDispatcher.cueFor(event = event, cueSettings = cueSettings)
+        val cue = strengthWorkoutSoundCueFor(
+            event = event,
+            cueSettings = cueSettings,
+            autoAfterRestTransition = autoAfterRestTransition
+        )
         soundCueController.dispatch(WorkoutSoundCueDispatcher.requestFor(event = event, cue = cue))
     }
+}
+
+internal fun strengthWorkoutSoundCueFor(
+    event: WorkoutEvent,
+    cueSettings: CueSettings?,
+    autoAfterRestTransition: Boolean = false
+) = when {
+    event is WorkoutEvent.NextExerciseReady && autoAfterRestTransition -> null
+    event is WorkoutEvent.StrengthSetStarted && autoAfterRestTransition -> cueSettings?.restEnding
+    else -> WorkoutSoundCueDispatcher.cueFor(event = event, cueSettings = cueSettings)
 }
 
 @Composable
