@@ -14,6 +14,7 @@ import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
 import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
@@ -121,7 +122,7 @@ object StrengthWorkoutEngine {
                             restElapsedSec = workingState.restElapsedSec + 1,
                             sessionElapsedSec = workingState.sessionElapsedSec + 1
                         ).completeCurrentRest()
-                        val advanceResult = advanceToPrepare(
+                        val advanceResult = advanceAfterRest(
                             state = completedRestState,
                             nextSetIndex = completedRestState.currentSetIndex + 1
                         )
@@ -506,6 +507,28 @@ object StrengthWorkoutEngine {
         return StrengthWorkoutEngineResult(state = prepareState, events = events)
     }
 
+    private fun advanceAfterRest(
+        state: StrengthWorkoutEngineState,
+        nextSetIndex: Int
+    ): StrengthWorkoutEngineResult {
+        val nextSet = state.setSteps.getOrNull(nextSetIndex)
+            ?: return completeSession(state)
+        if (nextSet.setTimerMode != StrengthSetTimerMode.AUTO_AFTER_REST) {
+            return advanceToPrepare(state, nextSetIndex)
+        }
+
+        val previousSet = state.currentSet
+        val activeResult = enterActive(state = state, setIndex = nextSetIndex)
+        val events = buildList {
+            if (previousSet != null && previousSet.exerciseId != nextSet.exerciseId) {
+                add(WorkoutEvent.NextExerciseReady(exerciseId = nextSet.exerciseId))
+            }
+            addAll(activeResult.events)
+        }
+
+        return activeResult.copy(events = events)
+    }
+
     private fun enterActive(
         state: StrengthWorkoutEngineState,
         setIndex: Int
@@ -580,10 +603,10 @@ object StrengthWorkoutEngine {
         val cue = state.restEndingCue ?: return StrengthWorkoutEngineResult(state = state)
         val restDurationSec = state.currentSessionStep?.plannedDurationSec
             ?: return StrengthWorkoutEngineResult(state = state)
+        val effectiveThresholdSec = cue.thresholdSec.coerceAtMost(restDurationSec)
         if (
             state.currentStepKind != SessionStepKind.STRENGTH_REST ||
-            cue.thresholdSec > restDurationSec ||
-            state.restRemainingSec > cue.thresholdSec ||
+            state.restRemainingSec > effectiveThresholdSec ||
             state.restRemainingSec <= 0 ||
             state.restRemainingSec in state.emittedRestEndingSeconds
         ) {
@@ -778,7 +801,8 @@ object StrengthWorkoutEngine {
             restAfterSec = setPlan.restAfterSec ?: target?.restAfterSetSec,
             exerciseSetIndex = exerciseSetIndex,
             exerciseSetCount = exerciseSetCount,
-            substitutionExerciseIds = substitutions
+            substitutionExerciseIds = substitutions,
+            setTimerMode = setTimerMode
         )
     }
 
@@ -906,7 +930,8 @@ data class StrengthSessionSetStep(
     val globalSetIndex: Int = 0,
     val totalSetCount: Int = 0,
     val substitutedFromExerciseId: String? = null,
-    val substitutionExerciseIds: List<String> = emptyList()
+    val substitutionExerciseIds: List<String> = emptyList(),
+    val setTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START
 ) {
     val prepareStepId: String = "$blockId-$setPlanId-prepare"
     val activeStepId: String = "$blockId-$setPlanId-active"

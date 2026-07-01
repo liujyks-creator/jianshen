@@ -87,7 +87,8 @@ class StrengthPlanEditorUiStateTest {
             .let(::requireNotNull)
 
         assertEquals(savedPlan.reminder, editedPlan.reminder)
-        assertEquals(savedPlan.preferences, editedPlan.preferences)
+        assertEquals(savedPlan.preferences?.heartRateDisplay, editedPlan.preferences?.heartRateDisplay)
+        assertNotNull(editedPlan.preferences?.cueSettings)
         assertEquals("weekly", editedPlan.reminder?.repeatRule)
         assertEquals("力量保留提醒", editedPlan.title)
     }
@@ -154,11 +155,20 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
-    fun createModeStrengthPlanDoesNotInventReminderOrPreferences() {
-        val plan = buildDefaultStrengthPlanEditorState().toWorkoutPlan()
+    fun createModeStrengthPlanKeepsReminderEmptyAndAppliesCueDefaults() {
+        val plan = buildDefaultStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                restCueEnabled = true,
+                soundEnabled = false,
+                defaultCountdownThresholdSec = 7
+            )
+        ).toWorkoutPlan()
+        val cues = requireNotNull(plan.preferences?.cueSettings)
 
         assertNull(plan.reminder)
-        assertNull(plan.preferences)
+        assertEquals(7, cues.actionEnding?.thresholdSec)
+        assertEquals(7, cues.restEnding?.thresholdSec)
+        assertFalse(requireNotNull(cues.restEnding).soundEnabled)
     }
 
     @Test

@@ -48,6 +48,13 @@ internal data class PlanEditorDefaults(
         return countdownCueDefaults(enabled = restCueEnabled)
     }
 
+    fun toCueSettings(): CueSettings {
+        return CueSettings(
+            actionEnding = actionCueDefaults().toCountdownCue(),
+            restEnding = restCueDefaults().toCountdownCue()
+        )
+    }
+
     private fun countdownCueDefaults(enabled: Boolean): CountdownCueUiState {
         return CountdownCueUiState(
             enabled = enabled,

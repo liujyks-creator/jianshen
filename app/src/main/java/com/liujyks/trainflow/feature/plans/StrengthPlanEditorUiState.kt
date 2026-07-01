@@ -3,8 +3,10 @@ package com.liujyks.trainflow.feature.plans
 import com.liujyks.trainflow.core.data.fixture.ActionExerciseFixture
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.data.fixture.WeightInputStrategy
+import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.ExerciseSide
+import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseTarget
 import com.liujyks.trainflow.core.model.StrengthSetKind
@@ -24,6 +26,7 @@ internal data class StrengthPlanEditorScreenState(
     val exercises: List<StrengthPlanExerciseUiState>,
     val selectableExercises: List<StrengthExerciseOptionUiState>,
     val strengthSetTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START,
+    val cueSettings: CueSettings? = null,
     val sourcePlanId: String? = null,
     val sourceCreatedAt: String? = null,
     val originalPlanMetadata: OriginalPlanMetadata? = null,
@@ -54,6 +57,10 @@ internal data class StrengthPlanEditorScreenState(
         require(canSave) {
             validationMessage ?: "力量计划草稿仍有未通过校验的输入。"
         }
+        val preferences = (originalPlanMetadata?.preferences ?: PlanPreferences()).copy(
+            cueSettings = cueSettings
+        )
+
         return WorkoutPlan(
             id = planId,
             mode = WorkoutMode.STRENGTH,
@@ -66,7 +73,7 @@ internal data class StrengthPlanEditorScreenState(
                 )
             },
             reminder = originalPlanMetadata?.reminder,
-            preferences = originalPlanMetadata?.preferences,
+            preferences = preferences,
             createdAt = originalPlanMetadata?.createdAt ?: sourceCreatedAt ?: timestamp,
             updatedAt = timestamp
         )
@@ -275,7 +282,8 @@ internal fun buildDefaultStrengthPlanEditorState(
         title = "基础力量计划",
         exercises = defaultEntries.mapIndexed { index, entry -> entry.toStrengthEditorExercise(index + 1) },
         selectableExercises = strengthEntries.map { entry -> entry.toStrengthOption() },
-        strengthSetTimerMode = defaults.strengthSetTimerMode
+        strengthSetTimerMode = defaults.strengthSetTimerMode,
+        cueSettings = defaults.toCueSettings()
     )
 }
 
@@ -764,12 +772,14 @@ internal fun WorkoutPlan.toStrengthPlanEditorState(
         buildDefaultStrengthPlanEditorState(entries, defaults).exercises
     }
     val timerMode = strengthBlocks.firstOrNull()?.setTimerMode ?: defaults.strengthSetTimerMode
+    val cueSettings = preferences?.cueSettings ?: defaults.toCueSettings()
     return StrengthPlanEditorScreenState(
         title = title,
         description = description.orEmpty(),
         exercises = safeExercises,
         selectableExercises = selectable,
         strengthSetTimerMode = timerMode,
+        cueSettings = cueSettings,
         sourcePlanId = id,
         sourceCreatedAt = createdAt,
         originalPlanMetadata = toOriginalPlanMetadata(),

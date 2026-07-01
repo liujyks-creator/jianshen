@@ -100,6 +100,89 @@ class WorkoutSoundCueDispatcherTest {
     }
 
     @Test
+    fun strengthRestEndingDispatchesCountdownBeepForFinalFiveSeconds() {
+        val player = FakeWorkoutSoundCuePlayer()
+        val controller = WorkoutSoundCueController(player)
+        val cueSettings = CueSettings(
+            restEnding = CountdownCue(thresholdSec = 5, soundEnabled = true)
+        )
+
+        (5 downTo 1).forEach { remainingSec ->
+            val event = WorkoutEvent.RestEnding(
+                stepId = "strength-rest-1",
+                remainingSec = remainingSec
+            )
+            controller.dispatch(
+                WorkoutSoundCueDispatcher.requestFor(
+                    event = event,
+                    cue = WorkoutSoundCueDispatcher.cueFor(
+                        event = event,
+                        cueSettings = cueSettings
+                    )
+                )
+            )
+        }
+
+        assertEquals(
+            List(5) { WorkoutSoundCueKind.COUNTDOWN_BEEP },
+            player.playedKinds
+        )
+    }
+
+    @Test
+    fun strengthRestEndingDoesNotDispatchCountdownBeepWhenSoundDisabled() {
+        val cueSettings = CueSettings(
+            restEnding = CountdownCue(thresholdSec = 5, soundEnabled = false)
+        )
+        val event = WorkoutEvent.RestEnding(
+            stepId = "strength-rest-1",
+            remainingSec = 5
+        )
+
+        val request = WorkoutSoundCueDispatcher.requestFor(
+            event = event,
+            cue = WorkoutSoundCueDispatcher.cueFor(event = event, cueSettings = cueSettings)
+        )
+
+        assertNull(request)
+    }
+
+    @Test
+    fun strengthNonRestEventsDoNotDispatchCountdownBeep() {
+        val cueSettings = CueSettings(
+            actionEnding = CountdownCue(thresholdSec = 5, soundEnabled = true),
+            restEnding = CountdownCue(thresholdSec = 5, soundEnabled = true)
+        )
+
+        val readyRequest = WorkoutSoundCueDispatcher.requestFor(
+            event = WorkoutEvent.StrengthSetReady(exerciseId = "squat", setPlanId = "set-1"),
+            cue = WorkoutSoundCueDispatcher.cueFor(
+                event = WorkoutEvent.StrengthSetReady(exerciseId = "squat", setPlanId = "set-1"),
+                cueSettings = cueSettings
+            )
+        )
+        val startedRequest = WorkoutSoundCueDispatcher.requestFor(
+            event = WorkoutEvent.StrengthSetStarted(exerciseId = "squat", setPlanId = "set-1"),
+            cue = WorkoutSoundCueDispatcher.cueFor(
+                event = WorkoutEvent.StrengthSetStarted(exerciseId = "squat", setPlanId = "set-1"),
+                cueSettings = cueSettings
+            )
+        )
+        val completedRequest = WorkoutSoundCueDispatcher.requestFor(
+            event = WorkoutEvent.StrengthSetCompleted(setRecordId = "set-1-record"),
+            cue = WorkoutSoundCueDispatcher.cueFor(
+                event = WorkoutEvent.StrengthSetCompleted(setRecordId = "set-1-record"),
+                cueSettings = cueSettings
+            )
+        )
+
+        requireNotNull(readyRequest)
+        assertEquals(WorkoutSoundCueKind.STAGE_BELL, readyRequest.kind)
+        assertNull(startedRequest)
+        assertNull(completedRequest)
+    }
+
+    @Test
     fun soundDisabledOrOutOfThresholdDoesNotRequestPlayback() {
         assertNull(
             WorkoutSoundCueDispatcher.requestFor(

@@ -571,6 +571,12 @@ const defaultCountdownCue: CountdownCue = {
 };
 ```
 
+E15-1 约定：
+
+- 计时与力量休息临近结束都使用 `CueSettings.restEnding` 产生 `WorkoutEvent.rest_ending`，并由声音消费者映射到 `COUNTDOWN_BEEP`。
+- `thresholdSec` 大于当前动作或休息时长时，执行引擎按当前阶段时长裁剪；短阶段或短休息最多覆盖整个阶段，不因为默认 5 秒阈值大于休息时长而静默禁用提醒。
+- `soundEnabled=false` 只阻止声音请求，不改变 `WorkoutEvent` 语义，也不影响震动 / 动画消费者的独立边界。
+
 ### 6.3 计时训练示例
 
 ```ts
@@ -655,6 +661,8 @@ type RepTarget =
 - `setTimerMode` 默认 `"manual_start"`
 - 动作级目标可作为多个组的共享默认值。
 - 用户展开逐组设置后，`StrengthSetPlan` 覆盖动作级默认值。
+- `setTimerMode: "auto_after_rest"` 表示组间休息结束后自动进入下一组 active set；`"manual_start"` 表示休息结束后停在下一组准备态，等待用户手动发出 `start_strength_set`。
+- 训练偏好设置提供新建 / 编辑计划的默认 `setTimerMode`，执行引擎消费保存到 `StrengthExerciseBlock` 的模式，不把该偏好改写为新的 `WorkoutCommand` 或 `WorkoutEvent`。
 
 ### 7.3 力量训练示例
 

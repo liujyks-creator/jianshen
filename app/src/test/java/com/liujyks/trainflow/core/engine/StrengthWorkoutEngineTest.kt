@@ -13,6 +13,7 @@ import com.liujyks.trainflow.core.model.StrengthSetCompletionDraft
 import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutCommand
@@ -243,7 +244,7 @@ class StrengthWorkoutEngineTest {
     }
 
     @Test
-    fun restEndingCueGreaterThanRestDurationIsIgnored() {
+    fun restEndingCueGreaterThanRestDurationCoversWholeRest() {
         var result = StrengthWorkoutEngine.dispatch(
             state = StrengthWorkoutEngine.create(
                 twoSetPlan(
@@ -263,12 +264,71 @@ class StrengthWorkoutEngineTest {
             WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
         )
 
-        assertFalse(result.events.any { event -> event is WorkoutEvent.RestEnding })
+        assertEquals(listOf(3), result.events.restEndingRemainingSeconds())
+
+        result = StrengthWorkoutEngine.tick(result.state)
+        assertEquals(listOf(2), result.events.restEndingRemainingSeconds())
+
+        result = StrengthWorkoutEngine.tick(result.state)
+        assertEquals(listOf(1), result.events.restEndingRemainingSeconds())
+
+        result = StrengthWorkoutEngine.tick(result.state)
+
+        assertEquals(SessionStepKind.STRENGTH_PREPARE_SET, result.state.currentSessionStep?.kind)
+    }
+
+    @Test
+    fun autoAfterRestStartsNextStrengthSetWhenRestCompletes() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(
+                twoSetPlan(
+                    restAfterFirstSetSec = 3,
+                    setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 2)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
 
         result = StrengthWorkoutEngine.tick(result.state, seconds = 3)
 
-        assertTrue(result.events.none { event -> event is WorkoutEvent.RestEnding })
+        assertEquals(SessionStepKind.STRENGTH_ACTIVE_SET, result.state.currentSessionStep?.kind)
+        assertEquals("bench-working-2", result.state.currentSet?.setPlanId)
+        assertEquals(0, result.state.activeSetElapsedSec)
+        assertEquals(3, result.state.strengthSetRecords.single().actualRestAfterSec)
+        assertTrue(result.events.single() is WorkoutEvent.StrengthSetStarted)
+    }
+
+    @Test
+    fun manualStartModeStillWaitsForUserAfterRestCompletes() {
+        var result = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(
+                twoSetPlan(
+                    restAfterFirstSetSec = 3,
+                    setTimerMode = StrengthSetTimerMode.MANUAL_START
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 2)
+        result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
+        result = StrengthWorkoutEngine.dispatch(
+            result.state,
+            WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput())
+        )
+
+        result = StrengthWorkoutEngine.tick(result.state, seconds = 3)
+
         assertEquals(SessionStepKind.STRENGTH_PREPARE_SET, result.state.currentSessionStep?.kind)
+        assertEquals("bench-working-2", result.state.currentSet?.setPlanId)
+        assertTrue(result.events.single() is WorkoutEvent.StrengthSetReady)
     }
 
     @Test
@@ -662,7 +722,8 @@ class StrengthWorkoutEngineTest {
 
     private fun twoSetPlan(
         restAfterFirstSetSec: Int,
-        preferences: PlanPreferences? = null
+        preferences: PlanPreferences? = null,
+        setTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START
     ): WorkoutPlan {
         return plan(
             preferences = preferences,
@@ -675,7 +736,8 @@ class StrengthWorkoutEngineTest {
                     sets = listOf(
                         set(id = "bench-working-1", order = 1, restAfterSec = restAfterFirstSetSec),
                         set(id = "bench-working-2", order = 2, restAfterSec = 0)
-                    )
+                    ),
+                    setTimerMode = setTimerMode
                 )
             )
         )
@@ -728,14 +790,16 @@ class StrengthWorkoutEngineTest {
         sets: List<StrengthSetPlan>,
         id: String = "bench",
         exerciseId: String = "barbell-bench-press",
-        order: Int = 1
+        order: Int = 1,
+        setTimerMode: StrengthSetTimerMode = StrengthSetTimerMode.MANUAL_START
     ): StrengthExerciseBlock {
         return StrengthExerciseBlock(
             id = id,
             order = order,
             exerciseId = exerciseId,
             target = target,
-            sets = sets
+            sets = sets,
+            setTimerMode = setTimerMode
         )
     }
 

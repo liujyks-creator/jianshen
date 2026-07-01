@@ -292,7 +292,8 @@ stateDiagram-v2
     PrepareSet --> ActiveSet: "start_strength_set"
     ActiveSet --> ConfirmSet: "complete_strength_set"
     ConfirmSet --> StrengthRest: "confirm_strength_set"
-    StrengthRest --> PrepareSet: "rest ended"
+    StrengthRest --> PrepareSet: "rest ended / manual_start"
+    StrengthRest --> ActiveSet: "rest ended / auto_after_rest"
     StrengthRest --> ActiveSet: "start_strength_set"
     PrepareSet --> Completed: "all sets done"
     ActiveSet --> Paused: "pause_session"
@@ -308,6 +309,8 @@ stateDiagram-v2
 - 确认层默认回填计划重量和计划次数。
 - 用户确认后再写入正式 `StrengthSetRecord`。
 - 休息倒计时和休息临近结束提醒独立于动作组耗时。
+- 力量休息临近结束提醒复用 `WorkoutEvent.RestEnding` 与 `CueSettings.restEnding`，阈值大于休息时长时按当前休息时长裁剪，默认 5 秒应覆盖短休息的全部倒计时。
+- `StrengthExerciseBlock.setTimerMode` 决定休息结束后的推进：`manual_start` 回到准备态等待手动开始，`auto_after_rest` 直接进入下一组 active set。
 
 ## 8. 平台能力边界
 
@@ -324,6 +327,7 @@ stateDiagram-v2
 
 - 声音和震动都是 `WorkoutEvent` 的消费者。
 - 倒计时最后 N 秒是否播放声音/震动由 `CueSettings` 控制。
+- `soundEnabled=false` 只阻止声音请求；声音实现不得请求 audio focus、主动 duck 或暂停外部音频。
 - 首版不播放语音读秒；仅保留 `voiceCueEnabled` 和语音输出适配接口。
 
 ### 8.3 心率与健康数据
