@@ -8,6 +8,7 @@
 
 1. Changing the global training preference from `manual_start` to `auto_after_rest` after creating an older strength plan does not make that old plan auto-start the next set.
 2. When the strength plan was created with `auto_after_rest`, rest end correctly advances into the next active set, but the existing stage bell did not play.
+3. Review feedback after the first implementation found the bell range was too wide: initial strength prepare, manual `开始本组`, manual `提前开始本组`, and `manual_start` rest-end prepare must not play the stage bell.
 
 ## Contract Clarification
 
@@ -17,12 +18,16 @@ The first feedback item is expected under the current contract: training prefere
 
 E15-1 made the strength engine consume `StrengthExerciseBlock.setTimerMode`, so `auto_after_rest` rest completion emits `WorkoutEvent.StrengthSetStarted` and enters `STRENGTH_ACTIVE_SET`. The sound dispatcher had no stage-bell mapping for `StrengthSetStarted`, and the strength route did not provide a cue for that auto-rest transition.
 
+The first E15-1a implementation fixed the missing auto-rest bell, but it also let generic strength ready/start event handling remain too broad. `StrengthSetReady` could still consume the action cue as a stage bell, which made initial prepare and `manual_start` prepare paths audible.
+
 ## Fix
 
-- `WorkoutSoundCueDispatcher` can now create a `STAGE_BELL` request for `WorkoutEvent.StrengthSetStarted` when a caller explicitly supplies a cue.
-- `StrengthWorkoutSessionRoute` supplies the previous rest cue only when an engine tick moves from `STRENGTH_REST` to `STRENGTH_ACTIVE_SET`.
+- `WorkoutSoundCueDispatcher.requestFor` no longer treats `StrengthSetReady` or `StrengthSetStarted` as generic stage-bell events.
+- `WorkoutSoundCueDispatcher.requestForStrengthAutoRestTransition` is the only strength set-start bell request path, and it is only called by the strength route after the route proves the transition.
+- `StrengthWorkoutSessionRoute` supplies the previous rest cue only when an engine tick naturally moves from `STRENGTH_REST` to `STRENGTH_ACTIVE_SET`.
+- Natural rest-end transitions suppress simultaneous `NextExerciseReady` requests, so `manual_start` rest end into a new exercise prepare state does not ring.
 - Manual `StartStrengthSet` commands, including tapping `提前开始本组`, still do not get a new bell from this story.
-- Auto-rest transitions suppress the simultaneous `NextExerciseReady` bell so the active-start transition owns a single stage bell request.
+- Initial `StrengthSetReady` / prepare state and ordinary set-ready paths do not request the stage bell.
 - `soundEnabled=false` on the rest cue still blocks the transition bell request.
 
 ## Boundaries
@@ -38,6 +43,7 @@ E15-1 made the strength engine consume `StrengthExerciseBlock.setTimerMode`, so 
 
 Executed verification:
 
+- Passed: `.\gradlew.bat app:testDebugUnitTest --tests "*StrengthWorkoutSoundCueRouteTest*"`
 - Passed: `.\gradlew.bat app:testDebugUnitTest --tests "*Strength*" --tests "*Sound*" --tests "*Cue*" --tests "*Feedback*"`
 - Passed: `.\gradlew.bat app:testDebugUnitTest`
 - Passed: `.\gradlew.bat app:assembleDebug`
@@ -46,7 +52,9 @@ Executed verification:
 - Passed: `git diff --check`
 - Passed: `git diff --cached --check`
 
-## Android Smoke Evidence
+## Prior Android Smoke Evidence
+
+The review fix did not change visible UI and did not rerun emulator smoke. Current review-fix behavior is covered by focused route / dispatcher tests plus the full Gradle verification above. The previous E15-1a implementation smoke evidence remains useful for APK launch and strength auto-rest execution flow context:
 
 Evidence directory:
 

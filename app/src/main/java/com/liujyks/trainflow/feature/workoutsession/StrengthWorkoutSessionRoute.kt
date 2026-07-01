@@ -106,11 +106,13 @@ internal fun StrengthWorkoutSessionRoute(
     ) {
         val previousState = engineState
         engineState = result.state
+        val naturalRestTickTransition = isTickResult &&
+            previousState.currentStepKind == SessionStepKind.STRENGTH_REST
         result.events.dispatchStrengthWorkoutSoundCues(
             cueSettings = plan.preferences?.cueSettings,
             soundCueController = soundCueController,
-            autoAfterRestTransition = isTickResult &&
-                previousState.currentStepKind == SessionStepKind.STRENGTH_REST &&
+            naturalRestTickTransition = naturalRestTickTransition,
+            autoAfterRestTransition = naturalRestTickTransition &&
                 result.state.currentStepKind == SessionStepKind.STRENGTH_ACTIVE_SET
         )
     }
@@ -227,27 +229,42 @@ internal fun StrengthWorkoutSessionRoute(
 private fun List<WorkoutEvent>.dispatchStrengthWorkoutSoundCues(
     cueSettings: CueSettings?,
     soundCueController: WorkoutSoundCueController,
+    naturalRestTickTransition: Boolean = false,
     autoAfterRestTransition: Boolean = false
 ) {
     forEach { event ->
-        val cue = strengthWorkoutSoundCueFor(
+        val request = strengthWorkoutSoundCueRequestFor(
             event = event,
             cueSettings = cueSettings,
+            naturalRestTickTransition = naturalRestTickTransition,
             autoAfterRestTransition = autoAfterRestTransition
         )
-        soundCueController.dispatch(WorkoutSoundCueDispatcher.requestFor(event = event, cue = cue))
+        soundCueController.dispatch(request)
     }
+}
+
+internal fun strengthWorkoutSoundCueRequestFor(
+    event: WorkoutEvent,
+    cueSettings: CueSettings?,
+    naturalRestTickTransition: Boolean = false,
+    autoAfterRestTransition: Boolean = false
+) = when {
+    event is WorkoutEvent.NextExerciseReady && naturalRestTickTransition -> null
+    event is WorkoutEvent.StrengthSetStarted && autoAfterRestTransition ->
+        WorkoutSoundCueDispatcher.requestForStrengthAutoRestTransition(
+            event = event,
+            cue = cueSettings?.restEnding
+        )
+    else -> WorkoutSoundCueDispatcher.requestFor(
+        event = event,
+        cue = strengthWorkoutSoundCueFor(event = event, cueSettings = cueSettings)
+    )
 }
 
 internal fun strengthWorkoutSoundCueFor(
     event: WorkoutEvent,
-    cueSettings: CueSettings?,
-    autoAfterRestTransition: Boolean = false
-) = when {
-    event is WorkoutEvent.NextExerciseReady && autoAfterRestTransition -> null
-    event is WorkoutEvent.StrengthSetStarted && autoAfterRestTransition -> cueSettings?.restEnding
-    else -> WorkoutSoundCueDispatcher.cueFor(event = event, cueSettings = cueSettings)
-}
+    cueSettings: CueSettings?
+) = WorkoutSoundCueDispatcher.cueFor(event = event, cueSettings = cueSettings)
 
 @Composable
 private fun StrengthWorkoutSessionScreen(

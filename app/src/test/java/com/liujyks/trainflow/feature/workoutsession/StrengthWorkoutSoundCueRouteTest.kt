@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
+import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
 import com.liujyks.trainflow.core.media.WorkoutSoundCueDispatcher
 import com.liujyks.trainflow.core.media.WorkoutSoundCueKind
 import com.liujyks.trainflow.core.model.CountdownCue
@@ -18,76 +19,150 @@ import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StrengthWorkoutSoundCueRouteTest {
     @Test
     fun autoAfterRestTransitionRequestsStageBellFromRestCue() {
-        val transition = runToRestEnd(
+        val restState = runToRestState(
             setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST,
-            restCue = soundCue(soundEnabled = true)
+            cueSettings = CueSettings(restEnding = soundCue(soundEnabled = true))
         )
-        val started = transition.events.filterIsInstance<WorkoutEvent.StrengthSetStarted>().single()
+        val transition = StrengthWorkoutEngine.tick(restState.state, seconds = 3)
 
-        val request = WorkoutSoundCueDispatcher.requestFor(
-            event = started,
-            cue = strengthWorkoutSoundCueFor(
-                event = started,
-                cueSettings = transition.cueSettings,
-                autoAfterRestTransition = true
-            )
-        )
+        val stageBellRequests = routeRequests(
+            previousState = restState.state,
+            result = transition,
+            cueSettings = restState.cueSettings,
+            isTickResult = true
+        ).filter { request -> request.kind == WorkoutSoundCueKind.STAGE_BELL }
 
-        assertNotNull(request)
-        assertEquals(WorkoutSoundCueKind.STAGE_BELL, request?.kind)
-        assertEquals("strength_set_started:barbell-bench-press:bench-working-2", request?.eventKey)
+        assertEquals(SessionStepKind.STRENGTH_ACTIVE_SET, transition.state.currentSessionStep?.kind)
+        assertEquals(1, stageBellRequests.size)
+        assertEquals("strength_set_started:barbell-bench-press:bench-working-2", stageBellRequests.single().eventKey)
     }
 
     @Test
-    fun manualStartRestEndDoesNotRequestActiveStartBell() {
-        val transition = runToRestEnd(
-            setTimerMode = StrengthSetTimerMode.MANUAL_START,
-            restCue = soundCue(soundEnabled = true)
+    fun initialPrepareDoesNotRequestStageBell() {
+        val cueSettings = CueSettings(
+            actionEnding = soundCue(soundEnabled = true),
+            restEnding = soundCue(soundEnabled = true)
         )
+        val initialState = StrengthWorkoutEngine.create(
+            plan = twoSetPlan(
+                setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST,
+                cueSettings = cueSettings
+            )
+        )
+        val result = StrengthWorkoutEngine.dispatch(initialState, WorkoutCommand.StartSession)
+
+        val requests = routeRequests(
+            previousState = initialState,
+            result = result,
+            cueSettings = cueSettings,
+            isTickResult = false
+        )
+
+        assertEquals(SessionStepKind.STRENGTH_PREPARE_SET, result.state.currentSessionStep?.kind)
+        assertTrue(result.events.any { event -> event is WorkoutEvent.StrengthSetReady })
+        assertTrue(requests.none { request -> request.kind == WorkoutSoundCueKind.STAGE_BELL })
+    }
+
+    @Test
+    fun manualStartStrengthSetDoesNotRequestTransitionBell() {
+        val cueSettings = CueSettings(
+            actionEnding = soundCue(soundEnabled = true),
+            restEnding = soundCue(soundEnabled = true)
+        )
+        val started = StrengthWorkoutEngine.dispatch(
+            state = StrengthWorkoutEngine.create(
+                plan = twoSetPlan(
+                    setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST,
+                    cueSettings = cueSettings
+                )
+            ),
+            command = WorkoutCommand.StartSession
+        )
+        val result = StrengthWorkoutEngine.dispatch(started.state, WorkoutCommand.StartStrengthSet())
+
+        val requests = routeRequests(
+            previousState = started.state,
+            result = result,
+            cueSettings = cueSettings,
+            isTickResult = false
+        )
+
+        assertEquals(SessionStepKind.STRENGTH_ACTIVE_SET, result.state.currentSessionStep?.kind)
+        assertTrue(result.events.any { event -> event is WorkoutEvent.StrengthSetStarted })
+        assertTrue(requests.none { request -> request.kind == WorkoutSoundCueKind.STAGE_BELL })
+    }
+
+    @Test
+    fun earlyStartDuringRestDoesNotRequestTransitionBell() {
+        val restState = runToRestState(
+            setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST,
+            cueSettings = CueSettings(restEnding = soundCue(soundEnabled = true))
+        )
+
+        val result = StrengthWorkoutEngine.dispatch(restState.state, WorkoutCommand.StartStrengthSet())
+        val requests = routeRequests(
+            previousState = restState.state,
+            result = result,
+            cueSettings = restState.cueSettings,
+            isTickResult = false
+        )
+
+        assertEquals(SessionStepKind.STRENGTH_ACTIVE_SET, result.state.currentSessionStep?.kind)
+        assertTrue(result.events.any { event -> event is WorkoutEvent.StrengthSetStarted })
+        assertTrue(requests.none { request -> request.kind == WorkoutSoundCueKind.STAGE_BELL })
+    }
+
+    @Test
+    fun manualStartRestEndDoesNotRequestAutoTransitionBell() {
+        val cueSettings = CueSettings(
+            actionEnding = soundCue(soundEnabled = true),
+            restEnding = soundCue(soundEnabled = true)
+        )
+        val restState = runToRestState(
+            setTimerMode = StrengthSetTimerMode.MANUAL_START,
+            cueSettings = cueSettings,
+            secondExerciseId = "dumbbell-row"
+        )
+        val transition = StrengthWorkoutEngine.tick(restState.state, seconds = 3)
 
         assertEquals(SessionStepKind.STRENGTH_PREPARE_SET, transition.state.currentSessionStep?.kind)
         assertTrue(transition.events.none { event -> event is WorkoutEvent.StrengthSetStarted })
 
-        val requests = transition.events.mapNotNull { event ->
-            WorkoutSoundCueDispatcher.requestFor(
-                event = event,
-                cue = strengthWorkoutSoundCueFor(
-                    event = event,
-                    cueSettings = transition.cueSettings,
-                    autoAfterRestTransition = false
-                )
-            )
-        }
+        val requests = routeRequests(
+            previousState = restState.state,
+            result = transition,
+            cueSettings = cueSettings,
+            isTickResult = true
+        )
 
-        assertTrue(requests.none { request -> request.eventKey.startsWith("strength_set_started:") })
+        assertTrue(transition.events.any { event -> event is WorkoutEvent.NextExerciseReady })
+        assertTrue(transition.events.any { event -> event is WorkoutEvent.StrengthSetReady })
+        assertTrue(requests.none { request -> request.kind == WorkoutSoundCueKind.STAGE_BELL })
     }
 
     @Test
     fun soundDisabledBlocksAutoAfterRestTransitionBell() {
-        val transition = runToRestEnd(
+        val restState = runToRestState(
             setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST,
-            restCue = soundCue(soundEnabled = false)
+            cueSettings = CueSettings(restEnding = soundCue(soundEnabled = false))
         )
-        val started = transition.events.filterIsInstance<WorkoutEvent.StrengthSetStarted>().single()
+        val transition = StrengthWorkoutEngine.tick(restState.state, seconds = 3)
 
-        val request = WorkoutSoundCueDispatcher.requestFor(
-            event = started,
-            cue = strengthWorkoutSoundCueFor(
-                event = started,
-                cueSettings = transition.cueSettings,
-                autoAfterRestTransition = true
-            )
+        val requests = routeRequests(
+            previousState = restState.state,
+            result = transition,
+            cueSettings = restState.cueSettings,
+            isTickResult = true
         )
 
-        assertNull(request)
+        assertTrue(transition.events.any { event -> event is WorkoutEvent.StrengthSetStarted })
+        assertTrue(requests.none { request -> request.kind == WorkoutSoundCueKind.STAGE_BELL })
     }
 
     @Test
@@ -108,16 +183,34 @@ class StrengthWorkoutSoundCueRouteTest {
         assertEquals(List(5) { WorkoutSoundCueKind.COUNTDOWN_BEEP }, requests.map { request -> request.kind })
     }
 
-    private fun runToRestEnd(
+    private fun routeRequests(
+        previousState: StrengthWorkoutEngineState,
+        result: StrengthWorkoutEngineResult,
+        cueSettings: CueSettings,
+        isTickResult: Boolean
+    ) = result.events.mapNotNull { event ->
+        val naturalRestTickTransition = isTickResult &&
+            previousState.currentStepKind == SessionStepKind.STRENGTH_REST
+        strengthWorkoutSoundCueRequestFor(
+            event = event,
+            cueSettings = cueSettings,
+            naturalRestTickTransition = naturalRestTickTransition,
+            autoAfterRestTransition = naturalRestTickTransition &&
+                result.state.currentStepKind == SessionStepKind.STRENGTH_ACTIVE_SET
+        )
+    }
+
+    private fun runToRestState(
         setTimerMode: StrengthSetTimerMode,
-        restCue: CountdownCue
+        cueSettings: CueSettings,
+        secondExerciseId: String = "barbell-bench-press"
     ): StrengthCueTransition {
-        val cueSettings = CueSettings(restEnding = restCue)
         var result = StrengthWorkoutEngine.dispatch(
             state = StrengthWorkoutEngine.create(
                 plan = twoSetPlan(
                     setTimerMode = setTimerMode,
-                    cueSettings = cueSettings
+                    cueSettings = cueSettings,
+                    secondExerciseId = secondExerciseId
                 )
             ),
             command = WorkoutCommand.StartSession
@@ -131,7 +224,7 @@ class StrengthWorkoutSoundCueRouteTest {
         )
 
         return StrengthCueTransition(
-            result = StrengthWorkoutEngine.tick(result.state, seconds = 3),
+            result = result,
             cueSettings = cueSettings
         )
     }
@@ -146,13 +239,11 @@ class StrengthWorkoutSoundCueRouteTest {
 
     private fun twoSetPlan(
         setTimerMode: StrengthSetTimerMode,
-        cueSettings: CueSettings
+        cueSettings: CueSettings,
+        secondExerciseId: String = "barbell-bench-press"
     ): WorkoutPlan {
-        return WorkoutPlan(
-            id = "strength-sound-cue-route-test",
-            mode = WorkoutMode.STRENGTH,
-            title = "Strength sound cue route test",
-            blocks = listOf(
+        val blocks = if (secondExerciseId == "barbell-bench-press") {
+            listOf(
                 StrengthExerciseBlock(
                     id = "bench",
                     order = 1,
@@ -173,7 +264,44 @@ class StrengthWorkoutSoundCueRouteTest {
                     ),
                     setTimerMode = setTimerMode
                 )
-            ),
+            )
+        } else {
+            listOf(
+                StrengthExerciseBlock(
+                    id = "bench",
+                    order = 1,
+                    exerciseId = "barbell-bench-press",
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "bench-working-1",
+                            order = 1,
+                            kind = StrengthSetKind.WORKING,
+                            restAfterSec = 3
+                        )
+                    ),
+                    setTimerMode = setTimerMode
+                ),
+                StrengthExerciseBlock(
+                    id = "row",
+                    order = 2,
+                    exerciseId = secondExerciseId,
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "row-working-1",
+                            order = 1,
+                            kind = StrengthSetKind.WORKING,
+                            restAfterSec = 0
+                        )
+                    ),
+                    setTimerMode = setTimerMode
+                )
+            )
+        }
+        return WorkoutPlan(
+            id = "strength-sound-cue-route-test",
+            mode = WorkoutMode.STRENGTH,
+            title = "Strength sound cue route test",
+            blocks = blocks,
             preferences = PlanPreferences(cueSettings = cueSettings),
             createdAt = "2026-07-01T00:00:00Z",
             updatedAt = "2026-07-01T00:00:00Z"
