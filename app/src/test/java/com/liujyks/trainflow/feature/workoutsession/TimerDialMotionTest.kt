@@ -208,14 +208,20 @@ class TimerDialMotionTest {
     }
 
     @Test
-    fun centerGlyphConsumesCurrentIconKeyWithBuiltInWhiteCanvasDrawing() {
+    fun centerGlyphConsumesCurrentIconKeyWithBuiltInImageResources() {
         val dialSource = File(
             "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimerDial.kt"
+        ).readText(Charsets.UTF_8)
+        val iconSource = File(
+            "src/main/java/com/liujyks/trainflow/ui/components/StageIconImage.kt"
         ).readText(Charsets.UTF_8)
 
         assertTrue(dialSource.contains("iconKey = safeState.currentStageIconKey"))
         assertTrue(dialSource.contains("TimerDialStageGlyph(iconKey = iconKey"))
         assertTrue(dialSource.contains("color = Color.White"))
+        assertTrue(dialSource.contains("StageIconImage("))
+        assertTrue(iconSource.contains("painterResource("))
+        assertTrue(iconSource.contains("Image("))
         listOf(
             "\"warmup\"",
             "\"work\"",
@@ -228,13 +234,13 @@ class TimerDialMotionTest {
             "\"mobility\"",
             "\"custom\""
         ).forEach { key ->
-            assertTrue("Missing built-in TimerDial icon key $key", dialSource.contains(key))
+            assertTrue("Missing built-in stage icon key $key", iconSource.contains(key))
         }
-        assertFalse(dialSource.contains("painterResource("))
-        assertFalse(dialSource.contains("Image("))
+        assertFalse(dialSource.contains("drawWarmupFlameIcon"))
+        assertFalse(dialSource.contains("drawRestSnowflakeIcon"))
+        assertFalse(dialSource.contains("drawCustomStageIcon"))
         assertFalse(dialSource.contains("ImageBitmap"))
         assertFalse(dialSource.contains("drawImage("))
-        assertFalse(dialSource.contains("R.drawable"))
     }
 
     @Test

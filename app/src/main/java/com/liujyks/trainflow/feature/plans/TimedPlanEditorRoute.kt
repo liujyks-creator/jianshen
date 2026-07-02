@@ -1,7 +1,6 @@
 package com.liujyks.trainflow.feature.plans
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -43,12 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -57,6 +51,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -66,6 +61,7 @@ import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_MAX_TARGETS_PER_STAGE_
 import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.stageColorPresetFor
+import com.liujyks.trainflow.ui.components.StageIconImage
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
@@ -1224,7 +1220,7 @@ private fun StageIconSection(
             color = MaterialTheme.colorScheme.onSurface
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.chunked(5).forEach { rowOptions ->
+            options.chunked(4).forEach { rowOptions ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     rowOptions.forEach { option ->
                         StageIconOptionButton(
@@ -1258,17 +1254,28 @@ private fun StageIconOptionButton(
             color = if (option.selected) TrainFlowPrimary else TrainFlowNeutral100
         ),
         modifier = Modifier
-            .size(52.dp)
+            .size(width = 64.dp, height = 62.dp)
             .semantics {
                 contentDescription = option.contentDescription
                 stateDescription = if (option.selected) "已选中" else "未选中"
             }
             .clickable(onClick = onClick)
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             StageStyleIconGlyph(
                 iconKey = option.key,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
+            )
+            Text(
+                text = option.label,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White
             )
         }
     }
@@ -1280,89 +1287,11 @@ private fun StageStyleIconGlyph(
     modifier: Modifier = Modifier,
     color: Color = Color.White
 ) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val strokeWidth = (w * 0.1f).coerceAtLeast(2f)
-        val stroke = Stroke(
-            width = strokeWidth,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
-        )
-        when (iconKey) {
-            "warmup" -> {
-                drawLine(color, Offset(w * 0.5f, h * 0.14f), Offset(w * 0.5f, h * 0.86f), strokeWidth)
-                drawLine(color, Offset(w * 0.18f, h * 0.5f), Offset(w * 0.82f, h * 0.5f), strokeWidth)
-                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
-            }
-
-            "work" -> {
-                val path = Path().apply {
-                    moveTo(w * 0.28f, h * 0.18f)
-                    lineTo(w * 0.78f, h * 0.5f)
-                    lineTo(w * 0.28f, h * 0.82f)
-                    close()
-                }
-                drawPath(path, color)
-            }
-
-            "speed_up" -> {
-                drawLine(color, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.7f, h * 0.32f), strokeWidth)
-                drawLine(color, Offset(w * 0.34f, h * 0.5f), Offset(w * 0.82f, h * 0.5f), strokeWidth)
-                drawLine(color, Offset(w * 0.5f, h * 0.68f), Offset(w * 0.82f, h * 0.68f), strokeWidth)
-            }
-
-            "sprint" -> {
-                val path = Path().apply {
-                    moveTo(w * 0.58f, h * 0.1f)
-                    lineTo(w * 0.28f, h * 0.52f)
-                    lineTo(w * 0.54f, h * 0.52f)
-                    lineTo(w * 0.38f, h * 0.9f)
-                    lineTo(w * 0.76f, h * 0.42f)
-                    lineTo(w * 0.5f, h * 0.42f)
-                    close()
-                }
-                drawPath(path, color)
-            }
-
-            "rest" -> {
-                drawLine(color, Offset(w * 0.26f, h * 0.24f), Offset(w * 0.74f, h * 0.24f), strokeWidth)
-                drawLine(color, Offset(w * 0.74f, h * 0.24f), Offset(w * 0.28f, h * 0.76f), strokeWidth)
-                drawLine(color, Offset(w * 0.28f, h * 0.76f), Offset(w * 0.74f, h * 0.76f), strokeWidth)
-            }
-
-            "recover_breathe" -> {
-                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.38f, h * 0.5f), style = stroke)
-                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.62f, h * 0.5f), style = stroke)
-                drawLine(color, Offset(w * 0.2f, h * 0.5f), Offset(w * 0.8f, h * 0.5f), strokeWidth * 0.72f)
-            }
-
-            "cooldown" -> {
-                drawLine(color, Offset(w * 0.5f, h * 0.16f), Offset(w * 0.5f, h * 0.84f), strokeWidth)
-                drawLine(color, Offset(w * 0.24f, h * 0.58f), Offset(w * 0.5f, h * 0.84f), strokeWidth)
-                drawLine(color, Offset(w * 0.76f, h * 0.58f), Offset(w * 0.5f, h * 0.84f), strokeWidth)
-            }
-
-            "strength" -> {
-                drawLine(color, Offset(w * 0.22f, h * 0.5f), Offset(w * 0.78f, h * 0.5f), strokeWidth)
-                drawLine(color, Offset(w * 0.22f, h * 0.32f), Offset(w * 0.22f, h * 0.68f), strokeWidth)
-                drawLine(color, Offset(w * 0.78f, h * 0.32f), Offset(w * 0.78f, h * 0.68f), strokeWidth)
-                drawLine(color, Offset(w * 0.34f, h * 0.38f), Offset(w * 0.34f, h * 0.62f), strokeWidth)
-                drawLine(color, Offset(w * 0.66f, h * 0.38f), Offset(w * 0.66f, h * 0.62f), strokeWidth)
-            }
-
-            "mobility" -> {
-                drawCircle(color, radius = w * 0.32f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
-                drawLine(color, Offset(w * 0.5f, h * 0.18f), Offset(w * 0.5f, h * 0.82f), strokeWidth)
-                drawLine(color, Offset(w * 0.18f, h * 0.5f), Offset(w * 0.82f, h * 0.5f), strokeWidth)
-            }
-
-            else -> {
-                drawCircle(color, radius = w * 0.26f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
-                drawCircle(color, radius = w * 0.06f, center = Offset(w * 0.5f, h * 0.5f))
-            }
-        }
-    }
+    StageIconImage(
+        iconKey = iconKey,
+        color = color,
+        modifier = modifier
+    )
 }
 
 @Composable

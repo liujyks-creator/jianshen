@@ -219,6 +219,7 @@ internal enum class TimedCompositionBoundaryStyleTarget(
 internal data class StageIconOptionUiState(
     val key: String,
     val label: String,
+    val description: String,
     val selected: Boolean,
     val contentDescription: String
 )
@@ -842,10 +843,12 @@ private fun buildStageStylePickerUiState(
         StageIconOptionUiState(
             key = option.key,
             label = option.label,
+            description = option.description,
             selected = selected,
             contentDescription = buildString {
                 if (selected) append("已选中，")
-                append("图标 ${option.label}")
+                append("图标 ${option.label}，")
+                append(option.description)
             }
         )
     }
@@ -901,20 +904,21 @@ private fun com.liujyks.trainflow.core.model.StageColorPreset.toEditorColorOptio
 
 private data class StageStyleIconLabel(
     val key: String,
-    val label: String
+    val label: String,
+    val description: String
 )
 
 private val StageStyleIconLabels: List<StageStyleIconLabel> = listOf(
-    StageStyleIconLabel(TimedStageIconKey.WARMUP.contractValue, "热身"),
-    StageStyleIconLabel(TimedStageIconKey.WORK.contractValue, "工作"),
-    StageStyleIconLabel(TimedStageIconKey.SPEED_UP.contractValue, "加速"),
-    StageStyleIconLabel(TimedStageIconKey.SPRINT.contractValue, "冲刺"),
-    StageStyleIconLabel(TimedStageIconKey.REST.contractValue, "休息"),
-    StageStyleIconLabel(TimedStageIconKey.RECOVER_BREATHE.contractValue, "呼吸"),
-    StageStyleIconLabel(TimedStageIconKey.COOLDOWN.contractValue, "放松"),
-    StageStyleIconLabel(TimedStageIconKey.STRENGTH.contractValue, "力量"),
-    StageStyleIconLabel(TimedStageIconKey.MOBILITY.contractValue, "灵活"),
-    StageStyleIconLabel(TimedStageIconKey.CUSTOM.contractValue, "自定义")
+    StageStyleIconLabel(TimedStageIconKey.WARMUP.contractValue, "热身", "火苗升温符号，适合热身和启动阶段"),
+    StageStyleIconLabel(TimedStageIconKey.WORK.contractValue, "训练中", "动作进行符号，适合普通训练目标"),
+    StageStyleIconLabel(TimedStageIconKey.SPEED_UP.contractValue, "加速", "速度线箭头符号，适合逐渐提速目标"),
+    StageStyleIconLabel(TimedStageIconKey.SPRINT.contractValue, "冲刺", "闪电冲刺符号，适合爆发目标"),
+    StageStyleIconLabel(TimedStageIconKey.REST.contractValue, "休息", "雪花冷静符号，适合普通休息"),
+    StageStyleIconLabel(TimedStageIconKey.RECOVER_BREATHE.contractValue, "轮间恢复", "循环恢复和呼吸符号，适合轮间休息"),
+    StageStyleIconLabel(TimedStageIconKey.COOLDOWN.contractValue, "放松", "下行降温和舒缓符号，适合放松阶段"),
+    StageStyleIconLabel(TimedStageIconKey.STRENGTH.contractValue, "力量", "哑铃符号，适合力量训练提示"),
+    StageStyleIconLabel(TimedStageIconKey.MOBILITY.contractValue, "灵活", "关节活动符号，适合灵活性和活动度目标"),
+    StageStyleIconLabel(TimedStageIconKey.CUSTOM.contractValue, "自定义", "通用圆点符号，适合未归类阶段")
 )
 
 private fun TimedCompositionPlanEditorScreenState.updateTarget(
@@ -1069,7 +1073,7 @@ private fun defaultCompositionStageGroups(): List<TimedCompositionStageGroupEdit
             id = "stage-core",
             name = "冲刺组合",
             colorHex = TimedCompositionTargetKind.ACTION.defaultColorHex,
-            iconKey = TimedCompositionTargetKind.ACTION.defaultIconKey,
+            iconKey = TimedStageIconKey.SPRINT.contractValue,
             order = 2,
             targets = listOf(
                 TimedCompositionTargetEditorUiState(
@@ -1077,7 +1081,7 @@ private fun defaultCompositionStageGroups(): List<TimedCompositionStageGroupEdit
                     name = "冲刺",
                     kind = TimedCompositionTargetKind.ACTION,
                     colorHex = TimedCompositionTargetKind.ACTION.defaultColorHex,
-                    iconKey = TimedCompositionTargetKind.ACTION.defaultIconKey,
+                    iconKey = TimedStageIconKey.SPRINT.contractValue,
                     durationSec = 120,
                     order = 1
                 )

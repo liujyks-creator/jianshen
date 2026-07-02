@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.liujyks.trainflow.ui.components.StageIconImage
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowReduceMotion
 import com.liujyks.trainflow.ui.theme.isBigType
@@ -534,178 +535,11 @@ private fun TimerDialStageGlyph(
     color: Color,
     size: Dp
 ) {
-    Canvas(modifier = Modifier.size(size)) {
-        val stroke = 3.dp.toPx()
-        val resolvedIconKey = iconKey.timerDialIconKey(stageType)
-        when (resolvedIconKey) {
-            "warmup" -> {
-                drawCircle(color = color, radius = size.toPx() * 0.22f)
-                listOf(0f, 90f, 180f, 270f).forEach { angle ->
-                    val radians = Math.toRadians(angle.toDouble())
-                    val center = Offset(size.toPx() / 2f, size.toPx() / 2f)
-                    val start = Offset(
-                        x = center.x + kotlin.math.cos(radians).toFloat() * size.toPx() * 0.32f,
-                        y = center.y + kotlin.math.sin(radians).toFloat() * size.toPx() * 0.32f
-                    )
-                    val end = Offset(
-                        x = center.x + kotlin.math.cos(radians).toFloat() * size.toPx() * 0.46f,
-                        y = center.y + kotlin.math.sin(radians).toFloat() * size.toPx() * 0.46f
-                    )
-                    drawLine(color = color, start = start, end = end, strokeWidth = stroke)
-                }
-            }
-            "work" -> {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(size.toPx() * 0.34f, size.toPx() * 0.12f)
-                    lineTo(size.toPx() * 0.68f, size.toPx() * 0.45f)
-                    lineTo(size.toPx() * 0.52f, size.toPx() * 0.45f)
-                    lineTo(size.toPx() * 0.66f, size.toPx() * 0.88f)
-                    lineTo(size.toPx() * 0.30f, size.toPx() * 0.52f)
-                    lineTo(size.toPx() * 0.48f, size.toPx() * 0.52f)
-                    close()
-                }
-                drawPath(path, color)
-            }
-            "speed_up" -> {
-                listOf(0.3f, 0.5f, 0.7f).forEach { y ->
-                    drawLine(
-                        color = color,
-                        start = Offset(size.toPx() * 0.22f, size.toPx() * y),
-                        end = Offset(size.toPx() * 0.7f, size.toPx() * y),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
-                    )
-                }
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(size.toPx() * 0.66f, size.toPx() * 0.22f)
-                    lineTo(size.toPx() * 0.86f, size.toPx() * 0.5f)
-                    lineTo(size.toPx() * 0.66f, size.toPx() * 0.78f)
-                }
-                drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
-            }
-            "sprint" -> {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(size.toPx() * 0.26f, size.toPx() * 0.16f)
-                    lineTo(size.toPx() * 0.78f, size.toPx() * 0.5f)
-                    lineTo(size.toPx() * 0.26f, size.toPx() * 0.84f)
-                    close()
-                }
-                drawPath(path, color)
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.16f, size.toPx() * 0.32f),
-                    end = Offset(size.toPx() * 0.38f, size.toPx() * 0.32f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.16f, size.toPx() * 0.68f),
-                    end = Offset(size.toPx() * 0.38f, size.toPx() * 0.68f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-            }
-            "rest" -> {
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.38f, size.toPx() * 0.22f),
-                    end = Offset(size.toPx() * 0.38f, size.toPx() * 0.78f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.62f, size.toPx() * 0.22f),
-                    end = Offset(size.toPx() * 0.62f, size.toPx() * 0.78f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-            }
-            "recover_breathe" -> {
-                drawArc(
-                    color = color,
-                    startAngle = 205f,
-                    sweepAngle = 130f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                drawArc(
-                    color = color,
-                    startAngle = 25f,
-                    sweepAngle = 130f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                drawCircle(
-                    color = color,
-                    radius = size.toPx() * 0.08f,
-                    center = Offset(size.toPx() * 0.5f, size.toPx() * 0.5f)
-                )
-            }
-            "cooldown" -> {
-                drawArc(
-                    color = color,
-                    startAngle = 30f,
-                    sweepAngle = 280f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                drawCircle(
-                    color = color.copy(alpha = 0.34f),
-                    radius = size.toPx() * 0.2f,
-                    center = Offset(size.toPx() * 0.5f, size.toPx() * 0.5f)
-                )
-            }
-            "strength" -> {
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.18f, size.toPx() * 0.5f),
-                    end = Offset(size.toPx() * 0.82f, size.toPx() * 0.5f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-                listOf(0.26f, 0.36f, 0.64f, 0.74f).forEach { x ->
-                    drawLine(
-                        color = color,
-                        start = Offset(size.toPx() * x, size.toPx() * 0.34f),
-                        end = Offset(size.toPx() * x, size.toPx() * 0.66f),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
-                    )
-                }
-            }
-            "mobility" -> {
-                drawCircle(
-                    color = color,
-                    radius = size.toPx() * 0.3f,
-                    style = Stroke(width = stroke)
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.5f, size.toPx() * 0.2f),
-                    end = Offset(size.toPx() * 0.5f, size.toPx() * 0.8f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.toPx() * 0.2f, size.toPx() * 0.5f),
-                    end = Offset(size.toPx() * 0.8f, size.toPx() * 0.5f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
-            }
-            else -> {
-                drawCircle(
-                    color = color,
-                    radius = size.toPx() * 0.34f,
-                    style = Stroke(width = stroke)
-                )
-                drawCircle(color = color, radius = size.toPx() * 0.08f)
-            }
-        }
-    }
+    StageIconImage(
+        iconKey = iconKey.timerDialIconKey(stageType),
+        color = color,
+        modifier = Modifier.size(size)
+    )
 }
 
 private fun String.timerDialIconKey(stageType: TimerDialStageType): String {
