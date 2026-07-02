@@ -10,6 +10,7 @@ import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
@@ -474,7 +475,7 @@ private fun WorkoutPlan.planDetailSummary(): String {
                 .mapNotNull { it.target?.restAfterSetSec }
                 .distinct()
             val restSummary = if (restValues.size == 1) "${restValues.single()}秒休息" else "按动作休息"
-            "$restSummary · 计划值预填实际记录"
+            "$restSummary · ${strengthSetTimerModeSummary()} · 计划值预填实际记录"
         }
 
         WorkoutMode.FOLLOW_ALONG -> "复用计时流程和动作内容"
@@ -572,6 +573,18 @@ private fun WorkoutPlan.strengthDetailSections(): List<PlanDetailSectionUiState>
             rows = actionRows
         )
     )
+}
+
+private fun WorkoutPlan.strengthSetTimerModeSummary(): String {
+    val modes = blocks.filterIsInstance<StrengthExerciseBlock>()
+        .map { block -> block.setTimerMode }
+        .distinct()
+    if (modes.isEmpty()) return "本组计时未设置"
+    return when (modes.singleOrNull()) {
+        StrengthSetTimerMode.AUTO_AFTER_REST -> "休息后自动开始下一组"
+        StrengthSetTimerMode.MANUAL_START -> "手动开始下一组"
+        null -> "按动作设置"
+    }
 }
 
 private fun StrengthSetKind.displayLabel(): String {

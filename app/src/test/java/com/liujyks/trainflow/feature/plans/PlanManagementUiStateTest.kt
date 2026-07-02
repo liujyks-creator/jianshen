@@ -8,6 +8,7 @@ import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionState
 import com.liujyks.trainflow.core.notifications.PlanReminderNotificationPermissionStatus
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.ui.theme.SkinRegistry
@@ -114,6 +115,25 @@ class PlanManagementUiStateTest {
         assertTrue(detail.sections.any { section -> section.title == "动作与组" })
         assertTrue(detail.reminder.boundaryCopy.contains("普通通知"))
         assertFalse(detail.sections.flatMap { it.rows }.joinToString().contains("manual_start"))
+    }
+
+    @Test
+    fun strengthPlanDetailShowsSavedSetTimerModeWithoutContractValue() {
+        val autoPlan = buildDefaultStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                strengthSetTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST
+            )
+        ).toWorkoutPlan(planId = "auto-strength")
+        val detailRows = PlanManagementScreenState(plans = listOf(autoPlan))
+            .selectPlan("auto-strength")
+            .selectedDetail
+            .let(::requireNotNull)
+            .sections
+            .flatMap { section -> section.rows }
+            .joinToString(" ")
+
+        assertTrue(detailRows.contains("休息后自动开始下一组"))
+        assertFalse(detailRows.contains("auto_after_rest"))
     }
 
     @Test

@@ -663,7 +663,7 @@ type RepTarget =
 - 用户展开逐组设置后，`StrengthSetPlan` 覆盖动作级默认值。
 - `setTimerMode: "auto_after_rest"` 表示组间休息结束后自动进入下一组 active set；`"manual_start"` 表示休息结束后停在下一组准备态，等待用户手动发出 `start_strength_set`。
 - 训练偏好设置提供新建 / 编辑计划的默认 `setTimerMode`，执行引擎消费保存到 `StrengthExerciseBlock` 的模式，不把该偏好改写为新的 `WorkoutCommand` 或 `WorkoutEvent`。
-- E15-1b planning：力量计划编辑页应暴露当前计划的 `setTimerMode`，让用户可以显式把已保存计划改为 `"manual_start"` 或 `"auto_after_rest"` 并保存。全局训练偏好仍只提供新建 / 编辑默认值，不在执行旧计划时运行时覆盖 `StrengthExerciseBlock.setTimerMode`。
+- E15-1b status：力量计划编辑页已暴露当前计划的 `setTimerMode`，用户可以显式把已保存计划改为 `"manual_start"` 或 `"auto_after_rest"` 并保存回同一个 plan id；计划详情显示用户可读模式。全局训练偏好仍只提供新建编辑草稿默认值，不在执行旧计划时运行时覆盖 `StrengthExerciseBlock.setTimerMode`。
 
 ### 7.3 力量训练示例
 
