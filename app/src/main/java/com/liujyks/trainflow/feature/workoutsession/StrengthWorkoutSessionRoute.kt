@@ -418,6 +418,14 @@ private fun StrengthMainPanel(
     uiState: StrengthWorkoutSessionScreenState,
     onPrimaryToggle: () -> Unit
 ) {
+    if (uiState.isCurrentSetSummaryCollapsed) {
+        StrengthCollapsedCurrentSetPanel(
+            uiState = uiState,
+            onPrimaryToggle = onPrimaryToggle
+        )
+        return
+    }
+
     val skin = LocalTrainFlowSkin.current
     val isRest = uiState.phaseLabel == "休息"
     val isConfirm = uiState.canConfirmPlanned
@@ -549,12 +557,78 @@ private fun StrengthMainPanel(
 }
 
 @Composable
+private fun StrengthCollapsedCurrentSetPanel(
+    uiState: StrengthWorkoutSessionScreenState,
+    onPrimaryToggle: () -> Unit
+) {
+    val skin = LocalTrainFlowSkin.current
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = uiState.canPause || uiState.canResume) {
+                onPrimaryToggle()
+            },
+        shape = RoundedCornerShape(currentCardCorner()),
+        colors = CardDefaults.cardColors(containerColor = skin.tokens.action.copy(alpha = 0.1f)),
+        border = BorderStroke(1.dp, skin.tokens.action.copy(alpha = 0.42f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StrengthSessionPill(
+                    text = uiState.phaseLabel,
+                    containerColor = skin.tokens.action,
+                    contentColor = skin.tokens.primary
+                )
+                if (uiState.setKindLabel.isNotBlank()) {
+                    StrengthSessionPill(text = uiState.setKindLabel)
+                }
+            }
+            Text(
+                text = uiState.currentExerciseName,
+                style = if (skin.isBigType) {
+                    MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = 25.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                } else {
+                    MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 22.sp,
+                        lineHeight = 27.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                },
+                color = TrainFlowNeutral50
+            )
+            Text(
+                text = "${uiState.setProgressLabel} · 计划 ${uiState.targetSummary}",
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral200
+            )
+            Text(
+                text = uiState.collapsedCurrentSetStatusLabel,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = skin.tokens.action
+            )
+        }
+    }
+}
+
+@Composable
 private fun StrengthSetConfirmationPanel(
     confirmation: StrengthSetConfirmationUiState,
     input: StrengthSetConfirmationInputState,
     validation: StrengthSetConfirmationValidation,
     onInputChange: (StrengthSetConfirmationInputState) -> Unit
 ) {
+    val skin = LocalTrainFlowSkin.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(currentProminentCardCorner()),
@@ -562,8 +636,8 @@ private fun StrengthSetConfirmationPanel(
         border = BorderStroke(1.dp, TrainFlowAction.copy(alpha = 0.45f))
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -579,36 +653,17 @@ private fun StrengthSetConfirmationPanel(
                         color = TrainFlowNeutral50
                     )
                     Text(
-                        text = "${confirmation.exerciseName} · ${confirmation.setProgressLabel}",
+                        text = "计划 ${confirmation.plannedWeightLabel} / ${confirmation.plannedRepLabel} · 耗时 ${confirmation.activeDurationLabel}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TrainFlowNeutral200
                     )
                 }
-                StrengthSessionPill(text = confirmation.setKindLabel)
+                if (skin.isBigType) {
+                    StrengthSessionPill(text = confirmation.setKindLabel)
+                }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StrengthConfirmationFact(
-                    label = "计划重量",
-                    value = confirmation.plannedWeightLabel,
-                    modifier = Modifier.weight(1f)
-                )
-                StrengthConfirmationFact(
-                    label = "计划次数",
-                    value = confirmation.plannedRepLabel,
-                    modifier = Modifier.weight(1f)
-                )
-                StrengthConfirmationFact(
-                    label = "本组耗时",
-                    value = confirmation.activeDurationLabel,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (LocalTrainFlowSkin.current.isBigType) {
+            if (skin.isBigType) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -774,29 +829,6 @@ private fun bigTypeConfirmationFieldColors() = OutlinedTextFieldDefaults.colors(
     disabledBorderColor = TrainFlowNeutral500,
     disabledSuffixColor = TrainFlowNeutral500
 )
-
-@Composable
-private fun StrengthConfirmationFact(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = TrainFlowNeutral500
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleSmall,
-            color = TrainFlowNeutral50
-        )
-    }
-}
 
 @Composable
 private fun StrengthNextSetPanel(uiState: StrengthWorkoutSessionScreenState) {

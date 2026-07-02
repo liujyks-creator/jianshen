@@ -137,6 +137,63 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun strengthConfirmRecordCollapsesCurrentSetSummaryOnlyInConfirmStep() {
+        val plan = buildDefaultPlanManagementState().plans[1]
+        var state = StrengthWorkoutEngine.dispatch(
+            StrengthWorkoutEngine.create(plan),
+            WorkoutCommand.StartSession
+        ).state
+        val prepare = state.toStrengthWorkoutSessionScreenState()
+        assertFalse(prepare.isCurrentSetSummaryCollapsed)
+
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()).state
+        val active = state.toStrengthWorkoutSessionScreenState()
+        assertFalse(active.isCurrentSetSummaryCollapsed)
+
+        state = StrengthWorkoutEngine.tick(state, seconds = 5).state
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()).state
+        val confirm = state.toStrengthWorkoutSessionScreenState()
+        assertEquals(SessionStepKind.STRENGTH_CONFIRM_SET, state.currentSessionStep?.kind)
+        assertTrue(confirm.isCurrentSetSummaryCollapsed)
+        assertTrue(confirm.collapsedCurrentSetStatusLabel.contains("待确认记录"))
+        assertTrue(confirm.collapsedCurrentSetStatusLabel.contains("完成耗时 00:05"))
+        assertTrue(confirm.currentExerciseName.isNotBlank())
+        assertTrue(confirm.setKindLabel.isNotBlank())
+        assertTrue(confirm.setProgressLabel.contains("第 1 /"))
+
+        val pausedConfirm = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession)
+            .state
+            .toStrengthWorkoutSessionScreenState()
+        assertTrue(pausedConfirm.isCurrentSetSummaryCollapsed)
+        assertTrue(pausedConfirm.collapsedCurrentSetStatusLabel.contains("已暂停"))
+
+        state = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ConfirmStrengthSet(StrengthSetCompletionInput()))
+            .state
+        val rest = state.toStrengthWorkoutSessionScreenState()
+        assertFalse(rest.isCurrentSetSummaryCollapsed)
+        assertTrue(rest.collapsedCurrentSetStatusLabel.isBlank())
+    }
+
+    @Test
+    fun strengthConfirmRecordCompactPanelDoesNotRenderLargeMetricProgressOrLongCue() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val collapsedPanelSource = routeSource
+            .substringAfter("private fun StrengthCollapsedCurrentSetPanel")
+            .substringBefore("private fun StrengthSetConfirmationPanel")
+
+        assertTrue(routeSource.contains("StrengthCollapsedCurrentSetPanel("))
+        assertTrue(collapsedPanelSource.contains("uiState.collapsedCurrentSetStatusLabel"))
+        assertTrue(collapsedPanelSource.contains("uiState.currentExerciseName"))
+        assertTrue(collapsedPanelSource.contains("uiState.setProgressLabel"))
+        assertTrue(collapsedPanelSource.contains("uiState.setKindLabel"))
+        assertFalse(collapsedPanelSource.contains("LinearProgressIndicator"))
+        assertFalse(collapsedPanelSource.contains("uiState.primaryMetricText"))
+        assertFalse(collapsedPanelSource.contains("uiState.shortCue"))
+    }
+
+    @Test
     fun followAlongExecutionKeepsPauseSkipAndEndImmediatelyReachable() {
         val plan = com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState()
             .plans

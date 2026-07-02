@@ -27,6 +27,8 @@ internal data class StrengthWorkoutSessionScreenState(
     val targetSummary: String,
     val primaryMetricLabel: String,
     val primaryMetricText: String,
+    val isCurrentSetSummaryCollapsed: Boolean,
+    val collapsedCurrentSetStatusLabel: String,
     val shortCue: String,
     val nextSetLabel: String,
     val confirmSummary: String?,
@@ -127,6 +129,15 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         SessionStepKind.STRENGTH_CONFIRM_SET -> activeSetElapsedSec.formatTimer()
         else -> current?.targetSummary() ?: "未开始"
     }
+    val shouldCollapseCurrentSetSummary = stepKind == SessionStepKind.STRENGTH_CONFIRM_SET &&
+        pendingDraft != null
+    val collapsedCurrentSetStatusLabel = when {
+        status == SessionStatus.PAUSED && shouldCollapseCurrentSetSummary ->
+            "已暂停 · 完成耗时 ${activeSetElapsedSec.formatTimer()}"
+        shouldCollapseCurrentSetSummary ->
+            "待确认记录 · 完成耗时 ${activeSetElapsedSec.formatTimer()}"
+        else -> ""
+    }
     val shortCue = buildShortCue(
         current = current,
         next = next,
@@ -201,6 +212,8 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         targetSummary = current?.targetSummary() ?: "暂无本组目标",
         primaryMetricLabel = primaryMetricLabel,
         primaryMetricText = primaryMetricText,
+        isCurrentSetSummaryCollapsed = shouldCollapseCurrentSetSummary,
+        collapsedCurrentSetStatusLabel = collapsedCurrentSetStatusLabel,
         shortCue = shortCue,
         nextSetLabel = next.toNextSetLabel(exerciseById),
         confirmSummary = pendingDraft?.let { draft ->
