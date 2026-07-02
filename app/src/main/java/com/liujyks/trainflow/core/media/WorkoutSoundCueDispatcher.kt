@@ -29,11 +29,6 @@ internal object WorkoutSoundCueDispatcher {
                 cue = cue,
                 source = WorkoutSoundCueSource.REST_STARTED
             )
-            is WorkoutEvent.StrengthSetReady -> stageTransitionRequest(
-                eventKey = "strength_set_ready:${event.exerciseId}:${event.setPlanId.orEmpty()}",
-                cue = cue,
-                source = WorkoutSoundCueSource.STAGE_TRANSITION
-            )
             is WorkoutEvent.NextExerciseReady -> stageTransitionRequest(
                 eventKey = "next_exercise_ready:${event.exerciseId}",
                 cue = cue,
@@ -48,11 +43,21 @@ internal object WorkoutSoundCueDispatcher {
         }
     }
 
+    fun requestForStrengthAutoRestTransition(
+        event: WorkoutEvent.StrengthSetStarted,
+        cue: CountdownCue?
+    ): WorkoutSoundCueRequest? {
+        return stageTransitionRequest(
+            eventKey = "strength_set_started:${event.exerciseId}:${event.setPlanId.orEmpty()}",
+            cue = cue,
+            source = WorkoutSoundCueSource.STAGE_TRANSITION
+        )
+    }
+
     fun cueFor(event: WorkoutEvent, cueSettings: CueSettings?): CountdownCue? {
         return when (event) {
             is WorkoutEvent.TimedWorkStarted,
             is WorkoutEvent.TimedWorkEnding,
-            is WorkoutEvent.StrengthSetReady,
             is WorkoutEvent.NextExerciseReady -> cueSettings?.actionEnding
             is WorkoutEvent.RestStarted,
             is WorkoutEvent.RestEnding -> cueSettings?.restEnding

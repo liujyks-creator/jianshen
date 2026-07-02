@@ -1,10 +1,14 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-07-01
+**状态日期:** 2026-07-02
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
+
+2026-07-02 E15-1a Strength auto-after-rest transition bell review fix 已实现，详见 `docs/testing/e15-1a-strength-auto-rest-bell.md`。本轮把力量训练阶段铃声严格限定到 `auto_after_rest` 休息自然结束后自动进入下一组 active set：route 仅在 engine tick 从 `STRENGTH_REST` 进入 `STRENGTH_ACTIVE_SET` 时，才把上一段 rest cue 交给专用 auto-rest transition request，并复用 `WorkoutSoundCueKind.STAGE_BELL` / `stage_bell_copper_clean.mp3`。`WorkoutSoundCueDispatcher.requestFor` 不再把 `StrengthSetReady` / `StrengthSetStarted` 当作通用阶段铃；初次 prepare、普通 set-ready、用户点击开始本组、休息中点击提前开始本组，以及 `manual_start` 休息结束进入 prepare set 都不请求该 bell；`soundEnabled=false` 继续阻止请求。训练偏好仍只作为新建 / 编辑计划默认值，执行旧计划继续消费已保存的 `StrengthExerciseBlock.setTimerMode`。本轮不新增音频资源，不请求 audio focus，不 duck 或暂停外部音频，不改 `WorkoutCommand` / `WorkoutEvent` 语义，不改 Room schema、TimerDial、记录页、完成页、图标、心率或设备接入边界。
+
+2026-07-02 E15-1b Strength plan set timer mode editor control 已加入下一步计划。当前产品语义保持不变：训练偏好里的 `manual_start` / `auto_after_rest` 只影响新建 / 编辑计划默认值，不会运行时覆盖旧计划；执行时仍消费保存到 `StrengthExerciseBlock.setTimerMode` 的计划值。为降低用户误解，下一轮建议在力量计划编辑页暴露当前计划的本组计时模式设置，允许用户把旧计划显式改为“手动开始下一组”或“休息后自动开始下一组”并保存。该 story 不改 engine 语义、不改 Room schema、不改声音、TimerDial、记录、心率或设备接入边界。
 
 2026-07-01 E15-1 Strength rest cue + auto-start regression 已实现，详见 `docs/testing/e15-1-strength-rest-cue-auto-start.md`。本轮只修力量训练执行里的两个真机反馈：力量休息最后 N 秒现在复用既有 `WorkoutEvent.RestEnding` / `CueSettings.restEnding` / `COUNTDOWN_BEEP` 路径，默认覆盖最后 5 秒，短休息按实际休息时长裁剪；`soundEnabled=false` 仍会阻止声音请求。力量训练“本组计时默认模式”进入计划后，`auto_after_rest` 现在会在休息结束后自动进入下一组 active set，`manual_start` 仍停在下一组准备态等待用户手动开始。修复未新增音频资源，未请求 audio focus，未 duck 或暂停外部音频，未修改 `WorkoutCommand` / `WorkoutEvent` 语义，未改 Room schema、TimerDial、记录页、完成页、图标、心率、BLE / Huawei / Health Connect / HealthKit / Wear OS 或医疗告警边界。力量完成 bell 和力量 haptics parity 仍作为后续增强。
 

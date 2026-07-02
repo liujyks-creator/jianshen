@@ -58,17 +58,35 @@ class WorkoutSoundCueDispatcherTest {
     }
 
     @Test
-    fun strengthPhaseReadyEventsMapToStageBell() {
+    fun strengthReadyAndStartedEventsDoNotMapToGenericStageBell() {
         val cue = CountdownCue(soundEnabled = true)
 
         val strengthReady = WorkoutSoundCueDispatcher.requestFor(
             event = WorkoutEvent.StrengthSetReady(exerciseId = "squat", setPlanId = "set-1"),
             cue = cue
         )
+        val strengthStarted = WorkoutSoundCueDispatcher.requestFor(
+            event = WorkoutEvent.StrengthSetStarted(exerciseId = "squat", setPlanId = "set-1"),
+            cue = cue
+        )
 
-        requireNotNull(strengthReady)
-        assertEquals(WorkoutSoundCueKind.STAGE_BELL, strengthReady.kind)
-        assertEquals(WorkoutSoundCueSource.STAGE_TRANSITION, strengthReady.source)
+        assertNull(strengthReady)
+        assertNull(strengthStarted)
+    }
+
+    @Test
+    fun explicitStrengthAutoRestTransitionMapsToStageBell() {
+        val cue = CountdownCue(soundEnabled = true)
+
+        val request = WorkoutSoundCueDispatcher.requestForStrengthAutoRestTransition(
+            event = WorkoutEvent.StrengthSetStarted(exerciseId = "squat", setPlanId = "set-2"),
+            cue = cue
+        )
+
+        requireNotNull(request)
+        assertEquals(WorkoutSoundCueKind.STAGE_BELL, request.kind)
+        assertEquals("strength_set_started:squat:set-2", request.eventKey)
+        assertEquals(WorkoutSoundCueSource.STAGE_TRANSITION, request.source)
     }
 
     @Test
@@ -176,8 +194,7 @@ class WorkoutSoundCueDispatcherTest {
             )
         )
 
-        requireNotNull(readyRequest)
-        assertEquals(WorkoutSoundCueKind.STAGE_BELL, readyRequest.kind)
+        assertNull(readyRequest)
         assertNull(startedRequest)
         assertNull(completedRequest)
     }
