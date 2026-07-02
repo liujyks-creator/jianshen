@@ -295,6 +295,12 @@ internal fun StrengthPlanEditorScreenState.updateDescription(value: String): Str
     return copy(description = value, savedPlan = null, statusMessage = null)
 }
 
+internal fun StrengthPlanEditorScreenState.updateStrengthSetTimerMode(
+    mode: StrengthSetTimerMode
+): StrengthPlanEditorScreenState {
+    return copy(strengthSetTimerMode = mode, savedPlan = null, statusMessage = null)
+}
+
 internal fun StrengthPlanEditorScreenState.updateTargetWeight(
     exerciseItemId: String,
     kg: Double?

@@ -186,6 +186,58 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
+    fun strengthSetTimerModeCanBeChangedAndSavedForCurrentPlan() {
+        val switched = buildDefaultStrengthPlanEditorState()
+            .updateStrengthSetTimerMode(StrengthSetTimerMode.AUTO_AFTER_REST)
+            .addExercise("barbell-bench-press")
+        val savedPlan = requireNotNull(
+            switched.saveDraftPlan(planId = "saved-strength").savedPlan
+        )
+        val blocks = savedPlan.blocks.filterIsInstance<StrengthExerciseBlock>()
+        val manualAgain = switched
+            .saveDraftPlan(planId = "saved-strength")
+            .updateStrengthSetTimerMode(StrengthSetTimerMode.MANUAL_START)
+
+        assertEquals(StrengthSetTimerMode.AUTO_AFTER_REST, switched.strengthSetTimerMode)
+        assertTrue(blocks.isNotEmpty())
+        assertTrue(blocks.all { it.setTimerMode == StrengthSetTimerMode.AUTO_AFTER_REST })
+        assertNull(manualAgain.savedPlan)
+        assertNull(manualAgain.statusMessage)
+        assertTrue(
+            manualAgain.toWorkoutPlan().blocks
+                .filterIsInstance<StrengthExerciseBlock>()
+                .all { block -> block.setTimerMode == StrengthSetTimerMode.MANUAL_START }
+        )
+    }
+
+    @Test
+    fun savedStrengthPlanBackfillsTimerModeAndOnlyChangesAfterExplicitEditorSave() {
+        val savedManualPlan = buildDefaultStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                strengthSetTimerMode = StrengthSetTimerMode.MANUAL_START
+            )
+        ).toWorkoutPlan(planId = "saved-strength", timestamp = "2026-06-14T01:00:00Z")
+        val editorAfterPreferenceChange = savedManualPlan.toStrengthPlanEditorState(
+            defaults = PlanEditorDefaults(
+                strengthSetTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST
+            )
+        )
+        val explicitlyUpdatedPlan = editorAfterPreferenceChange
+            .updateStrengthSetTimerMode(StrengthSetTimerMode.AUTO_AFTER_REST)
+            .saveDraftPlan(timestamp = "2026-06-15T01:00:00Z")
+            .savedPlan
+            .let(::requireNotNull)
+
+        assertEquals(StrengthSetTimerMode.MANUAL_START, editorAfterPreferenceChange.strengthSetTimerMode)
+        assertEquals("saved-strength", explicitlyUpdatedPlan.id)
+        assertTrue(
+            explicitlyUpdatedPlan.blocks
+                .filterIsInstance<StrengthExerciseBlock>()
+                .all { block -> block.setTimerMode == StrengthSetTimerMode.AUTO_AFTER_REST }
+        )
+    }
+
+    @Test
     fun changingTrainingPreferenceDefaultsDoesNotRewriteExistingStrengthDraftSetTimerMode() {
         val existingState = buildDefaultStrengthPlanEditorState(
             defaults = PlanEditorDefaults(

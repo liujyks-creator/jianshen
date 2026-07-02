@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
@@ -86,6 +87,7 @@ internal fun StrengthPlanEditorRoute(
         onBackToHome = onBackToHome,
         onTitleChanged = { uiState = uiState.updateTitle(it) },
         onDescriptionChanged = { uiState = uiState.updateDescription(it) },
+        onStrengthSetTimerModeChanged = { mode -> uiState = uiState.updateStrengthSetTimerMode(mode) },
         onTargetWeightChanged = { itemId, input -> uiState = uiState.updateTargetWeightText(itemId, input) },
         onRepRangeChanged = { itemId, minRepsInput, maxRepsInput ->
             uiState = uiState.updateRepRangeText(itemId, minRepsInput, maxRepsInput)
@@ -142,6 +144,7 @@ private fun StrengthPlanEditorScreen(
     onBackToHome: () -> Unit,
     onTitleChanged: (String) -> Unit,
     onDescriptionChanged: (String) -> Unit,
+    onStrengthSetTimerModeChanged: (StrengthSetTimerMode) -> Unit,
     onTargetWeightChanged: (String, String) -> Unit,
     onRepRangeChanged: (String, String, String) -> Unit,
     onFixedRepsChanged: (String, String) -> Unit,
@@ -227,6 +230,13 @@ private fun StrengthPlanEditorScreen(
                     uiState = uiState,
                     onTitleChanged = onTitleChanged,
                     onDescriptionChanged = onDescriptionChanged
+                )
+            }
+
+            item {
+                StrengthSetTimerModeCard(
+                    selectedMode = uiState.strengthSetTimerMode,
+                    onModeChanged = onStrengthSetTimerModeChanged
                 )
             }
 
@@ -367,6 +377,40 @@ private fun StrengthPlanBasicsCard(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("计划描述") },
             minLines = 2
+        )
+    }
+}
+
+@Composable
+private fun StrengthSetTimerModeCard(
+    selectedMode: StrengthSetTimerMode,
+    onModeChanged: (StrengthSetTimerMode) -> Unit
+) {
+    EditorCard {
+        SectionTitle(text = "本组计时模式")
+        Text(
+            text = "当前计划保存后以这里的设置为准；训练偏好只影响新建计划默认值，不会自动覆盖旧计划。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            StrengthSetTimerMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = selectedMode == mode,
+                    onClick = { onModeChanged(mode) },
+                    label = { Text(mode.editorLabel()) }
+                )
+            }
+        }
+        Text(
+            text = selectedMode.editorDescription(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -937,7 +981,7 @@ private fun StrengthSaveAndPreviewCard(uiState: StrengthPlanEditorScreenState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "点击开始每组；计划重量和次数会预填到实际记录，保存后进入本地计划列表。",
+                text = uiState.strengthSetTimerMode.savedPlanInstruction(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1031,6 +1075,29 @@ private fun StatusPill(
             style = MaterialTheme.typography.labelLarge,
             color = contentColor
         )
+    }
+}
+
+private fun StrengthSetTimerMode.editorLabel(): String {
+    return when (this) {
+        StrengthSetTimerMode.MANUAL_START -> "手动开始下一组"
+        StrengthSetTimerMode.AUTO_AFTER_REST -> "休息后自动开始下一组"
+    }
+}
+
+private fun StrengthSetTimerMode.editorDescription(): String {
+    return when (this) {
+        StrengthSetTimerMode.MANUAL_START -> "休息结束后进入下一组准备态，等待你点按开始本组。"
+        StrengthSetTimerMode.AUTO_AFTER_REST -> "休息自然结束后直接进入下一组计时，仍可在训练中暂停、提前开始或结束。"
+    }
+}
+
+private fun StrengthSetTimerMode.savedPlanInstruction(): String {
+    return when (this) {
+        StrengthSetTimerMode.MANUAL_START ->
+            "休息结束后等待手动开始下一组；计划重量和次数会预填到实际记录。"
+        StrengthSetTimerMode.AUTO_AFTER_REST ->
+            "休息自然结束后自动开始下一组；计划重量和次数会预填到实际记录。"
     }
 }
 
