@@ -300,6 +300,14 @@ class TimerDialUiStateTest {
             val outerBaseRingGap = outerInnerEdge - (innerRadius + spec.innerBaseStrokeDp / 2f)
             val markerInternalGap = spec.innerMarkerBoundaryRadiusDp - spec.innerBaseDotRadiusDp
 
+            assertTrue(
+                "${skin.id} active glow should fit within the Canvas safe inset",
+                spec.outerSafeStrokeDp >= TimerDialOuterCurrentSegmentMaxStrokeDp + TimerDialOuterGlowExtraStrokeDp
+            )
+            assertTrue(
+                "${skin.id} safe outer ring should remain outside the inner ring",
+                spec.outerSafeDiameterDp > spec.innerDiameterDp
+            )
             assertTrue("${skin.id} base ring should sit under the thin total line", spec.innerBaseStrokeDp > spec.innerStrokeDp)
             assertTrue("${skin.id} base dots should stay lighter than numbered markers", spec.innerBaseDotRadiusDp < spec.innerMarkerRadiusDp)
             assertTrue("${skin.id} marker should keep visible space from center circle", centerGap >= 10f)
@@ -410,6 +418,62 @@ class TimerDialUiStateTest {
         assertEquals(0.45f, dial.projectedStageProgress(elapsedMillis = 500), 0.0001f)
         assertEquals(0.5f, dial.projectedStageProgress(elapsedMillis = 1_000), 0.0001f)
         assertEquals(0.5f, dial.projectedStageProgress(elapsedMillis = 2_500), 0.0001f)
+    }
+
+    @Test
+    fun oneSecondTargetProjectionIsLinearMonotonicAndClamped() {
+        val dial = shortTargetDial(
+            durationSec = 1,
+            progress = 0f,
+            remainingSec = 1
+        )
+        val stageSamples = listOf(0L, 250L, 500L, 750L, 1_000L)
+            .map { elapsedMillis -> dial.projectedStageProgress(elapsedMillis = elapsedMillis) }
+        val totalSamples = listOf(0L, 250L, 500L, 750L, 1_000L)
+            .map { elapsedMillis -> dial.projectedTotalProgress(elapsedMillis = elapsedMillis) }
+
+        assertTrue(dial.usesShortTargetLinearProjection())
+        assertEquals(listOf(0f, 0.25f, 0.5f, 0.75f, 1f), stageSamples)
+        assertEquals(listOf(0f, 0.25f, 0.5f, 0.75f, 1f), totalSamples)
+        assertLinearProgressSteps(stageSamples)
+        assertLinearProgressSteps(totalSamples)
+        assertEquals(1f, dial.projectedStageProgress(elapsedMillis = 1_500), 0.0001f)
+        assertEquals(1f, dial.projectedTotalProgress(elapsedMillis = 1_500), 0.0001f)
+    }
+
+    @Test
+    fun twoSecondTargetProjectionKeepsEqualLinearFrameStepsAcrossEngineAnchors() {
+        val firstHalf = shortTargetDial(
+            durationSec = 2,
+            progress = 0f,
+            remainingSec = 2
+        )
+        val firstHalfSamples = listOf(0L, 250L, 500L, 750L, 1_000L)
+            .map { elapsedMillis -> firstHalf.projectedStageProgress(elapsedMillis = elapsedMillis) }
+        val secondHalf = shortTargetDial(
+            durationSec = 2,
+            progress = 0.5f,
+            remainingSec = 1
+        )
+        var previousDisplayed = TimerDialDisplayedProgress(
+            totalProgress = 0f,
+            currentStageProgress = 0f
+        )
+        val secondHalfSamples = listOf(0L, 250L, 500L, 750L, 1_000L).map { elapsedMillis ->
+            val displayed = secondHalf.monotonicDisplayedProgress(
+                elapsedMillis = elapsedMillis,
+                previousDisplayed = previousDisplayed
+            )
+            previousDisplayed = displayed
+            displayed.currentStageProgress
+        }
+
+        assertTrue(firstHalf.usesShortTargetLinearProjection())
+        assertTrue(secondHalf.usesShortTargetLinearProjection())
+        assertEquals(listOf(0f, 0.125f, 0.25f, 0.375f, 0.5f), firstHalfSamples)
+        assertEquals(listOf(0.5f, 0.625f, 0.75f, 0.875f, 1f), secondHalfSamples)
+        assertLinearProgressSteps(firstHalfSamples)
+        assertLinearProgressSteps(secondHalfSamples)
     }
 
     @Test
@@ -962,6 +1026,51 @@ class TimerDialUiStateTest {
         assertTrue(pausedDial.accessibilityDescription().contains("已暂停"))
         assertEquals(activeDial.currentStageProgress, pausedDial.currentStageProgress, 0.0001f)
         assertEquals(activeDial.totalProgress, pausedDial.totalProgress, 0.0001f)
+    }
+
+    private fun shortTargetDial(
+        durationSec: Int,
+        progress: Float,
+        remainingSec: Int
+    ): TimerDialUiState {
+        return TimerDialUiState.Empty.copy(
+            totalRemainingSec = remainingSec,
+            totalProgress = progress,
+            currentStageProgress = progress,
+            currentStageType = TimerDialStageType.WORK,
+            currentStageLabel = "Short target",
+            currentStageIndex = 1,
+            currentStageRemainingSec = remainingSec,
+            totalWorkoutStageCount = 1,
+            completedWorkoutStageCount = 0,
+            stageSegments = listOf(
+                TimerDialStageSegmentUiState(
+                    id = "short-target",
+                    label = "Short target",
+                    stageType = TimerDialStageType.WORK,
+                    durationSec = durationSec,
+                    progress = progress,
+                    isCurrent = true,
+                    colorHex = TimedStageType.WORK.defaultColorHex
+                )
+            ),
+            currentStageColorHex = TimedStageType.WORK.defaultColorHex,
+            currentStageTextColorHex = "#FFFFFF",
+            currentStageIconKey = "work",
+            canTogglePause = true
+        ).clamped()
+    }
+
+    private fun assertLinearProgressSteps(samples: List<Float>) {
+        samples.forEach { sample ->
+            assertTrue("progress should stay in 0..1: $sample", sample in 0f..1f)
+        }
+
+        val deltas = samples.zipWithNext { previous, next -> next - previous }
+        deltas.forEach { delta ->
+            assertTrue("progress should be monotonic", delta >= -0.0001f)
+            assertEquals("progress steps should be linear", deltas.first(), delta, 0.0001f)
+        }
     }
 
     private fun timerDialPlan(

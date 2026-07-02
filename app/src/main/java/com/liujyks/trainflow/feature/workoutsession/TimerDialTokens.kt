@@ -128,6 +128,9 @@ internal fun TimerDialStageSegmentUiState.strokeWidthDp(): Float {
     }
 }
 
+internal const val TimerDialOuterGlowExtraStrokeDp = 8f
+internal const val TimerDialOuterCurrentSegmentMaxStrokeDp = 12f
+
 internal data class TimerDialLayoutSpec(
     val dialSizeDp: Int,
     val centerSizeDp: Int,
@@ -143,6 +146,12 @@ internal data class TimerDialLayoutSpec(
 ) {
     val outerInsetDp: Float = outerMaxStrokeDp / 2f
     val outerDiameterDp: Float = dialSizeDp - outerMaxStrokeDp
+    val outerSafeStrokeDp: Float = maxOf(
+        outerMaxStrokeDp,
+        TimerDialOuterCurrentSegmentMaxStrokeDp + TimerDialOuterGlowExtraStrokeDp
+    )
+    val outerSafeInsetDp: Float = outerSafeStrokeDp / 2f
+    val outerSafeDiameterDp: Float = dialSizeDp - outerSafeStrokeDp
     val innerDiameterDp: Float = dialSizeDp - innerInsetDp * 2f
     val centerClearanceDp: Float = innerDiameterDp - centerSizeDp
     val innerMarkerBoundaryRadiusDp: Float = innerBaseStrokeDp / 2f
