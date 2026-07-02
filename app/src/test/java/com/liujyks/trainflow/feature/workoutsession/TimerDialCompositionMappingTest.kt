@@ -516,6 +516,55 @@ class TimerDialCompositionMappingTest {
     }
 
     @Test
+    fun v2ShortStageGroupTargetsUseLinearProjectionWithoutFixedCatchUpDelay() {
+        val block = compositionBlock(
+            stageGroups = listOf(
+                stageGroup(
+                    id = "short-targets",
+                    order = 1,
+                    targets = listOf(
+                        actionTarget(id = "two-second-work", durationSec = 2),
+                        restTarget(id = "one-second-rest", durationSec = 1, order = 2)
+                    )
+                )
+            )
+        )
+        val workAfterFirstSecond = block.expectedDialFor(
+            activeProgress = 0.5f,
+            currentRemainingSec = 1,
+            selectActiveStep = { step -> step.targetId == "two-second-work" }
+        )
+        var previousDisplayed = TimerDialDisplayedProgress(
+            totalProgress = 0f,
+            currentStageProgress = 0f
+        )
+        val displayedAtAnchor = workAfterFirstSecond.monotonicDisplayedProgress(
+            elapsedMillis = 0,
+            previousDisplayed = previousDisplayed
+        )
+        previousDisplayed = displayedAtAnchor
+        val displayedHalfSecondLater = workAfterFirstSecond.monotonicDisplayedProgress(
+            elapsedMillis = 500,
+            previousDisplayed = previousDisplayed
+        )
+        val restStart = block.expectedDialFor(
+            activeProgress = 0f,
+            currentRemainingSec = 1,
+            selectActiveStep = { step -> step.targetId == "one-second-rest" }
+        )
+
+        assertEquals(listOf(2, 1), workAfterFirstSecond.stageSegments.map { segment -> segment.durationSec })
+        assertEquals(0.5f, workAfterFirstSecond.currentStageProgress, 0.0001f)
+        assertTrue(workAfterFirstSecond.usesShortTargetLinearProjection())
+        assertEquals(0.5f, displayedAtAnchor.currentStageProgress, 0.0001f)
+        assertEquals(0.75f, displayedHalfSecondLater.currentStageProgress, 0.0001f)
+        assertEquals(1f / 3f, displayedAtAnchor.totalProgress, 0.0001f)
+        assertEquals(0.5f, displayedHalfSecondLater.totalProgress, 0.0001f)
+        assertTrue(restStart.usesShortTargetLinearProjection())
+        assertEquals(0.5f, restStart.projectedStageProgress(elapsedMillis = 500), 0.0001f)
+    }
+
+    @Test
     fun legacyTimedPlanKeepsExistingWorkRestCycleSemantics() {
         var state = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.create(legacyTimedPlan()),

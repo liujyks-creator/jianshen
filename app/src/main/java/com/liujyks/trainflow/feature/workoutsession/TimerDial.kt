@@ -217,11 +217,11 @@ internal fun TimerDial(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.requiredSize(dialSize)) {
-            val outerMaxStroke = layoutSpec.outerMaxStrokeDp.dp.toPx()
+            val outerSafeStroke = layoutSpec.outerSafeStrokeDp.dp.toPx()
             val innerStroke = layoutSpec.innerStrokeDp.dp.toPx()
             val innerBaseStroke = layoutSpec.innerBaseStrokeDp.dp.toPx()
-            val outerInset = outerMaxStroke / 2f
-            val outerSize = Size(size.width - outerMaxStroke, size.height - outerMaxStroke)
+            val outerInset = outerSafeStroke / 2f
+            val outerSize = Size(size.width - outerSafeStroke, size.height - outerSafeStroke)
             val outerTopLeft = Offset(outerInset, outerInset)
             val innerInset = layoutSpec.innerInsetDp.dp.toPx()
             val innerSize = Size(size.width - innerInset * 2f, size.height - innerInset * 2f)

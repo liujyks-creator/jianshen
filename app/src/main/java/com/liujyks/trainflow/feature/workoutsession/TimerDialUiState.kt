@@ -740,6 +740,8 @@ internal data class TimerDialDisplayedProgress(
     val currentStageProgress: Float
 )
 
+internal const val TimerDialShortTargetLinearMaxDurationSec = 2
+
 internal fun TimerDialUiState.smoothProgressIdentity(): TimerDialSmoothProgressIdentity {
     return TimerDialSmoothProgressIdentity(
         currentSegmentId = stageSegments.firstOrNull { segment -> segment.isCurrent }?.id,
@@ -807,24 +809,37 @@ internal fun TimerDialUiState.monotonicDisplayedProgress(
         return projected
     }
 
+    val snapForwardAnchor = usesShortTargetLinearProjection()
     return TimerDialDisplayedProgress(
         totalProgress = catchUpDisplayedProgress(
             previousProgress = previousDisplayed.totalProgress,
             anchorProgress = anchor.totalProgress,
-            projectedProgress = projected.totalProgress
+            projectedProgress = projected.totalProgress,
+            snapForwardAnchor = snapForwardAnchor
         ),
         currentStageProgress = catchUpDisplayedProgress(
             previousProgress = previousDisplayed.currentStageProgress,
             anchorProgress = anchor.currentStageProgress,
-            projectedProgress = projected.currentStageProgress
+            projectedProgress = projected.currentStageProgress,
+            snapForwardAnchor = snapForwardAnchor
         )
     )
+}
+
+internal fun TimerDialUiState.usesShortTargetLinearProjection(): Boolean {
+    val currentDurationSec = stageSegments
+        .firstOrNull { segment -> segment.isCurrent }
+        ?.durationSec
+        ?: return false
+
+    return currentDurationSec in 1..TimerDialShortTargetLinearMaxDurationSec
 }
 
 private fun catchUpDisplayedProgress(
     previousProgress: Float,
     anchorProgress: Float,
-    projectedProgress: Float
+    projectedProgress: Float,
+    snapForwardAnchor: Boolean = false
 ): Float {
     val previous = previousProgress.clampedProgress()
     val anchor = anchorProgress.clampedProgress()
@@ -832,6 +847,12 @@ private fun catchUpDisplayedProgress(
 
     if (previous >= anchor) {
         return maxOf(previous, projected)
+    }
+
+    if (snapForwardAnchor) {
+        return maxOf(anchor, projected)
+            .clampedProgress()
+            .coerceAtLeast(previous)
     }
 
     val projectedDelta = (projected - anchor).coerceAtLeast(0f)
