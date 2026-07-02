@@ -128,10 +128,14 @@ class TimedCompositionPlanEditorUiStateTest {
 
         assertTrue(stagePicker.colorPicker.recommendedColors.isNotEmpty())
         assertTrue(stagePicker.colorPicker.moreColors.isNotEmpty())
-        assertEquals("工作", stagePicker.selectedIconLabel)
-        assertEquals("呼吸", boundaryPicker.selectedIconLabel)
+        assertEquals("训练中", stagePicker.selectedIconLabel)
+        assertEquals("轮间恢复", boundaryPicker.selectedIconLabel)
         assertFalse(stagePicker.iconOptions.any { option -> option.label == option.key || "_" in option.label })
         assertEquals("加速", stagePicker.iconOptions.first { option -> option.key == "speed_up" }.label)
+        assertTrue(stagePicker.iconOptions.first { option -> option.key == "warmup" }.contentDescription.contains("升温"))
+        assertTrue(stagePicker.iconOptions.first { option -> option.key == "rest" }.contentDescription.contains("雪花"))
+        assertTrue(stagePicker.iconOptions.first { option -> option.key == "recover_breathe" }.contentDescription.contains("轮间"))
+        assertTrue(stagePicker.iconOptions.first { option -> option.key == "cooldown" }.contentDescription.contains("降温"))
     }
 
     @Test
