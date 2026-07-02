@@ -1,12 +1,12 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-07-02
+**状态日期:** 2026-07-03
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
 
-2026-07-02 E15-3 Stage icon semantic clarity 已实现，详见 `docs/testing/e15-3-stage-icon-semantic-clarity.md`。本轮只优化 timed composition / TimerDial 使用的内置 Canvas 阶段图标语义和 picker 文案：热身改为火苗升温符号，训练中改为动作小人，普通休息改为雪花冷静符号，轮间恢复改为循环恢复 + 呼吸符号，放松改为下行降温 + 舒缓波，冲刺改为闪电 + 速度线；默认新草稿里的“冲刺组合 / 冲刺”也使用 `sprint` 内置 key。编辑器 icon picker 现在 4 列展示图标 + 中文 label，并补充 TalkBack 语义说明，避免暴露 `speed_up` / `recover_breathe` 等 raw key。旧 `iconKey` 继续兼容，unknown fallback 不变；本轮不新增资源、图片、SVG、drawable、raw、依赖，不改 Room schema / migration，不改 engine timeline、TimerDial progress、`WorkoutCommand`、`WorkoutEvent`、声音、力量、heart-rate 或设备边界。Focused StageStyle / TimerDial / TimedComposition tests、full unit、assembleDebug、lintDebug、check 和 720x1280 AVD smoke 均已通过。
+2026-07-03 E15-3 Stage icon semantic clarity 按用户后续反馈完成生成图资源化 follow-up，详见 `docs/testing/e15-3-stage-icon-semantic-clarity.md`。用户确认现有内置图标仍过于简单并要求使用 image generation 重新设计后，本轮将 timed composition editor picker 与 TimerDial 中的阶段图标从 Compose Canvas helper 切换为项目内置、随 APK 打包的白色 PNG 资源：`warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility`、`custom` 均由 `StageIconImage` 映射到 `drawable-nodpi/stage_icon_*.png`。计划和训练快照仍只保存稳定 `iconKey`，旧 key 与 unknown fallback 继续兼容；不保存图片路径、drawable/raw 路径、URL、本地文件路径、base64 或上传资产。本轮不改 Room schema / migration，不改 engine timeline、TimerDial progress、`WorkoutCommand`、`WorkoutEvent`、声音、力量、heart-rate、BLE / Huawei / Health Connect / HealthKit / Wear OS 或设备边界。
 
 2026-07-02 E15-2 TimerDial clipping and short-target linear progress fix 已实现，详见 `docs/testing/e15-2-timerdial-clipping-linear-progress.md`。本轮只修真机反馈中的 TimerDial 外圈上下轻微裁切风险和 1s / 2s 短 target 的固定追赶式加速填充感：Canvas 外圈 arc rect 现在按 active glow 的最大可见 stroke 预留 safe inset，避免 glow 在画布边缘被裁；短 target 的 displayed progress 在 engine anchor 前移时直接对齐真实锚点，并继续按 frame elapsed / remaining duration 匀速线性推进，不再套固定 1 秒 catch-up。正常时长仍保留 E14.6-1 防回弹逻辑；v2 外圈 planned duration ratio、内圈总进度、12 点数字圆标、`+15s` rest extension、timeline、`WorkoutCommand`、`WorkoutEvent`、Room、records、completion、声音、力量编辑和 heart-rate / 设备边界均未改变。Focused TimerDial / TimedComposition tests、full unit、assembleDebug、lintDebug、check 和 720x1280 AVD smoke 已完成；短 target 视觉顺滑建议继续真机主观复测。
 

@@ -7,13 +7,41 @@ import org.junit.Test
 
 class StageStyleIconSemanticsTest {
     @Test
-    fun pickerAndTimerDialUseSemanticBuiltInCanvasIconShapes() {
+    fun pickerAndTimerDialUseImageGeneratedBuiltInIconResources() {
         val pickerSource = File(
             "src/main/java/com/liujyks/trainflow/feature/plans/TimedPlanEditorRoute.kt"
         ).readText(Charsets.UTF_8)
         val timerDialSource = File(
             "src/main/java/com/liujyks/trainflow/feature/workoutsession/TimerDial.kt"
         ).readText(Charsets.UTF_8)
+        val iconSource = File(
+            "src/main/java/com/liujyks/trainflow/ui/components/StageIconImage.kt"
+        ).readText(Charsets.UTF_8)
+
+        listOf(
+            "warmup",
+            "work",
+            "speed_up",
+            "sprint",
+            "rest",
+            "recover_breathe",
+            "cooldown",
+            "strength",
+            "mobility",
+            "custom"
+        ).forEach { iconKey ->
+            val resourceName = "stage_icon_$iconKey"
+            val resource = File("src/main/res/drawable-nodpi/$resourceName.png")
+
+            assertTrue("$resourceName image resource is missing", resource.isFile)
+            assertTrue("$resourceName image resource is empty", resource.length() > 1024L)
+            assertTrue("Drawable mapper is missing $resourceName", iconSource.contains("R.drawable.$resourceName"))
+        }
+        assertTrue(pickerSource.contains("StageIconImage("))
+        assertTrue(timerDialSource.contains("StageIconImage("))
+        assertTrue(pickerSource.contains("options.chunked(4)"))
+        assertTrue(pickerSource.contains("text = option.label"))
+        assertFalse(pickerSource.contains("text = option.key"))
 
         listOf(
             "drawWarmupFlameIcon",
@@ -24,12 +52,9 @@ class StageStyleIconSemanticsTest {
             "drawRoundRecoveryIcon",
             "drawCooldownDownshiftIcon"
         ).forEach { helperName ->
-            assertTrue("Picker is missing $helperName", pickerSource.contains(helperName))
-            assertTrue("TimerDial is missing $helperName", timerDialSource.contains(helperName))
+            assertFalse("Picker should not keep old Canvas helper $helperName", pickerSource.contains(helperName))
+            assertFalse("TimerDial should not keep old Canvas helper $helperName", timerDialSource.contains(helperName))
         }
-        assertTrue(pickerSource.contains("options.chunked(4)"))
-        assertTrue(pickerSource.contains("text = option.label"))
-        assertFalse(pickerSource.contains("text = option.key"))
     }
 
     @Test

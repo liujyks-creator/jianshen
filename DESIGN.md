@@ -261,6 +261,7 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 
 阶段图标用于快速识别当前训练阶段或目标，不是动作教学图。第一版只使用项目提供的内置白色图标集，通过稳定 `iconKey` 引用，并叠加在阶段色中心圆或阶段色块上。
 
+- E15-3 用户反馈后，内置 `iconKey` 的呈现可由项目打包的白色 PNG 资源实现，以提升小尺寸语义清晰度；这只是 APK 内部实现细节，不把图片路径或 drawable/raw 资源名写入计划或训练快照。
 - 热身、工作、休息、放松、自定义、轮间休息和 composition target 都应有默认图标 fallback。
 - 阶段 / 目标可保存 `iconKey`；无效或缺失的 key 回退到阶段类型默认图标，不影响训练执行。
 - 推荐首批 key 覆盖 `warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility` 和 `custom`。

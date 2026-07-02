@@ -402,6 +402,7 @@ E14.6 stage style / icon planning status: `docs/testing/e14-6-real-device-timerd
 - 颜色 fallback 顺序为 active target style -> parent stage group style -> boundary stage style -> stage / target kind safe default -> final safe fallback。
 - Icon fallback 顺序为 active target style -> parent stage group style -> boundary stage style -> boundary / type default -> `custom`。
 - 第一版 icon 只支持项目内置白色图标集，通过稳定 `iconKey` 引用；不得保存图片路径、SVG 路径、资源路径、本地文件路径、URL 或上传资产引用。
+- E15-3 用户确认后，内置 `iconKey` 的渲染实现可映射到项目打包 PNG 资源；这是 APK 内部表现层实现，不改变 `StageStyle` / `iconKey` 数据契约，也不得把 drawable 名称或资源路径写入计划和快照。
 - 推荐内置 key 至少覆盖 `warmup`、`work`、`speed_up`、`sprint`、`rest`、`recover_breathe`、`cooldown`、`strength`、`mobility` 和 `custom`。
 - 用户上传图片、自定义图片库、裁剪、存储、备份、版权处理和远程 icon pack 不进入当前版本，应列为 post-MVP / later story。
 - E14.6-3a 不建议 Room migration。Style 持久化继续走现有 `WorkoutPlan.blocks` JSON 和 `WorkoutSession.planSnapshot` JSON；新增 Room 字段必须另拆 migration story。
