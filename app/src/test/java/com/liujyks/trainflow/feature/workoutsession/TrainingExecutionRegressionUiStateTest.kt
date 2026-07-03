@@ -478,6 +478,31 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun strengthTerminalReturnActionIsStickyAndNotInsideRecapPanel() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val screenSource = routeSource
+            .substringAfter("private fun StrengthWorkoutSessionScreen")
+            .substringBefore("@Composable\nprivate fun StrengthSessionHeader")
+        val terminalPanelSource = routeSource
+            .substringAfter("private fun StrengthTerminalPanel")
+            .substringBefore("@Composable\nprivate fun StrengthTerminalReturnAction")
+        val returnActionSource = routeSource
+            .substringAfter("private fun StrengthTerminalReturnAction")
+            .substringBefore("@Composable\nprivate fun StrengthSessionSummaryPanel")
+
+        assertTrue(routeSource.contains("StrengthTerminalReturnAction("))
+        assertTrue(screenSource.contains("bottom = bottomControlsSpec.fixedBottomContentReserve"))
+        assertTrue(returnActionSource.contains(".navigationBarsPadding()"))
+        assertTrue(returnActionSource.contains("controlsSpec.primaryButtonMinHeight"))
+        assertTrue(returnActionSource.contains("text = \"返回计划\""))
+        assertFalse(terminalPanelSource.contains("Button("))
+        assertFalse(terminalPanelSource.contains("onBackToPlans"))
+        assertFalse(terminalPanelSource.contains("text = \"返回计划\""))
+    }
+
+    @Test
     fun builtInSkinSwitchingKeepsTrainingSemanticStateAndControlContract() {
         val plans = buildDefaultPlanManagementState().plans
         val timedState = TimedWorkoutEngine.dispatch(
