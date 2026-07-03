@@ -310,11 +310,7 @@ private fun StrengthWorkoutSessionScreen(
                 .padding(horizontal = currentPageHorizontalPadding())
                 .padding(
                     top = if (skin.isBigType) 14.dp else 22.dp,
-                    bottom = if (uiState.isTerminal) {
-                        22.dp
-                    } else {
-                        bottomControlsSpec.fixedBottomContentReserve
-                    }
+                    bottom = bottomControlsSpec.fixedBottomContentReserve
                 ),
             verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
         ) {
@@ -343,7 +339,7 @@ private fun StrengthWorkoutSessionScreen(
                 onConfirmSkipExercise = onConfirmSkipExercise
             )
             if (uiState.isTerminal) {
-                StrengthTerminalPanel(uiState, onBackToPlans, onOpenRecoveryRecommendation)
+                StrengthTerminalPanel(uiState, onOpenRecoveryRecommendation)
             } else if (!skin.isBigType) {
                 StrengthSecondaryControlsPanel(
                     uiState = uiState,
@@ -366,6 +362,11 @@ private fun StrengthWorkoutSessionScreen(
                 onPause = onPause,
                 onResume = onResume,
                 onEnd = onRequestEnd,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        } else {
+            StrengthTerminalReturnAction(
+                onBackToPlans = onBackToPlans,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -1147,10 +1148,8 @@ private fun StrengthControlHistoryPanel(uiState: StrengthWorkoutSessionScreenSta
 @Composable
 private fun StrengthTerminalPanel(
     uiState: StrengthWorkoutSessionScreenState,
-    onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
 ) {
-    val skin = LocalTrainFlowSkin.current
     StrengthDarkInfoPanel {
         Text(
             text = uiState.terminalTitle.orEmpty(),
@@ -1165,13 +1164,43 @@ private fun StrengthTerminalPanel(
         uiState.summary?.let { summary ->
             StrengthSessionSummaryPanel(summary, onOpenRecoveryRecommendation)
         }
-        Button(
-            onClick = onBackToPlans,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.accent)
+    }
+}
+
+@Composable
+private fun StrengthTerminalReturnAction(
+    onBackToPlans: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val skin = LocalTrainFlowSkin.current
+    val controlsSpec = trainingExecutionBottomControlsSpec()
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = skin.tokens.primary,
+        shadowElevation = 12.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = currentPageHorizontalPadding(), vertical = controlsSpec.verticalPadding),
+            verticalArrangement = Arrangement.spacedBy(controlsSpec.rowSpacing)
         ) {
-            Text(text = "返回计划", color = skin.tokens.primary)
+            Button(
+                onClick = onBackToPlans,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlsSpec.primaryButtonMinHeight),
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.accent)
+            ) {
+                Text(
+                    text = "返回计划",
+                    fontSize = if (skin.isBigType) 20.sp else 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = skin.tokens.primary
+                )
+            }
         }
     }
 }
