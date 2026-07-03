@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.feature.plans.buildDefaultTimedPlanEditorState
@@ -41,6 +42,17 @@ class TimedReadyStartGateTest {
         assertEquals(0, afterTick.activeElapsedSec)
         assertEquals(0, afterTick.pausedElapsedSec)
         assertEquals(null, afterTick.currentStep)
+    }
+
+    @Test
+    fun manualTimedCommandsThatCreateANewClockAnchorResetRouteTickPhase() {
+        assertTrue(WorkoutCommand.StartSession.shouldResetTimedRouteClockAnchor())
+        assertTrue(WorkoutCommand.PauseSession.shouldResetTimedRouteClockAnchor())
+        assertTrue(WorkoutCommand.ResumeSession.shouldResetTimedRouteClockAnchor())
+        assertTrue(WorkoutCommand.SkipStep.shouldResetTimedRouteClockAnchor())
+
+        assertFalse(WorkoutCommand.ExtendRest(seconds = 15).shouldResetTimedRouteClockAnchor())
+        assertFalse(WorkoutCommand.EndSession(reason = "user_requested").shouldResetTimedRouteClockAnchor())
     }
 
     @Test
