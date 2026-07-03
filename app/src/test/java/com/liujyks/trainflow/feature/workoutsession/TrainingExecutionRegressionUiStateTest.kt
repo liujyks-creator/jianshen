@@ -194,6 +194,28 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun strengthConfirmRecordPrioritizesEffortChoicesBeforeActualInputsAndRepShortcuts() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val confirmationPanelSource = routeSource
+            .substringAfter("private fun StrengthSetConfirmationPanel")
+            .substringBefore("private fun StrengthActualWeightField")
+        val actualWeightIndex = confirmationPanelSource.indexOf("StrengthActualWeightField(")
+        val actualRepsIndex = confirmationPanelSource.indexOf("StrengthActualRepsField(")
+        val effortIndex = confirmationPanelSource.indexOf("confirmation.effortOptions")
+        val repShortcutIndex = confirmationPanelSource.indexOf("confirmation.repQuickOptions")
+
+        assertTrue(actualWeightIndex >= 0)
+        assertTrue(actualRepsIndex >= 0)
+        assertTrue(effortIndex >= 0)
+        assertTrue(repShortcutIndex >= 0)
+        assertTrue(effortIndex < actualWeightIndex)
+        assertTrue(effortIndex < actualRepsIndex)
+        assertTrue(effortIndex < repShortcutIndex)
+    }
+
+    @Test
     fun followAlongExecutionKeepsPauseSkipAndEndImmediatelyReachable() {
         val plan = com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState()
             .plans

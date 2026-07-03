@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -573,13 +574,13 @@ private fun StrengthCollapsedCurrentSetPanel(
         border = BorderStroke(1.dp, skin.tokens.action.copy(alpha = 0.42f))
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 StrengthSessionPill(
                     text = uiState.phaseLabel,
@@ -589,6 +590,11 @@ private fun StrengthCollapsedCurrentSetPanel(
                 if (uiState.setKindLabel.isNotBlank()) {
                     StrengthSessionPill(text = uiState.setKindLabel)
                 }
+                Text(
+                    text = uiState.collapsedCurrentSetStatusLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    color = skin.tokens.action
+                )
             }
             Text(
                 text = uiState.currentExerciseName,
@@ -612,11 +618,6 @@ private fun StrengthCollapsedCurrentSetPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = TrainFlowNeutral200
             )
-            Text(
-                text = uiState.collapsedCurrentSetStatusLabel,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = skin.tokens.action
-            )
         }
     }
 }
@@ -636,8 +637,8 @@ private fun StrengthSetConfirmationPanel(
         border = BorderStroke(1.dp, TrainFlowAction.copy(alpha = 0.45f))
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -649,12 +650,12 @@ private fun StrengthSetConfirmationPanel(
                 ) {
                     Text(
                         text = "确认本组",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TrainFlowNeutral50
                     )
                     Text(
                         text = "计划 ${confirmation.plannedWeightLabel} / ${confirmation.plannedRepLabel} · 耗时 ${confirmation.activeDurationLabel}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = TrainFlowNeutral200
                     )
                 }
@@ -663,10 +664,39 @@ private fun StrengthSetConfirmationPanel(
                 }
             }
 
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                confirmation.effortOptions.forEach { option ->
+                    val selected = input.selectedEffort == option.effort
+                    OutlinedButton(
+                        onClick = { onInputChange(input.copy(selectedEffort = option.effort)) },
+                        modifier = Modifier.heightIn(min = 36.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (selected) TrainFlowAccent.copy(alpha = 0.18f) else Color.Transparent
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (selected) TrainFlowAccent else Color.White.copy(alpha = 0.2f)
+                        )
+                    ) {
+                        Text(
+                            text = option.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (selected) TrainFlowAccent else TrainFlowNeutral50
+                        )
+                    }
+                }
+            }
+
             if (skin.isBigType) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     StrengthActualWeightField(
                         confirmation = confirmation,
@@ -683,7 +713,7 @@ private fun StrengthSetConfirmationPanel(
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     StrengthActualWeightField(
                         confirmation = confirmation,
@@ -703,13 +733,15 @@ private fun StrengthSetConfirmationPanel(
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     confirmation.repQuickOptions.forEach { reps ->
                         val selected = input.actualRepsInput == reps.toString()
                         OutlinedButton(
                             onClick = { onInputChange(input.copy(actualRepsInput = reps.toString())) },
+                            modifier = Modifier.heightIn(min = 36.dp),
                             shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                             border = BorderStroke(
                                 width = 1.dp,
                                 color = if (selected) TrainFlowAccent else Color.White.copy(alpha = 0.22f)
@@ -720,32 +752,6 @@ private fun StrengthSetConfirmationPanel(
                                 color = if (selected) TrainFlowAccent else TrainFlowNeutral50
                             )
                         }
-                    }
-                }
-            }
-
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                confirmation.effortOptions.forEach { option ->
-                    val selected = input.selectedEffort == option.effort
-                    OutlinedButton(
-                        onClick = { onInputChange(input.copy(selectedEffort = option.effort)) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (selected) TrainFlowAccent.copy(alpha = 0.18f) else Color.Transparent
-                        ),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = if (selected) TrainFlowAccent else Color.White.copy(alpha = 0.2f)
-                        )
-                    ) {
-                        Text(
-                            text = option.label,
-                            color = if (selected) TrainFlowAccent else TrainFlowNeutral50
-                        )
                     }
                 }
             }
