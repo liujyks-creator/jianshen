@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -28,6 +27,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,7 +56,9 @@ import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
+import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
@@ -393,25 +396,82 @@ private fun StrengthSetTimerModeCard(
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             StrengthSetTimerMode.entries.forEach { mode ->
-                FilterChip(
+                StrengthSetTimerModeOption(
+                    mode = mode,
                     selected = selectedMode == mode,
-                    onClick = { onModeChanged(mode) },
-                    label = { Text(mode.editorLabel()) }
+                    onClick = { onModeChanged(mode) }
                 )
             }
         }
-        Text(
-            text = selectedMode.editorDescription(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    }
+}
+
+@Composable
+private fun StrengthSetTimerModeOption(
+    mode: StrengthSetTimerMode,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val borderColor = if (selected) TrainFlowAccent else TrainFlowNeutral200
+    val backgroundColor = if (selected) TrainFlowSurfaceMuted else MaterialTheme.colorScheme.surface
+    val stateText = if (selected) "当前" else "未选"
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton
+            )
+            .semantics {
+                contentDescription = "${mode.editorLabel()}，$stateText，${mode.editorDescription()}"
+            },
+        shape = RoundedCornerShape(12.dp),
+        color = backgroundColor,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            RadioButton(
+                selected = selected,
+                onClick = null
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = mode.editorLabel(),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stateText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) TrainFlowPrimary else TrainFlowNeutral700
+                    )
+                }
+                Text(
+                    text = mode.editorDescription(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
