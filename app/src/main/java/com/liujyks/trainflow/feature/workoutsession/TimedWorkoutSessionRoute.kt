@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -121,6 +122,7 @@ internal fun TimedWorkoutSessionRoute(
     var engineState by remember(plan.id, sessionId) {
         mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
     }
+    var timedRouteClockAnchor by remember(sessionId) { mutableIntStateOf(0) }
     val soundCueController = rememberWorkoutSoundCueController()
     val hapticFeedbackSink = rememberCountdownReminderHapticFeedbackSink()
     val context = LocalContext.current
@@ -140,16 +142,23 @@ internal fun TimedWorkoutSessionRoute(
         }
     }
 
-    LaunchedEffect(plan.id, sessionId) {
+    LaunchedEffect(plan.id, sessionId, timedRouteClockAnchor) {
+        val launchedClockAnchor = timedRouteClockAnchor
         while (true) {
             delay(1000)
-            if (engineState.shouldTickTimedRouteClock()) {
+            if (
+                launchedClockAnchor == timedRouteClockAnchor &&
+                engineState.shouldTickTimedRouteClock()
+            ) {
                 applyEngineResult(TimedWorkoutEngine.tick(engineState))
             }
         }
     }
 
     fun dispatch(command: WorkoutCommand) {
+        if (command.shouldResetTimedRouteClockAnchor()) {
+            timedRouteClockAnchor += 1
+        }
         applyEngineResult(TimedWorkoutEngine.dispatch(engineState, command))
     }
 
@@ -169,7 +178,7 @@ internal fun TimedWorkoutSessionRoute(
         if (!engineState.isTimedReadyStartGate()) return
 
         sessionStartedAt = Instant.now()
-        applyEngineResult(engineState.startTimedSessionFromReadyGate())
+        dispatch(WorkoutCommand.StartSession)
     }
 
     val uiState = engineState.toTimedWorkoutSessionScreenState(plan = plan)
@@ -1214,6 +1223,23 @@ private fun CompletionRecapBottomAction(
 
 internal fun TimedWorkoutEngineState.shouldTickTimedRouteClock(): Boolean {
     return status == SessionStatus.ACTIVE || status == SessionStatus.PAUSED
+}
+
+internal fun WorkoutCommand.shouldResetTimedRouteClockAnchor(): Boolean {
+    return when (this) {
+        WorkoutCommand.StartSession,
+        WorkoutCommand.PauseSession,
+        WorkoutCommand.ResumeSession,
+        WorkoutCommand.SkipStep -> true
+        is WorkoutCommand.EndSession,
+        is WorkoutCommand.ExtendRest,
+        is WorkoutCommand.CompleteStrengthSet,
+        is WorkoutCommand.ConfirmStrengthSet,
+        is WorkoutCommand.ReplaceExercise,
+        is WorkoutCommand.StartStrengthSet,
+        is WorkoutCommand.UpdateActualReps,
+        is WorkoutCommand.UpdateActualWeight -> false
+    }
 }
 
 private fun Int.formatReadyDuration(): String {
