@@ -547,13 +547,6 @@ private fun StrengthMainPanel(
                     )
                 }
             }
-            if (!skin.isBigType) {
-                Text(
-                    text = uiState.shortCue,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TrainFlowNeutral100
-                )
-            }
         }
     }
 }
@@ -852,13 +845,6 @@ private fun StrengthNextSetPanel(uiState: StrengthWorkoutSessionScreenState) {
             },
             color = TrainFlowNeutral50
         )
-        if (!isBigType) {
-            Text(
-                text = "力量训练按动作和组推进，休息结束后回到下一组准备。",
-                style = MaterialTheme.typography.bodySmall,
-                color = TrainFlowNeutral200
-            )
-        }
     }
 }
 

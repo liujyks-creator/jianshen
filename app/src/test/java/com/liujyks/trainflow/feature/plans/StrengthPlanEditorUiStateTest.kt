@@ -11,6 +11,7 @@ import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -19,6 +20,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StrengthPlanEditorUiStateTest {
+    @Test
+    fun strengthSetTargetEditorRemovesColorPlaceholderAndUsesFullWidthRestInput() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/plans/StrengthPlanEditorRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val setTargetRowSource = routeSource
+            .substringAfter("private fun StrengthSetTargetRow")
+            .substringBefore("private fun AddStrengthExerciseCard")
+
+        assertFalse(routeSource.contains("目标组颜色"))
+        assertFalse(routeSource.contains("后续保存"))
+        assertFalse(routeSource.contains("StrengthSetColorEntry"))
+        assertTrue(setTargetRowSource.contains("label = \"本组重量 kg\""))
+        assertTrue(setTargetRowSource.contains("label = \"本组次数\""))
+        assertTrue(setTargetRowSource.contains("label = \"本组休息秒数\""))
+        assertTrue(setTargetRowSource.contains("Modifier.fillMaxWidth()"))
+    }
+
     @Test
     fun savedStrengthPlanBackfillsExercisesTargetsSetsRestOverridesAndSubstitutions() {
         val initialExercise = buildDefaultStrengthPlanEditorState().exercises.first()

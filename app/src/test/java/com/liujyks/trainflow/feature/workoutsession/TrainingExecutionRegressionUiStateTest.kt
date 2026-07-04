@@ -194,6 +194,29 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
+    fun strengthExecutionRemovesCurrentSetShortCueAndNextSetExplanationCopy() {
+        val routeSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionRoute.kt"
+        ).readText(Charsets.UTF_8)
+        val uiStateSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionUiState.kt"
+        ).readText(Charsets.UTF_8)
+        val currentSetPanelSource = routeSource
+            .substringAfter("private fun StrengthCurrentSetPanel")
+            .substringBefore("private fun StrengthCollapsedCurrentSetPanel")
+        val nextSetPanelSource = routeSource
+            .substringAfter("private fun StrengthNextSetPanel")
+            .substringBefore("private fun StrengthExerciseAdjustmentPanel")
+
+        assertFalse(currentSetPanelSource.contains("uiState.shortCue"))
+        assertFalse(routeSource.contains("力量训练按动作和组推进"))
+        assertFalse(nextSetPanelSource.contains("bodySmall"))
+        assertFalse(uiStateSource.contains("val shortCue"))
+        assertFalse(uiStateSource.contains("buildShortCue"))
+        assertTrue(uiStateSource.contains("next.toNextSetLabel"))
+    }
+
+    @Test
     fun strengthConfirmRecordPrioritizesEffortChoicesBeforeActualInputsAndRepShortcuts() {
         val routeSource = File(
             "src/main/java/com/liujyks/trainflow/feature/workoutsession/StrengthWorkoutSessionRoute.kt"
@@ -487,10 +510,10 @@ class TrainingExecutionRegressionUiStateTest {
             .substringBefore("@Composable\nprivate fun StrengthSessionHeader")
         val terminalPanelSource = routeSource
             .substringAfter("private fun StrengthTerminalPanel")
-            .substringBefore("@Composable\nprivate fun StrengthTerminalReturnAction")
+            .substringBefore("private fun StrengthTerminalReturnAction")
         val returnActionSource = routeSource
             .substringAfter("private fun StrengthTerminalReturnAction")
-            .substringBefore("@Composable\nprivate fun StrengthSessionSummaryPanel")
+            .substringBefore("private fun StrengthSessionSummaryPanel")
 
         assertTrue(routeSource.contains("StrengthTerminalReturnAction("))
         assertTrue(screenSource.contains("bottom = bottomControlsSpec.fixedBottomContentReserve"))

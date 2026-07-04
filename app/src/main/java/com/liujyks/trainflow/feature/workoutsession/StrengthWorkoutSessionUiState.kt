@@ -29,7 +29,6 @@ internal data class StrengthWorkoutSessionScreenState(
     val primaryMetricText: String,
     val isCurrentSetSummaryCollapsed: Boolean,
     val collapsedCurrentSetStatusLabel: String,
-    val shortCue: String,
     val nextSetLabel: String,
     val confirmSummary: String?,
     val confirmation: StrengthSetConfirmationUiState?,
@@ -138,12 +137,6 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
             "待确认记录 · 完成耗时 ${activeSetElapsedSec.formatTimer()}"
         else -> ""
     }
-    val shortCue = buildShortCue(
-        current = current,
-        next = next,
-        phaseLabel = phaseLabel,
-        exerciseById = exerciseById
-    )
     val progressBase = totalSets.coerceAtLeast(1)
     val activeNumber = when {
         status == SessionStatus.COMPLETED -> totalSets
@@ -214,7 +207,6 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         primaryMetricText = primaryMetricText,
         isCurrentSetSummaryCollapsed = shouldCollapseCurrentSetSummary,
         collapsedCurrentSetStatusLabel = collapsedCurrentSetStatusLabel,
-        shortCue = shortCue,
         nextSetLabel = next.toNextSetLabel(exerciseById),
         confirmSummary = pendingDraft?.let { draft ->
             "按计划确认：${draft.defaultActualWeight.formatWeight()} · ${draft.defaultActualReps?.let { "$it 次" } ?: "未设次数"}"
@@ -497,30 +489,6 @@ private fun Exercise.replacementSummary(): String {
         else -> "力量可用"
     }
     return "$load · ${equipment.joinToString(" / ") { equipment -> equipment.contractValue }}"
-}
-
-private fun StrengthWorkoutEngineState.buildShortCue(
-    current: StrengthSessionSetStep?,
-    next: StrengthSessionSetStep?,
-    phaseLabel: String,
-    exerciseById: Map<String, Exercise>
-): String {
-    return when {
-        status == SessionStatus.PAUSED -> "训练已暂停，当前组和休息计时都已冻结。"
-        status == SessionStatus.COMPLETED -> "本次力量流程已完成，先放松呼吸。"
-        status == SessionStatus.ABANDONED -> "本次力量训练已提前结束。"
-        current == null -> "点击开始后进入第一组准备。"
-        currentStepKind == SessionStepKind.STRENGTH_PREPARE_SET ->
-            "确认器械和站位，准备后点击开始本组。"
-        currentStepKind == SessionStepKind.STRENGTH_ACTIVE_SET ->
-            exerciseById[current.exerciseId]?.instructions?.shortCue ?: "保持动作质量，完成后点击完成本组。"
-        currentStepKind == SessionStepKind.STRENGTH_CONFIRM_SET ->
-            "按本组计划值快速确认，保持训练节奏。"
-        currentStepKind == SessionStepKind.STRENGTH_REST ->
-            next?.let { "调整呼吸，准备 ${it.exerciseName(exerciseById)} · ${it.targetSummary()}。" }
-                ?: "调整呼吸，准备结束训练。"
-        else -> phaseLabel
-    }
 }
 
 private fun String?.toEarlyEndReasonSummary(): String {
