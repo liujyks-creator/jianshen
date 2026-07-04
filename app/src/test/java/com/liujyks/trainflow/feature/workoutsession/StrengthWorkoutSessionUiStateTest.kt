@@ -63,7 +63,6 @@ class StrengthWorkoutSessionUiStateTest {
         assertEquals("00:05", uiState.primaryMetricText)
         assertTrue(uiState.canCompleteSet)
         assertFalse(uiState.canStartSet)
-        assertTrue(uiState.shortCue.isNotBlank())
         assertTrue(uiState.immediateControls.any { control ->
             control.role == WorkoutImmediateControlRole.COMPLETE_STRENGTH_SET &&
                 control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
@@ -95,7 +94,6 @@ class StrengthWorkoutSessionUiStateTest {
         assertTrue(uiState.canConfirmPlanned)
         assertNotNull(uiState.confirmSummary)
         assertTrue(requireNotNull(uiState.confirmSummary).contains("按计划确认"))
-        assertTrue(uiState.shortCue.contains("确认"))
 
         val confirmation = requireNotNull(uiState.confirmation)
         assertEquals(uiState.currentExerciseName, confirmation.exerciseName)

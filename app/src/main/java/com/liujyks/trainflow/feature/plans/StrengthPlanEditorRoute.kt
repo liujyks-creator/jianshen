@@ -833,51 +833,12 @@ private fun StrengthSetTargetRow(
                 modifier = Modifier.weight(1f)
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            NumberField(
-                label = "本组休息秒数",
-                value = setTarget.restAfterText,
-                onValueChanged = onRestAfterChanged,
-                modifier = Modifier.weight(1f)
-            )
-            StrengthSetColorEntry(modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun StrengthSetColorEntry(modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, TrainFlowNeutral100),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = TrainFlowAction,
-                modifier = Modifier.size(24.dp),
-                border = BorderStroke(1.dp, TrainFlowNeutral100)
-            ) {
-                Box {}
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "目标组颜色",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "后续保存",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral700
-                )
-            }
-        }
+        NumberField(
+            label = "本组休息秒数",
+            value = setTarget.restAfterText,
+            onValueChanged = onRestAfterChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
