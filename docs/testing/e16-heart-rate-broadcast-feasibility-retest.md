@@ -1,6 +1,6 @@
 # E16 Heart-rate broadcast feasibility retest
 
-**Status:** Implemented test tool; waiting for user real-device result
+**Status:** Implemented / needs review; waiting for user real-device result
 **Date:** 2026-07-05
 **Scope:** HUAWEI Band 9 heart-rate broadcast mode on non-Huawei Android
 
@@ -22,11 +22,13 @@ If the retest succeeds, the next step is an explicit future BLE HRS adapter spik
 
 ## Test tool
 
-Added debug-only launcher:
+Added debug-only entry points:
 
-- `HR Broadcast Smoke`
+- Primary entry: open TrainFlow debug APK, then tap the top home button `HR Broadcast Smoke`.
+- Secondary entry: standalone launcher activity label `HR Broadcast Smoke` when the device launcher shows it.
 - Activity: `app/src/debug/java/com/liujyks/trainflow/app/HeartRateBroadcastSmokeActivity.kt`
 - Permissions are declared only in `app/src/debug/AndroidManifest.xml`.
+- The home button is wired only in debug builds. Release / production builds do not show this entry.
 
 The tool scans all BLE advertisements, lists bonded devices, connects to a selected device, discovers GATT services, and attempts to subscribe to:
 
@@ -39,7 +41,7 @@ It logs bpm notifications if received. It does not persist data and does not cal
 ## Retest matrix
 
 1. Baseline: broadcast off, Huawei Health connected.
-2. Main retest: enable Band 9 heart-rate broadcast, accept that Huawei Health may disconnect, then scan with `HR Broadcast Smoke`.
+2. Main retest: enable Band 9 heart-rate broadcast, accept that Huawei Health may disconnect, open TrainFlow, tap the top `HR Broadcast Smoke` button, then scan.
 3. Optional: broadcast on, Huawei Health killed / background restricted, then scan again.
 4. Cleanup: turn broadcast off and confirm Huawei Health can reconnect normally.
 

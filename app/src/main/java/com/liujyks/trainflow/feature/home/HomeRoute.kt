@@ -61,6 +61,7 @@ fun HomeRoute(
     onOpenSettings: () -> Unit,
     onOpenPlans: () -> Unit,
     onOpenRecords: () -> Unit,
+    onOpenHeartRateBroadcastSmoke: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState = remember { buildHomeScreenState() }
@@ -74,6 +75,7 @@ fun HomeRoute(
         onOpenSettings = onOpenSettings,
         onOpenPlans = onOpenPlans,
         onOpenRecords = onOpenRecords,
+        onOpenHeartRateBroadcastSmoke = onOpenHeartRateBroadcastSmoke,
         modifier = modifier
     )
 }
@@ -88,6 +90,7 @@ private fun TrainFlowHomeScreen(
     onOpenSettings: () -> Unit,
     onOpenPlans: () -> Unit,
     onOpenRecords: () -> Unit,
+    onOpenHeartRateBroadcastSmoke: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     if (LocalTrainFlowSkin.current.isTileFlow) {
@@ -100,6 +103,7 @@ private fun TrainFlowHomeScreen(
             onOpenSettings = onOpenSettings,
             onOpenPlans = onOpenPlans,
             onOpenRecords = onOpenRecords,
+            onOpenHeartRateBroadcastSmoke = onOpenHeartRateBroadcastSmoke,
             modifier = modifier
         )
         return
@@ -112,6 +116,7 @@ private fun TrainFlowHomeScreen(
             onOpenStrengthPlanEditor = onOpenStrengthPlanEditor,
             onOpenFollowAlong = onOpenFollowAlong,
             onOpenSettings = onOpenSettings,
+            onOpenHeartRateBroadcastSmoke = onOpenHeartRateBroadcastSmoke,
             modifier = modifier
         )
         return
@@ -124,6 +129,12 @@ private fun TrainFlowHomeScreen(
             .padding(horizontal = 20.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (onOpenHeartRateBroadcastSmoke != null) {
+            item {
+                HeartRateBroadcastSmokeDebugButton(onClick = onOpenHeartRateBroadcastSmoke)
+            }
+        }
+
         item {
             HomeHeader(
                 summary = uiState.summary,
@@ -183,6 +194,7 @@ private fun BigTypeHomeScreen(
     onOpenStrengthPlanEditor: () -> Unit,
     onOpenFollowAlong: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHeartRateBroadcastSmoke: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val strength = uiState.peerEntries.first { it.id == HomeEntryId.STRENGTH_TRAINING }
@@ -195,6 +207,12 @@ private fun BigTypeHomeScreen(
             .padding(horizontal = currentPageHorizontalPadding(), vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
+        if (onOpenHeartRateBroadcastSmoke != null) {
+            item {
+                HeartRateBroadcastSmokeDebugButton(onClick = onOpenHeartRateBroadcastSmoke)
+            }
+        }
+
         item {
             BigTypeHomeHeader(onOpenSettings = onOpenSettings)
         }
@@ -412,6 +430,7 @@ private fun TileFlowHomeScreen(
     onOpenSettings: () -> Unit,
     onOpenPlans: () -> Unit,
     onOpenRecords: () -> Unit,
+    onOpenHeartRateBroadcastSmoke: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -425,6 +444,12 @@ private fun TileFlowHomeScreen(
             .padding(horizontal = currentPageHorizontalPadding(), vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(currentSectionSpacing())
     ) {
+        if (onOpenHeartRateBroadcastSmoke != null) {
+            item {
+                HeartRateBroadcastSmokeDebugButton(onClick = onOpenHeartRateBroadcastSmoke)
+            }
+        }
+
         item {
             HomeHeader(
                 summary = "今天从一块清晰的训练磁贴开始。",
@@ -634,6 +659,26 @@ private fun HomeHeader(
             text = summary,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun HeartRateBroadcastSmokeDebugButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = TrainFlowAction,
+            contentColor = TrainFlowNeutral50
+        )
+    ) {
+        Text(
+            text = "HR Broadcast Smoke",
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -851,7 +896,8 @@ private fun TrainFlowHomeScreenPreview() {
             onOpenFollowAlong = {},
             onOpenSettings = {},
             onOpenPlans = {},
-            onOpenRecords = {}
+            onOpenRecords = {},
+            onOpenHeartRateBroadcastSmoke = null
         )
     }
 }
