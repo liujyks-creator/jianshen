@@ -851,7 +851,7 @@ private fun TrainFlowHomeScreenPreview() {
             onOpenFollowAlong = {},
             onOpenSettings = {},
             onOpenPlans = {},
-            onOpenRecords = {}
+            onOpenRecords = {},
         )
     }
 }

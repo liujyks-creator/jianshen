@@ -1,10 +1,12 @@
 # TrainFlow E11.2a HUAWEI Band 9 非华为 Android 可行性 Smoke
 
-**状态:** Completed; no Band 9 standard BLE HRS exposure found in current real-device condition
+**状态:** Completed for the original condition; broadcast-on retest now split to E16
 **日期:** 2026-06-21
 **范围:** HUAWEI Band 9 + 非华为 Android + 已安装华为运动健康
 
 本文记录第三方实时心率通道可行性。E11.2a 期间曾提供 debug-only BLE HRS smoke APK；E11.3 后续根据用户反馈撤销首版心率显示、录入和统计，并移除 debug smoke 入口。当前不做生产设备接入，不持久化心率，不绘制平均心率趋势，不把执行页 `HeartRateState` 当历史事实。
+
+2026-07-05 更新：用户补充说明，前次测试时 HUAWEI Band 9 未开启“心率广播”。设备提示开启心率广播后会作为第三方蓝牙设备连接，并会断开华为运动健康。这个新信息将 E11.2a 的结论收窄为“广播未开启 / Huawei Health 连接占用条件下未发现标准 BLE HRS”。开启心率广播后的可行性已拆到 `docs/testing/e16-heart-rate-broadcast-feasibility-retest.md` 重新测试；该 retest 不恢复 MVP 心率 UI，也不自动启动生产 BLE adapter。
 
 ## 1. 当前真实条件
 
@@ -29,7 +31,18 @@
 | Band 9 `0x180D` | Not found | 用户安装新版 smoke APK 后仍无法发现华为设备；当前没有 HRS service 证据。 |
 | Band 9 `0x2A37 notify` | Not found | 当前没有 Heart Rate Measurement characteristic、notify enabled 或 bpm notify 证据。 |
 
-## 2.1 Debug APK 使用步骤（历史记录）
+## 2.1 Follow-up: heart-rate broadcast caveat
+
+2026-07-05 用户反馈：此前未开启 Band 9 心率广播；Band 9 UI 提示开启心率广播会连接第三方蓝牙设备，并断开运动健康 App。
+
+因此 E11.2a 的 negative result 只覆盖当时条件，不覆盖“广播开启后作为标准第三方心率设备广播”的条件。后续判断以 E16 retest 为准：
+
+- E16 retest 已在广播开启条件下取得正向 BLE HRS 证据：`0x180D`、`0x2A37 notify`、CCCD 写入成功和持续 bpm notify。
+- 该证据只允许后续另拆 `E16-1 BLE HRS adapter spike`，不能从当前 story 直接接入生产心率。
+- 若仍无设备、无 HRS、无 notify 或无 bpm notify，继续保持 E11.3 结论。
+- 不论 retest 结果如何，当前 MVP 不恢复心率卡片、手动输入、未获取心率占位或平均心率趋势。
+
+## 2.2 Debug APK 使用步骤（历史记录）
 
 以下步骤仅记录 E11.2a 当时如何完成 smoke。E11.3 后 debug smoke 入口已移除，当前 APK 不再提供该入口。
 
@@ -65,7 +78,7 @@
 
 | 路线 | 判断 | 后续动作 |
 |---|---|---|
-| Android BLE HRS adapter spike | Do not start | 当前真实设备 smoke 未发现 HUAWEI / Band 9，也没有 `0x180D`、`0x2A37 notify` 或 bpm notify 证据；不拆 BLE adapter spike。 |
+| Android BLE HRS adapter spike | Do not start from E11.2a | E11.2a 原条件未发现 HUAWEI / Band 9，也没有 `0x180D`、`0x2A37 notify` 或 bpm notify 证据；E16 广播开启 retest 后已有正向 BLE HRS 证据，但只能另拆 `E16-1 BLE HRS adapter spike`，不能作为当前 story 的生产接入。 |
 | Huawei SDK feasibility | Optional next device research | 若仍要继续 Band 9 设备方向，只能另开 feasibility 验证 HMS Core、Huawei 账号授权、地区、审核、Band 9 支持和非华为 Android 兼容性。 |
 | Health Connect 历史同步 | Later / historical only | 可作为训练后历史摘要或趋势候选，不作为执行页实时来源；进入前必须另设计 source 标注、样本边界和权限文案。 |
 | Apple HealthKit | Future iOS route | 保留 iOS app + watchOS companion + HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder 方向，当前不开发。 |
@@ -73,7 +86,7 @@
 
 ## 5. 解锁 BLE adapter spike 所需的最小证据
 
-后续若要把路线切到 BLE HRS adapter spike，需要在同一台非华为 Android 手机上记录：
+后续若要把路线切到 BLE HRS adapter spike，需要在同一台非华为 Android 手机上记录；E16 retest 已在广播开启条件下满足这些最小证据，但只解锁未来单独的 `E16-1 BLE HRS adapter spike`：
 
 1. BLE scanner 可以发现 Band 9 或其可连接 BLE peripheral。
 2. GATT service 列表包含 Heart Rate Service `0x180D`。
@@ -94,10 +107,10 @@
 - `Bonded` 可列出系统已配对设备，但列表里只有 MERACH / Galaxy Buds Pro 等非目标设备，没有 HUAWEI / Band 9。
 - 截图可见范围内没有 Band 9 扫描设备卡片，也没有 `service 0x180D`、`characteristic 0x2A37` 或 bpm notify 证据。
 
-当前判断：
+当时判断：
 
 - 在 Huawei Health 已连接状态下，Band 9 没有作为系统 bonded BLE device 暴露给 TrainFlow smoke 工具。
-- 当前仍不能启动 BLE HRS adapter spike。
+- E11.2a 当时仍不能启动 BLE HRS adapter spike。
 - 该 second-pass 之后，用户在 2026-06-21 继续反馈新版 smoke APK 仍无法发现华为设备；结合本节证据，BLE HRS 路线已降级，不进入 BLE adapter spike 或生产设备接入。
 
 
@@ -105,17 +118,17 @@
 
 2026-06-21 用户反馈：安装新版 smoke APK 后，仍无法发现华为设备。
 
-当前判断：
+当时判断：
 
 - 在当前非华为 Android + HUAWEI Band 9 + Huawei Health 条件下，debug smoke 仍没有发现 HUAWEI / Band 设备。
 - 没有 `0x180D` Heart Rate Service、`0x2A37` Heart Rate Measurement notify 或 bpm notify 证据。
-- Android BLE HRS adapter spike 不应启动。
-- E11.2a 已完成：当前真实设备条件下不建议进入 BLE HRS adapter spike 或生产设备接入。
+- Android BLE HRS adapter spike 不应从 E11.2a 启动。
+- E11.2a 已完成：在广播未开启 / Huawei Health 连接占用的原条件下，不建议进入 BLE HRS adapter spike 或生产设备接入。
 - 后续只剩两条合理方向：单独评估 Huawei SDK feasibility，或 MVP 暂不接 Band 9 实时设备。
 ## 6. 明确未做
 
 - 未修改生产 Gradle、main Android Manifest、资源或 Room schema。
-- E11.2a 曾新增 debug-only smoke Activity 和 debug Manifest 蓝牙权限；E11.3 后已移除该入口，release / main manifest 不新增 BLE、BODY_SENSORS、Health Connect 或 Huawei SDK 权限。
+- E11.2a 曾新增 debug-only smoke Activity 和 debug Manifest 蓝牙权限；E11.3 后已移除该入口。E16 retest 后新的 smoke 入口也仅存在于 `app/src/debug` 的独立 launcher Activity，release / main manifest 不新增 BLE、BODY_SENSORS、Health Connect 或 Huawei SDK 权限。
 - 已运行 `app:assembleDebug` 和 `app:lintDebug`。
 - 未持久化任何心率数据。
 - 未绘制平均心率趋势。
