@@ -248,7 +248,12 @@ TrainFlow 是 Android 首发的训练计划执行助手。它帮助自定义训�
 
 ### Stage Color Picker
 
-- 阶段卡、计时目标卡、力量目标组卡和计划详情卡应展示当前色块和可打开的颜色选择入口；颜色选择器优先展示推荐色，再展示更多颜色。
+- 阶段卡、计时目标卡和计划详情卡应展示当前色块和可打开的颜色选择入口；颜色选择器优先展示推荐色，再展示更多颜色。力量目标组颜色当前不进入 MVP。
+- 力量目标组颜色不进入当前 MVP；编辑页不得展示“目标组颜色 / 后续保存”这类未完成占位入口。力量目标组识别以动作名称、组序号、热身 / 正式 / 递减 / 回退标签、目标重量、目标次数和休息为主。
+- 删除力量目标组颜色入口后，目标组编辑区必须重新收拢布局，不能留下原颜色卡片位置造成的空洞。推荐重量 / 次数并排，休息输入独占一行或全宽显示；每个目标组之间保持清晰但紧凑的分隔。
+- 力量执行页不需要展示动作短提示作为主内容；力量训练大多依靠器械、动作名称和组目标执行，自定义动作也只要求用户输入名称。计时 / 跟练仍可保留动作短提示，力量执行页应保持更克制。删除短提示后，当前组主卡应自然收缩高度，不用新的解释文案填空。
+- 力量执行页“下一组”区域应是摘要而不是说明卡：优先显示下一组动作名、组序号 / 总组序号、重量和次数，避免重复解释“力量训练按动作和组推进”这类低价值文案。
+- 若未来重新引入力量目标组颜色，必须先拆 model / serializer decision，不能在 UI polish 中静默新增 `StrengthSetPlan` 字段、plan snapshot JSON 或 Room schema；颜色仍不能表示训练强弱、加重量建议、康复建议或医疗含义。
 - E14.6-3 后，阶段 / 目标样式入口可以在同一 panel 中同时选择颜色和内置 icon，但拖拽手柄、展开 / 收起和样式入口必须分开，避免误触。
 - 色块尺寸应稳定，避免选中、hover、TalkBack 或文案变化导致布局跳动。
 - 选中态不能只靠颜色表达，必须至少包含外圈 / 描边、对勾和 TalkBack 文案。
@@ -313,7 +318,8 @@ TrainFlow 使用 4px 基数，移动端页面默认横向 padding 为 `{spacing.
 - 编辑页可以信息更密，但必须有分组和折叠。
 - 计划详情可以采用可折叠计划播放列表；当前计划的开始、编辑、复制和删除操作必须归属展开计划卡片，避免用户误读删除范围。
 - 计划编辑页的保存和开始训练可以使用轻量 sticky bottom action。`保存计划` 是绿色主按钮；`开始训练` 是深色实心次按钮，不使用红色实心样式抢占保存层级。
-- 力量目标组默认折叠，折叠态展示目标组摘要；展开态再编辑重量、次数、休息和颜色。
+- 力量目标组默认折叠，折叠态展示目标组摘要；展开态再编辑重量、次数和休息。
+- 选项文案较长的二选一 / 多选一控件应自适应为竖向 selector 或多行布局，不用横向 chip 把中文标签推出卡片边界；小屏和 Big Type 下不得依赖横向滚动才能读完关键选项。
 - 执行页信息密度必须低，最多同时强调一个主动作。
 - 记录和趋势页以可比较为主，不做营销式大卡片堆叠。
 
@@ -376,6 +382,7 @@ Chip 用于动作能力、部位、器械、难度、训练状态。Chip 不是�
 - 下一动作或下一组。
 - 主控制按钮。
 - 不再放置心率状态位；未来健康数据只能在不挤压主训练信息时重新评估。
+- E16 Band 9 心率广播 retest 已提供 BLE HRS 正向证据，但这只支持未来另拆 adapter spike；真正展示心率 UI 前，必须先做 HTML 视觉方案 / 高保真案例评审，再进入单独 Android UI 实现。
 
 主倒计时和主按钮的层级永远高于历史信息、说明和未来健康数据。
 
@@ -390,7 +397,7 @@ E10.1 后，计时训练后续按纯间歇计时器处理，执行页主信息�
 - 中部先展示关键数据摘要，再复用已有训练总结、数据总览和 session summary，不编造尚未实现的趋势或健康数据。
 - 计时训练复盘应继续来自现有 summary：总时长 / 有效信息、完成阶段或步骤、轮次进度、跳过内容、额外休息、训练部位和恢复入口。力量训练复盘应继续来自现有 summary：动作 / 组数完成情况、计划值与实际记录、组耗时、实际休息、替换和跳过。
 - rest extension、skipped、pause summary 和 early-end 信息只能来自既有 session record / summary 映射；当前 UI state 没有暴露的数据不得补假值。
-- 底部提供单一主返回入口，产品默认推荐 `返回训练首页`，保持小屏和导航栏安全区可达。`查看记录` 可作为低层级文字次入口候选，但第一版不应与返回形成两个主按钮。
+- 底部提供单一主返回入口，产品默认推荐 `返回训练首页`，保持小屏和导航栏安全区可达。完成页内容较长时，返回主动作应固定在底部导航 / 系统安全区上方，页面内容增加对应 bottom padding，不能要求用户滑到复盘卡片底部才离开。`查看记录` 可作为低层级文字次入口候选，但第一版不应与返回形成两个主按钮。
 - `completed` 才使用完成庆祝；`abandoned` 可使用同一 recap shell 的结束摘要语气，标注 `已结束` / `提前结束`，不显示 completed celebration。
 - 完成页不使用大 TimerDial 作为主视觉。若保留任何圆盘元素，只能作为小型完成徽章或训练类型标识，而不是继续占据执行页主控制层级。
 - reduce-motion 时关闭或 snap 完成庆祝动效，保留静态完成状态，不影响返回和记录写入。
@@ -417,6 +424,8 @@ E14.4-2b 的下一版 Timer Dial 语义必须保持当前已确认的圆盘 UI�
 Timer Dial 动效必须来自 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度。阶段弧线推进、总进度推进、work / rest 颜色和粗细变化、阶段切换、暂停态和最后 N 秒提醒都应服从真实训练状态和用户 cue settings。休息延长后，当前 rest 外圈弧和内圈 work+rest cycle progress 必须单调、不倒退，并在 active tick 继续推进；paused、completed 和 abandoned 状态不继续动画。
 
 E14.6 真机反馈补充：如果 normal motion 下外圈或当前 active segment 出现每秒前跳再回弹，必须拆 E14.6-1 单独修复。该修复只处理 progress monotonic / continuous behavior，不改 outer-ring semantic mapping、Canvas geometry、engine、timeline、Room、session records、commands 或 events。内部阶段圆环下的浅色承托圆环可以在后续 visual polish 中稍微加粗，但不得和 progress rebound fix 混为同一代码修复，除非后续 story 明确允许。
+
+E15-5 真机反馈补充：若 1s / 2s 短 target 仍出现一小段加速感，后续修复必须证据先行。实现前先用生产执行页中的 1s / 2s timed composition 计划采集 frame / screenrecord 或等价采样，证明 active segment displayed progress 的 delta 是否稳定；不能只靠修改 projection helper 或单元测试断言宣称视觉已修复。该修复仍不得改变 outer-ring planned-duration ratio、Canvas geometry、inner total progress、12 点数字圆标、engine timeline、Room、session record、commands/events、声音或心率边界。
 
 E14.6-3 / E14.6-3a stage style / icon planning 补充：Timer Dial 中心圆图标使用 active target `iconKey`，缺失时回退到 stage group icon，再回退到 `warmupStyle` / `cooldownStyle` / `restBetweenRoundsStyle` 或阶段类型默认 icon；中心圆和外圈颜色使用 target -> stageGroup -> boundary style -> type default fallback。Warmup、cooldown 和 synthetic between-round rest 即使不是 stageGroup targets，也应拥有自己的默认颜色和 icon。轮数不产生颜色或 icon。该规划不得改变 E14.4-2b-6 的外圈 planned-ratio 语义、内圈总阶段语义、12 点数字圆标、`+15s` rest extension 语义或 E14.5 continuous projection 边界。
 

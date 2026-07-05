@@ -51,7 +51,7 @@ stepsCompleted:
 | 架构风格 | 分层架构 + feature 模块 | UI、domain、data、platform adapter 分离。 |
 | 异步 | Kotlin Coroutines + Flow | 训练计时、状态订阅、数据库流式观察。 |
 | 本地数据库 | Room | 保存动作、计划、会话、组记录、恢复映射。 |
-| 偏好设置 | DataStore | 保存提醒偏好、心率展示偏好、训练默认值。 |
+| 偏好设置 | DataStore | 保存提醒偏好、健康数据边界偏好预留和训练默认值；当前 MVP 不显示心率。 |
 | 依赖注入 | Hilt | 生产实现与测试替身解耦。 |
 | 后台与提醒 | Notification + WorkManager/Alarm 边界 | 首版普通提醒，不做闹铃级强提醒硬依赖。 |
 | 最小网络 | 无必需网络 | 首版动作内容可随包或本地导入，后续再加同步。 |
@@ -141,7 +141,7 @@ feature:settings
 - `HeartRateProvider` source-aware 抽象接口与 disabled / mock / source-unavailable 实现。
 - E11.1 只收口 provider boundary 和不可用状态表达，不绑定具体手环 SDK，不接 Health Connect、Wear OS、BLE 或厂商 SDK。
 - 后续真实设备接入必须通过 provider adapter 转换为 `HeartRateState`，不能把 SDK model 泄漏到 UI、训练执行引擎、历史统计或 analytics。
-- E11.2a 下一步只做 HUAWEI Band 9 on non-Huawei Android feasibility smoke：当前条件是用户有 HUAWEI Band 9，手机不是华为手机，手机已安装华为运动健康，且华为运动健康可以读取手环数据；这不等价于 TrainFlow 第三方 App 可以实时读取心率。该 smoke 只决定后续 adapter 方向，不直接进入生产接入。
+- E11.2a 已记录广播未开启 / Huawei Health 连接占用条件下未发现 Band 9 标准 BLE HRS；E16 广播开启 retest 已在 debug-only 工具中取得 Band 9 BLE HRS 正向证据并合入 main（merge commit `bbd4296`）。该证据只允许后续另拆 `E16-1 BLE HRS adapter spike`，不直接进入生产接入或生产 UI。
 
 ### 4.10 `ui:designsystem`
 
@@ -172,7 +172,7 @@ feature:settings
 | `feature:workout-session` | 计时训练执行页、力量训练执行页、跟练雏形页、确认层。 |
 | `feature:history` | 训练总结、训练记录、基础趋势。 |
 | `feature:recovery` | 训练后恢复建议。 |
-| `feature:settings` | 训练偏好、通知偏好、心率显示偏好。 |
+| `feature:settings` | 训练偏好、通知偏好、未来健康数据边界偏好。 |
 
 ## 5. 分层数据流
 
@@ -332,7 +332,7 @@ stateDiagram-v2
 
 ### 8.3 心率与健康数据
 
-首版只实现 source-aware 抽象状态和占位：
+首版只保留 source-aware 抽象状态和 provider 边界；当前生产 UI、记录和统计不消费心率：
 
 ```kotlin
 interface HeartRateProvider {
@@ -345,11 +345,11 @@ interface HeartRateProvider {
 - E11.1 / E11.3 不申请真实健康、蓝牙或身体传感器权限，不实现或保留手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK。
 - 不做实时心率预警闭环，不做医疗、危险或训练中断判断。
 - 不因没有设备或没有手动输入而阻塞训练闭环；首版直接隐藏心率能力。
-- E11.2a 不持久化心率，不绘制平均心率趋势，不把执行页瞬时 `HeartRateState` 当历史事实，不申请生产健康 / 蓝牙 / 身体传感器权限。
+- E11.2a 和 E16 retest 都不持久化心率，不绘制平均心率趋势，不把执行页瞬时 `HeartRateState` 当历史事实，不申请生产健康 / 蓝牙 / 身体传感器权限。
 - 后续 Apple Watch / iOS 保留为 iOS 第一优先路线，合理架构是 iOS app + watchOS companion + HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder；当前 Android-first 阶段不进入 dev，且 Apple SDK model 不能泄漏到 TrainFlow UI / history / analytics。
-- HUAWEI Band 9 当前只作为 feasibility 样本。先确认 Band 9 是否暴露标准 BLE Heart Rate Service `0x180D`，以及 Heart Rate Measurement characteristic `0x2A37` 是否可 notify；若可用，后续优先拆 Android BLE HRS adapter spike。
-- 若 BLE HRS 不可用，再验证 Huawei Health Kit / Health Service Kit 是否能在非华为 Android + Band 9 + HMS Core 条件下授权读取实时心率。Huawei 官方生态存在，但实时心率、地区、账号、设备支持、权限申请和非华为手机兼容性都必须验证，不直接承诺生产接入。
-- Health Connect 更适合历史摘要 / 趋势，例如 post-workout summaries 或 average heart-rate trend，不作为 E11.2a 实时执行页首选；如果只能通过华为运动健康查看或同步历史数据，则不作为执行页实时心率来源。
+- HUAWEI Band 9 当前只作为 feasibility 样本。E11.2a 原条件没有发现标准 BLE HRS；E16 广播开启 retest 已发现 `HUAWEI Band HR-OD7` 广播 `0x180D`，连接后发现 `0x2A37 props=notify`，CCCD 写入成功并收到 bpm notify。后续若优先做心率设备，只能另拆 `E16-1 BLE HRS adapter spike`，先处理连接生命周期、来源标注、权限、用户 opt-in 和非医疗边界。
+- E16 正向证据不等于当前生产接入；当前 MVP 仍不显示、不录入、不统计心率。未来真正展示心率 UI 前，必须先做 HTML 视觉方案 / 高保真案例评审，再进入单独 Android UI 实现。
+- Huawei Health Kit / Health Service Kit、Health Connect、Wear OS、HealthKit 或厂商 SDK 仍只作为未来独立阶段调研。Health Connect 更适合历史摘要 / 趋势候选，不作为当前实时执行页来源。
 - 后续 Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 只能作为 `HeartRateProvider` adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI、训练执行引擎、历史统计和 analytics 不能直接依赖 SDK model。
 
 ### 8.4 媒体

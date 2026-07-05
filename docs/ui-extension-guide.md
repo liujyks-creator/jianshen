@@ -104,7 +104,7 @@ Feature 页面可以调整布局，但必须通过 ViewModel 和 use case 与核
 
 - 计划详情可采用可折叠计划播放列表，但 `开始训练`、编辑、复制和 `删除当前计划` 必须归属当前展开计划卡片，不能放成像作用于全部计划的全局操作。
 - 计划颜色是用户手动设置的计划级颜色，不从首个阶段、阶段内部目标或力量目标组自动推断；社区 layout 可以改变入口样式，但不能改变颜色来源语义。
-- 计时目标、计时内部阶段、力量目标组和计划颜色应复用同一类推荐色 / 更多颜色大色板交互，不能把颜色选择退化为多个难扫描的文字选项。
+- 计时目标、计时内部阶段和计划颜色应复用同一类推荐色 / 更多颜色大色板交互，不能把颜色选择退化为多个难扫描的文字选项。力量目标组颜色当前不进入 MVP。
 - 若某类颜色当前没有持久化字段，UI 可以提供安全展示或后续入口说明，但不得为了 polish 静默新增 Room schema、改变 `WorkoutPlan` / `PlanBlock` 语义或把颜色硬塞进不相干字段。
 - 编辑页 sticky action 若存在，`保存计划` 是主确认动作，`开始训练` 是次级启动动作；不要用红色实心开始按钮盖过保存计划。
 - 力量目标组可以默认折叠，但不得删除重量、次数、休息和计划值预填实际记录的语义。
@@ -130,7 +130,7 @@ E10.1 后，计时训练回归纯间歇计时器。下表中计时训练的“�
 
 E10.5 后，计时训练执行页的 Timer Dial 圆盘视觉语言可以被 skin 或社区 layout 适配，但只能改变表现，不能改变训练语义。外圈阶段弧线、内圈总进度、中心倒计时、暂停 / 继续、跳过 / 下一阶段和结束训练都必须来自计时训练 engine state / UI state / `WorkoutEvent`，不能使用视觉假进度或绕过 `WorkoutCommand`。
 
-E14.6-2 后，完成训练不应继续停在执行页大圆盘和执行态卡片上；completed terminal state 应进入“本次数据统计复盘页面”。页面顶部明确 `已完成` 并有克制庆祝感，中部先展示关键数据摘要，再复用既有训练总结 / 数据总览 / session summary，rest extension、skipped、pause 和 early-end 信息只能来自既有 summary / session record 映射，底部主动作推荐 `返回训练首页`。`查看记录` 只能作为低层级次入口候选，不能与返回形成两个主按钮。大 TimerDial 不应作为 completed 主视觉；如保留圆盘元素，只能作为小型完成徽章或训练类型标识。`abandoned` 可复用 recap shell，但必须是 `已结束` / `提前结束` 语气，不显示 completed celebration。该页面仍不得改 `WorkoutSession`、session records、E12 trends、E14.6-3 stage color/icon system、心率边界或训练命令 / 事件语义。
+E14.6-2 后，完成训练不应继续停在执行页大圆盘和执行态卡片上；completed terminal state 应进入“本次数据统计复盘页面”。页面顶部明确 `已完成` 并有克制庆祝感，中部先展示关键数据摘要，再复用既有训练总结 / 数据总览 / session summary，rest extension、skipped、pause 和 early-end 信息只能来自既有 summary / session record 映射，底部主动作推荐 `返回训练首页`。若复盘内容超过首屏，返回主动作必须固定在底部导航 / 系统安全区上方，滚动内容要预留 bottom padding，不能要求用户滑到长复盘底部才离开。`查看记录` 只能作为低层级次入口候选，不能与返回形成两个主按钮。大 TimerDial 不应作为 completed 主视觉；如保留圆盘元素，只能作为小型完成徽章或训练类型标识。`abandoned` 可复用 recap shell，但必须是 `已结束` / `提前结束` 语气，不显示 completed celebration。该页面仍不得改 `WorkoutSession`、session records、E12 trends、E14.6-3 stage color/icon system、心率边界或训练命令 / 事件语义。
 
 任何训练执行页变体都必须展示：
 
@@ -143,7 +143,7 @@ E14.6-2 后，完成训练不应继续停在执行页大圆盘和执行态卡片
 | 主控制 | 暂停/继续/跳过/结束 | 开始本组/完成本组/确认/休息控制 |
 | 心率位 | 首版隐藏 | 首版隐藏 |
 
-E11.3 后，首版训练执行页不显示心率位、不显示未获取心率占位，也不提供手动心率输入。后续如果重新评估健康设备或心率展示，必须先更新产品决策和权限 / 数据边界，并且不能挤压当前动作、主时间、下一步和主控制。
+E11.3 后，首版训练执行页不显示心率位、不显示未获取心率占位，也不提供手动心率输入。E16 Band 9 心率广播 retest 已提供 BLE HRS 正向证据，但只允许未来另拆 `E16-1 BLE HRS adapter spike`。后续如果重新评估健康设备或心率展示，必须先更新产品决策和权限 / 数据边界，并先做 HTML 视觉方案 / 高保真案例评审，再进入 Android UI 实现；未来健康数据仍不能挤压当前动作、主时间、下一步和主控制。
 
 ## 7. 主题贡献要求
 
@@ -193,7 +193,11 @@ E14.4-2b visual / semantic gate 与 E14.4-2b-2 data model decision 已确认阶�
 
 E14.6 stage style / icon planning 进一步约束：热身、放松和轮间休息都是阶段化显示面，允许阶段色和内置图标 fallback；轮数只是重复结构，不需要自己的颜色或图标。E14.6-3a 已决定 boundary style 持久化只进入 versioned timed composition JSON payload：`warmupStyle`、`cooldownStyle` 和 `restBetweenRoundsStyle`，每个字段只包含可选 `colorHex` 与可选 `iconKey`；不新增 Room migration。第一版阶段 / 目标图标只使用项目内置白色 icon key，不支持用户上传图片、自定义图片库、远程图标资源或图片路径持久化。UI skin 可以改变图标呈现方式、描边、尺寸或动效，但不得改变 `iconKey`、`colorHex`、target -> stageGroup -> boundary style -> type default fallback、训练引擎、TimerDial mapping、session record、命令或事件语义。不得通过 skin 自行增加 Room schema、图片上传、远程 icon pack 或上传资产存储。
 
+E15-5 strength target-group color 约束：力量目标组颜色不进入当前 MVP，UI skin 不应保留或放大“目标组颜色 / 后续保存”这类未完成占位入口。力量目标组识别以动作名称、组序号、热身 / 正式 / 递减 / 回退标签、目标重量、目标次数和休息为主；skin 可调整这些信息的排版和层级，但不得通过普通 UI polish 静默新增 `StrengthSetPlan` 字段、plan snapshot JSON、Room schema 或 session record 语义。若未来重新引入力量目标组颜色，必须先拆 model / serializer decision，颜色也不得解释为训练强度、推荐加重量、康复建议、医疗含义或趋势算法含义。
+
 E14.6-1 若修复 TimerDial normal motion 下外圈 / active segment 的每秒前跳再回弹，只允许处理 progress monotonic / continuous behavior。不得借该修复重做 outer-ring semantic mapping、Canvas geometry、stage count、engine timeline、Room schema、session records、`WorkoutCommand` 或 `WorkoutEvent`。
+
+E15-5a 若继续修复 1s / 2s short target 的加速感，必须先从生产执行页采集 frame / screenrecord 或等价采样证据，确认 displayed progress delta 的异常位置；不得只凭 projection helper 单元测试或主观描述直接改实现并宣称关闭。该修复仍只允许处理 motion / projection 行为，不得改变 v2 outer-ring planned-duration ratio、TimerDial geometry、inner total progress、12 点数字圆标、engine timeline、Room schema、session records、commands、events、声音或心率 / 设备边界。
 
 ## 10. UI Skin Review Checklist
 
