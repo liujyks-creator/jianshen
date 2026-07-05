@@ -895,7 +895,7 @@ stepsCompleted:
 **状态:** Implemented in permission/privacy copy contract, settings/plans/workout/recovery copy, readiness checklist, and unit tests
 
 作为用户，  
-我想理解通知、震动和健康数据边界，  
+我想理解通知、震动和健康数据边界，
 以便放心使用。
 
 **验收标准:**
