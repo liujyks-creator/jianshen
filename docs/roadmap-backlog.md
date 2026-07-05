@@ -1563,7 +1563,7 @@ stepsCompleted:
 
 ### Story E11.2a: HUAWEI Band 9 on non-Huawei Android feasibility smoke
 
-**状态:** Completed feasibility smoke; current real-device condition found no Band 9 BLE HRS / `0x2A37 notify` evidence; not production device integration
+**状态:** Completed for original condition; broadcast-on retest split to E16; not production device integration
 
 作为开发者，
 我想先用当前真实设备条件验证 HUAWEI Band 9 在非华为 Android 上的第三方可用心率通道，
@@ -1576,6 +1576,7 @@ stepsCompleted:
 - 手机已安装华为运动健康。
 - 华为运动健康可以读取手环数据。
 - 这只证明华为运动健康能读设备数据，不证明 TrainFlow 第三方 App 可以实时读取心率。
+- 2026-07-05 用户补充：此前未开启 Band 9 心率广播；设备提示开启心率广播会连接第三方蓝牙设备并断开华为运动健康。因此 E11.2a negative result 只覆盖原条件，广播开启条件拆到 E16 retest。
 
 **验收标准:**
 
@@ -1605,6 +1606,29 @@ stepsCompleted:
 - 官方资料只证明 Band 9 有心率传感器、支持 BLE、Huawei Health 可读取 / 展示心率；这不等价于 TrainFlow 第三方 App 可实时读取心率。
 - 当前路线建议是暂不接设备：用户 2026-06-21 反馈新版 smoke APK 仍无法发现华为设备，当前没有 `0x180D` / `0x2A37 notify` 或 bpm notify 证据，不进入 BLE adapter spike；后续若继续设备方向，应单独评估 Huawei SDK feasibility；MVP 不显示心率或未获取心率占位。Health Connect 只作为未来独立历史摘要 / 趋势候选。
 - 本阶段最终不保留生产训练页心率 UI、debug BLE smoke launcher、Gradle、main Android Manifest、资源、Room schema 或 `HeartRateProvider` 生产接入；未持久化心率，未绘制平均心率趋势，未实现或保留手动输入。
+
+### Story E16-HR: Heart-rate broadcast feasibility retest
+
+**状态:** Implemented debug-only test tool; waiting for user real-device result
+
+作为开发者，
+我想在 Band 9 明确开启心率广播、且华为运动健康可能断开的条件下重新做 BLE HRS smoke，
+以便判断旧 E11.2a negative result 是否只是广播未开启导致。
+
+**验收标准:**
+
+- Then 只提供 debug-only 测试入口，不改生产 `app/src/main` manifest 或 release 权限。
+- Then 扫描 BLE 广播和系统 bonded devices，允许用户选择疑似 Band 9 / HUAWEI / Heart Rate 设备连接。
+- Then GATT discover 后枚举 service / characteristic，并重点记录 `0x180D`、`0x2A37`、notify / indicate 和 CCCD 写入结果。
+- Then 收到 bpm notify 时只在 smoke log 中显示，不持久化、不写 `WorkoutSession`、不调用生产 `HeartRateProvider`。
+- Then 记录 Huawei Health 是否断开、广播关闭后是否能恢复连接。
+- Then 不恢复 heart-rate UI、手动输入、平均心率趋势，不新增生产设备接入、医学判断、危险告警或训练中断判断。
+
+**交付结果:**
+
+- 新增 `docs/testing/e16-heart-rate-broadcast-feasibility-retest.md`。
+- 新增 debug-only `HR Broadcast Smoke` Activity 和 debug manifest 蓝牙权限。
+- E11.2a 文档、decision log 和项目状态已标注旧 negative result 的条件边界。
 
 ### Story E11.3: 放弃首版心率显示、录入和统计
 

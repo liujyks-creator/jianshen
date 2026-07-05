@@ -1,10 +1,12 @@
 # TrainFlow E11.2a HUAWEI Band 9 非华为 Android 可行性 Smoke
 
-**状态:** Completed; no Band 9 standard BLE HRS exposure found in current real-device condition
+**状态:** Completed for the original condition; broadcast-on retest now split to E16
 **日期:** 2026-06-21
 **范围:** HUAWEI Band 9 + 非华为 Android + 已安装华为运动健康
 
 本文记录第三方实时心率通道可行性。E11.2a 期间曾提供 debug-only BLE HRS smoke APK；E11.3 后续根据用户反馈撤销首版心率显示、录入和统计，并移除 debug smoke 入口。当前不做生产设备接入，不持久化心率，不绘制平均心率趋势，不把执行页 `HeartRateState` 当历史事实。
+
+2026-07-05 更新：用户补充说明，前次测试时 HUAWEI Band 9 未开启“心率广播”。设备提示开启心率广播后会作为第三方蓝牙设备连接，并会断开华为运动健康。这个新信息将 E11.2a 的结论收窄为“广播未开启 / Huawei Health 连接占用条件下未发现标准 BLE HRS”。开启心率广播后的可行性已拆到 `docs/testing/e16-heart-rate-broadcast-feasibility-retest.md` 重新测试；该 retest 不恢复 MVP 心率 UI，也不自动启动生产 BLE adapter。
 
 ## 1. 当前真实条件
 
@@ -29,7 +31,17 @@
 | Band 9 `0x180D` | Not found | 用户安装新版 smoke APK 后仍无法发现华为设备；当前没有 HRS service 证据。 |
 | Band 9 `0x2A37 notify` | Not found | 当前没有 Heart Rate Measurement characteristic、notify enabled 或 bpm notify 证据。 |
 
-## 2.1 Debug APK 使用步骤（历史记录）
+## 2.1 Follow-up: heart-rate broadcast caveat
+
+2026-07-05 用户反馈：此前未开启 Band 9 心率广播；Band 9 UI 提示开启心率广播会连接第三方蓝牙设备，并断开运动健康 App。
+
+因此 E11.2a 的 negative result 只覆盖当时条件，不覆盖“广播开启后作为标准第三方心率设备广播”的条件。后续判断以 E16 retest 为准：
+
+- 若广播开启后出现 `0x180D` / `0x2A37 notify` / bpm notify 证据，才可考虑未来 BLE HRS adapter spike。
+- 若仍无设备、无 HRS、无 notify 或无 bpm notify，继续保持 E11.3 结论。
+- 不论 retest 结果如何，当前 MVP 不恢复心率卡片、手动输入、未获取心率占位或平均心率趋势。
+
+## 2.2 Debug APK 使用步骤（历史记录）
 
 以下步骤仅记录 E11.2a 当时如何完成 smoke。E11.3 后 debug smoke 入口已移除，当前 APK 不再提供该入口。
 
