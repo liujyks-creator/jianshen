@@ -1,12 +1,12 @@
 # TrainFlow E11.2a HUAWEI Band 9 非华为 Android 可行性 Smoke
 
-**状态:** Completed for the original condition; broadcast-on retest now split to E16
+**状态:** Completed for the original condition; E16 broadcast-on retest captured positive BLE HRS evidence
 **日期:** 2026-06-21
 **范围:** HUAWEI Band 9 + 非华为 Android + 已安装华为运动健康
 
 本文记录第三方实时心率通道可行性。E11.2a 期间曾提供 debug-only BLE HRS smoke APK；E11.3 后续根据用户反馈撤销首版心率显示、录入和统计，并移除 debug smoke 入口。当前不做生产设备接入，不持久化心率，不绘制平均心率趋势，不把执行页 `HeartRateState` 当历史事实。
 
-2026-07-05 更新：用户补充说明，前次测试时 HUAWEI Band 9 未开启“心率广播”。设备提示开启心率广播后会作为第三方蓝牙设备连接，并会断开华为运动健康。这个新信息将 E11.2a 的结论收窄为“广播未开启 / Huawei Health 连接占用条件下未发现标准 BLE HRS”。开启心率广播后的可行性已拆到 `docs/testing/e16-heart-rate-broadcast-feasibility-retest.md` 重新测试；该 retest 不恢复 MVP 心率 UI，也不自动启动生产 BLE adapter。
+2026-07-05 更新：用户补充说明，前次测试时 HUAWEI Band 9 未开启“心率广播”。设备提示开启心率广播后会作为第三方蓝牙设备连接，并会断开华为运动健康。这个新信息将 E11.2a 的结论收窄为“广播未开启 / Huawei Health 连接占用条件下未发现标准 BLE HRS”。开启心率广播后的可行性已在 `docs/testing/e16-heart-rate-broadcast-feasibility-retest.md` 重新测试并取得正向 BLE HRS 证据；该 retest 已 reviewed / merged 到 main，merge commit `bbd4296`，但不恢复 MVP 心率 UI，也不自动启动生产 BLE adapter。
 
 ## 1. 当前真实条件
 
@@ -28,8 +28,8 @@
 | Band 9 官方规格 | Partial evidence | 官方规格显示 Band 9 有 optical heart rate sensor，连接能力包含 BT 5.0 / BLE；规格未声明暴露标准 BLE Heart Rate Service。 |
 | 华为运动健康读数 | Confirmed by condition | 华为文档说明华为运动健康 / 手环可显示实时心率和运动中心率；这仍是华为 App / 设备生态能力，不等于第三方实时 GATT 通道。 |
 | 标准 BLE HRS 判定标准 | Known | 若设备实现标准 Heart Rate Service，应能发现 `0x180D`，且 `Heart Rate Measurement` characteristic 支持 notify。 |
-| Band 9 `0x180D` | Not found | 用户安装新版 smoke APK 后仍无法发现华为设备；当前没有 HRS service 证据。 |
-| Band 9 `0x2A37 notify` | Not found | 当前没有 Heart Rate Measurement characteristic、notify enabled 或 bpm notify 证据。 |
+| Band 9 `0x180D` | Not found in original condition | 用户安装 E11.2a 新版 smoke APK 后仍无法发现华为设备；该结论只覆盖广播未开启 / Huawei Health 连接占用条件。E16 广播开启 retest 后已有 `0x180D` 正向证据。 |
+| Band 9 `0x2A37 notify` | Not found in original condition | E11.2a 原条件没有 Heart Rate Measurement characteristic、notify enabled 或 bpm notify 证据。E16 广播开启 retest 后已有 `0x2A37 notify`、CCCD 写入成功和 bpm notify 证据。 |
 
 ## 2.1 Follow-up: heart-rate broadcast caveat
 
@@ -39,7 +39,6 @@
 
 - E16 retest 已在广播开启条件下取得正向 BLE HRS 证据：`0x180D`、`0x2A37 notify`、CCCD 写入成功和持续 bpm notify。
 - 该证据只允许后续另拆 `E16-1 BLE HRS adapter spike`，不能从当前 story 直接接入生产心率。
-- 若仍无设备、无 HRS、无 notify 或无 bpm notify，继续保持 E11.3 结论。
 - 不论 retest 结果如何，当前 MVP 不恢复心率卡片、手动输入、未获取心率占位或平均心率趋势。
 
 ## 2.2 Debug APK 使用步骤（历史记录）

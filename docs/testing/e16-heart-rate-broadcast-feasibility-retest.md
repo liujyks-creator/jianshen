@@ -1,8 +1,9 @@
 # E16 Heart-rate broadcast feasibility retest
 
-**Status:** Positive BLE HRS evidence captured; needs review before any future adapter spike
+**Status:** Positive BLE HRS evidence reviewed / merged to main; future adapter spike only
 **Date:** 2026-07-05
 **Scope:** HUAWEI Band 9 heart-rate broadcast mode on non-Huawei Android
+**Main merge:** `bbd4296`
 
 ## Why this retest exists
 
