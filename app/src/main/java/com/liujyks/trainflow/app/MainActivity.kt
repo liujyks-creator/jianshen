@@ -1,7 +1,5 @@
 package com.liujyks.trainflow.app
 
-import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -51,9 +49,6 @@ class MainActivity : ComponentActivity() {
                 initial = emptyList()
             )
             val scope = rememberCoroutineScope()
-            val openHeartRateBroadcastSmoke = remember(this) {
-                createDebugHeartRateBroadcastSmokeLauncher(this)
-            }
 
             TrainFlowTheme(
                 skin = preferences.toTrainFlowSkin(),
@@ -131,24 +126,9 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             preferencesDataSource.setUiSkinId(skinId)
                         }
-                    },
-                    onOpenHeartRateBroadcastSmoke = openHeartRateBroadcastSmoke
+                    }
                 )
             }
         }
-    }
-}
-
-private fun createDebugHeartRateBroadcastSmokeLauncher(
-    activity: ComponentActivity
-): (() -> Unit)? {
-    val isDebuggable = activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    if (!isDebuggable) return null
-    val smokeActivityClass = runCatching {
-        Class.forName("com.liujyks.trainflow.app.HeartRateBroadcastSmokeActivity")
-    }.getOrNull() ?: return null
-
-    return {
-        activity.startActivity(Intent(activity, smokeActivityClass))
     }
 }

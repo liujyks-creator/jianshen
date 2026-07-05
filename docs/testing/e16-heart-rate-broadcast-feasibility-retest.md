@@ -18,17 +18,17 @@ That changes the interpretation of E11.2a:
 
 This retest does not restore heart-rate UI to the MVP. TrainFlow still does not show heart-rate cards, manual bpm input, missing-heart-rate placeholders, average heart-rate trends, medical alerts, or training interruption decisions.
 
-If the retest succeeds, the next step is an explicit future BLE HRS adapter spike. It is not an automatic production integration and is not an MVP Alpha blocker.
+If the retest succeeds, the only valid next step is a separately scoped `E16-1 BLE HRS adapter spike`. It is not an automatic production integration, not a production UI change, and not an MVP Alpha blocker. Before any future heart-rate value is shown in TrainFlow, the product must first go through an HTML visual direction / high-fidelity case review and only then consider Android UI implementation.
 
 ## Test tool
 
-Added debug-only entry points:
+Added debug-only entry point:
 
-- Primary entry: open TrainFlow debug APK, then tap the top home button `HR Broadcast Smoke`.
-- Secondary entry: standalone launcher activity label `HR Broadcast Smoke` when the device launcher shows it.
+- Primary entry: standalone debug launcher activity label `HR Broadcast Smoke` when the device launcher shows it.
+- ADB fallback: `adb shell am start -n com.liujyks.trainflow/.app.HeartRateBroadcastSmokeActivity`.
 - Activity: `app/src/debug/java/com/liujyks/trainflow/app/HeartRateBroadcastSmokeActivity.kt`
 - Permissions are declared only in `app/src/debug/AndroidManifest.xml`.
-- The home button is wired only in debug builds. Release / production builds do not show this entry.
+- There is no home-screen button, route, callback, or Activity reference in `app/src/main`. Release / production builds do not show this entry.
 
 The tool scans all BLE advertisements, lists bonded devices, connects to a selected device, discovers GATT services, and attempts to subscribe to:
 
@@ -92,12 +92,12 @@ Interpretation:
 - The connected broadcast device exposes Heart Rate Measurement `0x2A37` with notify support.
 - CCCD subscription succeeds and bpm notifications arrive after the successful connection and notify setup.
 - The device name during broadcast appears as `HUAWEI Band HR-OD7`, with address `D8:F0:42:01:90:D7`; this differs from the earlier bonded label `HUAWEI Band 9-OD7 D8:EF:42:01:90:D7`, so future implementation should not rely on the paired label or static address alone.
-- This result is sufficient to justify a future BLE HRS adapter spike, but it still does not restore MVP heart-rate UI or create production device integration.
+- This result is sufficient to justify the separately scoped future `E16-1 BLE HRS adapter spike`, but it still does not restore MVP heart-rate UI or create production device integration.
 
 ## Retest matrix
 
 1. Baseline: broadcast off, Huawei Health connected.
-2. Main retest: enable Band 9 heart-rate broadcast, accept that Huawei Health may disconnect, open TrainFlow, tap the top `HR Broadcast Smoke` button, then scan.
+2. Main retest: enable Band 9 heart-rate broadcast, accept that Huawei Health may disconnect, open the debug-only `HR Broadcast Smoke` launcher activity or start it with `adb shell am start -n com.liujyks.trainflow/.app.HeartRateBroadcastSmokeActivity`, then scan.
 3. Optional: broadcast on, Huawei Health killed / background restricted, then scan again.
 4. Cleanup: turn broadcast off and confirm Huawei Health can reconnect normally.
 
@@ -122,4 +122,4 @@ BLE HRS feasibility requires all of these:
 
 ## Current recommendation
 
-Treat the 18:46 retest as successful device research evidence. The next step, if heart-rate work is prioritized later, is an explicit future BLE HRS adapter spike with connection lifecycle, source labelling, permissions, UX opt-in, and non-medical boundaries. Keep MVP Alpha readiness focused on the completed training loop, records, audio coexistence, permissions, and known user-test fixes.
+Treat the 18:46 retest as successful device research evidence. The next step, if heart-rate work is prioritized later, is only the separate `E16-1 BLE HRS adapter spike` with connection lifecycle, source labelling, permissions, UX opt-in, and non-medical boundaries. It must not directly restore production heart-rate UI. Before a future heart-rate display is implemented, TrainFlow must first complete an HTML visual direction / high-fidelity case review and then enter a separate Android UI story. Keep MVP Alpha readiness focused on the completed training loop, records, audio coexistence, permissions, and known user-test fixes.

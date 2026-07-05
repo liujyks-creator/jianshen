@@ -79,8 +79,7 @@ internal fun TrainFlowApp(
     onVibrationEnabledChanged: (Boolean) -> Unit = {},
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit = {},
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {},
-    onUiSkinChanged: (String) -> Unit = {},
-    onOpenHeartRateBroadcastSmoke: (() -> Unit)? = null
+    onUiSkinChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val planReminderScheduler = remember(context) {
@@ -176,7 +175,6 @@ internal fun TrainFlowApp(
                     onOpenRecords = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
                     },
-                    onOpenHeartRateBroadcastSmoke = onOpenHeartRateBroadcastSmoke,
                     modifier = Modifier.padding(innerPadding)
                 )
 
