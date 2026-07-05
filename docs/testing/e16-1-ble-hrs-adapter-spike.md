@@ -1,6 +1,6 @@
 # E16-1 BLE HRS adapter spike
 
-**Status:** Implemented; needs real-device smoke review
+**Status:** Implemented; real-device smoke passed; needs review
 **Date:** 2026-07-06
 **Scope:** Standard BLE Heart Rate Service adapter spike for debug verification only
 
@@ -76,9 +76,37 @@ Smoke evidence should be saved locally under:
 
 Do not commit screenshots, logs, APKs, `.local/`, or device output.
 
+## Real-device smoke result
+
+Real-device smoke passed on a real Android phone with HUAWEI Band 9 heart-rate broadcast mode enabled. Screenshot evidence time was approximately 2026-07-06 01:14 and has been accepted for review.
+
+Accepted evidence chain:
+
+- `Connecting HUAWEI Band HR-OD7 D8:F0:42:01:90:D7`
+- `GATT connection status=0 state=2`
+- `Services discovered status=0 count=9`
+- `service 0x180D`
+- `characteristic 0x2A37 props=notify`
+- `RESULT: HRS 0x180D found`
+- `RESULT: characteristic 0x2A37 found props=notify`
+- `setCharacteristicNotification=true`
+- `write CCCD result=0`
+- `Descriptor write 0x2902 status=0 for 0x2A37`
+- `RESULT: 0x2A37 notify enabled`
+- `RESULT: heart-rate notify bpm=100 flags=0x6 format=uint8 ... bytes=06 64`
+- `RESULT: heart-rate notify bpm=99 flags=0x6 format=uint8 ... bytes=06 63`
+- `Closing GATT`
+- `adapter stopped`
+
+Conclusion:
+
+```text
+passed: Band 9 broadcast -> BLE HRS adapter -> HeartRateState bpm flow
+```
+
 ## Current conclusion
 
-E16 already proved that Band 9 heart-rate broadcast mode can expose standard BLE HRS on the user's real device. E16-1 now packages that positive path into a reusable debug-only adapter spike and validates the standard payload parser in unit tests.
+E16 already proved that Band 9 heart-rate broadcast mode can expose standard BLE HRS on the user's real device. E16-1 now packages that positive path into a reusable debug-only adapter spike, validates the standard payload parser in unit tests, and has passed the real-device Band 9 broadcast smoke path through `HeartRateState` bpm flow.
 
 The spike is enough to continue future production planning for a BLE HRS source, but it is not a production feature.
 
@@ -135,5 +163,6 @@ Results:
 
 Real-device Band 9 smoke:
 
-- Not run by Codex in this pass.
-- Required for final device evidence because AVD cannot prove BLE HRS peripheral behavior.
+- Passed on real Android phone + HUAWEI Band 9 heart-rate broadcast mode.
+- Evidence accepted for review: scan/connect/discover `0x180D`, find `0x2A37 notify`, enable CCCD `0x2902`, receive bpm notify payloads `06 64` and `06 63`, close GATT, and stop adapter.
+- Final conclusion: `passed: Band 9 broadcast -> BLE HRS adapter -> HeartRateState bpm flow`.
