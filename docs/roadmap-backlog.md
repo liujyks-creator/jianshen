@@ -1609,7 +1609,7 @@ stepsCompleted:
 
 ### Story E16-HR: Heart-rate broadcast feasibility retest
 
-**状态:** Implemented debug-only test tool; waiting for user real-device result
+**状态:** Implemented debug-only test tool; needs source-labelled retest after inconclusive screenshot
 
 作为开发者，
 我想在 Band 9 明确开启心率广播、且华为运动健康可能断开的条件下重新做 BLE HRS smoke，
@@ -1628,6 +1628,9 @@ stepsCompleted:
 
 - 新增 `docs/testing/e16-heart-rate-broadcast-feasibility-retest.md`。
 - 新增 debug-only `HR Broadcast Smoke` Activity 和 debug manifest 蓝牙权限。
+- 补充 debug 首页顶部 `HR Broadcast Smoke` 入口，解决部分手机桌面 / 应用列表不可靠展示独立 launcher 的问题。
+- 2026-07-05 18:32 用户截图显示 Band 9 出现在 bonded devices，但 bpm notify 发生在首次可见连接 Band 9 之前，不能归因于 Band 9；后续 Band 9 连接 `GATT connection status=147 state=0` 并断开。
+- Debug smoke 后续已追加 heart-rate notify source label，并说明 `Clear` 不会断开 active GATT，避免旧连接 notify 污染下一轮判断。
 - E11.2a 文档、decision log 和项目状态已标注旧 negative result 的条件边界。
 
 ### Story E11.3: 放弃首版心率显示、录入和统计
@@ -2564,7 +2567,7 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 20. E10.17：Stage Color Picker，为计时阶段编辑页提供推荐色 / 更多颜色选择、集中色板、可访问选中态、计划持久化恢复和 Timer Dial 阶段色消费。（Implemented）
 21. E10.18：Plan Edit Backfill，从计划详情进入计时 / 力量编辑器，回填已保存计划并保存回同一 plan id，同时保持历史 session snapshot 不回写。（Implemented）
 22. E11.1：Heart-rate source boundary / unavailable state refinement；收口 source-aware provider/model 边界，不接设备、不做手动输入、不持久化心率、不画平均心率趋势。（Implemented; UI later hidden）
-23. E11.2a：HUAWEI Band 9 on non-Huawei Android feasibility smoke；已实现 debug-only smoke APK 入口并记录真实设备验证，当前用户手机仍无法发现华为设备，没有 BLE HRS `0x180D` / `0x2A37 notify` 证据，因此不进入 BLE adapter spike 或生产设备接入。（Completed; BLE HRS route downgraded）
+23. E11.2a / E16：HUAWEI Band 9 on non-Huawei Android feasibility smoke；E11.2a 原条件为广播未开启 / Huawei Health 连接占用，未发现华为设备。E16 广播开启 retest 已实现 debug-only `HR Broadcast Smoke` Activity、首页入口和 debug 蓝牙权限；18:32 用户截图显示 Band 9 可出现在 bonded devices，但可见 bpm notify 发生在连接 Band 9 之前，后续 Band 9 连接以 GATT status 147 断开，当前仍没有 Band-attributed BLE HRS `0x180D` / `0x2A37 notify` / bpm 完整证据，因此不进入 BLE adapter spike 或生产设备接入。（Implemented / needs source-labelled retest）
 24. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
 25. E12.1：真实记录与基础统计。（Implemented）
 26. E12.2a：非心率历史图表与聚合趋势。（Implemented）
@@ -2613,7 +2616,7 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、健康数据边界、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：当前 Band 9 + 非华为 Android + 华为运动健康可读数据条件下，新版 smoke APK 仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据，因此不进入 BLE adapter spike 或生产设备接入。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或平均心率趋势。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：原条件下 Band 9 + 非华为 Android + 华为运动健康连接时仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据。E16 广播开启 retest 已确认 Band 9 可出现在 bonded devices，但 18:32 截图里的 bpm notify 发生在首次可见连接 Band 9 之前，后续 Band 9 连接以 GATT status 147 断开，当前仍没有 Band-attributed BLE HRS / notify / bpm 完整证据，因此不进入 BLE adapter spike 或生产设备接入。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或平均心率趋势。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。

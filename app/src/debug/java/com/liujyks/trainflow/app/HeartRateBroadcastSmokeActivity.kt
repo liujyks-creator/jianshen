@@ -38,6 +38,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
     private lateinit var deviceList: LinearLayout
     private lateinit var logView: TextView
     private var currentGatt: BluetoothGatt? = null
+    private var currentGattLabel: String? = null
     private var isScanning = false
 
     private val scanCallback = object : ScanCallback() {
@@ -64,7 +65,10 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
                 appendLog("GATT disconnected")
                 gatt.close()
-                if (currentGatt == gatt) currentGatt = null
+                if (currentGatt == gatt) {
+                    currentGatt = null
+                    currentGattLabel = null
+                }
             }
         }
 
@@ -111,7 +115,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray
         ) {
-            handleCharacteristicChanged(characteristic, value)
+            handleCharacteristicChanged(gatt, characteristic, value)
         }
 
         @Deprecated("Deprecated by Android platform for API 33+")
@@ -119,7 +123,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
-            handleCharacteristicChanged(characteristic, characteristic.value ?: byteArrayOf())
+            handleCharacteristicChanged(gatt, characteristic, characteristic.value ?: byteArrayOf())
         }
     }
 
@@ -170,7 +174,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             seenDeviceLabels.clear()
             deviceList.removeAllViews()
             logView.text = ""
-            appendLog("Cleared")
+            appendLog("Cleared log/device list; active GATT remains until Stop / Disconnect.")
         })
         root.addView(TextView(this).apply {
             text = "Devices"
@@ -333,7 +337,8 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             return
         }
         closeGatt()
-        appendLog("Connecting ${device.safeName()} ${device.address}")
+        currentGattLabel = device.debugLabel()
+        appendLog("Connecting $currentGattLabel")
         currentGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         } else {
@@ -386,17 +391,20 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
         appendLog("write CCCD result=$writeResult")
     }
 
+    @SuppressLint("MissingPermission")
     private fun handleCharacteristicChanged(
+        gatt: BluetoothGatt,
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray
     ) {
         if (characteristic.uuid != HEART_RATE_MEASUREMENT_UUID) return
         val bpm = parseHeartRateBpm(value)
         val hex = value.joinToString(" ") { "%02X".format(it) }
+        val source = gatt.device?.debugLabel() ?: currentGattLabel ?: "(unknown)"
         if (bpm == null) {
-            appendLog("RESULT: heart-rate notify unreadable bytes=$hex")
+            appendLog("RESULT: heart-rate notify unreadable source=$source bytes=$hex")
         } else {
-            appendLog("RESULT: heart-rate notify bpm=$bpm bytes=$hex")
+            appendLog("RESULT: heart-rate notify bpm=$bpm source=$source bytes=$hex")
         }
     }
 
@@ -420,6 +428,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             it.close()
         }
         currentGatt = null
+        currentGattLabel = null
     }
 
     private fun appendLog(message: String) {
@@ -433,6 +442,11 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     private fun BluetoothDevice.safeName(): String {
         return runCatching { name }.getOrNull().takeUnless { it.isNullOrBlank() } ?: "(unknown)"
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun BluetoothDevice.debugLabel(): String {
+        return "${safeName()} $address"
     }
 
     private fun UUID.shortLabel(): String {

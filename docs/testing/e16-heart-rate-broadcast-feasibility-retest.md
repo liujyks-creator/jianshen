@@ -1,6 +1,6 @@
 # E16 Heart-rate broadcast feasibility retest
 
-**Status:** Implemented / needs review; waiting for user real-device result
+**Status:** Implemented / needs retest; latest screenshot is inconclusive for Band 9 notify
 **Date:** 2026-07-05
 **Scope:** HUAWEI Band 9 heart-rate broadcast mode on non-Huawei Android
 
@@ -36,7 +36,34 @@ The tool scans all BLE advertisements, lists bonded devices, connects to a selec
 - Heart Rate Measurement characteristic `0x2A37`
 - CCCD `0x2902` notification / indication
 
-It logs bpm notifications if received. It does not persist data and does not call TrainFlow `HeartRateProvider`.
+It logs bpm notifications if received. After the source-label fix, each bpm notification also includes the current GATT source device label. It does not persist data and does not call TrainFlow `HeartRateProvider`.
+
+## Real-device evidence
+
+### 2026-07-05 18:32 screenshot
+
+User screenshot: `C:/Users/25073/Downloads/Screenshot_2026-07-05-18-32-03-26_168a3d1b6f3b71..jpg`.
+
+Observed timeline:
+
+- `18:30:06` to `18:30:10`: log shows repeated `RESULT: heart-rate notify bpm=85 bytes=06 55`.
+- `18:30:09`: bonded list shows two devices: `Galaxy Buds Pro (5508)` and `HUAWEI Band 9-OD7 D8:EF:42:01:90:D7`.
+- `18:30:11`: first visible `Connecting HUAWEI Band 9-OD7 D8:EF:42:01:90:D7`.
+- `18:30:29` and `18:30:32`: additional visible HUAWEI Band 9 connection attempts.
+- `18:30:41`: log shows `GATT connection status=147 state=0` followed by `GATT disconnected`.
+
+Interpretation:
+
+- The visible `heart-rate notify bpm=85` lines happened before the first visible HUAWEI Band 9 connection attempt, so they cannot be attributed to `HUAWEI Band 9-OD7` from this screenshot.
+- The screenshot proves that Band 9 becomes visible in the bonded device list in broadcast mode.
+- The screenshot does not prove Band 9 GATT service discovery, `0x180D`, `0x2A37`, CCCD notify enablement, or Band-attributed bpm notify.
+- The visible Band 9 connection attempt appears to fail with GATT `status=147 state=0`.
+- The retest remains inconclusive for BLE HRS adapter feasibility until a new log shows source-attributed Band 9 service discovery and notify.
+
+Follow-up tool fix:
+
+- `Clear` now logs that it only clears the log/device list and does not disconnect active GATT.
+- Heart-rate notify logs now include `source=<device name address>` so future screenshots can distinguish old active connections from newly tapped devices.
 
 ## Retest matrix
 
@@ -54,7 +81,7 @@ BLE HRS feasibility requires all of these:
 3. `0x180D` contains `0x2A37`.
 4. `0x2A37` supports notify or indicate.
 5. CCCD write succeeds and the log shows `RESULT: 0x2A37 notify enabled`.
-6. While worn and measuring, the log shows `RESULT: heart-rate notify bpm=...`.
+6. While worn and measuring, the log shows `RESULT: heart-rate notify bpm=... source=HUAWEI Band 9-...`.
 7. The result records whether Huawei Health disconnects, whether it reconnects after broadcast stops, and whether the connection is stable for at least one short session.
 
 ## Fail / inconclusive criteria
