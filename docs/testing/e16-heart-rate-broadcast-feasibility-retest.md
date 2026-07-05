@@ -1,6 +1,6 @@
 # E16 Heart-rate broadcast feasibility retest
 
-**Status:** Implemented / needs retest; latest screenshot is inconclusive for Band 9 notify
+**Status:** Positive BLE HRS evidence captured; needs review before any future adapter spike
 **Date:** 2026-07-05
 **Scope:** HUAWEI Band 9 heart-rate broadcast mode on non-Huawei Android
 
@@ -65,6 +65,35 @@ Follow-up tool fix:
 - `Clear` now logs that it only clears the log/device list and does not disconnect active GATT.
 - Heart-rate notify logs now include `source=<device name address>` so future screenshots can distinguish old active connections from newly tapped devices.
 
+### 2026-07-05 18:46 screenshots
+
+User screenshots:
+
+- `C:/Users/25073/Downloads/Screenshot_2026-07-05-18-46-32-34_168a3d1b6f3b71..jpg`
+- `C:/Users/25073/Downloads/Screenshot_2026-07-05-18-46-26-65_168a3d1b6f3b71..jpg`
+
+Observed timeline:
+
+- `18:46:07`: scan sees `HRS_ADV rssi=-46 name=HUAWEI Band HR-OD7 address=D8:F0:42:01:90:D7 services=[0x180D]`.
+- `18:46:08`: scan sees the same device again with `services=[0x180D]`.
+- `18:46:08`: scan stops.
+- `18:46:08`: tool connects to the same address: `Connecting HUAWEI Band HR-OD7 D8:F0:42:01:90:D7`.
+- `18:46:08`: GATT connects successfully: `GATT connection status=0 state=2`, then starts service discovery.
+- `18:46:09`: service discovery succeeds: `Services discovered status=0 count=9`.
+- `18:46:09`: services include `service 0x180D`.
+- `18:46:09`: `service 0x180D` contains `characteristic 0x2A37 props=notify`.
+- `18:46:09`: result lines confirm `RESULT: HRS 0x180D found` and `RESULT: characteristic 0x2A37 found props=notify`.
+- `18:46:09`: notify setup succeeds: `setCharacteristicNotification=true`, `write CCCD result=0`, `Descriptor write 0x2902 status=0 for 0x2A37`, and `RESULT: 0x2A37 notify enabled`.
+- `18:46:10` onward: the same connection receives heart-rate notifications, starting with `RESULT: heart-rate notify bpm=90 bytes=06 5A`, then `89`, `88`, `87`, etc.
+
+Interpretation:
+
+- This is positive evidence that Band 9 heart-rate broadcast mode can expose standard BLE Heart Rate Service `0x180D`.
+- The connected broadcast device exposes Heart Rate Measurement `0x2A37` with notify support.
+- CCCD subscription succeeds and bpm notifications arrive after the successful connection and notify setup.
+- The device name during broadcast appears as `HUAWEI Band HR-OD7`, with address `D8:F0:42:01:90:D7`; this differs from the earlier bonded label `HUAWEI Band 9-OD7 D8:EF:42:01:90:D7`, so future implementation should not rely on the paired label or static address alone.
+- This result is sufficient to justify a future BLE HRS adapter spike, but it still does not restore MVP heart-rate UI or create production device integration.
+
 ## Retest matrix
 
 1. Baseline: broadcast off, Huawei Health connected.
@@ -81,7 +110,7 @@ BLE HRS feasibility requires all of these:
 3. `0x180D` contains `0x2A37`.
 4. `0x2A37` supports notify or indicate.
 5. CCCD write succeeds and the log shows `RESULT: 0x2A37 notify enabled`.
-6. While worn and measuring, the log shows `RESULT: heart-rate notify bpm=... source=HUAWEI Band 9-...`.
+6. While worn and measuring, the log shows `RESULT: heart-rate notify bpm=...` after connecting and enabling notify on the same Band broadcast address. Newer smoke logs should also show `source=HUAWEI Band ...`.
 7. The result records whether Huawei Health disconnects, whether it reconnects after broadcast stops, and whether the connection is stable for at least one short session.
 
 ## Fail / inconclusive criteria
@@ -93,4 +122,4 @@ BLE HRS feasibility requires all of these:
 
 ## Current recommendation
 
-Run the retest as device research only. Keep MVP Alpha readiness focused on the completed training loop, records, audio coexistence, permissions, and known user-test fixes. Heart-rate broadcast can inform a future User Test Fix Pack / device research story after the user returns real-device logs.
+Treat the 18:46 retest as successful device research evidence. The next step, if heart-rate work is prioritized later, is an explicit future BLE HRS adapter spike with connection lifecycle, source labelling, permissions, UX opt-in, and non-medical boundaries. Keep MVP Alpha readiness focused on the completed training loop, records, audio coexistence, permissions, and known user-test fixes.
