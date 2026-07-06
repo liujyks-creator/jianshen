@@ -28,6 +28,8 @@ class TrainFlowPreferencesBoundaryTest {
         assertEquals("manual_start", preferences.strengthSetTimerMode)
         assertFalse(preferences.heartRateDisplayEnabled)
         assertFalse(preferences.showDisconnectedHeartRatePlaceholder)
+        assertEquals(null, preferences.bleHeartRateDeviceIdentifier)
+        assertEquals(null, preferences.bleHeartRateDeviceDisplayName)
         assertEquals("official_flow", preferences.uiSkinId)
     }
 
@@ -103,6 +105,28 @@ class TrainFlowPreferencesBoundaryTest {
         val preferences = dataSource.preferences.first()
 
         assertEquals("big_type", preferences.uiSkinId)
+    }
+
+    @Test
+    fun dataSourcePersistsOnlyBleHeartRateDeviceSelectionPreference() = runBlocking {
+        val dataStore = PreferenceDataStoreFactory.create(
+            produceFile = {
+                File(temporaryFolder.root, "ble-hr-device.preferences_pb")
+            }
+        )
+        val dataSource = TrainFlowPreferencesDataSource(dataStore)
+
+        dataSource.setBleHeartRateDevicePreference(
+            identifier = "D8:F0:42:01:90:D7",
+            displayName = "HUAWEI Band HR-OD7"
+        )
+
+        val preferences = dataSource.preferences.first()
+
+        assertEquals("D8:F0:42:01:90:D7", preferences.bleHeartRateDeviceIdentifier)
+        assertEquals("HUAWEI Band HR-OD7", preferences.bleHeartRateDeviceDisplayName)
+        assertFalse(preferences.heartRateDisplayEnabled)
+        assertFalse(preferences.showDisconnectedHeartRatePlaceholder)
     }
 
     @Test

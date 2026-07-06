@@ -30,6 +30,8 @@ stepsCompleted:
 
 > 2026-07-06 刷新：E16-1 BLE HRS adapter spike 已实现为 debug-only adapter harness + 纯 Kotlin Heart Rate Measurement parser，并已在真实 Android 手机 + HUAWEI Band 9 heart-rate broadcast mode 下通过 smoke。证据链覆盖连接 Band 9、发现 `0x180D` / `0x2A37 props=notify`、CCCD `0x2902` 写入成功、收到 bpm notify 并映射到 `HeartRateState` flow，结论为 `passed: Band 9 broadcast -> BLE HRS adapter -> HeartRateState bpm flow`。该结果不改变 MVP readiness：生产训练 UI、记录、Room、commands/events、history/trends 和 production manifest 仍不接心率。未来生产心率仍需要单独权限 / opt-in / lifecycle / privacy / UI 高保真 gate。
 
+> 2026-07-06 刷新：E16-2 Production BLE HRS provider hardening 已实现 provider / state / permission / device-selection preference / lifecycle 地基。`core.health` 现在可生产编译 BLE HRS provider，但生产训练页仍不消费它，production manifest 仍未声明 BLE 权限，App 启动不请求权限、不扫描、不连接；debug `HR Broadcast Smoke` 只是显式手动 harness。MVP readiness 仍保持：不显示心率、不录入心率、不统计心率；未来展示心率前仍必须完成 opt-in、权限说明、隐私 / 非医疗文案、真机 smoke 和 `huashu-design` HTML 高保真 UI gate。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |
@@ -39,7 +41,7 @@ stepsCompleted:
 | E1 动作库 | Partially ready after E1.1 | `O-001` 已由 `docs/planning/action-content-slice.md` 收敛；E1.2 可进入 fixture 导入，但仍不得提前实现完整动作库业务层或 UI 闭环。 |
 | E6 跟练雏形 | Not yet | 需要先收敛 `O-002` 跟练边界。 |
 | E7 通知、声音、震动 | Partially ready | 普通通知方向明确；声音倒计时和前台服务策略仍需 Story 前确认。 |
-| 真实心率/健康数据 | Deferred | 首版只保留抽象状态和 provider 边界，不显示、不录入、不统计心率；E16 正向 BLE HRS 证据和 E16-1 debug adapter spike 只支持未来生产化评估，不是 MVP 生产接入。 |
+| 真实心率/健康数据 | Deferred | 首版只保留抽象状态和 provider 边界，不显示、不录入、不统计心率；E16 正向 BLE HRS 证据、E16-1 debug adapter spike 和 E16-2 production-capable provider hardening 都不是 MVP 生产 UI 接入。 |
 
 ## 2. 已检查文档
 
@@ -120,7 +122,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
-- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike；进入真实生产心率前仍必须另拆生产化 story，并重新设计权限、数据来源、用户 opt-in、非医疗提示、连接生命周期、隐私策略和 UI 视觉方案。
+- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基；进入真实生产心率 UI 前仍必须另拆 opt-in / settings / training UI / records policy story，并重新设计用户文案、隐私策略、非医疗提示、采样 / stale 策略和 UI 视觉方案。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查

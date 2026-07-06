@@ -31,6 +31,10 @@ class TrainFlowPreferencesDataSource(
             showDisconnectedHeartRatePlaceholder =
                 storedPreferences[TrainFlowPreferenceKeys.showDisconnectedHeartRatePlaceholder]
                     ?: false,
+            bleHeartRateDeviceIdentifier =
+                storedPreferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier],
+            bleHeartRateDeviceDisplayName =
+                storedPreferences[TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName],
             uiSkinId = TrainFlowPreferences.sanitizeUiSkinId(
                 storedPreferences[TrainFlowPreferenceKeys.uiSkinId]
                     ?: TrainFlowPreferences.DEFAULT_UI_SKIN_ID
@@ -104,6 +108,20 @@ class TrainFlowPreferencesDataSource(
     suspend fun setUiSkinId(skinId: String) {
         dataStore.edit { preferences ->
             preferences[TrainFlowPreferenceKeys.uiSkinId] = TrainFlowPreferences.sanitizeUiSkinId(skinId)
+        }
+    }
+
+    suspend fun setBleHeartRateDevicePreference(identifier: String, displayName: String) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier] = identifier
+            preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName] = displayName
+        }
+    }
+
+    suspend fun clearBleHeartRateDevicePreference() {
+        dataStore.edit { preferences ->
+            preferences.remove(TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier)
+            preferences.remove(TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName)
         }
     }
 }
