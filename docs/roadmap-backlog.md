@@ -1635,6 +1635,35 @@ stepsCompleted:
 - E16 结论只允许后续另拆 `E16-1 BLE HRS adapter spike`，不恢复当前 MVP 心率 UI，不新增生产权限或生产设备接入；未来真正展示心率前必须先做 HTML 视觉方案 / 高保真案例评审，再进入单独 Android UI 实现。
 - E11.2a 文档、decision log 和项目状态已标注旧 negative result 的条件边界。
 
+### Story E16-1: BLE HRS adapter spike
+
+**状态:** Implemented; real-device smoke passed; needs review
+
+作为开发者，
+我想把 E16 的标准 BLE HRS 正向路径封装为最小 debug-only adapter spike，
+以便后续能在真实 Android 手机 + Band 9 心率广播条件下验证扫描、连接、discover、notify 和 bpm 状态流。
+
+**验收标准:**
+
+- Then 提供标准 Heart Rate Measurement payload parser，覆盖 8-bit bpm、16-bit bpm、flags 和 malformed / empty payload。
+- Then parser 是无 Android SDK 依赖的纯 Kotlin utility，并有 focused unit tests。
+- Then debug-only adapter harness 可输出 scanning、device found、connecting、service discovered、notify enabled、bpm received、disconnected / stopped 状态。
+- Then adapter 输出 TrainFlow `HeartRateState`，不得把 Android BLE SDK model 泄漏到训练 engine、UI、records 或 history。
+- Then 生产默认心率路径仍不启用真实 BLE provider。
+- Then 不修改 production manifest 蓝牙权限，不恢复训练执行页心率 UI，不写 session record，不做心率统计。
+- Then 真机 BLE HRS 结论仍只能来自真实 Android 手机 + HUAWEI Band 9 心率广播，不能用 AVD 证明。
+
+**交付结果:**
+
+- 新增 `docs/testing/e16-1-ble-hrs-adapter-spike.md`。
+- 新增纯 Kotlin `HeartRateMeasurementParser` 和 focused tests，覆盖 8-bit、16-bit、flags、empty / malformed payload。
+- 新增 debug-only `BleHeartRateProvider`，封装 BLE scan、bonded listing、GATT connect、service discovery、`0x2A37` notify / CCCD 和 bpm mapping。
+- `HR Broadcast Smoke` 继续作为 debug launcher，但 Activity 只负责权限、按钮和日志展示；BLE lifecycle 在 debug provider 内。
+- 生产 source set 只新增 parser，不新增 production BLE provider、production manifest 权限、训练 UI、Room schema、records / trends 心率字段、`WorkoutCommand`、`WorkoutEvent` 或训练引擎语义。
+- `app:testDebugUnitTest --tests "*HeartRate*"` 和 `app:assembleDebug` 已通过；adb server 当前 protocol fault，未完成 emulator launch smoke。AVD 只可验证 debug Activity 基本路径，不可作为 BLE 外设可行性证据。
+- 用户已在真实 Android 手机 + HUAWEI Band 9 heart-rate broadcast mode 下完成真机 smoke，截图时间约 2026-07-06 01:14。证据链记录 `Connecting HUAWEI Band HR-OD7 D8:F0:42:01:90:D7`、`GATT connection status=0 state=2`、`Services discovered status=0 count=9`、`service 0x180D`、`characteristic 0x2A37 props=notify`、`RESULT: HRS 0x180D found`、`RESULT: characteristic 0x2A37 found props=notify`、`setCharacteristicNotification=true`、`write CCCD result=0`、`Descriptor write 0x2902 status=0 for 0x2A37`、`RESULT: 0x2A37 notify enabled`、`RESULT: heart-rate notify bpm=100 flags=0x6 format=uint8 ... bytes=06 64`、`RESULT: heart-rate notify bpm=99 flags=0x6 format=uint8 ... bytes=06 63`、`Closing GATT` 和 `adapter stopped`。
+- 真机结论：`passed: Band 9 broadcast -> BLE HRS adapter -> HeartRateState bpm flow`。这只关闭 E16-1 debug adapter smoke，不恢复生产心率 UI，不写 session record，不接 records / history / trends，也不改变 MVP 不显示、不录入、不统计心率的边界。
+
 ### Story E11.3: 放弃首版心率显示、录入和统计
 
 **状态:** Implemented as removal / rollback; no first-version heart-rate display, manual input, or heart-rate statistics
