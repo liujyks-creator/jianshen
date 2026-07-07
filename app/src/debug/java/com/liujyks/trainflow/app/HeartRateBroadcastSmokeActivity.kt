@@ -1,7 +1,5 @@
 package com.liujyks.trainflow.app
 
-import android.Manifest
-import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
@@ -9,9 +7,12 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
-import com.liujyks.trainflow.core.health.BleHeartRateAdapterStatus
-import com.liujyks.trainflow.core.health.BleHeartRateAdapterStatusKind
-import com.liujyks.trainflow.core.health.BleHeartRateProvider
+import com.liujyks.trainflow.core.health.AndroidBleHeartRateProvider
+import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
+import com.liujyks.trainflow.core.health.BleHeartRatePermissionPlanner
+import com.liujyks.trainflow.core.health.BleHeartRatePermissionTrigger
+import com.liujyks.trainflow.core.health.BleHeartRateProviderState
+import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -20,8 +21,8 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
     private val candidateButtons = linkedMapOf<String, Button>()
     private val provider by lazy {
-        BleHeartRateProvider(this) { status ->
-            handleAdapterStatus(status)
+        AndroidBleHeartRateProvider(this) { state ->
+            handleProviderState(state)
         }
     }
 
@@ -36,6 +37,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
         appendLog("Use Band 9 heart-rate broadcast mode, then scan.")
         appendLog("This debug-only tool does not write TrainFlow records.")
         appendLog("Production TrainFlow still has no heart-rate UI, records, or trends.")
+        appendLog("Permissions are requested only after tapping the explicit permission button.")
     }
 
     override fun onStop() {
@@ -61,7 +63,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
             textSize = 22f
         })
         root.addView(TextView(this).apply {
-            text = "Debug-only BLE HRS adapter spike. It scans 0x180D / 0x2A37 notify and maps bpm to HeartRateState only inside this debug tool."
+            text = "Debug-only BLE HRS harness. It explicitly starts the production-capable provider, scans 0x180D / 0x2A37 notify, and keeps bpm out of TrainFlow records."
             textSize = 14f
         })
         adapterStateView = TextView(this).apply {
@@ -129,30 +131,46 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
         provider.listBondedDevices()
     }
 
-    private fun handleAdapterStatus(status: BleHeartRateAdapterStatus) {
+    private fun handleProviderState(state: BleHeartRateProviderState) {
         runOnUiThread {
-            adapterStateView.text = "Adapter: ${status.kind.name.lowercase(Locale.US)}"
-            appendLog(status.message)
-            if (status.kind == BleHeartRateAdapterStatusKind.DEVICE_FOUND &&
-                status.address != null &&
-                status.deviceLabel != null &&
-                !candidateButtons.containsKey(status.address)
-            ) {
-                val button = Button(this).apply {
-                    text = "${status.deviceLabel}\n${status.candidateLabel ?: status.message}"
-                    setAllCaps(false)
-                    setOnClickListener {
-                        provider.stopScan()
-                        provider.connect(status.address)
-                    }
-                }
-                candidateButtons[status.address] = button
-                deviceList.addView(button)
+            adapterStateView.text = "Provider: ${state.kind.name.lowercase(Locale.US)}"
+            appendLog(state.logLine())
+            if (state.kind == BleHeartRateProviderStateKind.DEVICE_FOUND && state.candidate != null) {
+                addCandidateButton(state.candidate)
             }
         }
     }
 
+    private fun addCandidateButton(candidate: BleHeartRateDeviceCandidate) {
+        if (candidateButtons.containsKey(candidate.identifier)) return
+        val button = Button(this).apply {
+            text = buildString {
+                append(candidate.displayName)
+                append("\n")
+                append(candidate.identifier)
+                candidate.rssi?.let { append(" rssi=$it") }
+                if (candidate.advertisesHeartRateService) append(" services=[0x180D]")
+            }
+            setAllCaps(false)
+            setOnClickListener {
+                val selected = provider.selectDevice(candidate.identifier)
+                appendLog("Selected ${selected?.displayName ?: candidate.displayName}")
+                appendLog("Preference boundary: save identifier/display name only; no GATT or SDK model.")
+                provider.connectSelectedDevice()
+            }
+        }
+        candidateButtons[candidate.identifier] = button
+        deviceList.addView(button)
+    }
+
     private fun requestBluetoothPermissions() {
+        if (!BleHeartRatePermissionPlanner.shouldRequestPermissions(
+                BleHeartRatePermissionTrigger.EXPLICIT_USER_ACTION
+            )
+        ) {
+            appendLog("Permission request blocked: explicit user action is required.")
+            return
+        }
         val missing = requiredPermissions().filter {
             checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
@@ -182,11 +200,7 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
     }
 
     private fun requiredPermissions(): List<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            listOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        return BleHeartRatePermissionPlanner.requiredPermissions()
     }
 
     private fun hasRequiredPermissions(): Boolean {
@@ -199,6 +213,38 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
         val line = "${timeFormat.format(Date())} $message"
         logView.append(line)
         logView.append("\n")
+    }
+
+    private fun BleHeartRateProviderState.logLine(): String {
+        return buildString {
+            append(kind.name.lowercase(Locale.US))
+            append(": ")
+            append(message)
+            if (missingPermissions.isNotEmpty()) {
+                append(" missing=")
+                append(missingPermissions.joinToString())
+            }
+            selectedDevice?.let {
+                append(" selected=")
+                append(it.displayName)
+                append(" ")
+                append(it.identifier)
+            }
+            candidate?.let {
+                append(" candidate=")
+                append(it.displayName)
+                append(" ")
+                append(it.identifier)
+            }
+            bpm?.let {
+                append(" bpm=")
+                append(it)
+            }
+            recoverableReason?.let {
+                append(" recoverable=")
+                append(it.name.lowercase(Locale.US))
+            }
+        }
     }
 
     companion object {

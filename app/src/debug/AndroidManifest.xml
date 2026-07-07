@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission
         android:name="android.permission.BLUETOOTH"
@@ -17,13 +18,18 @@
 
     <application>
         <activity
-            android:name=".app.ShortTargetTimerDialDiagnosticActivity"
-            android:exported="true"
-            android:theme="@style/Theme.TrainFlow" />
+            android:name=".app.MainActivity"
+            android:exported="true">
+            <intent-filter tools:node="remove">
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity
-            android:name=".app.HeartRateBroadcastSmokeActivity"
+            android:name=".app.DebugEntryActivity"
             android:exported="true"
-            android:label="HR Broadcast Smoke"
+            android:label="TrainFlow Debug"
             android:theme="@style/Theme.TrainFlow">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -31,6 +37,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".app.ShortTargetTimerDialDiagnosticActivity"
+            android:exported="true"
+            android:theme="@style/Theme.TrainFlow" />
+        <activity
+            android:name=".app.HeartRateBroadcastSmokeActivity"
+            android:exported="true"
+            android:label="HR Broadcast Smoke"
+            android:theme="@style/Theme.TrainFlow" />
     </application>
 
 </manifest>

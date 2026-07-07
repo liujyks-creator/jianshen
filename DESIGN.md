@@ -384,6 +384,7 @@ Chip 用于动作能力、部位、器械、难度、训练状态。Chip 不是�
 - 不再放置心率状态位；未来健康数据只能在不挤压主训练信息时重新评估。
 - E16 Band 9 心率广播 retest 已提供 BLE HRS 正向证据，但这只支持未来另拆 adapter spike；真正展示心率 UI 前，必须先做 HTML 视觉方案 / 高保真案例评审，再进入单独 Android UI 实现。
 - E16-1 已实现 debug-only BLE HRS adapter spike 和纯 parser 测试；这仍不是生产 UI 许可。训练执行页不得因为 debug adapter 存在而恢复心率卡片、未获取心率占位、手动输入或平均心率趋势。
+- E16-2 已实现 production-capable BLE HRS provider / permission / lifecycle 地基；这仍不是训练执行页 UI 许可。任何未来心率展示都必须先经过 `huashu-design` HTML 高保真视觉 gate，并证明心率不会高于当前阶段、主时间、组目标、下一步和主控制。
 
 主倒计时和主按钮的层级永远高于历史信息、说明和未来健康数据。
 

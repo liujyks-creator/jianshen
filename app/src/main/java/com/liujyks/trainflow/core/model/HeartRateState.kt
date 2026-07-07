@@ -31,5 +31,11 @@ enum class HeartRateSourceKind(val contractValue: String) {
 enum class HeartRateUnavailableReason(val contractValue: String) {
     NO_SOURCE("no_source"),
     DISABLED_BY_USER("disabled_by_user"),
-    NOT_CONFIGURED("not_configured")
+    NOT_CONFIGURED("not_configured"),
+    PERMISSION_REQUIRED("permission_required"),
+    BLUETOOTH_DISABLED("bluetooth_disabled"),
+    SCAN_STOPPED("scan_stopped"),
+    DEVICE_DISCONNECTED("device_disconnected"),
+    CONNECTION_FAILED("connection_failed"),
+    READ_ERROR("read_error")
 }

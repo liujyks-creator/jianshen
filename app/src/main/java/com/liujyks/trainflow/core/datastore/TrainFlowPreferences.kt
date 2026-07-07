@@ -10,6 +10,8 @@ data class TrainFlowPreferences(
     val strengthSetTimerMode: String = STRENGTH_TIMER_MANUAL_START,
     val heartRateDisplayEnabled: Boolean = false,
     val showDisconnectedHeartRatePlaceholder: Boolean = false,
+    val bleHeartRateDeviceIdentifier: String? = null,
+    val bleHeartRateDeviceDisplayName: String? = null,
     val uiSkinId: String = DEFAULT_UI_SKIN_ID
 ) {
     companion object {
