@@ -385,6 +385,7 @@ Chip 用于动作能力、部位、器械、难度、训练状态。Chip 不是�
 - E16 Band 9 心率广播 retest 已提供 BLE HRS 正向证据，但这只支持未来另拆 adapter spike；真正展示心率 UI 前，必须先做 HTML 视觉方案 / 高保真案例评审，再进入单独 Android UI 实现。
 - E16-1 已实现 debug-only BLE HRS adapter spike 和纯 parser 测试；这仍不是生产 UI 许可。训练执行页不得因为 debug adapter 存在而恢复心率卡片、未获取心率占位、手动输入或平均心率趋势。
 - E16-2 已实现 production-capable BLE HRS provider / permission / lifecycle 地基；这仍不是训练执行页 UI 许可。任何未来心率展示都必须先经过 `huashu-design` HTML 高保真视觉 gate，并证明心率不会高于当前阶段、主时间、组目标、下一步和主控制。
+- E16-3 HTML 高保真视觉规划推荐顶部轻量状态 pill 作为未来心率 UI 的首选 slot；默认未启用或训练页无入口时完全不展示。`需授权`、`蓝牙关闭`、`连接中`、`等待读数`、`live bpm` 和 `数据中断` 等状态只能表达来源 / 连接 / 新鲜度，不得作为医疗告警、强度建议、训练中断依据或记录事实。当前卡片角标和底部微状态仅保留为备选参考，不能挤压 strength confirm-record、TimerDial 中心或固定底部主按钮。
 
 主倒计时和主按钮的层级永远高于历史信息、说明和未来健康数据。
 

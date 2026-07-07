@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E16-3 Heart Rate UI HTML Visual Planning - TrainFlow</title>
+  <!--
+    E16-3 assumptions and reasoning:
+    - This is a visual planning artifact, not production Android code.
+    - Heart rate must stay lower than current action, time, set target, confirmation input, and fixed primary action.
+    - Default training screens remain clean: if heart rate is not enabled or there is no entry, no heart-rate UI is shown.
+    - The safest placement is a small top status pill because it does not add a new card, does not change TimerDial,
+      and does not compete with strength confirm-record content.
+    - Permission, bluetooth, connecting, waiting, stale, and disconnected states are expressed as compact source status,
+      not as medical alerts or training recommendations.
+    - The values are placeholder review states only. They are not session records, trends, calories, or analytics facts.
+  -->
+  <style>
+    :root {
+      color-scheme: dark;
+      --primary: #0F1720;
+      --secondary: #17212B;
+      --accent: #2FBF8F;
+      --action: #F26B4F;
+      --focus: #65A9FF;
+      --surface: #FFFFFF;
+      --surface-muted: #F5F7FA;
+      --neutral-50: #FAFBFC;
+      --neutral-100: #EEF2F5;
+      --neutral-200: #D7DEE5;
+      --neutral-300: #A8B3BE;
+      --neutral-500: #65717D;
+      --neutral-700: #35424E;
+      --neutral-900: #111820;
+      --warning: #D9921E;
+      --error: #D84B4B;
+      --info: #367FD6;
+      --panel-border: rgba(255, 255, 255, 0.09);
+      --soft-panel: rgba(255, 255, 255, 0.06);
+      --pill: rgba(255, 255, 255, 0.10);
+      --shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+      font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(180deg, #eef2f5 0%, #dfe6ec 100%);
+      color: var(--neutral-900);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 28px 28px 44px;
+    }
+
+    .brief {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.85fr) minmax(320px, 1.15fr);
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 18px;
+    }
+
+    .brief-card {
+      background: var(--surface);
+      border: 1px solid #d7dee5;
+      border-radius: 10px;
+      padding: 18px;
+    }
+
+    .brief h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 3.4vw, 44px);
+      line-height: 1.08;
+      letter-spacing: 0;
+      text-wrap: balance;
+    }
+
+    .brief p {
+      margin: 0;
+      color: var(--neutral-700);
+      font-size: 15px;
+      line-height: 1.65;
+      text-wrap: pretty;
+    }
+
+    .decision-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .decision-item {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--neutral-700);
+    }
+
+    .decision-item strong {
+      color: var(--neutral-900);
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: minmax(250px, 0.65fr) minmax(320px, 1fr);
+      gap: 12px;
+      padding: 12px;
+      margin: 0 0 20px;
+      background: rgba(245, 247, 250, 0.88);
+      border: 1px solid rgba(168, 179, 190, 0.55);
+      border-radius: 10px;
+      backdrop-filter: blur(18px);
+    }
+
+    .control-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .control-title {
+      flex-basis: 100%;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--neutral-700);
+    }
+
+    .seg {
+      min-height: 36px;
+      padding: 8px 11px;
+      border: 1px solid #d7dee5;
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--neutral-700);
+      cursor: pointer;
+    }
+
+    .seg[aria-pressed="true"] {
+      background: var(--primary);
+      color: var(--neutral-50);
+      border-color: var(--primary);
+    }
+
+    .canvas {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .study-note {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(260px, 0.65fr) minmax(320px, 1fr);
+      gap: 14px;
+      background: var(--surface);
+      border: 1px solid #d7dee5;
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .study-note h2,
+    .study-note h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .study-note p,
+    .study-note li {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--neutral-700);
+    }
+
+    .study-note ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .phone-wrap {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .caption {
+      width: min(100%, 368px);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: end;
+      color: var(--neutral-700);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .caption strong {
+      display: block;
+      color: var(--neutral-900);
+      font-size: 14px;
+    }
+
+    .variant-tag {
+      flex: none;
+      color: var(--neutral-50);
+      background: var(--primary);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-weight: 800;
+    }
+
+    .phone {
+      width: min(100%, 368px);
+      min-height: 760px;
+      border-radius: 28px;
+      background: var(--primary);
+      box-shadow: var(--shadow);
+      border: 10px solid #0a1017;
+      overflow: hidden;
+      color: var(--neutral-50);
+    }
+
+    .screen {
+      position: relative;
+      min-height: 740px;
+      background: var(--primary);
+      padding: 22px 16px 138px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .screen::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 8px;
+      width: 122px;
+      height: 4px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.26);
+    }
+
+    .screen-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .title-block {
+      min-width: 0;
+    }
+
+    .plan-title {
+      margin: 0 0 5px;
+      font-size: 20px;
+      line-height: 1.18;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .subline {
+      color: var(--neutral-200);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .session-pill,
+    .hr-pill,
+    .micro-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: var(--pill);
+      color: var(--neutral-50);
+      white-space: nowrap;
+    }
+
+    .session-pill {
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .hr-pill {
+      min-height: 30px;
+      padding: 6px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--neutral-200);
+    }
+
+    .hr-pill.live {
+      color: var(--neutral-50);
+      border-color: rgba(47, 191, 143, 0.45);
+      background: rgba(47, 191, 143, 0.14);
+    }
+
+    .hr-pill.warning {
+      border-color: rgba(217, 146, 30, 0.42);
+      background: rgba(217, 146, 30, 0.12);
+      color: #F6D392;
+    }
+
+    .hr-pill.error {
+      border-color: rgba(216, 75, 75, 0.40);
+      background: rgba(216, 75, 75, 0.11);
+      color: #F6B7B7;
+    }
+
+    .hr-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.85;
+    }
+
+    .hr-slot {
+      min-height: 30px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .variant-b .hr-slot {
+      display: none;
+    }
+
+    .variant-c .hr-slot {
+      display: none;
+    }
+
+    .clean .hr-slot,
+    .not-enabled .hr-slot {
+      visibility: hidden;
+    }
+
+    .main-card,
+    .info-card {
+      position: relative;
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: var(--soft-panel);
+      overflow: hidden;
+    }
+
+    .main-card {
+      min-height: 178px;
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .main-card.rest {
+      background: rgba(47, 191, 143, 0.12);
+      border-color: rgba(47, 191, 143, 0.42);
+    }
+
+    .main-card.confirm {
+      min-height: 96px;
+      background: rgba(242, 107, 79, 0.12);
+      border-color: rgba(242, 107, 79, 0.46);
+    }
+
+    .main-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .phase {
+      margin: 0 0 5px;
+      font-size: 12px;
+      color: var(--neutral-200);
+      font-weight: 800;
+    }
+
+    .exercise {
+      margin: 0;
+      font-size: 25px;
+      line-height: 1.14;
+      font-weight: 850;
+      text-wrap: balance;
+      overflow-wrap: anywhere;
+    }
+
+    .metric-label {
+      margin: 0 0 3px;
+      color: var(--neutral-200);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .metric {
+      margin: 0;
+      color: var(--neutral-50);
+      font-size: 52px;
+      line-height: 0.95;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+
+    .target-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .target {
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05);
+      padding: 10px;
+    }
+
+    .target span {
+      display: block;
+      color: var(--neutral-300);
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .target strong {
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .corner-badge {
+      display: none;
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 3;
+    }
+
+    .variant-b .corner-badge {
+      display: inline-flex;
+    }
+
+    .variant-b.clean .corner-badge,
+    .variant-b.not-enabled .corner-badge {
+      display: none;
+    }
+
+    .next-card,
+    .confirm-card,
+    .timer-card {
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: var(--soft-panel);
+      padding: 14px;
+    }
+
+    .next-card h3,
+    .confirm-card h3,
+    .timer-card h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: var(--neutral-200);
+    }
+
+    .next-card p,
+    .timer-card p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.45;
+      color: var(--neutral-50);
+      overflow-wrap: anywhere;
+    }
+
+    .confirm-card {
+      display: grid;
+      gap: 10px;
+    }
+
+    .efforts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .effort {
+      min-height: 38px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+      display: grid;
+      place-items: center;
+      color: var(--neutral-50);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .effort.selected {
+      border-color: rgba(47, 191, 143, 0.8);
+      background: rgba(47, 191, 143, 0.16);
+    }
+
+    .inputs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .field {
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(15,23,32,0.62);
+      padding: 9px 10px;
+    }
+
+    .field span {
+      display: block;
+      color: var(--neutral-300);
+      font-size: 11px;
+      margin-bottom: 3px;
+      font-weight: 800;
+    }
+
+    .field strong {
+      font-size: 17px;
+    }
+
+    .timer-card {
+      min-height: 430px;
+      display: grid;
+      place-items: center;
+      gap: 4px;
+      text-align: center;
+    }
+
+    .total-time {
+      color: var(--neutral-200);
+      font-size: 18px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dial {
+      position: relative;
+      width: min(286px, 84vw);
+      aspect-ratio: 1;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(242, 107, 79, 0.18) 0 37%, transparent 38%),
+        conic-gradient(var(--action) 0 146deg, rgba(255,255,255,0.12) 146deg 202deg, rgba(47,191,143,0.52) 202deg 238deg, rgba(255,255,255,0.08) 238deg 360deg);
+    }
+
+    .dial::before,
+    .dial::after {
+      content: "";
+      position: absolute;
+      border-radius: inherit;
+    }
+
+    .dial::before {
+      inset: 16px;
+      border: 8px solid rgba(255,255,255,0.10);
+      border-left-color: rgba(47,191,143,0.72);
+      border-bottom-color: rgba(47,191,143,0.38);
+    }
+
+    .dial::after {
+      inset: 52px;
+      background: var(--action);
+      border: 1px solid rgba(255,255,255,0.20);
+    }
+
+    .dial-content {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      gap: 5px;
+      color: var(--neutral-50);
+    }
+
+    .dial-icon {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .dial-time {
+      font-size: 42px;
+      line-height: 1;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dial-label {
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .bottom-dock {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 16px 18px;
+      background: var(--primary);
+      box-shadow: 0 -18px 28px rgba(0,0,0,0.25);
+      display: grid;
+      gap: 8px;
+    }
+
+    .bottom-hr {
+      display: none;
+      justify-content: center;
+      min-height: 26px;
+    }
+
+    .variant-c .bottom-hr {
+      display: flex;
+    }
+
+    .variant-c.clean .bottom-hr,
+    .variant-c.not-enabled .bottom-hr {
+      display: none;
+    }
+
+    .micro-pill {
+      padding: 5px 9px;
+      font-size: 11px;
+      color: var(--neutral-200);
+      max-width: 100%;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .primary-action,
+    .secondary-action,
+    .danger-action,
+    .icon-action {
+      min-height: 50px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-weight: 850;
+    }
+
+    .primary-action {
+      width: 100%;
+      background: var(--action);
+      color: var(--neutral-50);
+    }
+
+    .primary-action.confirm {
+      background: var(--action);
+    }
+
+    .secondary-action,
+    .icon-action {
+      flex: 1;
+      background: transparent;
+      color: var(--neutral-50);
+      border-color: rgba(255,255,255,0.22);
+    }
+
+    .danger-action {
+      flex: 1;
+      background: transparent;
+      color: #F0A0A0;
+    }
+
+    .icon-action {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .state-copy {
+      grid-column: 1 / -1;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid #d7dee5;
+      border-radius: 10px;
+      color: var(--neutral-700);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .state-copy strong {
+      color: var(--neutral-900);
+    }
+
+    @media (max-width: 1180px) {
+      .canvas {
+        grid-template-columns: repeat(2, minmax(280px, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        padding: 14px 12px 28px;
+      }
+
+      .brief,
+      .toolbar,
+      .study-note,
+      .canvas {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        position: static;
+      }
+
+      .brief-card {
+        padding: 14px;
+      }
+
+      .decision-item {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .phone {
+        border-width: 8px;
+        border-radius: 24px;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .screen {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .metric {
+        font-size: 46px;
+      }
+
+      .exercise {
+        font-size: 22px;
+      }
+
+      .hr-pill,
+      .micro-pill {
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="brief" aria-label="Design brief">
+      <div class="brief-card">
+        <h1>E16-3 心率 UI 高保真视觉规划</h1>
+        <p>目标不是上线心率功能，而是验证未来如果用户显式启用心率，训练执行页应该如何轻量表达连接和读数状态。所有方案都基于 TrainFlow 现有深色执行页、固定底部主动作和 E15 力量训练最终层级。</p>
+      </div>
+      <div class="brief-card">
+        <p><strong>推荐方向:</strong> Variant A 顶部状态 pill。它在 strength active/rest/confirm-record 和 timed TimerDial 中都不新增大卡片，不挤压确认记录，不改变底部按钮，不恢复旧的心率卡片或未获取心率占位。</p>
+        <div class="decision-list">
+          <div class="decision-item"><strong>默认纯净</strong><span>未启用或训练页没有入口时，不展示任何心率 UI。</span></div>
+          <div class="decision-item"><strong>辅助状态</strong><span>心率只说明设备来源和数据新鲜度，不做医疗告警、强度建议或训练中断。</span></div>
+          <div class="decision-item"><strong>实现拆分</strong><span>HTML 方案后仍需单独 Android UI、opt-in、权限说明、隐私文案和 stale 策略 story。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <nav class="toolbar" aria-label="Prototype controls">
+      <div class="control-group" id="variantControls">
+        <div class="control-title">Placement variant</div>
+        <button class="seg" type="button" data-variant="variant-a" aria-pressed="true">A 顶部状态 pill</button>
+        <button class="seg" type="button" data-variant="variant-b" aria-pressed="false">B 当前卡片角标</button>
+        <button class="seg" type="button" data-variant="variant-c" aria-pressed="false">C 底部微状态</button>
+      </div>
+      <div class="control-group" id="stateControls">
+        <div class="control-title">Heart-rate state</div>
+        <button class="seg" type="button" data-state="clean" aria-pressed="true">默认纯净</button>
+        <button class="seg" type="button" data-state="not-enabled" aria-pressed="false">未启用</button>
+        <button class="seg" type="button" data-state="permission" aria-pressed="false">权限未授予</button>
+        <button class="seg" type="button" data-state="bluetooth" aria-pressed="false">蓝牙关闭</button>
+        <button class="seg" type="button" data-state="connecting" aria-pressed="false">正在连接</button>
+        <button class="seg" type="button" data-state="waiting" aria-pressed="false">等待数据</button>
+        <button class="seg" type="button" data-state="live" aria-pressed="false">live bpm</button>
+        <button class="seg" type="button" data-state="stale" aria-pressed="false">stale / disconnected</button>
+      </div>
+    </nav>
+
+    <section class="canvas variant-a clean" id="designCanvas" aria-live="polite">
+      <div class="study-note">
+        <div>
+          <h2 id="variantTitle">Variant A: 顶部状态 pill</h2>
+          <p id="variantCopy">把心率放在标题行右侧，作为 session status 的同级辅助状态。它最像现有状态 pill，不产生新卡片，不改 TimerDial，也不干扰力量确认本组。</p>
+        </div>
+        <div>
+          <h3 id="stateTitle">默认纯净状态</h3>
+          <ul id="stateBullets">
+            <li>训练页不展示心率入口、不显示未获取心率占位。</li>
+            <li>主任务保持当前动作、主时间、组目标和固定底部操作。</li>
+            <li>这是当前 MVP 的默认视觉基线。</li>
+          </ul>
+        </div>
+      </div>
+
+      <article class="phone-wrap">
+        <div class="caption">
+          <div><strong>Strength active</strong><span>本组进行中，心率不能抢过组耗时和目标重量/次数。</span></div>
+          <span class="variant-tag">S1</span>
+        </div>
+        <div class="phone">
+          <section class="screen" data-screen="strength-active">
+            <header class="screen-header">
+              <div class="title-block">
+                <h2 class="plan-title">胸部力量训练</h2>
+                <div class="subline">1 / 7 组已确认</div>
+              </div>
+              <div>
+                <span class="session-pill">进行中</span>
+                <div class="hr-slot"></div>
+              </div>
+            </header>
+            <section class="main-card">
+              <div class="corner-badge"></div>
+              <div class="main-top">
+                <div>
+                  <p class="phase">本组进行中</p>
+                  <h3 class="exercise">杠铃卧推</h3>
+                </div>
+                <span class="session-pill">正式组</span>
+              </div>
+              <div>
+                <p class="metric-label">本组耗时</p>
+                <p class="metric">00:37</p>
+              </div>
+              <div class="target-row">
+                <div class="target"><span>目标重量</span><strong>50 kg</strong></div>
+                <div class="target"><span>目标次数</span><strong>8-12 次</strong></div>
+              </div>
+            </section>
+            <section class="next-card">
+              <h3>下一组</h3>
+              <p>杠铃卧推 · 第 3 / 5 组 · 50 kg · 8-12 次</p>
+            </section>
+            <div class="bottom-dock">
+              <div class="bottom-hr"></div>
+              <button class="primary-action" type="button">完成本组</button>
+              <div class="controls-row">
+                <button class="secondary-action" type="button">暂停训练</button>
+                <button class="danger-action" type="button">结束训练</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="caption">
+          <div><strong>Strength rest</strong><span>休息倒计时仍是主角，心率只可提示来源状态。</span></div>
+          <span class="variant-tag">S2</span>
+        </div>
+        <div class="phone">
+          <section class="screen" data-screen="strength-rest">
+            <header class="screen-header">
+              <div class="title-block">
+                <h2 class="plan-title">胸部力量训练</h2>
+                <div class="subline">2 / 7 组已确认</div>
+              </div>
+              <div>
+                <span class="session-pill">进行中</span>
+                <div class="hr-slot"></div>
+              </div>
+            </header>
+            <section class="main-card rest">
+              <div class="corner-badge"></div>
+              <div class="main-top">
+                <div>
+                  <p class="phase">休息</p>
+                  <h3 class="exercise">杠铃卧推</h3>
+                </div>
+                <span class="session-pill">下一组</span>
+              </div>
+              <div>
+                <p class="metric-label">休息倒计时</p>
+                <p class="metric">01:18</p>
+              </div>
+              <div class="target-row">
+                <div class="target"><span>下一组重量</span><strong>50 kg</strong></div>
+                <div class="target"><span>下一组次数</span><strong>8-12 次</strong></div>
+              </div>
+            </section>
+            <section class="next-card">
+              <h3>下一组摘要</h3>
+              <p>杠铃卧推 · 第 3 / 5 组 · 正式组</p>
+            </section>
+            <div class="bottom-dock">
+              <div class="bottom-hr"></div>
+              <button class="primary-action" type="button">提前开始本组</button>
+              <div class="controls-row">
+                <button class="secondary-action" type="button">暂停训练</button>
+                <button class="danger-action" type="button">结束训练</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="caption">
+          <div><strong>Strength confirm-record</strong><span>最严格场景：感受、重量、次数、确认按钮必须同时可见。</span></div>
+          <span class="variant-tag">S3</span>
+        </div>
+        <div class="phone">
+          <section class="screen" data-screen="strength-confirm">
+            <header class="screen-header">
+              <div class="title-block">
+                <h2 class="plan-title">胸部力量训练</h2>
+                <div class="subline">2 / 7 组已确认</div>
+              </div>
+              <div>
+                <span class="session-pill">进行中</span>
+                <div class="hr-slot"></div>
+              </div>
+            </header>
+            <section class="main-card confirm">
+              <div class="corner-badge"></div>
+              <div class="main-top">
+                <div>
+                  <p class="phase">待确认记录 · 完成耗时 00:46</p>
+                  <h3 class="exercise">杠铃卧推</h3>
+                </div>
+                <span class="session-pill">正式组</span>
+              </div>
+            </section>
+            <section class="confirm-card">
+              <h3>确认本组</h3>
+              <div class="efforts">
+                <div class="effort">轻松</div>
+                <div class="effort selected">刚好</div>
+                <div class="effort">很吃力</div>
+                <div class="effort">动作变形</div>
+              </div>
+              <div class="inputs">
+                <div class="field"><span>实际重量</span><strong>50 kg</strong></div>
+                <div class="field"><span>实际次数</span><strong>10 次</strong></div>
+              </div>
+            </section>
+            <section class="next-card">
+              <h3>下一组</h3>
+              <p>杠铃卧推 · 第 3 / 5 组 · 50 kg · 8-12 次</p>
+            </section>
+            <div class="bottom-dock">
+              <div class="bottom-hr"></div>
+              <button class="primary-action confirm" type="button">确认本组</button>
+              <div class="controls-row">
+                <button class="secondary-action" type="button">暂停训练</button>
+                <button class="danger-action" type="button">结束训练</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="caption">
+          <div><strong>Timed active/rest</strong><span>TimerDial 不为心率改结构；只在外侧状态 slot 表达连接和读数。</span></div>
+          <span class="variant-tag">T1</span>
+        </div>
+        <div class="phone">
+          <section class="screen" data-screen="timed-active">
+            <header class="screen-header">
+              <div class="title-block">
+                <h2 class="plan-title">HIIT 计时训练</h2>
+                <div class="subline">步骤 4 / 12 · 第 2 / 4 轮</div>
+              </div>
+              <div>
+                <span class="session-pill">进行中</span>
+                <div class="hr-slot"></div>
+              </div>
+            </header>
+            <section class="timer-card">
+              <div class="corner-badge"></div>
+              <div class="total-time">12:48</div>
+              <div class="dial" aria-label="TimerDial visual mock">
+                <div class="dial-content">
+                  <div class="dial-icon">4</div>
+                  <div class="dial-time">00:22</div>
+                  <div class="dial-label">冲刺</div>
+                </div>
+              </div>
+              <p>下一步 · 休息 20秒</p>
+            </section>
+            <div class="bottom-dock">
+              <div class="bottom-hr"></div>
+              <div class="controls-row">
+                <button class="icon-action" type="button" aria-label="跳过">»</button>
+                <button class="secondary-action" type="button">+15s</button>
+                <button class="danger-action" type="button">结束</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+
+      <div class="state-copy" id="stateCopy">
+        <strong>当前状态:</strong> 默认纯净。训练页没有心率入口时，不出现任何心率 UI，也不显示“未获取心率”占位。
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const states = {
+      "clean": {
+        title: "默认纯净状态",
+        copy: "默认纯净。训练页没有心率入口时，不出现任何心率 UI，也不显示“未获取心率”占位。",
+        label: "",
+        tone: "",
+        bullets: [
+          "训练页不展示心率入口、不显示未获取心率占位。",
+          "主任务保持当前动作、主时间、组目标和固定底部操作。",
+          "这是当前 MVP 的默认视觉基线。"
+        ]
+      },
+      "not-enabled": {
+        title: "未启用心率",
+        copy: "未启用状态建议等同纯净默认。不要为了提醒用户开启能力而在训练页常驻占位。",
+        label: "",
+        tone: "",
+        bullets: [
+          "不展示 bpm、不展示空态、不显示设备入口。",
+          "启用心率应发生在设置或显式 opt-in flow，不在训练中打扰。",
+          "避免恢复旧心率卡片。"
+        ]
+      },
+      "permission": {
+        title: "权限未授予",
+        copy: "权限问题只用短状态说明，不在训练页内展开权限教育。未来点击入口应回到显式 opt-in / permission rationale。",
+        label: "需授权",
+        tone: "warning",
+        bullets: [
+          "文案短：需授权，不写长权限说明。",
+          "不把权限问题做成大卡片。",
+          "不在 App 启动或训练页打开时自动请求权限。"
+        ]
+      },
+      "bluetooth": {
+        title: "蓝牙关闭",
+        copy: "蓝牙关闭是可恢复设备状态，但不应把训练页变成设备调试页。",
+        label: "蓝牙关闭",
+        tone: "error",
+        bullets: [
+          "弱提示蓝牙关闭即可。",
+          "不显示设备地址、GATT、service 或 debug 文案。",
+          "训练主流程继续完整可用。"
+        ]
+      },
+      "connecting": {
+        title: "正在连接",
+        copy: "连接中使用轻量进度语气，避免占用休息倒计时或确认记录位置。",
+        label: "连接中",
+        tone: "warning",
+        bullets: [
+          "只表达状态，不显示技术日志。",
+          "不阻塞开始本组、完成本组、确认本组。",
+          "长时间连接失败应转为 stale/disconnected 或回到设置。"
+        ]
+      },
+      "waiting": {
+        title: "已连接等待数据",
+        copy: "等待数据不是错误，也不应该显示成未获取心率的大占位。",
+        label: "等待读数",
+        tone: "warning",
+        bullets: [
+          "文案避免“未获取心率”。",
+          "不显示 bpm 占位符。",
+          "如果状态持续，仍不影响训练执行。"
+        ]
+      },
+      "live": {
+        title: "Live bpm",
+        copy: "live bpm 是唯一显示数值的状态。数值要小，不超过状态 pill 层级，不进入 TimerDial 中心或力量主卡主数字。",
+        label: "86 bpm",
+        tone: "live",
+        bullets: [
+          "数值只作辅助状态。",
+          "不改变训练强度、不触发医疗告警。",
+          "不写入记录或趋势，除非未来另有数据 story。"
+        ]
+      },
+      "stale": {
+        title: "Stale / disconnected",
+        copy: "数据过期或断开时，保留弱化状态。不要把旧 bpm 高亮成当前事实。",
+        label: "数据中断",
+        tone: "error",
+        bullets: [
+          "弱化旧数据，不显示为 live。",
+          "不弹出阻断式提示。",
+          "训练页仍以当前动作和主控制为中心。"
+        ]
+      }
+    };
+
+    const variants = {
+      "variant-a": {
+        title: "Variant A: 顶部状态 pill",
+        copy: "把心率放在标题行右侧，作为 session status 的同级辅助状态。它最像现有状态 pill，不产生新卡片，不改 TimerDial，也不干扰力量确认本组。"
+      },
+      "variant-b": {
+        title: "Variant B: 当前卡片角标",
+        copy: "把心率贴在当前组卡片或 TimerDial 卡片右上角。它和当前训练对象关系更近，但 confirm-record 场景会增加卡片内视觉噪声，因此只适合作为备选。"
+      },
+      "variant-c": {
+        title: "Variant C: 底部控制区微状态",
+        copy: "把心率放在固定底部主操作上方。它距离手部操作近，但会压缩底部安全区和辅助按钮呼吸感，尤其在中文长文案和小屏下风险更高。"
+      }
+    };
+
+    const canvas = document.getElementById("designCanvas");
+    const variantTitle = document.getElementById("variantTitle");
+    const variantCopy = document.getElementById("variantCopy");
+    const stateTitle = document.getElementById("stateTitle");
+    const stateBullets = document.getElementById("stateBullets");
+    const stateCopy = document.getElementById("stateCopy");
+    let activeVariant = "variant-a";
+    let activeState = "clean";
+
+    function renderPill(state) {
+      const data = states[state];
+      if (!data.label) return "";
+      return `<span class="hr-pill ${data.tone}"><span class="hr-dot"></span>${data.label}</span>`;
+    }
+
+    function renderMicro(state) {
+      const data = states[state];
+      if (!data.label) return "";
+      return `<span class="micro-pill ${data.tone}"><span class="hr-dot"></span>${data.label}</span>`;
+    }
+
+    function applyState() {
+      canvas.className = `canvas ${activeVariant} ${activeState}`;
+      variantTitle.textContent = variants[activeVariant].title;
+      variantCopy.textContent = variants[activeVariant].copy;
+      stateTitle.textContent = states[activeState].title;
+      stateBullets.innerHTML = states[activeState].bullets.map(item => `<li>${item}</li>`).join("");
+      stateCopy.innerHTML = `<strong>当前状态:</strong> ${states[activeState].copy}`;
+
+      document.querySelectorAll(".hr-slot").forEach(slot => {
+        slot.innerHTML = renderPill(activeState);
+      });
+      document.querySelectorAll(".corner-badge").forEach(slot => {
+        slot.innerHTML = renderPill(activeState);
+      });
+      document.querySelectorAll(".bottom-hr").forEach(slot => {
+        slot.innerHTML = renderMicro(activeState);
+      });
+
+      document.querySelectorAll("[data-variant]").forEach(button => {
+        button.setAttribute("aria-pressed", String(button.dataset.variant === activeVariant));
+      });
+      document.querySelectorAll("[data-state]").forEach(button => {
+        button.setAttribute("aria-pressed", String(button.dataset.state === activeState));
+      });
+    }
+
+    document.getElementById("variantControls").addEventListener("click", event => {
+      const button = event.target.closest("[data-variant]");
+      if (!button) return;
+      activeVariant = button.dataset.variant;
+      applyState();
+    });
+
+    document.getElementById("stateControls").addEventListener("click", event => {
+      const button = event.target.closest("[data-state]");
+      if (!button) return;
+      activeState = button.dataset.state;
+      applyState();
+    });
+
+    applyState();
+  </script>
+</body>
+</html>

@@ -143,7 +143,7 @@ E14.6-2 后，完成训练不应继续停在执行页大圆盘和执行态卡片
 | 主控制 | 暂停/继续/跳过/结束 | 开始本组/完成本组/确认/休息控制 |
 | 心率位 | 首版隐藏 | 首版隐藏 |
 
-E11.3 后，首版训练执行页不显示心率位、不显示未获取心率占位，也不提供手动心率输入。E16 Band 9 心率广播 retest 已提供 BLE HRS 正向证据；E16-1 已实现 debug-only BLE HRS adapter spike 和纯 payload parser；E16-2 已实现 production-capable provider / permission / lifecycle 地基，但仍不允许社区 UI 或生产 shell 恢复心率卡片。后续如果重新评估健康设备或心率展示，必须先更新产品决策和权限 / 数据边界，并先做 HTML 视觉方案 / 高保真案例评审，再进入 Android UI 实现；未来健康数据仍不能挤压当前动作、主时间、下一步和主控制。
+E11.3 后，首版训练执行页不显示心率位、不显示未获取心率占位，也不提供手动心率输入。E16 Band 9 心率广播 retest 已提供 BLE HRS 正向证据；E16-1 已实现 debug-only BLE HRS adapter spike 和纯 payload parser；E16-2 已实现 production-capable provider / permission / lifecycle 地基，但仍不允许社区 UI 或生产 shell 恢复心率卡片。E16-3 HTML 高保真视觉规划推荐顶部轻量状态 pill，默认未启用或训练页无入口时完全不展示；社区 skin 若未来展示心率，也应把它作为辅助来源状态，不得高于当前动作、主时间、下一步、组目标和主控制。后续如果重新评估健康设备或心率展示，必须先更新产品决策和权限 / 数据边界，并先做 HTML 视觉方案 / 高保真案例评审，再进入 Android UI 实现；未来健康数据仍不能挤压当前动作、主时间、下一步和主控制。
 
 ## 7. 主题贡献要求
 

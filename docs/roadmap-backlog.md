@@ -1593,7 +1593,7 @@ stepsCompleted:
 
 **路线判定:**
 
-- BLE Heart Rate Service：标准 BLE HRS 仍是 Android-first 最通用的实时路线。E11.2a 原条件未发现可用 HRS；E16 广播开启 retest 已形成 Band 9 正向 BLE HRS 证据，E16-1 已完成 debug adapter spike，E16-2 已完成 production-capable provider / permission / lifecycle 地基。Android 12+ 权限、显式 opt-in、设备记忆稳定性、真机 clean stop 和未来 UI 层级仍是后续真实接入风险。
+- BLE Heart Rate Service：标准 BLE HRS 仍是 Android-first 最通用的实时路线。E11.2a 原条件未发现可用 HRS；E16 广播开启 retest 已形成 Band 9 正向 BLE HRS 证据，E16-1 已完成 debug adapter spike，E16-2 已完成 production-capable provider / permission / lifecycle 地基，E16-3 已完成 HTML 高保真视觉规划并推荐顶部轻量状态 pill。Android 12+ 权限、显式 opt-in、设备记忆稳定性、真机 clean stop、stale policy 和未来 Android UI 仍是后续真实接入风险。
 - Huawei Health Kit / Health Service Kit：官方生态存在，但实时心率、地区、账号、设备支持、权限申请、非华为手机兼容性都要验证；Band 9 当前只是 feasibility 样本，不直接承诺生产接入。
 - Health Connect：更适合未来历史摘要 / 趋势候选，不作为当前实时执行页来源；当前 MVP 不规划平均心率趋势。
 - Apple Watch / HealthKit：仍保留为未来 iOS 第一优先路线；合理路线是 iOS app + watchOS companion，使用 HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder。当前 Android-first 阶段不进入 dev，且 Apple SDK model 不得泄漏到 TrainFlow UI / history / analytics。
@@ -1692,6 +1692,32 @@ stepsCompleted:
 - 生产 `app/src/main/AndroidManifest.xml` 未新增 BLE 权限；debug manifest 继续服务手动 smoke。未来若移入 production manifest，必须先有显式 opt-in、权限说明、隐私 / 非医疗文案和 UI gate。
 - `app:testDebugUnitTest --tests "*HeartRate*"` 已通过；用户 2026-07-07 真机截图已覆盖 E16-2 Band 9 smoke：debug APK 入口为 `TrainFlow Debug` -> `DebugEntryActivity`，包含 `进入 TrainFlow` / `HR Broadcast Smoke` 两个明确按钮；`HR Broadcast Smoke` 可见且未污染 TrainFlow 首页；扫描发现 `HUAWEI Band HR-OD7 D8:F0:42:01:90:D7 services=[0x180D]`；覆盖 `bluetooth_disabled` recoverable state，以及 `scanning`、`device_found`、`device_selected`、`connecting`、`connected_waiting_for_data`；已 enable Heart Rate Measurement notify；持续收到 live bpm `84`、`85`、`86`、`87`、`88`、`89`、`90`、`91`；Stop 后出现 `stopped: BLE HRS provider stopped`。用户已检查 TrainFlow 训练页没有心率 UI。
 - 本 story 不恢复训练页心率 UI、心率卡片、`未获取心率` 占位、手动心率输入或平均心率趋势，不改 Room、`WorkoutSession`、records/history/trends、`WorkoutCommand`、`WorkoutEvent`、TimedWorkoutEngine、StrengthWorkoutEngine、TimerDial 或声音。
+
+### Story E16-3: Heart Rate UI HTML Visual Planning
+
+**状态:** HTML visual planning ready for review
+
+作为产品和 UI 设计执行，
+我想先用 HTML 高保真方案验证心率在训练执行页中的展示位置、状态表达和层级，
+以便后续若进入 Android UI 时不破坏 E15 已收口的力量训练和 TimerDial 体验。
+
+**验收标准:**
+
+- Then 只产出 HTML / CSS / JS 视觉方案和文档，不改 Android Kotlin、production manifest、Room、session record、records/history/trends、`WorkoutCommand`、`WorkoutEvent`、训练引擎、TimerDial 或声音。
+- Then 至少提供 2-3 个基于 TrainFlow 现有 UI 的 placement 变体。
+- Then 覆盖 timed training 和 strength training，特别是 strength active / rest / confirm-record。
+- Then 覆盖未启用、权限未授予、蓝牙关闭、正在连接、已连接等待数据、live bpm、stale / disconnected 和默认无入口纯净状态。
+- Then 心率视觉层级低于当前动作、主时间、组目标、重量 / 次数、下一步和固定底部主操作。
+- Then 不恢复大心率卡片、`未获取心率` 占位、手动心率输入或平均心率趋势。
+
+**交付结果:**
+
+- 新增 `docs/design/e16-3-heart-rate-ui-html/index.html`。
+- 新增 `docs/design/e16-3-heart-rate-ui-html/README.md`。
+- HTML 原型提供 Variant A 顶部状态 pill、Variant B 当前卡片角标、Variant C 底部微状态三个方向。
+- 推荐 Variant A 顶部状态 pill；默认纯净 / 未启用 / 训练页无入口时完全不展示心率 UI。
+- 状态文案只表达来源、连接和数据新鲜度，例如 `需授权`、`蓝牙关闭`、`连接中`、`等待读数`、`86 bpm`、`数据中断`，不做医疗告警、强度建议、训练中断或历史记录事实。
+- 后续若进入 Android UI，仍必须另拆 opt-in、permission rationale、privacy / non-medical copy、source selection、stale policy 和 implementation story。
 
 ### Story E11.3: 放弃首版心率显示、录入和统计
 
@@ -2632,38 +2658,39 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 20. E10.17：Stage Color Picker，为计时阶段编辑页提供推荐色 / 更多颜色选择、集中色板、可访问选中态、计划持久化恢复和 Timer Dial 阶段色消费。（Implemented）
 21. E10.18：Plan Edit Backfill，从计划详情进入计时 / 力量编辑器，回填已保存计划并保存回同一 plan id，同时保持历史 session snapshot 不回写。（Implemented）
 22. E11.1：Heart-rate source boundary / unavailable state refinement；收口 source-aware provider/model 边界，不接设备、不做手动输入、不持久化心率、不画平均心率趋势。（Implemented; UI later hidden）
-23. E11.2a / E16：HUAWEI Band 9 on non-Huawei Android feasibility smoke；E11.2a 原条件为广播未开启 / Huawei Health 连接占用，未发现华为设备。E16 广播开启 retest 已实现 debug-only `HR Broadcast Smoke` Activity、独立 debug launcher 和 debug 蓝牙权限，`app/src/main` 不暴露 smoke route / 首页按钮 / callback / Activity 引用；18:32 用户截图不可归因，18:46 用户截图已形成正向证据链：扫描到 `HUAWEI Band HR-OD7` 广播 `services=[0x180D]`，连接同一地址成功，发现 `0x180D` / `0x2A37 notify`，CCCD 写入成功并连续收到 bpm notify。E16 已 reviewed / merged 到 main（merge commit `bbd4296`）。该结果已进入 E16-1 / E16-2 provider 地基，但仍不做训练页 UI 或记录接入；未来真正展示心率前必须先做 HTML 视觉方案 / 高保真案例评审。（Positive evidence captured; provider foundation hardened）
+23. E11.2a / E16：HUAWEI Band 9 on non-Huawei Android feasibility smoke；E11.2a 原条件为广播未开启 / Huawei Health 连接占用，未发现华为设备。E16 广播开启 retest 已实现 debug-only `HR Broadcast Smoke` Activity、独立 debug launcher 和 debug 蓝牙权限，`app/src/main` 不暴露 smoke route / 首页按钮 / callback / Activity 引用；18:32 用户截图不可归因，18:46 用户截图已形成正向证据链：扫描到 `HUAWEI Band HR-OD7` 广播 `services=[0x180D]`，连接同一地址成功，发现 `0x180D` / `0x2A37 notify`，CCCD 写入成功并连续收到 bpm notify。E16 已 reviewed / merged 到 main（merge commit `bbd4296`）。该结果已进入 E16-1 / E16-2 provider 地基，但仍不做训练页 UI 或记录接入；E16-3 已完成 HTML 视觉方案 / 高保真案例评审的第一版。（Positive evidence captured; provider foundation hardened; HTML visual gate ready）
 24. E16-2：Production BLE HRS provider hardening；将 E16-1 debug spike 收敛为 production-capable `core.health` provider / state / permission planner / DataStore selected-device preference / lifecycle cleanup 地基，不改 production manifest，不接训练页 UI，不写 session record，不做 heart-rate statistics；2026-07-07 真机 smoke 已覆盖 debug entry、HR Broadcast Smoke、Band 9 `0x180D` scan、selected / connecting / waiting / notify / live bpm `84-91` 和 stop 状态。（Implemented; real-device smoke passed; needs review）
-25. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
-25. E12.1：真实记录与基础统计。（Implemented）
-26. E12.2a：非心率历史图表与聚合趋势。（Implemented）
-27. E12.3：历史记录清理。（Implemented）
-28. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
-29. E12.2b：力量同类 set 趋势。（Implemented）
-30. E12.4：Records / trends polish planning and visual gate；审计现有记录页数据能力、legacy/v2 timed composition 和 strength trend 语义，提出 records IA、chart axis / legend / empty state 和 implementation split。（Planning / visual gate complete）
-31. E12-1：Records data semantics + v2 interpretation foundation；history / record mapper 可解释 timed composition v2 stageGroup / target / boundary rest / rest extension，v2 timed trend key 与 legacy timed key 分离，strength comparable trend 不变。（Implemented; verified）
-32. E12-2：Records IA / chart UI polish；记录页重排为概览摘要 -> 筛选区 -> 最近训练 -> 选中详情 -> 趋势区，图表补 X/Y 轴、单位、Legend、空/不足状态，recent/detail 可区分 completed / abandoned / skipped / pause / rest extension、legacy timed、timed composition v2 与 strength。（Implemented; verified）
-33. E13：E13.1 声音提醒与音频共存已实现；E13 sound cue asset / audio coexistence audit and QA gate 已完成；E15-1 已修复力量休息最后 N 秒 beep 与 `auto_after_rest` 休息后自动开始回归；E15-1a review fix 已将 `auto_after_rest` 休息自然结束后自动进入下一组 active set 的 `STAGE_BELL` 请求限定到 tick 驱动的 rest -> active set 路径，初始 prepare、手动开始、提前开始和 `manual_start` prepare 路径均不响铃；E15-1b 计划补齐力量计划编辑页中的计划级本组计时模式设置，使旧计划可通过显式编辑保存切换 `manual_start` / `auto_after_rest`，但全局训练偏好仍不运行时覆盖旧计划。蓝牙 / 扬声器真机 smoke 仍待继续补证据，固定女声 cue、力量完成 bell 和力量 haptics parity 留给后续。
-34. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only and pushed as `6888e31`；E14.4-2b-5b engine integration planning gate docs-only complete；E14.4-2b-5b-1 engine adapter bridge tests added as a test-first red gate；E14.4-2b-5b-2 minimum engine bridge implemented；E14.4-2b-5b-3 v2 start gate enablement + smoke implemented；E14.4-2b-5c session record compatibility tests / smoke review implemented；E14.5 TimerDial continuous progress fix complete；E14.4-2b-6 TimerDial mapping planning gate docs-only complete；E14.4-2b-6a TimerDial mapping model/state tests complete；E14.4-2b-6b production mapping implementation complete；E14.4-2b-6c smoke / visual QA review gate complete；E14.4-2b closeout complete。
-35. E14.6：Real-device TimerDial feedback planning gate，拆出 E14.6-1 progress rebound fix、E14.6-2 completion recap page redesign、E14.6-3 stage style system planning / design。（Planning complete）
-36. E14.6-1：TimerDial progress rebound fix，修复 normal motion 下一秒 tick anchor handoff 造成的 active ring / active segment forward-then-back rebound。（Implemented; followed by E14.6-2 planning）
-37. E14.6-2：Completion recap page redesign planning / visual gate，确认 completed 终态进入“本次数据统计复盘页面”：顶部克制庆祝 + `已完成`，中部复用现有 summary / recap / session 数据，底部主动作推荐 `返回训练首页`，不保留大 TimerDial 作为主视觉，不改 session record 语义。（Planning complete; E14.6-2b implemented）
-38. E14.6-2b：Completion recap page Compose implementation，计时训练 completed / abandoned 终态进入独立复盘 shell，复用现有 summary / recap 内容并完成 Android smoke。（Implemented; E14.6-2c reviewed evidence）
-39. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此该 gate 未收口 screenshot-level visual QA。（Review complete; resolved by E14.6-2d）
-40. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; followed by E14.6-3 planning）
-41. E14.6-3：Stage style / icon planning，确认阶段样式由颜色和内置 `iconKey` 组成，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon，第一版只使用项目内置白色 icon key，用户上传图片列为 post-MVP。（Planning complete）
-42. E14.6-3a：Stage style data contract / model decision，选择 Option A：复用 composition v2 stage group / target 现有 `colorHex` / `iconKey`，只在 versioned timed composition JSON payload 中增加 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle`，不做 Room migration，legacy plans 和 old snapshots 通过 resolver defaults 有效。（Decision complete; E14.6-3b implemented）
-43. E14.6-3b：Stage style model / serializer tests，将 boundary style payload 落到 Kotlin model、plan / snapshot JSON serializer 和 focused tests，验证 valid / invalid color、known / unknown icon、asset-like icon rejection、v2 plan / session snapshot round-trip、old v2 missing fields、legacy JSON unaffected、Room unchanged 和 no resources / no UI / no TimerDial boundary。（Implemented; followed by E14.6-3c）
-44. E14.6-3c：Editor style picker UI，把 E14.6-3b payload 暴露到 timed composition editor，支持 warmup / cooldown / restBetweenRounds、stage group 和 target 的颜色 + 内置 iconKey 选择；rounds 无 style；复用色板、使用 Compose Canvas 内置 icon grid，不新增资源 / 上传路径 / TimerDial consumption / Room 变更。（Implemented; followed by E14.6-3d）
-45. E14.6-3d：TimerDial style consumption / visual QA，把 saved v2 stage style 消费到 TimerDial 外圈颜色和中心白色 built-in Canvas icon，保持 planned duration ratio、boundary fallback、legacy fallback、rest extension monotonic progress 和 continuous progress identity。（Implemented; followed by E14.6-3e）
-46. E14.6-3e：Stage style / TimerDial visual QA closeout，复查 E14.6-3d smoke 的 PNG / XML / logcat / scan 证据，确认 editor picker、TimerDial style consumption、boundary fallback、legacy timed、rest extension、continuous progress、资源 / 上传 / heart-rate 禁区均无阻塞；非阻塞 follow-up 仅保留 reduce-motion style-specific smoke、3 / 4 target 截图、dedicated legacy screenshot、显式 adb-after artifact 和承托环厚度 polish。（Review complete; followed by E12 records / trends polish planning gate）
-47. E15-3：Stage icon semantic clarity，优化 timed composition editor picker 与 TimerDial 阶段 icon 语义；用户后续确认生成图资源方案后，既有内置 key 映射到项目打包的白色 PNG 资源，覆盖热身、动作进行、加速、冲刺、普通休息、轮间恢复、放松、力量、灵活和自定义。picker 使用 4 列图标 + 中文 label 和语义 content description，默认新草稿 sprint 目标使用既有 `sprint` key，保持旧 key / saved plan / session snapshot 兼容，不保存图片路径或上传资产。（Merged into main）
-48. E15-4：Strength confirm-record UI collapse，在力量训练确认本组阶段折叠上方当前组 / 时间数据大卡片为紧凑摘要，保留动作名、当前组序号 / 总组数、完成耗时或暂停状态、计划目标摘要和正式组 / 热身组标签；review fix 已压缩确认卡片并把感受选择提前到实际输入之前，让 720x1280 下四个感受选项、实际重量 / 次数和固定底部主动作同时可见；prepare / active / rest 阶段保持既有行为和视觉边界。（Reviewed / merged）
-49. E15-5：Real-device polish planning gate，基于用户 2026-07-03 真机截图拆分短 target TimerDial 证据先行修复、力量本组计时模式 selector 防溢出、力量完成页固定返回动作、力量编辑 / 执行减法四个后续任务；E15-5d 后续按 2026-07-04 反馈收窄为删除目标组颜色占位和力量执行短提示。（Planning complete）
-50. E15-5a：TimerDial short-target motion diagnostic + fix gate，复现 ready gate route clock 旧 delay 提前 tick 新 1s / 2s target 的真实原因，并通过 manual command anchor 重置 tick 相位；baseline / fixed / skip / reduce-motion evidence 已复核。（Reviewed / merged）
-51. E15-5b：Strength set timer mode selector layout polish，将力量计划编辑页本组计时模式从横向 chip 改为竖向 radio-card selector，解决 720x1280 长中文溢出，保持 `StrengthSetTimerMode` 保存语义不变。（Reviewed / merged）
-52. E15-5c：Strength completion sticky return action，将力量 completed / abandoned 终态返回主动作固定到底部，复盘内容预留 padding，避免用户滑到长复盘底部才能返回。（Reviewed / merged）
-53. E15-5d：Strength editor and execution simplification，删除力量计划编辑页目标组颜色占位入口并重排目标组输入，删除力量执行页当前组短提示并让主卡自然收缩，下一组卡压缩为动作 / 组序号 / 重量 / 次数摘要；不新增颜色字段或数据持久化。（Reviewed / merged；APK 测试通过）
+25. E16-3：Heart Rate UI HTML Visual Planning；新增 HTML 高保真视觉入口和 README，提供顶部状态 pill、当前卡片角标、底部微状态 3 个变体，推荐顶部轻量状态 pill，默认未启用或无入口时不展示，不恢复心率卡片、`未获取心率`、手动输入或平均心率趋势。（HTML visual planning ready for review）
+26. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
+27. E12.1：真实记录与基础统计。（Implemented）
+28. E12.2a：非心率历史图表与聚合趋势。（Implemented）
+29. E12.3：历史记录清理。（Implemented）
+30. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
+31. E12.2b：力量同类 set 趋势。（Implemented）
+32. E12.4：Records / trends polish planning and visual gate；审计现有记录页数据能力、legacy/v2 timed composition 和 strength trend 语义，提出 records IA、chart axis / legend / empty state 和 implementation split。（Planning / visual gate complete）
+33. E12-1：Records data semantics + v2 interpretation foundation；history / record mapper 可解释 timed composition v2 stageGroup / target / boundary rest / rest extension，v2 timed trend key 与 legacy timed key 分离，strength comparable trend 不变。（Implemented; verified）
+34. E12-2：Records IA / chart UI polish；记录页重排为概览摘要 -> 筛选区 -> 最近训练 -> 选中详情 -> 趋势区，图表补 X/Y 轴、单位、Legend、空/不足状态，recent/detail 可区分 completed / abandoned / skipped / pause / rest extension、legacy timed、timed composition v2 与 strength。（Implemented; verified）
+35. E13：E13.1 声音提醒与音频共存已实现；E13 sound cue asset / audio coexistence audit and QA gate 已完成；E15-1 已修复力量休息最后 N 秒 beep 与 `auto_after_rest` 休息后自动开始回归；E15-1a review fix 已将 `auto_after_rest` 休息自然结束后自动进入下一组 active set 的 `STAGE_BELL` 请求限定到 tick 驱动的 rest -> active set 路径，初始 prepare、手动开始、提前开始和 `manual_start` prepare 路径均不响铃；E15-1b 计划补齐力量计划编辑页中的计划级本组计时模式设置，使旧计划可通过显式编辑保存切换 `manual_start` / `auto_after_rest`，但全局训练偏好仍不运行时覆盖旧计划。蓝牙 / 扬声器真机 smoke 仍待继续补证据，固定女声 cue、力量完成 bell 和力量 haptics parity 留给后续。
+36. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only and pushed as `6888e31`；E14.4-2b-5b engine integration planning gate docs-only complete；E14.4-2b-5b-1 engine adapter bridge tests added as a test-first red gate；E14.4-2b-5b-2 minimum engine bridge implemented；E14.4-2b-5b-3 v2 start gate enablement + smoke implemented；E14.4-2b-5c session record compatibility tests / smoke review implemented；E14.5 TimerDial continuous progress fix complete；E14.4-2b-6 TimerDial mapping planning gate docs-only complete；E14.4-2b-6a TimerDial mapping model/state tests complete；E14.4-2b-6b production mapping implementation complete；E14.4-2b-6c smoke / visual QA review gate complete；E14.4-2b closeout complete。
+37. E14.6：Real-device TimerDial feedback planning gate，拆出 E14.6-1 progress rebound fix、E14.6-2 completion recap page redesign、E14.6-3 stage style system planning / design。（Planning complete）
+38. E14.6-1：TimerDial progress rebound fix，修复 normal motion 下一秒 tick anchor handoff 造成的 active ring / active segment forward-then-back rebound。（Implemented; followed by E14.6-2 planning）
+39. E14.6-2：Completion recap page redesign planning / visual gate，确认 completed 终态进入“本次数据统计复盘页面”：顶部克制庆祝 + `已完成`，中部复用现有 summary / recap / session 数据，底部主动作推荐 `返回训练首页`，不保留大 TimerDial 作为主视觉，不改 session record 语义。（Planning complete; E14.6-2b implemented）
+40. E14.6-2b：Completion recap page Compose implementation，计时训练 completed / abandoned 终态进入独立复盘 shell，复用现有 summary / recap 内容并完成 Android smoke。（Implemented; E14.6-2c reviewed evidence）
+41. E14.6-2c：Completion recap smoke / visual QA review gate，复查 E14.6-2b smoke / UI tree / visual QA / boundary。UI tree 语义与交互覆盖可用，但截图证据损坏且补证据当前截图全黑，因此该 gate 未收口 screenshot-level visual QA。（Review complete; resolved by E14.6-2d）
+42. E14.6-2d：Completion recap screenshot evidence recapture，诊断 2b PNG binary corruption 与 2c current screenshots black issue，使用 binary-safe screencap + pull 补齐 completed recap top / summary / details、bottom return 和 abandoned shell 有效非黑屏截图证据。（Completed; followed by E14.6-3 planning）
+43. E14.6-3：Stage style / icon planning，确认阶段样式由颜色和内置 `iconKey` 组成，热身 / 放松 / 轮间休息 / 普通阶段 / 阶段内目标均可解析 style，轮数不需要颜色或 icon，第一版只使用项目内置白色 icon key，用户上传图片列为 post-MVP。（Planning complete）
+44. E14.6-3a：Stage style data contract / model decision，选择 Option A：复用 composition v2 stage group / target 现有 `colorHex` / `iconKey`，只在 versioned timed composition JSON payload 中增加 `warmupStyle`、`cooldownStyle`、`restBetweenRoundsStyle`，不做 Room migration，legacy plans 和 old snapshots 通过 resolver defaults 有效。（Decision complete; E14.6-3b implemented）
+45. E14.6-3b：Stage style model / serializer tests，将 boundary style payload 落到 Kotlin model、plan / snapshot JSON serializer 和 focused tests，验证 valid / invalid color、known / unknown icon、asset-like icon rejection、v2 plan / session snapshot round-trip、old v2 missing fields、legacy JSON unaffected、Room unchanged 和 no resources / no UI / no TimerDial boundary。（Implemented; followed by E14.6-3c）
+46. E14.6-3c：Editor style picker UI，把 E14.6-3b payload 暴露到 timed composition editor，支持 warmup / cooldown / restBetweenRounds、stage group 和 target 的颜色 + 内置 iconKey 选择；rounds 无 style；复用色板、使用 Compose Canvas 内置 icon grid，不新增资源 / 上传路径 / TimerDial consumption / Room 变更。（Implemented; followed by E14.6-3d）
+47. E14.6-3d：TimerDial style consumption / visual QA，把 saved v2 stage style 消费到 TimerDial 外圈颜色和中心白色 built-in Canvas icon，保持 planned duration ratio、boundary fallback、legacy fallback、rest extension monotonic progress 和 continuous progress identity。（Implemented; followed by E14.6-3e）
+48. E14.6-3e：Stage style / TimerDial visual QA closeout，复查 E14.6-3d smoke 的 PNG / XML / logcat / scan 证据，确认 editor picker、TimerDial style consumption、boundary fallback、legacy timed、rest extension、continuous progress、资源 / 上传 / heart-rate 禁区均无阻塞；非阻塞 follow-up 仅保留 reduce-motion style-specific smoke、3 / 4 target 截图、dedicated legacy screenshot、显式 adb-after artifact 和承托环厚度 polish。（Review complete; followed by E12 records / trends polish planning gate）
+49. E15-3：Stage icon semantic clarity，优化 timed composition editor picker 与 TimerDial 阶段 icon 语义；用户后续确认生成图资源方案后，既有内置 key 映射到项目打包的白色 PNG 资源，覆盖热身、动作进行、加速、冲刺、普通休息、轮间恢复、放松、力量、灵活和自定义。picker 使用 4 列图标 + 中文 label 和语义 content description，默认新草稿 sprint 目标使用既有 `sprint` key，保持旧 key / saved plan / session snapshot 兼容，不保存图片路径或上传资产。（Merged into main）
+50. E15-4：Strength confirm-record UI collapse，在力量训练确认本组阶段折叠上方当前组 / 时间数据大卡片为紧凑摘要，保留动作名、当前组序号 / 总组数、完成耗时或暂停状态、计划目标摘要和正式组 / 热身组标签；review fix 已压缩确认卡片并把感受选择提前到实际输入之前，让 720x1280 下四个感受选项、实际重量 / 次数和固定底部主动作同时可见；prepare / active / rest 阶段保持既有行为和视觉边界。（Reviewed / merged）
+51. E15-5：Real-device polish planning gate，基于用户 2026-07-03 真机截图拆分短 target TimerDial 证据先行修复、力量本组计时模式 selector 防溢出、力量完成页固定返回动作、力量编辑 / 执行减法四个后续任务；E15-5d 后续按 2026-07-04 反馈收窄为删除目标组颜色占位和力量执行短提示。（Planning complete）
+52. E15-5a：TimerDial short-target motion diagnostic + fix gate，复现 ready gate route clock 旧 delay 提前 tick 新 1s / 2s target 的真实原因，并通过 manual command anchor 重置 tick 相位；baseline / fixed / skip / reduce-motion evidence 已复核。（Reviewed / merged）
+53. E15-5b：Strength set timer mode selector layout polish，将力量计划编辑页本组计时模式从横向 chip 改为竖向 radio-card selector，解决 720x1280 长中文溢出，保持 `StrengthSetTimerMode` 保存语义不变。（Reviewed / merged）
+54. E15-5c：Strength completion sticky return action，将力量 completed / abandoned 终态返回主动作固定到底部，复盘内容预留 padding，避免用户滑到长复盘底部才能返回。（Reviewed / merged）
+55. E15-5d：Strength editor and execution simplification，删除力量计划编辑页目标组颜色占位入口并重排目标组输入，删除力量执行页当前组短提示并让主卡自然收缩，下一组卡压缩为动作 / 组序号 / 重量 / 次数摘要；不新增颜色字段或数据持久化。（Reviewed / merged；APK 测试通过）
 
 ## 7. 下一轮建议
 
@@ -2687,7 +2714,7 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、健康数据边界、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：原条件下 Band 9 + 非华为 Android + 华为运动健康连接时仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据。E16 广播开启 retest 在 18:46 用户截图中已形成正向证据链：`HUAWEI Band HR-OD7` 广播 `0x180D`、连接同一地址、发现 `0x180D` / `0x2A37 notify`、CCCD 写入成功并收到 bpm notify；E16 已 reviewed / merged 到 main，merge commit `bbd4296`。E16-1 已完成 debug adapter spike，E16-2 已完成 production-capable provider / state / permission / lifecycle / selected-device preference 地基并通过 2026-07-07 真机 smoke：debug entry 修复、HR Broadcast Smoke 可见但不污染首页、Band 9 scan / selected / connecting / waiting / notify / live bpm `84-91` / stop 均有截图结论。E16-2 仍不进入当前 MVP 生产训练页 UI、记录或统计。未来真正展示心率前，必须先做 HTML 视觉方案 / 高保真案例评审，再进入单独 Android UI 实现。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或平均心率趋势。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：原条件下 Band 9 + 非华为 Android + 华为运动健康连接时仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据。E16 广播开启 retest 在 18:46 用户截图中已形成正向证据链：`HUAWEI Band HR-OD7` 广播 `0x180D`、连接同一地址、发现 `0x180D` / `0x2A37 notify`、CCCD 写入成功并收到 bpm notify；E16 已 reviewed / merged 到 main，merge commit `bbd4296`。E16-1 已完成 debug adapter spike，E16-2 已完成 production-capable provider / state / permission / lifecycle / selected-device preference 地基并通过 2026-07-07 真机 smoke：debug entry 修复、HR Broadcast Smoke 可见但不污染首页、Band 9 scan / selected / connecting / waiting / notify / live bpm `84-91` / stop 均有截图结论。E16-3 已完成 HTML 高保真视觉规划，推荐顶部轻量状态 pill，并明确默认未启用或训练页无入口时完全不展示。E16-2 / E16-3 仍不进入当前 MVP 生产训练页 UI、记录或统计。未来真正进入 Android 心率 UI 前，必须另拆 opt-in / permission rationale / privacy / non-medical copy / stale policy / implementation story。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或平均心率趋势。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
@@ -2703,7 +2730,7 @@ E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复
 下一轮建议按 E15 收口后的发布准备优先级进入：
 
 ```text
-E15 系列已收口：E15-5d 已 review / accepted / merged，merge commit `0fa28463e4c24bf039944402a209f8f55c922c1b`，story commit `d9875bd48cd3e51b560c677efc3f6d4440efc89a`，用户 APK 测试通过。后续开发者处理 E15 附近维护问题时，先读 `docs/testing/e15-maintenance-lessons-learned.md`，尤其是 1s / 2s short target route clock、力量休息 beep、auto-after-rest stage bell、selector 长中文、confirm-record 首屏、completed / abandoned sticky return、目标组颜色占位删除和力量执行短提示删除。E16 heart-rate broadcast retest 已合入 main（`bbd4296`），E16-1 debug adapter spike 和 E16-2 provider hardening 已完成且 E16-2 2026-07-07 真机 smoke 通过；下一步仍不直接进入生产心率 UI，建议进入 MVP Alpha readiness 前检查或按用户真机反馈另拆 User Test Fix Pack 2。若未来继续心率，需要先做 opt-in / settings / permission rationale / privacy / stale policy / `huashu-design` HTML UI gate，并继续保持不恢复心率卡片、未获取心率、手动心率输入或平均心率趋势，不恢复力量目标组颜色占位。
+E15 系列已收口：E15-5d 已 review / accepted / merged，merge commit `0fa28463e4c24bf039944402a209f8f55c922c1b`，story commit `d9875bd48cd3e51b560c677efc3f6d4440efc89a`，用户 APK 测试通过。后续开发者处理 E15 附近维护问题时，先读 `docs/testing/e15-maintenance-lessons-learned.md`，尤其是 1s / 2s short target route clock、力量休息 beep、auto-after-rest stage bell、selector 长中文、confirm-record 首屏、completed / abandoned sticky return、目标组颜色占位删除和力量执行短提示删除。E16 heart-rate broadcast retest 已合入 main（`bbd4296`），E16-1 debug adapter spike 和 E16-2 provider hardening 已完成且 E16-2 2026-07-07 真机 smoke 通过；E16-3 HTML UI gate 已完成第一版并推荐顶部轻量状态 pill。下一步仍不直接进入生产心率 UI，建议进入 MVP Alpha readiness 前检查或按用户真机反馈另拆 User Test Fix Pack 2。若未来继续心率，需要另拆 opt-in / settings / permission rationale / privacy / stale policy / Android UI implementation，并继续保持不恢复心率卡片、未获取心率、手动心率输入或平均心率趋势，不恢复力量目标组颜色占位。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
