@@ -1,7 +1,7 @@
 # E16-2 Production BLE HRS provider hardening
 
-**Status:** Implemented; needs review
-**Date:** 2026-07-06
+**Status:** Implemented; real-device smoke passed; needs review
+**Date:** 2026-07-07
 **Scope:** Production-capable BLE Heart Rate Service provider foundation, permission planning, device selection preference, lifecycle hardening
 
 ## Goal
@@ -87,23 +87,37 @@ Verification performed so far:
 
 Result: passed after loading `.local/env.ps1`.
 
+Review-prep checks performed after the 2026-07-07 real-device evidence:
+
+```powershell
+git diff --check origin/main..HEAD
+git diff --cached --check
+rg -n "心率|heart rate|HeartRate|bpm|未获取心率|平均心率|manual heart|手动心率" app/src/main/java/com/liujyks/trainflow/feature/workoutsession
+rg -n "BLUETOOTH_SCAN|BLUETOOTH_CONNECT|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|BODY_SENSORS|android.permission.BLUETOOTH" app/src/main/AndroidManifest.xml
+```
+
 ## Real-device smoke
 
-E16-2 real-device smoke was not completed in this implementation pass.
+E16-2 real-device smoke passed based on the user's 2026-07-07 Android phone screenshots with HUAWEI Band 9 heart-rate broadcast mode enabled.
 
-Residual risk:
+Smoke conclusions:
 
-- The production-capable provider compiles and the debug harness uses it, but scan / connect / notify / stop still require a real Android phone plus Band 9 heart-rate broadcast mode.
-- AVD cannot prove BLE peripheral behavior.
-- Before review closes E16-2, recommended smoke evidence should be saved locally under `.local/smoke/e16-2-production-ble-hrs-provider-hardening/` and not committed:
-  - explicit permission button used;
-  - scan starts and stops within the scan window or via stop;
-  - Band candidate appears;
-  - device selected;
-  - connect -> waiting for data;
-  - live bpm notify;
-  - stop / disconnect closes GATT cleanly;
-  - Bluetooth disabled / disconnect path returns to recoverable state.
+- Debug APK entry is fixed as `TrainFlow Debug` -> `DebugEntryActivity`.
+- `DebugEntryActivity` shows two explicit buttons: `进入 TrainFlow` and `HR Broadcast Smoke`.
+- `HR Broadcast Smoke` is visible only through the debug entry and does not pollute the TrainFlow home page.
+- Scan discovered `HUAWEI Band HR-OD7 D8:F0:42:01:90:D7` with `services=[0x180D]`.
+- The recoverable `bluetooth_disabled` state was covered.
+- Provider state coverage includes `scanning`, `device_found`, `device_selected`, `connecting`, `connected_waiting_for_data`, and live reading states.
+- Heart Rate Measurement notify was enabled for standard HRS `0x180D` / `0x2A37`.
+- Live bpm values were received continuously: `84`, `85`, `86`, `87`, `88`, `89`, `90`, `91`.
+- Stop produced `stopped: BLE HRS provider stopped`, confirming the manual stop path is visible to the harness.
+- The user also checked that TrainFlow training pages still have no heart-rate UI.
+
+Review conclusion:
+
+- E16-2 provider hardening is real-device smoke-passed for scan / selected-device / connect / notify / live bpm / stop behavior.
+- This evidence closes the E16-2 smoke gap, but it does not change the product boundary: E16-2 is still a production-capable provider foundation, not production heart-rate UI launch.
+- No smoke screenshots, logs, APKs, `.local/smoke/` files, or device artifacts are committed.
 
 ## Boundaries preserved
 
@@ -117,3 +131,6 @@ Residual risk:
 - No `WorkoutCommand` or `WorkoutEvent` change.
 - No timed or strength engine semantic change.
 - No TimerDial, sound, records, history, or trends heart-rate integration.
+- No production manifest BLE permissions.
+- No production App startup scan, connect, or permission request.
+- Future heart-rate UI must first go through `huashu-design` HTML high-fidelity visual gate and should preserve the existing TrainFlow final UI hierarchy instead of redesigning the training layout around heart rate.
