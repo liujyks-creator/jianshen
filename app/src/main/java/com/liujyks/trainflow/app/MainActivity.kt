@@ -127,6 +127,14 @@ class MainActivity : ComponentActivity() {
                             preferencesDataSource.setHeartRateDisplayEnabled(enabled)
                         }
                     },
+                    onSaveHeartRateDevicePreference = { identifier, displayName ->
+                        scope.launch {
+                            preferencesDataSource.setBleHeartRateDevicePreference(
+                                identifier = identifier,
+                                displayName = displayName
+                            )
+                        }
+                    },
                     onClearHeartRateDevicePreference = {
                         scope.launch {
                             preferencesDataSource.clearBleHeartRateDevicePreference()

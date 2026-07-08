@@ -19,6 +19,7 @@ class TrainingPreferencesAppMapperTest {
             defaultCountdownThresholdSec = 11,
             strengthSetTimerMode = "auto_after_rest",
             heartRateDisplayEnabled = true,
+            bleHeartRateDeviceIdentifier = "D8:F0:42:01:90:D7",
             bleHeartRateDeviceDisplayName = "HUAWEI Band HR-OD7",
             uiSkinId = "tile_flow"
         )
@@ -29,9 +30,10 @@ class TrainingPreferencesAppMapperTest {
         assertFalse(state.soundEnabled)
         assertEquals(StrengthSetTimerModePreference.AUTO_AFTER_REST, state.strengthSetTimerMode)
         assertEquals("已启用", state.heartRateSettings.statusLabel)
+        assertEquals("D8:F0:42:01:90:D7", state.heartRateSettings.savedDeviceIdentifier)
         assertEquals("HUAWEI Band HR-OD7", state.heartRateSettings.savedDeviceDisplayName)
         assertEquals(
-            "已保存设备名称：HUAWEI Band HR-OD7。本轮不会自动扫描或连接。",
+            "已选择设备：HUAWEI Band HR-OD7。可用于后续连接；当前不进入训练页。",
             state.heartRateSettings.sourceSummary
         )
         assertEquals("tile_flow", state.selectedUiSkinId)

@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -17,6 +18,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelUuid
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -221,7 +223,7 @@ internal class AndroidBleHeartRateProvider(
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        leScanner.startScan(null, settings, scanCallback)
+        leScanner.startScan(heartRateServiceScanFilters(), settings, scanCallback)
         isScanning = true
         mainHandler.removeCallbacks(scanTimeoutRunnable)
         mainHandler.postDelayed(scanTimeoutRunnable, scanWindowMillis)
@@ -524,6 +526,14 @@ internal class AndroidBleHeartRateProvider(
             appContext.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
         }.toSet()
         return BleHeartRatePermissionPlanner.missingPermissions(granted)
+    }
+
+    private fun heartRateServiceScanFilters(): List<ScanFilter> {
+        return listOf(
+            ScanFilter.Builder()
+                .setServiceUuid(ParcelUuid(HEART_RATE_SERVICE_UUID))
+                .build()
+        )
     }
 
     private fun publishError(

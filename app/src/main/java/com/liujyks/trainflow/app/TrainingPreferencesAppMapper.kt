@@ -22,6 +22,7 @@ internal fun TrainFlowPreferences.toTrainingPreferencesScreenState(): TrainingPr
         strengthSetTimerMode = strengthSetTimerModePreferenceFromContract(strengthSetTimerMode),
         heartRateSettings = heartRateSettingsUiState(
             enabled = heartRateDisplayEnabled,
+            savedDeviceIdentifier = bleHeartRateDeviceIdentifier,
             savedDeviceDisplayName = bleHeartRateDeviceDisplayName
         ),
         selectedUiSkinId = skin.id,
