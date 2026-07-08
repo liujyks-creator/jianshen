@@ -163,17 +163,19 @@ internal enum class HeartRateBlePermissionStatus(
 
 internal data class HeartRateDevicePickerUiState(
     val status: HeartRateDevicePickerStatus = HeartRateDevicePickerStatus.DISABLED,
+    val scanActive: Boolean = false,
     val title: String = "设备来源：未启用",
     val body: String = "心率显示关闭时不会扫描或连接设备。",
     val actionLabel: String? = null,
     val canStartScan: Boolean = false,
     val canStopScan: Boolean = false,
     val devices: List<HeartRateDeviceCandidateUiState> = emptyList(),
+    val hrsCandidates: List<HeartRateDeviceCandidateUiState> = devices,
     val scanWindowCopy: String = "扫描窗口约 12 秒，到时会自动停止。",
     val bandHint: String = "HUAWEI Band 9 需要先在手环开启心率广播模式。"
 ) {
     val showDeviceList: Boolean
-        get() = devices.isNotEmpty()
+        get() = hrsCandidates.isNotEmpty()
 }
 
 internal data class HeartRateDeviceCandidateUiState(
@@ -242,6 +244,7 @@ internal fun heartRateSettingsUiState(
     blePermissionStatus: HeartRateBlePermissionStatus = HeartRateBlePermissionStatus.NOT_REQUESTED,
     scannerState: BleHeartRateProviderState = BleHeartRateProviderState.noSource(),
     scannerCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
+    scanActive: Boolean = scannerState.kind == BleHeartRateProviderStateKind.SCANNING,
     scanFinishedWithoutDevices: Boolean = false,
     scanWindowSeconds: Int = 12
 ): HeartRateSettingsUiState {
@@ -266,6 +269,7 @@ internal fun heartRateSettingsUiState(
             blePermissionStatus = resolvedPermissionStatus,
             scannerState = scannerState,
             scannerCandidates = scannerCandidates,
+            scanActive = scanActive,
             savedDeviceIdentifier = sanitizedIdentifier,
             savedDeviceDisplayName = sanitizedDisplayName,
             scanFinishedWithoutDevices = scanFinishedWithoutDevices,
@@ -279,6 +283,7 @@ internal fun heartRateDevicePickerUiState(
     blePermissionStatus: HeartRateBlePermissionStatus,
     scannerState: BleHeartRateProviderState = BleHeartRateProviderState.noSource(),
     scannerCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
+    scanActive: Boolean = scannerState.kind == BleHeartRateProviderStateKind.SCANNING,
     savedDeviceIdentifier: String? = null,
     savedDeviceDisplayName: String? = null,
     scanFinishedWithoutDevices: Boolean = false,
@@ -307,6 +312,10 @@ internal fun heartRateDevicePickerUiState(
         )
     }
 
+    if (scanActive) {
+        return scanningState(heartRateCandidates, scanWindowSeconds)
+    }
+
     return when (scannerState.kind) {
         BleHeartRateProviderStateKind.PERMISSION_REQUIRED -> HeartRateDevicePickerUiState(
             status = HeartRateDevicePickerStatus.PERMISSION_REQUIRED,
@@ -322,15 +331,7 @@ internal fun heartRateDevicePickerUiState(
             actionLabel = "扫描心率设备"
         )
 
-        BleHeartRateProviderStateKind.SCANNING -> HeartRateDevicePickerUiState(
-            status = HeartRateDevicePickerStatus.SCANNING,
-            title = "设备来源：扫描中",
-            body = "正在查找附近广播标准心率服务的设备；扫描窗口约 ${scanWindowSeconds} 秒。",
-            actionLabel = "停止扫描",
-            canStopScan = true,
-            devices = heartRateCandidates,
-            scanWindowCopy = "正在扫描，约 ${scanWindowSeconds} 秒后自动停止。"
-        )
+        BleHeartRateProviderStateKind.SCANNING -> scanningState(heartRateCandidates, scanWindowSeconds)
 
         BleHeartRateProviderStateKind.DEVICE_FOUND -> {
             if (heartRateCandidates.isNotEmpty()) {
@@ -341,6 +342,7 @@ internal fun heartRateDevicePickerUiState(
                     actionLabel = "重新扫描",
                     canStartScan = true,
                     devices = heartRateCandidates,
+                    hrsCandidates = heartRateCandidates,
                     scanWindowCopy = "每次扫描窗口约 ${scanWindowSeconds} 秒。"
                 )
             } else {
@@ -361,11 +363,23 @@ internal fun heartRateDevicePickerUiState(
             actionLabel = "重新扫描",
             canStartScan = true,
             devices = heartRateCandidates,
+            hrsCandidates = heartRateCandidates,
             scanWindowCopy = "每次扫描窗口约 ${scanWindowSeconds} 秒。"
         )
 
         BleHeartRateProviderStateKind.STOPPED -> {
-            if (scanFinishedWithoutDevices && heartRateCandidates.isEmpty()) {
+            if (heartRateCandidates.isNotEmpty()) {
+                HeartRateDevicePickerUiState(
+                    status = HeartRateDevicePickerStatus.DEVICES_FOUND,
+                    title = "设备来源：发现心率设备",
+                    body = "扫描已停止。已发现的心率设备仍可选择；也可以重新扫描。",
+                    actionLabel = "重新扫描",
+                    canStartScan = true,
+                    devices = heartRateCandidates,
+                    hrsCandidates = heartRateCandidates,
+                    scanWindowCopy = "每次扫描窗口约 ${scanWindowSeconds} 秒。"
+                )
+            } else if (scanFinishedWithoutDevices) {
                 HeartRateDevicePickerUiState(
                     status = HeartRateDevicePickerStatus.NO_DEVICES_FOUND,
                     title = "设备来源：未发现心率设备",
@@ -381,6 +395,23 @@ internal fun heartRateDevicePickerUiState(
 
         else -> idleOrSelectedState(savedId, savedName, scanWindowSeconds)
     }
+}
+
+private fun scanningState(
+    heartRateCandidates: List<HeartRateDeviceCandidateUiState>,
+    scanWindowSeconds: Int
+): HeartRateDevicePickerUiState {
+    return HeartRateDevicePickerUiState(
+        status = HeartRateDevicePickerStatus.SCANNING,
+        scanActive = true,
+        title = "设备来源：扫描中",
+        body = "正在查找附近广播标准心率服务的设备；扫描窗口约 ${scanWindowSeconds} 秒。",
+        actionLabel = "停止扫描",
+        canStopScan = true,
+        devices = heartRateCandidates,
+        hrsCandidates = heartRateCandidates,
+        scanWindowCopy = "正在扫描，约 ${scanWindowSeconds} 秒后自动停止。"
+    )
 }
 
 private fun idleOrSelectedState(

@@ -138,6 +138,7 @@ internal fun TrainFlowApp(
                 blePermissionStatus = resolvedHeartRateBlePermissionStatus,
                 scannerState = heartRateScannerState,
                 scannerCandidates = heartRateDeviceCandidates,
+                scanActive = heartRateScanActive,
                 savedDeviceIdentifier = trainingPreferencesState.heartRateSettings.savedDeviceIdentifier,
                 savedDeviceDisplayName = trainingPreferencesState.heartRateSettings.savedDeviceDisplayName,
                 scanFinishedWithoutDevices = heartRateScanFinishedWithoutDevices

@@ -269,9 +269,38 @@ class TrainingPreferencesUiStateTest {
         )
 
         assertEquals(HeartRateDevicePickerStatus.SCANNING, state.status)
+        assertTrue(state.scanActive)
         assertFalse(state.canStartScan)
         assertTrue(state.canStopScan)
         assertTrue(state.body.contains("扫描窗口约 12 秒"))
+    }
+
+    @Test
+    fun heartRateDevicePickerKeepsScanningDuringActiveNonHrsResults() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.DEVICE_FOUND,
+                message = "found non-HRS"
+            ),
+            scannerCandidates = listOf(
+                BleHeartRateDeviceCandidate(
+                    identifier = "AA:BB:CC:DD:EE:FF",
+                    displayName = "Keyboard",
+                    rssi = -30,
+                    advertisesHeartRateService = false
+                )
+            ),
+            scanActive = true
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SCANNING, state.status)
+        assertTrue(state.scanActive)
+        assertTrue(state.canStopScan)
+        assertFalse(state.canStartScan)
+        assertTrue(state.devices.isEmpty())
+        assertTrue(state.hrsCandidates.isEmpty())
     }
 
     @Test
@@ -309,6 +338,62 @@ class TrainingPreferencesUiStateTest {
     }
 
     @Test
+    fun heartRateDevicePickerRetainsHeartRateCandidatesAfterTimeout() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.STOPPED,
+                message = "Scan window ended"
+            ),
+            scannerCandidates = listOf(
+                BleHeartRateDeviceCandidate(
+                    identifier = "D8:F0:42:01:90:D7",
+                    displayName = "HUAWEI Band HR-OD7",
+                    rssi = -46,
+                    advertisesHeartRateService = true
+                )
+            ),
+            scanFinishedWithoutDevices = true
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.DEVICES_FOUND, state.status)
+        assertFalse(state.scanActive)
+        assertTrue(state.canStartScan)
+        assertFalse(state.canStopScan)
+        assertEquals(1, state.hrsCandidates.size)
+        assertEquals("HUAWEI Band HR-OD7", state.devices.single().displayName)
+        assertTrue(state.body.contains("仍可选择"))
+    }
+
+    @Test
+    fun heartRateDevicePickerRetainsHeartRateCandidatesAfterManualStop() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.STOPPED,
+                message = "BLE HRS provider stopped"
+            ),
+            scannerCandidates = listOf(
+                BleHeartRateDeviceCandidate(
+                    identifier = "D8:F0:42:01:90:D7",
+                    displayName = "HUAWEI Band HR-OD7",
+                    rssi = -46,
+                    advertisesHeartRateService = true
+                )
+            ),
+            scanFinishedWithoutDevices = false
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.DEVICES_FOUND, state.status)
+        assertFalse(state.scanActive)
+        assertTrue(state.canStartScan)
+        assertEquals(1, state.hrsCandidates.size)
+        assertTrue(state.body.contains("扫描已停止"))
+    }
+
+    @Test
     fun heartRateDevicePickerShowsNoDevicesAfterTimeoutWithoutCandidates() {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
@@ -322,6 +407,8 @@ class TrainingPreferencesUiStateTest {
 
         assertEquals(HeartRateDevicePickerStatus.NO_DEVICES_FOUND, state.status)
         assertTrue(state.canStartScan)
+        assertFalse(state.canStopScan)
+        assertTrue(state.hrsCandidates.isEmpty())
         assertTrue(state.body.contains("没有找到心率设备"))
         assertTrue(state.body.contains("心率广播模式"))
     }

@@ -8,13 +8,18 @@
 
 本轮在 `心率与设备` 设置卡片中新增设备来源状态和用户主动扫描 / 选择设备流程。
 
+- Review fix：设备选择 UI state 现在明确拆分 `scanActive`、HRS candidates 和 source status，不再只由 provider 最新事件决定列表和按钮状态。
+- Provider scan 使用 BLE `ScanFilter` 限定 Heart Rate Service `0x180D`，减少 non-HRS result 干扰。
 - 心率显示关闭时不显示可触发扫描的入口，不触发 scan。
 - 未授权蓝牙权限时不扫描，继续引导到 E16-6 的权限 rationale / runtime permission flow。
 - 蓝牙关闭或不可用时显示 `设备来源：蓝牙关闭`，扫描按钮 disabled。
 - 蓝牙权限允许后，用户必须点击 `扫描心率设备` 才会启动 BLE scan。
 - 扫描窗口为 12 秒；手动停止、timeout、关闭心率、权限丢失或离开设置页都会停止 scanner。
 - 扫描期间显示 `设备来源：扫描中`、`正在扫描` 和 `停止扫描`。
+- 扫描期间即使 provider 收到 non-HRS result，UI 仍保持 `扫描中` / `停止扫描`，不会退回 idle。
 - 候选列表只展示广播标准心率服务 `0x180D` 的设备；列表展示 display name、遮蔽后的 identifier、RSSI / 信号未知和 `广播标准心率服务 0x180D`。
+- 已发现 HRS 候选后，列表持续可选；12 秒 timeout 或手动停止后，如果已有 HRS candidates，状态保持 `devicesFound` 并保留列表。
+- 12 秒 timeout 后如果没有 HRS candidates，显示 `noDevicesFound`；手动停止且没有 HRS candidates 时按当前 UX 回到 idle / no source，不显示假候选。
 - 选择设备后只保存 `bleHeartRateDeviceIdentifier` / `bleHeartRateDeviceDisplayName`。
 - 已选择设备显示 `已选择设备 / 可用于后续连接` 同等文案，并保留清除已保存设备入口。
 - 清除后回到未连接源 / 待选择设备状态。
@@ -78,8 +83,12 @@ Focused tests 覆盖：
 - 未授权时不能扫描。
 - 蓝牙关闭时不能扫描。
 - scan start -> scanning state。
+- active scan 期间只有 non-HRS results -> 仍保持 scanning / stop scan。
 - HRS candidates -> devicesFound state。
+- HRS found then timeout -> retained devicesFound list。
+- manual stop after HRS candidates -> retained devicesFound list。
 - no candidates timeout -> noDevicesFound state。
+- provider scan source boundary -> uses Heart Rate Service `0x180D` `ScanFilter`。
 - select device -> selected state / DataStore identifier + display name boundary。
 - clear selection -> idle no source state。
 - scan failure -> scanFailed state。
