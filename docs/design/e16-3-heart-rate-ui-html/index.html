@@ -754,16 +754,29 @@
       z-index: 30;
       left: 244px;
       top: 112px;
-      width: 118px;
-      min-height: 42px;
+      width: fit-content;
+      min-width: 104px;
+      max-width: calc(100% - 24px);
+      min-height: 44px;
       display: grid;
       gap: 0;
-      border: 1px solid rgba(255,255,255,0.22);
+      --capsule-rgb: 31, 42, 54;
+      --capsule-text: #F8FBFF;
+      --capsule-edge: rgba(255, 255, 255, 0.30);
+      --capsule-accent: #F8FBFF;
+      --capsule-glow: rgba(0, 0, 0, 0.32);
+      border: 1px solid var(--capsule-edge);
       border-radius: 999px;
-      background: rgba(31, 42, 54, 0.94);
-      color: var(--neutral-50);
-      box-shadow: 0 14px 34px rgba(0,0,0,0.30);
-      backdrop-filter: blur(14px);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.34), rgba(255,255,255,0.08) 44%, rgba(255,255,255,0.18)),
+        rgba(var(--capsule-rgb), 0.62);
+      color: var(--capsule-text);
+      box-shadow:
+        0 16px 40px var(--capsule-glow),
+        inset 0 1px 0 rgba(255,255,255,0.38),
+        inset 0 -12px 26px rgba(255,255,255,0.055);
+      backdrop-filter: blur(20px) saturate(1.45);
+      -webkit-backdrop-filter: blur(20px) saturate(1.45);
       overflow: hidden;
       user-select: none;
       touch-action: none;
@@ -777,35 +790,84 @@
     .hr-capsule.dragging {
       transform: scale(1.03);
       border-color: rgba(101, 169, 255, 0.82);
-      box-shadow: 0 18px 44px rgba(0,0,0,0.36);
+      box-shadow:
+        0 20px 48px rgba(0,0,0,0.38),
+        0 0 0 4px rgba(101, 169, 255, 0.12),
+        inset 0 1px 0 rgba(255,255,255,0.44);
     }
 
     .hr-capsule.expanded {
-      width: 232px;
+      width: 258px;
+      max-width: calc(100% - 24px);
       border-radius: 18px;
     }
 
     .keyboard-on .hr-capsule.expanded {
-      width: 210px;
+      width: 224px;
     }
 
-    .hr-capsule.zone-low { background: rgba(71, 88, 106, 0.96); }
-    .hr-capsule.zone-warmup { background: rgba(54, 127, 214, 0.96); }
-    .hr-capsule.zone-fat { background: rgba(47, 191, 143, 0.96); color: #071511; }
-    .hr-capsule.zone-aerobic { background: rgba(221, 174, 42, 0.98); color: #1c1403; }
-    .hr-capsule.zone-anaerobic { background: rgba(242, 107, 79, 0.98); }
-    .hr-capsule.zone-limit { background: rgba(216, 75, 75, 0.98); }
-    .hr-capsule.zone-over { background: rgba(122, 17, 24, 0.98); }
-    .hr-capsule.state-warn { background: rgba(111, 88, 46, 0.96); }
-    .hr-capsule.state-error { background: rgba(82, 53, 59, 0.96); }
+    .hr-capsule.zone-low {
+      --capsule-rgb: 63, 80, 99;
+      --capsule-edge: rgba(215, 228, 241, 0.34);
+      --capsule-accent: #E6EEF6;
+    }
+
+    .hr-capsule.zone-warmup {
+      --capsule-rgb: 42, 100, 174;
+      --capsule-edge: rgba(141, 194, 255, 0.42);
+      --capsule-accent: #9ED0FF;
+    }
+
+    .hr-capsule.zone-fat {
+      --capsule-rgb: 38, 137, 106;
+      --capsule-edge: rgba(143, 238, 203, 0.42);
+      --capsule-accent: #B9F5DE;
+    }
+
+    .hr-capsule.zone-aerobic {
+      --capsule-rgb: 150, 114, 28;
+      --capsule-edge: rgba(248, 215, 116, 0.46);
+      --capsule-accent: #FFE59A;
+    }
+
+    .hr-capsule.zone-anaerobic {
+      --capsule-rgb: 178, 75, 47;
+      --capsule-edge: rgba(255, 169, 127, 0.44);
+      --capsule-accent: #FFC2A3;
+    }
+
+    .hr-capsule.zone-limit {
+      --capsule-rgb: 160, 45, 48;
+      --capsule-edge: rgba(255, 132, 132, 0.48);
+      --capsule-accent: #FFC1C1;
+    }
+
+    .hr-capsule.zone-over {
+      --capsule-rgb: 84, 9, 17;
+      --capsule-edge: rgba(255, 96, 108, 0.58);
+      --capsule-accent: #FFD5D8;
+      --capsule-glow: rgba(122, 17, 24, 0.42);
+    }
+
+    .hr-capsule.state-warn {
+      --capsule-rgb: 99, 75, 38;
+      --capsule-edge: rgba(238, 194, 117, 0.42);
+      --capsule-accent: #F4D092;
+    }
+
+    .hr-capsule.state-error {
+      --capsule-rgb: 66, 49, 57;
+      --capsule-edge: rgba(205, 183, 193, 0.34);
+      --capsule-accent: #E7DDE2;
+    }
 
     .capsule-row {
-      min-height: 42px;
+      min-height: 44px;
       display: grid;
-      grid-template-columns: 10px 1fr;
-      gap: 8px;
+      grid-template-columns: 8px max-content;
+      gap: 10px;
       align-items: center;
-      padding: 8px 12px;
+      padding: 9px 15px;
       pointer-events: none;
     }
 
@@ -813,21 +875,24 @@
       width: 8px;
       height: 8px;
       border-radius: 999px;
-      background: currentColor;
-      opacity: 0.85;
+      background: var(--capsule-accent);
+      box-shadow:
+        0 0 0 4px rgba(255,255,255,0.10),
+        0 0 16px rgba(255,255,255,0.14);
+      opacity: 0.96;
     }
 
     .hr-main {
-      min-width: 0;
+      min-width: max-content;
       display: grid;
       gap: 1px;
     }
 
     .hr-label {
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-size: 12px;
+      overflow: visible;
+      text-overflow: clip;
+      font-size: 13px;
       line-height: 1.1;
       font-weight: 900;
     }
@@ -845,6 +910,15 @@
 
     .hr-capsule.expanded .hr-sub {
       display: block;
+    }
+
+    .hr-capsule.expanded .capsule-row {
+      grid-template-columns: 10px minmax(0, 1fr);
+      padding: 10px 13px 8px;
+    }
+
+    .hr-capsule.expanded .hr-main {
+      min-width: 0;
     }
 
     .capsule-detail {
@@ -1477,15 +1551,15 @@
     function capsuleSize() {
       const rect = heartCapsule.getBoundingClientRect();
       return {
-        width: rect.width || (state.expanded ? 232 : 118),
-        height: rect.height || (state.expanded ? 146 : 42)
+        width: rect.width || (state.expanded ? 258 : 156),
+        height: rect.height || (state.expanded ? 154 : 44)
       };
     }
 
     function setCapsulePosition(x, y) {
       const size = capsuleSize();
-      const maxX = phoneScreen.clientWidth - size.width - 12;
-      const maxY = phoneScreen.clientHeight - size.height - 16;
+      const maxX = Math.max(12, phoneScreen.clientWidth - size.width - 12);
+      const maxY = Math.max(46, phoneScreen.clientHeight - size.height - 16);
       state.position.x = Math.max(12, Math.min(maxX, x));
       state.position.y = Math.max(46, Math.min(maxY, y));
       heartCapsule.style.left = `${state.position.x}px`;
@@ -1548,7 +1622,7 @@
     function findSafeY(y) {
       const size = capsuleSize();
       const minY = 82;
-      const maxY = phoneScreen.clientHeight - size.height - 48;
+      const maxY = Math.max(minY, phoneScreen.clientHeight - size.height - 48);
       const unsafe = fixedUnsafeRects();
       const candidates = [y, minY, 96, 126, 160, 198, 240, 290, 336, 382, 430, 486, maxY];
       unsafe.forEach(rect => {
@@ -1670,6 +1744,7 @@
       const c = capsuleRectAt();
       const unsafe = fixedUnsafeRects();
       const overlaps = unsafe.filter(r => intersects(c, r, 6)).map(r => r.label);
+      const labelFits = state.expanded || hrLabel.scrollWidth <= hrLabel.clientWidth + 1;
       const data = {
         scenario: state.scenario,
         heartRateState: state.hr,
@@ -1677,14 +1752,22 @@
           mode: state.expanded ? "expanded" : "collapsed",
           side: state.side,
           dragging: state.dragging,
-          rect: c
+          rect: c,
+          material: "frosted glass",
+          sizing: state.expanded ? "fixed detail panel" : "content-hugging"
+        },
+        textIntegrity: {
+          label: hrLabel.textContent,
+          scrollWidth: Math.round(hrLabel.scrollWidth),
+          clientWidth: Math.round(hrLabel.clientWidth),
+          collapsedLabelFits: labelFits
         },
         dragThresholdPx: 10,
         clickHit: "capsule consumes tap; no pointer-through",
         snap: "left/right safe edge on release",
         unsafeAreaExclusion: unsafe.map(r => r.label),
         overlaps,
-        pass: overlaps.length === 0
+        pass: overlaps.length === 0 && labelFits
       };
       evidenceBox.textContent = JSON.stringify(data, null, 2);
       window.__lastHeartRateEvidence = data;

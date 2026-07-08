@@ -15,6 +15,8 @@ Open the HTML in a browser. The prototype is interactive and supports:
 - bpm + age zone states
 - bpm-only state when age is missing
 - collapsed / expanded capsule
+- content-hugging collapsed width, so normal labels such as `低强度 88 bpm` and `超过上限 188 bpm` render in full
+- restrained frosted-glass material for collapsed and expanded states
 - tap to expand / collapse
 - drag with movement threshold
 - snap-left / snap-right safe-edge behavior
@@ -39,6 +41,8 @@ This is the only current recommended direction. The capsule is a TrainFlow app-s
 - Drag begins only after a visible movement threshold (`10px` in the prototype) to avoid confusing a light tap with drag.
 - While the capsule covers part of the page, the tap target is the capsule itself; taps do not pass through to underlying buttons.
 - Releasing after drag snaps the capsule to the left or right safe edge.
+- The collapsed capsule hugs its primary text instead of using a fixed narrow width. Regular user-facing labels must not be ellipsized.
+- Snap placement recalculates after label, state, mode, or width changes; right-snap grows inward from the right edge and left-snap grows inward from the left edge.
 - When the confirm-record keyboard area is visible, the prototype forces the capsule back to compact/collapsed mode because the full expanded detail cannot fit safely between confirm controls and the keyboard.
 - The snap target recalculates safe Y placement and does not settle over:
   - fixed bottom primary action
@@ -80,6 +84,8 @@ The prototype includes all zone + bpm states:
 - `超过上限 188 bpm`
 
 Zone color follows the current zone. `超过上限` uses deep red as a visual-only prompt. It must not trigger sound, vibration, forced pause, medical alert wording, or training interruption.
+
+The current visual treatment uses a frosted-glass capsule: subtle blur, translucent material, a small colored dot, and a tinted border. The zone color should support quick recognition without turning heart rate into the dominant training-page visual.
 
 ### Bpm Without Age
 
@@ -145,10 +151,13 @@ Future Android implementation still needs separate stories for:
 - Android UI implementation
 - 720x1280 visual QA on real execution screens
 
+The HTML uses CSS `backdrop-filter` to express the intended glass material. Android follow-up may approximate the material based on Compose capability, performance, and API support; it should preserve the content-hugging width and safe snap behavior even if the final glass blur is simplified.
+
 ## Verification Checklist
 
 - Browser opens `index.html` and renders nonblank.
 - 720x1280 viewport renders the mobile prototype without horizontal overflow.
+- Collapsed labels render in full for normal states, including `低强度 88 bpm` and `超过上限 188 bpm`.
 - Tap toggles collapsed / expanded capsule.
 - Drag only starts after movement threshold.
 - Drag release snaps left or right.
