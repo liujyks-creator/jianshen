@@ -7,8 +7,8 @@ internal object BleHeartRatePermissionPlanner {
     fun requiredPermissions(apiLevel: Int = Build.VERSION.SDK_INT): List<String> {
         return if (apiLevel >= Build.VERSION_CODES.S) {
             listOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT
+                BLUETOOTH_SCAN_PERMISSION,
+                BLUETOOTH_CONNECT_PERMISSION
             )
         } else {
             listOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -26,6 +26,9 @@ internal object BleHeartRatePermissionPlanner {
         return trigger == BleHeartRatePermissionTrigger.EXPLICIT_USER_ACTION
     }
 }
+
+private const val BLUETOOTH_SCAN_PERMISSION = "android.permission.BLUETOOTH_SCAN"
+private const val BLUETOOTH_CONNECT_PERMISSION = "android.permission.BLUETOOTH_CONNECT"
 
 internal enum class BleHeartRatePermissionTrigger {
     APP_STARTUP,

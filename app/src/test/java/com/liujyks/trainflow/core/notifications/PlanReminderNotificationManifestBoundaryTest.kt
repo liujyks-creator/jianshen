@@ -7,12 +7,20 @@ import org.junit.Test
 
 class PlanReminderNotificationManifestBoundaryTest {
     @Test
-    fun manifestOnlyAddsOrdinaryNotificationPermissionForE71() {
+    fun manifestKeepsNotificationAndScopedBlePermissionBoundary() {
         val manifest = File("src/main/AndroidManifest.xml").readText()
 
         assertTrue(manifest.contains("android.permission.POST_NOTIFICATIONS"))
+        assertTrue(manifest.contains("android.permission.BLUETOOTH_SCAN"))
+        assertTrue(manifest.contains("android:usesPermissionFlags=\"neverForLocation\""))
+        assertTrue(manifest.contains("android.permission.BLUETOOTH_CONNECT"))
+        assertTrue(manifest.contains("android.permission.ACCESS_FINE_LOCATION"))
+        assertTrue(manifest.contains("android:maxSdkVersion=\"30\""))
         forbiddenPermissions.forEach { permission ->
-            assertFalse("Manifest must not request $permission", manifest.contains(permission))
+            assertFalse(
+                "Manifest must not request $permission",
+                manifest.contains("android:name=\"$permission\"")
+            )
         }
         assertTrue(manifest.contains("PlanReminderNotificationReceiver"))
         assertTrue(manifest.contains("android:exported=\"false\""))
@@ -64,8 +72,8 @@ class PlanReminderNotificationManifestBoundaryTest {
             "android.permission.ACTIVITY_RECOGNITION",
             "android.permission.BLUETOOTH",
             "android.permission.BLUETOOTH_ADMIN",
-            "android.permission.BLUETOOTH_CONNECT",
-            "android.permission.BLUETOOTH_SCAN",
+            "android.permission.SYSTEM_ALERT_WINDOW",
+            "android.settings.action.MANAGE_OVERLAY_PERMISSION",
             "android.permission.health.READ_HEART_RATE",
             "android.permission.health.READ_EXERCISE",
             "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
