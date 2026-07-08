@@ -90,9 +90,9 @@ class TrainingPreferencesUiStateTest {
 
         assertTrue(disabledCopy.contains("默认关闭"))
         assertTrue(disabledCopy.contains("不显示胶囊、不扫描、不连接、不记录"))
-        assertTrue(disabledCopy.contains("当前阶段只保存显示偏好"))
+        assertTrue(disabledCopy.contains("无训练时只显示不记录"))
         assertTrue(disabledCopy.contains("训练记录采样另拆后续任务"))
-        assertTrue(disabledCopy.contains("本轮不请求权限"))
+        assertTrue(disabledCopy.contains("主动点击授权入口并看过说明"))
         assertTrue(disabledCopy.contains("不使用系统 overlay"))
         assertTrue(disabledCopy.contains("不诊断疾病"))
         assertTrue(disabledCopy.contains("不自动中断训练"))
@@ -110,7 +110,9 @@ class TrainingPreferencesUiStateTest {
         assertEquals("已启用", state.statusLabel)
         assertEquals("已启用显示偏好；后续可选择设备。", state.statusSummary)
         assertEquals("未连接源 / 待选择设备。", state.sourceSummary)
-        assertEquals("开启后仅表示已启用显示偏好；不会自动扫描、连接或申请权限。", state.enabledBoundaryCopy)
+        assertEquals("开启后仍不会自动扫描或连接；选择设备会在后续任务实现。", state.enabledBoundaryCopy)
+        assertEquals(HeartRateBlePermissionStatus.NOT_REQUESTED, state.blePermissionStatus)
+        assertTrue(state.canPrepareBlePermission)
         assertFalse(state.canClearSavedDevice)
     }
 
@@ -125,6 +127,94 @@ class TrainingPreferencesUiStateTest {
         assertEquals(
             "已保存设备名称：HUAWEI Band HR-OD7。本轮不会自动扫描或连接。",
             state.sourceSummary
+        )
+    }
+
+    @Test
+    fun heartRatePermissionFlowShowsRationaleBeforeRequest() {
+        val enabled = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceDisplayName = null
+        )
+
+        assertTrue(enabled.canPrepareBlePermission)
+        assertFalse(enabled.showBlePermissionRationale)
+        assertFalse(enabled.canRequestBlePermission)
+
+        val rationale = enabled.prepareBlePermissionRationale()
+
+        assertEquals(HeartRateBlePermissionStatus.RATIONALE_VISIBLE, rationale.blePermissionStatus)
+        assertTrue(rationale.showBlePermissionRationale)
+        assertTrue(rationale.canRequestBlePermission)
+        assertTrue(rationale.blePermissionRationaleBullets.any { text -> text.contains("查找并连接") })
+        assertTrue(rationale.blePermissionRationaleBullets.any { text -> text.contains("不使用系统悬浮窗") })
+        assertTrue(rationale.blePermissionRationaleBullets.any { text -> text.contains("无训练时只显示不记录") })
+        assertTrue(rationale.blePermissionRationaleBullets.any { text -> text.contains("不替代医生建议") })
+    }
+
+    @Test
+    fun disabledHeartRatePermissionFlowCannotRequest() {
+        val disabled = heartRateSettingsUiState(
+            enabled = false,
+            savedDeviceDisplayName = null
+        )
+
+        assertFalse(disabled.canPrepareBlePermission)
+        assertFalse(disabled.prepareBlePermissionRationale().showBlePermissionRationale)
+        assertEquals(HeartRateBlePermissionStatus.NOT_REQUESTED, disabled.blePermissionStatus)
+    }
+
+    @Test
+    fun heartRatePermissionResultCopyCoversGrantedDeniedAndSettingsBoundary() {
+        val granted = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceDisplayName = null,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
+        )
+        val denied = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceDisplayName = null,
+            blePermissionStatus = HeartRateBlePermissionStatus.DENIED
+        )
+        val permanentlyDenied = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceDisplayName = null,
+            blePermissionStatus = HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+        )
+
+        assertTrue(granted.blePermissionStatusCopy.contains("蓝牙权限已允许 / 可选择设备"))
+        assertTrue(granted.blePermissionStatusCopy.contains("不扫描、不连接"))
+        assertTrue(denied.blePermissionStatusCopy.contains("权限未赋予"))
+        assertTrue(denied.blePermissionStatusCopy.contains("稍后再次点击"))
+        assertTrue(permanentlyDenied.blePermissionStatusCopy.contains("系统设置"))
+        assertFalse(permanentlyDenied.blePermissionStatusCopy.contains("开始扫描"))
+    }
+
+    @Test
+    fun heartRatePermissionStatusResolverDoesNotTreatSwitchOnAsRequest() {
+        assertEquals(
+            HeartRateBlePermissionStatus.NOT_REQUESTED,
+            resolveHeartRateBlePermissionStatus(
+                displayEnabled = true,
+                allPermissionsGranted = false,
+                requestResult = HeartRateBlePermissionStatus.NOT_REQUESTED
+            )
+        )
+        assertEquals(
+            HeartRateBlePermissionStatus.GRANTED,
+            resolveHeartRateBlePermissionStatus(
+                displayEnabled = true,
+                allPermissionsGranted = true,
+                requestResult = HeartRateBlePermissionStatus.NOT_REQUESTED
+            )
+        )
+        assertEquals(
+            HeartRateBlePermissionStatus.NOT_REQUESTED,
+            resolveHeartRateBlePermissionStatus(
+                displayEnabled = false,
+                allPermissionsGranted = true,
+                requestResult = HeartRateBlePermissionStatus.GRANTED
+            )
         )
     }
 

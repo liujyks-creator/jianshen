@@ -1753,6 +1753,36 @@ stepsCompleted:
 - 明确后续拆分：E16-5 settings / opt-in UI、E16-6 permission request flow、E16-7 device picker / source status、E16-8 app-shell floating capsule、E16-9 `HeartRateState` -> capsule mapping、E16-10 stale / offline policy、E16-11 recording model / 1s sampling persistence、E16-12 analysis / zones / post-workout summary。
 - 本 story 未改 Android Kotlin、production manifest、Gradle、Room、session record、records/history/trends、`WorkoutCommand`、`WorkoutEvent`、TimedWorkoutEngine、StrengthWorkoutEngine、TimerDial、声音、震动或通知；未恢复旧心率卡片、`-- bpm`、`未获取心率`、手动心率输入或旧平均心率趋势。
 
+### Story E16-6: Heart-rate BLE permission request flow
+
+**状态:** Implemented
+
+作为已开启心率显示的用户，
+我想在准备连接设备前先看到蓝牙权限用途说明，并由我主动触发系统授权，
+以便 TrainFlow 只在明确同意后获得后续设备选择所需权限。
+
+**验收标准:**
+
+- Then 默认关闭状态不请求权限。
+- Then 开启 `心率显示` switch 后仍不自动请求权限。
+- Then 用户主动点击 `准备连接设备` 后先展示 App 内中文 rationale。
+- Then rationale 覆盖查找并连接蓝牙心率设备、不使用系统悬浮窗、不后台无限扫描、不无提示扫描、无训练只显示不记录、训练记录采样另拆、非医疗边界。
+- Then Android 12+ 使用 `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` runtime permission。
+- Then Android 11 及以下仅按 planner 使用 `ACCESS_FINE_LOCATION maxSdkVersion=30` 作为蓝牙扫描兼容 fallback，不写成定位能力。
+- Then granted 后显示 `蓝牙权限已允许 / 可选择设备` 或等同文案。
+- Then denied 后显示 `权限未赋予` 并说明可稍后重试。
+- Then permanently denied / 不再询问可检测时提示去系统设置开启。
+- Then 本 story 不扫描、不连接、不展示设备列表、不写训练记录、不恢复旧心率 UI。
+
+**交付结果:**
+
+- 新增 `docs/testing/e16-6-heart-rate-permission-request-flow.md`。
+- 生产 manifest 新增 `BLUETOOTH_SCAN`（`neverForLocation`）、`BLUETOOTH_CONNECT` 和 `ACCESS_FINE_LOCATION maxSdkVersion=30`。
+- 设置页 `心率与设备` 卡片新增两段式权限入口：`准备连接设备` 显示 rationale，`授权蓝牙权限` 才调用 Activity Result permission launcher。
+- UI state 覆盖未请求、rationale visible、granted、denied、permanently denied 状态。
+- Focused tests 覆盖默认关闭不请求、开启后未授权、点击前只显示 rationale、granted / denied 文案、关闭后不请求，以及 manifest 只允许本 story 的 scoped BLE permissions。
+- 本 story 未做 BLE scan、device picker、GATT connect、训练页浮动胶囊、session record、Room / records / history / trends、`WorkoutCommand` / `WorkoutEvent`、训练引擎、TimerDial、声音、震动、通知或 cue。
+
 ### Story E11.3: 放弃首版心率显示、录入和统计
 
 **状态:** Implemented as removal / rollback; no first-version heart-rate display, manual input, or heart-rate statistics
@@ -2697,15 +2727,16 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 25. E16-3 / E16-3a：Heart Rate UI HTML Visual Planning；E16-3 初版新增 HTML 高保真视觉入口和 README，提供顶部状态 pill、当前卡片角标、底部微状态 3 个变体作为探索。后续讨论确认顶部 pill 有布局冲突风险，当前推荐已改为 App 内可拖动浮动心率胶囊，并新增 `docs/design/e16-heart-rate-floating-capsule-decision.md`；E16-3a 已完成浮动胶囊 HTML 修订，覆盖拖动吸附、安全区、连接 / 数据状态、区间 + bpm、深红超上限、未训练只显示不记录、训练中 1 秒采样记录边界和 720x1280 no-overlap evidence。（Visual planning complete; Android implementation still split later）
 26. E16-4：Heart-rate opt-in / settings / permission rationale planning；新增 `docs/testing/e16-4-heart-rate-opt-in-settings-planning.md`，明确默认关闭、设置页显式开启、开启前 rationale、BLE 权限只在用户主动开启 / 选择设备 / 重新扫描后触发、不使用系统 overlay 权限、未训练只显示不记录、设备偏好只保存 identifier / display name、关闭后不扫描 / 不连接 / 不记录、异常状态文案、非医疗文案和 E16-5 之后实现拆分。（Docs-only planning complete）
 27. E16-5：Heart-rate settings / opt-in UI implementation；在现有 Android 设置页新增 `心率与设备` 卡片和 `heartRateDisplayEnabled` DataStore 显式开关，默认关闭；关闭后明确不显示胶囊、不扫描、不连接、不记录；开启后仅显示已启用显示偏好、后续可选择设备和未连接源 / 待选择设备，不请求权限、不扫描、不连接、不接训练页浮动胶囊、不记录心率。（Implemented）
-28. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
-29. E12.1：真实记录与基础统计。（Implemented）
-30. E12.2a：非心率历史图表与聚合趋势。（Implemented）
-31. E12.3：历史记录清理。（Implemented）
-32. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
-33. E12.2b：力量同类 set 趋势。（Implemented）
-34. E12.4：Records / trends polish planning and visual gate；审计现有记录页数据能力、legacy/v2 timed composition 和 strength trend 语义，提出 records IA、chart axis / legend / empty state 和 implementation split。（Planning / visual gate complete）
-35. E12-1：Records data semantics + v2 interpretation foundation；history / record mapper 可解释 timed composition v2 stageGroup / target / boundary rest / rest extension，v2 timed trend key 与 legacy timed key 分离，strength comparable trend 不变。（Implemented; verified）
-36. E12-2：Records IA / chart UI polish；记录页重排为概览摘要 -> 筛选区 -> 最近训练 -> 选中详情 -> 趋势区，图表补 X/Y 轴、单位、Legend、空/不足状态，recent/detail 可区分 completed / abandoned / skipped / pause / rest extension、legacy timed、timed composition v2 与 strength。（Implemented; verified）
+28. E16-6：Heart-rate BLE permission request flow；在设置页为已开启心率显示的用户提供 `准备连接设备` / `授权蓝牙权限` 两段式入口，先展示中文 rationale，再触发 Android runtime permission request；production manifest 新增 scoped BLE permissions 与 Android 11 及以下 scan compatibility fallback，但仍不扫描、不连接、不展示设备列表、不记录心率。（Implemented）
+29. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
+30. E12.1：真实记录与基础统计。（Implemented）
+31. E12.2a：非心率历史图表与聚合趋势。（Implemented）
+32. E12.3：历史记录清理。（Implemented）
+33. E12.2c：计时同类阶段 / 轮次与额外休息趋势。（Implemented）
+34. E12.2b：力量同类 set 趋势。（Implemented）
+35. E12.4：Records / trends polish planning and visual gate；审计现有记录页数据能力、legacy/v2 timed composition 和 strength trend 语义，提出 records IA、chart axis / legend / empty state 和 implementation split。（Planning / visual gate complete）
+36. E12-1：Records data semantics + v2 interpretation foundation；history / record mapper 可解释 timed composition v2 stageGroup / target / boundary rest / rest extension，v2 timed trend key 与 legacy timed key 分离，strength comparable trend 不变。（Implemented; verified）
+37. E12-2：Records IA / chart UI polish；记录页重排为概览摘要 -> 筛选区 -> 最近训练 -> 选中详情 -> 趋势区，图表补 X/Y 轴、单位、Legend、空/不足状态，recent/detail 可区分 completed / abandoned / skipped / pause / rest extension、legacy timed、timed composition v2 与 strength。（Implemented; verified）
 37. E13：E13.1 声音提醒与音频共存已实现；E13 sound cue asset / audio coexistence audit and QA gate 已完成；E15-1 已修复力量休息最后 N 秒 beep 与 `auto_after_rest` 休息后自动开始回归；E15-1a review fix 已将 `auto_after_rest` 休息自然结束后自动进入下一组 active set 的 `STAGE_BELL` 请求限定到 tick 驱动的 rest -> active set 路径，初始 prepare、手动开始、提前开始和 `manual_start` prepare 路径均不响铃；E15-1b 计划补齐力量计划编辑页中的计划级本组计时模式设置，使旧计划可通过显式编辑保存切换 `manual_start` / `auto_after_rest`，但全局训练偏好仍不运行时覆盖旧计划。蓝牙 / 扬声器真机 smoke 仍待继续补证据，固定女声 cue、力量完成 bell 和力量 haptics parity 留给后续。
 38. E14.4-2b：Timed composition editor and TimerDial ring semantics visual / semantic gate + E14.4-2b-1 visual prototype / mock + E14.4-2b-2 data model decision retained；E14.4-2b-3 restart serializer / model and editor adapter foundation implemented；E14.4-2b-4 editor UI visual/code gate implemented；E14.4-2b-5 engine timeline planning gate docs-only complete；E14.4-2b-5a timeline adapter model/tests implemented adapter-only and pushed as `6888e31`；E14.4-2b-5b engine integration planning gate docs-only complete；E14.4-2b-5b-1 engine adapter bridge tests added as a test-first red gate；E14.4-2b-5b-2 minimum engine bridge implemented；E14.4-2b-5b-3 v2 start gate enablement + smoke implemented；E14.4-2b-5c session record compatibility tests / smoke review implemented；E14.5 TimerDial continuous progress fix complete；E14.4-2b-6 TimerDial mapping planning gate docs-only complete；E14.4-2b-6a TimerDial mapping model/state tests complete；E14.4-2b-6b production mapping implementation complete；E14.4-2b-6c smoke / visual QA review gate complete；E14.4-2b closeout complete。
 39. E14.6：Real-device TimerDial feedback planning gate，拆出 E14.6-1 progress rebound fix、E14.6-2 completion recap page redesign、E14.6-3 stage style system planning / design。（Planning complete）
@@ -2750,7 +2781,7 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、健康数据边界、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：原条件下 Band 9 + 非华为 Android + 华为运动健康连接时仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据。E16 广播开启 retest 在 18:46 用户截图中已形成正向证据链：`HUAWEI Band HR-OD7` 广播 `0x180D`、连接同一地址、发现 `0x180D` / `0x2A37 notify`、CCCD 写入成功并收到 bpm notify；E16 已 reviewed / merged 到 main，merge commit `bbd4296`。E16-1 已完成 debug adapter spike，E16-2 已完成 production-capable provider / state / permission / lifecycle / selected-device preference 地基并通过 2026-07-07 真机 smoke：debug entry 修复、HR Broadcast Smoke 可见但不污染首页、Band 9 scan / selected / connecting / waiting / notify / live bpm `84-91` / stop 均有截图结论。E16-3 初版 HTML 高保真视觉规划推荐顶部 pill，但该方向已被后续浮动胶囊决策取代；E16-3a App 内可拖动浮动心率胶囊 HTML 视觉修订已完成，merge commit `24c84c7`。E16-4 已完成 opt-in / settings / permission rationale / privacy / non-medical docs-only planning。E16-5 已完成 settings / opt-in UI：设置页新增 `心率与设备` 卡片，`heartRateDisplayEnabled` 默认关闭并可显式开关，关闭后不显示胶囊、不扫描、不连接、不记录，开启后仅表示已启用显示偏好 / 后续可选择设备，不请求权限、不扫描、不连接、不接训练页胶囊、不写记录。未来 Android 实现仍应按 E16-6 permission request flow、E16-7 device picker / source status、E16-8 app-shell floating capsule、E16-9 state mapping、E16-10 stale / offline policy、E16-11 recording model、E16-12 analysis 拆分。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或旧平均心率趋势。
+E11.1 Heart-rate source boundary / unavailable state refinement 已实现并保留为底层边界；Android `HeartRateState` / `HeartRateProvider` 可表达来源状态，但当前生产 UI、历史和统计不消费它。E11.2a 已完成 debug-only smoke：原条件下 Band 9 + 非华为 Android + 华为运动健康连接时仍无法发现华为设备，没有 BLE HRS / `0x2A37 notify` 物理证据。E16 广播开启 retest 在 18:46 用户截图中已形成正向证据链：`HUAWEI Band HR-OD7` 广播 `0x180D`、连接同一地址、发现 `0x180D` / `0x2A37 notify`、CCCD 写入成功并收到 bpm notify；E16 已 reviewed / merged 到 main，merge commit `bbd4296`。E16-1 已完成 debug adapter spike，E16-2 已完成 production-capable provider / state / permission / lifecycle / selected-device preference 地基并通过 2026-07-07 真机 smoke：debug entry 修复、HR Broadcast Smoke 可见但不污染首页、Band 9 scan / selected / connecting / waiting / notify / live bpm `84-91` / stop 均有截图结论。E16-3 初版 HTML 高保真视觉规划推荐顶部 pill，但该方向已被后续浮动胶囊决策取代；E16-3a App 内可拖动浮动心率胶囊 HTML 视觉修订已完成，merge commit `24c84c7`。E16-4 已完成 opt-in / settings / permission rationale / privacy / non-medical docs-only planning。E16-5 已完成 settings / opt-in UI，E16-6 已完成 BLE permission request flow：设置页只有在已开启心率显示并主动点击权限入口、看过 rationale 后才触发 runtime permission request，结果只回填 UI。未来 Android 实现仍应按 E16-7 device picker / source status、E16-8 app-shell floating capsule、E16-9 state mapping、E16-10 stale / offline policy、E16-11 recording model、E16-12 analysis 拆分。E11.3 已按用户测试反馈撤销首版心率显示、录入和统计：执行页不再显示心率卡片，不提供手动输入，历史页不显示心率占位或旧平均心率趋势。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
@@ -2766,7 +2797,7 @@ E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复
 下一轮建议按 E15 收口后的发布准备优先级进入：
 
 ```text
-E15 系列已收口：E15-5d 已 review / accepted / merged，merge commit `0fa28463e4c24bf039944402a209f8f55c922c1b`，story commit `d9875bd48cd3e51b560c677efc3f6d4440efc89a`，用户 APK 测试通过。后续开发者处理 E15 附近维护问题时，先读 `docs/testing/e15-maintenance-lessons-learned.md`，尤其是 1s / 2s short target route clock、力量休息 beep、auto-after-rest stage bell、selector 长中文、confirm-record 首屏、completed / abandoned sticky return、目标组颜色占位删除和力量执行短提示删除。E16 heart-rate broadcast retest 已合入 main（`bbd4296`），E16-1 debug adapter spike 和 E16-2 provider hardening 已完成且 E16-2 2026-07-07 真机 smoke 通过；E16-3a App 内可拖动浮动心率胶囊 HTML 视觉修订已合入（`24c84c7`），E16-4 opt-in / settings / permission rationale planning 已完成，E16-5 settings / opt-in UI 已实现。下一步若继续心率，应进入 E16-6 permission request flow，再按 device picker / source status、app-shell floating capsule、state mapping、stale / offline policy、recording model / 1s sampling persistence 和 analysis / zones 拆分；不要直接进入训练页 Android 胶囊或记录落库。继续保持不恢复心率卡片、未获取心率、手动心率输入或旧平均心率趋势，不恢复力量目标组颜色占位。
+E15 系列已收口：E15-5d 已 review / accepted / merged，merge commit `0fa28463e4c24bf039944402a209f8f55c922c1b`，story commit `d9875bd48cd3e51b560c677efc3f6d4440efc89a`，用户 APK 测试通过。后续开发者处理 E15 附近维护问题时，先读 `docs/testing/e15-maintenance-lessons-learned.md`，尤其是 1s / 2s short target route clock、力量休息 beep、auto-after-rest stage bell、selector 长中文、confirm-record 首屏、completed / abandoned sticky return、目标组颜色占位删除和力量执行短提示删除。E16 heart-rate broadcast retest 已合入 main（`bbd4296`），E16-1 debug adapter spike 和 E16-2 provider hardening 已完成且 E16-2 2026-07-07 真机 smoke 通过；E16-3a App 内可拖动浮动心率胶囊 HTML 视觉修订已合入（`24c84c7`），E16-4 opt-in / settings / permission rationale planning、E16-5 settings / opt-in UI 和 E16-6 permission request flow 均已实现。下一步若继续心率，应进入 E16-7 device picker / source status，再按 app-shell floating capsule、state mapping、stale / offline policy、recording model / 1s sampling persistence 和 analysis / zones 拆分；不要直接进入训练页 Android 胶囊或记录落库。继续保持不恢复心率卡片、未获取心率、手动心率输入或旧平均心率趋势，不恢复力量目标组颜色占位。
 ```
 
 E10.15 Motion Timing Rules 回看重点：

@@ -51,6 +51,8 @@ internal fun SettingsRoute(
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit,
     onHeartRateDisplayEnabledChanged: (Boolean) -> Unit,
+    onPrepareHeartRateBlePermission: () -> Unit,
+    onRequestHeartRateBlePermission: () -> Unit,
     onClearHeartRateDevicePreference: () -> Unit,
     onUiSkinChanged: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -95,6 +97,8 @@ internal fun SettingsRoute(
             HeartRatePreferencesCard(
                 uiState = uiState.heartRateSettings,
                 onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
+                onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
                 onClearHeartRateDevicePreference = onClearHeartRateDevicePreference
             )
         }
@@ -220,6 +224,8 @@ private fun StrengthPreferencesCard(
 private fun HeartRatePreferencesCard(
     uiState: HeartRateSettingsUiState,
     onHeartRateDisplayEnabledChanged: (Boolean) -> Unit,
+    onPrepareHeartRateBlePermission: () -> Unit,
+    onRequestHeartRateBlePermission: () -> Unit,
     onClearHeartRateDevicePreference: () -> Unit
 ) {
     SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.focus) {
@@ -239,6 +245,20 @@ private fun HeartRatePreferencesCard(
         StatusBlock(title = "非医疗说明", body = uiState.nonMedicalCopy)
         StatusBlock(title = "权限说明", body = uiState.permissionCopy)
         StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
+        StatusBlock(title = uiState.blePermissionStatusTitle, body = uiState.blePermissionStatusCopy)
+        if (uiState.showBlePermissionRationale) {
+            StatusBlock(
+                title = uiState.blePermissionRationaleTitle,
+                body = uiState.blePermissionRationaleBullets.joinToString("\n")
+            )
+            TextButton(onClick = onRequestHeartRateBlePermission) {
+                Text(text = uiState.blePermissionActionLabel)
+            }
+        } else if (uiState.enabled && uiState.canPrepareBlePermission) {
+            TextButton(onClick = onPrepareHeartRateBlePermission) {
+                Text(text = uiState.blePermissionActionLabel)
+            }
+        }
         Text(
             text = uiState.enabledBoundaryCopy,
             style = MaterialTheme.typography.bodyMedium,
@@ -447,6 +467,8 @@ private fun SettingsRoutePreview() {
             onEmphasisAnimationEnabledChanged = {},
             onStrengthSetTimerModeChanged = {},
             onHeartRateDisplayEnabledChanged = {},
+            onPrepareHeartRateBlePermission = {},
+            onRequestHeartRateBlePermission = {},
             onClearHeartRateDevicePreference = {},
             onUiSkinChanged = {}
         )

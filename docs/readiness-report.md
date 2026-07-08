@@ -40,6 +40,8 @@ stepsCompleted:
 
 > 2026-07-08 刷新：E16-5 Heart-rate settings / opt-in UI implementation 已实现，主文档为 `docs/testing/e16-5-heart-rate-settings-opt-in-ui.md`。当前 readiness 结论仍不是权限、设备选择、浮动胶囊或记录落库许可：本轮只在设置页提供 `心率与设备` 卡片和 `heartRateDisplayEnabled` 显式开关，默认关闭；开启后仅表示显示偏好已启用、后续可选择设备，未连接源 / 待选择设备；关闭后明确不显示胶囊、不扫描、不连接、不记录。生产 manifest 未新增 BLE / location / overlay 权限，App 不请求 runtime permission，不扫描、不连接、不写 session record，不恢复旧心率卡片、`未获取心率`、手动心率输入或平均心率趋势。后续仍需从 E16-6 permission request flow、E16-7 device picker / source status、E16-8 app-shell floating capsule、E16-11 recording model 和 E16-12 analysis 分 story 推进。
 
+> 2026-07-08 刷新：E16-6 Heart-rate BLE permission request flow 已实现，主文档为 `docs/testing/e16-6-heart-rate-permission-request-flow.md`。当前 readiness 结论仍不是设备选择、扫描、连接、浮动胶囊或记录落库许可：本轮仅新增 production manifest 中 Android 12+ `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` runtime permissions，以及 Android 11 及以下 `ACCESS_FINE_LOCATION maxSdkVersion=30` 蓝牙扫描兼容 fallback；设置页只有在用户已开启心率显示并主动点击 `准备连接设备` 后才显示 App 内 rationale，继续点击 `授权蓝牙权限` 才触发系统权限弹窗。默认关闭和仅开启 switch 都不会请求权限；权限允许 / 拒绝 / 可检测的不再询问状态只回填 UI 文案。仍不扫描、不连接、不展示设备列表、不接训练页胶囊、不写 session record、不改 Room / records / history / trends、不恢复旧心率 UI；E16-7 device picker / source status 仍需单独 story。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |
@@ -130,7 +132,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
-- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基并通过 2026-07-07 真机 smoke，E16-3a 已完成 App 内可拖动浮动心率胶囊 HTML 修订，E16-4 已完成 opt-in / settings / permission rationale / privacy / non-medical planning。进入真实生产心率前仍必须另拆 E16-5 settings / opt-in UI、E16-6 permission request flow、E16-7 device picker / source status、E16-8 capsule implementation、E16-9 state mapping、E16-10 stale / offline policy、E16-11 recording model 和 E16-12 analysis；不得直接进入训练页 UI 或记录落库。
+- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基并通过 2026-07-07 真机 smoke，E16-3a 已完成 App 内可拖动浮动心率胶囊 HTML 修订，E16-4 已完成 opt-in / settings / permission rationale / privacy / non-medical planning，E16-5 已完成 settings / opt-in UI，E16-6 已完成 BLE permission request flow。进入真实生产心率前仍必须另拆 E16-7 device picker / source status、E16-8 capsule implementation、E16-9 state mapping、E16-10 stale / offline policy、E16-11 recording model 和 E16-12 analysis；不得直接进入训练页 UI 或记录落库。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查

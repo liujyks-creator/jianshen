@@ -1,5 +1,11 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +36,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
+import com.liujyks.trainflow.core.health.BleHeartRatePermissionPlanner
+import com.liujyks.trainflow.core.health.BleHeartRatePermissionTrigger
 import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
@@ -51,9 +59,12 @@ import com.liujyks.trainflow.feature.recovery.RecoveryRoute
 import com.liujyks.trainflow.feature.recovery.emptyRecoveryScreenState
 import com.liujyks.trainflow.feature.recovery.toRecoveryScreenState
 import com.liujyks.trainflow.feature.settings.SettingsRoute
+import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import com.liujyks.trainflow.feature.settings.StrengthSetTimerModePreference
 import com.liujyks.trainflow.feature.settings.TrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.settings.defaultTrainingPreferencesScreenState
+import com.liujyks.trainflow.feature.settings.prepareBlePermissionRationale
+import com.liujyks.trainflow.feature.settings.resolveHeartRateBlePermissionStatus
 import com.liujyks.trainflow.feature.workoutsession.FollowAlongWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
@@ -86,6 +97,41 @@ internal fun TrainFlowApp(
     val context = LocalContext.current
     val planReminderScheduler = remember(context) {
         AndroidPlanReminderScheduler(context.applicationContext)
+    }
+    var heartRateBlePermissionStatus by rememberSaveable {
+        mutableStateOf(HeartRateBlePermissionStatus.NOT_REQUESTED)
+    }
+    var heartRatePermissionRefreshKey by rememberSaveable {
+        mutableStateOf(0)
+    }
+    val heartRateDisplayEnabled = trainingPreferencesState.heartRateSettings.enabled
+    val allHeartRateBlePermissionsGranted = heartRatePermissionRefreshKey.let {
+        context.arePermissionsGranted(BleHeartRatePermissionPlanner.requiredPermissions())
+    }
+    val resolvedHeartRateBlePermissionStatus = resolveHeartRateBlePermissionStatus(
+        displayEnabled = heartRateDisplayEnabled,
+        allPermissionsGranted = allHeartRateBlePermissionsGranted,
+        requestResult = heartRateBlePermissionStatus
+    )
+    val settingsState = trainingPreferencesState.copy(
+        heartRateSettings = trainingPreferencesState.heartRateSettings.copy(
+            blePermissionStatus = resolvedHeartRateBlePermissionStatus
+        )
+    )
+    val heartRateBlePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val requiredPermissions = BleHeartRatePermissionPlanner.requiredPermissions()
+        val granted = context.arePermissionsGranted(requiredPermissions)
+            || requiredPermissions.all { permission -> result[permission] == true }
+        heartRateBlePermissionStatus = if (granted) {
+            HeartRateBlePermissionStatus.GRANTED
+        } else if (context.hasPermanentlyDeniedPermissions(requiredPermissions, result)) {
+            HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+        } else {
+            HeartRateBlePermissionStatus.DENIED
+        }
+        heartRatePermissionRefreshKey += 1
     }
     var currentDestination by rememberSaveable {
         mutableStateOf(OfficialShellDestination.TRAINING)
@@ -120,6 +166,16 @@ internal fun TrainFlowApp(
 
     LaunchedEffect(workoutPlans) {
         planManagementState = planManagementState.withPlans(workoutPlans)
+    }
+
+    LaunchedEffect(heartRateDisplayEnabled, allHeartRateBlePermissionsGranted) {
+        heartRateBlePermissionStatus = when {
+            !heartRateDisplayEnabled -> HeartRateBlePermissionStatus.NOT_REQUESTED
+            allHeartRateBlePermissionsGranted -> HeartRateBlePermissionStatus.GRANTED
+            heartRateBlePermissionStatus == HeartRateBlePermissionStatus.GRANTED ->
+                HeartRateBlePermissionStatus.NOT_REQUESTED
+            else -> heartRateBlePermissionStatus
+        }
     }
 
     fun applyShellState(nextState: OfficialShellState) {
@@ -233,7 +289,7 @@ internal fun TrainFlowApp(
                 )
 
                 OfficialShellDestination.SETTINGS -> SettingsRoute(
-                    uiState = trainingPreferencesState,
+                    uiState = settingsState,
                     onBackToTraining = {
                         applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
                     },
@@ -245,6 +301,31 @@ internal fun TrainFlowApp(
                     onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged,
                     onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
                     onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
+                    onPrepareHeartRateBlePermission = {
+                        heartRateBlePermissionStatus = settingsState
+                            .heartRateSettings
+                            .prepareBlePermissionRationale()
+                            .blePermissionStatus
+                    },
+                    onRequestHeartRateBlePermission = {
+                        if (
+                            heartRateDisplayEnabled &&
+                            settingsState.heartRateSettings.canRequestBlePermission &&
+                            BleHeartRatePermissionPlanner.shouldRequestPermissions(
+                                BleHeartRatePermissionTrigger.EXPLICIT_USER_ACTION
+                            )
+                        ) {
+                            val missingPermissions = BleHeartRatePermissionPlanner
+                                .requiredPermissions()
+                                .filterNot { permission -> context.isPermissionGranted(permission) }
+                            if (missingPermissions.isEmpty()) {
+                                heartRateBlePermissionStatus = HeartRateBlePermissionStatus.GRANTED
+                                heartRatePermissionRefreshKey += 1
+                            } else {
+                                heartRateBlePermissionLauncher.launch(missingPermissions.toTypedArray())
+                            }
+                        }
+                    },
                     onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
                     onUiSkinChanged = onUiSkinChanged,
                     modifier = Modifier.padding(innerPadding)
@@ -417,6 +498,33 @@ internal fun TrainFlowApp(
                 )
             }
         }
+    }
+}
+
+private fun Context.arePermissionsGranted(permissions: List<String>): Boolean {
+    return permissions.all { permission -> isPermissionGranted(permission) }
+}
+
+private fun Context.isPermissionGranted(permission: String): Boolean {
+    return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun Context.hasPermanentlyDeniedPermissions(
+    permissions: List<String>,
+    requestResult: Map<String, Boolean>
+): Boolean {
+    val activity = findActivity() ?: return false
+    return permissions.any { permission ->
+        requestResult[permission] == false &&
+            !activity.shouldShowRequestPermissionRationale(permission)
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? {
+    return when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 }
 
