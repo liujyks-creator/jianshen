@@ -122,6 +122,16 @@ class MainActivity : ComponentActivity() {
                             preferencesDataSource.setStrengthSetTimerMode(mode.contractValue)
                         }
                     },
+                    onHeartRateDisplayEnabledChanged = { enabled ->
+                        scope.launch {
+                            preferencesDataSource.setHeartRateDisplayEnabled(enabled)
+                        }
+                    },
+                    onClearHeartRateDevicePreference = {
+                        scope.launch {
+                            preferencesDataSource.clearBleHeartRateDevicePreference()
+                        }
+                    },
                     onUiSkinChanged = { skinId ->
                         scope.launch {
                             preferencesDataSource.setUiSkinId(skinId)

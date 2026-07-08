@@ -4,6 +4,7 @@ import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.feature.plans.PlanEditorDefaults
 import com.liujyks.trainflow.feature.settings.TrainingPreferencesScreenState
+import com.liujyks.trainflow.feature.settings.heartRateSettingsUiState
 import com.liujyks.trainflow.feature.settings.strengthSetTimerModePreferenceFromContract
 import com.liujyks.trainflow.feature.settings.uiSkinPreferenceOptionsFromRegistry
 import com.liujyks.trainflow.ui.theme.SkinRegistry
@@ -19,6 +20,10 @@ internal fun TrainFlowPreferences.toTrainingPreferencesScreenState(): TrainingPr
         vibrationEnabled = vibrationEnabled,
         emphasisAnimationEnabled = emphasisAnimationEnabled,
         strengthSetTimerMode = strengthSetTimerModePreferenceFromContract(strengthSetTimerMode),
+        heartRateSettings = heartRateSettingsUiState(
+            enabled = heartRateDisplayEnabled,
+            savedDeviceDisplayName = bleHeartRateDeviceDisplayName
+        ),
         selectedUiSkinId = skin.id,
         uiSkinOptions = uiSkinPreferenceOptionsFromRegistry(skin.id)
     )

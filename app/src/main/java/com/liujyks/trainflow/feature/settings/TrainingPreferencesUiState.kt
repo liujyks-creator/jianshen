@@ -13,6 +13,7 @@ internal data class TrainingPreferencesScreenState(
     val vibrationEnabled: Boolean = true,
     val emphasisAnimationEnabled: Boolean = true,
     val strengthSetTimerMode: StrengthSetTimerModePreference = StrengthSetTimerModePreference.MANUAL_START,
+    val heartRateSettings: HeartRateSettingsUiState = HeartRateSettingsUiState(),
     val selectedUiSkinId: String = SkinRegistry.defaultSkin.id,
     val uiSkinOptions: List<UiSkinPreferenceOption> = uiSkinPreferenceOptionsFromRegistry(selectedUiSkinId),
     val permissionPrivacySections: List<PermissionPrivacySection> = PermissionPrivacyCopy.sections
@@ -34,6 +35,60 @@ internal data class TrainingPreferencesScreenState(
     val selectedSkinSummary: String
         get() = uiSkinOptions.firstOrNull { option -> option.selected }?.displayName
             ?: SkinRegistry.defaultSkin.displayName
+}
+
+internal data class HeartRateSettingsUiState(
+    val enabled: Boolean = false,
+    val savedDeviceDisplayName: String? = null
+) {
+    val sectionTitle: String = "心率与设备"
+
+    val statusLabel: String
+        get() = if (enabled) "已启用" else "未启用"
+
+    val statusSummary: String
+        get() = if (enabled) {
+            "已启用显示偏好；后续可选择设备。"
+        } else {
+            "默认关闭。TrainFlow 不显示心率胶囊。"
+        }
+
+    val sourceSummary: String
+        get() = if (enabled) {
+            savedDeviceDisplayName?.let { displayName ->
+                "已保存设备名称：$displayName。本轮不会自动扫描或连接。"
+            } ?: "未连接源 / 待选择设备。"
+        } else {
+            "关闭后不显示胶囊、不扫描、不连接、不记录。"
+        }
+
+    val purposeCopy: String =
+        "用途：训练中显示 App 内实时心率胶囊，作为训练参考。"
+
+    val recordingBoundaryCopy: String =
+        "记录边界：当前阶段只保存显示偏好；训练记录采样另拆后续任务。"
+
+    val privacyCopy: String =
+        "隐私：无训练时只在 App 内显示状态或实时心率，不写入训练记录。后续训练中记录会另行实现。"
+
+    val nonMedicalCopy: String =
+        "非医疗：心率区间仅作训练参考，不诊断疾病，不替代医生建议，不自动中断训练。"
+
+    val permissionCopy: String =
+        "权限：BLE 权限只会在后续用户主动选择设备或扫描时请求；本轮不请求权限。"
+
+    val overlayCopy: String =
+        "悬浮边界：不使用系统 overlay / 显示在其他应用上层权限，未来胶囊只显示在 TrainFlow App 内。"
+
+    val enabledBoundaryCopy: String
+        get() = if (enabled) {
+            "开启后仅表示已启用显示偏好；不会自动扫描、连接或申请权限。"
+        } else {
+            "关闭状态下不会显示心率胶囊，也不会扫描、连接或记录。"
+        }
+
+    val canClearSavedDevice: Boolean
+        get() = savedDeviceDisplayName != null
 }
 
 internal data class UiSkinPreferenceOption(
@@ -73,6 +128,18 @@ internal fun strengthSetTimerModePreferenceFromContract(
 
 internal fun defaultTrainingPreferencesScreenState(): TrainingPreferencesScreenState {
     return TrainingPreferencesScreenState()
+}
+
+internal fun heartRateSettingsUiState(
+    enabled: Boolean,
+    savedDeviceDisplayName: String?
+): HeartRateSettingsUiState {
+    return HeartRateSettingsUiState(
+        enabled = enabled,
+        savedDeviceDisplayName = savedDeviceDisplayName?.takeIf { displayName ->
+            displayName.isNotBlank()
+        }
+    )
 }
 
 internal fun uiSkinPreferenceOptionsFromRegistry(selectedSkinId: String): List<UiSkinPreferenceOption> {

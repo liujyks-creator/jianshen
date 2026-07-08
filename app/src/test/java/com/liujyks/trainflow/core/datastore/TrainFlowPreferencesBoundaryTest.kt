@@ -130,6 +130,35 @@ class TrainFlowPreferencesBoundaryTest {
     }
 
     @Test
+    fun dataSourcePersistsHeartRateDisplayOptInWithoutPlaceholder() = runBlocking {
+        val dataStore = PreferenceDataStoreFactory.create(
+            produceFile = {
+                File(temporaryFolder.root, "heart-rate-opt-in-${System.nanoTime()}.preferences_pb")
+            }
+        )
+        val dataSource = TrainFlowPreferencesDataSource(dataStore)
+
+        dataSource.setHeartRateDisplayEnabled(true)
+        val enabledPreferences = dataSource.preferences.first()
+
+        assertTrue(enabledPreferences.heartRateDisplayEnabled)
+        assertFalse(enabledPreferences.showDisconnectedHeartRatePlaceholder)
+
+        val disabledDataStore = PreferenceDataStoreFactory.create(
+            produceFile = {
+                File(temporaryFolder.root, "heart-rate-disabled-${System.nanoTime()}.preferences_pb")
+            }
+        )
+        val disabledDataSource = TrainFlowPreferencesDataSource(disabledDataStore)
+
+        disabledDataSource.setHeartRateDisplayEnabled(false)
+        val disabledPreferences = disabledDataSource.preferences.first()
+
+        assertFalse(disabledPreferences.heartRateDisplayEnabled)
+        assertFalse(disabledPreferences.showDisconnectedHeartRatePlaceholder)
+    }
+
+    @Test
     fun preferenceStoreNameStaysInsideTrainFlowNamespace() {
         assertEquals("trainflow_preferences", TrainFlowPreferenceKeys.DATASTORE_NAME)
     }

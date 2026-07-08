@@ -111,6 +111,13 @@ class TrainFlowPreferencesDataSource(
         }
     }
 
+    suspend fun setHeartRateDisplayEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.heartRateDisplayEnabled] = enabled
+            preferences[TrainFlowPreferenceKeys.showDisconnectedHeartRatePlaceholder] = false
+        }
+    }
+
     suspend fun setBleHeartRateDevicePreference(identifier: String, displayName: String) {
         dataStore.edit { preferences ->
             preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier] = identifier
