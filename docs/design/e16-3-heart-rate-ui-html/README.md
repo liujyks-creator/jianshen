@@ -17,6 +17,7 @@ Open the HTML in a browser. The prototype is interactive and supports:
 - collapsed / expanded capsule
 - content-hugging collapsed width, so normal labels such as `低强度 88 bpm` and `超过上限 188 bpm` render in full
 - restrained frosted-glass material for collapsed and expanded states
+- width-change motion demo for collapsed state changes
 - tap to expand / collapse
 - drag with movement threshold
 - snap-left / snap-right safe-edge behavior
@@ -43,6 +44,8 @@ This is the only current recommended direction. The capsule is a TrainFlow app-s
 - Releasing after drag snaps the capsule to the left or right safe edge.
 - The collapsed capsule hugs its primary text instead of using a fixed narrow width. Regular user-facing labels must not be ellipsized.
 - Snap placement recalculates after label, state, mode, or width changes; right-snap grows inward from the right edge and left-snap grows inward from the left edge.
+- Width changes are animated as part of the capsule behavior: the prototype uses a restrained `220ms` material morph, keeps the snapped edge anchored, and applies a subtle text fade. It does not use marquee text, number flipping, repeated pulse, flashing, sound, vibration, or alert motion.
+- During drag, the prototype keeps the current capsule size stable. If a heart-rate state update arrives while dragging, the pending visual state is applied after release and safe snap.
 - When the confirm-record keyboard area is visible, the prototype forces the capsule back to compact/collapsed mode because the full expanded detail cannot fit safely between confirm controls and the keyboard.
 - The snap target recalculates safe Y placement and does not settle over:
   - fixed bottom primary action
@@ -151,13 +154,14 @@ Future Android implementation still needs separate stories for:
 - Android UI implementation
 - 720x1280 visual QA on real execution screens
 
-The HTML uses CSS `backdrop-filter` to express the intended glass material. Android follow-up may approximate the material based on Compose capability, performance, and API support; it should preserve the content-hugging width and safe snap behavior even if the final glass blur is simplified.
+The HTML uses CSS `backdrop-filter` to express the intended glass material. Android follow-up may approximate the material based on Compose capability, performance, and API support; it should preserve the content-hugging width, width-change anchoring, restrained state morph, and safe snap behavior even if the final glass blur is simplified.
 
 ## Verification Checklist
 
 - Browser opens `index.html` and renders nonblank.
 - 720x1280 viewport renders the mobile prototype without horizontal overflow.
 - Collapsed labels render in full for normal states, including `低强度 88 bpm` and `超过上限 188 bpm`.
+- Switching collapsed labels animates width from the snapped edge instead of jumping or expanding offscreen.
 - Tap toggles collapsed / expanded capsule.
 - Drag only starts after movement threshold.
 - Drag release snaps left or right.

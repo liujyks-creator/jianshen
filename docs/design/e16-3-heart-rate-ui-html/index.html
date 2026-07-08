@@ -781,10 +781,14 @@
       user-select: none;
       touch-action: none;
       transition:
-        width 160ms cubic-bezier(0.16, 1, 0.30, 1),
+        width 220ms cubic-bezier(0.20, 0.80, 0.20, 1),
+        left 220ms cubic-bezier(0.20, 0.80, 0.20, 1),
+        top 220ms cubic-bezier(0.20, 0.80, 0.20, 1),
         border-radius 160ms cubic-bezier(0.16, 1, 0.30, 1),
         transform 100ms cubic-bezier(0.16, 1, 0.30, 1),
-        background-color 160ms cubic-bezier(0.16, 1, 0.30, 1);
+        background-color 180ms cubic-bezier(0.16, 1, 0.30, 1),
+        border-color 180ms cubic-bezier(0.16, 1, 0.30, 1),
+        box-shadow 180ms cubic-bezier(0.16, 1, 0.30, 1);
     }
 
     .hr-capsule.dragging {
@@ -794,6 +798,10 @@
         0 20px 48px rgba(0,0,0,0.38),
         0 0 0 4px rgba(101, 169, 255, 0.12),
         inset 0 1px 0 rgba(255,255,255,0.44);
+      transition:
+        transform 100ms cubic-bezier(0.16, 1, 0.30, 1),
+        border-color 120ms cubic-bezier(0.16, 1, 0.30, 1),
+        box-shadow 120ms cubic-bezier(0.16, 1, 0.30, 1);
     }
 
     .hr-capsule.expanded {
@@ -919,6 +927,25 @@
 
     .hr-capsule.expanded .hr-main {
       min-width: 0;
+    }
+
+    .hr-capsule.text-changing .hr-main {
+      animation: capsuleTextFade 220ms cubic-bezier(0.20, 0.80, 0.20, 1);
+    }
+
+    .hr-capsule.width-morphing {
+      will-change: width, left, top;
+    }
+
+    @keyframes capsuleTextFade {
+      0% {
+        opacity: 0.38;
+        transform: translateY(1px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .capsule-detail {
@@ -1189,6 +1216,13 @@
             <button class="small-button" type="button" id="snapLeftButton">Snap left</button>
             <button class="small-button" type="button" id="snapRightButton">Snap right</button>
           </div>
+        </div>
+        <div class="control-block">
+          <span class="label">宽度动画</span>
+          <div class="seg-row">
+            <button class="small-button" type="button" id="widthMotionButton">低强度 ↔ 超上限</button>
+          </div>
+          <p class="small-copy">collapsed 宽度变化以当前贴边侧为锚点：右贴边向左扩展，左贴边向右扩展；拖动中锁定尺寸，松手后再应用最新状态。</p>
         </div>
         <div class="control-block">
           <span class="label">安全区演示</span>
@@ -1529,6 +1563,7 @@
     const keyboardToggle = document.getElementById("keyboardToggle");
     const collapseButton = document.getElementById("collapseButton");
     const expandButton = document.getElementById("expandButton");
+    const widthMotionButton = document.getElementById("widthMotionButton");
     const scenarioTitle = document.getElementById("scenarioTitle");
     const scenarioCopy = document.getElementById("scenarioCopy");
 
@@ -1541,7 +1576,10 @@
       showUnsafe: true,
       position: { x: 244, y: 112 },
       dragging: false,
-      moved: false
+      moved: false,
+      pendingHeartRender: false,
+      widthMotionToggle: false,
+      motionTimer: 0
     };
 
     function screenRect() {
@@ -1556,13 +1594,42 @@
       };
     }
 
+    function clearCapsuleMotion(keepInlineWidth = false) {
+      if (state.motionTimer) {
+        window.clearTimeout(state.motionTimer);
+        state.motionTimer = 0;
+      }
+      heartCapsule.classList.remove("width-morphing", "text-changing");
+      heartCapsule.style.transition = "";
+      if (!keepInlineWidth) {
+        heartCapsule.style.width = "";
+      }
+    }
+
     function setCapsulePosition(x, y) {
       const size = capsuleSize();
       const maxX = Math.max(12, phoneScreen.clientWidth - size.width - 12);
       const maxY = Math.max(46, phoneScreen.clientHeight - size.height - 16);
       state.position.x = Math.max(12, Math.min(maxX, x));
       state.position.y = Math.max(46, Math.min(maxY, y));
+      heartCapsule.style.right = "auto";
       heartCapsule.style.left = `${state.position.x}px`;
+      heartCapsule.style.top = `${state.position.y}px`;
+    }
+
+    function setSnappedCapsulePosition(x, y) {
+      const size = capsuleSize();
+      const maxX = Math.max(12, phoneScreen.clientWidth - size.width - 12);
+      const maxY = Math.max(46, phoneScreen.clientHeight - size.height - 16);
+      state.position.x = Math.max(12, Math.min(maxX, x));
+      state.position.y = Math.max(46, Math.min(maxY, y));
+      if (state.side === "right") {
+        heartCapsule.style.left = "auto";
+        heartCapsule.style.right = `${Math.max(12, phoneScreen.clientWidth - state.position.x - size.width)}px`;
+      } else {
+        heartCapsule.style.right = "auto";
+        heartCapsule.style.left = `${state.position.x}px`;
+      }
       heartCapsule.style.top = `${state.position.y}px`;
     }
 
@@ -1578,6 +1645,10 @@
         width: Math.round(r.width),
         height: Math.round(r.height)
       };
+    }
+
+    function actualCapsuleRect() {
+      return rectOfElement(heartCapsule, "capsule");
     }
 
     function fixedUnsafeRects() {
@@ -1649,11 +1720,12 @@
     }
 
     function snapCapsule(side = state.side) {
+      clearCapsuleMotion();
       state.side = side;
       const size = capsuleSize();
       const x = side === "left" ? 12 : phoneScreen.clientWidth - size.width - 12;
       const y = findSafeY(state.position.y);
-      setCapsulePosition(x, y);
+      setSnappedCapsulePosition(x, y);
       updateEvidence();
     }
 
@@ -1664,7 +1736,7 @@
       keyboardToggle.setAttribute("aria-pressed", String(state.keyboard));
     }
 
-    function renderScenario() {
+    function renderScenario(options = {}) {
       const data = scenarios[state.scenario];
       scenarioTitle.textContent = data.title;
       scenarioCopy.textContent = data.copy;
@@ -1702,12 +1774,17 @@
       state.side = data.initial.side;
       state.position.y = data.initial.y;
       renderUnsafe();
-      requestAnimationFrame(() => snapCapsule(data.initial.side));
+      if (options.snapInitial !== false) {
+        requestAnimationFrame(() => snapCapsule(data.initial.side));
+      }
     }
 
-    function renderHeartState() {
-      const data = hrStates[state.hr];
-      heartCapsule.className = `hr-capsule ${data.tone}${state.expanded ? " expanded" : ""}${state.dragging ? " dragging" : ""}`;
+    function heartCapsuleClassName(data, extra = "") {
+      return `hr-capsule ${data.tone}${state.expanded ? " expanded" : ""}${state.dragging ? " dragging" : ""}${extra ? ` ${extra}` : ""}`;
+    }
+
+    function applyHeartStateContent(data) {
+      heartCapsule.className = heartCapsuleClassName(data);
       heartCapsule.setAttribute("aria-expanded", String(state.expanded));
       hrLabel.textContent = data.label;
       hrSub.textContent = data.sub;
@@ -1717,7 +1794,100 @@
       zoneText.textContent = data.zone;
       freshnessText.textContent = data.freshness;
       boundaryNote.textContent = data.note;
-      snapCapsule(state.side);
+    }
+
+    function measureTargetCapsule(data) {
+      const storedWidth = heartCapsule.style.width;
+      const storedLeft = heartCapsule.style.left;
+      const storedRight = heartCapsule.style.right;
+      const storedTop = heartCapsule.style.top;
+      const storedTransition = heartCapsule.style.transition;
+
+      heartCapsule.style.transition = "none";
+      heartCapsule.style.width = "";
+      applyHeartStateContent(data);
+      const measured = capsuleSize();
+      const targetX = state.side === "left" ? 12 : Math.max(12, phoneScreen.clientWidth - measured.width - 12);
+      const targetY = findSafeY(state.position.y);
+
+      heartCapsule.style.width = storedWidth;
+      heartCapsule.style.left = storedLeft;
+      heartCapsule.style.right = storedRight;
+      heartCapsule.style.top = storedTop;
+      heartCapsule.style.transition = storedTransition;
+
+      return { width: measured.width, height: measured.height, x: targetX, y: targetY };
+    }
+
+    function renderHeartState(options = {}) {
+      if (state.keyboard && state.scenario === "strengthConfirm" && state.expanded) {
+        state.expanded = false;
+      }
+      const data = hrStates[state.hr];
+      if (state.dragging && options.deferDuringDrag !== false) {
+        state.pendingHeartRender = true;
+        updateButtons();
+        return;
+      }
+
+      const shouldAnimate = options.animate !== false;
+      clearCapsuleMotion(true);
+      const oldRect = actualCapsuleRect();
+      const oldLabel = hrLabel.textContent;
+      const target = measureTargetCapsule(data);
+      const oldRightInset = Math.max(12, phoneScreen.clientWidth - oldRect.right);
+      const targetRightInset = Math.max(12, phoneScreen.clientWidth - target.x - target.width);
+
+      state.position.x = target.x;
+      state.position.y = target.y;
+
+      if (!shouldAnimate) {
+        heartCapsule.style.transition = "";
+        heartCapsule.style.width = "";
+        applyHeartStateContent(data);
+        setSnappedCapsulePosition(target.x, target.y);
+        updateEvidence();
+        updateButtons();
+        return;
+      }
+
+      heartCapsule.style.transition = "none";
+      heartCapsule.style.width = `${oldRect.width}px`;
+      if (state.side === "right") {
+        heartCapsule.style.left = "auto";
+        heartCapsule.style.right = `${oldRightInset}px`;
+      } else {
+        heartCapsule.style.right = "auto";
+        heartCapsule.style.left = `${oldRect.left}px`;
+      }
+      heartCapsule.style.top = `${oldRect.top}px`;
+      applyHeartStateContent(data);
+      heartCapsule.classList.add("width-morphing");
+      if (oldLabel !== data.label) {
+        heartCapsule.classList.add("text-changing");
+      }
+
+      heartCapsule.getBoundingClientRect();
+      heartCapsule.style.transition = "";
+
+      requestAnimationFrame(() => {
+        heartCapsule.style.width = `${target.width}px`;
+        if (state.side === "right") {
+          heartCapsule.style.right = `${targetRightInset}px`;
+        } else {
+          heartCapsule.style.left = `${target.x}px`;
+        }
+        heartCapsule.style.top = `${target.y}px`;
+        updateEvidence();
+      });
+
+      state.motionTimer = window.setTimeout(() => {
+        state.motionTimer = 0;
+        heartCapsule.classList.remove("width-morphing", "text-changing");
+        heartCapsule.style.width = "";
+        setSnappedCapsulePosition(target.x, target.y);
+        updateEvidence();
+      }, 260);
       updateButtons();
     }
 
@@ -1762,6 +1932,12 @@
           clientWidth: Math.round(hrLabel.clientWidth),
           collapsedLabelFits: labelFits
         },
+        motion: {
+          widthMorph: "220ms cubic-bezier(0.20, 0.80, 0.20, 1)",
+          anchor: state.side === "left" ? "left edge fixed; grows inward to the right" : "right edge fixed; grows inward to the left",
+          textChange: "subtle 220ms fade; no marquee, no number flip",
+          draggingPolicy: "lock current size during drag; apply pending state after release"
+        },
         dragThresholdPx: 10,
         clickHit: "capsule consumes tap; no pointer-through",
         snap: "left/right safe edge on release",
@@ -1776,7 +1952,7 @@
 
     function toggleExpanded(expanded) {
       state.expanded = expanded && !(state.keyboard && state.scenario === "strengthConfirm");
-      renderHeartState();
+      renderHeartState({ animate: true });
     }
 
     let pointerStart = null;
@@ -1822,6 +1998,10 @@
       } else {
         toggleExpanded(!state.expanded);
       }
+      if (state.pendingHeartRender) {
+        state.pendingHeartRender = false;
+        renderHeartState({ animate: true, deferDuringDrag: false });
+      }
       try {
         heartCapsule.releasePointerCapture(event.pointerId);
       } catch (error) {
@@ -1835,18 +2015,26 @@
         state.keyboard = false;
       }
       renderScenario();
-      renderHeartState();
+      renderHeartState({ animate: false });
     });
 
     hrStateSelect.addEventListener("change", () => {
       state.hr = hrStateSelect.value;
-      renderHeartState();
+      renderHeartState({ animate: true });
     });
 
     collapseButton.addEventListener("click", () => toggleExpanded(false));
     expandButton.addEventListener("click", () => toggleExpanded(true));
     document.getElementById("snapLeftButton").addEventListener("click", () => snapCapsule("left"));
     document.getElementById("snapRightButton").addEventListener("click", () => snapCapsule("right"));
+
+    widthMotionButton.addEventListener("click", () => {
+      state.expanded = false;
+      state.widthMotionToggle = !state.widthMotionToggle;
+      state.hr = state.widthMotionToggle ? "over" : "low";
+      hrStateSelect.value = state.hr;
+      renderHeartState({ animate: true });
+    });
 
     unsafeToggle.addEventListener("click", () => {
       state.showUnsafe = !state.showUnsafe;
@@ -1862,7 +2050,7 @@
         state.expanded = false;
       }
       renderScenario();
-      renderHeartState();
+      renderHeartState({ animate: false });
       updateButtons();
     });
 
@@ -1874,6 +2062,9 @@
       if (next.scenario) {
         state.scenario = next.scenario;
         scenarioSelect.value = next.scenario;
+        if (typeof next.keyboard !== "boolean") {
+          state.keyboard = false;
+        }
       }
       if (next.hr) {
         state.hr = next.hr;
@@ -1885,14 +2076,14 @@
       if (typeof next.keyboard === "boolean") {
         state.keyboard = next.keyboard;
       }
-      renderScenario();
-      renderHeartState();
+      renderScenario({ snapInitial: false });
+      renderHeartState({ animate: next.animate !== false });
       if (next.side) snapCapsule(next.side);
       return updateEvidence();
     };
 
     renderScenario();
-    renderHeartState();
+    renderHeartState({ animate: false });
   </script>
 </body>
 </html>
