@@ -50,6 +50,8 @@ internal fun SettingsRoute(
     onVibrationEnabledChanged: (Boolean) -> Unit,
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit,
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit,
+    onHeartRateDisplayEnabledChanged: (Boolean) -> Unit,
+    onClearHeartRateDevicePreference: () -> Unit,
     onUiSkinChanged: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -86,6 +88,14 @@ internal fun SettingsRoute(
             StrengthPreferencesCard(
                 uiState = uiState,
                 onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged
+            )
+        }
+
+        item {
+            HeartRatePreferencesCard(
+                uiState = uiState.heartRateSettings,
+                onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
+                onClearHeartRateDevicePreference = onClearHeartRateDevicePreference
             )
         }
 
@@ -207,6 +217,42 @@ private fun StrengthPreferencesCard(
 }
 
 @Composable
+private fun HeartRatePreferencesCard(
+    uiState: HeartRateSettingsUiState,
+    onHeartRateDisplayEnabledChanged: (Boolean) -> Unit,
+    onClearHeartRateDevicePreference: () -> Unit
+) {
+    SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.focus) {
+        SectionTitle(text = uiState.sectionTitle)
+        ToggleRow(
+            title = "心率显示",
+            checked = uiState.enabled,
+            onCheckedChange = onHeartRateDisplayEnabledChanged
+        )
+        StatusBlock(
+            title = "当前状态：${uiState.statusLabel}",
+            body = "${uiState.statusSummary} ${uiState.sourceSummary}"
+        )
+        StatusBlock(title = "显示用途", body = uiState.purposeCopy)
+        StatusBlock(title = "记录边界", body = uiState.recordingBoundaryCopy)
+        StatusBlock(title = "隐私说明", body = uiState.privacyCopy)
+        StatusBlock(title = "非医疗说明", body = uiState.nonMedicalCopy)
+        StatusBlock(title = "权限说明", body = uiState.permissionCopy)
+        StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
+        Text(
+            text = uiState.enabledBoundaryCopy,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        if (uiState.canClearSavedDevice) {
+            TextButton(onClick = onClearHeartRateDevicePreference) {
+                Text(text = "清除已保存设备")
+            }
+        }
+    }
+}
+
+@Composable
 private fun SkinPreferencesCard(
     uiState: TrainingPreferencesScreenState,
     onUiSkinChanged: (String) -> Unit
@@ -263,15 +309,23 @@ private fun PermissionPrivacyCard(sections: List<PermissionPrivacySection>) {
 
 @Composable
 private fun BoundaryTextRow(section: PermissionPrivacySection) {
+    StatusBlock(title = section.title, body = section.body)
+}
+
+@Composable
+private fun StatusBlock(
+    title: String,
+    body: String
+) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = section.title,
+            text = title,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = section.body,
+            text = body,
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -392,6 +446,8 @@ private fun SettingsRoutePreview() {
             onVibrationEnabledChanged = {},
             onEmphasisAnimationEnabledChanged = {},
             onStrengthSetTimerModeChanged = {},
+            onHeartRateDisplayEnabledChanged = {},
+            onClearHeartRateDevicePreference = {},
             onUiSkinChanged = {}
         )
     }

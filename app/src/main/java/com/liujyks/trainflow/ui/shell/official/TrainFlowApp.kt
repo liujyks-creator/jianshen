@@ -79,6 +79,8 @@ internal fun TrainFlowApp(
     onVibrationEnabledChanged: (Boolean) -> Unit = {},
     onEmphasisAnimationEnabledChanged: (Boolean) -> Unit = {},
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {},
+    onHeartRateDisplayEnabledChanged: (Boolean) -> Unit = {},
+    onClearHeartRateDevicePreference: () -> Unit = {},
     onUiSkinChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -242,6 +244,8 @@ internal fun TrainFlowApp(
                     onVibrationEnabledChanged = onVibrationEnabledChanged,
                     onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged,
                     onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
+                    onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
+                    onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
                     onUiSkinChanged = onUiSkinChanged,
                     modifier = Modifier.padding(innerPadding)
                 )
