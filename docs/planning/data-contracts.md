@@ -822,11 +822,12 @@ E12.2b 力量同类 set 趋势口径：
 - 不得把原动作 block 和替换后动作 block 拼接为候选集合，也不得让替换动作自动并入原动作趋势；替换记录必须在趋势 UI 标注来源。
 - 趋势只展示 planned / actual weight、planned / actual reps、set kind、set order、actual rest 和 active duration 等可回顾字段；不判断强弱，不推荐加重量，不输出康复、医疗或训练中断结论。
 
-E12 / E11.3 后续心率趋势边界：
+E12 / E11.3 / E16 后续心率趋势边界：
 
 - E11.3 后首版不显示、不录入、不统计心率，也不规划平均心率趋势。
-- 如果未来重新进入健康设备阶段，心率趋势只能消费已经保存到训练记录或分析数据源中的明确来源心率数据，不能直接把执行页瞬时 `HeartRateState` 当作历史趋势事实。
-- 当前没有设备心率或手动心率 UI；历史页和趋势页不显示未获取心率占位，不绘制假平均心率趋势。
+- E16 已确认 Band 9 broadcast -> BLE HRS -> `HeartRateState` bpm flow 可行，但这只解锁后续分阶段接入，不代表恢复旧的首版心率卡片、手动输入或平均心率趋势。
+- 如果未来进入心率记录 / 分析阶段，心率趋势只能消费已经保存到训练记录或独立分析数据源中的明确来源心率样本，不能直接把执行页瞬时 `HeartRateState` 当作历史趋势事实。
+- 当前没有设备心率或手动心率训练记录 UI；历史页和趋势页不显示“未获取心率”占位，不绘制假平均心率趋势。
 - 所有心率趋势必须标注来源边界，不得做医疗判断、危险告警、训练中断依据或康复结论。
 
 ### 9.2 执行步骤
@@ -1020,7 +1021,7 @@ type WorkoutEvent =
 
 ### 12.1 UI 状态接口
 
-`HeartRateState` 是训练执行页消费的 source-aware UI 抽象状态，不是历史趋势事实来源。
+`HeartRateState` 是 TrainFlow UI 消费的 source-aware 实时心率抽象状态，不是历史趋势事实来源。E16 之后的 UI 方向是 App 内可拖动浮动心率胶囊；它消费 `HeartRateState` / provider state 显示连接、等待、live bpm、stale / offline 等状态，但不会把这些瞬时状态直接写成训练历史。
 
 ```ts
 type HeartRateStateKind =
@@ -1062,12 +1063,11 @@ interface HeartRateState {
 - `permission_unavailable` 表示未来 provider adapter 需要的权限不可用；E11.1 不申请真实健康、蓝牙或身体传感器权限。
 - `provider_unavailable` 表示 provider 被禁用、当前构建未接入或平台能力不可用。
 
-后续 adapter 路线只作为 E11.2 或独立设备阶段评估：
+后续 adapter 路线的当前状态：
 
-- Apple Watch / iOS：未来 iOS 第一优先路线是 iOS app + watchOS companion，通过 HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder 读取并转换，不能把 HealthKit model 泄漏到 TrainFlow UI / history / analytics；当前 Android-first 阶段不进入 dev。
-- HUAWEI Band 9 / Huawei Health：当前真实验证样本是 HUAWEI Band 9 + 非华为 Android 手机 + 已安装华为运动健康，且华为运动健康可以读取手环数据；这只证明华为运动健康能读设备数据，不证明 TrainFlow 第三方 App 可以实时读取心率。E11.2a 先做 feasibility smoke，不直接承诺生产接入。
-- 通用心率设备：标准 BLE Heart Rate Service 仍是 Android-first 最通用的实时路线；但当前设备条件下必须先确认 HUAWEI Band 9 是否暴露 BLE HRS `0x180D`，以及 Heart Rate Measurement characteristic `0x2A37` 是否可 notify，再决定是否进入 BLE adapter spike。
-- Huawei Health Kit / Health Service Kit：官方生态存在，但实时心率、地区、账号、设备支持、权限申请、非华为手机兼容性都要验证。若 Band 9 不暴露 BLE HRS，再验证 Huawei Health Kit / Health Service Kit 是否能在非华为 Android + Band 9 + HMS Core 条件下授权读取实时心率。
+- Android BLE HRS：E16 / E16-1 / E16-2 已确认 HUAWEI Band 9 heart-rate broadcast mode 可暴露 BLE Heart Rate Service `0x180D`，Heart Rate Measurement `0x2A37 notify` 可持续输出 bpm，并已完成 production-capable provider hardening；生产 UI、权限入口、记录和分析仍需后续 story。
+- Apple Watch / iOS：未来 iOS 第一优先路线仍是 iOS app + watchOS companion，通过 HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder 读取并转换，不能把 HealthKit model 泄漏到 TrainFlow UI / history / analytics；当前 Android-first 阶段不进入 dev。
+- Huawei Health Kit / Health Service Kit：保留为 BLE HRS 不满足生产需求时的备选评估路径，不作为当前主线。
 - Health Connect：更适合历史摘要 / 趋势，例如 post-workout summaries 或 average heart-rate trend，不作为 E11.2a 实时执行页首选。
 - 所有未来设备路线都必须统一输出 TrainFlow `HeartRateState`，标注来源；如未来重新引入手动数据，必须是 `sourceKind: "manual"`，不得伪装成设备数据。
 
@@ -1090,14 +1090,26 @@ E11.2a feasibility smoke 边界：
 - `warningLevel` 口径废弃，不再通过 `HeartRateState` 表达医疗、危险、强告警或训练中断判断。
 - `HeartRateState` 不得直接进入历史趋势事实；它只描述执行页当下可展示的来源、数值和不可用状态。
 
-### 12.3 后续持久化与平均心率趋势边界
+E16-3 之后的未来 UI 边界：
 
-当前没有持久化心率记录模型，且 E11.3 后首版不再规划平均心率趋势。若未来重新进入健康设备阶段，必须另行设计 `WorkoutSession.heartRateSummary` 或独立 `heart_rate_samples` / `heart_rate_records`。
+- 心率 UI 不再使用旧的训练页内联展示位 / 卡片 / 未获取占位；当前方向是 App 内可拖动浮动心率胶囊，偏好开启后在 TrainFlow App 内跨页面显示。
+- 连接 / 数据状态与心率区间状态分开表达：无 bpm 时显示 `未启用`、`未连接源`、`权限未赋予`、`蓝牙关闭`、`正在连接`、`等待数据`、`数据过期` 或 `离线`；有 bpm 且有年龄时显示 `热身 105 bpm`、`燃脂 122 bpm` 这类区间 + 数值文案。
+- 心率区间基于用户设置年龄推算；年龄缺失时只显示 bpm / 连接状态，不做区间判断。
+- 超过用户设置上限时仅做深红视觉提示，不触发声音、震动、强制暂停、医疗警报或训练中断。
+- 浮动胶囊不得遮挡 TimerDial、力量训练主按钮、confirm-record 输入 / 感受选择、完成页固定返回等核心操作；E16-3a 必须先用 `huashu-design` 做 HTML 高保真与 overlap / drag / snap 评审。
+
+### 12.3 后续持久化与心率分析边界
+
+当前 production 仍没有持久化心率记录模型。E16 之后如进入训练中心率记录 / 分析阶段，优先另行设计独立 `heart_rate_samples` / `heart_rate_records`，再由样本派生 session summary；不要把旧的“平均心率趋势”作为唯一目标，也不要把瞬时 `HeartRateState` 直接塞进 `WorkoutSession`。
 
 ```ts
 interface WorkoutSessionHeartRateSummary {
-  sourceKind: "device" | "manual";
+  sourceKind: "device";
   averageBpm: number;
+  peakBpm?: number;
+  minBpm?: number;
+  zoneDurationsSec?: Record<string, number>;
+  overLimitDurationSec?: number;
   measuredAt?: string;
   recordedAt: string;
   sampleCount: number;
@@ -1107,21 +1119,26 @@ interface WorkoutSessionHeartRateSummary {
 
 interface HeartRateSample {
   sessionId: string;
-  sourceKind: "device" | "manual";
+  sourceKind: "device";
   bpm: number;
   measuredAt: string;
   recordedAt: string;
-  sampleCount?: number;
   sourceId?: string;
   sourceLabel?: string;
+  zone?: "below_warmup" | "warmup" | "fat_burn" | "aerobic" | "anaerobic" | "limit" | "over_limit";
+  maxHeartRateFormula?: "age_220";
+  userAgeYears?: number;
 }
 ```
 
-- 设备数据只能作为未来心率趋势的优先来源；手动数据如重新引入，只能作为明确标注来源的可选补充。
-- 未来任何持久化 sample / summary 都必须至少保留 `sourceKind`、`sourceLabel`、`sourceId`、`sampleCount`、`measuredAt` 和 `recordedAt` 边界；缺少这些边界时只能作为不可比较或不可绘制数据处理。
-- 无明确 `sourceKind`、无 `bpm` / `averageBpm`、无 `measuredAt` / `recordedAt` 或无 `sampleCount` 边界时，不绘制平均心率趋势。
-- 平均心率趋势不得从执行页瞬时 `HeartRateState` 反推，不得绘制假趋势。
-- 心率趋势不得输出医疗判断、危险告警、训练中断依据、康复结论或强弱判断。
+- 设备数据是未来心率趋势和训练分析的优先来源；E11.3 撤销的手动心率输入不得作为 E16 生产路线默认恢复。
+- 只有训练进行中才记录样本；无训练进行时，浮动胶囊只显示实时状态，不写训练记录。
+- 采样粒度按 1 秒控制。计时训练覆盖全过程；力量训练覆盖 active、rest、confirm-record 等训练 session 区间。
+- 区间可由 bpm + 用户年龄 + 当时规则推导，但若落库 zone，必须能追溯年龄 / 公式 / 来源边界；年龄缺失时不写区间判断。
+- 未来任何持久化 sample 都必须至少保留 `sourceKind`、`sourceLabel`、`sourceId`、`bpm`、`measuredAt` 和 `recordedAt` 边界；summary 必须额外保留 `sampleCount`。缺少这些边界时只能作为不可比较或不可绘制数据处理。
+- 无明确 `sourceKind`、无 `bpm` / `averageBpm`、无 `measuredAt` / `recordedAt`，或 summary 无 `sampleCount` 边界时，不绘制平均心率趋势。
+- 心率 summary / 趋势不得从执行页瞬时 `HeartRateState` 反推，不得绘制假趋势。
+- 后续分析可以做平均心率、峰值、区间时长、超过上限时长、休息恢复下降、力量 set-to-set 心率变化和计时训练强度曲线；不得输出医疗判断、危险告警、训练中断依据或康复结论。训练轻 / 重 / 疲劳类提示必须另拆规则与文案评审，保持非医疗语气。
 
 ## 13. 恢复建议模型
 

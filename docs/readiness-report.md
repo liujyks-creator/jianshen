@@ -34,6 +34,8 @@ stepsCompleted:
 
 > 2026-07-07 刷新：E16-2 真机 smoke 已按用户 Android 手机截图补齐并通过。Debug APK 入口为 `TrainFlow Debug` -> `DebugEntryActivity`，包含 `进入 TrainFlow` / `HR Broadcast Smoke` 两个明确按钮；`HR Broadcast Smoke` 可见且未污染 TrainFlow 首页。截图覆盖 `bluetooth_disabled` recoverable state、`scanning`、`device_found`、`device_selected`、`connecting`、`connected_waiting_for_data`、HUAWEI Band HR-OD7 `D8:F0:42:01:90:D7 services=[0x180D]`、Heart Rate Measurement notify enabled、live bpm `84-91` 和 stop 后 `stopped: BLE HRS provider stopped`。用户已确认 TrainFlow 训练页没有心率 UI。该结果关闭 E16-2 real-device smoke 缺口，但仍不是生产心率 UI 上线许可。
 
+> 2026-07-07 刷新：E16-3 初版 HTML 高保真视觉规划已完成，但顶部状态 pill 推荐方向已被后续讨论取代。当前心率 UI 方向是 E16-3a App 内可拖动浮动心率胶囊：不使用系统级悬浮窗权限，偏好开启后可在 TrainFlow app 内显示，未训练时只显示不记录，训练中 1 秒采样记录 timed / strength 全过程。E16-3a 仍必须先做 `huashu-design` HTML 高保真视觉修订，验证拖动、点击展开、吸附安全区、连接 / 数据状态和“区间 + bpm”颜色，不得直接进入 Android UI。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |
@@ -124,7 +126,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
-- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基并通过 2026-07-07 真机 smoke；进入真实生产心率 UI 前仍必须另拆 opt-in / settings / training UI / records policy story，并重新设计用户文案、隐私策略、非医疗提示、采样 / stale 策略和 UI 视觉方案。
+- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基并通过 2026-07-07 真机 smoke；进入真实生产心率 UI 前仍必须先完成 E16-3a App 内可拖动浮动心率胶囊 HTML 视觉修订，再另拆 opt-in / settings / training UI / records policy story，并重新设计用户文案、隐私策略、非医疗提示、1 秒采样 / stale 策略和 UI 视觉方案。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查
@@ -186,7 +188,7 @@ MVP Alpha readiness 前检查
 - 核对是否还有 P0 / release blocker、真机 smoke 缺口、音频共存风险、禁区文件风险、handoff 文档缺口。
 - 不启动新功能，不改 Kotlin / Compose / Gradle / Room / APK / 测试代码。
 - 不恢复心率卡片、未获取心率、手动心率输入或平均心率趋势。
-- 不把 Band 9 正向 BLE HRS 证据解释为当前生产心率 UI 或生产设备接入；未来展示心率前必须先做 HTML 视觉方案 / 高保真案例评审。
+- 不把 Band 9 正向 BLE HRS 证据解释为当前生产心率 UI 或生产设备接入；未来展示心率前必须先完成 E16-3a App 内可拖动浮动心率胶囊 HTML 视觉方案 / 高保真案例评审。
 - 不恢复力量目标组颜色占位；若未来重新引入，必须先做 model / serializer decision。
 - 若用户给出新的具体真机问题，另拆 User Test Fix Pack 2。
 

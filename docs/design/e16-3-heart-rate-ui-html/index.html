@@ -1,0 +1,2089 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E16-3a Heart Rate Floating Capsule - TrainFlow</title>
+  <!--
+    E16-3a assumptions and reasoning:
+    - This is a visual planning artifact, not Android production code.
+    - The current recommendation is an in-app draggable floating heart-rate capsule.
+    - It is a TrainFlow app-shell overlay, not a system overlay and not page layout.
+    - It must stay secondary to current action, TimerDial, strength set targets, confirm-record inputs, and fixed primary actions.
+    - Tap only expands/collapses details. Drag starts after a visible movement threshold to avoid accidental drag.
+    - Release snaps to a safe left/right edge and cannot settle over bottom controls, bottom nav, confirm-record controls,
+      keyboard area, status bar, or gesture navigation.
+    - Recording language is boundary-only: no training means display-only; active timed/strength means future 1s sampling,
+      but this prototype does not implement any record model.
+  -->
+  <style>
+    :root {
+      color-scheme: light;
+      --primary: #0F1720;
+      --secondary: #17212B;
+      --accent: #2FBF8F;
+      --action: #F26B4F;
+      --focus: #65A9FF;
+      --surface: #FFFFFF;
+      --surface-muted: #F5F7FA;
+      --neutral-50: #FAFBFC;
+      --neutral-100: #EEF2F5;
+      --neutral-200: #D7DEE5;
+      --neutral-300: #A8B3BE;
+      --neutral-500: #65717D;
+      --neutral-700: #35424E;
+      --neutral-900: #111820;
+      --warning: #D9921E;
+      --error: #D84B4B;
+      --deep-red: #7A1118;
+      --shadow: 0 24px 60px rgba(17, 24, 32, 0.18);
+      --panel-border: rgba(255, 255, 255, 0.10);
+      --soft-panel: rgba(255, 255, 255, 0.065);
+      --phone-w: 390px;
+      --phone-h: 844px;
+      font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #e9eef3;
+      color: var(--neutral-900);
+    }
+
+    button,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .page {
+      width: min(1320px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.8fr) minmax(360px, 1.2fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid #d7dee5;
+      border-radius: 10px;
+      padding: 18px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.08;
+      letter-spacing: 0;
+      text-wrap: balance;
+    }
+
+    .intro p,
+    .panel li {
+      color: var(--neutral-700);
+      font-size: 14px;
+      line-height: 1.62;
+      text-wrap: pretty;
+    }
+
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .decision {
+      border: 1px solid var(--neutral-100);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--surface-muted);
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--neutral-700);
+    }
+
+    .decision strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--neutral-900);
+      font-size: 12px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr) minmax(300px, 0.82fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+      position: sticky;
+      top: 12px;
+    }
+
+    .control-card h2,
+    .evidence-card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .control-block {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .label {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--neutral-700);
+    }
+
+    .select,
+    .small-button,
+    .toggle {
+      min-height: 40px;
+      border-radius: 8px;
+      border: 1px solid var(--neutral-200);
+      background: var(--surface);
+      color: var(--neutral-900);
+      padding: 8px 10px;
+    }
+
+    .seg-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .small-button[aria-pressed="true"],
+    .toggle[aria-pressed="true"] {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--neutral-50);
+    }
+
+    .small-copy {
+      margin: 0;
+      color: var(--neutral-700);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .stage-wrap {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .stage-label {
+      width: min(100%, var(--phone-w));
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 12px;
+      color: var(--neutral-700);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .stage-label strong {
+      display: block;
+      color: var(--neutral-900);
+      font-size: 15px;
+    }
+
+    .mode-chip {
+      flex: none;
+      border-radius: 999px;
+      background: var(--primary);
+      color: var(--neutral-50);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .phone {
+      position: relative;
+      width: var(--phone-w);
+      height: var(--phone-h);
+      border-radius: 32px;
+      background: #090f16;
+      border: 10px solid #0a1017;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      color: var(--neutral-50);
+      touch-action: none;
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      overflow: hidden;
+      background: var(--primary);
+      padding: 32px 16px 124px;
+    }
+
+    .screen::before {
+      content: "";
+      position: absolute;
+      z-index: 25;
+      left: 50%;
+      top: 12px;
+      width: 112px;
+      height: 5px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .gesture-bar {
+      position: absolute;
+      z-index: 25;
+      left: 50%;
+      bottom: 8px;
+      width: 122px;
+      height: 4px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .app-header {
+      position: relative;
+      z-index: 3;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+
+    .screen-title {
+      margin: 0 0 5px;
+      font-size: 20px;
+      line-height: 1.18;
+      font-weight: 850;
+      overflow-wrap: anywhere;
+    }
+
+    .subline {
+      color: var(--neutral-200);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 30px;
+      border-radius: 999px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.10);
+      color: var(--neutral-50);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .content-stack {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      gap: 12px;
+    }
+
+    .main-card,
+    .next-card,
+    .confirm-card,
+    .summary-card,
+    .ordinary-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--soft-panel);
+    }
+
+    .main-card {
+      min-height: 174px;
+      padding: 17px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .main-card.rest {
+      background: rgba(47, 191, 143, 0.12);
+      border-color: rgba(47, 191, 143, 0.42);
+    }
+
+    .main-card.confirm {
+      min-height: 94px;
+      background: rgba(242, 107, 79, 0.13);
+      border-color: rgba(242, 107, 79, 0.48);
+    }
+
+    .main-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .phase {
+      margin: 0 0 5px;
+      color: var(--neutral-200);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .exercise {
+      margin: 0;
+      font-size: 25px;
+      line-height: 1.14;
+      font-weight: 850;
+      text-wrap: balance;
+    }
+
+    .metric-label {
+      margin: 0 0 4px;
+      color: var(--neutral-200);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .metric {
+      margin: 0;
+      font-size: 52px;
+      line-height: 0.95;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+
+    .target-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .target,
+    .field {
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.055);
+      padding: 10px;
+    }
+
+    .target span,
+    .field span {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--neutral-300);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .target strong,
+    .field strong {
+      color: var(--neutral-50);
+      font-size: 18px;
+      line-height: 1.15;
+    }
+
+    .next-card,
+    .summary-card,
+    .ordinary-card {
+      padding: 14px;
+    }
+
+    .next-card h3,
+    .confirm-card h3,
+    .summary-card h3,
+    .ordinary-card h3 {
+      margin: 0 0 8px;
+      color: var(--neutral-200);
+      font-size: 14px;
+    }
+
+    .next-card p,
+    .summary-card p,
+    .ordinary-card p {
+      margin: 0;
+      color: var(--neutral-50);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .timer-card {
+      min-height: 462px;
+      display: grid;
+      place-items: center;
+      gap: 10px;
+      text-align: center;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--soft-panel);
+      padding: 18px 12px;
+    }
+
+    .total-time {
+      color: var(--neutral-200);
+      font-size: 18px;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dial {
+      position: relative;
+      width: 296px;
+      max-width: 82vw;
+      aspect-ratio: 1;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(242, 107, 79, 0.18) 0 37%, transparent 38%),
+        conic-gradient(var(--action) 0 148deg, rgba(255,255,255,0.12) 148deg 204deg, rgba(47,191,143,0.58) 204deg 238deg, rgba(255,255,255,0.08) 238deg 360deg);
+    }
+
+    .dial::before,
+    .dial::after {
+      content: "";
+      position: absolute;
+      border-radius: inherit;
+    }
+
+    .dial::before {
+      inset: 16px;
+      border: 8px solid rgba(255,255,255,0.10);
+      border-left-color: rgba(47,191,143,0.72);
+      border-bottom-color: rgba(47,191,143,0.38);
+    }
+
+    .dial::after {
+      inset: 54px;
+      background: var(--action);
+      border: 1px solid rgba(255,255,255,0.20);
+    }
+
+    .dial-content {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      gap: 5px;
+    }
+
+    .dial-icon {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .dial-time {
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dial-label {
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .confirm-card {
+      display: grid;
+      gap: 10px;
+      padding: 13px;
+    }
+
+    .efforts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .effort {
+      min-height: 38px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.13);
+      display: grid;
+      place-items: center;
+      color: var(--neutral-50);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .effort.selected {
+      border-color: rgba(47, 191, 143, 0.80);
+      background: rgba(47, 191, 143, 0.16);
+    }
+
+    .inputs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .field {
+      background: rgba(15, 23, 32, 0.62);
+    }
+
+    .completion-hero {
+      display: grid;
+      place-items: center;
+      min-height: 142px;
+      border: 1px solid rgba(47, 191, 143, 0.42);
+      border-radius: 10px;
+      background: rgba(47, 191, 143, 0.13);
+      text-align: center;
+      padding: 16px;
+    }
+
+    .completion-mark {
+      width: 56px;
+      height: 56px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 10px;
+      color: var(--neutral-900);
+      background: var(--accent);
+      font-size: 30px;
+      font-weight: 900;
+    }
+
+    .completion-hero h3 {
+      margin: 0 0 5px;
+      font-size: 22px;
+    }
+
+    .ordinary-card {
+      min-height: 118px;
+      background: var(--surface);
+      color: var(--neutral-900);
+      border-color: var(--neutral-100);
+    }
+
+    .ordinary-card h3,
+    .ordinary-card p {
+      color: inherit;
+    }
+
+    .ordinary-card p {
+      color: var(--neutral-700);
+    }
+
+    .light-screen {
+      background: var(--surface-muted);
+      color: var(--neutral-900);
+    }
+
+    .light-screen .screen-title {
+      color: var(--neutral-900);
+    }
+
+    .light-screen .subline {
+      color: var(--neutral-700);
+    }
+
+    .light-screen .status-pill {
+      color: var(--neutral-900);
+      background: var(--surface);
+      border-color: var(--neutral-200);
+    }
+
+    .bottom-dock {
+      position: absolute;
+      z-index: 8;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 16px 28px;
+      background: var(--primary);
+      box-shadow: 0 -18px 28px rgba(0,0,0,0.24);
+      display: grid;
+      gap: 8px;
+    }
+
+    .bottom-nav {
+      position: absolute;
+      z-index: 8;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 86px;
+      padding: 9px 18px 24px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      background: var(--surface);
+      border-top: 1px solid var(--neutral-100);
+    }
+
+    .nav-item {
+      display: grid;
+      place-items: center;
+      color: var(--neutral-500);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .nav-item.active {
+      color: var(--accent);
+    }
+
+    .primary-action,
+    .secondary-action,
+    .danger-action,
+    .icon-action {
+      min-height: 50px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-weight: 850;
+    }
+
+    .primary-action {
+      width: 100%;
+      background: var(--action);
+      color: var(--neutral-50);
+    }
+
+    .secondary-action,
+    .icon-action {
+      flex: 1;
+      background: transparent;
+      color: var(--neutral-50);
+      border-color: rgba(255,255,255,0.22);
+    }
+
+    .danger-action {
+      flex: 1;
+      background: transparent;
+      color: #F0A0A0;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .keyboard-zone {
+      position: absolute;
+      z-index: 7;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 292px;
+      padding: 12px;
+      background: #202832;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      display: none;
+    }
+
+    .keyboard-on .keyboard-zone {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 6px;
+      align-content: start;
+    }
+
+    .keyboard-key {
+      min-height: 30px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .keyboard-on .bottom-dock {
+      display: none;
+    }
+
+    .unsafe-layer {
+      position: absolute;
+      z-index: 14;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+    }
+
+    .show-unsafe .unsafe-layer {
+      display: block;
+    }
+
+    .unsafe-shape {
+      position: absolute;
+      border: 1px dashed rgba(242, 107, 79, 0.78);
+      background: rgba(242, 107, 79, 0.12);
+      color: #ffd0c8;
+      font-size: 10px;
+      font-weight: 850;
+      line-height: 1;
+      padding: 4px;
+    }
+
+    .hr-capsule {
+      position: absolute;
+      z-index: 30;
+      left: 244px;
+      top: 112px;
+      width: fit-content;
+      min-width: 104px;
+      max-width: calc(100% - 24px);
+      min-height: 44px;
+      display: grid;
+      gap: 0;
+      --capsule-rgb: 31, 42, 54;
+      --capsule-text: #F8FBFF;
+      --capsule-edge: rgba(255, 255, 255, 0.30);
+      --capsule-accent: #F8FBFF;
+      --capsule-glow: rgba(0, 0, 0, 0.32);
+      border: 1px solid var(--capsule-edge);
+      border-radius: 999px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.34), rgba(255,255,255,0.08) 44%, rgba(255,255,255,0.18)),
+        rgba(var(--capsule-rgb), 0.62);
+      color: var(--capsule-text);
+      box-shadow:
+        0 16px 40px var(--capsule-glow),
+        inset 0 1px 0 rgba(255,255,255,0.38),
+        inset 0 -12px 26px rgba(255,255,255,0.055);
+      backdrop-filter: blur(20px) saturate(1.45);
+      -webkit-backdrop-filter: blur(20px) saturate(1.45);
+      overflow: hidden;
+      user-select: none;
+      touch-action: none;
+      transition:
+        width 220ms cubic-bezier(0.20, 0.80, 0.20, 1),
+        left 220ms cubic-bezier(0.20, 0.80, 0.20, 1),
+        top 220ms cubic-bezier(0.20, 0.80, 0.20, 1),
+        border-radius 160ms cubic-bezier(0.16, 1, 0.30, 1),
+        transform 100ms cubic-bezier(0.16, 1, 0.30, 1),
+        background-color 180ms cubic-bezier(0.16, 1, 0.30, 1),
+        border-color 180ms cubic-bezier(0.16, 1, 0.30, 1),
+        box-shadow 180ms cubic-bezier(0.16, 1, 0.30, 1);
+    }
+
+    .hr-capsule.dragging {
+      transform: scale(1.03);
+      border-color: rgba(101, 169, 255, 0.82);
+      box-shadow:
+        0 20px 48px rgba(0,0,0,0.38),
+        0 0 0 4px rgba(101, 169, 255, 0.12),
+        inset 0 1px 0 rgba(255,255,255,0.44);
+      transition:
+        transform 100ms cubic-bezier(0.16, 1, 0.30, 1),
+        border-color 120ms cubic-bezier(0.16, 1, 0.30, 1),
+        box-shadow 120ms cubic-bezier(0.16, 1, 0.30, 1);
+    }
+
+    .hr-capsule.expanded {
+      width: 258px;
+      max-width: calc(100% - 24px);
+      border-radius: 18px;
+    }
+
+    .keyboard-on .hr-capsule.expanded {
+      width: 224px;
+    }
+
+    .hr-capsule.zone-low {
+      --capsule-rgb: 63, 80, 99;
+      --capsule-edge: rgba(215, 228, 241, 0.34);
+      --capsule-accent: #E6EEF6;
+    }
+
+    .hr-capsule.zone-warmup {
+      --capsule-rgb: 42, 100, 174;
+      --capsule-edge: rgba(141, 194, 255, 0.42);
+      --capsule-accent: #9ED0FF;
+    }
+
+    .hr-capsule.zone-fat {
+      --capsule-rgb: 38, 137, 106;
+      --capsule-edge: rgba(143, 238, 203, 0.42);
+      --capsule-accent: #B9F5DE;
+    }
+
+    .hr-capsule.zone-aerobic {
+      --capsule-rgb: 150, 114, 28;
+      --capsule-edge: rgba(248, 215, 116, 0.46);
+      --capsule-accent: #FFE59A;
+    }
+
+    .hr-capsule.zone-anaerobic {
+      --capsule-rgb: 178, 75, 47;
+      --capsule-edge: rgba(255, 169, 127, 0.44);
+      --capsule-accent: #FFC2A3;
+    }
+
+    .hr-capsule.zone-limit {
+      --capsule-rgb: 160, 45, 48;
+      --capsule-edge: rgba(255, 132, 132, 0.48);
+      --capsule-accent: #FFC1C1;
+    }
+
+    .hr-capsule.zone-over {
+      --capsule-rgb: 84, 9, 17;
+      --capsule-edge: rgba(255, 96, 108, 0.58);
+      --capsule-accent: #FFD5D8;
+      --capsule-glow: rgba(122, 17, 24, 0.42);
+    }
+
+    .hr-capsule.state-warn {
+      --capsule-rgb: 99, 75, 38;
+      --capsule-edge: rgba(238, 194, 117, 0.42);
+      --capsule-accent: #F4D092;
+    }
+
+    .hr-capsule.state-error {
+      --capsule-rgb: 66, 49, 57;
+      --capsule-edge: rgba(205, 183, 193, 0.34);
+      --capsule-accent: #E7DDE2;
+    }
+
+    .capsule-row {
+      min-height: 44px;
+      display: grid;
+      grid-template-columns: 8px max-content;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 15px;
+      pointer-events: none;
+    }
+
+    .hr-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--capsule-accent);
+      box-shadow:
+        0 0 0 4px rgba(255,255,255,0.10),
+        0 0 16px rgba(255,255,255,0.14);
+      opacity: 0.96;
+    }
+
+    .hr-main {
+      min-width: max-content;
+      display: grid;
+      gap: 1px;
+    }
+
+    .hr-label {
+      white-space: nowrap;
+      overflow: visible;
+      text-overflow: clip;
+      font-size: 13px;
+      line-height: 1.1;
+      font-weight: 900;
+    }
+
+    .hr-sub {
+      display: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 10px;
+      line-height: 1.15;
+      font-weight: 750;
+      opacity: 0.78;
+    }
+
+    .hr-capsule.expanded .hr-sub {
+      display: block;
+    }
+
+    .hr-capsule.expanded .capsule-row {
+      grid-template-columns: 10px minmax(0, 1fr);
+      padding: 10px 13px 8px;
+    }
+
+    .hr-capsule.expanded .hr-main {
+      min-width: 0;
+    }
+
+    .hr-capsule.text-changing .hr-main {
+      animation: capsuleTextFade 220ms cubic-bezier(0.20, 0.80, 0.20, 1);
+    }
+
+    .hr-capsule.width-morphing {
+      will-change: width, left, top;
+    }
+
+    @keyframes capsuleTextFade {
+      0% {
+        opacity: 0.38;
+        transform: translateY(1px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .capsule-detail {
+      display: none;
+      padding: 0 12px 12px;
+      pointer-events: none;
+    }
+
+    .hr-capsule.expanded .capsule-detail {
+      display: grid;
+      gap: 8px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .detail-item {
+      border-radius: 8px;
+      background: rgba(255,255,255,0.13);
+      padding: 7px;
+    }
+
+    .keyboard-on .detail-item {
+      padding: 5px;
+    }
+
+    .zone-fat .detail-item,
+    .zone-aerobic .detail-item {
+      background: rgba(0,0,0,0.13);
+    }
+
+    .detail-item span {
+      display: block;
+      font-size: 9px;
+      line-height: 1.15;
+      font-weight: 850;
+      opacity: 0.72;
+    }
+
+    .detail-item strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      line-height: 1.12;
+      font-weight: 900;
+    }
+
+    .boundary-note {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.38;
+      opacity: 0.82;
+    }
+
+    .keyboard-on .boundary-note {
+      display: none;
+    }
+
+    .snap-ghost {
+      position: absolute;
+      z-index: 13;
+      width: 42px;
+      top: 108px;
+      bottom: 112px;
+      border: 1px dashed rgba(101, 169, 255, 0.28);
+      pointer-events: none;
+      display: none;
+    }
+
+    .show-unsafe .snap-ghost {
+      display: block;
+    }
+
+    .snap-ghost.left { left: 12px; }
+    .snap-ghost.right { right: 12px; }
+
+    .evidence-card {
+      position: sticky;
+      top: 12px;
+    }
+
+    .evidence-list {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 12px;
+    }
+
+    .evidence-row {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.38;
+      color: var(--neutral-700);
+    }
+
+    .evidence-row strong {
+      color: var(--neutral-900);
+    }
+
+    .evidence-box {
+      min-height: 190px;
+      max-height: 360px;
+      overflow: auto;
+      border-radius: 8px;
+      background: #101820;
+      color: #d8e2ec;
+      padding: 12px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .superseded {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .old-card {
+      border: 1px dashed #c0cad4;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.58);
+      padding: 14px;
+    }
+
+    .old-card h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .old-card p {
+      margin: 0;
+      color: var(--neutral-700);
+      font-size: 13px;
+      line-height: 1.52;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 1180px) {
+      .workspace {
+        grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1fr);
+      }
+
+      .evidence-card {
+        grid-column: 1 / -1;
+        position: static;
+      }
+    }
+
+    @media (max-width: 880px) {
+      .page {
+        padding: 14px;
+      }
+
+      .intro,
+      .workspace,
+      .superseded {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        position: static;
+      }
+
+      .phone {
+        width: min(100%, var(--phone-w));
+      }
+    }
+
+    @media (max-width: 430px) {
+      :root {
+        --phone-w: calc(100vw - 28px);
+      }
+
+      .phone {
+        border-width: 8px;
+        border-radius: 26px;
+      }
+
+      .screen {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .metric {
+        font-size: 46px;
+      }
+
+      .exercise {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro" aria-label="Design brief">
+      <div class="panel">
+        <h1>E16-3a 心率浮动胶囊视觉方案</h1>
+        <p>当前推荐方向是 TrainFlow App 内可拖动浮动心率胶囊。它是 app shell overlay，不使用系统级悬浮窗权限，不参与训练页排版，也不挤压 TimerDial、力量 active/rest/confirm-record 或固定底部主按钮。</p>
+      </div>
+      <div class="panel">
+        <p><strong>本轮结论:</strong> 旧顶部 status pill 已降级为 superseded exploration。推荐方案只保留浮动胶囊：点击展开 / 收起，拖动超过阈值才进入 dragging，松手后吸附到左右安全边，不能停在主按钮、输入、confirm-record、底部导航、键盘、状态栏或手势导航区上。</p>
+        <div class="decision-grid">
+          <div class="decision"><strong>非系统悬浮窗</strong>只在 TrainFlow app 内显示，不申请 draw-over-other-apps。</div>
+          <div class="decision"><strong>辅助层级</strong>心率低于当前动作、主时间、组目标、记录确认和主按钮。</div>
+          <div class="decision"><strong>无训练</strong>只显示连接或 bpm，不写训练记录。</div>
+          <div class="decision"><strong>训练中</strong>表达未来 1s sampling 边界，本 HTML 不实现记录模型。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="Interactive prototype">
+      <aside class="controls panel control-card">
+        <h2>Prototype Controls</h2>
+        <div class="control-block">
+          <label class="label" for="scenarioSelect">页面场景</label>
+          <select class="select" id="scenarioSelect">
+            <option value="timed">Timed TimerDial active</option>
+            <option value="strengthActive">Strength active</option>
+            <option value="strengthRest">Strength rest</option>
+            <option value="strengthConfirm">Strength confirm-record</option>
+            <option value="strengthCompletion">Strength completion</option>
+            <option value="ordinary">普通非训练页面</option>
+          </select>
+        </div>
+        <div class="control-block">
+          <label class="label" for="hrStateSelect">心率 / 连接状态</label>
+          <select class="select" id="hrStateSelect">
+            <optgroup label="无 bpm">
+              <option value="disabled">未启用</option>
+              <option value="noSource">未连接源</option>
+              <option value="permission">权限未赋予</option>
+              <option value="bluetooth">蓝牙关闭</option>
+              <option value="connecting">正在连接</option>
+              <option value="waiting">等待数据</option>
+              <option value="stale">数据过期</option>
+              <option value="offline">离线</option>
+            </optgroup>
+            <optgroup label="有 bpm + 年龄">
+              <option value="low">低强度 88 bpm</option>
+              <option value="warmup">热身 105 bpm</option>
+              <option value="fat">燃脂 122 bpm</option>
+              <option value="aerobic">有氧 143 bpm</option>
+              <option value="anaerobic">无氧 165 bpm</option>
+              <option value="limit">极限 180 bpm</option>
+              <option value="over">超过上限 188 bpm</option>
+            </optgroup>
+            <optgroup label="有 bpm + 年龄缺失">
+              <option value="bpmOnly">心率 105 bpm</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="control-block">
+          <span class="label">胶囊状态</span>
+          <div class="seg-row">
+            <button class="small-button" type="button" id="collapseButton" aria-pressed="true">Collapsed</button>
+            <button class="small-button" type="button" id="expandButton" aria-pressed="false">Expanded</button>
+            <button class="small-button" type="button" id="snapLeftButton">Snap left</button>
+            <button class="small-button" type="button" id="snapRightButton">Snap right</button>
+          </div>
+        </div>
+        <div class="control-block">
+          <span class="label">宽度动画</span>
+          <div class="seg-row">
+            <button class="small-button" type="button" id="widthMotionButton">低强度 ↔ 超上限</button>
+          </div>
+          <p class="small-copy">collapsed 宽度变化以当前贴边侧为锚点：右贴边向左扩展，左贴边向右扩展；拖动中锁定尺寸，松手后再应用最新状态。</p>
+        </div>
+        <div class="control-block">
+          <span class="label">安全区演示</span>
+          <div class="seg-row">
+            <button class="toggle" type="button" id="unsafeToggle" aria-pressed="true">显示 exclusion zones</button>
+            <button class="toggle" type="button" id="keyboardToggle" aria-pressed="false">键盘区域</button>
+          </div>
+          <p class="small-copy">拖动胶囊时可以经过不安全区域；松手后必须吸附到安全边位置。轻点不拖动，只展开 / 收起详情。</p>
+        </div>
+      </aside>
+
+      <section class="stage-wrap">
+        <div class="stage-label">
+          <div>
+            <strong id="scenarioTitle">Timed TimerDial active</strong>
+            <span id="scenarioCopy">训练中：未来记录边界为 1 秒采样；本轮只做视觉与安全区验证。</span>
+          </div>
+          <span class="mode-chip" id="modeChip">Recommended</span>
+        </div>
+
+        <div class="phone" id="phoneFrame">
+          <section class="screen show-unsafe" id="phoneScreen">
+            <div class="snap-ghost left"></div>
+            <div class="snap-ghost right"></div>
+            <div class="unsafe-layer" id="unsafeLayer"></div>
+            <header class="app-header" data-unsafe="statusbar">
+              <div>
+                <h2 class="screen-title" id="screenTitle">HIIT 计时训练</h2>
+                <div class="subline" id="screenSubline">步骤 4 / 12 · 第 2 / 4 轮</div>
+              </div>
+              <span class="status-pill" id="sessionPill">进行中</span>
+            </header>
+
+            <div class="content-stack" id="scenarioContent"></div>
+
+            <div class="bottom-dock" id="bottomDock" data-unsafe="bottom-actions">
+              <button class="primary-action" type="button" id="primaryAction">完成本组</button>
+              <div class="controls-row" id="secondaryActions">
+                <button class="secondary-action" type="button">暂停训练</button>
+                <button class="danger-action" type="button">结束训练</button>
+              </div>
+            </div>
+
+            <nav class="bottom-nav hidden" id="bottomNav" data-unsafe="bottom-nav" aria-label="Bottom navigation">
+              <div class="nav-item active">训练</div>
+              <div class="nav-item">计划</div>
+              <div class="nav-item">动作库</div>
+              <div class="nav-item">记录</div>
+            </nav>
+
+            <div class="keyboard-zone" id="keyboardZone" data-unsafe="keyboard">
+              <div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div>
+              <div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div>
+              <div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div>
+              <div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div><div class="keyboard-key"></div>
+            </div>
+
+            <button class="hr-capsule" id="heartCapsule" type="button" aria-label="心率浮动胶囊" aria-expanded="false">
+              <div class="capsule-row">
+                <span class="hr-dot"></span>
+                <span class="hr-main">
+                  <span class="hr-label" id="hrLabel">未启用</span>
+                  <span class="hr-sub" id="hrSub">偏好关闭</span>
+                </span>
+              </div>
+              <div class="capsule-detail" id="capsuleDetail">
+                <div class="detail-grid">
+                  <div class="detail-item"><span>来源</span><strong id="sourceText">未启用</strong></div>
+                  <div class="detail-item"><span>记录</span><strong id="recordingText">不记录</strong></div>
+                  <div class="detail-item"><span>区间</span><strong id="zoneText">无</strong></div>
+                  <div class="detail-item"><span>更新</span><strong id="freshnessText">无数据</strong></div>
+                </div>
+                <p class="boundary-note" id="boundaryNote">无 bpm 时只显示连接 / 数据状态，不显示区间。</p>
+              </div>
+            </button>
+            <div class="gesture-bar" data-unsafe="gesture"></div>
+          </section>
+        </div>
+      </section>
+
+      <aside class="panel evidence-card">
+        <h2>No-overlap Evidence</h2>
+        <div class="evidence-list">
+          <div class="evidence-row"><strong>Tap behavior</strong><span>点击胶囊只展开 / 收起，不触发底层按钮。</span></div>
+          <div class="evidence-row"><strong>Drag threshold</strong><span>移动超过 10px 才进入 dragging，避免轻点误判。</span></div>
+          <div class="evidence-row"><strong>Snap behavior</strong><span>松手吸附到左 / 右安全边，并重新计算安全 Y。</span></div>
+          <div class="evidence-row"><strong>Unsafe areas</strong><span>状态栏、主按钮、底部导航、confirm-record、输入、感受、键盘、手势区。</span></div>
+        </div>
+        <pre class="evidence-box" id="evidenceBox">Evidence pending...</pre>
+      </aside>
+    </section>
+
+    <section class="superseded" aria-label="Superseded explorations">
+      <div class="old-card">
+        <h3>Superseded A · 顶部 status pill</h3>
+        <p>保留为 overlap-risk 参考。它会竞争 `进行中` 状态、长标题和小屏 header 空间，不再作为推荐方向。</p>
+      </div>
+      <div class="old-card">
+        <h3>Superseded B · 当前卡片角标</h3>
+        <p>会增加当前组 / TimerDial 卡片噪声，confirm-record 折叠摘要场景尤其容易破坏层级。</p>
+      </div>
+      <div class="old-card">
+        <h3>Superseded C · 底部微状态</h3>
+        <p>最容易压缩固定主按钮、底部导航、手势区和力量确认按钮周围的呼吸空间。</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const scenarios = {
+      timed: {
+        title: "Timed TimerDial active",
+        copy: "训练中：未来记录边界为 1 秒采样；本轮只做视觉与安全区验证。",
+        screenTitle: "HIIT 计时训练",
+        subline: "步骤 4 / 12 · 第 2 / 4 轮",
+        pill: "进行中",
+        light: false,
+        bottom: "timed",
+        recording: "1s sampling",
+        initial: { side: "right", y: 112 },
+        html: `
+          <section class="timer-card">
+            <div class="total-time">12:48</div>
+            <div class="dial" aria-label="TimerDial visual mock">
+              <div class="dial-content">
+                <div class="dial-icon">4</div>
+                <div class="dial-time">00:22</div>
+                <div class="dial-label">冲刺</div>
+              </div>
+            </div>
+            <p>下一步 · 休息 20秒</p>
+          </section>
+        `
+      },
+      strengthActive: {
+        title: "Strength active",
+        copy: "本组进行中：心率始终低于本组耗时、目标重量 / 次数和完成本组。",
+        screenTitle: "胸部力量训练",
+        subline: "1 / 7 组已确认",
+        pill: "进行中",
+        light: false,
+        bottom: "finishSet",
+        recording: "1s sampling",
+        initial: { side: "right", y: 184 },
+        html: `
+          <section class="main-card">
+            <div class="main-top">
+              <div>
+                <p class="phase">本组进行中</p>
+                <h3 class="exercise">杠铃卧推</h3>
+              </div>
+              <span class="status-pill">正式组</span>
+            </div>
+            <div>
+              <p class="metric-label">本组耗时</p>
+              <p class="metric">00:37</p>
+            </div>
+            <div class="target-row">
+              <div class="target"><span>目标重量</span><strong>50 kg</strong></div>
+              <div class="target"><span>目标次数</span><strong>8-12 次</strong></div>
+            </div>
+          </section>
+          <section class="next-card">
+            <h3>下一组</h3>
+            <p>杠铃卧推 · 第 3 / 5 组 · 50 kg · 8-12 次</p>
+          </section>
+        `
+      },
+      strengthRest: {
+        title: "Strength rest",
+        copy: "休息中：胶囊不抢休息倒计时，也不遮挡提前开始本组。",
+        screenTitle: "胸部力量训练",
+        subline: "2 / 7 组已确认",
+        pill: "休息",
+        light: false,
+        bottom: "startSet",
+        recording: "1s sampling",
+        initial: { side: "left", y: 184 },
+        html: `
+          <section class="main-card rest">
+            <div class="main-top">
+              <div>
+                <p class="phase">休息</p>
+                <h3 class="exercise">杠铃卧推</h3>
+              </div>
+              <span class="status-pill">下一组</span>
+            </div>
+            <div>
+              <p class="metric-label">休息倒计时</p>
+              <p class="metric">01:18</p>
+            </div>
+            <div class="target-row">
+              <div class="target"><span>下一组重量</span><strong>50 kg</strong></div>
+              <div class="target"><span>下一组次数</span><strong>8-12 次</strong></div>
+            </div>
+          </section>
+          <section class="next-card">
+            <h3>下一组摘要</h3>
+            <p>杠铃卧推 · 第 3 / 5 组 · 正式组</p>
+          </section>
+        `
+      },
+      strengthConfirm: {
+        title: "Strength confirm-record",
+        copy: "最严格场景：胶囊释放后不能停在实际重量、实际次数、感受选择或确认本组上。",
+        screenTitle: "胸部力量训练",
+        subline: "2 / 7 组已确认",
+        pill: "待确认",
+        light: false,
+        bottom: "confirmSet",
+        recording: "1s sampling",
+        initial: { side: "right", y: 126 },
+        html: `
+          <section class="main-card confirm">
+            <div class="main-top">
+              <div>
+                <p class="phase">待确认记录 · 完成耗时 00:46</p>
+                <h3 class="exercise">杠铃卧推</h3>
+              </div>
+              <span class="status-pill">正式组</span>
+            </div>
+          </section>
+          <section class="confirm-card" data-unsafe="confirm-record">
+            <h3>确认本组</h3>
+            <div class="efforts" data-unsafe="effort-options">
+              <div class="effort">轻松</div>
+              <div class="effort selected">刚好</div>
+              <div class="effort">很吃力</div>
+              <div class="effort">动作变形</div>
+            </div>
+            <div class="inputs" data-unsafe="inputs">
+              <div class="field"><span>实际重量</span><strong>50 kg</strong></div>
+              <div class="field"><span>实际次数</span><strong>10 次</strong></div>
+            </div>
+          </section>
+          <section class="next-card">
+            <h3>下一组</h3>
+            <p>杠铃卧推 · 第 3 / 5 组 · 50 kg · 8-12 次</p>
+          </section>
+        `
+      },
+      strengthCompletion: {
+        title: "Strength completion",
+        copy: "完成页：底部返回主动作仍固定可达，胶囊只能作为辅助状态停在安全边。",
+        screenTitle: "胸部力量训练",
+        subline: "本次训练复盘",
+        pill: "已完成",
+        light: false,
+        bottom: "returnHome",
+        recording: "terminal display",
+        initial: { side: "right", y: 160 },
+        html: `
+          <section class="completion-hero">
+            <div>
+              <div class="completion-mark">✓</div>
+              <h3>已完成</h3>
+              <p>7 组完成 · 总时长 42:18</p>
+            </div>
+          </section>
+          <section class="summary-card">
+            <h3>关键数据</h3>
+            <p>卧推 5 组、上斜哑铃推 2 组。计划重量和实际记录已保存。</p>
+          </section>
+          <section class="summary-card">
+            <h3>恢复建议</h3>
+            <p>胸部、肱三头肌和前三角需要基础拉伸与放松。</p>
+          </section>
+        `
+      },
+      ordinary: {
+        title: "普通非训练页面",
+        copy: "无训练时：偏好开启后可显示连接或 bpm，但只显示不记录。",
+        screenTitle: "训练首页",
+        subline: "今天可以从最近计划开始",
+        pill: "非训练",
+        light: true,
+        bottom: "nav",
+        recording: "display only",
+        initial: { side: "right", y: 126 },
+        html: `
+          <section class="ordinary-card">
+            <h3>开始计时训练</h3>
+            <p>默认推荐入口，适合 HIIT、热身、拉伸和自定义间歇。</p>
+          </section>
+          <section class="ordinary-card">
+            <h3>力量训练</h3>
+            <p>按动作、重量、次数、组数和休息完成计划。</p>
+          </section>
+          <section class="ordinary-card">
+            <h3>最近计划</h3>
+            <p>胸部力量训练 · 上次完成 2026-07-07</p>
+          </section>
+        `
+      }
+    };
+
+    const hrStates = {
+      disabled: { label: "未启用", sub: "偏好关闭", tone: "state-error", source: "未启用", zone: "无", freshness: "无数据", note: "偏好关闭时 Android 后续实现应隐藏胶囊；本状态仅用于设计审查。", noBpm: true },
+      noSource: { label: "未连接源", sub: "选择设备后显示", tone: "state-error", source: "无来源", zone: "无", freshness: "无数据", note: "无 bpm 时只显示连接 / 数据状态，不显示区间或 bpm 占位。", noBpm: true },
+      permission: { label: "权限未赋予", sub: "需要显式 opt-in", tone: "state-warn", source: "权限缺失", zone: "无", freshness: "无数据", note: "点击展开只能说明状态；真正权限说明属于后续 opt-in / permission rationale。", noBpm: true },
+      bluetooth: { label: "蓝牙关闭", sub: "训练不受阻塞", tone: "state-warn", source: "蓝牙关闭", zone: "无", freshness: "无数据", note: "不显示 GATT、service、device address 或 debug 日志。", noBpm: true },
+      connecting: { label: "正在连接", sub: "设备来源", tone: "state-warn", source: "设备", zone: "无", freshness: "连接中", note: "连接中不阻塞训练主流程。", noBpm: true },
+      waiting: { label: "等待数据", sub: "已连接无读数", tone: "state-warn", source: "设备", zone: "无", freshness: "等待首条", note: "等待数据不是错误，也不显示“未获取心率”大占位。", noBpm: true },
+      stale: { label: "数据过期", sub: "不伪装 live", tone: "state-error", source: "设备", zone: "无", freshness: "过期", note: "过期数据不得高亮成当前事实。", noBpm: true },
+      offline: { label: "离线", sub: "来源断开", tone: "state-error", source: "设备", zone: "无", freshness: "离线", note: "离线时训练继续可用。", noBpm: true },
+      low: { label: "低强度 88 bpm", sub: "低于 50%", tone: "zone-low", source: "Band 9", zone: "低强度", freshness: "live", note: "有 bpm 且年龄已设置时显示区间 + bpm。", bpm: 88 },
+      warmup: { label: "热身 105 bpm", sub: "50-60%", tone: "zone-warmup", source: "Band 9", zone: "热身", freshness: "live", note: "区间基于用户年龄估算最大心率，只是训练辅助。", bpm: 105 },
+      fat: { label: "燃脂 122 bpm", sub: "60-70%", tone: "zone-fat", source: "Band 9", zone: "燃脂", freshness: "live", note: "颜色跟随区间，但不输出训练强度建议。", bpm: 122 },
+      aerobic: { label: "有氧 143 bpm", sub: "70-80%", tone: "zone-aerobic", source: "Band 9", zone: "有氧", freshness: "live", note: "区间显示不改变 TimerDial 或力量训练主信息层级。", bpm: 143 },
+      anaerobic: { label: "无氧 165 bpm", sub: "80-90%", tone: "zone-anaerobic", source: "Band 9", zone: "无氧", freshness: "live", note: "高区间只做视觉状态，不触发声音或震动。", bpm: 165 },
+      limit: { label: "极限 180 bpm", sub: "90-100%", tone: "zone-limit", source: "Band 9", zone: "极限", freshness: "live", note: "极限仍是训练区间显示，不写成医疗警报。", bpm: 180 },
+      over: { label: "超过上限 188 bpm", sub: "视觉提示", tone: "zone-over", source: "Band 9", zone: "超过上限", freshness: "live", note: "超过上限仅深红视觉提示；不播放声音、不震动、不强制暂停、不做医疗告警。", bpm: 188 },
+      bpmOnly: { label: "心率 105 bpm", sub: "年龄未设置", tone: "zone-low", source: "Band 9", zone: "年龄缺失", freshness: "live", note: "年龄缺失时只显示 bpm，不显示心率区间。", bpm: 105, ageMissing: true }
+    };
+
+    const scenarioSelect = document.getElementById("scenarioSelect");
+    const hrStateSelect = document.getElementById("hrStateSelect");
+    const phoneScreen = document.getElementById("phoneScreen");
+    const scenarioContent = document.getElementById("scenarioContent");
+    const screenTitle = document.getElementById("screenTitle");
+    const screenSubline = document.getElementById("screenSubline");
+    const sessionPill = document.getElementById("sessionPill");
+    const primaryAction = document.getElementById("primaryAction");
+    const secondaryActions = document.getElementById("secondaryActions");
+    const bottomDock = document.getElementById("bottomDock");
+    const bottomNav = document.getElementById("bottomNav");
+    const heartCapsule = document.getElementById("heartCapsule");
+    const hrLabel = document.getElementById("hrLabel");
+    const hrSub = document.getElementById("hrSub");
+    const sourceText = document.getElementById("sourceText");
+    const recordingText = document.getElementById("recordingText");
+    const zoneText = document.getElementById("zoneText");
+    const freshnessText = document.getElementById("freshnessText");
+    const boundaryNote = document.getElementById("boundaryNote");
+    const evidenceBox = document.getElementById("evidenceBox");
+    const unsafeLayer = document.getElementById("unsafeLayer");
+    const unsafeToggle = document.getElementById("unsafeToggle");
+    const keyboardToggle = document.getElementById("keyboardToggle");
+    const collapseButton = document.getElementById("collapseButton");
+    const expandButton = document.getElementById("expandButton");
+    const widthMotionButton = document.getElementById("widthMotionButton");
+    const scenarioTitle = document.getElementById("scenarioTitle");
+    const scenarioCopy = document.getElementById("scenarioCopy");
+
+    const state = {
+      scenario: "timed",
+      hr: "disabled",
+      side: "right",
+      expanded: false,
+      keyboard: false,
+      showUnsafe: true,
+      position: { x: 244, y: 112 },
+      dragging: false,
+      moved: false,
+      pendingHeartRender: false,
+      widthMotionToggle: false,
+      motionTimer: 0
+    };
+
+    function screenRect() {
+      return phoneScreen.getBoundingClientRect();
+    }
+
+    function capsuleSize() {
+      const rect = heartCapsule.getBoundingClientRect();
+      return {
+        width: rect.width || (state.expanded ? 258 : 156),
+        height: rect.height || (state.expanded ? 154 : 44)
+      };
+    }
+
+    function clearCapsuleMotion(keepInlineWidth = false) {
+      if (state.motionTimer) {
+        window.clearTimeout(state.motionTimer);
+        state.motionTimer = 0;
+      }
+      heartCapsule.classList.remove("width-morphing", "text-changing");
+      heartCapsule.style.transition = "";
+      if (!keepInlineWidth) {
+        heartCapsule.style.width = "";
+      }
+    }
+
+    function setCapsulePosition(x, y) {
+      const size = capsuleSize();
+      const maxX = Math.max(12, phoneScreen.clientWidth - size.width - 12);
+      const maxY = Math.max(46, phoneScreen.clientHeight - size.height - 16);
+      state.position.x = Math.max(12, Math.min(maxX, x));
+      state.position.y = Math.max(46, Math.min(maxY, y));
+      heartCapsule.style.right = "auto";
+      heartCapsule.style.left = `${state.position.x}px`;
+      heartCapsule.style.top = `${state.position.y}px`;
+    }
+
+    function setSnappedCapsulePosition(x, y) {
+      const size = capsuleSize();
+      const maxX = Math.max(12, phoneScreen.clientWidth - size.width - 12);
+      const maxY = Math.max(46, phoneScreen.clientHeight - size.height - 16);
+      state.position.x = Math.max(12, Math.min(maxX, x));
+      state.position.y = Math.max(46, Math.min(maxY, y));
+      if (state.side === "right") {
+        heartCapsule.style.left = "auto";
+        heartCapsule.style.right = `${Math.max(12, phoneScreen.clientWidth - state.position.x - size.width)}px`;
+      } else {
+        heartCapsule.style.right = "auto";
+        heartCapsule.style.left = `${state.position.x}px`;
+      }
+      heartCapsule.style.top = `${state.position.y}px`;
+    }
+
+    function rectOfElement(el, label) {
+      const host = screenRect();
+      const r = el.getBoundingClientRect();
+      return {
+        label,
+        left: Math.round(r.left - host.left),
+        top: Math.round(r.top - host.top),
+        right: Math.round(r.right - host.left),
+        bottom: Math.round(r.bottom - host.top),
+        width: Math.round(r.width),
+        height: Math.round(r.height)
+      };
+    }
+
+    function actualCapsuleRect() {
+      return rectOfElement(heartCapsule, "capsule");
+    }
+
+    function fixedUnsafeRects() {
+      const w = phoneScreen.clientWidth;
+      const h = phoneScreen.clientHeight;
+      const rects = [
+        { label: "status-bar", left: 0, top: 0, right: w, bottom: 74, width: w, height: 74 },
+        { label: "gesture-nav", left: 0, top: h - 34, right: w, bottom: h, width: w, height: 34 }
+      ];
+      const unsafeElements = phoneScreen.querySelectorAll("[data-unsafe]");
+      unsafeElements.forEach(el => {
+        if (el.offsetParent === null && !el.classList.contains("keyboard-zone")) return;
+        const label = el.getAttribute("data-unsafe");
+        if (label === "statusbar" || label === "gesture") return;
+        rects.push(rectOfElement(el, label));
+      });
+      return rects.filter(r => r.width > 0 && r.height > 0);
+    }
+
+    function intersects(a, b, margin = 8) {
+      return !(
+        a.right <= b.left - margin ||
+        a.left >= b.right + margin ||
+        a.bottom <= b.top - margin ||
+        a.top >= b.bottom + margin
+      );
+    }
+
+    function capsuleRectAt(x = state.position.x, y = state.position.y) {
+      const size = capsuleSize();
+      return {
+        label: "capsule",
+        left: Math.round(x),
+        top: Math.round(y),
+        right: Math.round(x + size.width),
+        bottom: Math.round(y + size.height),
+        width: Math.round(size.width),
+        height: Math.round(size.height)
+      };
+    }
+
+    function findSafeY(y) {
+      const size = capsuleSize();
+      const minY = 82;
+      const maxY = Math.max(minY, phoneScreen.clientHeight - size.height - 48);
+      const unsafe = fixedUnsafeRects();
+      const candidates = [y, minY, 96, 126, 160, 198, 240, 290, 336, 382, 430, 486, maxY];
+      unsafe.forEach(rect => {
+        candidates.push(rect.top - size.height - 14, rect.bottom + 14);
+      });
+      for (let offset = 0; offset <= 360; offset += 8) {
+        candidates.push(y - offset, y + offset);
+      }
+      const sideX = state.side === "left" ? 12 : phoneScreen.clientWidth - size.width - 12;
+      const valid = candidates
+        .map(v => Math.max(minY, Math.min(maxY, v)))
+        .filter((v, index, arr) => arr.indexOf(v) === index)
+        .sort((a, b) => Math.abs(a - y) - Math.abs(b - y));
+      const found = valid.find(candidateY => {
+        const c = capsuleRectAt(sideX, candidateY);
+        return unsafe.every(r => !intersects(c, r, 6));
+      });
+      if (found != null) return found;
+      for (let candidateY = minY; candidateY <= maxY; candidateY += 4) {
+        const c = capsuleRectAt(sideX, candidateY);
+        if (unsafe.every(r => !intersects(c, r, 6))) return candidateY;
+      }
+      return minY;
+    }
+
+    function snapCapsule(side = state.side) {
+      clearCapsuleMotion();
+      state.side = side;
+      const size = capsuleSize();
+      const x = side === "left" ? 12 : phoneScreen.clientWidth - size.width - 12;
+      const y = findSafeY(state.position.y);
+      setSnappedCapsulePosition(x, y);
+      updateEvidence();
+    }
+
+    function updateButtons() {
+      collapseButton.setAttribute("aria-pressed", String(!state.expanded));
+      expandButton.setAttribute("aria-pressed", String(state.expanded));
+      unsafeToggle.setAttribute("aria-pressed", String(state.showUnsafe));
+      keyboardToggle.setAttribute("aria-pressed", String(state.keyboard));
+    }
+
+    function renderScenario(options = {}) {
+      const data = scenarios[state.scenario];
+      scenarioTitle.textContent = data.title;
+      scenarioCopy.textContent = data.copy;
+      screenTitle.textContent = data.screenTitle;
+      screenSubline.textContent = data.subline;
+      sessionPill.textContent = data.pill;
+      scenarioContent.innerHTML = data.html;
+
+      phoneScreen.classList.toggle("light-screen", data.light);
+      bottomDock.classList.toggle("hidden", data.bottom === "nav");
+      bottomNav.classList.toggle("hidden", data.bottom !== "nav");
+
+      if (data.bottom === "timed") {
+        primaryAction.classList.add("hidden");
+        secondaryActions.innerHTML = `
+          <button class="icon-action" type="button" aria-label="跳过">»</button>
+          <button class="secondary-action" type="button">+15s</button>
+          <button class="danger-action" type="button">结束</button>
+        `;
+      } else {
+        primaryAction.classList.remove("hidden");
+        const labels = {
+          finishSet: "完成本组",
+          startSet: "提前开始本组",
+          confirmSet: "确认本组",
+          returnHome: "返回训练首页"
+        };
+        primaryAction.textContent = labels[data.bottom] || "完成本组";
+        secondaryActions.innerHTML = `
+          <button class="secondary-action" type="button">暂停训练</button>
+          <button class="danger-action" type="button">结束训练</button>
+        `;
+      }
+
+      state.side = data.initial.side;
+      state.position.y = data.initial.y;
+      renderUnsafe();
+      if (options.snapInitial !== false) {
+        requestAnimationFrame(() => snapCapsule(data.initial.side));
+      }
+    }
+
+    function heartCapsuleClassName(data, extra = "") {
+      return `hr-capsule ${data.tone}${state.expanded ? " expanded" : ""}${state.dragging ? " dragging" : ""}${extra ? ` ${extra}` : ""}`;
+    }
+
+    function applyHeartStateContent(data) {
+      heartCapsule.className = heartCapsuleClassName(data);
+      heartCapsule.setAttribute("aria-expanded", String(state.expanded));
+      hrLabel.textContent = data.label;
+      hrSub.textContent = data.sub;
+      sourceText.textContent = data.source;
+      const scenario = scenarios[state.scenario];
+      recordingText.textContent = scenario.recording;
+      zoneText.textContent = data.zone;
+      freshnessText.textContent = data.freshness;
+      boundaryNote.textContent = data.note;
+    }
+
+    function measureTargetCapsule(data) {
+      const storedWidth = heartCapsule.style.width;
+      const storedLeft = heartCapsule.style.left;
+      const storedRight = heartCapsule.style.right;
+      const storedTop = heartCapsule.style.top;
+      const storedTransition = heartCapsule.style.transition;
+
+      heartCapsule.style.transition = "none";
+      heartCapsule.style.width = "";
+      applyHeartStateContent(data);
+      const measured = capsuleSize();
+      const targetX = state.side === "left" ? 12 : Math.max(12, phoneScreen.clientWidth - measured.width - 12);
+      const targetY = findSafeY(state.position.y);
+
+      heartCapsule.style.width = storedWidth;
+      heartCapsule.style.left = storedLeft;
+      heartCapsule.style.right = storedRight;
+      heartCapsule.style.top = storedTop;
+      heartCapsule.style.transition = storedTransition;
+
+      return { width: measured.width, height: measured.height, x: targetX, y: targetY };
+    }
+
+    function renderHeartState(options = {}) {
+      if (state.keyboard && state.scenario === "strengthConfirm" && state.expanded) {
+        state.expanded = false;
+      }
+      const data = hrStates[state.hr];
+      if (state.dragging && options.deferDuringDrag !== false) {
+        state.pendingHeartRender = true;
+        updateButtons();
+        return;
+      }
+
+      const shouldAnimate = options.animate !== false;
+      clearCapsuleMotion(true);
+      const oldRect = actualCapsuleRect();
+      const oldLabel = hrLabel.textContent;
+      const target = measureTargetCapsule(data);
+      const oldRightInset = Math.max(12, phoneScreen.clientWidth - oldRect.right);
+      const targetRightInset = Math.max(12, phoneScreen.clientWidth - target.x - target.width);
+
+      state.position.x = target.x;
+      state.position.y = target.y;
+
+      if (!shouldAnimate) {
+        heartCapsule.style.transition = "";
+        heartCapsule.style.width = "";
+        applyHeartStateContent(data);
+        setSnappedCapsulePosition(target.x, target.y);
+        updateEvidence();
+        updateButtons();
+        return;
+      }
+
+      heartCapsule.style.transition = "none";
+      heartCapsule.style.width = `${oldRect.width}px`;
+      if (state.side === "right") {
+        heartCapsule.style.left = "auto";
+        heartCapsule.style.right = `${oldRightInset}px`;
+      } else {
+        heartCapsule.style.right = "auto";
+        heartCapsule.style.left = `${oldRect.left}px`;
+      }
+      heartCapsule.style.top = `${oldRect.top}px`;
+      applyHeartStateContent(data);
+      heartCapsule.classList.add("width-morphing");
+      if (oldLabel !== data.label) {
+        heartCapsule.classList.add("text-changing");
+      }
+
+      heartCapsule.getBoundingClientRect();
+      heartCapsule.style.transition = "";
+
+      requestAnimationFrame(() => {
+        heartCapsule.style.width = `${target.width}px`;
+        if (state.side === "right") {
+          heartCapsule.style.right = `${targetRightInset}px`;
+        } else {
+          heartCapsule.style.left = `${target.x}px`;
+        }
+        heartCapsule.style.top = `${target.y}px`;
+        updateEvidence();
+      });
+
+      state.motionTimer = window.setTimeout(() => {
+        state.motionTimer = 0;
+        heartCapsule.classList.remove("width-morphing", "text-changing");
+        heartCapsule.style.width = "";
+        setSnappedCapsulePosition(target.x, target.y);
+        updateEvidence();
+      }, 260);
+      updateButtons();
+    }
+
+    function renderUnsafe() {
+      phoneScreen.classList.toggle("show-unsafe", state.showUnsafe);
+      phoneScreen.classList.toggle("keyboard-on", state.keyboard && state.scenario === "strengthConfirm");
+      unsafeLayer.innerHTML = "";
+      requestAnimationFrame(() => {
+        fixedUnsafeRects().forEach(rect => {
+          const div = document.createElement("div");
+          div.className = "unsafe-shape";
+          div.style.left = `${rect.left}px`;
+          div.style.top = `${rect.top}px`;
+          div.style.width = `${rect.width}px`;
+          div.style.height = `${rect.height}px`;
+          div.textContent = rect.label;
+          unsafeLayer.appendChild(div);
+        });
+        updateEvidence();
+      });
+    }
+
+    function updateEvidence() {
+      const c = capsuleRectAt();
+      const unsafe = fixedUnsafeRects();
+      const overlaps = unsafe.filter(r => intersects(c, r, 6)).map(r => r.label);
+      const labelFits = state.expanded || hrLabel.scrollWidth <= hrLabel.clientWidth + 1;
+      const data = {
+        scenario: state.scenario,
+        heartRateState: state.hr,
+        capsule: {
+          mode: state.expanded ? "expanded" : "collapsed",
+          side: state.side,
+          dragging: state.dragging,
+          rect: c,
+          material: "frosted glass",
+          sizing: state.expanded ? "fixed detail panel" : "content-hugging"
+        },
+        textIntegrity: {
+          label: hrLabel.textContent,
+          scrollWidth: Math.round(hrLabel.scrollWidth),
+          clientWidth: Math.round(hrLabel.clientWidth),
+          collapsedLabelFits: labelFits
+        },
+        motion: {
+          widthMorph: "220ms cubic-bezier(0.20, 0.80, 0.20, 1)",
+          anchor: state.side === "left" ? "left edge fixed; grows inward to the right" : "right edge fixed; grows inward to the left",
+          textChange: "subtle 220ms fade; no marquee, no number flip",
+          draggingPolicy: "lock current size during drag; apply pending state after release"
+        },
+        dragThresholdPx: 10,
+        clickHit: "capsule consumes tap; no pointer-through",
+        snap: "left/right safe edge on release",
+        unsafeAreaExclusion: unsafe.map(r => r.label),
+        overlaps,
+        pass: overlaps.length === 0 && labelFits
+      };
+      evidenceBox.textContent = JSON.stringify(data, null, 2);
+      window.__lastHeartRateEvidence = data;
+      return data;
+    }
+
+    function toggleExpanded(expanded) {
+      state.expanded = expanded && !(state.keyboard && state.scenario === "strengthConfirm");
+      renderHeartState({ animate: true });
+    }
+
+    let pointerStart = null;
+
+    heartCapsule.addEventListener("pointerdown", event => {
+      heartCapsule.setPointerCapture(event.pointerId);
+      pointerStart = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        capsuleX: state.position.x,
+        capsuleY: state.position.y
+      };
+      state.moved = false;
+    });
+
+    heartCapsule.addEventListener("pointermove", event => {
+      if (!pointerStart) return;
+      const dx = event.clientX - pointerStart.x;
+      const dy = event.clientY - pointerStart.y;
+      const distance = Math.hypot(dx, dy);
+      if (!state.dragging && distance > 10) {
+        state.dragging = true;
+        state.moved = true;
+        heartCapsule.classList.add("dragging");
+      }
+      if (state.dragging) {
+        setCapsulePosition(pointerStart.capsuleX + dx, pointerStart.capsuleY + dy);
+        updateEvidence();
+      }
+    });
+
+    heartCapsule.addEventListener("pointerup", event => {
+      if (!pointerStart) return;
+      const didDrag = state.dragging;
+      pointerStart = null;
+      state.dragging = false;
+      heartCapsule.classList.remove("dragging");
+      if (didDrag) {
+        const centerX = state.position.x + capsuleSize().width / 2;
+        const side = centerX < phoneScreen.clientWidth / 2 ? "left" : "right";
+        snapCapsule(side);
+      } else {
+        toggleExpanded(!state.expanded);
+      }
+      if (state.pendingHeartRender) {
+        state.pendingHeartRender = false;
+        renderHeartState({ animate: true, deferDuringDrag: false });
+      }
+      try {
+        heartCapsule.releasePointerCapture(event.pointerId);
+      } catch (error) {
+        // Pointer capture may already be released by the browser.
+      }
+    });
+
+    scenarioSelect.addEventListener("change", () => {
+      state.scenario = scenarioSelect.value;
+      if (state.scenario !== "strengthConfirm") {
+        state.keyboard = false;
+      }
+      renderScenario();
+      renderHeartState({ animate: false });
+    });
+
+    hrStateSelect.addEventListener("change", () => {
+      state.hr = hrStateSelect.value;
+      renderHeartState({ animate: true });
+    });
+
+    collapseButton.addEventListener("click", () => toggleExpanded(false));
+    expandButton.addEventListener("click", () => toggleExpanded(true));
+    document.getElementById("snapLeftButton").addEventListener("click", () => snapCapsule("left"));
+    document.getElementById("snapRightButton").addEventListener("click", () => snapCapsule("right"));
+
+    widthMotionButton.addEventListener("click", () => {
+      state.expanded = false;
+      state.widthMotionToggle = !state.widthMotionToggle;
+      state.hr = state.widthMotionToggle ? "over" : "low";
+      hrStateSelect.value = state.hr;
+      renderHeartState({ animate: true });
+    });
+
+    unsafeToggle.addEventListener("click", () => {
+      state.showUnsafe = !state.showUnsafe;
+      renderUnsafe();
+      updateButtons();
+    });
+
+    keyboardToggle.addEventListener("click", () => {
+      state.keyboard = !state.keyboard;
+      if (state.keyboard) {
+        state.scenario = "strengthConfirm";
+        scenarioSelect.value = state.scenario;
+        state.expanded = false;
+      }
+      renderScenario();
+      renderHeartState({ animate: false });
+      updateButtons();
+    });
+
+    window.collectHeartRateCapsuleEvidence = function collectHeartRateCapsuleEvidence() {
+      return updateEvidence();
+    };
+
+    window.setHeartRatePrototypeState = function setHeartRatePrototypeState(next) {
+      if (next.scenario) {
+        state.scenario = next.scenario;
+        scenarioSelect.value = next.scenario;
+        if (typeof next.keyboard !== "boolean") {
+          state.keyboard = false;
+        }
+      }
+      if (next.hr) {
+        state.hr = next.hr;
+        hrStateSelect.value = next.hr;
+      }
+      if (typeof next.expanded === "boolean") {
+        state.expanded = next.expanded;
+      }
+      if (typeof next.keyboard === "boolean") {
+        state.keyboard = next.keyboard;
+      }
+      renderScenario({ snapInitial: false });
+      renderHeartState({ animate: next.animate !== false });
+      if (next.side) snapCapsule(next.side);
+      return updateEvidence();
+    };
+
+    renderScenario();
+    renderHeartState({ animate: false });
+  </script>
+</body>
+</html>
