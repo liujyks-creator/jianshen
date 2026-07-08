@@ -1,110 +1,159 @@
-# E16-3 Heart Rate UI HTML Visual Planning
+# E16-3a Heart-rate Floating Capsule HTML Visual Revision
 
-**Status:** HTML visual planning ready for review
-**Date:** 2026-07-07
+**Status:** Recommended visual direction for future heart-rate UI
+**Date:** 2026-07-08
 **Scope:** HTML / CSS / JS high-fidelity visual planning only
 
 ## Entry
 
 - `docs/design/e16-3-heart-rate-ui-html/index.html`
 
-Open the file in a browser and use the controls at the top to switch:
+Open the HTML in a browser. The prototype is interactive and supports:
 
-- Variant A: top status pill
-- Variant B: current-card corner badge
-- Variant C: bottom control micro-status
-
-The same entry also switches through the required heart-rate states:
-
-- default clean training page with no heart-rate entry
-- heart rate not enabled
-- permission not granted
-- bluetooth disabled
-- connecting
-- connected waiting for data
-- live bpm
-- stale / disconnected
+- page scenario switching
+- no-bpm connection / data states
+- bpm + age zone states
+- bpm-only state when age is missing
+- collapsed / expanded capsule
+- tap to expand / collapse
+- drag with movement threshold
+- snap-left / snap-right safe-edge behavior
+- unsafe-area overlay
+- keyboard-area simulation for confirm-record
+- built-in no-overlap evidence via `window.collectHeartRateCapsuleEvidence()`
 
 ## Recommended Direction
 
-Recommend **Variant A: top status pill**.
+E16-3a recommends an **in-app draggable floating heart-rate capsule**.
 
-Why:
+This is the only current recommended direction. The capsule is a TrainFlow app-shell overlay:
 
-- It follows the current TrainFlow execution-page language: compact status pill, dark execution surface, clear current action and fixed bottom control.
-- It does not add a heart-rate card.
-- It does not restore `未获取心率`, manual heart-rate input, or average heart-rate trend.
-- It avoids touching the TimerDial center, strength current-set metric, target weight / reps, and confirm-record form.
-- It works across strength active, strength rest, strength confirm-record, and timed training.
-- It can disappear entirely when heart rate is not enabled or the training page has no heart-rate entry.
+- It does not use Android system overlay / "display over other apps" permission.
+- It does not appear outside TrainFlow.
+- It does not participate in page layout.
+- It must not push, resize, or reflow TimerDial, strength active/rest/confirm-record, completion recap, fixed bottom actions, or bottom navigation.
 
-## Alternatives
+## Interaction Rules Covered
 
-### Variant B: Current-Card Corner Badge
+- A tap on the capsule only expands or collapses heart-rate detail.
+- Drag begins only after a visible movement threshold (`10px` in the prototype) to avoid confusing a light tap with drag.
+- While the capsule covers part of the page, the tap target is the capsule itself; taps do not pass through to underlying buttons.
+- Releasing after drag snaps the capsule to the left or right safe edge.
+- When the confirm-record keyboard area is visible, the prototype forces the capsule back to compact/collapsed mode because the full expanded detail cannot fit safely between confirm controls and the keyboard.
+- The snap target recalculates safe Y placement and does not settle over:
+  - fixed bottom primary action
+  - bottom navigation
+  - confirm-record card
+  - confirm-record actual weight / reps inputs
+  - effort selection
+  - keyboard area
+  - status bar
+  - system gesture navigation area
 
-This keeps heart rate visually close to the active training object, which is useful in timed active or strength active states.
+## State Coverage
 
-Why it is not first choice:
+### No bpm
 
-- It adds extra noise inside the current set card.
-- It is riskier in confirm-record because the current-set summary is already intentionally collapsed to protect the confirmation form.
-- It may make heart rate feel attached to the set result, even though E16-3 must not record heart rate into the session.
+The prototype includes all no-bpm states:
 
-### Variant C: Bottom Control Micro-Status
-
-This keeps source status near the thumb zone and avoids the header.
-
-Why it is not first choice:
-
-- It reduces breathing room around fixed bottom controls.
-- It is most likely to compete with `确认本组`, `完成本组`, `提前开始本组`, `+15s`, and `结束训练`.
-- It has the highest small-screen risk because bottom controls already need navigation-bar padding and stable button height.
-
-## State Language
-
-Use compact source-state language:
-
-- `需授权`
+- `未启用`
+- `未连接源`
+- `权限未赋予`
 - `蓝牙关闭`
-- `连接中`
-- `等待读数`
-- `86 bpm`
-- `数据中断`
+- `正在连接`
+- `等待数据`
+- `数据过期`
+- `离线`
 
-Avoid:
+These states display connection / data status only. They do not show zone names, bpm placeholders, debug BLE details, medical wording, or training recommendations.
 
-- `未获取心率`
-- `-- bpm`
-- medical alert language
-- training intensity recommendations
-- debug BLE terms such as GATT, service, characteristic, CCCD, scan window, or device address
+### Bpm + Age
 
-## Boundaries
+The prototype includes all zone + bpm states:
+
+- `低强度 88 bpm`
+- `热身 105 bpm`
+- `燃脂 122 bpm`
+- `有氧 143 bpm`
+- `无氧 165 bpm`
+- `极限 180 bpm`
+- `超过上限 188 bpm`
+
+Zone color follows the current zone. `超过上限` uses deep red as a visual-only prompt. It must not trigger sound, vibration, forced pause, medical alert wording, or training interruption.
+
+### Bpm Without Age
+
+When age is missing, the prototype shows bpm only:
+
+- `心率 105 bpm`
+
+It does not show a zone label or percent range.
+
+## Scenario Coverage
+
+The prototype covers:
+
+- timed TimerDial active
+- strength active
+- strength rest
+- strength confirm-record
+- strength completion
+- ordinary non-workout page
+
+Non-workout display is live-only and does not record. Workout scenarios express the future 1-second sampling boundary, but this HTML does not implement a record model.
+
+## Superseded Explorations
+
+The original E16-3 top-pill recommendation is no longer current.
+
+The HTML keeps the old directions only as labeled historical references:
+
+- Superseded A: top status pill
+- Superseded B: current-card corner badge
+- Superseded C: bottom micro-status
+
+Do not use these as Android implementation guidance.
+
+## Android Follow-up Boundary
 
 This visual plan does not:
 
 - modify Android Kotlin
-- modify production manifest
-- add BLE permissions to production
-- connect the BLE provider
+- modify production manifest or Gradle
+- add production BLE permissions
+- connect the BLE provider to training UI
 - write heart-rate samples or summaries
-- modify Room, records, history, trends, `WorkoutCommand`, `WorkoutEvent`, TimedWorkoutEngine, StrengthWorkoutEngine, TimerDial, or sound logic
+- modify Room, session records, records/history/trends
+- modify `WorkoutCommand`
+- modify `WorkoutEvent`
+- modify `TimedWorkoutEngine`
+- modify `StrengthWorkoutEngine`
+- modify `TimerDial`
+- modify sound, vibration, notification, or cue logic
 
-Future Android implementation still needs a separate story for:
+Future Android implementation still needs separate stories for:
 
 - explicit opt-in
+- heart-rate display preference
+- source selection / device status entry
 - permission rationale
-- privacy and non-medical copy
-- source selection / selected-device affordance
-- stale data policy
-- production UI mapping from abstract `HeartRateState`
-- visual QA on 720x1280, especially strength confirm-record
+- privacy copy
+- non-medical copy
+- stale / offline policy
+- `HeartRateState` to UI mapping
+- recording model and 1-second sampling persistence
+- Android UI implementation
+- 720x1280 visual QA on real execution screens
 
 ## Verification Checklist
 
-- Browser opens the HTML and renders nonblank.
-- 720x1280 viewport renders a usable mobile layout.
-- Strength confirm-record still shows effort choices, actual weight, actual reps, and fixed `确认本组` without overlap.
-- Bottom buttons remain visible and stable.
-- Heart rate is absent in default clean / not-enabled states.
+- Browser opens `index.html` and renders nonblank.
+- 720x1280 viewport renders the mobile prototype without horizontal overflow.
+- Tap toggles collapsed / expanded capsule.
+- Drag only starts after movement threshold.
+- Drag release snaps left or right.
+- `window.collectHeartRateCapsuleEvidence()` reports `pass: true` for timed, strength active, strength rest, strength confirm-record, strength completion, ordinary page, and confirm-record with keyboard area.
+- Strength confirm-record keeps effort choices, actual weight, actual reps, and fixed `确认本组` protected from capsule settlement.
+- Bottom buttons and bottom navigation remain visible and stable.
+- Old top pill is not marked as recommended.
 - No Android, Kotlin, manifest, Gradle, Room, record, history, trend, command, event, TimerDial, or sound files are changed.
