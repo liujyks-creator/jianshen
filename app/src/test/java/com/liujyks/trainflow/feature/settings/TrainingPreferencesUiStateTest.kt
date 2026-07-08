@@ -1,5 +1,10 @@
 package com.liujyks.trainflow.feature.settings
 
+import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
+import com.liujyks.trainflow.core.health.BleHeartRateProviderState
+import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
+import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
+import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -110,7 +115,7 @@ class TrainingPreferencesUiStateTest {
         assertEquals("已启用", state.statusLabel)
         assertEquals("已启用显示偏好；后续可选择设备。", state.statusSummary)
         assertEquals("未连接源 / 待选择设备。", state.sourceSummary)
-        assertEquals("开启后仍不会自动扫描或连接；选择设备会在后续任务实现。", state.enabledBoundaryCopy)
+        assertEquals("开启后仍不会自动扫描或连接；只有点击扫描心率设备才会查找附近设备。", state.enabledBoundaryCopy)
         assertEquals(HeartRateBlePermissionStatus.NOT_REQUESTED, state.blePermissionStatus)
         assertTrue(state.canPrepareBlePermission)
         assertFalse(state.canClearSavedDevice)
@@ -125,7 +130,7 @@ class TrainingPreferencesUiStateTest {
 
         assertTrue(state.canClearSavedDevice)
         assertEquals(
-            "已保存设备名称：HUAWEI Band HR-OD7。本轮不会自动扫描或连接。",
+            "已选择设备：HUAWEI Band HR-OD7。可用于后续连接；当前不进入训练页。",
             state.sourceSummary
         )
     }
@@ -182,8 +187,8 @@ class TrainingPreferencesUiStateTest {
             blePermissionStatus = HeartRateBlePermissionStatus.PERMANENTLY_DENIED
         )
 
-        assertTrue(granted.blePermissionStatusCopy.contains("蓝牙权限已允许 / 可选择设备"))
-        assertTrue(granted.blePermissionStatusCopy.contains("不扫描、不连接"))
+        assertTrue(granted.blePermissionStatusCopy.contains("蓝牙权限已允许"))
+        assertTrue(granted.blePermissionStatusCopy.contains("主动扫描"))
         assertTrue(denied.blePermissionStatusCopy.contains("权限未赋予"))
         assertTrue(denied.blePermissionStatusCopy.contains("稍后再次点击"))
         assertTrue(permanentlyDenied.blePermissionStatusCopy.contains("系统设置"))
@@ -216,6 +221,167 @@ class TrainingPreferencesUiStateTest {
                 requestResult = HeartRateBlePermissionStatus.GRANTED
             )
         )
+    }
+
+    @Test
+    fun heartRateDevicePickerDoesNotScanWhenDisabledOrPermissionMissing() {
+        val disabled = heartRateDevicePickerUiState(
+            displayEnabled = false,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
+        )
+        val permissionRequired = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.DENIED
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.DISABLED, disabled.status)
+        assertFalse(disabled.canStartScan)
+        assertEquals(HeartRateDevicePickerStatus.PERMISSION_REQUIRED, permissionRequired.status)
+        assertFalse(permissionRequired.canStartScan)
+        assertTrue(permissionRequired.body.contains("未授权时不会扫描"))
+    }
+
+    @Test
+    fun heartRateDevicePickerBlocksScanWhenBluetoothDisabled() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
+                message = "Bluetooth is disabled"
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.BLUETOOTH_DISABLED, state.status)
+        assertFalse(state.canStartScan)
+        assertTrue(state.body.contains("蓝牙已关闭"))
+    }
+
+    @Test
+    fun heartRateDevicePickerStartScanMovesToScanningState() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.SCANNING,
+                message = "Scanning"
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SCANNING, state.status)
+        assertFalse(state.canStartScan)
+        assertTrue(state.canStopScan)
+        assertTrue(state.body.contains("扫描窗口约 12 秒"))
+    }
+
+    @Test
+    fun heartRateDevicePickerShowsOnlyHeartRateCapableCandidates() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.DEVICE_FOUND,
+                message = "found"
+            ),
+            scannerCandidates = listOf(
+                BleHeartRateDeviceCandidate(
+                    identifier = "AA:BB:CC:DD:EE:FF",
+                    displayName = "Keyboard",
+                    rssi = -30,
+                    advertisesHeartRateService = false
+                ),
+                BleHeartRateDeviceCandidate(
+                    identifier = "D8:F0:42:01:90:D7",
+                    displayName = "HUAWEI Band HR-OD7",
+                    rssi = -46,
+                    advertisesHeartRateService = true
+                )
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.DEVICES_FOUND, state.status)
+        assertTrue(state.canStartScan)
+        assertEquals(1, state.devices.size)
+        assertEquals("HUAWEI Band HR-OD7", state.devices.single().displayName)
+        assertEquals("D8:F0:42:**:**:D7", state.devices.single().safeIdentifier)
+        assertTrue(state.devices.single().capabilitySummary.contains("0x180D"))
+        assertTrue(state.devices.single().signalSummary.contains("-46"))
+    }
+
+    @Test
+    fun heartRateDevicePickerShowsNoDevicesAfterTimeoutWithoutCandidates() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.STOPPED,
+                message = "Scan window ended"
+            ),
+            scanFinishedWithoutDevices = true
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.NO_DEVICES_FOUND, state.status)
+        assertTrue(state.canStartScan)
+        assertTrue(state.body.contains("没有找到心率设备"))
+        assertTrue(state.body.contains("心率广播模式"))
+    }
+
+    @Test
+    fun heartRateDevicePickerShowsSelectedDevicePreference() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.DEVICE_SELECTED,
+                message = "selected",
+                selectedDevice = BleHeartRateDeviceSelection(
+                    identifier = "D8:F0:42:01:90:D7",
+                    displayName = "HUAWEI Band HR-OD7"
+                )
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SELECTED, state.status)
+        assertTrue(state.canStartScan)
+        assertTrue(state.body.contains("已保存"))
+        assertTrue(state.body.contains("后续连接"))
+    }
+
+    @Test
+    fun heartRateDevicePickerShowsScanFailedState() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scannerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.ERROR,
+                message = "failed",
+                recoverableReason = BleHeartRateRecoverableReason.SCAN_FAILED
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SCAN_FAILED, state.status)
+        assertTrue(state.canStartScan)
+        assertTrue(state.body.contains("扫描未完成"))
+    }
+
+    @Test
+    fun clearSelectionReturnsPickerToIdleNoSource() {
+        val selected = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceIdentifier = "D8:F0:42:01:90:D7",
+            savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
+        )
+        val cleared = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceIdentifier = null,
+            savedDeviceDisplayName = null,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SELECTED, selected.devicePickerState.status)
+        assertEquals(HeartRateDevicePickerStatus.IDLE_NO_SOURCE, cleared.devicePickerState.status)
+        assertTrue(cleared.devicePickerState.canStartScan)
     }
 
     @Test

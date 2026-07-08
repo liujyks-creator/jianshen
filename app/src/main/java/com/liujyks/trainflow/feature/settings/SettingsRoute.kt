@@ -53,6 +53,9 @@ internal fun SettingsRoute(
     onHeartRateDisplayEnabledChanged: (Boolean) -> Unit,
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onSelectHeartRateDevice: (String) -> Unit,
     onClearHeartRateDevicePreference: () -> Unit,
     onUiSkinChanged: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -99,6 +102,9 @@ internal fun SettingsRoute(
                 onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
                 onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
                 onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                onSelectHeartRateDevice = onSelectHeartRateDevice,
                 onClearHeartRateDevicePreference = onClearHeartRateDevicePreference
             )
         }
@@ -226,6 +232,9 @@ private fun HeartRatePreferencesCard(
     onHeartRateDisplayEnabledChanged: (Boolean) -> Unit,
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onSelectHeartRateDevice: (String) -> Unit,
     onClearHeartRateDevicePreference: () -> Unit
 ) {
     SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.focus) {
@@ -246,6 +255,12 @@ private fun HeartRatePreferencesCard(
         StatusBlock(title = "权限说明", body = uiState.permissionCopy)
         StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
         StatusBlock(title = uiState.blePermissionStatusTitle, body = uiState.blePermissionStatusCopy)
+        HeartRateDevicePickerBlock(
+            uiState = uiState.devicePickerState,
+            onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+            onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+            onSelectHeartRateDevice = onSelectHeartRateDevice
+        )
         if (uiState.showBlePermissionRationale) {
             StatusBlock(
                 title = uiState.blePermissionRationaleTitle,
@@ -268,6 +283,68 @@ private fun HeartRatePreferencesCard(
             TextButton(onClick = onClearHeartRateDevicePreference) {
                 Text(text = "清除已保存设备")
             }
+        }
+    }
+}
+
+@Composable
+private fun HeartRateDevicePickerBlock(
+    uiState: HeartRateDevicePickerUiState,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onSelectHeartRateDevice: (String) -> Unit
+) {
+    StatusBlock(title = uiState.title, body = uiState.body)
+    Text(
+        text = "${uiState.scanWindowCopy} ${uiState.bandHint}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = TrainFlowNeutral700
+    )
+    when {
+        uiState.canStopScan -> {
+            TextButton(onClick = onStopHeartRateDeviceScan) {
+                Text(text = uiState.actionLabel ?: "停止扫描")
+            }
+        }
+
+        uiState.actionLabel != null -> {
+            TextButton(
+                enabled = uiState.canStartScan,
+                onClick = onStartHeartRateDeviceScan
+            ) {
+                Text(text = uiState.actionLabel)
+            }
+        }
+    }
+    if (uiState.showDeviceList) {
+        uiState.devices.forEach { device ->
+            HeartRateDeviceCandidateRow(
+                device = device,
+                onSelectHeartRateDevice = onSelectHeartRateDevice
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeartRateDeviceCandidateRow(
+    device: HeartRateDeviceCandidateUiState,
+    onSelectHeartRateDevice: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = device.displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "${device.safeIdentifier} · ${device.signalSummary} · ${device.capabilitySummary}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+        TextButton(onClick = { onSelectHeartRateDevice(device.identifier) }) {
+            Text(text = "选择设备")
         }
     }
 }
@@ -469,6 +546,9 @@ private fun SettingsRoutePreview() {
             onHeartRateDisplayEnabledChanged = {},
             onPrepareHeartRateBlePermission = {},
             onRequestHeartRateBlePermission = {},
+            onStartHeartRateDeviceScan = {},
+            onStopHeartRateDeviceScan = {},
+            onSelectHeartRateDevice = {},
             onClearHeartRateDevicePreference = {},
             onUiSkinChanged = {}
         )
