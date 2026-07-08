@@ -144,7 +144,7 @@ feature:settings
 - E11.2a 已记录广播未开启 / Huawei Health 连接占用条件下未发现 Band 9 标准 BLE HRS；E16 广播开启 retest 已在 debug-only 工具中取得 Band 9 BLE HRS 正向证据并合入 main（merge commit `bbd4296`）。该证据只允许后续另拆 `E16-1 BLE HRS adapter spike`，不直接进入生产接入或生产 UI。
 - E16-1 adapter spike 已把标准 HRS payload parser 落为纯 Kotlin utility，并把 BLE scan / GATT / notify lifecycle 封装在 `app/src/debug` 的 `BleHeartRateProvider` 测试入口；该 debug provider 不注入生产路径，不申请 production manifest 蓝牙权限，不接训练执行页、Room、records、history 或 trends。
 - E16-2 允许 production-capable `AndroidBleHeartRateProvider` 地基位于 `core.health`，但默认 App 路径不调用 scan / connect，不申请 production manifest BLE 权限，不接训练页 UI、Room、records、history 或 trends。该 provider 只通过显式调用启动扫描，使用固定 scan window，stop / disconnect / close 和失败路径必须关闭 GATT，并把 SDK model 限定在 provider 内部。
-- E16-3a 之前不得直接把 provider 接到训练 UI 或记录层。当前 UI 方向是 App 内浮动心率胶囊；它仍必须消费 `HeartRateState` / 后续 zone mapper 的抽象状态，不得直接依赖 Android BLE SDK model。
+- E16-3a 已完成 App 内浮动心率胶囊 HTML 视觉修订；E16-4 已完成 opt-in / settings / permission rationale planning。Provider 仍不得直接接到训练 UI 或记录层；后续必须先通过设置页显式 opt-in、权限说明、设备选择和非医疗文案，再分 story 接入胶囊 UI。浮动胶囊仍必须消费 `HeartRateState` / 后续 zone mapper 的抽象状态，不得直接依赖 Android BLE SDK model。
 
 ### 4.10 `ui:designsystem`
 
@@ -175,7 +175,7 @@ feature:settings
 | `feature:workout-session` | 计时训练执行页、力量训练执行页、跟练雏形页、确认层。 |
 | `feature:history` | 训练总结、训练记录、基础趋势。 |
 | `feature:recovery` | 训练后恢复建议。 |
-| `feature:settings` | 训练偏好、通知偏好、未来健康数据边界偏好。 |
+| `feature:settings` | 训练偏好、通知偏好、未来健康数据边界偏好；未来心率 opt-in 的 canonical setup 入口。 |
 
 ## 5. 分层数据流
 
@@ -354,6 +354,8 @@ interface HeartRateProvider {
 - E16-1 已实现 debug-only BLE HRS adapter spike：标准 payload parser 可测试 8-bit / 16-bit bpm 与 flags；debug provider 可在真机上输出 scanning、device found、connecting、service discovered、notify enabled、bpm received、disconnected / stopped 状态，并把 bpm 映射为 `HeartRateState`。这仍不是生产接入。
 - E16-2 已将 BLE HRS provider 基础生产化到 `core.health`：状态边界覆盖 no source、permission required、bluetooth disabled、scanning、device found / selected、connecting、connected waiting for data、live bpm、stale / disconnected 和 recoverable error；权限规划明确 Android 12+ 的 `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` 与 Android 11 及以下 scan compatibility 的 `ACCESS_FINE_LOCATION`，但权限请求只能由未来显式用户动作触发，不在 app 启动时触发。DataStore 只保存可选 device identifier / display name；Android privacy、BLE private address 和 Band broadcast label/address 变化意味着该 identifier 不能被当作稳定医疗设备身份。
 - E16-3 初版顶部 pill 方案不再作为推荐实现；当前未来 UI 方向是 App 内可拖动浮动心率胶囊，不使用 `SYSTEM_ALERT_WINDOW` / “显示在其他应用上层”权限。胶囊属于 TrainFlow app shell overlay，不参与训练页布局，不得遮挡主按钮、底部导航、confirm-record 控件、输入框、键盘区域、状态栏或手势导航；松手后必须吸附到安全边缘。
+- E16-4 明确未来心率功能默认关闭，canonical 入口是 `设置 -> 训练偏好 -> 心率`；设备状态入口和胶囊展开态只能作为已启用后的状态 / 设置捷径。首次开启前必须展示用途、权限、隐私和非医疗说明；BLE scan / connect 权限只能在用户主动开启 / 选择设备 / 重新扫描后触发，不得在 app 启动、进入训练页或开始训练时触发。
+- 未来心率设备选择只保存 provider identifier / display name，不保存 `BluetoothDevice`、`BluetoothGatt`、GATT / SDK model、bpm 样本或 session summary。关闭心率后 provider 必须停止扫描、断开连接、不重连、不记录；可保留已保存设备名称作为 convenience hint，并提供清除入口。
 - 未来心率显示必须区分连接 / 数据状态和心率区间状态。无可用 bpm 时只能显示 `未启用`、`未连接源`、`权限未赋予`、`蓝牙关闭`、`正在连接`、`等待数据`、`数据过期`、`离线` 等来源状态；有 bpm 且用户已设置年龄时才显示“区间 + bpm”，例如 `热身 105 bpm`。未设置年龄时只显示 bpm，不计算区间。区间可基于用户年龄估算最大心率，用户后续可覆盖最大心率或提醒阈值。
 - 未来记录边界：未训练时只显示不记录；timed 和 strength 训练中允许按 1 秒采样记录心率，覆盖 strength active、rest 与 confirm-record。该记录模型、Room / session schema、summary、history / trends 和训练后分析必须另拆 story；E16-3a 仍只做视觉规划。
 - `超过上限` 表示超过用户设置的提醒阈值，首版只做深红视觉提示，不播放声音、不震动、不强制暂停，不做医疗、危险或训练中断判断。
@@ -376,8 +378,10 @@ interface HeartRateProvider {
 | 前台服务 | E7.2 不启用 | 后续只有在确需后台训练可靠推进且能匹配合法 foreground service 类型时再引入。 |
 | 震动 | 临近结束提醒 | 由用户偏好控制。 |
 | 健康数据 | 首版预留 | 未接入时不请求。 |
+| BLE scan / connect | 未来心率设备 opt-in 后扫描和连接用户选择的设备 | 不在 app 启动、训练页进入或训练开始时请求；只在用户主动开启 / 选择设备 / 重新扫描后请求。Android 11 及以下 location scan compatibility 只能用于蓝牙扫描说明，不得写成定位能力。 |
+| 系统悬浮窗 | 不使用 | 浮动心率胶囊只在 TrainFlow app shell 内显示，不申请 `SYSTEM_ALERT_WINDOW` / “显示在其他应用上层”。 |
 
-首版不采集医疗数据，不做医疗结论，不上传训练数据到远端服务。
+首版不采集医疗数据，不做医疗结论，不上传训练数据到远端服务。未来心率展示和区间必须保持非医疗文案：`超过上限` 只表示超过用户设置的视觉提醒阈值，不播放声音、不震动、不强制暂停、不自动中断训练。
 
 ## 10. 测试策略
 

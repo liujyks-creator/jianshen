@@ -255,6 +255,8 @@ interface HeartRateDisplayPreference {
 }
 ```
 
+E16-4 更新：未来生产心率 opt-in 应作为 app-level settings / DataStore preference 处理，而不是计划级功能开关。`showDisconnectedPlaceholder` 只保留为早期 prototype / compatibility 字段名，不得恢复训练页 `-- bpm`、`未获取心率` 占位或旧内联心率卡片。生产设置至少需要表达 display enabled、selected provider identifier、selected display name、用户年龄 / 阈值，以及关闭后保留或清除已保存设备的行为；设备偏好只保存 identifier / display name，不保存 GATT / SDK model / bpm 样本 / session summary。
+
 ### 5.2 计划块
 
 ```ts
