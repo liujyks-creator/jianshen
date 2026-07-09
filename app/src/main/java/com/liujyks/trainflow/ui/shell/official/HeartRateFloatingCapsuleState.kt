@@ -50,7 +50,8 @@ internal enum class HeartRateFloatingCapsuleStatus {
     ZONE_AEROBIC,
     ZONE_ANAEROBIC,
     ZONE_LIMIT,
-    OVER_LIMIT
+    OVER_LIMIT,
+    ERROR
 }
 
 internal fun heartRateFloatingCapsuleUiState(
@@ -62,6 +63,21 @@ internal fun heartRateFloatingCapsuleUiState(
 ): HeartRateFloatingCapsuleUiState {
     if (!settings.enabled) {
         return HeartRateFloatingCapsuleUiState.Hidden
+    }
+
+    if (settings.blePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
+        return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
+            label = "权限未赋予",
+            title = "需要蓝牙权限",
+            body = "进入心率与设备后，可按说明授权蓝牙权限。TrainFlow 不会在启动或训练开始时自动请求。",
+            deviceHint = settings.savedDeviceDisplayName,
+            forceCollapsed = forceCollapsed
+        )
+    }
+
+    if (settings.devicePickerState.status == HeartRateDevicePickerStatus.BLUETOOTH_DISABLED) {
+        return bluetoothDisabledCapsule(settings, forceCollapsed)
     }
 
     val liveReading = liveState?.bpm?.takeIf { bpm -> bpm > 0 }?.let { bpm ->
@@ -129,6 +145,20 @@ internal fun heartRateFloatingCapsuleUiState(
                 if (state.unavailableReason == HeartRateUnavailableReason.BLUETOOTH_DISABLED) {
                     return bluetoothDisabledCapsule(settings, forceCollapsed)
                 }
+                if (
+                    state.unavailableReason == HeartRateUnavailableReason.CONNECTION_FAILED ||
+                    state.unavailableReason == HeartRateUnavailableReason.READ_ERROR
+                ) {
+                    return stateCapsule(
+                        status = HeartRateFloatingCapsuleStatus.ERROR,
+                        label = "连接异常",
+                        title = "心率连接异常",
+                        body = "当前只显示错误状态；可到心率与设备中重新处理。",
+                        deviceHint = state.sourceLabel ?: settings.savedDeviceDisplayName,
+                        updateLabel = "异常",
+                        forceCollapsed = forceCollapsed
+                    )
+                }
                 if (state.sourceLabel != null || settings.savedDeviceDisplayName != null) {
                     return stateCapsule(
                         status = HeartRateFloatingCapsuleStatus.CONNECTING,
@@ -146,19 +176,6 @@ internal fun heartRateFloatingCapsuleUiState(
     }
 
     return when {
-        settings.blePermissionStatus != HeartRateBlePermissionStatus.GRANTED ->
-            stateCapsule(
-                status = HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
-                label = "权限未赋予",
-                title = "需要蓝牙权限",
-                body = "进入心率与设备后，可按说明授权蓝牙权限。TrainFlow 不会在启动或训练开始时自动请求。",
-                deviceHint = settings.savedDeviceDisplayName,
-                forceCollapsed = forceCollapsed
-            )
-
-        settings.devicePickerState.status == HeartRateDevicePickerStatus.BLUETOOTH_DISABLED ->
-            bluetoothDisabledCapsule(settings, forceCollapsed)
-
         settings.devicePickerState.status == HeartRateDevicePickerStatus.SCANNING ->
             stateCapsule(
                 status = HeartRateFloatingCapsuleStatus.CONNECTING,
@@ -300,6 +317,7 @@ private fun stateCapsule(
         HeartRateFloatingCapsuleStatus.WAITING_DATA,
         HeartRateFloatingCapsuleStatus.STALE,
         HeartRateFloatingCapsuleStatus.OFFLINE,
+        HeartRateFloatingCapsuleStatus.ERROR,
         HeartRateFloatingCapsuleStatus.SELECTED_DEVICE -> "当前只显示状态"
         HeartRateFloatingCapsuleStatus.BPM_ONLY,
         HeartRateFloatingCapsuleStatus.ZONE_LOW,

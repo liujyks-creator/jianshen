@@ -389,6 +389,7 @@ private fun HeartRateFloatingCapsuleStatus.toneColor(): Color {
         HeartRateFloatingCapsuleStatus.OVER_LIMIT -> Color(0xFF7A1118)
         HeartRateFloatingCapsuleStatus.STALE,
         HeartRateFloatingCapsuleStatus.OFFLINE -> TrainFlowNeutral500
+        HeartRateFloatingCapsuleStatus.ERROR -> TrainFlowError
         HeartRateFloatingCapsuleStatus.NO_SOURCE,
         HeartRateFloatingCapsuleStatus.HIDDEN -> TrainFlowNeutral200
     }

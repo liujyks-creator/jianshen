@@ -55,7 +55,7 @@ internal class AndroidBleHeartRateProvider(
 
     private val scanTimeoutRunnable = Runnable {
         if (isScanning) {
-            stopScan(
+            stopBleScan(
                 BleHeartRateProviderState(
                     kind = BleHeartRateProviderStateKind.STOPPED,
                     message = "Scan window ended; no background scan is kept running",
@@ -197,6 +197,18 @@ internal class AndroidBleHeartRateProvider(
 
     fun refreshAvailability() {
         publish(availabilityState())
+    }
+
+    fun stopScan() {
+        if (isScanning) {
+            stopBleScan(
+                BleHeartRateProviderState(
+                    kind = BleHeartRateProviderStateKind.STOPPED,
+                    message = "BLE heart-rate scan stopped",
+                    selectedDevice = selectedDevice
+                )
+            )
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -475,7 +487,7 @@ internal class AndroidBleHeartRateProvider(
     }
 
     @SuppressLint("MissingPermission")
-    private fun stopScan(
+    private fun stopBleScan(
         state: BleHeartRateProviderState? = null
     ) {
         if (isScanning) {

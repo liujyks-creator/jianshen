@@ -118,6 +118,7 @@ internal fun TrainFlowApp(
         AndroidHeartRateDeviceScanner(context.applicationContext)
     }
     val heartRateScannerState by heartRateDeviceScanner.providerState.collectAsState()
+    val heartRateLiveState = heartRateScannerState.toHeartRateState()
     val heartRateDeviceCandidates by heartRateDeviceScanner.candidates.collectAsState()
     var heartRateScanActive by rememberSaveable {
         mutableStateOf(false)
@@ -223,6 +224,26 @@ internal fun TrainFlowApp(
             heartRateDeviceScanner.stopScan()
             heartRateScanActive = false
             heartRateScanFinishedWithoutDevices = false
+        }
+    }
+
+    LaunchedEffect(
+        heartRateDisplayEnabled,
+        resolvedHeartRateBlePermissionStatus,
+        heartRateScannerState.kind
+    ) {
+        when (
+            heartRateLiveProviderLifecycleAction(
+                displayEnabled = heartRateDisplayEnabled,
+                blePermissionStatus = resolvedHeartRateBlePermissionStatus,
+                providerStateKind = heartRateScannerState.kind
+            )
+        ) {
+            HeartRateLiveProviderLifecycleAction.CONNECT_SELECTED_DEVICE ->
+                heartRateDeviceScanner.connectSelectedDevice()
+            HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT ->
+                heartRateDeviceScanner.stopAndDisconnect()
+            HeartRateLiveProviderLifecycleAction.NONE -> Unit
         }
     }
 
@@ -450,7 +471,6 @@ internal fun TrainFlowApp(
                         if (displayName != null) {
                             onSaveHeartRateDevicePreference(identifier, displayName)
                         }
-                        heartRateDeviceScanner.stopScan()
                         heartRateScanActive = false
                         heartRateScanFinishedWithoutDevices = false
                     },
@@ -627,7 +647,10 @@ internal fun TrainFlowApp(
                     )
                 }
                 HeartRateFloatingCapsuleOverlay(
-                    uiState = heartRateFloatingCapsuleUiState(settingsState.heartRateSettings),
+                    uiState = heartRateFloatingCapsuleUiState(
+                        settings = settingsState.heartRateSettings,
+                        liveState = heartRateLiveState
+                    ),
                     exclusionPolicy = shellState.heartRateCapsuleExclusionPolicy(),
                     onOpenHeartRateSettings = {
                         heartRateSettingsFocusRequestKey += 1
@@ -637,6 +660,31 @@ internal fun TrainFlowApp(
                 )
             }
         }
+    }
+}
+
+internal enum class HeartRateLiveProviderLifecycleAction {
+    NONE,
+    CONNECT_SELECTED_DEVICE,
+    STOP_AND_DISCONNECT
+}
+
+internal fun heartRateLiveProviderLifecycleAction(
+    displayEnabled: Boolean,
+    blePermissionStatus: HeartRateBlePermissionStatus,
+    providerStateKind: BleHeartRateProviderStateKind
+): HeartRateLiveProviderLifecycleAction {
+    if (!displayEnabled || blePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
+        return HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT
+    }
+    return when (providerStateKind) {
+        BleHeartRateProviderStateKind.DEVICE_SELECTED ->
+            HeartRateLiveProviderLifecycleAction.CONNECT_SELECTED_DEVICE
+        BleHeartRateProviderStateKind.PERMISSION_REQUIRED,
+        BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
+        BleHeartRateProviderStateKind.UNAVAILABLE ->
+            HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT
+        else -> HeartRateLiveProviderLifecycleAction.NONE
     }
 }
 

@@ -11,6 +11,8 @@ internal interface HeartRateDeviceScanner : AutoCloseable {
     fun startScan()
     fun stopScan()
     fun selectDevice(identifier: String): BleHeartRateDeviceSelection?
+    fun connectSelectedDevice()
+    fun stopAndDisconnect()
 }
 
 internal class AndroidHeartRateDeviceScanner(
@@ -30,11 +32,19 @@ internal class AndroidHeartRateDeviceScanner(
     }
 
     override fun stopScan() {
-        provider.stop()
+        provider.stopScan()
     }
 
     override fun selectDevice(identifier: String): BleHeartRateDeviceSelection? {
         return provider.selectDevice(identifier)
+    }
+
+    override fun connectSelectedDevice() {
+        provider.connectSelectedDevice()
+    }
+
+    override fun stopAndDisconnect() {
+        provider.stop()
     }
 
     override fun close() {

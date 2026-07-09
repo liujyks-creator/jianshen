@@ -47,6 +47,12 @@ class HeartRateFloatingCapsuleStateTest {
             settings = heartRateSettingsUiState(
                 enabled = true,
                 blePermissionStatus = HeartRateBlePermissionStatus.DENIED
+            ),
+            liveState = HeartRateState(
+                kind = HeartRateStateKind.DEVICE_READING,
+                sourceKind = HeartRateSourceKind.DEVICE,
+                bpm = 105,
+                sourceLabel = "HUAWEI Band HR-OD7"
             )
         )
 
@@ -198,5 +204,27 @@ class HeartRateFloatingCapsuleStateTest {
         assertEquals(HeartRateFloatingCapsuleStatus.OVER_LIMIT, state.status)
         assertEquals("超过上限 188 bpm", state.collapsedLabel)
         assertTrue(state.detailBody.contains("不触发声音、震动、强制暂停"))
+    }
+
+    @Test
+    fun recoverableProviderErrorShowsCompactErrorState() {
+        val state = heartRateFloatingCapsuleUiState(
+            settings = heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
+            ),
+            liveState = HeartRateState(
+                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
+                sourceKind = HeartRateSourceKind.DEVICE,
+                sourceLabel = "HUAWEI Band HR-OD7",
+                unavailableReason = HeartRateUnavailableReason.CONNECTION_FAILED
+            )
+        )
+
+        assertEquals(HeartRateFloatingCapsuleStatus.ERROR, state.status)
+        assertEquals("连接异常", state.collapsedLabel)
+        assertEquals("当前只显示状态", state.infoTiles.first { it.label == "记录" }.value)
+        assertEquals("异常", state.infoTiles.first { it.label == "更新" }.value)
     }
 }
