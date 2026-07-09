@@ -214,10 +214,10 @@ private fun HeartRateFloatingCapsule(
                 role = Role.Button
             },
         shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
         border = BorderStroke(1.dp, tone.copy(alpha = 0.42f)),
-        shadowElevation = 5.dp,
-        tonalElevation = 2.dp
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier.padding(
