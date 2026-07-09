@@ -1,6 +1,6 @@
 # E16-8 Heart-rate floating capsule
 
-**Status:** Implemented; unit/build/lint/check validated; AVD smoke blocked by missing local AVD
+**Status:** Implemented; unit/build/lint/check validated; AVD smoke completed on `TrainFlow_Pixel_API_36`
 **Date:** 2026-07-09
 **Scope:** Android app-shell floating heart-rate capsule overlay, capsule UI state mapper, drag / snap geometry, focused tests, docs
 
@@ -134,29 +134,43 @@ TrainFlow_Pixel_API_36
 .local/smoke/e16-8-heart-rate-floating-capsule/
 ```
 
-本机 AVD smoke 未能执行：当前环境 `emulator -list-avds` 未列出 `TrainFlow_Pixel_API_36`，`adb devices` 无已连接设备。已保存：
+补采结果：`TrainFlow_Pixel_API_36` 已确认存在，已启动为 `emulator-5554`，`sys.boot_completed=1`，并完成 E16-8 App-shell floating heart-rate capsule AVD UI smoke。
 
 ```text
 .local/smoke/e16-8-heart-rate-floating-capsule/00-adb-devices.txt
 ```
 
-因此以下截图 / XML / logcat 证据仍需在固定 AVD 可用后补采：
+已保存以下证据：
 
-- disabled hidden
-- enabled no source capsule visible
-- permission denied state
-- selected source state
-- expanded state
-- drag snap left / right
-- timed active no overlap
-- strength active no overlap
-- strength rest no overlap
-- strength confirm-record no overlap
-- completion no overlap
-- bottom nav / settings no overlap
-- logcat fatal / ANR scan
+- `00-adb-devices.txt`
+- `01-disabled-hidden.png` / `01-disabled-hidden.xml`
+- `02-enabled-no-source-capsule.png` / `02-enabled-no-source-capsule.xml`
+- `03-expanded-state.png` / `03-expanded-state.xml`
+- `04-drag-snap-left.png` / `04-drag-snap-left.xml`
+- `05-drag-snap-right.png` / `05-drag-snap-right.xml`
+- `06-settings-no-overlap.png` / `06-settings-no-overlap.xml`
+- `07-timed-active-no-overlap.png` / `07-timed-active-no-overlap.xml`
+- `08-strength-active-no-overlap.png` / `08-strength-active-no-overlap.xml`
+- `09-strength-rest-no-overlap.png` / `09-strength-rest-no-overlap.xml`
+- `10-strength-confirm-record-no-overlap.png` / `10-strength-confirm-record-no-overlap.xml`
+- `11-strength-completion-no-overlap.png` / `11-strength-completion-no-overlap.xml`
+- `12-bottom-nav-no-overlap.png` / `12-bottom-nav-no-overlap.xml`
+- `bounds-check.txt`
+- `bounds-evidence.json`
+- `logcat-fatal-anr-scan.txt`
 
-真机 BLE 外设测试仍只能由用户人工完成；本 story 不要求 Codex 环境验证真实 Band 9 外设。
+模拟器覆盖：
+
+- 默认 `heartRateDisplayEnabled=false` 时胶囊隐藏。
+- 授予模拟器蓝牙运行时权限并开启心率显示后，胶囊显示 `未连接源`，未出现设备列表。
+- 轻点胶囊可展开，expanded 态提供 `心率与设备` 入口；展开本身不请求权限、不扫描、不连接。
+- 胶囊可拖动并吸附到左右安全边，轻点没有被误判为拖动。
+- settings、timed active、strength active、strength rest、strength confirm-record、strength completion、bottom nav 的关键控件无遮挡。
+- `bounds-check.txt` / `bounds-evidence.json` 结果为 `overall=PASS`；胶囊未与 bottom nav、固定底部主按钮、confirm-record 实际重量 / 次数输入、感受选择、completion 返回按钮、TimerDial center / main action 相交。
+- `logcat-fatal-anr-scan.txt` 结果为 PASS：TrainFlow 进程 logcat 未发现 FATAL / ANR / BLE scan / connect / notify 关键词，crash buffer 未发现 TrainFlow FATAL / ANR。
+- 生产 TrainFlow UI 未出现 `HR Broadcast Smoke`。
+
+本次未改功能代码，属于 docs-only smoke update。真机 BLE 外设测试仍只能由用户人工完成；真实 Band 9 / BLE bpm 数据获取仍为后续人工测试，不阻塞 E16-8。
 
 ## 禁止范围确认
 
