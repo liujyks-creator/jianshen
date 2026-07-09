@@ -296,7 +296,19 @@ private fun stateCapsule(
         HeartRateFloatingCapsuleStatus.NO_SOURCE,
         HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
         HeartRateFloatingCapsuleStatus.BLUETOOTH_DISABLED -> "未记录"
-        else -> "1s sampling"
+        HeartRateFloatingCapsuleStatus.CONNECTING,
+        HeartRateFloatingCapsuleStatus.WAITING_DATA,
+        HeartRateFloatingCapsuleStatus.STALE,
+        HeartRateFloatingCapsuleStatus.OFFLINE,
+        HeartRateFloatingCapsuleStatus.SELECTED_DEVICE -> "当前只显示状态"
+        HeartRateFloatingCapsuleStatus.BPM_ONLY,
+        HeartRateFloatingCapsuleStatus.ZONE_LOW,
+        HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
+        HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN,
+        HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
+        HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
+        HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
+        HeartRateFloatingCapsuleStatus.OVER_LIMIT -> "训练记录：后续开启"
     }
     return HeartRateFloatingCapsuleUiState(
         visible = true,

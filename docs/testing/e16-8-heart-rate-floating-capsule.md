@@ -1,6 +1,6 @@
 # E16-8 Heart-rate floating capsule
 
-**Status:** Implemented; review-fix for real-device feedback complete; unit and AVD smoke revalidated
+**Status:** Implemented; E16-8 review findings fixed; unit and AVD smoke revalidated
 **Date:** 2026-07-09
 **Scope:** Android app-shell floating heart-rate capsule overlay, capsule UI state mapper, drag / snap geometry, focused tests, docs
 
@@ -17,7 +17,7 @@
 修复方式：
 
 - expanded 从大圆角胶囊收敛为轻量 popover 卡片，最大宽度 / 高度受限；小屏或避让区不足时自动使用 compact expanded，仍不足则直接保持 collapsed，避免遮挡设置页主内容、confirm-record 输入、固定底部动作和底部导航。
-- 自定义 pointer input 不再消费普通 tap；拖动只在超过 movement threshold 后消费事件，expanded 内 `心率与设备` 按钮可正常点击。
+- 自定义 pointer input 不再消费普通 tap；拖动只在超过 movement threshold 后消费事件。2026-07-10 follow-up 后，expanded 不再承载 `心率与设备` 主按钮，相关操作转移到设置页卡片按钮。
 - `心率与设备` 点击会收起胶囊并打开设置页，同时通过 request key 滚动到现有 `心率与设备` 设置卡片；如果从训练 session 打开，返回设置页会回到原 session，不通过普通底部导航绕过 session lock。
 - debug manifest 不再移除 MainActivity launcher，也不再给 `DebugEntryActivity` 注册 launcher intent；debug APK 默认启动直接进入 TrainFlow。`HR Broadcast Smoke` 仍保留在 `app/src/debug`，可通过 adb explicit activity 启动，但不作为普通启动首屏。
 
@@ -48,6 +48,18 @@ Focused tests 新增覆盖：
 - 蓝牙权限弹窗取消后回到 `DENIED`，继续显示 `重新授权蓝牙权限` 按钮；如果后续进入系统不再弹窗状态，按钮仍显示为 `去系统设置开启`，并打开 TrainFlow 应用详情页。
 - 心率个人参数设置记录为后续任务：年龄、估算最大心率、可选手动最大心率、上限提醒阈值、区间说明、非医疗提示。本轮不新增 DataStore 字段，不做区间设置 UI，不做 E16-9 state mapping，不接 live bpm，不写记录。
 
+## 2026-07-10 Review Findings Fix
+
+本轮继续只修 E16-8 review findings，不扩大到 E16-9 / E16-11。
+
+修复项：
+
+- runtime permission result 不再把所有 non-granted 结果折叠为 `DENIED`；`TrainFlowApp` 使用已有 `hasPermanentlyDeniedPermissions(...)` helper。普通拒绝保持 `DENIED`，设置页继续显示 `重新授权蓝牙权限`；系统不再弹窗 / no longer prompts 时进入 `PERMANENTLY_DENIED`，设置页显示 `去系统设置开启`，点击打开 TrainFlow app details settings。
+- expanded 信息面板中的 `记录` 格不再显示 `1s sampling`，也不暗示 E16-8 已启用记录。无来源 / 未授权 / 蓝牙关闭显示 `未记录`；已选择设备、正在连接、等待数据、数据过期、离线显示 `当前只显示状态`；mapper-ready 的 bpm / zone / over-limit 状态显示 `训练记录：后续开启`。
+- `HeartRateFloatingCapsuleStateTest` 不再锁定 selected-device state 为 `1s sampling`；新增 permission result 单测覆盖 denied、permanently denied 和 granted。
+- 最终 expanded 结构是 `来源` / `记录` / `区间` / `更新` 信息面板；`心率与设备` 操作入口已转移到设置页卡片按钮。胶囊 expanded 不再作为权限、扫描、选择设备或 debug smoke 的操作入口。
+- 用户人工测试 OK；本修复没有要求新增 AVD screenshot 证据。
+
 ## 实现范围
 
 本轮在 official app shell 顶层实现 App 内浮动心率胶囊 overlay。
@@ -60,6 +72,7 @@ Focused tests 新增覆盖：
 - 拖动释放后吸附到左右安全边。
 - expanded 内展示 `来源`、`记录`、`区间`、`更新` 信息格，不再重复放置 `心率与设备` 主按钮。
 - 设置页 `心率与设备` 卡片仍是权限授权、扫描设备和选择设备的唯一操作区域；胶囊 expanded 不会请求权限、扫描、连接或打开 debug smoke。
+- expanded `记录` 信息只表达当前边界：`未记录`、`当前只显示状态` 或 `训练记录：后续开启`，不出现 `1s sampling`。
 - 键盘 / IME 可见或强制 compact 时收起，避免 confirm-record + keyboard 空间不足。
 - 位置保留在 shell 内存中；本轮不持久化位置。
 
@@ -137,18 +150,21 @@ Focused tests 覆盖：
 - permission denied -> `权限未赋予`
 - bluetooth disabled -> `蓝牙关闭`
 - selected source -> `已选择设备`
+- selected source `记录` -> `当前只显示状态`
 - waiting data -> `等待数据`
 - stale / offline
 - bpm without age -> bpm-only
+- bpm / zone `记录` -> `训练记录：后续开启`
 - bpm with age -> zone + bpm
 - over limit -> deep red visual-only state
+- permission runtime result -> retryable `DENIED`
+- permission runtime result -> `PERMANENTLY_DENIED` settings path
 - left / right snap
 - bottom button and confirm-record exclusion snap-away
 - status / gesture inset clamp
 - tap movement threshold does not become drag
 - expanded safe placement regular -> compact fallback
 - expanded safe placement no-space -> collapsed
-- capsule settings shortcut and active-session return path from the earlier review fix
 - debug manifest launcher boundary
 
 ## Boundary Scans
@@ -188,7 +204,7 @@ TrainFlow_Pixel_API_36
 .local/smoke/e16-8-heart-rate-floating-capsule-review-fix/
 ```
 
-Review-fix AVD smoke 使用固定 AVD `TrainFlow_Pixel_API_36`；`emulator-5554` 已完成默认启动直进 TrainFlow、expanded compact settings、点击 `心率与设备` 后进入 / 定位设置卡片、confirm-record 安全性、logcat fatal / ANR scan 和 bounds evidence 采集。
+Review-fix AVD smoke 使用固定 AVD `TrainFlow_Pixel_API_36`；`emulator-5554` 已完成默认启动直进 TrainFlow、expanded compact settings 信息面板、设置页心率卡片可达、confirm-record 安全性、logcat fatal / ANR scan 和 bounds evidence 采集。
 
 ```text
 .local/smoke/e16-8-heart-rate-floating-capsule-review-fix/00-adb-devices.txt
@@ -199,7 +215,6 @@ review-fix 已保存以下证据：
 - `00-adb-devices.txt`
 - `01-launch-direct-trainflow.png` / `01-launch-direct-trainflow.xml`
 - `02-expanded-compact-settings.png` / `02-expanded-compact-settings.xml`
-- `03-click-heart-rate-device-entry.png` / `03-click-heart-rate-device-entry.xml`
 - `04-settings-card-visible.png` / `04-settings-card-visible.xml`
 - `05-confirm-record-expanded-safe.png` / `05-confirm-record-expanded-safe.xml`
 - `apk-badging-launcher.txt`
@@ -211,8 +226,8 @@ review-fix 已保存以下证据：
 Review-fix 模拟器覆盖：
 
 - 默认 debug launcher 直接打开 `com.liujyks.trainflow/.app.MainActivity`，首屏不再显示 `进入 TrainFlow` / `HR Broadcast Smoke` 两按钮 debug entry。
-- 设置页 expanded 胶囊在 720x1280 viewport 上收敛为 `[196,234][692,590]` 的轻量 popover，`心率与设备` 按钮完整可见。
-- 点击 expanded 内 `心率与设备` 后，胶囊收起并定位到设置页现有 `心率与设备` 卡片。
+- 设置页 expanded 胶囊在 720x1280 viewport 上收敛为轻量 popover，并展示最终 `来源` / `记录` / `区间` / `更新` 信息面板。
+- `心率与设备` 操作已转移到设置页现有卡片按钮；expanded 不再承载该主按钮。
 - confirm-record 场景空间不足时保持 collapsed；实际重量、实际次数和确认按钮保持完整可见，不被 expanded 遮挡。
 - `bounds-check.txt` / `bounds-evidence.json` 结果为 `overall=PASS`。
 - `logcat-fatal-anr-scan.txt` 结果为 PASS：未发现 FATAL / ANR / debug entry / BLE scan / connect / notify 关键词。
@@ -228,6 +243,7 @@ Review-fix 模拟器覆盖：
 - 未改 Room schema / migration。
 - 未改 records / history / trends。
 - 未做 1s sampling persistence。
+- expanded 不显示 `1s sampling`，不暗示记录已启用。
 - 未做 post-workout analysis / zones summary。
 - 未改 `WorkoutCommand` / `WorkoutEvent`。
 - 未改 `TimedWorkoutEngine` / `StrengthWorkoutEngine`。

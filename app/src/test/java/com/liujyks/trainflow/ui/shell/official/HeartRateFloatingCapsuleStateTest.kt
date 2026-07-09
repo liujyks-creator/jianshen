@@ -86,7 +86,7 @@ class HeartRateFloatingCapsuleStateTest {
         assertEquals("已选择设备", state.collapsedLabel)
         assertEquals("HUAWEI Band HR-OD7", state.deviceHint)
         assertEquals("HUAWEI Band HR-OD7", state.infoTiles.first { it.label == "来源" }.value)
-        assertEquals("1s sampling", state.infoTiles.first { it.label == "记录" }.value)
+        assertEquals("当前只显示状态", state.infoTiles.first { it.label == "记录" }.value)
     }
 
     @Test
@@ -155,6 +155,7 @@ class HeartRateFloatingCapsuleStateTest {
 
         assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, state.status)
         assertEquals("心率 105 bpm", state.collapsedLabel)
+        assertEquals("训练记录：后续开启", state.infoTiles.first { it.label == "记录" }.value)
     }
 
     @Test

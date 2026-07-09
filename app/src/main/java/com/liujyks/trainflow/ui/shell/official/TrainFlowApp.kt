@@ -156,13 +156,15 @@ internal fun TrainFlowApp(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         val requiredPermissions = BleHeartRatePermissionPlanner.requiredPermissions()
-        val granted = context.arePermissionsGranted(requiredPermissions)
-            || requiredPermissions.all { permission -> result[permission] == true }
-        heartRateBlePermissionStatus = if (granted) {
-            HeartRateBlePermissionStatus.GRANTED
-        } else {
-            HeartRateBlePermissionStatus.DENIED
-        }
+        heartRateBlePermissionStatus = resolveHeartRateBlePermissionRequestResult(
+            requiredPermissions = requiredPermissions,
+            requestResult = result,
+            allPermissionsCurrentlyGranted = context.arePermissionsGranted(requiredPermissions),
+            hasPermanentlyDeniedPermissions = context.hasPermanentlyDeniedPermissions(
+                permissions = requiredPermissions,
+                requestResult = result
+            )
+        )
         heartRatePermissionRefreshKey += 1
     }
     var currentDestination by rememberSaveable {
@@ -677,6 +679,21 @@ private fun Context.hasPermanentlyDeniedPermissions(
     return permissions.any { permission ->
         requestResult[permission] == false &&
             !activity.shouldShowRequestPermissionRationale(permission)
+    }
+}
+
+internal fun resolveHeartRateBlePermissionRequestResult(
+    requiredPermissions: List<String>,
+    requestResult: Map<String, Boolean>,
+    allPermissionsCurrentlyGranted: Boolean,
+    hasPermanentlyDeniedPermissions: Boolean
+): HeartRateBlePermissionStatus {
+    val granted = allPermissionsCurrentlyGranted ||
+        requiredPermissions.all { permission -> requestResult[permission] == true }
+    return when {
+        granted -> HeartRateBlePermissionStatus.GRANTED
+        hasPermanentlyDeniedPermissions -> HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+        else -> HeartRateBlePermissionStatus.DENIED
     }
 }
 
