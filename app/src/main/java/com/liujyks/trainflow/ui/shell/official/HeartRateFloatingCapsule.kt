@@ -4,12 +4,14 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
@@ -46,6 +48,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -104,13 +107,41 @@ internal fun HeartRateFloatingCapsuleOverlay(
             densityScale = density.density,
             policy = effectivePolicy
         )
+        val regularExpandedSize = with(density) {
+            HeartRateCapsuleSize(width = 248.dp.toPx(), height = 184.dp.toPx())
+        }
+        val compactExpandedSize = with(density) {
+            HeartRateCapsuleSize(width = 236.dp.toPx(), height = 152.dp.toPx())
+        }
+        val regularExpandedFits = effectivePolicy != HeartRateCapsuleExclusionPolicy.IME_VISIBLE &&
+            hasSafeHeartRateCapsulePlacement(
+                capsuleSize = regularExpandedSize,
+                viewport = viewport,
+                safeInsets = safeInsets,
+                exclusionZones = exclusionZones,
+                edgeMargin = edgeMargin
+            )
+        val compactExpandedFits = effectivePolicy != HeartRateCapsuleExclusionPolicy.IME_VISIBLE &&
+            hasSafeHeartRateCapsulePlacement(
+                capsuleSize = compactExpandedSize,
+                viewport = viewport,
+                safeInsets = safeInsets,
+                exclusionZones = exclusionZones,
+                edgeMargin = edgeMargin
+            )
         var expanded by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(effectivePolicy, expanded) {
-            if (effectivePolicy == HeartRateCapsuleExclusionPolicy.IME_VISIBLE && expanded) {
+        LaunchedEffect(effectivePolicy, expanded, compactExpandedFits) {
+            if (
+                (effectivePolicy == HeartRateCapsuleExclusionPolicy.IME_VISIBLE || !compactExpandedFits) &&
+                expanded
+            ) {
                 expanded = false
             }
         }
-        val renderedExpanded = expanded && effectivePolicy != HeartRateCapsuleExclusionPolicy.IME_VISIBLE
+        val renderedExpanded = expanded &&
+            effectivePolicy != HeartRateCapsuleExclusionPolicy.IME_VISIBLE &&
+            compactExpandedFits
+        val compactExpanded = renderedExpanded && !regularExpandedFits
         var capsuleSize by remember { mutableStateOf(HeartRateCapsuleSize(0f, 0f)) }
         var capsuleX by rememberSaveable { mutableStateOf(Float.NaN) }
         var capsuleY by rememberSaveable { mutableStateOf(Float.NaN) }
@@ -157,7 +188,12 @@ internal fun HeartRateFloatingCapsuleOverlay(
         HeartRateFloatingCapsule(
             uiState = uiState,
             expanded = renderedExpanded,
-            onOpenHeartRateSettings = onOpenHeartRateSettings,
+            compactExpanded = compactExpanded,
+            onToggleExpanded = { expanded = !expanded },
+            onOpenHeartRateSettings = {
+                expanded = false
+                onOpenHeartRateSettings()
+            },
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .onSizeChanged { size ->
@@ -175,7 +211,6 @@ internal fun HeartRateFloatingCapsuleOverlay(
                 )
                 .heartRateCapsulePointerInput(
                     thresholdPx = with(density) { 10.dp.toPx() },
-                    onTap = { expanded = !expanded },
                     onDragBy = { delta ->
                         capsuleX = (capsuleX.takeUnless { it.isNaN() } ?: 0f)
                             .plus(delta.x)
@@ -201,19 +236,25 @@ internal fun HeartRateFloatingCapsuleOverlay(
 private fun HeartRateFloatingCapsule(
     uiState: HeartRateFloatingCapsuleUiState,
     expanded: Boolean,
+    compactExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onOpenHeartRateSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val tone = uiState.status.toneColor()
+    val expandedMaxWidth = if (compactExpanded) 236.dp else 248.dp
+    val expandedMaxHeight = if (compactExpanded) 152.dp else 184.dp
     Surface(
         modifier = modifier
-            .widthIn(min = 116.dp, max = if (expanded) 280.dp else 220.dp)
+            .widthIn(min = 116.dp, max = if (expanded) expandedMaxWidth else 220.dp)
+            .then(if (expanded) Modifier.heightIn(max = expandedMaxHeight) else Modifier)
             .animateContentSize(animationSpec = tween(durationMillis = 220))
+            .clickable(onClick = onToggleExpanded)
             .semantics {
                 contentDescription = "心率胶囊：${uiState.collapsedLabel}"
                 role = Role.Button
             },
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(if (expanded) 20.dp else 999.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
         border = BorderStroke(1.dp, tone.copy(alpha = 0.42f)),
         shadowElevation = 0.dp,
@@ -221,10 +262,10 @@ private fun HeartRateFloatingCapsule(
     ) {
         Column(
             modifier = Modifier.padding(
-                horizontal = if (expanded) 16.dp else 13.dp,
-                vertical = if (expanded) 13.dp else 9.dp
+                horizontal = if (expanded) 12.dp else 13.dp,
+                vertical = if (expanded) 10.dp else 9.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(if (expanded) 6.dp else 8.dp)
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -241,27 +282,34 @@ private fun HeartRateFloatingCapsule(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = TrainFlowNeutral900,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (expanded) {
                 Text(
                     text = uiState.detailTitle,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = TrainFlowNeutral900
+                    color = TrainFlowNeutral900,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 uiState.deviceHint?.let { device ->
                     Text(
                         text = device,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TrainFlowNeutral700
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TrainFlowNeutral700,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Text(
                     text = uiState.detailBody,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TrainFlowNeutral700
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TrainFlowNeutral700,
+                    maxLines = if (compactExpanded) 2 else 3,
+                    overflow = TextOverflow.Ellipsis
                 )
                 TextButton(
                     onClick = onOpenHeartRateSettings,
@@ -307,14 +355,12 @@ private fun Modifier.offsetPx(
 
 private fun Modifier.heartRateCapsulePointerInput(
     thresholdPx: Float,
-    onTap: () -> Unit,
     onDragBy: (Offset) -> Unit,
     onDragEnd: () -> Unit
 ): Modifier {
     return pointerInput(thresholdPx) {
         awaitEachGesture {
             val down = awaitFirstDown()
-            down.consume()
             var totalDx = 0f
             var totalDy = 0f
             var dragging = false
@@ -337,8 +383,6 @@ private fun Modifier.heartRateCapsulePointerInput(
             } while (current?.pressed == true)
             if (dragging) {
                 onDragEnd()
-            } else {
-                onTap()
             }
         }
     }

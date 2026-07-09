@@ -81,6 +81,30 @@ class OfficialShellStateTest {
     }
 
     @Test
+    fun heartRateCapsuleSettingsShortcutOpensSettingsFromTraining() {
+        val state = OfficialShellState(currentDestination = OfficialShellDestination.TRAINING)
+            .openHeartRateSettingsFromCapsule()
+
+        assertEquals(OfficialShellDestination.SETTINGS, state.currentDestination)
+        assertTrue(state.showBottomBar)
+    }
+
+    @Test
+    fun heartRateCapsuleSettingsShortcutReturnsToActiveTimedSession() {
+        val initial = OfficialShellState()
+        val timedPlan = initial.planManagementState.plans.first()
+        val inSession = initial.startTimedSession(timedPlan)
+        val inSettings = inSession.openHeartRateSettingsFromCapsule()
+        val returned = inSettings.returnFromSettings()
+
+        assertEquals(OfficialShellDestination.SETTINGS, inSettings.currentDestination)
+        assertFalse(inSettings.showBottomBar)
+        assertEquals(timedPlan.id, inSettings.activeTimedSessionPlan?.id)
+        assertEquals(OfficialShellDestination.TIMED_SESSION, returned.currentDestination)
+        assertEquals(timedPlan.id, returned.activeTimedSessionPlan?.id)
+    }
+
+    @Test
     fun timedSessionSelectsTrainingBottomDestination() {
         assertEquals(
             OfficialShellDestination.TRAINING,

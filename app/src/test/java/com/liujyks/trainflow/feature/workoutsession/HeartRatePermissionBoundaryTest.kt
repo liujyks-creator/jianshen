@@ -35,4 +35,21 @@ class HeartRatePermissionBoundaryTest {
         assertFalse(manifest.contains("android.permission.USE_EXACT_ALARM"))
         assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
     }
+
+    @Test
+    fun debugHeartRateSmokeDoesNotReplaceDefaultLauncher() {
+        val mainManifest = File("src/main/AndroidManifest.xml").readText()
+        val debugManifest = File("src/debug/AndroidManifest.xml").readText()
+
+        assertTrue(mainManifest.contains("android.intent.category.LAUNCHER"))
+        assertTrue(mainManifest.contains(".app.MainActivity"))
+        assertFalse(mainManifest.contains("DebugEntryActivity"))
+        assertFalse(mainManifest.contains("HeartRateBroadcastSmokeActivity"))
+        assertFalse(mainManifest.contains("HR Broadcast Smoke"))
+        assertFalse(mainManifest.contains("进入 TrainFlow"))
+
+        assertTrue(debugManifest.contains(".app.DebugEntryActivity"))
+        assertTrue(debugManifest.contains(".app.HeartRateBroadcastSmokeActivity"))
+        assertFalse(debugManifest.contains("android.intent.category.LAUNCHER"))
+    }
 }

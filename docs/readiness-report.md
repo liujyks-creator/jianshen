@@ -46,6 +46,8 @@ stepsCompleted:
 
 > 2026-07-09 刷新：E16-8 App-shell floating heart-rate capsule 已实现，主文档为 `docs/testing/e16-8-heart-rate-floating-capsule.md`。当前 readiness 结论仍不是 GATT 连接、live bpm 生产接入、训练记录落库或分析许可：本轮只在 official app shell 顶层实现 App 内 overlay 胶囊，偏好关闭时隐藏，偏好开启时显示设置 / 权限 / source / 已选设备状态，并支持 collapsed / expanded、tap、drag threshold、左右安全边 snap 和 fixed exclusion zones。Mapper 已预留 bpm-only、zone+bpm、stale/offline 和 `超过上限` 深红视觉-only 分支，但生产路径不伪造真实 bpm，不启动 scan / connect / notify，不写心率样本。unit/build/lint/check 已通过；固定 AVD `TrainFlow_Pixel_API_36` 已启动为 `emulator-5554` 并完成 E16-8 AVD UI smoke，`bounds-check.txt` / `bounds-evidence.json` 为 `overall=PASS`，已有 no-overlap / no-crash evidence；rectangular shadow 已修复，shadow-fix smoke 已完成。真实 Band 9 / BLE live bpm 人工测试后续进行，不阻塞 E16-8。E16-9 state mapping / real provider hardening、E16-10 stale / offline policy、E16-11 recording model 和 E16-12 analysis 仍需单独 story。
 
+> 2026-07-09 review-fix 刷新：E16-8 真机人工测试反馈已修复，仍不改变 readiness 边界。浮动心率胶囊 expanded 现在有最大宽高限制，小屏 / 避让区不足时降级为 compact expanded 或保持 collapsed，不再以巨大椭圆遮挡设置页、confirm-record 输入或底部导航；expanded 内 `心率与设备` 按钮现在可点击，并只导航 / 定位到设置页现有心率与设备卡片，不请求权限、不扫描、不连接、不打开 debug smoke；debug APK 默认 launcher 恢复为 TrainFlow MainActivity，`HR Broadcast Smoke` 保留在 `app/src/debug` 作为 explicit debug-only 工具，不阻挡普通测试。Review-fix 证据目录为 `.local/smoke/e16-8-heart-rate-floating-capsule-review-fix/`。E16-9、E16-10、E16-11 和 E16-12 仍需单独 story，不能从本修复直接进入 live bpm、记录落库或分析。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |

@@ -41,6 +41,40 @@ internal data class HeartRateCapsulePlacement(
     val edge: HeartRateCapsuleSnapEdge
 )
 
+internal fun hasSafeHeartRateCapsulePlacement(
+    capsuleSize: HeartRateCapsuleSize,
+    viewport: HeartRateCapsuleViewport,
+    safeInsets: HeartRateCapsuleSafeInsets,
+    exclusionZones: List<HeartRateCapsuleExclusionZone>,
+    edgeMargin: Float
+): Boolean {
+    if (capsuleSize.width <= 0f || capsuleSize.height <= 0f) return false
+    val minX = safeInsets.left + edgeMargin
+    val maxX = viewport.width - safeInsets.right - edgeMargin - capsuleSize.width
+    val minY = safeInsets.top + edgeMargin
+    val maxY = viewport.height - safeInsets.bottom - edgeMargin - capsuleSize.height
+    if (maxX < minX || maxY < minY) return false
+
+    return listOf(minX, maxX).any { x ->
+        nearestSafeY(
+            desiredY = minY,
+            x = x,
+            minY = minY,
+            maxY = maxY,
+            capsuleSize = capsuleSize,
+            exclusionZones = exclusionZones,
+            margin = edgeMargin
+        ).let { y ->
+            !intersectsAnyExclusion(
+                x = x,
+                y = y,
+                capsuleSize = capsuleSize,
+                exclusionZones = exclusionZones
+            )
+        }
+    }
+}
+
 internal fun snapHeartRateCapsuleToSafeEdge(
     releasePoint: HeartRateCapsulePoint,
     capsuleSize: HeartRateCapsuleSize,

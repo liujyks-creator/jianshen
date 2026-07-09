@@ -122,6 +122,9 @@ internal fun TrainFlowApp(
     var heartRateScanFinishedWithoutDevices by rememberSaveable {
         mutableStateOf(false)
     }
+    var heartRateSettingsFocusRequestKey by rememberSaveable {
+        mutableStateOf(0)
+    }
     val heartRateDisplayEnabled = trainingPreferencesState.heartRateSettings.enabled
     val allHeartRateBlePermissionsGranted = heartRatePermissionRefreshKey.let {
         context.arePermissionsGranted(BleHeartRatePermissionPlanner.requiredPermissions())
@@ -381,7 +384,7 @@ internal fun TrainFlowApp(
                     OfficialShellDestination.SETTINGS -> SettingsRoute(
                     uiState = settingsState,
                     onBackToTraining = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
+                        applyShellState(shellState.returnFromSettings())
                     },
                     onDefaultCountdownThresholdChanged = onDefaultCountdownThresholdChanged,
                     onActionCueEnabledChanged = onActionCueEnabledChanged,
@@ -443,6 +446,7 @@ internal fun TrainFlowApp(
                     },
                     onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
                     onUiSkinChanged = onUiSkinChanged,
+                    heartRateFocusRequestKey = heartRateSettingsFocusRequestKey,
                     modifier = Modifier.padding(innerPadding)
                 )
 
@@ -616,7 +620,8 @@ internal fun TrainFlowApp(
                     uiState = heartRateFloatingCapsuleUiState(settingsState.heartRateSettings),
                     exclusionPolicy = shellState.heartRateCapsuleExclusionPolicy(),
                     onOpenHeartRateSettings = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.SETTINGS))
+                        heartRateSettingsFocusRequestKey += 1
+                        applyShellState(shellState.openHeartRateSettingsFromCapsule())
                     },
                     modifier = Modifier.fillMaxSize()
                 )

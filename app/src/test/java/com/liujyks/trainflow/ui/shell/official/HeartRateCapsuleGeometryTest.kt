@@ -113,4 +113,52 @@ class HeartRateCapsuleGeometryTest {
             )
         )
     }
+
+    @Test
+    fun expandedPlacementCanFallBackToCompactSizeOnSmallViewport() {
+        val unsafeBottomZone = HeartRateCapsuleExclusionZone(
+            left = 0f,
+            top = 300f,
+            right = viewport.width,
+            bottom = viewport.height
+        )
+
+        val regularExpandedFits = hasSafeHeartRateCapsulePlacement(
+            capsuleSize = HeartRateCapsuleSize(width = 248f, height = 270f),
+            viewport = viewport,
+            safeInsets = safeInsets,
+            exclusionZones = listOf(unsafeBottomZone),
+            edgeMargin = 12f
+        )
+        val compactExpandedFits = hasSafeHeartRateCapsulePlacement(
+            capsuleSize = HeartRateCapsuleSize(width = 236f, height = 150f),
+            viewport = viewport,
+            safeInsets = safeInsets,
+            exclusionZones = listOf(unsafeBottomZone),
+            edgeMargin = 12f
+        )
+
+        assertFalse(regularExpandedFits)
+        assertTrue(compactExpandedFits)
+    }
+
+    @Test
+    fun expandedPlacementCanReportNoSafeSpace() {
+        val almostFullScreenUnsafeZone = HeartRateCapsuleExclusionZone(
+            left = 0f,
+            top = 120f,
+            right = viewport.width,
+            bottom = viewport.height
+        )
+
+        val canPlace = hasSafeHeartRateCapsulePlacement(
+            capsuleSize = HeartRateCapsuleSize(width = 236f, height = 150f),
+            viewport = viewport,
+            safeInsets = safeInsets,
+            exclusionZones = listOf(almostFullScreenUnsafeZone),
+            edgeMargin = 12f
+        )
+
+        assertFalse(canPlace)
+    }
 }
