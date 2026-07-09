@@ -16,18 +16,15 @@ internal data class OfficialShellState(
     val activeRecoveryRecommendation: BasicRecoveryRecommendation? = null
 ) {
     val showBottomBar: Boolean
-        get() = !isSessionNavigationLocked
+        get() = !hasActiveSession
 
-    private val isSessionNavigationLocked: Boolean
-        get() = (currentDestination == OfficialShellDestination.TIMED_SESSION && activeTimedSessionPlan != null) ||
-            (currentDestination == OfficialShellDestination.STRENGTH_SESSION && activeStrengthSessionPlan != null) ||
-            (
-                currentDestination == OfficialShellDestination.FOLLOW_ALONG_SESSION &&
-                    activeFollowAlongSessionPlan != null
-                )
+    private val hasActiveSession: Boolean
+        get() = activeTimedSessionPlan != null ||
+            activeStrengthSessionPlan != null ||
+            activeFollowAlongSessionPlan != null
 
     fun selectDestination(destination: OfficialShellDestination): OfficialShellState {
-        if (isSessionNavigationLocked && destination != currentDestination) {
+        if (hasActiveSession && destination != currentDestination) {
             return this
         }
 
@@ -140,6 +137,22 @@ internal data class OfficialShellState(
             activeFollowAlongSessionPlan = null,
             activeRecoveryRecommendation = recommendation
         )
+    }
+
+    fun openHeartRateSettingsFromCapsule(): OfficialShellState {
+        return copy(
+            currentDestination = OfficialShellDestination.SETTINGS,
+            activeRecoveryRecommendation = null
+        )
+    }
+
+    fun returnFromSettings(): OfficialShellState {
+        return when {
+            activeTimedSessionPlan != null -> copy(currentDestination = OfficialShellDestination.TIMED_SESSION)
+            activeStrengthSessionPlan != null -> copy(currentDestination = OfficialShellDestination.STRENGTH_SESSION)
+            activeFollowAlongSessionPlan != null -> copy(currentDestination = OfficialShellDestination.FOLLOW_ALONG_SESSION)
+            else -> selectDestination(OfficialShellDestination.TRAINING)
+        }
     }
 
     fun finishTimedSession(): OfficialShellState {

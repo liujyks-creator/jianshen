@@ -3,13 +3,17 @@ package com.liujyks.trainflow.ui.shell.official
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -121,6 +125,9 @@ internal fun TrainFlowApp(
     var heartRateScanFinishedWithoutDevices by rememberSaveable {
         mutableStateOf(false)
     }
+    var heartRateSettingsFocusRequestKey by rememberSaveable {
+        mutableStateOf(0)
+    }
     val heartRateDisplayEnabled = trainingPreferencesState.heartRateSettings.enabled
     val allHeartRateBlePermissionsGranted = heartRatePermissionRefreshKey.let {
         context.arePermissionsGranted(BleHeartRatePermissionPlanner.requiredPermissions())
@@ -149,15 +156,15 @@ internal fun TrainFlowApp(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         val requiredPermissions = BleHeartRatePermissionPlanner.requiredPermissions()
-        val granted = context.arePermissionsGranted(requiredPermissions)
-            || requiredPermissions.all { permission -> result[permission] == true }
-        heartRateBlePermissionStatus = if (granted) {
-            HeartRateBlePermissionStatus.GRANTED
-        } else if (context.hasPermanentlyDeniedPermissions(requiredPermissions, result)) {
-            HeartRateBlePermissionStatus.PERMANENTLY_DENIED
-        } else {
-            HeartRateBlePermissionStatus.DENIED
-        }
+        heartRateBlePermissionStatus = resolveHeartRateBlePermissionRequestResult(
+            requiredPermissions = requiredPermissions,
+            requestResult = result,
+            allPermissionsCurrentlyGranted = context.arePermissionsGranted(requiredPermissions),
+            hasPermanentlyDeniedPermissions = context.hasPermanentlyDeniedPermissions(
+                permissions = requiredPermissions,
+                requestResult = result
+            )
+        )
         heartRatePermissionRefreshKey += 1
     }
     var currentDestination by rememberSaveable {
@@ -298,33 +305,34 @@ internal fun TrainFlowApp(
                 }
             }
         ) { innerPadding ->
-            when (shellState.currentDestination) {
-                OfficialShellDestination.TRAINING -> HomeRoute(
-                    onOpenExerciseLibrary = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.EXERCISE_LIBRARY))
-                    },
-                    onOpenTimedPlanEditor = {
-                        applyShellState(shellState.openTimedPlanEditorForCreate())
-                    },
-                    onOpenStrengthPlanEditor = {
-                        applyShellState(shellState.openStrengthPlanEditorForCreate())
-                    },
-                    onOpenFollowAlong = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.FOLLOW_ALONG_ENTRY))
-                    },
-                    onOpenSettings = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.SETTINGS))
-                    },
-                    onOpenPlans = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.PLANS))
-                    },
-                    onOpenRecords = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
-                    },
-                    modifier = Modifier.padding(innerPadding)
-                )
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (shellState.currentDestination) {
+                    OfficialShellDestination.TRAINING -> HomeRoute(
+                        onOpenExerciseLibrary = {
+                            applyShellState(shellState.selectDestination(OfficialShellDestination.EXERCISE_LIBRARY))
+                        },
+                        onOpenTimedPlanEditor = {
+                            applyShellState(shellState.openTimedPlanEditorForCreate())
+                        },
+                        onOpenStrengthPlanEditor = {
+                            applyShellState(shellState.openStrengthPlanEditorForCreate())
+                        },
+                        onOpenFollowAlong = {
+                            applyShellState(shellState.selectDestination(OfficialShellDestination.FOLLOW_ALONG_ENTRY))
+                        },
+                        onOpenSettings = {
+                            applyShellState(shellState.selectDestination(OfficialShellDestination.SETTINGS))
+                        },
+                        onOpenPlans = {
+                            applyShellState(shellState.selectDestination(OfficialShellDestination.PLANS))
+                        },
+                        onOpenRecords = {
+                            applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
+                        },
+                        modifier = Modifier.padding(innerPadding)
+                    )
 
-                OfficialShellDestination.TIMED_PLAN_EDITOR -> TimedPlanEditorRoute(
+                    OfficialShellDestination.TIMED_PLAN_EDITOR -> TimedPlanEditorRoute(
                     onBackToHome = {
                         applyShellState(
                             shellState
@@ -350,7 +358,7 @@ internal fun TrainFlowApp(
                     modifier = Modifier.padding(innerPadding)
                 )
 
-                OfficialShellDestination.STRENGTH_PLAN_EDITOR -> StrengthPlanEditorRoute(
+                    OfficialShellDestination.STRENGTH_PLAN_EDITOR -> StrengthPlanEditorRoute(
                     onBackToHome = {
                         applyShellState(
                             shellState
@@ -376,10 +384,10 @@ internal fun TrainFlowApp(
                     modifier = Modifier.padding(innerPadding)
                 )
 
-                OfficialShellDestination.SETTINGS -> SettingsRoute(
+                    OfficialShellDestination.SETTINGS -> SettingsRoute(
                     uiState = settingsState,
                     onBackToTraining = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.TRAINING))
+                        applyShellState(shellState.returnFromSettings())
                     },
                     onDefaultCountdownThresholdChanged = onDefaultCountdownThresholdChanged,
                     onActionCueEnabledChanged = onActionCueEnabledChanged,
@@ -390,10 +398,17 @@ internal fun TrainFlowApp(
                     onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
                     onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
                     onPrepareHeartRateBlePermission = {
-                        heartRateBlePermissionStatus = settingsState
-                            .heartRateSettings
-                            .prepareBlePermissionRationale()
-                            .blePermissionStatus
+                        if (
+                            settingsState.heartRateSettings.blePermissionStatus ==
+                            HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+                        ) {
+                            context.openTrainFlowAppSettings()
+                        } else {
+                            heartRateBlePermissionStatus = settingsState
+                                .heartRateSettings
+                                .prepareBlePermissionRationale()
+                                .blePermissionStatus
+                        }
                     },
                     onRequestHeartRateBlePermission = {
                         if (
@@ -441,17 +456,18 @@ internal fun TrainFlowApp(
                     },
                     onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
                     onUiSkinChanged = onUiSkinChanged,
+                    heartRateFocusRequestKey = heartRateSettingsFocusRequestKey,
                     modifier = Modifier.padding(innerPadding)
                 )
 
-                OfficialShellDestination.FOLLOW_ALONG_ENTRY -> FollowAlongRoute(
+                    OfficialShellDestination.FOLLOW_ALONG_ENTRY -> FollowAlongRoute(
                     onStartFollowAlong = { plan ->
                         applyShellState(shellState.startFollowAlongSession(plan))
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
 
-                OfficialShellDestination.FOLLOW_ALONG_SESSION -> {
+                    OfficialShellDestination.FOLLOW_ALONG_SESSION -> {
                     val activePlan = shellState.activeFollowAlongSessionPlan
                     if (activePlan != null) {
                         FollowAlongWorkoutSessionRoute(
@@ -472,7 +488,7 @@ internal fun TrainFlowApp(
                     }
                 }
 
-                OfficialShellDestination.TIMED_SESSION -> {
+                    OfficialShellDestination.TIMED_SESSION -> {
                     val activePlan = shellState.activeTimedSessionPlan
                     if (activePlan != null) {
                         TimedWorkoutSessionRoute(
@@ -521,7 +537,7 @@ internal fun TrainFlowApp(
                     }
                 }
 
-                OfficialShellDestination.STRENGTH_SESSION -> {
+                    OfficialShellDestination.STRENGTH_SESSION -> {
                     val activePlan = shellState.activeStrengthSessionPlan
                     if (activePlan != null) {
                         StrengthWorkoutSessionRoute(
@@ -563,54 +579,79 @@ internal fun TrainFlowApp(
                     }
                 }
 
-                OfficialShellDestination.EXERCISE_LIBRARY -> ExerciseLibraryRoute(
-                    modifier = Modifier.padding(innerPadding)
-                )
+                    OfficialShellDestination.EXERCISE_LIBRARY -> ExerciseLibraryRoute(
+                        modifier = Modifier.padding(innerPadding)
+                    )
 
-                OfficialShellDestination.PLANS -> PlanManagementRoute(
-                    uiState = shellState.planManagementState,
-                    onStateChange = { planManagementState ->
-                        applyShellState(shellState.withPlanManagementState(planManagementState))
-                    },
-                    onPersistPlan = onSaveWorkoutPlan,
-                    onDeletePlan = onDeleteWorkoutPlan,
-                    onEditPlan = { plan ->
-                        applyShellState(shellState.editPlan(plan))
-                    },
-                    onCreateTimedPlan = {
-                        applyShellState(shellState.openTimedPlanEditorForCreate())
-                    },
-                    onCreateStrengthPlan = {
-                        applyShellState(shellState.openStrengthPlanEditorForCreate())
-                    },
-                    onStartTimedPlan = { plan ->
-                        applyShellState(shellState.startTimedSession(plan))
-                    },
-                    onStartStrengthPlan = { plan ->
-                        applyShellState(shellState.startStrengthSession(plan))
-                    },
-                    modifier = Modifier.padding(innerPadding)
-                )
+                    OfficialShellDestination.PLANS -> PlanManagementRoute(
+                        uiState = shellState.planManagementState,
+                        onStateChange = { planManagementState ->
+                            applyShellState(shellState.withPlanManagementState(planManagementState))
+                        },
+                        onPersistPlan = onSaveWorkoutPlan,
+                        onDeletePlan = onDeleteWorkoutPlan,
+                        onEditPlan = { plan ->
+                            applyShellState(shellState.editPlan(plan))
+                        },
+                        onCreateTimedPlan = {
+                            applyShellState(shellState.openTimedPlanEditorForCreate())
+                        },
+                        onCreateStrengthPlan = {
+                            applyShellState(shellState.openStrengthPlanEditorForCreate())
+                        },
+                        onStartTimedPlan = { plan ->
+                            applyShellState(shellState.startTimedSession(plan))
+                        },
+                        onStartStrengthPlan = { plan ->
+                            applyShellState(shellState.startStrengthSession(plan))
+                        },
+                        modifier = Modifier.padding(innerPadding)
+                    )
 
-                OfficialShellDestination.RECORDS -> HistoryRoute(
-                    sessions = workoutSessions,
-                    onClearAllHistory = onClearAllWorkoutSessions,
-                    onClearPlanHistory = onClearWorkoutSessionsForPlan,
-                    onClearDateHistory = onClearWorkoutSessionsStartedOnDate,
-                    modifier = Modifier.padding(innerPadding)
-                )
+                    OfficialShellDestination.RECORDS -> HistoryRoute(
+                        sessions = workoutSessions,
+                        onClearAllHistory = onClearAllWorkoutSessions,
+                        onClearPlanHistory = onClearWorkoutSessionsForPlan,
+                        onClearDateHistory = onClearWorkoutSessionsStartedOnDate,
+                        modifier = Modifier.padding(innerPadding)
+                    )
 
-                OfficialShellDestination.RECOVERY -> RecoveryRoute(
-                    uiState = shellState.activeRecoveryRecommendation
-                        ?.toRecoveryScreenState()
-                        ?: emptyRecoveryScreenState(),
-                    onBackToRecords = {
-                        applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
+                    OfficialShellDestination.RECOVERY -> RecoveryRoute(
+                        uiState = shellState.activeRecoveryRecommendation
+                            ?.toRecoveryScreenState()
+                            ?: emptyRecoveryScreenState(),
+                        onBackToRecords = {
+                            applyShellState(shellState.selectDestination(OfficialShellDestination.RECORDS))
+                        },
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+                HeartRateFloatingCapsuleOverlay(
+                    uiState = heartRateFloatingCapsuleUiState(settingsState.heartRateSettings),
+                    exclusionPolicy = shellState.heartRateCapsuleExclusionPolicy(),
+                    onOpenHeartRateSettings = {
+                        heartRateSettingsFocusRequestKey += 1
+                        applyShellState(shellState.openHeartRateSettingsFromCapsule())
                     },
-                    modifier = Modifier.padding(innerPadding)
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
+    }
+}
+
+private fun OfficialShellState.heartRateCapsuleExclusionPolicy(): HeartRateCapsuleExclusionPolicy {
+    return when {
+        currentDestination == OfficialShellDestination.STRENGTH_SESSION && activeStrengthSessionPlan != null ->
+            HeartRateCapsuleExclusionPolicy.STRENGTH_SESSION
+        (
+            currentDestination == OfficialShellDestination.TIMED_SESSION && activeTimedSessionPlan != null
+            ) || (
+            currentDestination == OfficialShellDestination.FOLLOW_ALONG_SESSION &&
+                activeFollowAlongSessionPlan != null
+            ) -> HeartRateCapsuleExclusionPolicy.TIMED_SESSION
+        showBottomBar -> HeartRateCapsuleExclusionPolicy.BOTTOM_NAV
+        else -> HeartRateCapsuleExclusionPolicy.STANDARD
     }
 }
 
@@ -622,6 +663,14 @@ private fun Context.isPermissionGranted(permission: String): Boolean {
     return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 }
 
+private fun Context.openTrainFlowAppSettings() {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", packageName, null)
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    startActivity(intent)
+}
+
 private fun Context.hasPermanentlyDeniedPermissions(
     permissions: List<String>,
     requestResult: Map<String, Boolean>
@@ -630,6 +679,21 @@ private fun Context.hasPermanentlyDeniedPermissions(
     return permissions.any { permission ->
         requestResult[permission] == false &&
             !activity.shouldShowRequestPermissionRationale(permission)
+    }
+}
+
+internal fun resolveHeartRateBlePermissionRequestResult(
+    requiredPermissions: List<String>,
+    requestResult: Map<String, Boolean>,
+    allPermissionsCurrentlyGranted: Boolean,
+    hasPermanentlyDeniedPermissions: Boolean
+): HeartRateBlePermissionStatus {
+    val granted = allPermissionsCurrentlyGranted ||
+        requiredPermissions.all { permission -> requestResult[permission] == true }
+    return when {
+        granted -> HeartRateBlePermissionStatus.GRANTED
+        hasPermanentlyDeniedPermissions -> HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+        else -> HeartRateBlePermissionStatus.DENIED
     }
 }
 

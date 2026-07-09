@@ -170,6 +170,37 @@ class TrainingPreferencesUiStateTest {
     }
 
     @Test
+    fun deniedHeartRatePermissionKeepsRetryActionVisible() {
+        val denied = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceDisplayName = null,
+            blePermissionStatus = HeartRateBlePermissionStatus.DENIED
+        )
+        val rationale = denied.prepareBlePermissionRationale()
+
+        assertTrue(denied.canPrepareBlePermission)
+        assertEquals("重新授权蓝牙权限", denied.blePermissionActionLabel)
+        assertEquals(HeartRateBlePermissionStatus.RATIONALE_VISIBLE, rationale.blePermissionStatus)
+        assertTrue(rationale.canRequestBlePermission)
+    }
+
+    @Test
+    fun permanentlyDeniedHeartRatePermissionKeepsSettingsActionVisible() {
+        val permanentlyDenied = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceDisplayName = null,
+            blePermissionStatus = HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+        )
+
+        assertTrue(permanentlyDenied.canPrepareBlePermission)
+        assertEquals("去系统设置开启", permanentlyDenied.blePermissionActionLabel)
+        assertEquals(
+            HeartRateBlePermissionStatus.PERMANENTLY_DENIED,
+            permanentlyDenied.prepareBlePermissionRationale().blePermissionStatus
+        )
+    }
+
+    @Test
     fun heartRatePermissionResultCopyCoversGrantedDeniedAndSettingsBoundary() {
         val granted = heartRateSettingsUiState(
             enabled = true,
@@ -219,6 +250,14 @@ class TrainingPreferencesUiStateTest {
                 displayEnabled = false,
                 allPermissionsGranted = true,
                 requestResult = HeartRateBlePermissionStatus.GRANTED
+            )
+        )
+        assertEquals(
+            HeartRateBlePermissionStatus.DENIED,
+            resolveHeartRateBlePermissionStatus(
+                displayEnabled = true,
+                allPermissionsGranted = false,
+                requestResult = HeartRateBlePermissionStatus.DENIED
             )
         )
     }
