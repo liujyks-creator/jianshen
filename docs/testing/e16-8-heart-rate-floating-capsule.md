@@ -29,6 +29,25 @@ Focused tests 新增覆盖：
 - 胶囊心率设置捷径可从 active timed session 打开设置并返回原 session。
 - debug source set 可保留 smoke activity，但 debug manifest 不再声明 launcher；production manifest 不包含 debug entry / smoke。
 
+## 2026-07-10 Capsule Information Panel / Settings Action Visual Fix
+
+用户继续反馈：
+
+1. 设置页 `心率与设备` 里的 `授权蓝牙权限` 和 `扫描心率设备` 视觉上像普通说明文字，不像可点击按钮。
+2. 胶囊 expanded 里重复出现 `心率与设备` 入口，信息结构不清；expanded 应直接展示当前心率系统的具体状态信息。
+3. 胶囊拖动不可靠，用户感觉“不能移动”。
+4. 系统蓝牙权限弹窗点取消后，设置页授权入口可能消失，需要重启 App 才能再次看到。
+5. 年龄、估算最大心率、可选手动最大心率、上限提醒阈值、区间说明和非医疗提示需要进入后续心率个人参数设置，但不在本轮完成。
+
+修复方式：
+
+- 胶囊 expanded 从“状态文案 + `心率与设备` 入口”改成信息面板，展示 `来源`、`记录`、`区间`、`更新` 四个状态格，并保留一行短说明。
+- expanded 内不再把 `心率与设备` 作为主按钮；进入权限、扫描、选择设备仍通过设置页完成，避免胶囊误触直接触发权限或 BLE 行为。
+- 设置页把 `授权蓝牙权限`、`扫描心率设备`、`停止扫描`、`选择设备` 改成明确的全宽 Button / OutlinedButton，避免看起来像注释文本。
+- 胶囊移除单独的 `clickable` 修饰，统一由 pointer input 判断轻点 / 拖动；`awaitFirstDown(requireUnconsumed = false)` 避免 click / drag 互相抢事件，让拖动更可靠。
+- 蓝牙权限弹窗取消后回到 `DENIED`，继续显示 `重新授权蓝牙权限` 按钮；如果后续进入系统不再弹窗状态，按钮仍显示为 `去系统设置开启`，并打开 TrainFlow 应用详情页。
+- 心率个人参数设置记录为后续任务：年龄、估算最大心率、可选手动最大心率、上限提醒阈值、区间说明、非医疗提示。本轮不新增 DataStore 字段，不做区间设置 UI，不做 E16-9 state mapping，不接 live bpm，不写记录。
+
 ## 实现范围
 
 本轮在 official app shell 顶层实现 App 内浮动心率胶囊 overlay。
@@ -39,8 +58,8 @@ Focused tests 新增覆盖：
 - 胶囊支持 collapsed / expanded，轻点切换展开收起。
 - 胶囊支持拖动，使用 movement threshold 避免轻点误判为拖动。
 - 拖动释放后吸附到左右安全边。
-- expanded 内提供 `心率与设备` 入口，复用现有设置页 destination，不新增复杂导航。
-- review fix 后，入口会滚动 / 定位到设置页现有 `心率与设备` 卡片；点击不会请求权限、扫描、连接或打开 debug smoke。
+- expanded 内展示 `来源`、`记录`、`区间`、`更新` 信息格，不再重复放置 `心率与设备` 主按钮。
+- 设置页 `心率与设备` 卡片仍是权限授权、扫描设备和选择设备的唯一操作区域；胶囊 expanded 不会请求权限、扫描、连接或打开 debug smoke。
 - 键盘 / IME 可见或强制 compact 时收起，避免 confirm-record + keyboard 空间不足。
 - 位置保留在 shell 内存中；本轮不持久化位置。
 
@@ -129,7 +148,7 @@ Focused tests 覆盖：
 - tap movement threshold does not become drag
 - expanded safe placement regular -> compact fallback
 - expanded safe placement no-space -> collapsed
-- capsule `心率与设备` settings shortcut and active-session return path
+- capsule settings shortcut and active-session return path from the earlier review fix
 - debug manifest launcher boundary
 
 ## Boundary Scans
@@ -222,5 +241,7 @@ Review-fix 模拟器覆盖：
 ## 后续
 
 E16-9 `HeartRateState` -> capsule mapping / real provider state hardening 仍未开始；本轮只提供 mapper-ready 分支和 focused tests。
+
+心率个人参数设置后续另拆：年龄、估算最大心率、可选手动最大心率、上限提醒阈值、区间说明和非医疗提示。本轮只记录该需求，不实现 DataStore、设置 UI 或训练记录消费。
 
 E16-10 stale / offline policy、E16-11 recording model / 1-second sampling persistence、E16-12 analysis / zones / post-workout summary 仍未开始。由于本轮没有落库或分析，后续编号无需调整。

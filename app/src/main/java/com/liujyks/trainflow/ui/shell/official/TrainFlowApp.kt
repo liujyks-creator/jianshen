@@ -3,7 +3,10 @@ package com.liujyks.trainflow.ui.shell.official
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -157,8 +160,6 @@ internal fun TrainFlowApp(
             || requiredPermissions.all { permission -> result[permission] == true }
         heartRateBlePermissionStatus = if (granted) {
             HeartRateBlePermissionStatus.GRANTED
-        } else if (context.hasPermanentlyDeniedPermissions(requiredPermissions, result)) {
-            HeartRateBlePermissionStatus.PERMANENTLY_DENIED
         } else {
             HeartRateBlePermissionStatus.DENIED
         }
@@ -395,10 +396,17 @@ internal fun TrainFlowApp(
                     onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
                     onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
                     onPrepareHeartRateBlePermission = {
-                        heartRateBlePermissionStatus = settingsState
-                            .heartRateSettings
-                            .prepareBlePermissionRationale()
-                            .blePermissionStatus
+                        if (
+                            settingsState.heartRateSettings.blePermissionStatus ==
+                            HeartRateBlePermissionStatus.PERMANENTLY_DENIED
+                        ) {
+                            context.openTrainFlowAppSettings()
+                        } else {
+                            heartRateBlePermissionStatus = settingsState
+                                .heartRateSettings
+                                .prepareBlePermissionRationale()
+                                .blePermissionStatus
+                        }
                     },
                     onRequestHeartRateBlePermission = {
                         if (
@@ -651,6 +659,14 @@ private fun Context.arePermissionsGranted(permissions: List<String>): Boolean {
 
 private fun Context.isPermissionGranted(permission: String): Boolean {
     return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun Context.openTrainFlowAppSettings() {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", packageName, null)
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    startActivity(intent)
 }
 
 private fun Context.hasPermanentlyDeniedPermissions(

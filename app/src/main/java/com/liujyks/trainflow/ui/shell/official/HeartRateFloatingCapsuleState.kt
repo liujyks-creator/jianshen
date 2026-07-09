@@ -14,7 +14,7 @@ internal data class HeartRateFloatingCapsuleUiState(
     val detailTitle: String,
     val detailBody: String,
     val deviceHint: String? = null,
-    val actionLabel: String = "心率与设备",
+    val infoTiles: List<HeartRateFloatingCapsuleInfoTile> = emptyList(),
     val forceCollapsed: Boolean = false
 ) {
     companion object {
@@ -27,6 +27,11 @@ internal data class HeartRateFloatingCapsuleUiState(
         )
     }
 }
+
+internal data class HeartRateFloatingCapsuleInfoTile(
+    val label: String,
+    val value: String
+)
 
 internal enum class HeartRateFloatingCapsuleStatus {
     HIDDEN,
@@ -213,6 +218,8 @@ private fun heartRateReadingCapsuleUiState(
             title = "超过上限",
             body = "超过上限只是深红视觉提示，不触发声音、震动、强制暂停或医疗告警。",
             deviceHint = sourceLabel,
+            zoneLabel = "超过上限",
+            updateLabel = "实时",
             forceCollapsed = forceCollapsed
         )
     }
@@ -227,6 +234,8 @@ private fun heartRateReadingCapsuleUiState(
             title = "实时心率",
             body = "未设置年龄时只显示 bpm，不计算心率区间。",
             deviceHint = sourceLabel,
+            zoneLabel = "无",
+            updateLabel = "实时",
             forceCollapsed = forceCollapsed
         )
     }
@@ -237,6 +246,8 @@ private fun heartRateReadingCapsuleUiState(
         title = zone.label,
         body = "区间基于用户年龄估算最大心率，仅作训练参考。",
         deviceHint = sourceLabel,
+        zoneLabel = zone.label,
+        updateLabel = "实时",
         forceCollapsed = forceCollapsed
     )
 }
@@ -267,8 +278,26 @@ private fun stateCapsule(
     title: String,
     body: String,
     deviceHint: String? = null,
+    zoneLabel: String = "无",
+    updateLabel: String = "无数据",
     forceCollapsed: Boolean
 ): HeartRateFloatingCapsuleUiState {
+    val sourceLabel = deviceHint
+        ?.takeIf { it.isNotBlank() }
+        ?: when (status) {
+            HeartRateFloatingCapsuleStatus.PERMISSION_DENIED -> "未授权"
+            HeartRateFloatingCapsuleStatus.BLUETOOTH_DISABLED -> "蓝牙关闭"
+            HeartRateFloatingCapsuleStatus.CONNECTING -> "查找中"
+            HeartRateFloatingCapsuleStatus.NO_SOURCE -> "未连接"
+            else -> label
+        }
+    val recordingLabel = when (status) {
+        HeartRateFloatingCapsuleStatus.HIDDEN,
+        HeartRateFloatingCapsuleStatus.NO_SOURCE,
+        HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
+        HeartRateFloatingCapsuleStatus.BLUETOOTH_DISABLED -> "未记录"
+        else -> "1s sampling"
+    }
     return HeartRateFloatingCapsuleUiState(
         visible = true,
         status = status,
@@ -276,6 +305,12 @@ private fun stateCapsule(
         detailTitle = title,
         detailBody = body,
         deviceHint = deviceHint?.takeIf { it.isNotBlank() },
+        infoTiles = listOf(
+            HeartRateFloatingCapsuleInfoTile(label = "来源", value = sourceLabel),
+            HeartRateFloatingCapsuleInfoTile(label = "记录", value = recordingLabel),
+            HeartRateFloatingCapsuleInfoTile(label = "区间", value = zoneLabel),
+            HeartRateFloatingCapsuleInfoTile(label = "更新", value = updateLabel)
+        ),
         forceCollapsed = forceCollapsed
     )
 }

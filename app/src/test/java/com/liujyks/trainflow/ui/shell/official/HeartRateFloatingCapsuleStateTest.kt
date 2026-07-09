@@ -33,6 +33,12 @@ class HeartRateFloatingCapsuleStateTest {
         assertTrue(state.visible)
         assertEquals(HeartRateFloatingCapsuleStatus.NO_SOURCE, state.status)
         assertEquals("未连接源", state.collapsedLabel)
+        assertEquals(
+            listOf("来源", "记录", "区间", "更新"),
+            state.infoTiles.map { it.label }
+        )
+        assertEquals("未连接", state.infoTiles.first { it.label == "来源" }.value)
+        assertEquals("未记录", state.infoTiles.first { it.label == "记录" }.value)
     }
 
     @Test
@@ -79,6 +85,8 @@ class HeartRateFloatingCapsuleStateTest {
         assertEquals(HeartRateFloatingCapsuleStatus.SELECTED_DEVICE, state.status)
         assertEquals("已选择设备", state.collapsedLabel)
         assertEquals("HUAWEI Band HR-OD7", state.deviceHint)
+        assertEquals("HUAWEI Band HR-OD7", state.infoTiles.first { it.label == "来源" }.value)
+        assertEquals("1s sampling", state.infoTiles.first { it.label == "记录" }.value)
     }
 
     @Test
@@ -166,6 +174,8 @@ class HeartRateFloatingCapsuleStateTest {
 
         assertEquals(HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN, state.status)
         assertEquals("燃脂 122 bpm", state.collapsedLabel)
+        assertEquals("燃脂", state.infoTiles.first { it.label == "区间" }.value)
+        assertEquals("实时", state.infoTiles.first { it.label == "更新" }.value)
     }
 
     @Test

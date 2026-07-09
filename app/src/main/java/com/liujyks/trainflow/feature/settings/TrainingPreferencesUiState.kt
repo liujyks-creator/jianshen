@@ -158,7 +158,7 @@ internal enum class HeartRateBlePermissionStatus(
     RATIONALE_VISIBLE(label = "说明待确认", canPrepare = false),
     GRANTED(label = "已允许", canPrepare = false),
     DENIED(label = "权限未赋予", canPrepare = true),
-    PERMANENTLY_DENIED(label = "需到系统设置开启", canPrepare = false)
+    PERMANENTLY_DENIED(label = "需到系统设置开启", canPrepare = true)
 }
 
 internal data class HeartRateDevicePickerUiState(
@@ -476,7 +476,13 @@ internal fun maskDeviceIdentifier(identifier: String): String {
 }
 
 internal fun HeartRateSettingsUiState.prepareBlePermissionRationale(): HeartRateSettingsUiState {
-    return if (enabled && blePermissionStatus.canPrepare) {
+    return if (
+        enabled &&
+        blePermissionStatus in setOf(
+            HeartRateBlePermissionStatus.NOT_REQUESTED,
+            HeartRateBlePermissionStatus.DENIED
+        )
+    ) {
         copy(blePermissionStatus = HeartRateBlePermissionStatus.RATIONALE_VISIBLE)
     } else {
         this

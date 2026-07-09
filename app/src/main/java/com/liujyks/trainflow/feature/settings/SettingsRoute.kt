@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -261,39 +263,48 @@ private fun HeartRatePreferencesCard(
             title = "当前状态：${uiState.statusLabel}",
             body = "${uiState.statusSummary} ${uiState.sourceSummary}"
         )
-        StatusBlock(title = "显示用途", body = uiState.purposeCopy)
-        StatusBlock(title = "记录边界", body = uiState.recordingBoundaryCopy)
-        StatusBlock(title = "隐私说明", body = uiState.privacyCopy)
-        StatusBlock(title = "非医疗说明", body = uiState.nonMedicalCopy)
-        StatusBlock(title = "权限说明", body = uiState.permissionCopy)
-        StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
         StatusBlock(title = uiState.blePermissionStatusTitle, body = uiState.blePermissionStatusCopy)
+        if (uiState.showBlePermissionRationale) {
+            StatusBlock(
+                title = uiState.blePermissionRationaleTitle,
+                body = uiState.blePermissionRationaleBullets.joinToString("\n")
+            )
+            Button(
+                onClick = onRequestHeartRateBlePermission,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = uiState.blePermissionActionLabel)
+            }
+        } else if (uiState.enabled && uiState.canPrepareBlePermission) {
+            Button(
+                onClick = onPrepareHeartRateBlePermission,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = uiState.blePermissionActionLabel)
+            }
+        }
         HeartRateDevicePickerBlock(
             uiState = uiState.devicePickerState,
             onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
             onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
             onSelectHeartRateDevice = onSelectHeartRateDevice
         )
-        if (uiState.showBlePermissionRationale) {
-            StatusBlock(
-                title = uiState.blePermissionRationaleTitle,
-                body = uiState.blePermissionRationaleBullets.joinToString("\n")
-            )
-            TextButton(onClick = onRequestHeartRateBlePermission) {
-                Text(text = uiState.blePermissionActionLabel)
-            }
-        } else if (uiState.enabled && uiState.canPrepareBlePermission) {
-            TextButton(onClick = onPrepareHeartRateBlePermission) {
-                Text(text = uiState.blePermissionActionLabel)
-            }
-        }
+        StatusBlock(title = "显示用途", body = uiState.purposeCopy)
+        StatusBlock(title = "记录边界", body = uiState.recordingBoundaryCopy)
+        StatusBlock(title = "隐私说明", body = uiState.privacyCopy)
+        StatusBlock(title = "非医疗说明", body = uiState.nonMedicalCopy)
+        StatusBlock(title = "权限说明", body = uiState.permissionCopy)
+        StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
         Text(
             text = uiState.enabledBoundaryCopy,
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
         if (uiState.canClearSavedDevice) {
-            TextButton(onClick = onClearHeartRateDevicePreference) {
+            OutlinedButton(
+                onClick = onClearHeartRateDevicePreference,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(text = "清除已保存设备")
             }
         }
@@ -315,15 +326,19 @@ private fun HeartRateDevicePickerBlock(
     )
     when {
         uiState.canStopScan -> {
-            TextButton(onClick = onStopHeartRateDeviceScan) {
+            OutlinedButton(
+                onClick = onStopHeartRateDeviceScan,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(text = uiState.actionLabel ?: "停止扫描")
             }
         }
 
         uiState.actionLabel != null -> {
-            TextButton(
+            Button(
                 enabled = uiState.canStartScan,
-                onClick = onStartHeartRateDeviceScan
+                onClick = onStartHeartRateDeviceScan,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(text = uiState.actionLabel)
             }
@@ -356,7 +371,10 @@ private fun HeartRateDeviceCandidateRow(
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
-        TextButton(onClick = { onSelectHeartRateDevice(device.identifier) }) {
+        Button(
+            onClick = { onSelectHeartRateDevice(device.identifier) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(text = "选择设备")
         }
     }
