@@ -29,6 +29,8 @@ internal class AndroidBleHeartRateProvider(
     context: Context,
     private val scanWindowMillis: Long = DEFAULT_SCAN_WINDOW_MILLIS,
     private val now: () -> Instant = { Instant.now() },
+    private val onScanState: (BleHeartRateScanState) -> Unit = {},
+    private val onCandidate: (BleHeartRateDeviceCandidate) -> Unit = {},
     private val onState: (BleHeartRateProviderState) -> Unit = {}
 ) : HeartRateProvider, AutoCloseable {
     private val appContext = context.applicationContext
@@ -39,12 +41,14 @@ internal class AndroidBleHeartRateProvider(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val devices = linkedMapOf<String, BluetoothDevice>()
     private val mutableProviderState = MutableStateFlow(BleHeartRateProviderState.noSource())
+    private val mutableScanState = MutableStateFlow(BleHeartRateScanState.idle())
     private val mutableCandidates = MutableStateFlow<List<BleHeartRateDeviceCandidate>>(emptyList())
     private val mutableHeartRateState = MutableStateFlow(mutableProviderState.value.toHeartRateState())
 
     override val heartRateState: Flow<com.liujyks.trainflow.core.model.HeartRateState> =
         mutableHeartRateState
     val providerState: StateFlow<BleHeartRateProviderState> = mutableProviderState
+    val scanState: StateFlow<BleHeartRateScanState> = mutableScanState
     val candidates: StateFlow<List<BleHeartRateDeviceCandidate>> = mutableCandidates
 
     private var currentGatt: BluetoothGatt? = null
@@ -55,11 +59,10 @@ internal class AndroidBleHeartRateProvider(
 
     private val scanTimeoutRunnable = Runnable {
         if (isScanning) {
-            stopScan(
-                BleHeartRateProviderState(
-                    kind = BleHeartRateProviderStateKind.STOPPED,
-                    message = "Scan window ended; no background scan is kept running",
-                    selectedDevice = selectedDevice
+            stopBleScan(
+                BleHeartRateScanState(
+                    kind = BleHeartRateScanStateKind.STOPPED,
+                    message = "Scan window ended; no background scan is kept running"
                 )
             )
         }
@@ -75,10 +78,12 @@ internal class AndroidBleHeartRateProvider(
         }
 
         override fun onScanFailed(errorCode: Int) {
-            stopScan()
-            publishError(
-                message = "BLE scan failed code=$errorCode",
-                reason = BleHeartRateRecoverableReason.SCAN_FAILED
+            stopBleScan(
+                BleHeartRateScanState(
+                    kind = BleHeartRateScanStateKind.ERROR,
+                    message = "BLE scan failed code=$errorCode",
+                    recoverableReason = BleHeartRateRecoverableReason.SCAN_FAILED
+                )
             )
         }
     }
@@ -86,6 +91,10 @@ internal class AndroidBleHeartRateProvider(
     @SuppressLint("MissingPermission")
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            if (!gattMatchesSelectedDevice(gatt)) {
+                closeGatt(gatt)
+                return
+            }
             val selection = gatt.device?.toSelection() ?: selectedDevice
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 closeGatt(gatt)
@@ -129,6 +138,7 @@ internal class AndroidBleHeartRateProvider(
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            if (!gattMatchesSelectedDevice(gatt)) return
             val selection = gatt.device?.toSelection() ?: selectedDevice
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 closeGatt(gatt)
@@ -158,6 +168,7 @@ internal class AndroidBleHeartRateProvider(
             descriptor: BluetoothGattDescriptor,
             status: Int
         ) {
+            if (!gattMatchesSelectedDevice(gatt)) return
             if (descriptor.characteristic.uuid != HEART_RATE_MEASUREMENT_UUID) return
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 publish(
@@ -196,7 +207,25 @@ internal class AndroidBleHeartRateProvider(
     }
 
     fun refreshAvailability() {
-        publish(availabilityState())
+        val availability = availabilityState()
+        val resolved = providerStateAfterAvailabilityRefresh(
+            currentState = mutableProviderState.value,
+            availabilityState = availability
+        )
+        if (resolved != mutableProviderState.value) {
+            publish(resolved)
+        }
+    }
+
+    fun stopScan() {
+        if (isScanning) {
+            stopBleScan(
+                BleHeartRateScanState(
+                    kind = BleHeartRateScanStateKind.STOPPED,
+                    message = "BLE heart-rate scan stopped"
+                )
+            )
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -213,9 +242,12 @@ internal class AndroidBleHeartRateProvider(
         val adapter = bluetoothAdapter
         val leScanner = scanner
         if (adapter == null || leScanner == null) {
-            publishError(
-                message = "Bluetooth LE scanner is unavailable on this device",
-                reason = BleHeartRateRecoverableReason.SCAN_FAILED
+            publishScanState(
+                BleHeartRateScanState(
+                    kind = BleHeartRateScanStateKind.ERROR,
+                    message = "Bluetooth LE scanner is unavailable on this device",
+                    recoverableReason = BleHeartRateRecoverableReason.SCAN_FAILED
+                )
             )
             return
         }
@@ -227,9 +259,9 @@ internal class AndroidBleHeartRateProvider(
         isScanning = true
         mainHandler.removeCallbacks(scanTimeoutRunnable)
         mainHandler.postDelayed(scanTimeoutRunnable, scanWindowMillis)
-        publish(
-            BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.SCANNING,
+        publishScanState(
+            BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.SCANNING,
                 message = "Scanning for BLE Heart Rate Service devices"
             )
         )
@@ -255,7 +287,10 @@ internal class AndroidBleHeartRateProvider(
             )
         }
         val selection = device.toSelection()
+        stopScan()
+        publishScanState(BleHeartRateScanState.idle("Scan ended after device selection"))
         selectedDevice = selection
+        mutableCandidates.value = emptyList()
         publish(
             BleHeartRateProviderState(
                 kind = BleHeartRateProviderStateKind.DEVICE_SELECTED,
@@ -361,13 +396,7 @@ internal class AndroidBleHeartRateProvider(
         val updated = mutableCandidates.value
             .filterNot { it.identifier == candidate.identifier } + candidate
         mutableCandidates.value = updated
-        publish(
-            BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.DEVICE_FOUND,
-                message = "BLE device found",
-                candidate = candidate
-            )
-        )
+        onCandidate(candidate)
     }
 
     @SuppressLint("MissingPermission")
@@ -450,6 +479,7 @@ internal class AndroidBleHeartRateProvider(
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray
     ) {
+        if (!gattMatchesSelectedDevice(gatt)) return
         if (characteristic.uuid != HEART_RATE_MEASUREMENT_UUID) return
         val measurement = HeartRateMeasurementParser.parse(value)
         val selection = gatt.device?.toSelection() ?: selectedDevice
@@ -475,15 +505,15 @@ internal class AndroidBleHeartRateProvider(
     }
 
     @SuppressLint("MissingPermission")
-    private fun stopScan(
-        state: BleHeartRateProviderState? = null
+    private fun stopBleScan(
+        state: BleHeartRateScanState? = null
     ) {
         if (isScanning) {
             scanner?.stopScan(scanCallback)
         }
         isScanning = false
         mainHandler.removeCallbacks(scanTimeoutRunnable)
-        state?.let(::publish)
+        state?.let(::publishScanState)
     }
 
     @SuppressLint("MissingPermission")
@@ -557,6 +587,17 @@ internal class AndroidBleHeartRateProvider(
         mutableProviderState.value = state
         mutableHeartRateState.value = state.toHeartRateState()
         onState(state)
+    }
+
+    private fun publishScanState(state: BleHeartRateScanState) {
+        mutableScanState.value = state
+        onScanState(state)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun gattMatchesSelectedDevice(gatt: BluetoothGatt): Boolean {
+        val selectedIdentifier = selectedDevice?.identifier ?: return false
+        return runCatching { gatt.device.address }.getOrNull() == selectedIdentifier
     }
 
     @SuppressLint("MissingPermission")

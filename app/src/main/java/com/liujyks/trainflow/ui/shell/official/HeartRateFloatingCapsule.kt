@@ -378,7 +378,6 @@ private fun HeartRateFloatingCapsuleStatus.toneColor(): Color {
         HeartRateFloatingCapsuleStatus.BLUETOOTH_DISABLED,
         HeartRateFloatingCapsuleStatus.CONNECTING -> Color(0xFFD9921E)
         HeartRateFloatingCapsuleStatus.WAITING_DATA,
-        HeartRateFloatingCapsuleStatus.SELECTED_DEVICE,
         HeartRateFloatingCapsuleStatus.BPM_ONLY -> TrainFlowFocus
         HeartRateFloatingCapsuleStatus.ZONE_LOW -> Color(0xFF7A8EA1)
         HeartRateFloatingCapsuleStatus.ZONE_WARMUP -> Color(0xFF4F8FDB)
@@ -388,7 +387,9 @@ private fun HeartRateFloatingCapsuleStatus.toneColor(): Color {
         HeartRateFloatingCapsuleStatus.ZONE_LIMIT -> TrainFlowError
         HeartRateFloatingCapsuleStatus.OVER_LIMIT -> Color(0xFF7A1118)
         HeartRateFloatingCapsuleStatus.STALE,
-        HeartRateFloatingCapsuleStatus.OFFLINE -> TrainFlowNeutral500
+        HeartRateFloatingCapsuleStatus.OFFLINE,
+        HeartRateFloatingCapsuleStatus.SAVED_DEVICE -> TrainFlowNeutral500
+        HeartRateFloatingCapsuleStatus.ERROR -> TrainFlowError
         HeartRateFloatingCapsuleStatus.NO_SOURCE,
         HeartRateFloatingCapsuleStatus.HIDDEN -> TrainFlowNeutral200
     }

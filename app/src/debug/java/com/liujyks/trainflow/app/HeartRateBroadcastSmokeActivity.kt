@@ -12,7 +12,7 @@ import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
 import com.liujyks.trainflow.core.health.BleHeartRatePermissionPlanner
 import com.liujyks.trainflow.core.health.BleHeartRatePermissionTrigger
 import com.liujyks.trainflow.core.health.BleHeartRateProviderState
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
+import com.liujyks.trainflow.core.health.BleHeartRateScanState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -21,9 +21,12 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
     private val candidateButtons = linkedMapOf<String, Button>()
     private val provider by lazy {
-        AndroidBleHeartRateProvider(this) { state ->
-            handleProviderState(state)
-        }
+        AndroidBleHeartRateProvider(
+            context = this,
+            onScanState = ::handleScanState,
+            onCandidate = ::handleCandidate,
+            onState = ::handleProviderState
+        )
     }
 
     private lateinit var adapterStateView: TextView
@@ -135,9 +138,22 @@ class HeartRateBroadcastSmokeActivity : ComponentActivity() {
         runOnUiThread {
             adapterStateView.text = "Provider: ${state.kind.name.lowercase(Locale.US)}"
             appendLog(state.logLine())
-            if (state.kind == BleHeartRateProviderStateKind.DEVICE_FOUND && state.candidate != null) {
-                addCandidateButton(state.candidate)
-            }
+        }
+    }
+
+    private fun handleScanState(state: BleHeartRateScanState) {
+        runOnUiThread {
+            appendLog("scan_${state.kind.name.lowercase(Locale.US)}: ${state.message}")
+        }
+    }
+
+    private fun handleCandidate(candidate: BleHeartRateDeviceCandidate) {
+        runOnUiThread {
+            appendLog(
+                "device_found: ${candidate.displayName} ${candidate.identifier}" +
+                    if (candidate.advertisesHeartRateService) " services=[0x180D]" else ""
+            )
+            addCandidateButton(candidate)
         }
     }
 

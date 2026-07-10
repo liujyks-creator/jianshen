@@ -52,8 +52,6 @@ internal data class BleHeartRateProviderState(
                 message = message
             )
 
-            BleHeartRateProviderStateKind.SCANNING,
-            BleHeartRateProviderStateKind.DEVICE_FOUND,
             BleHeartRateProviderStateKind.DEVICE_SELECTED,
             BleHeartRateProviderStateKind.CONNECTING -> HeartRateState(
                 kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
@@ -118,8 +116,6 @@ internal enum class BleHeartRateProviderStateKind {
     NO_SOURCE,
     PERMISSION_REQUIRED,
     BLUETOOTH_DISABLED,
-    SCANNING,
-    DEVICE_FOUND,
     DEVICE_SELECTED,
     CONNECTING,
     CONNECTED_WAITING_FOR_DATA,
@@ -128,6 +124,47 @@ internal enum class BleHeartRateProviderStateKind {
     DISCONNECTED,
     STOPPED,
     ERROR
+}
+
+internal data class BleHeartRateScanState(
+    val kind: BleHeartRateScanStateKind,
+    val message: String,
+    val recoverableReason: BleHeartRateRecoverableReason? = null
+) {
+    companion object {
+        fun idle(message: String = "BLE heart-rate scanner idle") = BleHeartRateScanState(
+            kind = BleHeartRateScanStateKind.IDLE,
+            message = message
+        )
+    }
+}
+
+internal enum class BleHeartRateScanStateKind {
+    IDLE,
+    SCANNING,
+    STOPPED,
+    ERROR
+}
+
+internal fun providerStateAfterAvailabilityRefresh(
+    currentState: BleHeartRateProviderState,
+    availabilityState: BleHeartRateProviderState
+): BleHeartRateProviderState {
+    val passiveStates = setOf(
+        BleHeartRateProviderStateKind.UNAVAILABLE,
+        BleHeartRateProviderStateKind.NO_SOURCE,
+        BleHeartRateProviderStateKind.PERMISSION_REQUIRED,
+        BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
+        BleHeartRateProviderStateKind.STOPPED
+    )
+    return if (
+        availabilityState.kind != BleHeartRateProviderStateKind.NO_SOURCE ||
+        currentState.kind in passiveStates
+    ) {
+        availabilityState
+    } else {
+        currentState
+    }
 }
 
 internal enum class BleHeartRateRecoverableReason {

@@ -29,11 +29,11 @@ class TrainingPreferencesAppMapperTest {
         assertFalse(state.actionCueEnabled)
         assertFalse(state.soundEnabled)
         assertEquals(StrengthSetTimerModePreference.AUTO_AFTER_REST, state.strengthSetTimerMode)
-        assertEquals("已启用", state.heartRateSettings.statusLabel)
+        assertEquals("已开启", state.heartRateSettings.statusLabel)
         assertEquals("D8:F0:42:01:90:D7", state.heartRateSettings.savedDeviceIdentifier)
         assertEquals("HUAWEI Band HR-OD7", state.heartRateSettings.savedDeviceDisplayName)
         assertEquals(
-            "已选择设备：HUAWEI Band HR-OD7。可用于后续连接；当前不进入训练页。",
+            "已保存设备：HUAWEI Band HR-OD7。保存设备不代表它在附近、正在广播、正在连接或已连接。",
             state.heartRateSettings.sourceSummary
         )
         assertEquals("tile_flow", state.selectedUiSkinId)

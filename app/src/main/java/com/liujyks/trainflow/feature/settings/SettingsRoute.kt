@@ -229,7 +229,7 @@ private fun StrengthPreferencesCard(
                 selected = uiState.strengthSetTimerMode == mode,
                 onClick = { onStrengthSetTimerModeChanged(mode) },
                 label = {
-                    Text("${mode.label} · ${mode.contractValue}")
+                    Text(mode.label)
                 }
             )
             Text(
@@ -259,10 +259,19 @@ private fun HeartRatePreferencesCard(
             checked = uiState.enabled,
             onCheckedChange = onHeartRateDisplayEnabledChanged
         )
-        StatusBlock(
-            title = "当前状态：${uiState.statusLabel}",
-            body = "${uiState.statusSummary} ${uiState.sourceSummary}"
-        )
+        StatusBlock(title = "心率显示：${uiState.statusLabel}", body = uiState.statusSummary)
+        if (uiState.enabled) {
+            StatusBlock(
+                title = "连接状态：${uiState.devicePickerState.connectionStatusLabel}",
+                body = uiState.sourceSummary
+            )
+            uiState.savedDeviceDisplayName?.let { displayName ->
+                StatusBlock(
+                    title = "已保存设备：$displayName",
+                    body = "保存设备仅供你主动连接，不代表设备在附近、已开启广播、正在连接或已经连接。"
+                )
+            }
+        }
         StatusBlock(title = uiState.blePermissionStatusTitle, body = uiState.blePermissionStatusCopy)
         if (uiState.showBlePermissionRationale) {
             StatusBlock(
