@@ -8,22 +8,26 @@ TrainFlow is not a generic fitness content feed. Its first job is to turn a user
 
 ## Read First
 
-Before making product or implementation changes, read these files in order:
+Before making product or implementation changes, first use `rg --files -g AGENTS.md` and read this file plus any closer applicable `AGENTS.md` files.
+
+Then read the core context:
 
 1. `docs/project-status.md`
 2. `docs/planning/decision-log.md`
-3. `docs/planning/product-brief.md`
-4. `docs/planning/prd.md`
-5. `docs/planning/ux-design.md`
-6. `docs/planning/data-contracts.md`
-7. `docs/architecture.md`
-8. `docs/roadmap-backlog.md`
-9. `docs/readiness-report.md`
-10. `DESIGN.md`
-11. `docs/ui-extension-guide.md`
-12. `docs/setup.md` when setup or commands matter
+3. The current story's testing, decision, or review document when one exists
 
-Treat `docs/planning/decision-log.md` as the current compact record of accepted decisions. Use the longer planning documents for rationale and detail.
+Add only the documents relevant to the task type:
+
+- New product capability, product decision, PRD, or UX flow: `docs/planning/product-brief.md`, `docs/planning/prd.md`, and `docs/planning/ux-design.md`.
+- Data contract, Room, persistence, engine, command, event, or session work: `docs/planning/data-contracts.md` and `docs/architecture.md`.
+- UI, Compose, layout, theme, interaction, or visual review: `DESIGN.md`, `docs/ui-extension-guide.md`, and the relevant approved visual/design decision.
+- Roadmap, readiness, phase status, or docs-only work: `docs/roadmap-backlog.md` and `docs/readiness-report.md` when affected.
+- Environment, Gradle, AVD, APK, adb, or test-command work: `docs/setup.md`.
+- Prototype work: `prototype/src/data/contracts.ts` and the relevant prototype files.
+
+Do not read unrelated long planning documents by default. Expand the read set when the task crosses boundaries, a current decision is unclear, or the focused documents point to another source.
+
+Treat `docs/planning/decision-log.md` as the compact record of accepted decisions. Use longer planning documents for rationale and detail only when they are relevant.
 
 ## Current Product Baseline
 
