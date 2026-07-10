@@ -1750,7 +1750,9 @@ stepsCompleted:
 - 明确隐私说明：心率来自用户主动选择的设备；未训练时只显示不记录；训练中未来可按 1 秒采样记录，但 recording model / Room / summary / history / trends 另拆。
 - 明确非医疗说明：区间只做训练参考，`超过上限` 只做深红视觉提示，不播放声音、不震动、不强制暂停、不做疾病诊断或医生建议替代。
 - 明确关闭行为：胶囊消失，停止扫描，断开连接，不重连，不记录；已保存设备 identifier / display name 可作为 convenience hint 保留，并提供清除入口。
-- 明确后续拆分：E16-5 settings / opt-in UI、E16-6 permission request flow、E16-7 device picker / source status、E16-8 app-shell floating capsule、E16-9 `HeartRateState` -> capsule mapping、E16-10 stale / offline policy、E16-11 recording model / 1s sampling persistence、E16-12 analysis / zones / post-workout summary。
+- 明确后续拆分：E16-5 settings / opt-in UI、E16-6 permission request flow、E16-7 device picker / source status、E16-8 app-shell floating capsule、E16-9 `HeartRateState` -> capsule mapping、E16-10 stale / offline policy、E16-11 recording model / 1s sampling persistence、E16-12a recap HTML visual gate、E16-12 analysis / zones / post-workout summary。
+
+E16-12 已记录外部划船训练详情 / 图表参考：只借鉴训练后单次记录详情的摘要、曲线和区间时长层级，不复制截图资产或划船专属距离、配速、桨频、功率、卡路里、恢复时长和训练压力指标。实际页面必须等待 E16-11 已保存来源明确的样本，再经 E16-12a `huashu-design` HTML 视觉评审后实现，详见 `docs/testing/e16-12-heart-rate-recap-visual-reference.md`。
 - 本 story 未改 Android Kotlin、production manifest、Gradle、Room、session record、records/history/trends、`WorkoutCommand`、`WorkoutEvent`、TimedWorkoutEngine、StrengthWorkoutEngine、TimerDial、声音、震动或通知；未恢复旧心率卡片、`-- bpm`、`未获取心率`、手动心率输入或旧平均心率趋势。
 
 ### Story E16-6: Heart-rate BLE permission request flow
