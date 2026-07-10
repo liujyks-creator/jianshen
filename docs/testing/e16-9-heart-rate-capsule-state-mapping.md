@@ -1,6 +1,6 @@
 # E16-9 Heart-rate capsule state mapping
 
-**Status:** Implemented; code review accepted; Band 9 post-fix real-device acceptance passed; pending final review / merge
+**Status:** Reviewed / merged to `main` (merge commit `3271697fbc5c3d3385fbcdbc214f4d1a9a2c6832`); Band 9 post-fix real-device acceptance passed
 **Date:** 2026-07-11
 **Scope:** Provider/source/live state to floating capsule mapping, app-shell read-only live state wiring, focused tests, documentation
 
