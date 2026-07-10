@@ -1,6 +1,6 @@
 # E16-9 Heart-rate capsule state mapping
 
-**Status:** Implemented; code review accepted; pending Band 9 post-fix real-device acceptance before merge
+**Status:** Implemented; code review accepted; Band 9 post-fix real-device acceptance passed; pending final review / merge
 **Date:** 2026-07-11
 **Scope:** Provider/source/live state to floating capsule mapping, app-shell read-only live state wiring, focused tests, documentation
 
@@ -102,7 +102,7 @@
 
 - TrainFlow 可以发现、连接 Band 9，并持续获得 live bpm；这是 E16-9 production path 的正向证据。
 - 关闭 Band 9 心率广播后，胶囊显示 `连接异常`；本轮接受当前 error 映射，完整 stale / offline 时序仍属于 E16-10。
-- E16-9b 的实现语义是：退出 App 再进入后，胶囊显示 `未连接`，并在 expanded / 设置页明确标出已保存设备；不会自动连接。用户可点击 `连接已保存设备` 后进行一次 bounded、精确 identifier 匹配尝试；重新开启 Band 9 广播不会自动重连。该修复后的 Band 9 路径仍待下方最终人工验收。
+- E16-9b 的实现语义是：退出 App 再进入后，胶囊显示 `未连接`，并在 expanded / 设置页明确标出已保存设备；不会自动连接。用户可点击 `连接已保存设备` 后进行一次 bounded、精确 identifier 匹配尝试；重新开启 Band 9 广播不会自动重连。该修复后的 Band 9 路径已在下方 2026-07-11 人工验收中通过。
 - 已连接并显示 bpm 时点击 `重新扫描`，原实现只在 12 秒扫描窗口内出现 `心率` / `正在连接` 交替；窗口结束后交替停止。该时间边界证明 scanner `scanning` / candidate state 覆盖了 active provider display state，而不是 notify 自身抖动。
 - 本修复已将 scanner lifecycle / candidates 与 provider connection / live bpm 分离。扫描窗口、候选变化、发现其他未选择设备和 timeout 都不再污染胶囊；当前 live bpm 保持显示，只有用户选择新设备后才切换 target。
 
@@ -113,6 +113,17 @@
 - AVD 清空 TrainFlow 数据后的默认状态为 `心率显示：未开启`，胶囊隐藏符合默认关闭规则；开启显示偏好后，胶囊显示 `权限未赋予`，证明当前 APK 的胶囊状态映射仍在工作，不是心率 UI 被移除。
 - 证据位于 `.local/smoke/e16-9b-apk-provenance-diagnosis/`，不提交。
 - AVD 没有保存的真实 Band 9 或 live HRS source，不能替代下面的精确 identifier reconnect 和 live bpm 扫描窗口人工验收。
+
+## 2026-07-11 Band 9 修复后人工验收
+
+用户确认以下合入前验收全部通过：
+
+1. Band 9 已显示 live bpm 时，点击 `扫描其他设备` 并完整等待约 12 秒，胶囊持续显示当前 bpm，不再出现 bpm / `正在连接` 交替。
+2. 扫描到其他 HRS 设备但不选择，以及扫描窗口结束后，Band 9 当前 bpm / 连接状态保持。
+3. 重启 App 后，显示中性 `未连接 + 已保存设备`，不自动扫描或连接。
+4. 开启 Band 9 广播后，点击 `连接已保存设备`，精确 identifier 匹配路径可恢复连接并再次获得 bpm。
+
+结论：E16-9b 的 saved-device clarity、explicit reconnect 和 live-bpm scan isolation 已完成真实 Band 9 验收。此结果不扩大到 E16-10 的自动重连、retry/backoff 或 error -> stale/offline 时序。
 
 后续 reconnect / stale-offline policy 必须单独决定：
 
