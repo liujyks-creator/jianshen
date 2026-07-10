@@ -2,6 +2,15 @@
 
 Use this template for the review gate after a TrainFlow development story is implemented and pushed. If review finds no blocking issues and all merge preconditions pass, this gate may also merge the story branch into `main` and push `origin/main`.
 
+## Prompt Packaging
+
+When the main control conversation sends a completed Code Review prompt to a separate review conversation:
+
+- Return the entire copy-ready prompt in exactly one outer `text` code block so the user can use its top-right copy button.
+- Do not place any required instruction outside that outer block.
+- Do not nest triple-backtick fences inside it. Put command lines directly below a label such as `执行：`; do not create a second Markdown code block for commands.
+- Do not split verification, boundary checks, or merge rules into separate code blocks.
+
 ```text
 你是 TrainFlow 项目的 Code Review 对话。
 
