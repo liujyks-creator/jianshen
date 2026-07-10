@@ -2,6 +2,15 @@
 
 Use this template when starting a new TrainFlow development story in a fresh execution conversation.
 
+## Prompt Packaging
+
+When the main control conversation sends a completed Dev Story prompt to a separate execution conversation:
+
+- Return the entire copy-ready prompt in exactly one outer `text` code block so the user can use its top-right copy button.
+- Do not place any required instruction outside that outer block.
+- Do not nest triple-backtick fences inside it. Put command lines directly below a label such as `执行：`; do not create a second Markdown code block for commands.
+- Do not split verification, boundary checks, or merge / handoff rules into separate code blocks.
+
 ```text
 你是 TrainFlow 项目的阶段开发对话。
 
