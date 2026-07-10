@@ -86,30 +86,27 @@ Android 虚拟测试环境（审查 UI / APK / smoke / 真机截图修复时必�
 - .local/ 是否仍未被 Git 跟踪
 - 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
 
-规则与文档读取策略：
-- 先运行 `rg --files -g AGENTS.md`，读取根 `AGENTS.md` 及目标目录下更具体的适用规则文件。
-- 核心必读：`docs/project-status.md`、`docs/planning/decision-log.md`、本 Story 的 testing / decision / review 文档。
-- 按 Story 变更范围补读，不要默认全量阅读不相关长文档：
-  - 新产品能力、PRD、用户流程或产品决策：`docs/planning/product-brief.md`、`docs/planning/prd.md`、`docs/planning/ux-design.md`。
-  - 数据契约、Room、持久化、engine、command/event、session：`docs/planning/data-contracts.md`、`docs/architecture.md`。
-  - UI、Compose、布局、主题、交互、视觉修复：`DESIGN.md`、`docs/ui-extension-guide.md`、相关 HTML / design decision。
-  - backlog、readiness、状态或 docs-only：`docs/roadmap-backlog.md`、`docs/readiness-report.md`。
-  - 环境、Gradle、AVD、APK、adb、测试命令：`docs/setup.md`。
-  - prototype：`prototype/src/data/contracts.ts` 和相关 prototype 文件。
-- 当 Story diff 或已读文档显示跨边界风险时，再扩展阅读范围。
+必读状态文档：
+1. AGENTS.md
+2. docs/project-status.md
+3. docs/roadmap-backlog.md
+4. docs/readiness-report.md
+5. docs/planning/decision-log.md
+6. docs/planning/product-brief.md
+7. docs/planning/prd.md
+8. docs/planning/ux-design.md
+9. docs/planning/data-contracts.md
+10. docs/architecture.md
+11. DESIGN.md
+12. docs/ui-extension-guide.md
+13. docs/setup.md
+14. prototype/src/data/contracts.ts
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
 - 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；审查 UI 时仍必须确认生成结果消费了 DESIGN.md 和项目文档，而不是猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞 review。
 - 如 Android emulator QA skill 可用，Android UI / APK / smoke / 截图验证类 review 先读取并遵循；如不可用，仍必须使用上方 `.local/android-sdk` 路径尝试 `adb devices` 和 AVD 检查。
 - skills/ 是本地辅助目录，不应提交。
-
-Review 子代理策略（只读）：
-- Review 主代理可自行决定使用 0–2 个 explorer 子代理，只在审查范围足够大且存在互不重叠的核查维度时使用。
-- 每个 explorer 先读取适用 `AGENTS.md`、核心状态文档和所分配审查维度的相关文档；UI / 视觉审查遵循 `huashu-design`（如可用）、`DESIGN.md` 与既有视觉方案。
-- explorer 只能做只读检查，报告文件路径、行号、证据和风险；不得改代码、写文档、stage、commit、push、合并或批准 review。
-- 适合并行核查：状态机/生命周期、数据/架构边界、UI smoke 与证据、文档同步和禁区文件。
-- Review 主代理负责整合 findings、执行最终验证和唯一的 merge 判断。子代理不可用或不适合时，主 review 代理继续单代理完成。
 
 当前 Story 原目标：
 - <一句话说明本阶段原目标>
@@ -214,7 +211,6 @@ Review 后处理规则：
   - 是否确认没有触碰禁止范围
   - 是否确认 skills/ 和 .local/ 未提交
   - 是否确认 APK、countdown_beep1.mp3、deliverables/、人工/ 未提交
-  - 如使用 review explorer：各 explorer 的核查范围、证据和主 review 代理的整合结论
   - 仍有哪些风险或技术债
   - 给主管理对话的下一步建议
 ```
