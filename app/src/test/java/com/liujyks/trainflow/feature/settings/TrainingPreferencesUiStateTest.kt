@@ -5,6 +5,8 @@ import com.liujyks.trainflow.core.health.BleHeartRateProviderState
 import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
 import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
 import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
+import com.liujyks.trainflow.core.health.BleHeartRateScanState
+import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -285,7 +287,7 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
+            providerState = BleHeartRateProviderState(
                 kind = BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
                 message = "Bluetooth is disabled"
             )
@@ -301,8 +303,8 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.SCANNING,
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.SCANNING,
                 message = "Scanning"
             )
         )
@@ -319,9 +321,9 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.DEVICE_FOUND,
-                message = "found non-HRS"
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.SCANNING,
+                message = "Scanning"
             ),
             scannerCandidates = listOf(
                 BleHeartRateDeviceCandidate(
@@ -330,8 +332,7 @@ class TrainingPreferencesUiStateTest {
                     rssi = -30,
                     advertisesHeartRateService = false
                 )
-            ),
-            scanActive = true
+            )
         )
 
         assertEquals(HeartRateDevicePickerStatus.SCANNING, state.status)
@@ -343,13 +344,39 @@ class TrainingPreferencesUiStateTest {
     }
 
     @Test
+    fun heartRateDevicePickerLabelsRescanAsScanningOtherDevicesWhenSourceIsSelected() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            providerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.LIVE_BPM,
+                message = "live",
+                selectedDevice = BleHeartRateDeviceSelection(
+                    identifier = "D8:F0:42:01:90:D7",
+                    displayName = "HUAWEI Band HR-OD7"
+                ),
+                bpm = 105
+            ),
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.SCANNING,
+                message = "Scanning"
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SCANNING, state.status)
+        assertEquals("设备来源：正在扫描其他设备", state.title)
+        assertTrue(state.body.contains("当前连接和心率胶囊不会因扫描中断"))
+        assertTrue(state.body.contains("只有选择新设备后"))
+    }
+
+    @Test
     fun heartRateDevicePickerShowsOnlyHeartRateCapableCandidates() {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.DEVICE_FOUND,
-                message = "found"
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.STOPPED,
+                message = "Scan window ended"
             ),
             scannerCandidates = listOf(
                 BleHeartRateDeviceCandidate(
@@ -381,8 +408,8 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.STOPPED,
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.STOPPED,
                 message = "Scan window ended"
             ),
             scannerCandidates = listOf(
@@ -410,8 +437,8 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.STOPPED,
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.STOPPED,
                 message = "BLE HRS provider stopped"
             ),
             scannerCandidates = listOf(
@@ -437,8 +464,8 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.STOPPED,
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.STOPPED,
                 message = "Scan window ended"
             ),
             scanFinishedWithoutDevices = true
@@ -457,7 +484,7 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
+            providerState = BleHeartRateProviderState(
                 kind = BleHeartRateProviderStateKind.DEVICE_SELECTED,
                 message = "selected",
                 selectedDevice = BleHeartRateDeviceSelection(
@@ -478,8 +505,8 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            scannerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.ERROR,
+            scanState = BleHeartRateScanState(
+                kind = BleHeartRateScanStateKind.ERROR,
                 message = "failed",
                 recoverableReason = BleHeartRateRecoverableReason.SCAN_FAILED
             )

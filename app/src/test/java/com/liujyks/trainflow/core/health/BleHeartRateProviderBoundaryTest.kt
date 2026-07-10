@@ -103,10 +103,9 @@ class BleHeartRateProviderBoundaryTest {
             rssi = -46,
             advertisesHeartRateService = true
         )
-        val found = BleHeartRateProviderState(
-            kind = BleHeartRateProviderStateKind.DEVICE_FOUND,
-            message = "found",
-            candidate = candidate
+        val scanning = BleHeartRateScanState(
+            kind = BleHeartRateScanStateKind.SCANNING,
+            message = "scanning"
         )
         val selected = BleHeartRateProviderState(
             kind = BleHeartRateProviderStateKind.DEVICE_SELECTED,
@@ -129,8 +128,28 @@ class BleHeartRateProviderBoundaryTest {
             HeartRateUnavailableReason.BLUETOOTH_DISABLED,
             bluetoothOff.toHeartRateState().unavailableReason
         )
-        assertEquals("HUAWEI Band HR-OD7", found.toHeartRateState().sourceLabel)
+        assertEquals(BleHeartRateScanStateKind.SCANNING, scanning.kind)
         assertEquals("D8:F0:42:01:90:D7", selected.toHeartRateState().sourceId)
         assertEquals(HeartRateUnavailableReason.CONNECTION_FAILED, error.toHeartRateState().unavailableReason)
+    }
+
+    @Test
+    fun availabilityRefreshDoesNotReplaceActiveLiveProviderState() {
+        val live = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.LIVE_BPM,
+            message = "live",
+            selectedDevice = BleHeartRateDeviceSelection(
+                identifier = "D8:F0:42:01:90:D7",
+                displayName = "HUAWEI Band HR-OD7"
+            ),
+            bpm = 105
+        )
+
+        val resolved = providerStateAfterAvailabilityRefresh(
+            currentState = live,
+            availabilityState = BleHeartRateProviderState.noSource()
+        )
+
+        assertEquals(live, resolved)
     }
 }

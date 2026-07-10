@@ -92,6 +92,8 @@
 
 | D-044 | Accepted | E13.1 短提示音使用用户本人 / 项目内制作素材，并以媒体音量通道和不抢占外部音频为默认策略。 | `countdown_beep1.mp3` 和 `.local/audio/stage_bell_copper_clean.mp3` 已由用户确认授权用于 TrainFlow App 内短提示音分发；提交时只允许提交 Android raw 资源副本，不提交根目录原文件或 `.local` 原文件。计时临近结束按阈值 N 映射：剩余 N / ... / 1 秒播放 `countdown_beep1.mp3`，倒数到 0 后的下阶段开始播放 `stage_bell_copper_clean.mp3`；最后阶段没有下阶段时，在 session completed 的 0 秒边界同样播放 bell；开始训练的第一阶段不额外插入 bell。所有计时阶段都可触发临近结束提醒，阈值等于阶段时长时覆盖整个阶段，阈值超过阶段时长时按阶段全长裁剪覆盖。声音提示只消费既有 `WorkoutEvent` / `CueSettings`，不改变训练引擎、`WorkoutCommand` 或 `WorkoutEvent` 语义；Android 播放层使用 media audio attributes，走媒体音量通道，不请求会打断外部音乐 / 视频的 audio focus，不主动 duck，不暂停外部音频。 |
 
+| D-074 | Accepted | E16-9 active heart-rate provider state 与设置页 scan state 必须分离。 | 2026-07-10 Band 9 人工测试确认 TrainFlow 可连接并获得 live bpm，关闭广播后显示 `连接异常`；同时发现已连接时重新扫描只在 12 秒 scan window 内出现 bpm / `正在连接` 交替，证明 scanner lifecycle 覆盖了 capsule 的 provider display state。修复后 `BleHeartRateScanState` / candidates 只驱动设置页扫描按钮和列表，`providerState` / `HeartRateState` 独立驱动胶囊；扫描、候选更新、发现其他未选择设备和 timeout 不断开当前连接、不切换 target、不覆盖 live bpm，只有用户选择新设备后才切换 target。cold start saved source 不自动连接、广播恢复自动重连、retry/backoff 和 error -> stale/offline 时序继续属于后续 reconnect / E16-10 policy；不得借此进入 recording、1s persistence、analysis、Room、records/history/trends、commands/events、engines、TimerDial 或 cue。 |
+
 ## 预留能力
 
 | ID | 状态 | 能力 | 当前边界 |

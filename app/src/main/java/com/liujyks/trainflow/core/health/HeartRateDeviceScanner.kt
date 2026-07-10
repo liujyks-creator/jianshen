@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 internal interface HeartRateDeviceScanner : AutoCloseable {
     val providerState: StateFlow<BleHeartRateProviderState>
+    val scanState: StateFlow<BleHeartRateScanState>
     val candidates: StateFlow<List<BleHeartRateDeviceCandidate>>
 
     fun refreshAvailability()
@@ -21,6 +22,7 @@ internal class AndroidHeartRateDeviceScanner(
     private val provider = AndroidBleHeartRateProvider(context.applicationContext)
 
     override val providerState: StateFlow<BleHeartRateProviderState> = provider.providerState
+    override val scanState: StateFlow<BleHeartRateScanState> = provider.scanState
     override val candidates: StateFlow<List<BleHeartRateDeviceCandidate>> = provider.candidates
 
     override fun refreshAvailability() {

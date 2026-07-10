@@ -4,7 +4,6 @@ import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.HeartRateStateKind
 import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
-import com.liujyks.trainflow.feature.settings.HeartRateDevicePickerStatus
 import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
 
 internal data class HeartRateFloatingCapsuleUiState(
@@ -74,10 +73,6 @@ internal fun heartRateFloatingCapsuleUiState(
             deviceHint = settings.savedDeviceDisplayName,
             forceCollapsed = forceCollapsed
         )
-    }
-
-    if (settings.devicePickerState.status == HeartRateDevicePickerStatus.BLUETOOTH_DISABLED) {
-        return bluetoothDisabledCapsule(settings, forceCollapsed)
     }
 
     val liveReading = liveState?.bpm?.takeIf { bpm -> bpm > 0 }?.let { bpm ->
@@ -176,16 +171,6 @@ internal fun heartRateFloatingCapsuleUiState(
     }
 
     return when {
-        settings.devicePickerState.status == HeartRateDevicePickerStatus.SCANNING ->
-            stateCapsule(
-                status = HeartRateFloatingCapsuleStatus.CONNECTING,
-                label = "正在连接",
-                title = "正在查找心率设备",
-                body = "扫描只由你在设置页主动触发；胶囊不会自动启动扫描或连接。",
-                deviceHint = settings.savedDeviceDisplayName,
-                forceCollapsed = forceCollapsed
-            )
-
         settings.savedDeviceDisplayName != null || settings.savedDeviceIdentifier != null ->
             stateCapsule(
                 status = HeartRateFloatingCapsuleStatus.SELECTED_DEVICE,
