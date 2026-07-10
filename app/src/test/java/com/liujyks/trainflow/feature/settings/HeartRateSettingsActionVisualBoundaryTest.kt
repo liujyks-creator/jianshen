@@ -30,4 +30,12 @@ class HeartRateSettingsActionVisualBoundaryTest {
         assertTrue(source.contains("awaitFirstDown(requireUnconsumed = false)"))
         assertTrue(source.contains("onTap = { expanded = !expanded }"))
     }
+
+    @Test
+    fun strengthPreferenceCardDoesNotExposeInternalTimerModeTokens() {
+        val source = File("src/main/java/com/liujyks/trainflow/feature/settings/SettingsRoute.kt").readText()
+
+        assertFalse(source.contains("mode.contractValue"))
+        assertTrue(source.contains("Text(mode.label)"))
+    }
 }

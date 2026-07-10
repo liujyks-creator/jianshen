@@ -27,7 +27,7 @@ class TrainingPreferencesUiStateTest {
         assertEquals("默认最后 5 秒提醒", state.countdownSummary)
         assertFalse(state.heartRateSettings.enabled)
         assertEquals("心率与设备", state.heartRateSettings.sectionTitle)
-        assertEquals("未启用", state.heartRateSettings.statusLabel)
+        assertEquals("未开启", state.heartRateSettings.statusLabel)
         assertEquals("关闭后不显示胶囊、不扫描、不连接、不记录。", state.heartRateSettings.sourceSummary)
         assertEquals("official_flow", state.selectedUiSkinId)
         assertEquals("Official Flow", state.selectedSkinSummary)
@@ -114,10 +114,10 @@ class TrainingPreferencesUiStateTest {
             savedDeviceDisplayName = null
         )
 
-        assertEquals("已启用", state.statusLabel)
+        assertEquals("已开启", state.statusLabel)
         assertEquals("已启用显示偏好；后续可选择设备。", state.statusSummary)
         assertEquals("未连接源 / 待选择设备。", state.sourceSummary)
-        assertEquals("开启后仍不会自动扫描或连接；只有点击扫描心率设备才会查找附近设备。", state.enabledBoundaryCopy)
+        assertEquals("开启后仍不会自动扫描或连接；只有你主动点击连接已保存设备或扫描心率设备才会查找附近设备。", state.enabledBoundaryCopy)
         assertEquals(HeartRateBlePermissionStatus.NOT_REQUESTED, state.blePermissionStatus)
         assertTrue(state.canPrepareBlePermission)
         assertFalse(state.canClearSavedDevice)
@@ -132,7 +132,7 @@ class TrainingPreferencesUiStateTest {
 
         assertTrue(state.canClearSavedDevice)
         assertEquals(
-            "已选择设备：HUAWEI Band HR-OD7。可用于后续连接；当前不进入训练页。",
+            "已保存设备：HUAWEI Band HR-OD7。保存设备不代表它在附近、正在广播、正在连接或已连接。",
             state.sourceSummary
         )
     }
@@ -496,8 +496,75 @@ class TrainingPreferencesUiStateTest {
 
         assertEquals(HeartRateDevicePickerStatus.SELECTED, state.status)
         assertTrue(state.canStartScan)
-        assertTrue(state.body.contains("已保存"))
-        assertTrue(state.body.contains("后续连接"))
+        assertTrue(state.body.contains("仅保存"))
+        assertEquals("连接已保存设备", state.actionLabel)
+        assertEquals("未连接", state.connectionStatusLabel)
+    }
+
+    @Test
+    fun savedDeviceReconnectScansOnlyAfterExplicitActionAndMatchesIdentifierExactly() {
+        val savedIdentifier = "D8:F0:42:01:90:D7"
+        val scanning = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scanState = BleHeartRateScanState(BleHeartRateScanStateKind.SCANNING, "Scanning"),
+            savedDeviceIdentifier = savedIdentifier,
+            savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+            scanPurpose = HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE
+        )
+        val sameNameDifferentIdentifier = BleHeartRateDeviceCandidate(
+            identifier = "AA:BB:CC:DD:EE:FF",
+            displayName = "HUAWEI Band HR-OD7",
+            advertisesHeartRateService = true
+        )
+        val exactMatch = sameNameDifferentIdentifier.copy(identifier = savedIdentifier)
+
+        assertEquals("设备来源：正在查找已保存设备", scanning.title)
+        assertTrue(scanning.body.contains("identifier 完全匹配"))
+        assertEquals(null, savedDeviceReconnectCandidateIdentifier(savedIdentifier, listOf(sameNameDifferentIdentifier)))
+        assertEquals(savedIdentifier, savedDeviceReconnectCandidateIdentifier(savedIdentifier, listOf(sameNameDifferentIdentifier, exactMatch)))
+    }
+
+    @Test
+    fun savedDeviceReconnectTimeoutKeepsOtherHrsCandidatesForManualChoice() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            scanState = BleHeartRateScanState(BleHeartRateScanStateKind.STOPPED, "Scan window ended"),
+            savedDeviceIdentifier = "D8:F0:42:01:90:D7",
+            savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+            savedDeviceReconnectNotFound = true,
+            scannerCandidates = listOf(
+                BleHeartRateDeviceCandidate(
+                    identifier = "AA:BB:CC:DD:EE:FF",
+                    displayName = "Other HRS",
+                    advertisesHeartRateService = true
+                )
+            )
+        )
+
+        assertEquals(HeartRateDevicePickerStatus.SAVED_DEVICE_NOT_FOUND, state.status)
+        assertEquals("设备来源：未找到已保存设备", state.title)
+        assertEquals("连接已保存设备", state.actionLabel)
+        assertEquals(1, state.hrsCandidates.size)
+    }
+
+    @Test
+    fun liveBpmUsesScanOtherDevicesActionWithoutChangingConnectionStatus() {
+        val state = heartRateDevicePickerUiState(
+            displayEnabled = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            providerState = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.LIVE_BPM,
+                message = "live",
+                bpm = 105
+            ),
+            savedDeviceIdentifier = "D8:F0:42:01:90:D7",
+            savedDeviceDisplayName = "HUAWEI Band HR-OD7"
+        )
+
+        assertEquals("扫描其他设备", state.actionLabel)
+        assertEquals("已连接", state.connectionStatusLabel)
     }
 
     @Test

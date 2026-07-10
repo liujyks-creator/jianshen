@@ -1,6 +1,6 @@
 # E16-9 Heart-rate capsule state mapping
 
-**Status:** Implemented; Band 9 manual-test feedback fix implemented; unit verified; AVD smoke completed
+**Status:** Implemented; saved-device clarity and explicit reconnect follow-up verified
 **Date:** 2026-07-10
 **Scope:** Provider/source/live state to floating capsule mapping, app-shell read-only live state wiring, focused tests, documentation
 
@@ -19,6 +19,15 @@
 - 选择设备后，只有在心率显示已开启、BLE 权限已授予、provider 内已有本次用户选择的设备时，app shell 才调用 `connectSelectedDevice()`。
 - 本轮不做 cold-start saved-device 自动重连。原因是 DataStore 只保存 provider identifier / display name，不保存 `BluetoothDevice` / `BluetoothGatt` / SDK model；provider 冷启动后没有可安全连接的 Android `BluetoothDevice` 实例。后续如要自动重连，必须另拆明确的 bounded reconnect / bonded-device lookup 策略，且不得静默扫描。
 
+## 2026-07-10 E16-9b：已保存设备清晰度与显式连接
+
+- 冷启动从 DataStore 恢复的只有 identifier / display name 是**已保存偏好**，不是当前 provider 连接。胶囊 collapsed 显示中性 `未连接`；expanded 的 `来源` 显示 `已保存：{设备名}`，`更新` 显示 `未连接`。旧的运行时 `连接异常` 不跨进程保存，重启后如尚未验证可用性则回到这一路径。
+- 设置页明确分列 `心率显示：已开启`、`连接状态：未连接` 和 `已保存设备：{设备名}`，并说明保存设备不代表在附近、已开启广播、正在连接或已经连接。
+- 有 saved identifier 且当前未连接时，主操作为 `连接已保存设备`。只有这次用户点击才启动既有约 12 秒、标准 HRS `0x180D` filter 的 scan；只有候选 identifier 与保存 identifier 精确相等时，才自动 `selectDevice()` 并沿用现有 `connectSelectedDevice()` 生命周期。display name 相同不足以自动连接。
+- timeout 未匹配显示 `未找到已保存设备`，不连接、不重试；其他 HRS candidates 继续保留在列表供用户手动选择。无保存设备仍为 `扫描心率设备`。
+- 当前 live bpm 时主操作为 `扫描其他设备`。fbaabf9 的 provider / scan state 分离保持不变：scan active、candidate update 和 timeout 都不覆盖当前 GATT 或 bpm；只有手动选择新设备才切换 target。
+- 力量训练默认模式卡片只显示中文 label `手动开始` / `休息后自动`，不展示 `manual_start` / `auto_after_rest` contract token；contract、DataStore、计划编辑器和训练引擎不变。
+
 ## 状态 Mapping 表
 
 | 输入优先级 | Collapsed label | Expanded 来源 | Expanded 记录 | Expanded 区间 | Expanded 更新 |
@@ -27,7 +36,7 @@
 | permission missing | `权限未赋予` | `未授权` 或已保存设备名 | `未记录` | `无` | `无数据` |
 | bluetooth disabled | `蓝牙关闭` | `蓝牙关闭` 或已保存设备名 | `未记录` | `无` | `无数据` |
 | no selected source | `未连接源` | `未连接` | `未记录` | `无` | `无数据` |
-| saved / selected source, not connected | `已选择设备` | 设备名 | `当前只显示状态` | `无` | `无数据` |
+| saved source, no active provider (cold start) | `未连接` | `已保存：设备名` | `当前只显示状态` | `无` | `未连接` |
 | provider connecting | `正在连接` | 设备名 | `当前只显示状态` | `无` | `无数据` |
 | scanner active while provider is live | 保持当前 live bpm | 保持当前设备 | `训练记录：后续开启` | 保持当前区间 | `实时` |
 | connected waiting first data | `等待数据` | 设备名 | `当前只显示状态` | `无` | `无数据` |
@@ -82,7 +91,10 @@
 - scan timeout -> 继续显示当前 live bpm / provider state。
 - 用户选择新设备 -> 新 target 进入 selected / connecting / waiting / live 流程，旧 target 不再覆盖新状态。
 - broadcast / provider connection error -> `连接异常`。
-- cold start 只有保存的 source hint、provider 无已知设备 -> `已选择设备`，不自动连接。
+- cold start 只有保存的 source hint、provider 无已知设备 -> `未连接 + 已保存：设备名`，不自动 scan / connect，旧 error 不跨进程展示。
+- 点击 `连接已保存设备` 才开始 bounded scan；同名不同 identifier 不自动连接，精确 identifier 才可进入既有 connecting / waiting / live 路径。
+- saved reconnect timeout -> `未找到已保存设备`，其他 HRS candidates 保留供手选。
+- SettingsRoute 不展示 `manual_start` / `auto_after_rest`。
 
 ## 2026-07-10 Band 9 人工真机测试反馈
 
@@ -90,7 +102,7 @@
 
 - TrainFlow 可以发现、连接 Band 9，并持续获得 live bpm；这是 E16-9 production path 的正向证据。
 - 关闭 Band 9 心率广播后，胶囊显示 `连接异常`；本轮接受当前 error 映射，完整 stale / offline 时序仍属于 E16-10。
-- 退出 App 再进入后，胶囊显示 `已选择设备`，但不会自动连接；重新开启 Band 9 广播也不会自动重连，必须重新扫描并选择设备。该行为是当前实现限制，本轮不强行扩展 reconnect。
+- 退出 App 再进入后，胶囊显示 `未连接`，并在 expanded / 设置页明确标出已保存设备；不会自动连接。E16-9b 允许用户点击 `连接已保存设备` 后进行一次 bounded、精确 identifier 匹配尝试；重新开启 Band 9 广播不会自动重连。
 - 已连接并显示 bpm 时点击 `重新扫描`，原实现只在 12 秒扫描窗口内出现 `心率` / `正在连接` 交替；窗口结束后交替停止。该时间边界证明 scanner `scanning` / candidate state 覆盖了 active provider display state，而不是 notify 自身抖动。
 - 本修复已将 scanner lifecycle / candidates 与 provider connection / live bpm 分离。扫描窗口、候选变化、发现其他未选择设备和 timeout 都不再污染胶囊；当前 live bpm 保持显示，只有用户选择新设备后才切换 target。
 
@@ -103,7 +115,7 @@
 
 ## 验证命令
 
-已通过：
+2026-07-10 E16-9b 已通过：
 
 ```powershell
 .\gradlew.bat app:testDebugUnitTest --tests "*HeartRate*"
@@ -119,7 +131,7 @@
 git diff --check
 ```
 
-2026-07-10 Band 9 feedback fix 复跑以上 focused / full unit / assemble / lint / check 均通过；boundary scans 确认没有新增 overlay permission、旧心率卡片 / 手动输入 / 平均心率趋势，也没有把心率接入 records、Room、engines、commands/events、TimerDial 或 cue。
+2026-07-10 E16-9b 复跑 focused / full unit / assemble / lint / check 均通过；boundary scans 确认没有新增 overlay permission、旧心率卡片 / 手动输入 / 平均心率趋势，也没有把心率接入 records、Room、engines、commands/events、TimerDial 或 cue。
 
 待 staging 后执行：
 
@@ -167,6 +179,34 @@ TrainFlow_Pixel_API_36
 
 AVD 没有真实 BLE HRS 外设，不能证明 Band 9 live bpm。真实 live bpm 需要用户真机人工测试。
 
+### E16-9b saved-device clarity evidence
+
+固定 AVD `TrainFlow_Pixel_API_36` 已使用新 debug APK 重测；证据只位于：
+
+```text
+.local/smoke/e16-9b-saved-device-clarity/
+```
+
+已覆盖：
+
+- 默认关闭时不显示胶囊；力量设置 XML 仅显示 `手动开始` / `休息后自动`，不含 raw `manual_start` / `auto_after_rest`。
+- app-private DataStore 注入仅用于 AVD fake saved source 后 cold start：胶囊显示 `未连接`，logcat 没有 TrainFlow `startScan` / `connectGatt`，不把旧 runtime error 当成当前状态。
+- 设置页显示 `心率显示：已开启`、`连接状态：未连接`、`已保存设备：Fake Band 9 AVD`，并出现 `连接已保存设备`。
+- 点击该按钮才出现“仅会自动连接 identifier 完全匹配”的 12 秒扫描 UI；无匹配 timeout 后显示 `设备来源：未找到已保存设备`，不连接、不重试。
+- 最终 logcat `FATAL EXCEPTION` / `ANR` scan 为空；未启动 production `HR Broadcast Smoke`。
+
+`live fake state + 扫描其他设备` 无法在本 AVD 注入成可用 HRS/GATT source，且本轮禁止使用 production HR Broadcast Smoke；因此该路径由 `HeartRateFloatingCapsuleStateTest` / `TrainingPreferencesUiStateTest` 的 provider-state fixture 覆盖，不依赖 Band 9 或 AVD BLE 外设能力。
+
+关键证据：
+
+```text
+.local/smoke/e16-9b-saved-device-clarity/18-cold-start-saved-source.xml
+.local/smoke/e16-9b-saved-device-clarity/20-settings-saved-unconnected-detail-text.txt
+.local/smoke/e16-9b-saved-device-clarity/22-explicit-connect-scan-text.txt
+.local/smoke/e16-9b-saved-device-clarity/29-fixed-saved-device-timeout-text.txt
+.local/smoke/e16-9b-saved-device-clarity/30-final-logcat-fatal-anr.txt
+```
+
 feedback fix debug APK：
 
 ```text
@@ -196,7 +236,7 @@ SHA-256: 0410919335FE797060BE851361447E9757EF291E8DFE976F53BC64E36ADBDE6B
 4. 等扫描窗口结束，确认胶囊仍显示原 bpm / 当前 provider state。
 5. 选择另一设备时，确认此时才切换 target 并进入 `正在连接` / `等待数据` / live。
 6. 关闭 Band 9 心率广播，确认显示 `连接异常` 或后续离线状态。
-7. 重启 App，确认当前限制仍为 `已选择设备` 且不自动连接，并把该结果保留给后续 reconnect policy。
+7. 重启 App，确认显示 `未连接 + 已保存设备` 且不自动连接；点击 `连接已保存设备` 后才允许一次 12 秒精确 identifier 查找，并把自动重连 / backoff / error 时序留给 E16-10。
 
 ## 禁止范围确认
 
@@ -218,6 +258,6 @@ SHA-256: 0410919335FE797060BE851361447E9757EF291E8DFE976F53BC64E36ADBDE6B
 
 ## 后续
 
-- E16-10 stale / offline policy 仍未开始。
+- E16-10 仍负责更广泛 reconnect / backoff、广播恢复是否允许自动重连，以及 error -> stale / offline 时序；本轮没有实现这些。
 - E16-11 recording model / 1s sampling persistence 仍未开始。
 - E16-12 analysis / zones / post-workout summary 仍未开始。

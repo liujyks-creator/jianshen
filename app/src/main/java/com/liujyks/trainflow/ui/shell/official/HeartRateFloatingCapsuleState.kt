@@ -41,7 +41,7 @@ internal enum class HeartRateFloatingCapsuleStatus {
     WAITING_DATA,
     STALE,
     OFFLINE,
-    SELECTED_DEVICE,
+    SAVED_DEVICE,
     BPM_ONLY,
     ZONE_LOW,
     ZONE_WARMUP,
@@ -173,11 +173,12 @@ internal fun heartRateFloatingCapsuleUiState(
     return when {
         settings.savedDeviceDisplayName != null || settings.savedDeviceIdentifier != null ->
             stateCapsule(
-                status = HeartRateFloatingCapsuleStatus.SELECTED_DEVICE,
-                label = "已选择设备",
-                title = "已选择心率设备",
-                body = "设备可用于后续连接；当前仅显示来源状态，不读取或伪造 bpm。",
+                status = HeartRateFloatingCapsuleStatus.SAVED_DEVICE,
+                label = "未连接",
+                title = "尚未连接心率设备",
+                body = "已保存设备仅供你主动连接，不代表设备在附近、已开启广播、正在连接或已经连接。",
                 deviceHint = settings.savedDeviceDisplayName ?: settings.savedDeviceIdentifier,
+                updateLabel = "未连接",
                 forceCollapsed = forceCollapsed
             )
 
@@ -303,7 +304,7 @@ private fun stateCapsule(
         HeartRateFloatingCapsuleStatus.STALE,
         HeartRateFloatingCapsuleStatus.OFFLINE,
         HeartRateFloatingCapsuleStatus.ERROR,
-        HeartRateFloatingCapsuleStatus.SELECTED_DEVICE -> "当前只显示状态"
+        HeartRateFloatingCapsuleStatus.SAVED_DEVICE -> "当前只显示状态"
         HeartRateFloatingCapsuleStatus.BPM_ONLY,
         HeartRateFloatingCapsuleStatus.ZONE_LOW,
         HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
@@ -321,7 +322,14 @@ private fun stateCapsule(
         detailBody = body,
         deviceHint = deviceHint?.takeIf { it.isNotBlank() },
         infoTiles = listOf(
-            HeartRateFloatingCapsuleInfoTile(label = "来源", value = sourceLabel),
+            HeartRateFloatingCapsuleInfoTile(
+                label = "来源",
+                value = if (status == HeartRateFloatingCapsuleStatus.SAVED_DEVICE) {
+                    "已保存：$sourceLabel"
+                } else {
+                    sourceLabel
+                }
+            ),
             HeartRateFloatingCapsuleInfoTile(label = "记录", value = recordingLabel),
             HeartRateFloatingCapsuleInfoTile(label = "区间", value = zoneLabel),
             HeartRateFloatingCapsuleInfoTile(label = "更新", value = updateLabel)

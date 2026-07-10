@@ -84,7 +84,7 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun selectedSourceShowsSelectedDeviceWithoutFakeBpm() {
+    fun savedSourceWithoutActiveProviderShowsNotConnectedWithoutFakeBpm() {
         val state = heartRateFloatingCapsuleUiState(
             settings = heartRateSettingsUiState(
                 enabled = true,
@@ -94,11 +94,12 @@ class HeartRateFloatingCapsuleStateTest {
             )
         )
 
-        assertEquals(HeartRateFloatingCapsuleStatus.SELECTED_DEVICE, state.status)
-        assertEquals("已选择设备", state.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.SAVED_DEVICE, state.status)
+        assertEquals("未连接", state.collapsedLabel)
         assertEquals("HUAWEI Band HR-OD7", state.deviceHint)
-        assertEquals("HUAWEI Band HR-OD7", state.infoTiles.first { it.label == "来源" }.value)
+        assertEquals("已保存：HUAWEI Band HR-OD7", state.infoTiles.first { it.label == "来源" }.value)
         assertEquals("当前只显示状态", state.infoTiles.first { it.label == "记录" }.value)
+        assertEquals("未连接", state.infoTiles.first { it.label == "更新" }.value)
     }
 
     @Test
@@ -315,7 +316,7 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun coldStartSavedSourceWithoutProviderDeviceStaysSelectedAndDoesNotAutoConnect() {
+    fun coldStartSavedSourceWithoutProviderDeviceStaysNotConnectedAndDoesNotPersistOldError() {
         val state = heartRateFloatingCapsuleUiState(
             settings = heartRateSettingsUiState(
                 enabled = true,
@@ -326,8 +327,9 @@ class HeartRateFloatingCapsuleStateTest {
             liveState = BleHeartRateProviderState.noSource().toHeartRateState()
         )
 
-        assertEquals(HeartRateFloatingCapsuleStatus.SELECTED_DEVICE, state.status)
-        assertEquals("已选择设备", state.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.SAVED_DEVICE, state.status)
+        assertEquals("未连接", state.collapsedLabel)
+        assertEquals("未连接", state.infoTiles.first { it.label == "更新" }.value)
     }
 
     private fun capsuleWhileScanning(

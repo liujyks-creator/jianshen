@@ -69,12 +69,14 @@ import com.liujyks.trainflow.feature.recovery.emptyRecoveryScreenState
 import com.liujyks.trainflow.feature.recovery.toRecoveryScreenState
 import com.liujyks.trainflow.feature.settings.SettingsRoute
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
+import com.liujyks.trainflow.feature.settings.HeartRateDeviceScanPurpose
 import com.liujyks.trainflow.feature.settings.StrengthSetTimerModePreference
 import com.liujyks.trainflow.feature.settings.TrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.settings.defaultTrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.settings.heartRateDevicePickerUiState
 import com.liujyks.trainflow.feature.settings.prepareBlePermissionRationale
 import com.liujyks.trainflow.feature.settings.resolveHeartRateBlePermissionStatus
+import com.liujyks.trainflow.feature.settings.savedDeviceReconnectCandidateIdentifier
 import com.liujyks.trainflow.feature.workoutsession.FollowAlongWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.StrengthWorkoutSessionRoute
 import com.liujyks.trainflow.feature.workoutsession.TimedWorkoutSessionRoute
@@ -125,6 +127,12 @@ internal fun TrainFlowApp(
     var heartRateScanFinishedWithoutDevices by rememberSaveable {
         mutableStateOf(false)
     }
+    var heartRateScanPurpose by rememberSaveable {
+        mutableStateOf(HeartRateDeviceScanPurpose.NONE)
+    }
+    var savedDeviceReconnectNotFound by rememberSaveable {
+        mutableStateOf(false)
+    }
     var heartRateSettingsFocusRequestKey by rememberSaveable {
         mutableStateOf(0)
     }
@@ -148,7 +156,9 @@ internal fun TrainFlowApp(
                 scannerCandidates = heartRateDeviceCandidates,
                 savedDeviceIdentifier = trainingPreferencesState.heartRateSettings.savedDeviceIdentifier,
                 savedDeviceDisplayName = trainingPreferencesState.heartRateSettings.savedDeviceDisplayName,
-                scanFinishedWithoutDevices = heartRateScanFinishedWithoutDevices
+                scanFinishedWithoutDevices = heartRateScanFinishedWithoutDevices,
+                savedDeviceReconnectNotFound = savedDeviceReconnectNotFound,
+                scanPurpose = heartRateScanPurpose
             )
         )
     )
@@ -222,6 +232,8 @@ internal fun TrainFlowApp(
         } else if (!heartRateDisplayEnabled || resolvedHeartRateBlePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
             heartRateDeviceScanner.stopScan()
             heartRateScanFinishedWithoutDevices = false
+            heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+            savedDeviceReconnectNotFound = false
         }
     }
 
@@ -245,7 +257,27 @@ internal fun TrainFlowApp(
         }
     }
 
-    LaunchedEffect(heartRateScanState.kind, heartRateDeviceCandidates) {
+    LaunchedEffect(
+        heartRateScanState.kind,
+        heartRateDeviceCandidates,
+        heartRateScanPurpose,
+        trainingPreferencesState.heartRateSettings.savedDeviceIdentifier
+    ) {
+        if (
+            heartRateScanPurpose == HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE &&
+            heartRateScanState.kind == BleHeartRateScanStateKind.SCANNING
+        ) {
+            val matchedIdentifier = savedDeviceReconnectCandidateIdentifier(
+                savedDeviceIdentifier = trainingPreferencesState.heartRateSettings.savedDeviceIdentifier,
+                candidates = heartRateDeviceCandidates
+            )
+            if (matchedIdentifier != null) {
+                heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+                savedDeviceReconnectNotFound = false
+                heartRateDeviceScanner.selectDevice(matchedIdentifier)
+                return@LaunchedEffect
+            }
+        }
         val heartRateCandidateCount = heartRateDeviceCandidates.count { candidate ->
             candidate.advertisesHeartRateService
         }
@@ -256,6 +288,13 @@ internal fun TrainFlowApp(
 
             BleHeartRateScanStateKind.STOPPED -> {
                 heartRateScanFinishedWithoutDevices = heartRateCandidateCount == 0
+                if (heartRateScanPurpose == HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE) {
+                    savedDeviceReconnectNotFound = savedDeviceReconnectCandidateIdentifier(
+                        savedDeviceIdentifier = trainingPreferencesState.heartRateSettings.savedDeviceIdentifier,
+                        candidates = heartRateDeviceCandidates
+                    ) == null
+                    heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+                }
             }
 
             BleHeartRateScanStateKind.ERROR,
@@ -266,6 +305,7 @@ internal fun TrainFlowApp(
     LaunchedEffect(currentDestination) {
         if (currentDestination != OfficialShellDestination.SETTINGS) {
             heartRateDeviceScanner.stopScan()
+            heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
         }
     }
 
@@ -434,12 +474,23 @@ internal fun TrainFlowApp(
                     onStartHeartRateDeviceScan = {
                         if (settingsState.heartRateSettings.devicePickerState.canStartScan) {
                             heartRateScanFinishedWithoutDevices = false
+                            savedDeviceReconnectNotFound = false
+                            heartRateScanPurpose = when {
+                                trainingPreferencesState.heartRateSettings.savedDeviceIdentifier != null &&
+                                    heartRateProviderState.kind != BleHeartRateProviderStateKind.LIVE_BPM ->
+                                    HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE
+                                heartRateProviderState.kind == BleHeartRateProviderStateKind.LIVE_BPM ->
+                                    HeartRateDeviceScanPurpose.SCAN_OTHER_DEVICES
+                                else -> HeartRateDeviceScanPurpose.SCAN_DEVICES
+                            }
                             heartRateDeviceScanner.startScan()
                         }
                     },
                     onStopHeartRateDeviceScan = {
+                        heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
                         heartRateDeviceScanner.stopScan()
                         heartRateScanFinishedWithoutDevices = false
+                        savedDeviceReconnectNotFound = false
                     },
                     onSelectHeartRateDevice = { identifier ->
                         val selection = heartRateDeviceScanner.selectDevice(identifier)
@@ -451,6 +502,8 @@ internal fun TrainFlowApp(
                             onSaveHeartRateDevicePreference(identifier, displayName)
                         }
                         heartRateScanFinishedWithoutDevices = false
+                        savedDeviceReconnectNotFound = false
+                        heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
                     },
                     onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
                     onUiSkinChanged = onUiSkinChanged,
