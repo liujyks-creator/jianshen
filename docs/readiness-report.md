@@ -50,6 +50,8 @@ stepsCompleted:
 
 > 2026-07-11 刷新：E16-9 / E16-9b HeartRateState -> floating capsule live state mapping 与 saved-device clarity 已 reviewed / merged 到 `main`（merge commit `3271697fbc5c3d3385fbcdbc214f4d1a9a2c6832`），主文档为 `docs/testing/e16-9-heart-rate-capsule-state-mapping.md`。`4b7689a` 已通过 code review；固定 AVD 已从该 commit 重新 build/install，确认默认关闭时胶囊隐藏、显式开启后显示 `权限未赋予`；用户随后完成 Band 9 修复后人工验收，确认精确 identifier reconnect 与 live bpm “扫描其他设备”窗口通过。readiness 结论仍不是训练记录落库或分析许可：provider/source/live state 只读映射到 App 内浮动胶囊，只有用户已开启心率显示、已授权蓝牙并在设置页主动选择 provider 已知设备后才允许 `connectSelectedDevice()`；胶囊点击、展开和拖动不触发 scan。冷启动不自动连接，runtime error 不跨进程保存；不写 `WorkoutSession`、不做 1s sampling persistence、不新增 Room / migration、不改 records/history/trends、`WorkoutCommand` / `WorkoutEvent`、TimedWorkoutEngine、StrengthWorkoutEngine、TimerDial、声音 / 震动 / 通知或 cue。E16-10 stale / offline policy、E16-11 recording model 和 E16-12 analysis 仍需单独 story。
 
+> 2026-07-11 E16-10b-1 刷新：Heart-rate freshness policy core 已实现并等待 review。新增内容仅为 `core.health` 纯 Kotlin、显式 monotonic elapsed-time 输入的不可变 timeline / policy / reason codes 与 JVM tests；10 / 15 / 30 秒边界、valid sample reset、parse failure 不刷新、disconnect/offline、technical failure/error、retry exhausted 事实保持和异常时间 fail-closed 已锁定。production provider、浮动胶囊、设置页和 GATT lifecycle 未接入，运行时行为不变；真实 timer、scheduler、callback race 与 reconnect 仍属于 E16-10b-2。该结果不是 E16-11 记录、1 秒持久化或 E16-12 分析许可；下一步只能进入 E16-10b-1 Code Review gate。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |
