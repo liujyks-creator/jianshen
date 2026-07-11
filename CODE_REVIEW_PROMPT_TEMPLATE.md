@@ -107,6 +107,11 @@ Android 虚拟测试环境（审查 UI / APK / smoke / 真机截图修复时必�
   - prototype：`prototype/src/data/contracts.ts` 和相关 prototype 文件。
 - 当 Story diff 或已读文档显示跨边界风险时，再扩展阅读范围。
 
+跨对话 / 跨模型一致性：
+- Review 必须从当前 Git diff、accepted decision IDs、Story 文档、测试和证据重建事实，不依赖开发模型的隐性记忆或交付摘要中的未验证结论。
+- `implemented`、branch 已 push、review 文本写 PASS、人工测试通过都不等于已合入；在 merge commit 推送并通过 ancestry / sync 检查前，下游 Story 保持 locked。
+- 如果 Git ancestry、状态文档和交付报告互相矛盾，停止合并并给出 scoped docs-sync / fix finding；不得用模型判断替代可验证的 merge 事实。
+
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
 - 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；审查 UI 时仍必须确认生成结果消费了 DESIGN.md 和项目文档，而不是猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞 review。
@@ -200,8 +205,10 @@ Review 后处理规则：
 - 合并后必须确认：
   - git rev-parse main origin/main
   - git rev-list --left-right --count main...origin/main
-  - <story commit> 是 main ancestor
+  - git merge-base --is-ancestor <story commit> main
   - git status
+- 只有上述合并后检查全部通过，才能报告 `reviewed / merged` 并标记依赖该 Story 的下游任务为 unlocked。
+- 如果 review 通过但尚未 merge / push，状态只能是 `reviewed / pending merge`，下游任务仍 locked。
 - 如 main 不同步、story branch 不同步、验证失败、merge conflict、禁区文件 staged / tracked、或合并后 main 与 origin/main 不一致：停止并报告，不要强推、不要 reset、不要自行修复无关文件。
 
 输出要求：
@@ -224,6 +231,7 @@ Review 后处理规则：
   - 是否确认 skills/ 和 .local/ 未提交
   - 是否确认 APK、countdown_beep1.mp3、deliverables/、人工/ 未提交
   - 如使用 review explorer：各 explorer 的核查范围、证据和主 review 代理的整合结论
+  - 下游 Story 是否 unlocked；必须附 main/origin 同步和 story commit ancestry 依据
   - 仍有哪些风险或技术债
   - 给主管理对话的下一步建议
 ```

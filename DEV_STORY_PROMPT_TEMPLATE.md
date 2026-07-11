@@ -47,14 +47,21 @@ Windows 文本编码规则：
 - 前一阶段：<Story ID / commit / branch>
 - 前一阶段 review 状态：<reviewed / changes requested / not reviewed>
 - 前一阶段是否已合入 main：<是/否>
+- 本 Story 的前置 commit / branch：<逐项列出；没有则写无>
 - 当前阶段分支：<codex/...>
-- 如存在前置合并、验证或环境阻塞，先处理前置任务；前置任务不清楚时停止并报告。
+- `push`、`review accepted`、人工测试通过都不等于已合入 main；只有前置 commit / branch 已是 main ancestor 且 main 与 origin/main 同步，才解锁本 Story。
+- 如存在前置合并、验证、docs sync 或环境阻塞，先处理前置任务；前置任务不清楚时停止并报告。
 
 开始前确认：
+- git fetch --prune origin
 - git status
 - git branch --show-current
 - git rev-parse --show-toplevel
 - git log --oneline --decorate -6
+- git rev-parse main origin/main
+- git rev-list --left-right --count main...origin/main
+- 对每个前置 commit / branch 执行：git merge-base --is-ancestor <required-commit-or-branch> main
+- 任一前置 ancestry 检查失败时，在创建 Story branch 或修改文件前停止并报告缺失 gate
 - skills/ 是否仍未被 Git 跟踪
 - .local/ 是否仍未被 Git 跟踪
 - 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
@@ -93,6 +100,12 @@ Android 虚拟测试环境（UI / APK / 真机截图修复 / smoke 类 Story 必
   - 环境、Gradle、AVD、APK、adb、测试命令：`docs/setup.md`。
   - prototype：`prototype/src/data/contracts.ts` 和相关 prototype 文件。
 - 当任务跨边界、现有决策不清楚或已读文档要求引用其他来源时，再扩展阅读范围。
+
+跨对话 / 跨模型一致性：
+- 不把上一模型、上一对话或主管理摘要中的隐性记忆当作事实源；以当前 main 中的已接受 decision ID、Story 文档、测试、证据和 Git ancestry 重建上下文。
+- Story 提示词应引用具体 decision ID、前置 Story 文档和 required commit / branch，不使用“之前已经做过”这类不可验证表述。
+- 如果提示词声称前置已 merged，但 ancestry 检查失败，必须停止；不得自行把已 push 分支当作 main 基线，也不得绕过缺失的 review / docs-sync gate。
+- 如果 main 文档仍写 pending，而 Git 已合并，或文档写 merged 但 Git 未合并，先报告并完成独立 docs-sync / review，不能在矛盾状态上继续实现。
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。

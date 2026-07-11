@@ -20,6 +20,7 @@
 - 最近已合入阶段：<Story ID / merge commit>
 - 当前人工测试状态：<无 / 待测 / 已通过 / 发现问题>
 - 当前不可合入原因：<无 / 写明 gate 或 finding>
+- 未关闭 gate / pending branch：<逐项列出 branch、tip、等待 review / 人工测试 / merge / docs sync；没有则写无>
 - 下一步建议：<review / 人工测试 / Dev Story / 规划>
 
 ## 启动恢复
@@ -38,6 +39,14 @@
    - Gradle、AVD、APK、adb、环境：`docs/setup.md`
 5. 不默认读取无关长文档；任务跨边界、现有决策不清或已读文档要求引用其他来源时，再扩展阅读。
 6. 启动后先输出简短项目仪表盘：基线、active Story、当前 gate、未决风险、下一步建议。不要直接开始下一阶段。
+
+## 跨对话事实源与前置 Gate
+
+- 不依赖上一模型或上一对话的隐性记忆。跨模型一致性只以当前 `main`、accepted decision IDs、Story 文档、测试 / evidence 和 Git history 为准。
+- branch 已 push、review 报告 PASS、人工测试通过都不等于已合入 main。只有 merge commit 已 push、required tip 是 main ancestor、`main...origin/main = 0 0` 且状态文档一致，依赖它的下一 Story 才 unlocked。
+- 生成任何依赖型 Dev Story 前，先执行 `git fetch --prune origin`，并对每个前置 commit / branch 执行 `git merge-base --is-ancestor <required-commit-or-branch> main`。
+- 如果存在已 push 但未 review / merge 的前置分支，下一条提示词必须是该分支的 Review / fix / docs-sync gate，不得提前生成依赖它的 Dev Story。
+- 如果 Git 已合并但状态文档仍写 pending，先做 scoped docs-sync 并 review；如果文档写 merged 但 ancestry 检查失败，以 Git 为准并停止下游任务。
 
 ## 固定禁区
 
@@ -75,15 +84,21 @@
 
 生成 Dev Story 提示词时：
 - 基于 `DEV_STORY_PROMPT_TEMPLATE.md`。
+- 提示词开头明确要求读取 `AGENTS.md` 和 `DEV_STORY_PROMPT_TEMPLATE.md`。
 - 写清楚基线、branch、前置状态、目标、允许范围、禁止范围、状态不变量、相关必读文档、验证、AVD / 人工测试边界和交付格式。
+- 列出 required commit / branch，并要求在创建分支或修改文件前执行 ancestry check；前置未合入时必须停止。
 - 只列与 Story 有关的 MD；不要复制整套无关文档清单。
 - UI 功能必须说明 `huashu-design` / 已批准 HTML 视觉方案 / `DESIGN.md` 的适用关系。
+- 整份可复制提示词只使用一个外层 `text` 代码块；内部命令直接写普通文本行，不嵌套三反引号，不把必需内容拆到框外。
 
 生成 Code Review 提示词时：
 - 基于 `CODE_REVIEW_PROMPT_TEMPLATE.md`。
+- 提示词开头明确要求读取 `AGENTS.md` 和 `CODE_REVIEW_PROMPT_TEMPLATE.md`。
 - 写清楚 story branch、story commit、基线、可接受范围、重点风险、必跑验证、必查 evidence、人工测试是否是合入前置条件。
 - 无 blocker / must-fix / should-fix、验证通过、branch 同步、禁区未提交时，review gate 才可 `--no-ff` 合并 main 并 push。
 - 有问题时不合并，只输出 findings、最小修复方向和下一轮修复提示词。
+- Review 只有在 merge/push、main/origin 同步和 story tip ancestry 均通过后，才能报告下游 Story unlocked。
+- 整份可复制提示词只使用一个外层 `text` 代码块；内部不嵌套 Markdown 代码围栏。
 
 简单 APK 人工测试请求时：
 - 不输出长提示词。
@@ -102,12 +117,13 @@
 
 1. 先核对它回答的是当前 active Story，而非过期阶段。
 2. 检查 commit、push、验证、禁区、边界和证据路径是否完整。
-3. 判断下一关：
+3. 对报告声称已 merge 的 Story 执行 ancestry 与 main/origin sync 检查；缺少 merge commit 或检查失败时，不得按 merged 处理。
+4. 判断下一关：
    - 代码实现完成 -> 生成 Code Review prompt。
    - review 通过但真机证据不足 -> 给 APK 和简短人工测试清单。
    - review 或人工测试有问题 -> 标记 `changes requested`，生成最小修复 Dev Story prompt。
    - review 已 merge -> 更新快照，规划下一条独立 Story。
-4. 不把“用户真机截图发现的问题”降格为 nice-to-have；先判断是否影响现有验收语义、用户理解、数据正确性或安全边界。
+5. 不把“用户真机截图发现的问题”降格为 nice-to-have；先判断是否影响现有验收语义、用户理解、数据正确性或安全边界。
 
 ## 输出风格
 

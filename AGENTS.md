@@ -124,6 +124,13 @@ This project may use two optional local skills for product and design planning:
 
 `skills/bmad-method` is a local working copy for this computer only and is intentionally ignored by Git. `huashu-design` is normally installed as a Codex skill rather than under the repository `skills/` directory. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, design-system work, high-fidelity prototype work, design-variant exploration, or visual review when relevant. If they are missing, continue from the repository documents rather than blocking.
 
+## Cross-Conversation Source Of Truth
+
+- Do not rely on a previous model's or conversation's implicit memory. Cross-model and cross-conversation handoffs must be reconstructed from the current `main` branch, accepted decision-log entries, Story documents, tests, evidence records, and Git history.
+- A pushed branch, an accepted review report, or completed manual testing does not by itself unlock a dependent Story. The prerequisite is merged only when its required commit or branch is an ancestor of `main`, `main` matches `origin/main`, and the applicable status documents agree.
+- Before starting a dependent Story, fetch `origin` and verify each named prerequisite with `git merge-base --is-ancestor <required-commit-or-branch> main`. If any check fails, stop before creating a branch or modifying files and return to the missing review / merge / docs-sync gate.
+- If a prompt, status document, and Git history disagree, do not choose the most convenient version. Treat Git ancestry as the merge fact, then resolve the documentation inconsistency in a scoped reviewable change before continuing.
+
 ## Working Habits
 
 - Read the current repo state before changing files.
