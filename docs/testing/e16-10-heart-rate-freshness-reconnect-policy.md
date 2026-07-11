@@ -8,9 +8,9 @@
 
 ## 1. 结论摘要
 
-已批准 **方案 B：仅对已在当前前台进程成功 live 的同一设备，允许有限、可见、无扫描的直接 GATT 重连**。它只覆盖用户已经显式 opt-in、授权、选择并连接成功过的 runtime target；不把已保存 identifier/displayName 当作在线身份，也不在冷启动、回到前台或蓝牙恢复时主动 scan/connect。
+已批准 **方案 B：仅对已在当前前台进程成功 live 的同一设备，允许有限、可见、无扫描的直接 GATT 重连**。它只覆盖用户已经显式 opt-in、授权、选择并连接成功过的 runtime target；不把已保存 identifier/displayName 当作在线身份，也不在冷启动、回到前台、蓝牙恢复或权限重新授予时主动创建 retry queue、scan/connect 或恢复旧 attempt。权限恢复后必须等待用户明确点击 `连接已保存设备` 或选择新设备。
 
-已批准的默认参数是：有效 bpm 在最后一条有效 `0x2A37` notify 后 **10 秒**内；连续 **10 秒**无新 notify 进入 `数据过期`；已连接但从 notify enable 起 **15 秒**仍无首条数据也进入 `数据过期`；连续 **30 秒**无数据则判为 notify 停止的 `连接异常`。明确 GATT 断开直接进入 `离线`，连接、service discovery、CCCD、解析或 silence 技术失败进入 `连接异常`，不保留或展示旧 bpm。意外失联后按 **2 秒、5 秒、10 秒**退避尝试最多 **3 次** direct GATT reconnect；每次连接最多等待 **10 秒**回调。任何用户停止、关闭、清除、切换 target、权限/蓝牙不可用、进后台或 retry 耗尽都会取消队列并终止自动恢复。
+已批准的默认参数是：有效 bpm 在最后一条有效 `0x2A37` notify 后 **10 秒**内；连续 **10 秒**无新 notify 进入 `数据过期`；已连接但从 notify enable 起 **15 秒**仍无首条数据也进入 `数据过期`；连续 **30 秒**无数据则判为 notify 停止的 `连接异常`。明确 GATT 断开直接进入 `离线`，连接、service discovery、CCCD、解析或 silence 技术失败进入 `连接异常`，不保留或展示旧 bpm。意外失联后按 **2 秒、5 秒、10 秒**退避尝试最多 **3 次** direct GATT reconnect；每次连接最多等待 **10 秒**回调。任何用户停止、关闭、清除、切换 target、权限/蓝牙不可用、进后台或 retry 耗尽都会取消队列并终止自动恢复。retry exhausted 本身不产生新的历史事实状态，状态始终维持最近真实失败原因。
 
 以上阈值是已接受的产品默认值，不代表 Android 常量已经实现；E16-10b 必须将其建模为可测试的 policy/time source，而非把 timer 直接散落在 UI。
 
@@ -28,9 +28,9 @@
 
 - 只允许当前前台进程、且本次已成功进入 live bpm 的同一 runtime target 做有限 direct GATT reconnect。
 - 采用 10 / 15 / 30 秒 freshness 阈值，以及 2 / 5 / 10 秒、最多 3 次、每次 10 秒 watchdog 的重连预算。
-- 不允许后台自动连接；冷启动、回到前台、蓝牙恢复和 retry 耗尽后均不自动 scan/connect。
+- 不允许后台自动连接；冷启动、回到前台、蓝牙恢复、权限重新授予和 retry 耗尽后均不自动创建 retry queue，不自动 scan/connect，也不恢复旧 attempt。权限恢复后必须等待用户明确点击 `连接已保存设备` 或选择新设备。
 - E16-10b 必须在设置页提供可见的 `停止连接` 操作；它取消队列并抑制本前台周期的自动恢复，直到用户手动连接或选择新设备。
-- retry exhausted 不新增历史事实状态：明确断开保持 `离线`；connect / notify / parse / silence 技术失败保持 `连接异常`；设置页可显示 `自动重连已停止，请手动连接`。
+- retry exhausted 不新增历史事实状态：最近明确 GATT disconnect 保持 `离线`；最近 connect / service discovery / CCCD / notify silence / parse 技术失败保持 `连接异常`；设置页可显示 `自动重连已停止，请手动连接`，但不能改变底层事实状态。
 
 ## 4. 策略方向
 
@@ -56,7 +56,7 @@
 | `onConnectionStateChange(...DISCONNECTED)` 且非用户操作 | 立即 | `离线` | 不显示缓存 bpm；进入有限 retry。 |
 | GATT status / connect / discover / CCCD / parse error | 立即 | `连接异常` | 关闭 GATT；允许符合条件时进入有限 retry。 |
 
-`数据过期` 是数据质量状态，不是“设备已经离线”的同义词；`离线` 只用于明确断开或 retry exhausted 后仍找不到当前 runtime target；`连接异常` 用于连接/订阅/解析或 notify silence 的技术异常。E16-10b 应保留原因码给设置页，不让胶囊以 GATT status code 面向用户。
+`数据过期` 是数据质量状态，不是“设备已经离线”的同义词；`离线` 只用于最近真实失败原因是明确 GATT disconnect；`连接异常` 用于最近真实失败原因是连接、service discovery、CCCD、订阅、解析或 notify silence 技术异常。retry exhausted 只停止自动恢复，不产生新的事实状态，也不能因“找不到当前 runtime target”独立改判为 `离线`。E16-10b 应保留原因码给设置页，不让胶囊以 GATT status code 面向用户。
 
 ### 5.2 事件语义与优先级
 
@@ -68,14 +68,15 @@
 | 用户手动 `连接已保存设备` | `正在查找已保存设备` / `正在连接` | 取消旧队列；该手动意图优先 | 只允许约 12 秒 exact-identifier scan；无匹配不自动 retry |
 | 用户手动重新扫描 | `扫描中` 或 live 时 `扫描其他设备` | 非 live 时取消队列；live 时队列暂停至 scan 结束 | 候选不会自动换 target；手选新设备才取消旧 target / queue |
 | 用户手选新设备 | `正在连接` 新设备 | 取消旧 target 的所有 attempt | 新 selection 成为唯一 target；只有它成功 live 后才有未来 auto-retry 资格 |
-| 权限丢失 / 被永久拒绝 | `权限未赋予` | 立即取消；不请求系统权限 | 保留 saved preference；disconnect |
+| 权限丢失 / 被永久拒绝 | `权限未赋予` | 立即取消 retry；stop scan + 关闭 GATT并停止相关动作；不请求系统权限 | 保留 saved preference；旧 attempt 作废 |
+| 权限重新授予 | `未连接 + 已保存设备` | 不创建 retry queue，不恢复旧 attempt，不自动 scan/connect | 等待用户明确点击 `连接已保存设备` 或选择新设备 |
 | 蓝牙关闭 | `蓝牙关闭` | 立即取消；不监听蓝牙恢复后自动开始 | 保留 saved preference；disconnect |
 | App 进入后台、process dispose | 保持最后已知不可用状态或停止状态，不以后台 timer 更新胶囊 | 立即取消；不后台 scan/connect | 关闭 GATT；回前台不自动恢复 |
 | 冷启动 / 回到前台 | `未连接 + 已保存设备` 或当前前台真实 live 状态 | 不建立新队列 | 不自动 scan/connect；由用户发起下一步 |
 
 ### 5.3 有限重连
 
-触发资格必须同时满足：显示偏好仍开启、权限和蓝牙仍可用、App 在前台、当前 process 有同一设备曾进入 `LIVE_BPM` 的 runtime `BluetoothDevice`、用户未 stop/clear/disable、没有手动 scan/target switch 在进行。
+触发资格必须同时满足：显示偏好仍开启、权限和蓝牙持续可用且本次资格未曾因权限丢失终止、App 在前台、当前 process 有同一设备曾进入 `LIVE_BPM` 的 runtime `BluetoothDevice`、用户未 stop/clear/disable、没有手动 scan/target switch 在进行。权限重新授予只恢复“可由用户发起连接”的前置条件，不恢复旧资格或 attempt；必须由用户明确点击 `连接已保存设备` 或选择新设备后重新建立连接意图。
 
 | 项目 | 推荐规则 |
 |---|---|
@@ -84,8 +85,8 @@
 | 退避 | 发生可恢复异常后等待 2 秒、5 秒、10 秒再发起第 1/2/3 次。每次新 attempt 前再次检查资格。 |
 | attempt watchdog | 每次 `CONNECTING` 最多 10 秒；无成功连接/notify 前进时关闭该 GATT，计为失败，继续下一次退避。 |
 | 成功条件 | 重新收到第一条 valid bpm 才清除 attempt count 并恢复 live；仅连接或 notify enabled 不算恢复完成。 |
-| 终止 | 用户意图、权限/蓝牙不可用、后台、target 改变、scan 冲突、3 次均失败或运行时 target 丢失；终止后绝不自动 scan。 |
-| 耗尽后的状态 | 最近明确 disconnect -> `离线`；connect/notify/parse/silence failure -> `连接异常`；设置页显示“自动重连已停止，请手动连接”。 |
+| 终止 | 用户意图、权限/蓝牙不可用、后台、target 改变、scan 冲突、3 次均失败或运行时 target 丢失；终止后绝不自动 scan。权限重新授予、蓝牙恢复、回到前台均不得重建 queue 或恢复旧 attempt。 |
+| 耗尽后的状态 | retry exhausted 本身不产生事实状态；最近明确 disconnect -> 保持 `离线`；最近 connect/service discovery/CCCD/notify silence/parse failure -> 保持 `连接异常`；设置页可显示“自动重连已停止，请手动连接”，但不改变底层事实状态。 |
 
 这不是 cold-start reconnect：进程被杀后没有可信 runtime target，因此 restart、回前台、Band 9 后来恢复广播均只能显示已保存偏好并提供用户动作。若广播在同一前台进程的有限 retry 窗口内恢复，方案 B 的 direct reconnect 可以成功；若在窗口之外恢复，用户使用 `连接已保存设备`。
 
@@ -107,12 +108,15 @@ stateDiagram-v2
     离线 --> 有限重连 : 符合前台 runtime target 条件
     连接异常 --> 有限重连 : 符合前台 runtime target 条件
     有限重连 --> 正在连接 : 2s / 5s / 10s attempt
-    有限重连 --> 离线 : retry 耗尽（断开）
-    有限重连 --> 连接异常 : retry 耗尽（技术异常）
+    离线 --> 离线 : retry 耗尽 / 保持最近明确断开事实
+    连接异常 --> 连接异常 : retry 耗尽 / 保持最近技术失败事实
+    实时 --> 权限未赋予 : 权限丢失 / 取消 retry + 关闭 GATT
+    有限重连 --> 权限未赋予 : 权限丢失 / 取消 retry + 关闭 GATT
+    权限未赋予 --> 未连接 : 权限恢复 / 等待用户明确连接
     未连接 --> [*] : display off / clear
 ```
 
-上图的 `手动查找` 只代表用户主动的 bounded scan，不可由 `有限重连` 进入。display off、主动停止、clear、权限丢失、蓝牙关闭和后台是高优先级 interruption：先取消 timer/retry/GATT，再映射各自状态，不能由延迟 callback 把 UI 重新写回 `正在连接` 或 live。
+上图的 `手动查找` 只代表用户主动的 bounded scan，不可由 `有限重连` 进入。display off、主动停止、clear、权限丢失、蓝牙关闭和后台是高优先级 interruption：先取消 timer/retry、stop scan、关闭 GATT并停止相关动作，再映射各自状态，不能由延迟 callback 把 UI 重新写回 `正在连接` 或 live。权限重新授予只回到等待用户动作的 `未连接`，不得自动建立 retry queue、scan/connect 或恢复旧 attempt。
 
 ## 7. 用户可见文案与状态色
 
@@ -123,10 +127,10 @@ stateDiagram-v2
 | 等待首条数据 | `等待数据` | `设备已连接，正在等待心率数据。` | `停止连接`（设置页） | 中性灰 / info |
 | 数据过期 | `数据过期` | `最近超过 10 秒没有新的心率数据，当前不显示旧 bpm。` | `等待恢复`；需要时 `重新连接` | 弱提示黄褐 / warning，非 alarm |
 | 正在自动恢复 | `正在重新连接` | `与 {设备名} 的连接中断，正在尝试重新连接（第 n/3 次）。不会扫描或切换设备。` | `停止连接` | info 蓝 / 中性 |
-| 离线 | `离线` | `与 {设备名} 的连接已断开。自动重连已停止。` | `连接已保存设备`；可 `扫描心率设备` | 中性灰 |
-| 连接异常 | `连接异常` | `未能继续接收 {设备名} 的心率数据。自动重连已停止。` | `连接已保存设备`；可 `扫描心率设备` | warning 黄褐，不用医疗红 |
+| 离线 | `离线` | `与 {设备名} 的连接已断开。自动重连已停止，请手动连接。` | `连接已保存设备`；可 `扫描心率设备` | 中性灰 |
+| 连接异常 | `连接异常` | `未能继续接收 {设备名} 的心率数据。自动重连已停止，请手动连接。` | `连接已保存设备`；可 `扫描心率设备` | warning 黄褐，不用医疗红 |
 | 蓝牙关闭 | `蓝牙关闭` | `请开启蓝牙后，再手动连接已保存设备。` | 打开系统蓝牙后由用户手动连接 | 中性灰 |
-| 权限未赋予 | `权限未赋予` | `需要蓝牙权限才能扫描或连接你主动选择的设备。` | `重新授权蓝牙权限` / `去系统设置开启` | 中性灰 / info |
+| 权限未赋予 | `权限未赋予` | `需要蓝牙权限才能扫描或连接你主动选择的设备。重新授权后不会自动连接。` | 先 `重新授权蓝牙权限` / `去系统设置开启`，再手动 `连接已保存设备` 或选择新设备 | 中性灰 / info |
 | 用户已停止 | `未连接` | `已停止连接 {设备名}；已保存设备不代表当前已连接。` | `连接已保存设备` | 中性灰 |
 | 已保存未连接 | `未连接` | `已保存：{设备名}。设备可能不在附近、未广播或未连接。` | `连接已保存设备` | 中性灰 |
 
@@ -149,14 +153,15 @@ stateDiagram-v2
 | 同一前台进程内恢复 Band 9 广播 | 在未耗尽 budget 的 direct retry 中恢复；首条 valid bpm 后回 live 并清计数 | 3 次以内实际成功或明确未成功的 Band 9 结果 |
 | 广播在 retry 耗尽后恢复 | 不自动 scan/connect；维持 `离线`/`连接异常`，用户点击 `连接已保存设备` 才进行 12 秒 exact scan | 无自动 scan/connect log；手动 reconnect 通过 |
 | 蓝牙关闭再开启 | 立即 `蓝牙关闭`、取消 queue/GATT；恢复蓝牙后不自动 scan/connect | 系统状态 + 无自动动作日志 |
-| 权限撤销 / 永久拒绝 | `权限未赋予`、取消 queue/GATT；不重复请求权限 | 设置页文案与无 retry 日志 |
+| 权限撤销 / 永久拒绝 | `权限未赋予`；取消 retry、stop scan、关闭 GATT并停止相关动作；不重复请求权限 | 设置页文案、GATT close 与无 retry/scan/connect 日志 |
+| 权限重新授予 | 保持未连接；不创建 retry queue、不自动 scan/connect、不恢复旧 attempt；等待用户点击 `连接已保存设备` 或选择新设备 | permission-result + lifecycle log；用户动作前无 retry/scan/connect，用户动作后才进入手动连接路径 |
 | App 前台 -> 后台 -> 前台 | 后台取消 retry / disconnect；回前台不自动恢复，仅显示已保存未连接或明确状态 | lifecycle log；无后台 scan/connect |
 | cold start with saved device | `未连接 + 已保存设备`；绝不自启 retry/scan/connect | fresh install/data injection + log |
 | waiting first notify | 15 秒进入 `数据过期`；30 秒进入 `连接异常` 与 retry eligibility | deterministic clock test + Band 9 / fake provider |
 | live notify silence | 10 秒进入 `数据过期`；30 秒通知异常；不显示旧 bpm | deterministic clock test |
 | 用户停止连接 | 停止后没有 retry；手动连接才可恢复 | UI action + delayed-callback race test |
 | 手动扫描 / 手选新设备 | live scan 不污染旧 bpm；选新设备取消旧 queue；新 target 才可重连 | existing E16-9 isolation regression + target guard |
-| retry 耗尽 | 3 次后终止，无自动 scan；文案提供手动下一步 | scheduler test + real-device failure run |
+| retry 耗尽 | 3 次后终止，无自动 scan；保持最近真实失败原因对应的 `离线` / `连接异常`，文案提供手动下一步但不改事实状态 | scheduler/reason-state test + real-device failure run |
 
 真实 Band 9 验收还应记录系统蓝牙状态、是否在前台、广播恢复时点、每个 retry 的 attempt number 与结果；截图和设备日志仅存 `.local/smoke/e16-10-.../`，不提交。
 
@@ -168,6 +173,6 @@ stateDiagram-v2
 
 ## 11. 主管理确认记录
 
-2026-07-11，主管理对话确认方案 B、10 / 15 / 30 秒 freshness、2 / 5 / 10 秒退避、最多 3 次 retry、每次 10 秒 watchdog、前台同 runtime target 资格、设置页 `停止连接` 操作，以及 retry exhausted 沿用 `离线` / `连接异常` 历史事实状态并补充手动恢复文案。方案 C 的自动扫描恢复不进入当前策略。
+2026-07-11，主管理对话确认方案 B、10 / 15 / 30 秒 freshness、2 / 5 / 10 秒退避、最多 3 次 retry、每次 10 秒 watchdog、前台同 runtime target 资格、设置页 `停止连接` 操作，以及 retry exhausted 不产生新事实状态、沿用最近真实失败原因对应的 `离线` / `连接异常` 并补充手动恢复文案。权限丢失必须取消 retry、stop scan、关闭 GATT并停止相关动作；重新授予后不得自动创建 queue、scan/connect 或恢复旧 attempt，必须等待用户明确连接。方案 C 的自动扫描恢复不进入当前策略。
 
 E16-10a 的 docs-only 交付状态为 **implemented / needs review**。E16-10b 仍未开始；不得把本次批准记录写成 timer、自动重连、自动扫描、UI 操作或验证已经实现。
