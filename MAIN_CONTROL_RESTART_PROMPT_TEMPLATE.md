@@ -97,7 +97,8 @@
 - 写清楚 story branch、不可变的 story full commit SHA、基线、可接受范围、重点风险、必跑验证、必查 evidence、人工测试是否是合入前置条件。
 - Story diff 统一使用 `origin/main...origin/<story branch>` 三点 diff（merge-base scope）；不得生成 `main..<story branch>` 两点 diff，避免 main 后续前进时把 main-only 变更误判为 Story 变更。
 - 无 blocker / must-fix / should-fix、验证通过、branch 同步、禁区未提交，且本 Story 明确列出的全部 merge prerequisite（包括被指定为前置条件的人工真机验收）均满足时，review gate 才可 `--no-ff` 合并 main 并 push。
-- 有问题时不合并，只输出 findings、最小修复方向和下一轮修复提示词。
+- 有问题时不合并；Review 对话只输出 findings、每项 finding 的最小修复建议和修复提示词要点，不得生成完整 Dev Story / Review Fix 提示词。
+- 主管理对话收到 `changes requested` 后，负责审查 Review 证据，并把 findings、最小修复建议和修复提示词要点整合成唯一、完整、可复制的修复提示词；不要让 Review 对话和主管理对话各生成一份完整提示词。
 - Review 只有在 merge/push、main/origin 同步和 immutable story full commit SHA ancestry 均通过后，才能报告下游 Story unlocked；branch tip 不作为解锁事实。
 - 整份可复制提示词只使用一个外层 `text` 代码块；内部不嵌套 Markdown 代码围栏。
 
@@ -123,7 +124,8 @@
 4. 判断下一关：
    - 代码实现完成 -> 生成 Code Review prompt。
    - review 通过但真机证据不足 -> 给 APK 和简短人工测试清单。
-   - review 或人工测试有问题 -> 标记 `changes requested`，生成最小修复 Dev Story prompt。
+   - review 有问题 -> 标记 `changes requested`；保留 Review 给出的 findings、最小修复建议和修复提示词要点，由主管理对话生成唯一完整的最小修复 Dev Story prompt。
+   - 人工测试有问题 -> 标记 `changes requested`，由主管理对话根据测试事实生成唯一完整的最小修复 Dev Story prompt。
    - review 已 merge -> 更新快照，规划下一条独立 Story。
 5. 不把“用户真机截图发现的问题”降格为 nice-to-have；先判断是否影响现有验收语义、用户理解、数据正确性或安全边界。
 

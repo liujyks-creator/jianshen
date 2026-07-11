@@ -11,6 +11,14 @@ When the main control conversation sends a completed Code Review prompt to a sep
 - Do not nest triple-backtick fences inside it. Put command lines directly below a label such as `执行：`; do not create a second Markdown code block for commands.
 - Do not split verification, boundary checks, or merge rules into separate code blocks.
 
+## Review / Main-Control Responsibility Boundary
+
+- If review finds blocker / must-fix / should-fix issues, the review conversation must output both:
+  - minimal fix recommendations for each finding; and
+  - fix-prompt key points that the main control conversation must preserve.
+- The review conversation must not assemble or output a complete executable Dev Story / Review Fix prompt. The main control conversation owns the single final copy-ready fix prompt, using the findings, minimal fix recommendations, and fix-prompt key points as inputs.
+- This boundary avoids duplicate prompt generation while preserving the technical detail discovered during review.
+
 ```text
 你是 TrainFlow 项目的 Code Review 对话。
 
@@ -188,7 +196,8 @@ Review 子代理策略（只读）：
 - npm.cmd run build
 
 Review 后处理规则：
-- 如果发现 blocker / must-fix / should-fix：不要合并 main；输出 findings、最小修复建议和修复提示词要点，停止。
+- 如果发现 blocker / must-fix / should-fix：不要合并 main；输出 findings、每项 finding 的最小修复建议，以及供主管理对话生成最终修复任务时使用的修复提示词要点，然后停止。
+- Review 对话不得把这些要点扩写成完整、可直接执行的 Dev Story / Review Fix 提示词；唯一完整修复提示词由主管理对话生成。
 - 如果只有 nice-to-have：默认可以合并，但必须在输出中说明剩余建议；如果 nice-to-have 实际影响验收、数据安全、架构边界或用户风险，应提升为 should-fix 并停止。
 - 如果没有 blocker / must-fix / should-fix，但明确列为 merge prerequisite 的人工真机验收尚未完成：不要合并；状态为 `reviewed / pending real-device acceptance`，这不是代码 finding，下游 Story 仍 locked。
 - 如果没有 blocker / must-fix / should-fix，且验证通过、story branch 与 origin/<story branch> 同步、main 与 origin/main 同步、禁区文件未 staged / 未提交、本 Story 的全部 merge prerequisite 均满足：直接将 story branch 以 `--no-ff` 合入 main 并 push origin main。
@@ -220,6 +229,7 @@ Review 后处理规则：
 - 严重级别使用 blocker / must-fix / should-fix / nice-to-have。
 - 如果没有 blocker / must-fix / should-fix 且已合并，要明确说已合入 main。
 - 如果发现需要修复的问题，不要合并 main；给出最小修复建议和修复提示词要点。
+- “修复提示词要点”必须覆盖关键不变量、必补测试、允许/禁止范围和验证要求，但不得包装成完整开发任务提示词。
 - 明确 Code Review 结论：
   - Findings 结论
   - 是否已合入 main
