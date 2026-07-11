@@ -51,7 +51,9 @@ reason code 不包含 GATT status code，也不直接承担用户文案；后续
 - 明确 GATT disconnect 形成 `gatt_disconnected`，判为 offline。
 - connect、service discovery、CCCD、notify silence 与 parse failure 判为 technical error。
 - `retryExhausted()` 返回同一事实 timeline；它只代表后续 controller 的恢复预算耗尽，不创造新状态。
-- `now` / timestamp 为负、notify timestamp 缺失、时间回退、sample 晚于 now 或 sample 早于 notify start 时，统一 fail closed 为 `technical_error / invalid_monotonic_time`；不抛异常、不伪造 live。
+- failure-only timeline 可以合法不含 notify / sample timestamp：明确 disconnect 仍判为 `offline / gatt_disconnected`，明确技术失败仍保持其对应的 `technical_error` reason。
+- 所有实际存在的 timestamp 都必须先通过 monotonic 校验：`now` 与 timestamp 非负，timestamp 不晚于 `nowElapsedMs`；notify / sample 同时存在时，sample 不早于 notify。任一校验失败都必须在 failure fact 映射前 fail closed 为 `technical_error / invalid_monotonic_time`。
+- 只有 timeline 没有 failure fact、需要计算 waiting / live / stale freshness 时，缺少 notify timestamp 才 fail closed 为 `technical_error / invalid_monotonic_time`；不抛异常、不伪造 live。
 - wall-clock / `measuredAt` 不属于 policy API，无法参与超时判定。
 
 ## Focused tests
@@ -66,8 +68,20 @@ reason code 不包含 GATT status code，也不直接承担用户文案；后续
 6. 明确 disconnect 始终保持 offline。
 7. connect / discovery / CCCD / notify silence / parse failure 保持 technical error。
 8. retry exhausted 不改变最近事实。
-9. 负时间、缺失 timestamp、时间回退及不可能的 timestamp 顺序安全 fail closed。
+9. failure-only timeline 无 timestamp 时保持 disconnect / technical failure 事实；无 failure fact 且需要 freshness 计算时缺少 notify timestamp，以及负时间、时间回退或不可能的 timestamp 顺序，安全 fail closed。
 10. timeline transition 不可变，policy evaluation 不产生 scan / connect / retry / record side effect。
+
+## Review-fix 说明
+
+- 收窄“缺失 timestamp 统一 fail closed”的错误概括，明确 failure-only timeline 无 timestamp 合法。
+- 保持非法 monotonic 输入优先于 failure fact 映射，且 retry exhausted 不改变最近事实。
+- 本轮只修文档语义；Kotlin policy 与测试不变。
+
+## Review-fix 验证
+
+- `. .\.local\env.ps1`：通过。
+- `.\gradlew.bat app:testDebugUnitTest --tests "*HeartRate*"`：通过，`BUILD SUCCESSFUL`。
+- 本轮仅修文档且不改变 UI / BLE lifecycle，因此无需 AVD 或 Band 9 smoke。
 
 ## 隔离确认
 
