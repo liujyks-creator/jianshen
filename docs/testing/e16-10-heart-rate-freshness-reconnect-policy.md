@@ -1,6 +1,6 @@
 # E16-10a 心率数据新鲜度、离线与重连策略规划
 
-**状态：** Policy approved / Needs review — 主管理对话已确认策略；本文仍是 docs-only 记录，不代表 E16-10b 已开始或已实现
+**状态：** Policy approved / Reviewed / merged — docs-only 策略已合入 `main`（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；不代表 runtime reconnect 已实现
 **日期：** 2026-07-11
 **前置：** E16-9 / E16-9b 已 reviewed / merged（`3271697fbc5c3d3385fbcdbc214f4d1a9a2c6832`），Band 9 修复后人工验收通过
 **范围：** 前台 live BLE HRS 的 freshness、unexpected disconnect、有限重连与用户可见恢复策略
@@ -136,12 +136,12 @@ stateDiagram-v2
 
 “已保存设备”只能作为 `来源` 或设置页偏好行出现，绝不能替代 `连接状态`。胶囊 expanded 的 `记录` 继续只显示 `当前只显示状态` / `训练记录：后续开启`，不出现采样、平均值、图表或复盘承诺。
 
-## 8. E16-10b 实现拆分（未开始）
+## 8. E16-10b 实现拆分与当前状态
 
-1. **E16-10b-1 policy/core:** 定义 freshness clock、notify timestamp、等待/过期/异常转移、reason codes 和纯 Kotlin unit tests；不改 `HeartRateState` 历史事实边界，不写 Room/DataStore schema。
-2. **E16-10b-2 foreground reconnect controller:** 为已 live 的 runtime target 实现单一、可取消的 2/5/10 retry scheduler 与 10 秒 attempt watchdog；处理 GATT callback race、old callback target guard、scan conflict 和 lifecycle cancellation；禁止自动 scan。
-3. **E16-10b-3 UI mapper/settings copy:** 把 approved reason / attempt 映射为上表文案和弱状态色，明确 `停止连接`、手动连接、scan、clear、disable 的优先级；不新建视觉页面。
-4. **E16-10b-4 verification / closeout:** focused state-machine tests、Android build/lint/check、AVD non-BLE UI mapping smoke 和真实 Band 9 验收；没有真机证据不得宣称广播恢复自动 reconnect 已关闭。
+1. **E16-10b-1 policy/core — reviewed / merged:** 纯 Kotlin freshness policy core 已合入 `main`（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）；production provider/runtime 尚未消费该 policy。
+2. **E16-10b-2 foreground reconnect controller — unlocked / not started:** 下一步允许创建独立 Dev Story；真实 timer、scheduler、watchdog、retry controller、GATT callback race、old-target guard、scan conflict 和 lifecycle cancellation 仍未实现，且继续禁止自动 scan。
+3. **E16-10b-3 UI mapper/settings copy — locked / not started:** 继续依赖 E16-10b-2；不得提前接入 approved reason / attempt 文案、弱状态色或 `停止连接` UI。
+4. **E16-10b-4 verification / closeout — locked / not started:** 继续依赖 E16-10b-2 / E16-10b-3；尚无 AVD non-BLE mapping closeout 或真实 Band 9 reconnect 验收。
 
 每个 implementation story 都必须避免让 scanner state 覆盖 active provider/bpm，也不得以 UI callback 直接驱动 engine、records 或 session。
 
@@ -175,4 +175,4 @@ stateDiagram-v2
 
 2026-07-11，主管理对话确认方案 B、10 / 15 / 30 秒 freshness、2 / 5 / 10 秒退避、最多 3 次 retry、每次 10 秒 watchdog、前台同 runtime target 资格、设置页 `停止连接` 操作，以及 retry exhausted 不产生新事实状态、沿用最近真实失败原因对应的 `离线` / `连接异常` 并补充手动恢复文案。权限丢失必须取消 retry、stop scan、关闭 GATT并停止相关动作；重新授予后不得自动创建 queue、scan/connect 或恢复旧 attempt，必须等待用户明确连接。方案 C 的自动扫描恢复不进入当前策略。
 
-E16-10a 的 docs-only 交付状态为 **implemented / needs review**。E16-10b 仍未开始；不得把本次批准记录写成 timer、自动重连、自动扫描、UI 操作或验证已经实现。
+E16-10a 的 docs-only 策略已 **reviewed / merged**（merge commit `56d8029719889d329680f3dc099a77ae94909142`）。E16-10b umbrella 当前为 **in progress**：E16-10b-1 纯 Kotlin policy core 已 **reviewed / merged**（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`），但 production provider/runtime 尚未消费该 policy；E16-10b-2 仅为 **unlocked / not started**。不得把这些状态写成 timer、自动重连、自动扫描、UI 操作或真实 BLE 验证已经实现。
