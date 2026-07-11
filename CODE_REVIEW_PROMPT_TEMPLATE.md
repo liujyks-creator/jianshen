@@ -90,8 +90,9 @@ Android 虚拟测试环境（审查 UI / APK / smoke / 真机截图修复时必�
 - git rev-list --left-right --count main...origin/main
 - git rev-parse <story branch> origin/<story branch>
 - git rev-list --left-right --count <story branch>...origin/<story branch>
-- git diff --stat main..<story branch>
-- git diff --name-status main..<story branch>
+- git diff --stat origin/main...origin/<story branch>
+- git diff --name-status origin/main...origin/<story branch>
+- 上述 Story scope 必须使用 merge-base / three-dot diff；不得使用 `main..<story branch>` 两点 diff，因为 Story 创建后 main 可能继续前进，两点 diff 会把后续 main-only 变更误报为 Story 反向变更
 - skills/ 是否仍未被 Git 跟踪
 - .local/ 是否仍未被 Git 跟踪
 - 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
@@ -179,7 +180,7 @@ Review 子代理策略（只读）：
 - .\gradlew.bat app:lintDebug
 - .\gradlew.bat app:check
 - git diff --cached --check
-- git diff --check main..<story branch>
+- git diff --check origin/main...origin/<story branch>
 - 如 Story 涉及 Android UI / APK / 视觉修复 / 交互 smoke：复核实现报告中的 `.local/smoke/<Story ID>/` 截图路径，必要时用 `TrainFlow_Pixel_API_36` 或已连接设备重跑 adb smoke；如未运行，必须在 review 结论中说明原因和风险。
 
 如果只是 review，且未改 prototype 或前端共享配置，不需要运行：
@@ -195,7 +196,7 @@ Review 后处理规则：
   - git status
   - git rev-list --left-right --count main...origin/main
   - git rev-list --left-right --count <story branch>...origin/<story branch>
-  - git diff --check main..<story branch>
+  - git diff --check origin/main...origin/<story branch>
   - skills/、.local/、APK、countdown_beep1.mp3、deliverables/、人工/ 未被 staged 或提交
 - 合并步骤：
   - git switch main

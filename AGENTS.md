@@ -130,6 +130,7 @@ This project may use two optional local skills for product and design planning:
 - A pushed branch, an accepted review report, or completed manual testing does not by itself unlock a dependent Story. The prerequisite is merged only when its immutable required full commit SHA is an ancestor of `main`, `main` matches `origin/main`, and the applicable status documents agree.
 - Before starting a dependent Story, fetch `origin` and verify each named prerequisite with `git merge-base --is-ancestor <required-full-commit-sha> main`. A branch name may be recorded only as a locator for resolving and cross-checking that immutable SHA; never use a movable or deleted branch tip as the downstream unlock fact. If any check fails, stop before creating a branch or modifying files and return to the missing review / merge / docs-sync gate.
 - If a prompt, status document, and Git history disagree, do not choose the most convenient version. Treat Git ancestry as the merge fact, then resolve the documentation inconsistency in a scoped reviewable change before continuing.
+- Review Story scope from the merge base, because `main` may advance after the Story branch is created. After fetching and confirming remote synchronization, use `git diff origin/main...origin/<story-branch>` (three-dot) or an explicit merge-base-to-Story diff. Do not use `git diff main..<story-branch>` (two-dot) for Story scope; it can misreport later `main` changes as reverse Story changes.
 
 ## Working Habits
 

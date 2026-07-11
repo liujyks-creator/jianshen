@@ -95,6 +95,7 @@
 - 基于 `CODE_REVIEW_PROMPT_TEMPLATE.md`。
 - 提示词开头明确要求读取 `AGENTS.md` 和 `CODE_REVIEW_PROMPT_TEMPLATE.md`。
 - 写清楚 story branch、不可变的 story full commit SHA、基线、可接受范围、重点风险、必跑验证、必查 evidence、人工测试是否是合入前置条件。
+- Story diff 统一使用 `origin/main...origin/<story branch>` 三点 diff（merge-base scope）；不得生成 `main..<story branch>` 两点 diff，避免 main 后续前进时把 main-only 变更误判为 Story 变更。
 - 无 blocker / must-fix / should-fix、验证通过、branch 同步、禁区未提交，且本 Story 明确列出的全部 merge prerequisite（包括被指定为前置条件的人工真机验收）均满足时，review gate 才可 `--no-ff` 合并 main 并 push。
 - 有问题时不合并，只输出 findings、最小修复方向和下一轮修复提示词。
 - Review 只有在 merge/push、main/origin 同步和 immutable story full commit SHA ancestry 均通过后，才能报告下游 Story unlocked；branch tip 不作为解锁事实。
