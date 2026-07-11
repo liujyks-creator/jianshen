@@ -46,7 +46,10 @@ internal class HeartRateFreshnessPolicy {
         nowElapsedMs: Long,
         timeline: HeartRateFreshnessTimeline
     ): HeartRateFreshnessDecision {
-        if (!hasValidMonotonicStructure(nowElapsedMs, timeline)) {
+        val validMonotonicStructure = hasValidMonotonicStructure(nowElapsedMs, timeline)
+        val validFailureFact = hasValidFailureFact(timeline.latestFailureReason)
+
+        if (!validMonotonicStructure || !validFailureFact) {
             return invalidTimeDecision()
         }
 
@@ -93,6 +96,11 @@ internal class HeartRateFreshnessPolicy {
             lastValidSampleElapsedMs == null ||
             lastValidSampleElapsedMs >= notifyEnabledAtElapsedMs
     }
+
+    private fun hasValidFailureFact(reason: HeartRateFreshnessReason?): Boolean =
+        reason == null ||
+            reason == HeartRateFreshnessReason.GATT_DISCONNECTED ||
+            reason.isTechnicalFailure
 
     private fun evaluateFirstSampleWait(ageMs: Long): HeartRateFreshnessDecision = when {
         ageMs >= TechnicalErrorAfterMs -> HeartRateFreshnessDecision(

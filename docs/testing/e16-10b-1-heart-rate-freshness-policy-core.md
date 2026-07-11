@@ -52,7 +52,9 @@ reason code 不包含 GATT status code，也不直接承担用户文案；后续
 - connect、service discovery、CCCD、notify silence 与 parse failure 判为 technical error。
 - `retryExhausted()` 返回同一事实 timeline；它只代表后续 controller 的恢复预算耗尽，不创造新状态。
 - failure-only timeline 可以合法不含 notify / sample timestamp：明确 disconnect 仍判为 `offline / gatt_disconnected`，明确技术失败仍保持其对应的 `technical_error` reason。
-- 所有实际存在的 timestamp 都必须先通过 monotonic 校验：`now` 与 timestamp 非负，timestamp 不晚于 `nowElapsedMs`；notify / sample 同时存在时，sample 不早于 notify。任一校验失败都必须在 failure fact 映射前 fail closed 为 `technical_error / invalid_monotonic_time`。
+- timeline 会在 failure fact 映射前先检查所有实际存在 timestamp 的 monotonic 结构，以及 `latestFailureReason` 的 failure fact 结构合法性。
+- 合法 failure fact 仅限 `gatt_disconnected` 或标记为 technical failure 的 reason；通过 constructor 或 `copy()` 把 waiting / live / stale reason 放入 `latestFailureReason` 时，即使 timestamp 合法，也会 fail closed 为 `technical_error / invalid_monotonic_time`。
+- 所有实际存在的 timestamp 都必须先通过 monotonic 校验：`now` 与 timestamp 非负，timestamp 不晚于 `nowElapsedMs`；notify / sample 同时存在时，sample 不早于 notify。任一结构校验失败都必须在 failure fact 映射前 fail closed 为 `technical_error / invalid_monotonic_time`。
 - 只有 timeline 没有 failure fact、需要计算 waiting / live / stale freshness 时，缺少 notify timestamp 才 fail closed 为 `technical_error / invalid_monotonic_time`；不抛异常、不伪造 live。
 - wall-clock / `measuredAt` 不属于 policy API，无法参与超时判定。
 
@@ -68,20 +70,24 @@ reason code 不包含 GATT status code，也不直接承担用户文案；后续
 6. 明确 disconnect 始终保持 offline。
 7. connect / discovery / CCCD / notify silence / parse failure 保持 technical error。
 8. retry exhausted 不改变最近事实。
-9. failure-only timeline 无 timestamp 时保持 disconnect / technical failure 事实；无 failure fact 且需要 freshness 计算时缺少 notify timestamp，以及负时间、时间回退或不可能的 timestamp 顺序，安全 fail closed。
-10. timeline transition 不可变，policy evaluation 不产生 scan / connect / retry / record side effect。
+9. failure-only timeline 无 timestamp 时保持 disconnect / technical failure 事实；constructor / `copy()` 中的合法 disconnect 与 technical failure 继续保持原事实。
+10. constructor 参数化覆盖 waiting / live / first-sample-stale / sample-stale 非 failure reason，`copy()` 覆盖合法 timestamp 下的非法 failure fact；非法 reason 与非法 monotonic timestamp 组合稳定 fail closed，`technicalFailure()` 对非 technical reason 的既有归一化保持不变。
+11. 无 failure fact 且需要 freshness 计算时缺少 notify timestamp，以及负时间、时间回退或不可能的 timestamp 顺序，安全 fail closed。
+12. timeline transition 不可变，policy evaluation 不产生 scan / connect / retry / record side effect。
 
 ## Review-fix 说明
 
-- 收窄“缺失 timestamp 统一 fail closed”的错误概括，明确 failure-only timeline 无 timestamp 合法。
-- 保持非法 monotonic 输入优先于 failure fact 映射，且 retry exhausted 不改变最近事实。
-- 本轮只修文档语义；Kotlin policy 与测试不变。
+- 修复 internal data class constructor / `copy()` 可向 `latestFailureReason` 注入非 failure reason 的矛盾 model state。
+- `evaluate()` 现在同时验证实际存在 timestamp 的 monotonic 结构与 failure fact 结构，二者都在 failure 映射前完成；任一非法输入都稳定返回 `technical_error / invalid_monotonic_time`。
+- 未改变 failure-only 无 timestamp、合法 disconnect / technical failure、`technicalFailure()` 归一化、retry exhausted 与 10 / 15 / 30 秒边界。
 
 ## Review-fix 验证
 
-- `. .\.local\env.ps1`：通过。
-- `.\gradlew.bat app:testDebugUnitTest --tests "*HeartRate*"`：通过，`BUILD SUCCESSFUL`。
-- 本轮仅修文档且不改变 UI / BLE lifecycle，因此无需 AVD 或 Band 9 smoke。
+- `. .\.local\env.ps1` 与 `java -version`：通过，Temurin OpenJDK 17.0.19。
+- `app:testDebugUnitTest --tests "*HeartRateFreshnessPolicyTest"`、`--tests "*HeartRate*"` 与全量 `app:testDebugUnitTest`：通过。
+- `app:assembleDebug`、`app:lintDebug` 与 `app:check`：通过。
+- `git diff --check`、`git diff --cached --check`、Story 三点 diff 范围检查：通过。
+- 本轮只修改纯 Kotlin policy、focused JVM tests 与本 Story 文档，不改变 UI / BLE lifecycle，因此明确不运行 AVD 或 Band 9 smoke。
 
 ## 隔离确认
 

@@ -168,6 +168,95 @@ class HeartRateFreshnessPolicyTest {
     }
 
     @Test
+    fun constructorRejectsEveryNonFailureReasonStoredAsLatestFailure() {
+        val nonFailureReasons = listOf(
+            HeartRateFreshnessReason.WAITING_FIRST_SAMPLE,
+            HeartRateFreshnessReason.LIVE_VALID_SAMPLE,
+            HeartRateFreshnessReason.FIRST_SAMPLE_STALE,
+            HeartRateFreshnessReason.SAMPLE_STALE
+        )
+
+        nonFailureReasons.forEach { reason ->
+            val invalidTimeline = HeartRateFreshnessTimeline(latestFailureReason = reason)
+
+            assertDecision(
+                invalidTimeline,
+                1_000,
+                HeartRateFreshnessKind.TECHNICAL_ERROR,
+                HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+            )
+        }
+    }
+
+    @Test
+    fun copyRejectsNonFailureReasonEvenWhenTimestampsAreValid() {
+        val validTimeline = HeartRateFreshnessTimeline()
+            .notifyEnabled(atElapsedMs = 1_000)
+            .validSample(atElapsedMs = 2_000)
+        val invalidTimeline = validTimeline.copy(
+            latestFailureReason = HeartRateFreshnessReason.FIRST_SAMPLE_STALE
+        )
+
+        assertDecision(
+            invalidTimeline,
+            2_001,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
+    fun invalidFailureReasonWithInvalidMonotonicTimestampFailsClosedStably() {
+        val invalidTimeline = HeartRateFreshnessTimeline(
+            notifyEnabledAtElapsedMs = 2_000,
+            latestFailureReason = HeartRateFreshnessReason.LIVE_VALID_SAMPLE
+        )
+
+        assertDecision(
+            invalidTimeline,
+            1_999,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
+    fun constructorAndCopyKeepValidFailureFacts() {
+        val disconnected = HeartRateFreshnessTimeline(
+            latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
+        )
+        val technicalFailure = HeartRateFreshnessTimeline().copy(
+            latestFailureReason = HeartRateFreshnessReason.CONNECT_FAILED
+        )
+
+        assertDecision(
+            disconnected,
+            1_000,
+            HeartRateFreshnessKind.OFFLINE,
+            HeartRateFreshnessReason.GATT_DISCONNECTED
+        )
+        assertDecision(
+            technicalFailure,
+            1_000,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.CONNECT_FAILED
+        )
+    }
+
+    @Test
+    fun technicalFailureStillNormalizesNonTechnicalReason() {
+        val normalized = HeartRateFreshnessTimeline()
+            .technicalFailure(HeartRateFreshnessReason.LIVE_VALID_SAMPLE)
+
+        assertDecision(
+            normalized,
+            1_000,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
     fun failureTimelineRejectsSampleBeforeNotifyEnabled() {
         val failed = HeartRateFreshnessTimeline(
             notifyEnabledAtElapsedMs = 2_000,
