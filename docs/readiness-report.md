@@ -141,7 +141,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
 - `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基并通过 2026-07-07 真机 smoke，E16-3a 已完成 App 内可拖动浮动心率胶囊 HTML 修订，E16-4 已完成 opt-in / settings / permission rationale / privacy / non-medical planning，E16-5 已完成 settings / opt-in UI，E16-6 已完成 BLE permission request flow，E16-7 已完成 device picker / source status，E16-8 已完成 app-shell floating capsule implementation，E16-9 已完成 provider/source/live state 到胶囊的只读映射和受约束 selected-device connect lifecycle。进入训练记录和分析前仍必须另拆 E16-10 stale / offline policy、E16-11 recording model 和 E16-12 analysis；不得直接进入记录落库或分析。
-- E16-10a 已完成 freshness / offline / reconnect docs-only policy，状态为 needs review，详见 `docs/testing/e16-10-heart-rate-freshness-reconnect-policy.md`。其推荐的前台有限 direct reconnect 与 10 / 15 / 30 秒 freshness、2/5/10 秒 retry 候选值尚未获得主管理对话确认，因而不是实现许可；无论采用何种方案，都不得以保存设备偏好在冷启动、回前台、蓝牙恢复或 retry 耗尽后自动 scan/connect。E16-11 recording 与 E16-12 analysis 继续隔离。
+- E16-10a freshness / offline / reconnect docs-only policy 已获主管理确认，状态为 implemented / needs review，详见 `docs/testing/e16-10-heart-rate-freshness-reconnect-policy.md` 和 D-078 / O-009 Accepted。已批准仅当前前台进程、本次已 live bpm 的同一 runtime target 做有限 direct reconnect，采用 10 / 15 / 30 秒 freshness、2/5/10 秒退避、最多 3 次、每次 10 秒 watchdog；禁止自动 scan、自动换 target、后台连接，以及冷启动、回前台、蓝牙恢复或 retry 耗尽后的自动恢复。E16-10b 尚未开始，仍负责 policy/core、foreground reconnect controller、设置页 `停止连接` 与 mapper/copy、测试和真机验证；批准策略不是实现许可。E16-11 recording / 1 秒持久化和 E16-12 analysis / recap 均未开始并继续隔离。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查

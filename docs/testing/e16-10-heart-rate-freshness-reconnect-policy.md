@@ -1,6 +1,6 @@
 # E16-10a 心率数据新鲜度、离线与重连策略规划
 
-**状态：** Needs review — 本文是供主管理对话确认的策略提案，不是已批准实现或 E16-10b 开工许可
+**状态：** Policy approved / Needs review — 主管理对话已确认策略；本文仍是 docs-only 记录，不代表 E16-10b 已开始或已实现
 **日期：** 2026-07-11
 **前置：** E16-9 / E16-9b 已 reviewed / merged（`3271697fbc5c3d3385fbcdbc214f4d1a9a2c6832`），Band 9 修复后人工验收通过
 **范围：** 前台 live BLE HRS 的 freshness、unexpected disconnect、有限重连与用户可见恢复策略
@@ -8,11 +8,11 @@
 
 ## 1. 结论摘要
 
-建议主管理对话确认 **方案 B：仅对已在当前前台进程成功 live 的同一设备，允许有限、可见、无扫描的直接 GATT 重连**。它只覆盖用户已经显式 opt-in、授权、选择并连接成功过的 runtime target；不把已保存 identifier/displayName 当作在线身份，也不在冷启动、回到前台或广播恢复时主动 scan/connect。
+已批准 **方案 B：仅对已在当前前台进程成功 live 的同一设备，允许有限、可见、无扫描的直接 GATT 重连**。它只覆盖用户已经显式 opt-in、授权、选择并连接成功过的 runtime target；不把已保存 identifier/displayName 当作在线身份，也不在冷启动、回到前台或蓝牙恢复时主动 scan/connect。
 
-建议的默认参数是：有效 bpm 在最后一条有效 `0x2A37` notify 后 **10 秒**内；连续 **10 秒**无新 notify 进入 `数据过期`；已连接但从 notify enable 起 **15 秒**仍无首条数据也进入 `数据过期`；连续 **30 秒**无数据则判为 notify 停止的 `连接异常`。明确 GATT 断开直接进入 `离线`，连接、service discovery、CCCD 或解析失败直接进入 `连接异常`，不保留或展示旧 bpm。意外失联后按 **2 秒、5 秒、10 秒**退避尝试最多 **3 次** direct GATT reconnect；每次连接最多等待 **10 秒**回调。任何用户停止、关闭、清除、切换 target、权限/蓝牙不可用、进后台或 retry 耗尽都会取消队列并终止自动恢复。
+已批准的默认参数是：有效 bpm 在最后一条有效 `0x2A37` notify 后 **10 秒**内；连续 **10 秒**无新 notify 进入 `数据过期`；已连接但从 notify enable 起 **15 秒**仍无首条数据也进入 `数据过期`；连续 **30 秒**无数据则判为 notify 停止的 `连接异常`。明确 GATT 断开直接进入 `离线`，连接、service discovery、CCCD、解析或 silence 技术失败进入 `连接异常`，不保留或展示旧 bpm。意外失联后按 **2 秒、5 秒、10 秒**退避尝试最多 **3 次** direct GATT reconnect；每次连接最多等待 **10 秒**回调。任何用户停止、关闭、清除、切换 target、权限/蓝牙不可用、进后台或 retry 耗尽都会取消队列并终止自动恢复。
 
-以上阈值是产品默认值，不代表已接受的 Android 常量；E16-10b 必须在确认后将其建模为可测试的 policy/time source，而非把 timer 直接散落在 UI。
+以上阈值是已接受的产品默认值，不代表 Android 常量已经实现；E16-10b 必须将其建模为可测试的 policy/time source，而非把 timer 直接散落在 UI。
 
 ## 2. 已确认事实
 
@@ -24,23 +24,23 @@
 6. 现有 provider 已有 `CONNECTED_WAITING_FOR_DATA`、`LIVE_BPM`、`STALE`、`DISCONNECTED`、`ERROR` 状态承载位，但当前没有 freshness timer、连接 watchdog 或重连 scheduler。`STALE` / `DISCONNECTED` 当前都会映射到 `stale_reading`，胶囊已能区分 `数据过期` 与 `离线`。
 7. 心率仍只读显示；不做医疗告警、声音、震动、强制暂停或训练中断，也不进入 E16-11 / E16-12。
 
-## 3. 仍待决问题
+## 3. 已批准决策
 
-- 是否接受前台 live session 的有限自动恢复，还是任何异常都要求用户手动点击？
-- 10 / 15 / 30 秒 freshness 阈值及 2 / 5 / 10 秒重试退避是否合适于 Band 9 广播节奏和真实 Android 回调表现？
-- 自动重连是否只在 App 保持前台时继续（本文推荐），还是允许 App 短暂后台后继续？
-- `停止连接` 是否需要成为设置页明确操作，或仅在 E16-10b 加入后才暴露？无论 UI 形态如何，它必须是取消自动重连的显式用户意图。
-- retry 耗尽后的状态是使用现有 `离线` / `连接异常` 组合，还是 E16-10b 增加只供设置页使用的 retry-exhausted reason？后者不能改变 `HeartRateState` 的历史事实边界。
+- 只允许当前前台进程、且本次已成功进入 live bpm 的同一 runtime target 做有限 direct GATT reconnect。
+- 采用 10 / 15 / 30 秒 freshness 阈值，以及 2 / 5 / 10 秒、最多 3 次、每次 10 秒 watchdog 的重连预算。
+- 不允许后台自动连接；冷启动、回到前台、蓝牙恢复和 retry 耗尽后均不自动 scan/connect。
+- E16-10b 必须在设置页提供可见的 `停止连接` 操作；它取消队列并抑制本前台周期的自动恢复，直到用户手动连接或选择新设备。
+- retry exhausted 不新增历史事实状态：明确断开保持 `离线`；connect / notify / parse / silence 技术失败保持 `连接异常`；设置页可显示 `自动重连已停止，请手动连接`。
 
 ## 4. 策略方向
 
 | 方向 | 规则 | 优点 | 风险 / 缺点 |
 |---|---|---|---|
 | A. 全部手动恢复 | 任何断开、error、notify 停止或广播恢复后都不重连；用户手动点击已保存设备或重新扫描。 | 最容易解释；严格延续 E16-9 的无自动连接边界；最少 BLE lifecycle 风险。 | 训练中 Band 9 短暂广播中断会造成不必要摩擦；用户需离开训练流恢复，不能利用已明确同意的 runtime connection。 |
-| B. 前台、同 target、有限 direct reconnect（推荐） | 只对当前进程里曾 live 的同一 `BluetoothDevice` / selected runtime target；意外中断后 2/5/10 秒退避，最多 3 次；不 scan、不换 target、全程可见。 | 在不把保存偏好当连接身份的前提下恢复短暂中断；不违反冷启动无自动 scan/connect；target 不漂移，容易验证和取消。 | 需要单一 scheduler、attempt watchdog、生命周期取消和真机覆盖；Band 9 恢复得太晚仍要用户手动恢复。 |
+| B. 前台、同 target、有限 direct reconnect（已批准） | 只对当前进程里曾 live 的同一 `BluetoothDevice` / selected runtime target；意外中断后 2/5/10 秒退避，最多 3 次；不 scan、不换 target、全程可见。 | 在不把保存偏好当连接身份的前提下恢复短暂中断；不违反冷启动无自动 scan/connect；target 不漂移，容易验证和取消。 | 需要单一 scheduler、attempt watchdog、生命周期取消和真机覆盖；Band 9 恢复得太晚仍要用户手动恢复。 |
 | C. 自动重新扫描并匹配保存 identifier | 失联后自动启动 bounded HRS scan，发现相同 identifier 后连接。 | 广播恢复较晚时成功率可能更高。 | 与 E16-9 的冷启动 / 无静默扫描边界冲突；identifier 只是 convenience hint，地址随机化会失败；扫描会增加隐私、功耗与 scan-vs-live 竞争风险。**不推荐。** |
 
-## 5. 推荐方案 B 的策略合同（待确认）
+## 5. 已批准方案 B 的策略合同
 
 ### 5.1 Freshness 与状态阈值
 
@@ -132,7 +132,7 @@ stateDiagram-v2
 
 “已保存设备”只能作为 `来源` 或设置页偏好行出现，绝不能替代 `连接状态`。胶囊 expanded 的 `记录` 继续只显示 `当前只显示状态` / `训练记录：后续开启`，不出现采样、平均值、图表或复盘承诺。
 
-## 8. E16-10b 实现拆分（确认后）
+## 8. E16-10b 实现拆分（未开始）
 
 1. **E16-10b-1 policy/core:** 定义 freshness clock、notify timestamp、等待/过期/异常转移、reason codes 和纯 Kotlin unit tests；不改 `HeartRateState` 历史事实边界，不写 Room/DataStore schema。
 2. **E16-10b-2 foreground reconnect controller:** 为已 live 的 runtime target 实现单一、可取消的 2/5/10 retry scheduler 与 10 秒 attempt watchdog；处理 GATT callback race、old callback target guard、scan conflict 和 lifecycle cancellation；禁止自动 scan。
@@ -166,12 +166,8 @@ stateDiagram-v2
 - E16-11 才能决定训练期间 1 秒采样、来源、持久化、缺口和 session schema；E16-10 不预先添加字段或 DataStore schema。
 - E16-12 必须等待 E16-11 的已保存、来源明确样本，并先通过独立 E16-12a 高保真视觉评审；E16-10 不做平均值、区间时长、曲线、复盘、训练建议或医疗解释。
 
-## 11. 需主管理对话确认
+## 11. 主管理确认记录
 
-1. 接受方案 B，还是维持方案 A 的全手动恢复？明确拒绝方案 C 的自动扫描恢复。
-2. 是否批准 10 秒 live stale、15 秒 waiting stale、30 秒 notify-abnormal，及 2/5/10 秒、最多 3 次、每次 10 秒 watchdog 的默认值？
-3. 是否接受“仅当前前台进程、已 live 的 runtime target”这一资格，且后台 / cold start / 回前台 / retry 耗尽后都不自动恢复？
-4. 是否将 `停止连接` 作为 E16-10b 设置页可见操作，并把它定义为本前台周期 suppress 自动重连？
-5. retry exhausted 的设置页信息是否需要专门 reason，或以既有 `离线` / `连接异常` + 文案处理即可？
+2026-07-11，主管理对话确认方案 B、10 / 15 / 30 秒 freshness、2 / 5 / 10 秒退避、最多 3 次 retry、每次 10 秒 watchdog、前台同 runtime target 资格、设置页 `停止连接` 操作，以及 retry exhausted 沿用 `离线` / `连接异常` 历史事实状态并补充手动恢复文案。方案 C 的自动扫描恢复不进入当前策略。
 
-在这些项目获得确认前，E16-10a 的状态保持 **needs review**；不得以本文为依据直接实现 timer、自动重连或自动扫描。
+E16-10a 的 docs-only 交付状态为 **implemented / needs review**。E16-10b 仍未开始；不得把本次批准记录写成 timer、自动重连、自动扫描、UI 操作或验证已经实现。
