@@ -1,10 +1,14 @@
 # E16-10b-1 Heart-rate freshness policy core
 
-**状态：** Implemented / Needs review
+**状态：** Reviewed / merged
 
 **日期：** 2026-07-11
 
 **前置：** E16-10a reviewed / merged to `main` at `56d8029719889d329680f3dc099a77ae94909142`
+
+**Story tip：** `09d17616f213c1df7905e46662f4a195345fdd9a`
+
+**Merge commit：** `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`
 
 **范围：** 纯 Kotlin monotonic freshness policy / model 与 focused JVM tests
 
@@ -97,4 +101,4 @@ reason code 不包含 GATT status code，也不直接承担用户文案；后续
 - 未修改 WorkoutCommand、WorkoutEvent、TimedWorkoutEngine、StrengthWorkoutEngine、TimerDial、声音、震动、通知或 cue。
 - E16-11 的训练中 1 秒采样 / 持久化与 E16-12 的分析 / 复盘未开始。
 
-真实 timer、scheduler、callback race、old callback target guard 与 foreground direct reconnect 仍未实现，全部属于 E16-10b-2。下一步只能进入 E16-10b-1 Code Review gate，不启动 E16-10b-2。
+E16-10b-1 已关闭。production provider/controller/runtime 仍未接入该 policy；真实 timer、scheduler、watchdog、retry controller、callback race、old-target guard、lifecycle cancellation 与 foreground direct reconnect 仍未实现，全部属于 E16-10b-2。下一步可独立启动 E16-10b-2 Dev Story；这只表示 **unlocked / not started**，不表示 runtime 已实现、进行中或已验证。
