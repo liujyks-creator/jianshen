@@ -43,8 +43,8 @@
 ## 跨对话事实源与前置 Gate
 
 - 不依赖上一模型或上一对话的隐性记忆。跨模型一致性只以当前 `main`、accepted decision IDs、Story 文档、测试 / evidence 和 Git history 为准。
-- branch 已 push、review 报告 PASS、人工测试通过都不等于已合入 main。只有 merge commit 已 push、required tip 是 main ancestor、`main...origin/main = 0 0` 且状态文档一致，依赖它的下一 Story 才 unlocked。
-- 生成任何依赖型 Dev Story 前，先执行 `git fetch --prune origin`，并对每个前置 commit / branch 执行 `git merge-base --is-ancestor <required-commit-or-branch> main`。
+- branch 已 push、review 报告 PASS、人工测试通过都不等于已合入 main。只有 merge commit 已 push、不可变的 required full commit SHA 是 main ancestor、`main...origin/main = 0 0` 且状态文档一致，依赖它的下一 Story 才 unlocked。
+- 生成任何依赖型 Dev Story 前，先执行 `git fetch --prune origin`，并对每个前置完整 commit SHA 执行 `git merge-base --is-ancestor <required-full-commit-sha> main`。branch 仅作定位和核对 SHA 的备注，不得以可移动 branch tip 作为解锁依据。
 - 如果存在已 push 但未 review / merge 的前置分支，下一条提示词必须是该分支的 Review / fix / docs-sync gate，不得提前生成依赖它的 Dev Story。
 - 如果 Git 已合并但状态文档仍写 pending，先做 scoped docs-sync 并 review；如果文档写 merged 但 ancestry 检查失败，以 Git 为准并停止下游任务。
 
@@ -86,7 +86,7 @@
 - 基于 `DEV_STORY_PROMPT_TEMPLATE.md`。
 - 提示词开头明确要求读取 `AGENTS.md` 和 `DEV_STORY_PROMPT_TEMPLATE.md`。
 - 写清楚基线、branch、前置状态、目标、允许范围、禁止范围、状态不变量、相关必读文档、验证、AVD / 人工测试边界和交付格式。
-- 列出 required commit / branch，并要求在创建分支或修改文件前执行 ancestry check；前置未合入时必须停止。
+- 列出 required full commit SHA；branch 仅作定位备注。要求在创建分支或修改文件前按完整 SHA 执行 ancestry check；前置未合入时必须停止。
 - 只列与 Story 有关的 MD；不要复制整套无关文档清单。
 - UI 功能必须说明 `huashu-design` / 已批准 HTML 视觉方案 / `DESIGN.md` 的适用关系。
 - 整份可复制提示词只使用一个外层 `text` 代码块；内部命令直接写普通文本行，不嵌套三反引号，不把必需内容拆到框外。
@@ -94,10 +94,10 @@
 生成 Code Review 提示词时：
 - 基于 `CODE_REVIEW_PROMPT_TEMPLATE.md`。
 - 提示词开头明确要求读取 `AGENTS.md` 和 `CODE_REVIEW_PROMPT_TEMPLATE.md`。
-- 写清楚 story branch、story commit、基线、可接受范围、重点风险、必跑验证、必查 evidence、人工测试是否是合入前置条件。
-- 无 blocker / must-fix / should-fix、验证通过、branch 同步、禁区未提交时，review gate 才可 `--no-ff` 合并 main 并 push。
+- 写清楚 story branch、不可变的 story full commit SHA、基线、可接受范围、重点风险、必跑验证、必查 evidence、人工测试是否是合入前置条件。
+- 无 blocker / must-fix / should-fix、验证通过、branch 同步、禁区未提交，且本 Story 明确列出的全部 merge prerequisite（包括被指定为前置条件的人工真机验收）均满足时，review gate 才可 `--no-ff` 合并 main 并 push。
 - 有问题时不合并，只输出 findings、最小修复方向和下一轮修复提示词。
-- Review 只有在 merge/push、main/origin 同步和 story tip ancestry 均通过后，才能报告下游 Story unlocked。
+- Review 只有在 merge/push、main/origin 同步和 immutable story full commit SHA ancestry 均通过后，才能报告下游 Story unlocked；branch tip 不作为解锁事实。
 - 整份可复制提示词只使用一个外层 `text` 代码块；内部不嵌套 Markdown 代码围栏。
 
 简单 APK 人工测试请求时：
@@ -110,6 +110,7 @@
 - `implemented / needs review`：开发已推送，等待独立 review。
 - `changes requested`：review 或人工测试发现需修复项，保留 branch 和已有 commits，不回退 Git。
 - `reviewed / pending real-device acceptance`：自动 review 通过，仍等待明确真机验收。
+- `reviewed / pending merge`：review 与全部 Story 特有 gate 已通过，但尚未完成 merge / push 或合并后同步确认。
 - `reviewed / merged`：review gate 已合入 main 并推送。
 - `blocked`：同一外部阻塞连续出现至少三轮且无法继续推进时才使用。
 

@@ -127,8 +127,8 @@ This project may use two optional local skills for product and design planning:
 ## Cross-Conversation Source Of Truth
 
 - Do not rely on a previous model's or conversation's implicit memory. Cross-model and cross-conversation handoffs must be reconstructed from the current `main` branch, accepted decision-log entries, Story documents, tests, evidence records, and Git history.
-- A pushed branch, an accepted review report, or completed manual testing does not by itself unlock a dependent Story. The prerequisite is merged only when its required commit or branch is an ancestor of `main`, `main` matches `origin/main`, and the applicable status documents agree.
-- Before starting a dependent Story, fetch `origin` and verify each named prerequisite with `git merge-base --is-ancestor <required-commit-or-branch> main`. If any check fails, stop before creating a branch or modifying files and return to the missing review / merge / docs-sync gate.
+- A pushed branch, an accepted review report, or completed manual testing does not by itself unlock a dependent Story. The prerequisite is merged only when its immutable required full commit SHA is an ancestor of `main`, `main` matches `origin/main`, and the applicable status documents agree.
+- Before starting a dependent Story, fetch `origin` and verify each named prerequisite with `git merge-base --is-ancestor <required-full-commit-sha> main`. A branch name may be recorded only as a locator for resolving and cross-checking that immutable SHA; never use a movable or deleted branch tip as the downstream unlock fact. If any check fails, stop before creating a branch or modifying files and return to the missing review / merge / docs-sync gate.
 - If a prompt, status document, and Git history disagree, do not choose the most convenient version. Treat Git ancestry as the merge fact, then resolve the documentation inconsistency in a scoped reviewable change before continuing.
 
 ## Working Habits
