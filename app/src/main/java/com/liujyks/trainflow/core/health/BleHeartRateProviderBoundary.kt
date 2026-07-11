@@ -25,7 +25,11 @@ internal data class BleHeartRateProviderState(
     val bpm: Int? = null,
     val measuredAt: String? = null,
     val missingPermissions: List<String> = emptyList(),
-    val recoverableReason: BleHeartRateRecoverableReason? = null
+    val recoverableReason: BleHeartRateRecoverableReason? = null,
+    val freshnessReason: HeartRateFreshnessReason? = null,
+    val currentReconnectAttempt: Int = 0,
+    val retryBudgetExhausted: Boolean = false,
+    val reconnectInProgress: Boolean = false
 ) {
     fun toHeartRateState(): HeartRateState {
         return when (kind) {
@@ -84,8 +88,6 @@ internal data class BleHeartRateProviderState(
             BleHeartRateProviderStateKind.DISCONNECTED -> HeartRateState(
                 kind = HeartRateStateKind.STALE_READING,
                 sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = bpm,
-                measuredAt = measuredAt,
                 sourceId = selectedDevice?.identifier,
                 sourceLabel = selectedDevice?.displayName,
                 unavailableReason = HeartRateUnavailableReason.DEVICE_DISCONNECTED,

@@ -7,6 +7,7 @@ import com.liujyks.trainflow.core.model.HeartRateStateKind
 import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -151,5 +152,37 @@ class BleHeartRateProviderBoundaryTest {
         )
 
         assertEquals(live, resolved)
+    }
+
+    @Test
+    fun staleOfflineAndTechnicalStatesExposeStableRuntimeMetadataWithoutOldBpm() {
+        val selected = BleHeartRateDeviceSelection("same-runtime-target", "Band")
+        val stale = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.STALE,
+            message = "stale",
+            selectedDevice = selected,
+            bpm = 96,
+            measuredAt = "display-only",
+            freshnessReason = HeartRateFreshnessReason.SAMPLE_STALE,
+            currentReconnectAttempt = 2,
+            reconnectInProgress = true
+        )
+        val exhausted = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.ERROR,
+            message = "error",
+            selectedDevice = selected,
+            recoverableReason = BleHeartRateRecoverableReason.CONNECTION_FAILED,
+            freshnessReason = HeartRateFreshnessReason.CONNECT_FAILED,
+            currentReconnectAttempt = 3,
+            retryBudgetExhausted = true
+        )
+
+        assertNull(stale.toHeartRateState().bpm)
+        assertNull(stale.toHeartRateState().measuredAt)
+        assertEquals(HeartRateFreshnessReason.SAMPLE_STALE, stale.freshnessReason)
+        assertEquals(2, stale.currentReconnectAttempt)
+        assertTrue(stale.reconnectInProgress)
+        assertEquals(HeartRateFreshnessReason.CONNECT_FAILED, exhausted.freshnessReason)
+        assertTrue(exhausted.retryBudgetExhausted)
     }
 }

@@ -9,6 +9,8 @@ internal interface HeartRateDeviceScanner : AutoCloseable {
     val candidates: StateFlow<List<BleHeartRateDeviceCandidate>>
 
     fun refreshAvailability()
+    fun setDisplayEnabled(enabled: Boolean)
+    fun setForegroundActive(active: Boolean)
     fun startScan()
     fun stopScan()
     fun selectDevice(identifier: String): BleHeartRateDeviceSelection?
@@ -27,6 +29,14 @@ internal class AndroidHeartRateDeviceScanner(
 
     override fun refreshAvailability() {
         provider.refreshAvailability()
+    }
+
+    override fun setDisplayEnabled(enabled: Boolean) {
+        provider.setDisplayEnabled(enabled)
+    }
+
+    override fun setForegroundActive(active: Boolean) {
+        provider.setForegroundActive(active)
     }
 
     override fun startScan() {

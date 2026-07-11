@@ -41,6 +41,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.health.BleHeartRatePermissionPlanner
 import com.liujyks.trainflow.core.health.BleHeartRatePermissionTrigger
@@ -108,6 +111,7 @@ internal fun TrainFlowApp(
     onUiSkinChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val planReminderScheduler = remember(context) {
         AndroidPlanReminderScheduler(context.applicationContext)
     }
@@ -213,6 +217,7 @@ internal fun TrainFlowApp(
     }
 
     LaunchedEffect(heartRateDisplayEnabled, allHeartRateBlePermissionsGranted) {
+        heartRateDeviceScanner.setDisplayEnabled(heartRateDisplayEnabled)
         heartRateBlePermissionStatus = when {
             !heartRateDisplayEnabled -> HeartRateBlePermissionStatus.NOT_REQUESTED
             allHeartRateBlePermissionsGranted -> HeartRateBlePermissionStatus.GRANTED
@@ -312,6 +317,23 @@ internal fun TrainFlowApp(
     DisposableEffect(heartRateDeviceScanner) {
         onDispose {
             heartRateDeviceScanner.close()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, heartRateDeviceScanner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> heartRateDeviceScanner.setForegroundActive(true)
+                Lifecycle.Event.ON_STOP -> heartRateDeviceScanner.setForegroundActive(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        heartRateDeviceScanner.setForegroundActive(
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        )
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
