@@ -51,6 +51,20 @@ live 状态下用户扫描其他设备继续与 provider/GATT 分离，candidate
 - never-live/cold/no-runtime-target eligibility、display/permission/Bluetooth/background/stop/clear/close/scan cancellation、foreground restore/manual recovery与 live scan coexistence。
 - provider stable metadata 与 stale/offline old-bpm suppression。
 
+## Review Fix（2026-07-12）
+
+被审 Story tip `a93cbeffa13cbb52f7199084a3051fbd6f98e7c6` 的 controller / provider race findings 已按同一 Story 边界修复，当前仍为 **Implemented / Needs review**：
+
+- 新 target selection 与同 runtime target 的 manual attempt 已拆开。只有 `selectNewTarget()` 初始化 target generation、ever-live、timeline 与 retry budget；`beginManualAttempt()` 不消耗或清零 budget，不清除 exhausted，也不丢 ever-live。partial / exhausted budget、manual failure、notify success-before-bpm 均保留既有事实；只有 valid bpm 清零，选择新 target 才初始化新事实。
+- display off、permission lost、Bluetooth off、`ON_STOP`、user stop、target switch / clear 与 provider close 均会停止实际 `BluetoothLeScanner`、移除当前 12 秒 timeout、失效 scan generation 与 queued scan callbacks。permission / Bluetooth 丢失后的 stop 使用安全幂等关闭；条件恢复只刷新 availability，不自动 scan / connect。
+- manual scan 成为独立 active 状态。live scan 不关闭 GATT、不改变 target / bpm；scan active 期间 disconnect / notify silence 只记录并暂停剩余 direct-reconnect queue。scan 正常结束或 timeout 后，仅当它从 live target 开始、target generation 未变、资格仍成立、未选择新设备且 budget 可用时恢复。non-live scan、资格丢失或新 target 会永久失效旧队列。
+- provider 增加 closed、lifecycle generation 与 scan generation gate。scan result / batch / failure / timeout、Bluetooth receiver / availability post、GATT callbacks、controller effect 与 state / candidate sinks 在执行前校验 open、generation，并在 GATT 路径继续校验 target / attempt / object identity。stop / close / switch / clear 失效 generation；close 幂等，close 后不更新 state / candidates 或调用 sinks。
+- controller 增加 recovery cancellation epoch。retry、watchdog、freshness closure 同时校验 epoch、target、attempt / freshness generation、eligibility、scan active 与 closed；测试 scheduler 会保留并主动执行已取消 closure，证明条件后来恢复也不会 resurrect 旧 attempt。
+
+新增或扩展的 focused JVM matrix 覆盖 partial / exhausted manual attempt、manual failure、notify-before-bpm、valid-bpm reset、新 target reset、active-scan disconnect / silence / end-resume / timeout、新 target / eligibility loss / non-live no-resume，以及 close 后 scan / receiver / availability / GATT / sink callback gate。provider scan-filter boundary test同步到每次 scan 独立 callback instance。
+
+Review-fix AVD smoke 使用固定 `TrainFlow_Pixel_API_36` / `emulator-5554`，证据位于 `.local/smoke/e16-10b-2-foreground-reconnect-controller-review-fix/`（未提交）。已确认 active scan 后按 Home 触发 `ON_STOP`，恢复后不再显示 scanning 且不自动 connect；active scan 中关闭心率显示后立即进入“未开启”、不再显示 scanning；撤销 Bluetooth permissions 后 cold launch 无崩溃且不 scan / connect，重新授予后也不自动恢复；通过 emulator Bluetooth shell disable / enable 覆盖关闭与恢复 cold launch，未出现 TrainFlow FATAL / ANR，恢复后不自动 scan / connect。AVD 无真实 BLE HRS target，因此没有声称或伪造 Band 9 reconnect / live bpm 证据。
+
 ## AVD non-BLE smoke
 
 固定 AVD `TrainFlow_Pixel_API_36` / `emulator-5554` 安装并启动 debug APK成功。证据位于 `.local/smoke/e16-10b-2-foreground-reconnect-controller/`，未提交。

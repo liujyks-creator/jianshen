@@ -4,11 +4,7 @@ internal fun interface HeartRateMonotonicClock {
     fun elapsedRealtimeMs(): Long
 }
 
-internal enum class HeartRateScheduledTask {
-    RETRY,
-    WATCHDOG,
-    FRESHNESS
-}
+internal enum class HeartRateScheduledTask { RETRY, WATCHDOG, FRESHNESS }
 
 internal interface HeartRateControllerScheduler {
     fun schedule(task: HeartRateScheduledTask, delayMs: Long, action: () -> Unit)
@@ -17,14 +13,7 @@ internal interface HeartRateControllerScheduler {
 }
 
 internal enum class HeartRateReconnectRuntimeKind {
-    IDLE,
-    CONNECTING,
-    WAITING,
-    LIVE,
-    STALE,
-    OFFLINE,
-    TECHNICAL_ERROR,
-    STOPPED
+    IDLE, CONNECTING, WAITING, LIVE, STALE, OFFLINE, TECHNICAL_ERROR, STOPPED
 }
 
 internal data class HeartRateReconnectRuntimeState(
@@ -46,15 +35,10 @@ internal sealed interface HeartRateReconnectEffect {
         val manual: Boolean
     ) : HeartRateReconnectEffect
 
-    data class CloseAttempt(
-        val targetGeneration: Long,
-        val attemptGeneration: Long
-    ) : HeartRateReconnectEffect
-
+    data class CloseAttempt(val targetGeneration: Long, val attemptGeneration: Long) : HeartRateReconnectEffect
     data class StateChanged(val state: HeartRateReconnectRuntimeState) : HeartRateReconnectEffect
 }
 
-/** Identity guard kept Android-free so delayed callbacks can be tested with plain fake GATT objects. */
 internal class HeartRateGattAttemptGuard<Gatt : Any> {
     private var currentGatt: Gatt? = null
     private var targetGeneration = 0L
@@ -69,12 +53,9 @@ internal class HeartRateGattAttemptGuard<Gatt : Any> {
     fun isCurrent(gatt: Gatt, target: Long, attempt: Long): Boolean =
         currentGatt === gatt && targetGeneration == target && attemptGeneration == attempt
 
-    /** Invalidates identity before the adapter performs disconnect()/close(). */
     fun invalidate(gatt: Gatt, target: Long, attempt: Long): Boolean {
         if (!isCurrent(gatt, target, attempt)) return false
-        currentGatt = null
-        targetGeneration = 0L
-        attemptGeneration = 0L
+        clear()
         return true
     }
 
@@ -85,10 +66,7 @@ internal class HeartRateGattAttemptGuard<Gatt : Any> {
     }
 }
 
-/**
- * Pure, single-owner state machine for one foreground process-local BLE runtime target.
- * Android GATT, Handler, wall time, scanning and UI are deliberately outside this type.
- */
+/** Pure single-owner foreground reconnect state machine. */
 internal class HeartRateForegroundReconnectController(
     private val clock: HeartRateMonotonicClock,
     private val scheduler: HeartRateControllerScheduler,
@@ -98,13 +76,17 @@ internal class HeartRateForegroundReconnectController(
     private var targetGeneration = 0L
     private var attemptGeneration = 0L
     private var freshnessGeneration = 0L
+    private var recoveryEpoch = 0L
     private var hasRuntimeTarget = false
     private var targetEverLive = false
     private var foreground = true
     private var displayEnabled = true
     private var permissionGranted = true
     private var bluetoothEnabled = true
-    private var scanConflict = false
+    private var scanActive = false
+    private var scanMayResumeQueue = false
+    private var scanTargetGeneration = 0L
+    private var pendingRetryAfterScan = false
     private var stopSuppressed = false
     private var closed = false
     private var retryAttempt = 0
@@ -115,18 +97,27 @@ internal class HeartRateForegroundReconnectController(
 
     fun currentState(): HeartRateReconnectRuntimeState = state
 
-    fun beginManualTarget(): Long {
+    /** A new selection is the only operation that creates a target generation and resets its facts. */
+    fun selectNewTarget(): Long {
+        if (closed) return targetGeneration
         invalidateCurrent(close = true)
         targetGeneration += 1
         hasRuntimeTarget = true
         targetEverLive = false
         stopSuppressed = false
-        scanConflict = false
         retryAttempt = 0
         retryBudgetExhausted = false
         timeline = HeartRateFreshnessTimeline()
-        startAttempt(manual = true, reconnectAttempt = 0)
+        publish(HeartRateReconnectRuntimeState(targetGeneration = targetGeneration, attemptGeneration = attemptGeneration))
         return targetGeneration
+    }
+
+    /** A manual attempt for the existing target is free and preserves ever-live and retry facts until valid bpm. */
+    fun beginManualAttempt() {
+        if (closed || !hasRuntimeTarget || !baseEligibility() || scanActive) return
+        stopSuppressed = false
+        invalidateAttempt(close = true)
+        startAttempt(manual = true, reconnectAttempt = retryAttempt)
     }
 
     fun notifyEnabled(target: Long, attempt: Long) {
@@ -134,7 +125,7 @@ internal class HeartRateForegroundReconnectController(
         scheduler.cancel(HeartRateScheduledTask.WATCHDOG)
         timeline = timeline.notifyEnabled(clock.elapsedRealtimeMs())
         publishFreshness()
-        scheduleFreshness(delayMs = FIRST_SAMPLE_STALE_MS)
+        scheduleFreshness(FIRST_SAMPLE_STALE_MS)
     }
 
     fun validSample(target: Long, attempt: Long, bpm: Int) {
@@ -142,15 +133,15 @@ internal class HeartRateForegroundReconnectController(
         targetEverLive = true
         retryAttempt = 0
         retryBudgetExhausted = false
-        state = state.copy(currentReconnectAttempt = 0, reconnectInProgress = false)
+        pendingRetryAfterScan = false
+        state = state.copy(currentReconnectAttempt = 0, retryBudgetExhausted = false, reconnectInProgress = false)
         timeline = timeline.validSample(clock.elapsedRealtimeMs())
         publishFreshness(bpm)
-        scheduleFreshness(delayMs = LIVE_STALE_MS)
+        scheduleFreshness(LIVE_STALE_MS)
     }
 
-    fun parseFailure(target: Long, attempt: Long) {
+    fun parseFailure(target: Long, attempt: Long) =
         technicalFailure(target, attempt, HeartRateFreshnessReason.PARSE_FAILED)
-    }
 
     fun disconnected(target: Long, attempt: Long) {
         if (!isCurrentAttempt(target, attempt)) return
@@ -158,50 +149,54 @@ internal class HeartRateForegroundReconnectController(
         cancelAttemptTasks()
         timeline = timeline.disconnected()
         publishFreshness()
-        scheduleRetryIfEligible()
+        queueOrScheduleRetry()
     }
 
-    fun technicalFailure(
-        target: Long,
-        attempt: Long,
-        reason: HeartRateFreshnessReason
-    ) {
+    fun technicalFailure(target: Long, attempt: Long, reason: HeartRateFreshnessReason) {
         if (!isCurrentAttempt(target, attempt)) return
-        invalidateAttempt(close = true)
+        invalidateAttempt(close = true, cancelRecovery = false)
         timeline = timeline.technicalFailure(reason)
         publishFreshness()
-        scheduleRetryIfEligible()
+        queueOrScheduleRetry()
     }
 
-    fun setForeground(isForeground: Boolean) {
-        foreground = isForeground
-        if (!isForeground) cancelAutomaticRecovery(close = true)
+    fun setForeground(value: Boolean) {
+        foreground = value
+        if (!value) cancelAutomaticRecovery(close = true)
     }
 
-    fun setDisplayEnabled(enabled: Boolean) {
-        displayEnabled = enabled
-        if (!enabled) cancelAutomaticRecovery(close = true)
+    fun setDisplayEnabled(value: Boolean) {
+        displayEnabled = value
+        if (!value) cancelAutomaticRecovery(close = true)
     }
 
-    fun setPermissionGranted(granted: Boolean) {
-        permissionGranted = granted
-        if (!granted) cancelAutomaticRecovery(close = true)
+    fun setPermissionGranted(value: Boolean) {
+        permissionGranted = value
+        if (!value) cancelAutomaticRecovery(close = true)
     }
 
-    fun setBluetoothEnabled(enabled: Boolean) {
-        bluetoothEnabled = enabled
-        if (!enabled) cancelAutomaticRecovery(close = true)
+    fun setBluetoothEnabled(value: Boolean) {
+        bluetoothEnabled = value
+        if (!value) cancelAutomaticRecovery(close = true)
     }
 
     fun onManualScanStarted() {
-        if (state.kind != HeartRateReconnectRuntimeKind.LIVE) {
-            scanConflict = true
-            cancelAutomaticRecovery(close = activeAttempt)
-        }
+        if (closed) return
+        scanActive = true
+        scanTargetGeneration = targetGeneration
+        scanMayResumeQueue = state.kind == HeartRateReconnectRuntimeKind.LIVE && targetEverLive
+        pendingRetryAfterScan = false
+        scheduler.cancel(HeartRateScheduledTask.RETRY)
+        if (!scanMayResumeQueue) cancelAutomaticRecovery(close = activeAttempt)
     }
 
     fun onManualScanEnded() {
-        scanConflict = false
+        if (!scanActive) return
+        scanActive = false
+        val mayResume = scanMayResumeQueue && pendingRetryAfterScan && scanTargetGeneration == targetGeneration
+        scanMayResumeQueue = false
+        pendingRetryAfterScan = false
+        if (mayResume && eligibleForAutomaticReconnect()) scheduleCurrentRetry()
     }
 
     fun userStop() {
@@ -223,169 +218,152 @@ internal class HeartRateForegroundReconnectController(
         closed = true
         invalidateCurrent(close = true)
         hasRuntimeTarget = false
-        publish(HeartRateReconnectRuntimeState(kind = HeartRateReconnectRuntimeKind.STOPPED))
+        // Provider closes its sinks before this call; keep internal state observable for tests only.
+        state = HeartRateReconnectRuntimeState(kind = HeartRateReconnectRuntimeKind.STOPPED)
     }
 
     private fun startAttempt(manual: Boolean, reconnectAttempt: Int) {
-        if (closed || !hasRuntimeTarget) return
+        if (closed || !hasRuntimeTarget || !baseEligibility() || scanActive) return
         if (!manual && !eligibleForAutomaticReconnect()) return
         scheduler.cancel(HeartRateScheduledTask.RETRY)
         attemptGeneration += 1
         activeAttempt = true
+        val target = targetGeneration
         val attempt = attemptGeneration
+        val epoch = recoveryEpoch
         publish(
             state.copy(
                 kind = HeartRateReconnectRuntimeKind.CONNECTING,
                 reason = null,
-                currentReconnectAttempt = reconnectAttempt,
-                retryBudgetExhausted = false,
+                currentReconnectAttempt = retryAttempt,
+                retryBudgetExhausted = retryBudgetExhausted,
                 reconnectInProgress = !manual,
                 bpm = null,
-                targetGeneration = targetGeneration,
+                targetGeneration = target,
                 attemptGeneration = attempt
             )
         )
-        effectSink(
-            HeartRateReconnectEffect.ConnectDirect(
-                targetGeneration = targetGeneration,
-                attemptGeneration = attempt,
-                reconnectAttempt = reconnectAttempt,
-                manual = manual
-            )
-        )
+        effectSink(HeartRateReconnectEffect.ConnectDirect(target, attempt, reconnectAttempt, manual))
         scheduler.schedule(HeartRateScheduledTask.WATCHDOG, WATCHDOG_MS) {
-            if (isCurrentAttempt(targetGeneration, attempt)) {
-                technicalFailure(targetGeneration, attempt, HeartRateFreshnessReason.CONNECT_FAILED)
+            if (epoch == recoveryEpoch && isCurrentAttempt(target, attempt) && baseEligibility() && !scanActive) {
+                technicalFailure(target, attempt, HeartRateFreshnessReason.CONNECT_FAILED)
             }
         }
     }
 
-    private fun scheduleRetryIfEligible() {
-        if (!eligibleForAutomaticReconnect()) return
+    private fun queueOrScheduleRetry() {
+        if (!automaticFactsEligible()) return
         if (retryAttempt >= MAX_RETRIES) {
             retryBudgetExhausted = true
-            scheduler.cancelAll()
-            publish(
-                state.copy(
-                    currentReconnectAttempt = MAX_RETRIES,
-                    retryBudgetExhausted = true,
-                    reconnectInProgress = false,
-                    bpm = null
-                )
-            )
+            pendingRetryAfterScan = false
+            scheduler.cancel(HeartRateScheduledTask.RETRY)
+            publish(state.copy(currentReconnectAttempt = MAX_RETRIES, retryBudgetExhausted = true, reconnectInProgress = false, bpm = null))
             return
         }
-        val nextAttempt = retryAttempt + 1
-        retryAttempt = nextAttempt
-        publish(
-            state.copy(
-                currentReconnectAttempt = nextAttempt,
-                reconnectInProgress = true,
-                retryBudgetExhausted = false,
-                bpm = null
-            )
-        )
-        val expectedTarget = targetGeneration
-        val delay = RETRY_DELAYS_MS[nextAttempt - 1]
-        scheduler.schedule(HeartRateScheduledTask.RETRY, delay) {
-            if (expectedTarget == targetGeneration && eligibleForAutomaticReconnect()) {
-                startAttempt(manual = false, reconnectAttempt = nextAttempt)
-            }
+        retryAttempt += 1
+        publish(state.copy(currentReconnectAttempt = retryAttempt, retryBudgetExhausted = false, reconnectInProgress = true, bpm = null))
+        if (scanActive) {
+            pendingRetryAfterScan = scanMayResumeQueue && scanTargetGeneration == targetGeneration
+            return
+        }
+        if (eligibleForAutomaticReconnect()) scheduleCurrentRetry()
+    }
+
+    private fun scheduleCurrentRetry() {
+        val attemptNumber = retryAttempt
+        if (attemptNumber !in 1..MAX_RETRIES) return
+        val target = targetGeneration
+        val epoch = recoveryEpoch
+        scheduler.schedule(HeartRateScheduledTask.RETRY, RETRY_DELAYS_MS[attemptNumber - 1]) {
+            if (
+                epoch == recoveryEpoch && target == targetGeneration && retryAttempt == attemptNumber &&
+                eligibleForAutomaticReconnect()
+            ) startAttempt(manual = false, reconnectAttempt = attemptNumber)
         }
     }
 
-    private fun eligibleForAutomaticReconnect(): Boolean =
-        !closed && foreground && displayEnabled && permissionGranted && bluetoothEnabled &&
-            !stopSuppressed && !scanConflict && hasRuntimeTarget && targetEverLive &&
-            !retryBudgetExhausted && !activeAttempt
+    private fun automaticFactsEligible(): Boolean =
+        !closed && baseEligibility() && !stopSuppressed && hasRuntimeTarget && targetEverLive && !retryBudgetExhausted && !activeAttempt
+
+    private fun eligibleForAutomaticReconnect(): Boolean = automaticFactsEligible() && !scanActive
+
+    private fun baseEligibility(): Boolean = foreground && displayEnabled && permissionGranted && bluetoothEnabled
 
     private fun scheduleFreshness(delayMs: Long) {
         scheduler.cancel(HeartRateScheduledTask.FRESHNESS)
         freshnessGeneration += 1
-        val expectedFreshness = freshnessGeneration
-        val expectedTarget = targetGeneration
-        val expectedAttempt = attemptGeneration
+        val freshness = freshnessGeneration
+        val target = targetGeneration
+        val attempt = attemptGeneration
+        val epoch = recoveryEpoch
         scheduler.schedule(HeartRateScheduledTask.FRESHNESS, delayMs) {
-            if (
-                expectedFreshness == freshnessGeneration &&
-                isCurrentAttempt(expectedTarget, expectedAttempt)
-            ) {
-                val decision = publishFreshness()
-                when (decision.kind) {
-                    HeartRateFreshnessKind.WAITING -> scheduleFreshness(FIRST_SAMPLE_STALE_MS)
-                    HeartRateFreshnessKind.LIVE -> scheduleFreshness(LIVE_STALE_MS)
-                    HeartRateFreshnessKind.STALE -> {
-                        val origin = timeline.lastValidSampleElapsedMs
-                            ?: timeline.notifyEnabledAtElapsedMs
-                            ?: clock.elapsedRealtimeMs()
-                        scheduleFreshness((TECHNICAL_ERROR_MS - (clock.elapsedRealtimeMs() - origin)).coerceAtLeast(0L))
-                    }
-                    HeartRateFreshnessKind.TECHNICAL_ERROR -> {
-                        invalidateAttempt(close = true)
-                        scheduleRetryIfEligible()
-                    }
-                    HeartRateFreshnessKind.OFFLINE -> Unit
+            if (epoch != recoveryEpoch || freshness != freshnessGeneration || !isCurrentAttempt(target, attempt)) return@schedule
+            val decision = publishFreshness()
+            when (decision.kind) {
+                HeartRateFreshnessKind.WAITING -> scheduleFreshness(FIRST_SAMPLE_STALE_MS)
+                HeartRateFreshnessKind.LIVE -> scheduleFreshness(LIVE_STALE_MS)
+                HeartRateFreshnessKind.STALE -> {
+                    val origin = timeline.lastValidSampleElapsedMs ?: timeline.notifyEnabledAtElapsedMs ?: clock.elapsedRealtimeMs()
+                    scheduleFreshness((TECHNICAL_ERROR_MS - (clock.elapsedRealtimeMs() - origin)).coerceAtLeast(0L))
                 }
+                HeartRateFreshnessKind.TECHNICAL_ERROR -> {
+                    invalidateAttempt(close = true, cancelRecovery = false)
+                    queueOrScheduleRetry()
+                }
+                HeartRateFreshnessKind.OFFLINE -> Unit
             }
         }
     }
 
     private fun publishFreshness(bpm: Int? = null): HeartRateFreshnessDecision {
         val decision = freshnessPolicy.evaluate(clock.elapsedRealtimeMs(), timeline)
-        val runtimeKind = when (decision.kind) {
+        val kind = when (decision.kind) {
             HeartRateFreshnessKind.WAITING -> HeartRateReconnectRuntimeKind.WAITING
             HeartRateFreshnessKind.LIVE -> HeartRateReconnectRuntimeKind.LIVE
             HeartRateFreshnessKind.STALE -> HeartRateReconnectRuntimeKind.STALE
             HeartRateFreshnessKind.OFFLINE -> HeartRateReconnectRuntimeKind.OFFLINE
             HeartRateFreshnessKind.TECHNICAL_ERROR -> HeartRateReconnectRuntimeKind.TECHNICAL_ERROR
         }
-        publish(
-            state.copy(
-                kind = runtimeKind,
-                reason = decision.reason,
-                retryBudgetExhausted = retryBudgetExhausted,
-                reconnectInProgress = state.reconnectInProgress && runtimeKind != HeartRateReconnectRuntimeKind.LIVE,
-                bpm = if (runtimeKind == HeartRateReconnectRuntimeKind.LIVE) bpm ?: state.bpm else null,
-                targetGeneration = targetGeneration,
-                attemptGeneration = attemptGeneration
-            )
-        )
+        publish(state.copy(kind = kind, reason = decision.reason, retryBudgetExhausted = retryBudgetExhausted,
+            reconnectInProgress = state.reconnectInProgress && kind != HeartRateReconnectRuntimeKind.LIVE,
+            bpm = if (kind == HeartRateReconnectRuntimeKind.LIVE) bpm ?: state.bpm else null,
+            targetGeneration = targetGeneration, attemptGeneration = attemptGeneration))
         return decision
     }
 
     private fun cancelAutomaticRecovery(close: Boolean) {
+        recoveryEpoch += 1
         scheduler.cancelAll()
+        pendingRetryAfterScan = false
+        scanMayResumeQueue = false
         freshnessGeneration += 1
-        if (close) invalidateAttempt(close = true) else activeAttempt = false
+        if (close) invalidateAttempt(close = true, cancelRecovery = false) else activeAttempt = false
         if (hasRuntimeTarget && state.kind !in setOf(HeartRateReconnectRuntimeKind.IDLE, HeartRateReconnectRuntimeKind.STOPPED)) {
             timeline = timeline.disconnected()
-            publish(
-                state.copy(
-                    kind = HeartRateReconnectRuntimeKind.OFFLINE,
-                    reason = HeartRateFreshnessReason.GATT_DISCONNECTED,
-                    reconnectInProgress = false,
-                    bpm = null,
-                    attemptGeneration = attemptGeneration
-                )
-            )
+            publish(state.copy(kind = HeartRateReconnectRuntimeKind.OFFLINE, reason = HeartRateFreshnessReason.GATT_DISCONNECTED,
+                reconnectInProgress = false, bpm = null, attemptGeneration = attemptGeneration))
         }
     }
 
     private fun invalidateCurrent(close: Boolean) {
+        recoveryEpoch += 1
         scheduler.cancelAll()
+        pendingRetryAfterScan = false
+        scanMayResumeQueue = false
+        scanActive = false
         freshnessGeneration += 1
-        invalidateAttempt(close)
+        invalidateAttempt(close, cancelRecovery = false)
     }
 
-    private fun invalidateAttempt(close: Boolean) {
+    private fun invalidateAttempt(close: Boolean, cancelRecovery: Boolean = true) {
+        if (cancelRecovery) recoveryEpoch += 1
         val oldAttempt = attemptGeneration
         val oldTarget = targetGeneration
+        val wasActive = activeAttempt
         activeAttempt = false
         attemptGeneration += 1
         cancelAttemptTasks()
-        if (close && oldAttempt > 0L) {
-            effectSink(HeartRateReconnectEffect.CloseAttempt(oldTarget, oldAttempt))
-        }
+        if (close && wasActive && oldAttempt > 0L) effectSink(HeartRateReconnectEffect.CloseAttempt(oldTarget, oldAttempt))
     }
 
     private fun cancelAttemptTasks() {
@@ -395,9 +373,10 @@ internal class HeartRateForegroundReconnectController(
     }
 
     private fun isCurrentAttempt(target: Long, attempt: Long): Boolean =
-        hasRuntimeTarget && activeAttempt && target == targetGeneration && attempt == attemptGeneration
+        !closed && hasRuntimeTarget && activeAttempt && target == targetGeneration && attempt == attemptGeneration
 
     private fun publish(next: HeartRateReconnectRuntimeState) {
+        if (closed) return
         state = next
         effectSink(HeartRateReconnectEffect.StateChanged(next))
     }

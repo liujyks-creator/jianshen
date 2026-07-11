@@ -42,7 +42,8 @@ class HeartRateForegroundReconnectControllerTest {
         assertEquals(HeartRateReconnectRuntimeKind.TECHNICAL_ERROR, fixture.state.kind)
         assertEquals(HeartRateFreshnessReason.FIRST_SAMPLE_SILENCE, fixture.state.reason)
 
-        fixture.controller.beginManualTarget()
+        fixture.controller.selectNewTarget()
+        fixture.controller.beginManualAttempt()
         val recovered = fixture.latestConnect()
         fixture.controller.notifyEnabled(recovered.targetGeneration, recovered.attemptGeneration)
         fixture.controller.validSample(recovered.targetGeneration, recovered.attemptGeneration, 91)
@@ -143,7 +144,8 @@ class HeartRateForegroundReconnectControllerTest {
         val fixture = Fixture()
         val old = fixture.liveManualAttempt()
         fixture.controller.disconnected(old.targetGeneration, old.attemptGeneration)
-        val nextTarget = fixture.controller.beginManualTarget()
+        val nextTarget = fixture.controller.selectNewTarget()
+        fixture.controller.beginManualAttempt()
         val fresh = fixture.latestConnect()
         assertTrue(nextTarget > old.targetGeneration)
 
@@ -231,7 +233,7 @@ class HeartRateForegroundReconnectControllerTest {
         fixture.advance(60_000)
         assertEquals(1, fixture.connects.size)
 
-        fixture.controller.beginManualTarget()
+        fixture.controller.beginManualAttempt()
         assertEquals(2, fixture.connects.size)
     }
 
@@ -272,6 +274,124 @@ class HeartRateForegroundReconnectControllerTest {
         assertTrue(backoff.scheduler.isEmpty())
     }
 
+    @Test
+    fun sameTargetManualAttemptsPreservePartialAndExhaustedBudgetUntilValidBpm() {
+        val fixture = Fixture()
+        val first = fixture.liveManualAttempt()
+        val target = first.targetGeneration
+        fixture.controller.disconnected(target, first.attemptGeneration)
+        fixture.advance(2_000)
+        val retry = fixture.latestConnect()
+        fixture.controller.technicalFailure(retry.targetGeneration, retry.attemptGeneration, HeartRateFreshnessReason.CONNECT_FAILED)
+        assertEquals(2, fixture.state.currentReconnectAttempt)
+
+        fixture.controller.beginManualAttempt()
+        val partialManual = fixture.latestConnect()
+        assertEquals(target, partialManual.targetGeneration)
+        assertTrue(partialManual.manual)
+        assertEquals(2, fixture.state.currentReconnectAttempt)
+        fixture.controller.technicalFailure(target, partialManual.attemptGeneration, HeartRateFreshnessReason.CONNECT_FAILED)
+        assertEquals(3, fixture.state.currentReconnectAttempt)
+        fixture.advance(10_000)
+        val lastRetry = fixture.latestConnect()
+        fixture.controller.technicalFailure(target, lastRetry.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
+        assertTrue(fixture.state.retryBudgetExhausted)
+
+        fixture.controller.beginManualAttempt()
+        val exhaustedManual = fixture.latestConnect()
+        assertEquals(target, exhaustedManual.targetGeneration)
+        assertTrue(fixture.state.retryBudgetExhausted)
+        assertEquals(3, fixture.state.currentReconnectAttempt)
+        fixture.controller.notifyEnabled(target, exhaustedManual.attemptGeneration)
+        assertTrue(fixture.state.retryBudgetExhausted)
+        fixture.controller.validSample(target, exhaustedManual.attemptGeneration, 79)
+        assertFalse(fixture.state.retryBudgetExhausted)
+        assertEquals(0, fixture.state.currentReconnectAttempt)
+
+        fixture.controller.selectNewTarget()
+        assertFalse(fixture.state.retryBudgetExhausted)
+        assertEquals(0, fixture.state.currentReconnectAttempt)
+        assertTrue(fixture.state.targetGeneration > target)
+    }
+
+    @Test
+    fun liveScanPausesDisconnectAndSilenceRecoveryThenResumesRemainingQueue() {
+        val disconnected = Fixture()
+        val live = disconnected.liveManualAttempt()
+        disconnected.controller.onManualScanStarted()
+        disconnected.controller.disconnected(live.targetGeneration, live.attemptGeneration)
+        assertFalse(disconnected.scheduler.has(HeartRateScheduledTask.RETRY))
+        assertEquals(1, disconnected.state.currentReconnectAttempt)
+        disconnected.controller.onManualScanEnded()
+        assertEquals(2_000L, disconnected.scheduler.delayFor(HeartRateScheduledTask.RETRY))
+        disconnected.advance(2_000)
+        assertEquals(2, disconnected.connects.size)
+
+        val silence = Fixture()
+        silence.liveManualAttempt()
+        silence.controller.onManualScanStarted()
+        silence.advance(30_000)
+        assertEquals(HeartRateReconnectRuntimeKind.TECHNICAL_ERROR, silence.state.kind)
+        assertFalse(silence.scheduler.has(HeartRateScheduledTask.RETRY))
+        silence.controller.onManualScanEnded()
+        assertEquals(2_000L, silence.scheduler.delayFor(HeartRateScheduledTask.RETRY))
+    }
+
+    @Test
+    fun scanQueueNeverResumesAfterNewTargetEligibilityLossOrNonLiveScan() {
+        val newTarget = Fixture()
+        val live = newTarget.liveManualAttempt()
+        newTarget.controller.onManualScanStarted()
+        newTarget.controller.disconnected(live.targetGeneration, live.attemptGeneration)
+        newTarget.controller.selectNewTarget()
+        newTarget.controller.onManualScanEnded()
+        newTarget.advance(60_000)
+        assertEquals(1, newTarget.connects.size)
+
+        val lost = Fixture()
+        val liveLost = lost.liveManualAttempt()
+        lost.controller.onManualScanStarted()
+        lost.controller.disconnected(liveLost.targetGeneration, liveLost.attemptGeneration)
+        lost.controller.setPermissionGranted(false)
+        lost.controller.setPermissionGranted(true)
+        lost.controller.onManualScanEnded()
+        lost.advance(60_000)
+        assertEquals(1, lost.connects.size)
+
+        val nonLive = Fixture()
+        val waiting = nonLive.manualAttempt()
+        nonLive.controller.notifyEnabled(waiting.targetGeneration, waiting.attemptGeneration)
+        nonLive.controller.onManualScanStarted()
+        nonLive.controller.onManualScanEnded() // includes timeout semantics
+        nonLive.advance(60_000)
+        assertEquals(1, nonLive.connects.size)
+    }
+
+    @Test
+    fun canceledClosuresCannotResurrectAfterConditionsRecover() {
+        val fixture = Fixture()
+        val live = fixture.liveManualAttempt()
+        fixture.controller.disconnected(live.targetGeneration, live.attemptGeneration)
+        fixture.controller.setForeground(false)
+        fixture.controller.setForeground(true)
+        fixture.scheduler.runCanceled(HeartRateScheduledTask.RETRY)
+        assertEquals(1, fixture.connects.size)
+
+        fixture.controller.beginManualAttempt()
+        fixture.controller.setBluetoothEnabled(false)
+        fixture.controller.setBluetoothEnabled(true)
+        fixture.scheduler.runCanceled(HeartRateScheduledTask.WATCHDOG)
+        assertFalse(fixture.state.retryBudgetExhausted)
+
+        fixture.controller.beginManualAttempt()
+        val manual = fixture.latestConnect()
+        fixture.controller.notifyEnabled(manual.targetGeneration, manual.attemptGeneration)
+        fixture.controller.setDisplayEnabled(false)
+        fixture.controller.setDisplayEnabled(true)
+        fixture.scheduler.runCanceled(HeartRateScheduledTask.FRESHNESS)
+        assertEquals(HeartRateReconnectRuntimeKind.OFFLINE, fixture.state.kind)
+    }
+
     private class Fixture {
         val clock = FakeClock()
         val scheduler = FakeScheduler(clock)
@@ -283,7 +403,8 @@ class HeartRateForegroundReconnectControllerTest {
             get() = controller.currentState()
 
         fun manualAttempt(): HeartRateReconnectEffect.ConnectDirect {
-            controller.beginManualTarget()
+            controller.selectNewTarget()
+            controller.beginManualAttempt()
             return latestConnect()
         }
 
@@ -305,22 +426,26 @@ class HeartRateForegroundReconnectControllerTest {
     private class FakeScheduler(private val clock: FakeClock) : HeartRateControllerScheduler {
         private data class Entry(val atMs: Long, val action: () -> Unit)
         private val entries = EnumMap<HeartRateScheduledTask, Entry>(HeartRateScheduledTask::class.java)
+        private val canceled = EnumMap<HeartRateScheduledTask, Entry>(HeartRateScheduledTask::class.java)
 
         override fun schedule(task: HeartRateScheduledTask, delayMs: Long, action: () -> Unit) {
             entries[task] = Entry(clock.nowMs + delayMs, action)
         }
 
         override fun cancel(task: HeartRateScheduledTask) {
-            entries.remove(task)
+            entries.remove(task)?.let { canceled[task] = it }
         }
 
         override fun cancelAll() {
-            entries.clear()
+            HeartRateScheduledTask.entries.forEach(::cancel)
         }
 
         fun has(task: HeartRateScheduledTask): Boolean = entries.containsKey(task)
         fun isEmpty(): Boolean = entries.isEmpty()
         fun delayFor(task: HeartRateScheduledTask): Long = entries.getValue(task).atMs - clock.nowMs
+        fun runCanceled(task: HeartRateScheduledTask) {
+            canceled.remove(task)?.action?.invoke()
+        }
 
         fun advanceBy(deltaMs: Long) {
             val target = clock.nowMs + deltaMs
