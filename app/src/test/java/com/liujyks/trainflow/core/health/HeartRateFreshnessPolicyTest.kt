@@ -93,6 +93,121 @@ class HeartRateFreshnessPolicyTest {
     }
 
     @Test
+    fun disconnectCannotBypassNotifyTimestampValidation() {
+        val disconnected = HeartRateFreshnessTimeline()
+            .notifyEnabled(atElapsedMs = 1_000)
+            .disconnected()
+
+        assertDecision(
+            disconnected,
+            999,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
+    fun technicalFailureCannotBypassSampleTimestampValidation() {
+        val failed = HeartRateFreshnessTimeline()
+            .notifyEnabled(atElapsedMs = 1_000)
+            .validSample(atElapsedMs = 2_000)
+            .technicalFailure(HeartRateFreshnessReason.PARSE_FAILED)
+
+        assertDecision(
+            failed,
+            1_999,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
+    fun failureOnlyTimelineStillRejectsNegativeNow() {
+        assertDecision(
+            HeartRateFreshnessTimeline().disconnected(),
+            -1,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
+    fun failureOnlyTimelinesMapFactsWithoutNotifyOrSampleTimestamps() {
+        assertDecision(
+            HeartRateFreshnessTimeline().disconnected(),
+            1_000,
+            HeartRateFreshnessKind.OFFLINE,
+            HeartRateFreshnessReason.GATT_DISCONNECTED
+        )
+        assertDecision(
+            HeartRateFreshnessTimeline().technicalFailure(HeartRateFreshnessReason.CONNECT_FAILED),
+            1_000,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.CONNECT_FAILED
+        )
+    }
+
+    @Test
+    fun failureFactsStillMapAfterValidMonotonicTimestamps() {
+        val validTimeline = HeartRateFreshnessTimeline()
+            .notifyEnabled(atElapsedMs = 1_000)
+            .validSample(atElapsedMs = 2_000)
+
+        assertDecision(
+            validTimeline.disconnected(),
+            2_001,
+            HeartRateFreshnessKind.OFFLINE,
+            HeartRateFreshnessReason.GATT_DISCONNECTED
+        )
+        assertDecision(
+            validTimeline.technicalFailure(HeartRateFreshnessReason.PARSE_FAILED),
+            2_001,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.PARSE_FAILED
+        )
+    }
+
+    @Test
+    fun failureTimelineRejectsSampleBeforeNotifyEnabled() {
+        val failed = HeartRateFreshnessTimeline(
+            notifyEnabledAtElapsedMs = 2_000,
+            lastValidSampleElapsedMs = 1_999,
+            latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
+        )
+
+        assertDecision(
+            failed,
+            3_000,
+            HeartRateFreshnessKind.TECHNICAL_ERROR,
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        )
+    }
+
+    @Test
+    fun failureTimelineRejectsNegativePresentTimestamps() {
+        val cases = listOf(
+            HeartRateFreshnessTimeline(
+                notifyEnabledAtElapsedMs = -1,
+                latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
+            ),
+            HeartRateFreshnessTimeline(
+                notifyEnabledAtElapsedMs = 0,
+                lastValidSampleElapsedMs = -1,
+                latestFailureReason = HeartRateFreshnessReason.PARSE_FAILED
+            )
+        )
+
+        cases.forEach { timeline ->
+            assertDecision(
+                timeline,
+                1_000,
+                HeartRateFreshnessKind.TECHNICAL_ERROR,
+                HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+            )
+        }
+    }
+
+    @Test
     fun technicalFailuresRemainTechnicalErrors() {
         val reasons = listOf(
             HeartRateFreshnessReason.CONNECT_FAILED,

@@ -46,6 +46,10 @@ internal class HeartRateFreshnessPolicy {
         nowElapsedMs: Long,
         timeline: HeartRateFreshnessTimeline
     ): HeartRateFreshnessDecision {
+        if (!hasValidMonotonicStructure(nowElapsedMs, timeline)) {
+            return invalidTimeDecision()
+        }
+
         timeline.latestFailureReason?.let { reason ->
             return HeartRateFreshnessDecision(
                 kind = if (reason == HeartRateFreshnessReason.GATT_DISCONNECTED) {
@@ -60,23 +64,34 @@ internal class HeartRateFreshnessPolicy {
         val notifyEnabledAtElapsedMs = timeline.notifyEnabledAtElapsedMs
             ?: return invalidTimeDecision()
         val lastValidSampleElapsedMs = timeline.lastValidSampleElapsedMs
-        if (
-            nowElapsedMs < 0L ||
-            notifyEnabledAtElapsedMs < 0L ||
-            notifyEnabledAtElapsedMs > nowElapsedMs ||
-            lastValidSampleElapsedMs != null && (
-                lastValidSampleElapsedMs < notifyEnabledAtElapsedMs ||
-                    lastValidSampleElapsedMs > nowElapsedMs
-                )
-        ) {
-            return invalidTimeDecision()
-        }
 
         return if (lastValidSampleElapsedMs == null) {
             evaluateFirstSampleWait(nowElapsedMs - notifyEnabledAtElapsedMs)
         } else {
             evaluateValidSampleAge(nowElapsedMs - lastValidSampleElapsedMs)
         }
+    }
+
+    private fun hasValidMonotonicStructure(
+        nowElapsedMs: Long,
+        timeline: HeartRateFreshnessTimeline
+    ): Boolean {
+        if (nowElapsedMs < 0L) return false
+
+        val notifyEnabledAtElapsedMs = timeline.notifyEnabledAtElapsedMs
+        val lastValidSampleElapsedMs = timeline.lastValidSampleElapsedMs
+        val presentTimestamps = listOfNotNull(
+            notifyEnabledAtElapsedMs,
+            lastValidSampleElapsedMs
+        )
+
+        if (presentTimestamps.any { timestamp -> timestamp < 0L || timestamp > nowElapsedMs }) {
+            return false
+        }
+
+        return notifyEnabledAtElapsedMs == null ||
+            lastValidSampleElapsedMs == null ||
+            lastValidSampleElapsedMs >= notifyEnabledAtElapsedMs
     }
 
     private fun evaluateFirstSampleWait(ageMs: Long): HeartRateFreshnessDecision = when {
