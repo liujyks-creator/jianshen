@@ -2,15 +2,6 @@
 
 Use this template for the review gate after a TrainFlow development story is implemented and pushed. If review finds no blocking issues and all merge preconditions pass, this gate may also merge the story branch into `main` and push `origin/main`.
 
-## Prompt Packaging
-
-When the main control conversation sends a completed Code Review prompt to a separate review conversation:
-
-- Return the entire copy-ready prompt in exactly one outer `text` code block so the user can use its top-right copy button.
-- Do not place any required instruction outside that outer block.
-- Do not nest triple-backtick fences inside it. Put command lines directly below a label such as `执行：`; do not create a second Markdown code block for commands.
-- Do not split verification, boundary checks, or merge rules into separate code blocks.
-
 ```text
 你是 TrainFlow 项目的 Code Review 对话。
 
@@ -21,7 +12,7 @@ Code Review <Story ID>: <Story 名称>
 C:/Users/25073/Desktop/jianshen
 
 目标：
-对已完成并推送的 <story branch> 做正式 code review。重点审查阶段范围、架构边界、数据契约、UI 状态流、测试覆盖、潜在 bug 和范围倒灌。如果没有 blocker / must-fix / should-fix，验证、同步、禁区文件检查和本 Story 明确列出的全部 merge prerequisite 都通过，则直接将 <story branch> 以 `--no-ff` 合入 `main` 并推送 `origin/main`。如果发现问题，则不要合并 main，输出 findings 和修复建议；如果只缺明确列出的外部人工验收 gate，则保持 review 通过但不合并。不开始下一阶段。
+对已完成并推送的 <story branch> 做正式 code review。重点审查阶段范围、架构边界、数据契约、UI 状态流、测试覆盖、潜在 bug 和范围倒灌。如果没有 blocker / must-fix / should-fix 且验证、同步和禁区文件检查都通过，则直接将 <story branch> 以 `--no-ff` 合入 `main` 并推送 `origin/main`。如果发现问题，则不要合并 main，输出 findings 和修复建议。不开始下一阶段。
 
 固定规则：
 - 不创建新的 git worktree。
@@ -29,7 +20,7 @@ C:/Users/25073/Desktop/jianshen
 - 不把工程建到临时目录或其他目录。
 - 只在 C:/Users/25073/Desktop/jianshen 工作。
 - 不 reset、不 rebase、不强推。
-- 只有在 review 无 blocker / must-fix / should-fix、验证通过、main 与 origin/main 同步、story branch 与 origin/<story branch> 同步、禁区文件未 staged / 未提交，且本 Story 明确列出的全部 merge prerequisite（包括被指定为前置条件的人工真机验收）均满足时，才允许合并 <story branch> 到 main。
+- 只有在 review 无 blocker / must-fix / should-fix、验证通过、main 与 origin/main 同步、story branch 与 origin/<story branch> 同步、禁区文件未 staged / 未提交时，才允许合并 <story branch> 到 main。
 - 不开始下一阶段。
 - 本轮默认先做 review；若 review 通过并满足合并条件，可执行合并和推送。除非用户明确要求修复，不要改代码。
 - 不提交 skills/、.local/、build 输出、日志、设备输出、node_modules、dist 或本地临时文件。
@@ -48,11 +39,10 @@ Windows 文本编码规则：
 当前状态：
 - main 当前 commit：<main commit>
 - Story 分支：<story branch>
-- Story 完整 commit SHA：<immutable story full commit SHA；不得只写短 SHA 或以 branch tip 替代>
+- Story commit：<story commit>
 - Story 是否已推送：<是/否>
 - Story 是否已合入 main：<是/否>
-- 前置 Story review 状态：<reviewed / merged | reviewed / pending real-device acceptance | reviewed / pending merge | changes requested | not reviewed>
-- Story 特有 merge prerequisite：<无 / 人工真机验收 / 其他明确 gate；逐项写明是否已满足>
+- 前置 Story review 状态：<reviewed / changes requested / not reviewed>
 
 环境提醒：
 - 如果需要运行 Android 验证，先尝试在当前 PowerShell 会话运行：
@@ -96,35 +86,27 @@ Android 虚拟测试环境（审查 UI / APK / smoke / 真机截图修复时必�
 - .local/ 是否仍未被 Git 跟踪
 - 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
 
-规则与文档读取策略：
-- 先运行 `rg --files -g AGENTS.md`，读取根 `AGENTS.md` 及目标目录下更具体的适用规则文件。
-- 核心必读：`docs/project-status.md`、`docs/planning/decision-log.md`、本 Story 的 testing / decision / review 文档。
-- 按 Story 变更范围补读，不要默认全量阅读不相关长文档：
-  - 新产品能力、PRD、用户流程或产品决策：`docs/planning/product-brief.md`、`docs/planning/prd.md`、`docs/planning/ux-design.md`。
-  - 数据契约、Room、持久化、engine、command/event、session：`docs/planning/data-contracts.md`、`docs/architecture.md`。
-  - UI、Compose、布局、主题、交互、视觉修复：`DESIGN.md`、`docs/ui-extension-guide.md`、相关 HTML / design decision。
-  - backlog、readiness、状态或 docs-only：`docs/roadmap-backlog.md`、`docs/readiness-report.md`。
-  - 环境、Gradle、AVD、APK、adb、测试命令：`docs/setup.md`。
-  - prototype：`prototype/src/data/contracts.ts` 和相关 prototype 文件。
-- 当 Story diff 或已读文档显示跨边界风险时，再扩展阅读范围。
-
-跨对话 / 跨模型一致性：
-- Review 必须从当前 Git diff、accepted decision IDs、Story 文档、测试和证据重建事实，不依赖开发模型的隐性记忆或交付摘要中的未验证结论。
-- `implemented`、branch 已 push、review 文本写 PASS、人工测试通过都不等于已合入；人工测试仅在它被明确列为本 Story merge prerequisite 时参与本次合并判定。在 merge commit 推送并通过 ancestry / sync 检查前，下游 Story 保持 locked。
-- 如果 Git ancestry、状态文档和交付报告互相矛盾，停止合并并给出 scoped docs-sync / fix finding；不得用模型判断替代可验证的 merge 事实。
+必读状态文档：
+1. AGENTS.md
+2. docs/project-status.md
+3. docs/roadmap-backlog.md
+4. docs/readiness-report.md
+5. docs/planning/decision-log.md
+6. docs/planning/product-brief.md
+7. docs/planning/prd.md
+8. docs/planning/ux-design.md
+9. docs/planning/data-contracts.md
+10. docs/architecture.md
+11. DESIGN.md
+12. docs/ui-extension-guide.md
+13. docs/setup.md
+14. prototype/src/data/contracts.ts
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
 - 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；审查 UI 时仍必须确认生成结果消费了 DESIGN.md 和项目文档，而不是猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞 review。
 - 如 Android emulator QA skill 可用，Android UI / APK / smoke / 截图验证类 review 先读取并遵循；如不可用，仍必须使用上方 `.local/android-sdk` 路径尝试 `adb devices` 和 AVD 检查。
 - skills/ 是本地辅助目录，不应提交。
-
-Review 子代理策略（只读）：
-- Review 主代理可自行决定使用 0–2 个 explorer 子代理，只在审查范围足够大且存在互不重叠的核查维度时使用。
-- 每个 explorer 先读取适用 `AGENTS.md`、核心状态文档和所分配审查维度的相关文档；UI / 视觉审查遵循 `huashu-design`（如可用）、`DESIGN.md` 与既有视觉方案。
-- explorer 只能做只读检查，报告文件路径、行号、证据和风险；不得改代码、写文档、stage、commit、push、合并或批准 review。
-- 适合并行核查：状态机/生命周期、数据/架构边界、UI smoke 与证据、文档同步和禁区文件。
-- Review 主代理负责整合 findings、执行最终验证和唯一的 merge 判断。子代理不可用或不适合时，主 review 代理继续单代理完成。
 
 当前 Story 原目标：
 - <一句话说明本阶段原目标>
@@ -189,8 +171,7 @@ Review 子代理策略（只读）：
 Review 后处理规则：
 - 如果发现 blocker / must-fix / should-fix：不要合并 main；输出 findings、最小修复建议和修复提示词要点，停止。
 - 如果只有 nice-to-have：默认可以合并，但必须在输出中说明剩余建议；如果 nice-to-have 实际影响验收、数据安全、架构边界或用户风险，应提升为 should-fix 并停止。
-- 如果没有 blocker / must-fix / should-fix，但明确列为 merge prerequisite 的人工真机验收尚未完成：不要合并；状态为 `reviewed / pending real-device acceptance`，这不是代码 finding，下游 Story 仍 locked。
-- 如果没有 blocker / must-fix / should-fix，且验证通过、story branch 与 origin/<story branch> 同步、main 与 origin/main 同步、禁区文件未 staged / 未提交、本 Story 的全部 merge prerequisite 均满足：直接将 story branch 以 `--no-ff` 合入 main 并 push origin main。
+- 如果没有 blocker / must-fix / should-fix，且验证通过、story branch 与 origin/<story branch> 同步、main 与 origin/main 同步、禁区文件未 staged / 未提交：直接将 story branch 以 `--no-ff` 合入 main 并 push origin main。
 - 合并前必须再次确认：
   - git status
   - git rev-list --left-right --count main...origin/main
@@ -207,10 +188,8 @@ Review 后处理规则：
 - 合并后必须确认：
   - git rev-parse main origin/main
   - git rev-list --left-right --count main...origin/main
-  - git merge-base --is-ancestor <story-full-commit-sha> main
+  - <story commit> 是 main ancestor
   - git status
-- 只有上述合并后检查全部通过，才能报告 `reviewed / merged` 并标记依赖该 Story 的下游任务为 unlocked。
-- 如果 review 和全部 Story 特有 merge prerequisite 已通过，但因为同步、冲突、推送或其他操作性原因尚未 merge / push，状态为 `reviewed / pending merge`，下游任务仍 locked。
 - 如 main 不同步、story branch 不同步、验证失败、merge conflict、禁区文件 staged / tracked、或合并后 main 与 origin/main 不一致：停止并报告，不要强推、不要 reset、不要自行修复无关文件。
 
 输出要求：
@@ -224,7 +203,7 @@ Review 后处理规则：
   - 是否已合入 main
   - merge commit（如已合并）
   - 是否已推送 origin/main（如已合并）
-  - Story 状态必须从以下选择：`changes requested`、`reviewed / pending real-device acceptance`、`reviewed / pending merge`、`reviewed / merged`
+  - Story 状态应为 implemented、changes requested，还是 reviewed
   - 是否需要修复 commit
   - 是否可以进入下一阶段
   - 本轮是否运行验证以及结果
@@ -232,8 +211,6 @@ Review 后处理规则：
   - 是否确认没有触碰禁止范围
   - 是否确认 skills/ 和 .local/ 未提交
   - 是否确认 APK、countdown_beep1.mp3、deliverables/、人工/ 未提交
-  - 如使用 review explorer：各 explorer 的核查范围、证据和主 review 代理的整合结论
-  - 下游 Story 是否 unlocked；必须附 main/origin 同步和 immutable story full commit SHA ancestry 依据
   - 仍有哪些风险或技术债
   - 给主管理对话的下一步建议
 ```
