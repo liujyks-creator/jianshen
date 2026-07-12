@@ -2745,14 +2745,14 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 
 ### E17 心率子系统重新规划
 
-1. **E17-0 Heart-rate correct-course / E16 retrospective and E17 reset**：关闭并保留 E16 历史支线，审计失败分支，分类遗产，冻结胶囊视觉与互动，重置状态、decision、roadmap、readiness、architecture 和提示词流程。（Implemented / needs review; active）
+1. **E17-0 Heart-rate correct-course / E16 retrospective and E17 reset**：将 E16 原始代码与文档封存为 sealed historical archive / reference only；胶囊视觉与互动作为 `adopted / frozen / direct reuse` 资产直接采用；审计失败分支并重置状态、decision、roadmap、readiness、architecture 和提示词流程。（Implemented / needs review; active）
 2. **E17-1 Band 9 与标准 HRS 重新复验**：重新验证广播、UUID、CCCD、notify、payload、identifier 和 Huawei Health 互斥；真机事实不继承旧 E16 acceptance。（Planned / locked）
 3. **E17-2 产品范围重新定义**：重新决定 opt-in、权限、隐私、未训练显示、saved device、手动恢复、状态语义、记录边界和自动重连价值。（Planned / locked）
 4. **E17-3 最小技术架构**：重新设计原生 GATT ownership、callback 串行化、permission failure、scan/connect/close、事实 / presentation 与测试层级，必须适合小型 App。（Planned / locked）
 5. **E17-4 Implementation readiness**：对齐产品、架构、胶囊状态接线、测试矩阵和 Story 拆分；未通过不得写 production 代码。（Planned / locked）
 6. **E17 implementation directions**：parser / platform boundary、manual scan-connect、presentation mapping、可选 reconnect 等仅为 provisional；E17-4 reviewed / merged 后才能生成正式编号和 Story。（Provisional / locked）
 
-E17 阶段按 immutable full SHA + `main` ancestry 串行解锁。当前下一步只能是 E17-0 独立 Code Review；E17-1 至 E17-4 均未解锁。
+E17 阶段按 immutable full SHA + `main` ancestry 串行解锁。E17-0 必须先通过独立 Code Review，再以 `--no-ff` 合入 `main` 并推送，使 E17-0 immutable Story SHA 成为 `main` ancestor；随后完成独立 E17-0 closeout docs-sync 的开发、独立 Review、合入与推送，使 closeout immutable SHA 成为 `main` ancestor；最后确认 `main...origin/main = 0 0`，且 project-status、roadmap、readiness 与 E17 计划状态一致，E17-1 才可解锁。E17-0 merge 后不得立即开始 E17-1。当前下一步只能是 E17-0 独立 Code Review；E17-1 至 E17-4 均 locked，不开始 Band 9 / HRS 复验，不开始 E17 产品、架构、readiness 或 production 实现，自动重连不作为默认前置。
 32. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
 31. E12.1：真实记录与基础统计。（Implemented）
 32. E12.2a：非心率历史图表与聚合趋势。（Implemented）
@@ -2806,7 +2806,7 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、健康数据边界、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 与 E16 已合入 Story 继续保留历史 Git 事实；E16 umbrella 已由 correct-course 关闭并被 E17 supersede。E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，永久禁止合并；b3 / b4 旧路线终止，E16-11 / E16-12 不自动进入 E17。唯一冻结项为浮动胶囊视觉与互动，其他结论按 E17 重新评估。当前 active 为 E17-0 implemented / needs review，E17-1 至 E17-4 locked。
+E11.1 与 E16 已合入 Story 继续保留历史 Git 事实；E16 umbrella 已由 correct-course 关闭并被 E17 supersede，E16 原始代码和文档为 sealed historical archive / reference only。E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，永久禁止合并；b3 / b4 旧路线终止，E16-11 / E16-12 不自动进入 E17。浮动胶囊视觉与互动为 `adopted / frozen / direct reuse`，runtime 状态与接线不冻结。当前 active 为 E17-0 implemented / needs review，E17-1 至 E17-4 locked；E17-0 merge 后仍须独立 closeout docs-sync 全部门禁完成才可解锁 E17-1。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
@@ -2822,7 +2822,7 @@ E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复
 下一轮建议按 E15 收口后的发布准备优先级进入：
 
 ```text
-E15 系列已收口并保留原历史事实。E16 系列现为 `closed by correct-course / superseded by E17`；已合入 Story 的 merge fact 保留，但不自动成为 E17 acceptance。E16-10b-2 `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。当前下一步只能执行 E17-0 独立 Code Review；E17-1 仍 locked。
+E15 系列已收口并保留原历史事实。E16 系列现为 `closed by correct-course / superseded by E17`，原始代码和文档为 sealed historical archive / reference only；已合入 Story 的 merge fact 保留，但不自动成为 E17 acceptance。E16-10b-2 `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。胶囊视觉与互动为 `adopted / frozen / direct reuse`。当前下一步只能执行 E17-0 独立 Code Review；E17-0 merge 后须完成独立 closeout docs-sync 的开发、Review、merge / push、ancestry、main 同步和状态一致性门禁，E17-1 才可解锁；目前仍 locked。
 ```
 
 E10.15 Motion Timing Rules 回看重点：

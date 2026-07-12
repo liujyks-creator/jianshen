@@ -6,8 +6,6 @@
 **范围：** 前台 live BLE HRS 的 freshness、unexpected disconnect、有限重连与用户可见恢复策略
 **不在范围：** Kotlin/Compose/manifest/Gradle/Room/DataStore schema 改动；自动重连实现；1 秒采样、session record、records/history/trends、E16-11 recording、E16-12 analysis/recap
 
-> **2026-07-12 supersession：** 本文保留为 E16 历史策略记录，不再是当前 implementation contract。E16 已由 correct-course 关闭并被 E17 替代；10 / 15 / 30 秒、2 / 5 / 10 秒和方案 B 均须在 E17 重新评估。E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并；E16-10b-3 / b4 旧路线终止。
-
 ## 1. 结论摘要
 
 已批准 **方案 B：仅对已在当前前台进程成功 live 的同一设备，允许有限、可见、无扫描的直接 GATT 重连**。它只覆盖用户已经显式 opt-in、授权、选择并连接成功过的 runtime target；不把已保存 identifier/displayName 当作在线身份，也不在冷启动、回到前台、蓝牙恢复或权限重新授予时主动创建 retry queue、scan/connect 或恢复旧 attempt。权限恢复后必须等待用户明确点击 `连接已保存设备` 或选择新设备。
@@ -141,7 +139,7 @@ stateDiagram-v2
 ## 8. E16-10b 实现拆分与当前状态
 
 1. **E16-10b-1 policy/core — reviewed / merged:** 纯 Kotlin freshness policy core 已合入 `main`（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）；production provider/runtime 尚未消费该 policy。
-2. **E16-10b-2 foreground reconnect controller — changes requested / superseded:** 失败分支 immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，永久禁止合并。
+2. **E16-10b-2 foreground reconnect controller — unlocked / not started:** 下一步允许创建独立 Dev Story；真实 timer、scheduler、watchdog、retry controller、GATT callback race、old-target guard、scan conflict 和 lifecycle cancellation 仍未实现，且继续禁止自动 scan。
 3. **E16-10b-3 UI mapper/settings copy — locked / not started:** 继续依赖 E16-10b-2；不得提前接入 approved reason / attempt 文案、弱状态色或 `停止连接` UI。
 4. **E16-10b-4 verification / closeout — locked / not started:** 继续依赖 E16-10b-2 / E16-10b-3；尚无 AVD non-BLE mapping closeout 或真实 Band 9 reconnect 验收。
 
@@ -177,4 +175,4 @@ stateDiagram-v2
 
 2026-07-11，主管理对话确认方案 B、10 / 15 / 30 秒 freshness、2 / 5 / 10 秒退避、最多 3 次 retry、每次 10 秒 watchdog、前台同 runtime target 资格、设置页 `停止连接` 操作，以及 retry exhausted 不产生新事实状态、沿用最近真实失败原因对应的 `离线` / `连接异常` 并补充手动恢复文案。权限丢失必须取消 retry、stop scan、关闭 GATT并停止相关动作；重新授予后不得自动创建 queue、scan/connect 或恢复旧 attempt，必须等待用户明确连接。方案 C 的自动扫描恢复不进入当前策略。
 
-E16-10a 与 E16-10b-1 的 **reviewed / merged** Git 事实保留；E16 umbrella 当前已 **closed by correct-course / superseded by E17**。不得把历史合入写成 E17 已接受，亦不得继续旧 E16-10b-2 / b3 / b4 路线。
+E16-10a 的 docs-only 策略已 **reviewed / merged**（merge commit `56d8029719889d329680f3dc099a77ae94909142`）。E16-10b umbrella 当前为 **in progress**：E16-10b-1 纯 Kotlin policy core 已 **reviewed / merged**（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`），但 production provider/runtime 尚未消费该 policy；E16-10b-2 仅为 **unlocked / not started**。不得把这些状态写成 timer、自动重连、自动扫描、UI 操作或真实 BLE 验证已经实现。

@@ -12,8 +12,6 @@
 
 **范围：** 纯 Kotlin monotonic freshness policy / model 与 focused JVM tests
 
-> **2026-07-12 supersession：** 本文的 reviewed / merged 是不可变历史事实；E16 umbrella 已由 correct-course 关闭并被 E17 替代。本文 policy 只作 reference，10 / 15 / 30 秒与 reason model 不自动成为 E17 acceptance。E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。
-
 ## 实现结论
 
 本 Story 在 `core.health` 新增不可变 `HeartRateFreshnessTimeline`、纯 `HeartRateFreshnessPolicy`、`HeartRateFreshnessDecision`、状态与稳定 reason code。policy 只接收调用方显式提供的 monotonic elapsed-time 数值，不读取 `SystemClock`、wall clock 或用于显示的 `measuredAt`。
@@ -103,4 +101,4 @@ reason code 不包含 GATT status code，也不直接承担用户文案；后续
 - 未修改 WorkoutCommand、WorkoutEvent、TimedWorkoutEngine、StrengthWorkoutEngine、TimerDial、声音、震动、通知或 cue。
 - E16-11 的训练中 1 秒采样 / 持久化与 E16-12 的分析 / 复盘未开始。
 
-E16-10b-1 已作为历史 Story 关闭。production provider/controller/runtime 未在 `main` 接入该 policy；旧 E16-10b-2 路线现已终止。当前下一步只能是 E17-0 独立 Code Review，E17-1 仍 locked。
+E16-10b-1 已关闭。production provider/controller/runtime 仍未接入该 policy；真实 timer、scheduler、watchdog、retry controller、callback race、old-target guard、lifecycle cancellation 与 foreground direct reconnect 仍未实现，全部属于 E16-10b-2。下一步可独立启动 E16-10b-2 Dev Story；这只表示 **unlocked / not started**，不表示 runtime 已实现、进行中或已验证。

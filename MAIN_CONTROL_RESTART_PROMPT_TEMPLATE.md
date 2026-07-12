@@ -47,6 +47,7 @@
 - 生成任何依赖型 Dev Story 前，先执行 `git fetch --prune origin`，并对每个前置完整 commit SHA 执行 `git merge-base --is-ancestor <required-full-commit-sha> main`。branch 仅作定位和核对 SHA 的备注，不得以可移动 branch tip 作为解锁依据。
 - 如果存在已 push 但未 review / merge 的前置分支，下一条提示词必须是该分支的 Review / fix / docs-sync gate，不得提前生成依赖它的 Dev Story。
 - 如果 Git 已合并但状态文档仍写 pending，先做 scoped docs-sync 并 review；如果文档写 merged 但 ancestry 检查失败，以 Git 为准并停止下游任务。
+- 只有 accepted correct-course decision 明确指定时，旧阶段文档才是 `sealed historical archive`：其当时的 current / next / dependency 历史措辞不属于当前指令，也不要求与当前状态逐行同步；当前任务只由 accepted superseding decision 和当前权威状态文档决定。Dev / Review 未经明确 Story 授权不得修改 sealed archive，Review 不得仅因历史措辞提出当前状态 finding，但 sealed archive 在 Story diff 中出现未经授权的修改时必须提出 finding；正常读取历史证据不受限制。
 
 ## 固定禁区
 

@@ -1,6 +1,6 @@
 # E16 心率支线回顾与替代说明
 
-**状态：** E16 已由 correct-course 关闭；历史保留；由 E17 重新规划
+**状态：** E16 已由 correct-course 关闭；sealed historical archive / reference only；由 E17 重新规划
 **日期：** 2026-07-12
 **当前 Story：** E17-0（docs-only）
 
@@ -15,6 +15,22 @@ closed by correct-course / superseded by E17
 ```
 
 E16 不得描述为正常完成、release-ready 或 E17 implementation-ready。
+
+### 1.1 Sealed historical archive 规则
+
+E16 原始代码及其 testing、planning、design 文档整体定义为 `sealed historical archive / reference only`。sealed 表示：E17 不再逐行修改这些原始材料；其中当时的 `current`、`next`、`depends on` / dependency、`unlocked`、`in progress` 等措辞只代表文档创建时的历史时间点，不要求与 E17 当前状态逐行一致，不能生成当前任务、解锁 E17 Story，旧执行入口也不能覆盖 D-079 和 E17 当前权威文档。Review 不得仅因 sealed archive 保留历史措辞而提出 E17 当前状态 finding；未经新的明确 correct-course decision，不得修改 sealed archive。
+
+sealed 不表示删除 Git 历史或分支，不否认历史测试、Band 9 / HRS 证据，也不把旧实现认定为 E17 当前合同或自动复用旧 production 架构。
+
+当前文档权威层级从高到低为：
+
+1. `AGENTS.md`
+2. accepted superseding decision D-079
+3. 当前 E17 权威文档：`docs/project-status.md`、`docs/planning/e17-heart-rate-correct-course.md`、`docs/readiness-report.md`、`docs/roadmap-backlog.md`、`docs/architecture.md`
+4. 本 retrospective / supersession 索引
+5. sealed E16 原始文档与代码（historical evidence only）
+
+低层材料不得覆盖高层决策或当前状态。
 
 ## 2. E16 取得的成果
 
@@ -96,13 +112,13 @@ E16-10b-2 的范围失控。失败分支相对 `origin/main` 涉及 20 个文件
 
 | 资产 / 能力 | 来源 Story / 文件 | 历史证据 | 分类 | E17 处理方式 | 所需重新验收 |
 |---|---|---|---|---|---|
-| 胶囊视觉设计与信息层级 | E16-3a、E16-8；`HeartRateFloatingCapsule.kt` | HTML、AVD、真机反馈 | freeze | 原样保留视觉方向 | E17 runtime 接线后只验兼容与无回归 |
-| collapsed / expanded 与互动动画 | E16-3a、E16-8；motion tokens | HTML、AVD、UI tests | freeze | 保留形态、220ms 克制 morph 和交互表现 | reduce-motion / 新状态适配回归 |
-| 拖动、threshold、左右吸附 | `HeartRateFloatingCapsule.kt`、`HeartRateCapsuleGeometry.kt` | geometry tests、AVD | freeze | 保留行为 | 小屏、左右边缘和误触回归 |
-| viewport clamp、安全区、IME 收缩 | 同上及 shell overlay host | bounds evidence、AVD | freeze | 保留行为 | 训练页 / confirm-record / IME 回归 |
-| 已批准 HTML 方案 | `docs/design/e16-3-heart-rate-ui-html/` | interactive prototype | freeze | 作为视觉真源保留 | 不重新做视觉评审 |
-| `HeartRateFloatingCapsuleState.kt` 视觉 DTO 部分 | E16-8 / E16-9 | mapper tests | reference-only | 只参考视觉所需字段 | 新 mapper 定义后重测 |
-| provider 状态、文案、mapper、优先级 | E16-9；`HeartRateFloatingCapsuleState.kt` | unit + Band 9 历史反馈 | rewrite | E17-2 / E17-3 重新定义 | 产品语义、状态转换、真机一致性 |
+| 胶囊视觉设计与信息层级 | E16-3a、E16-8；`HeartRateFloatingCapsule.kt` | HTML、AVD、真机反馈 | adopted / frozen / direct reuse | E17 原样直接采用 | E17 runtime 接线后只验兼容与无回归 |
+| collapsed / expanded 与互动动画 | E16-3a、E16-8；motion tokens | HTML、AVD、UI tests | adopted / frozen / direct reuse | 直接采用形态、克制 morph 和相关 motion | reduce-motion / 新状态适配回归 |
+| 拖动、movement threshold、左右吸附 | `HeartRateFloatingCapsule.kt`、`HeartRateCapsuleGeometry.kt` | geometry tests、AVD | adopted / frozen / direct reuse | 直接采用行为 | 小屏、左右边缘和误触回归 |
+| viewport clamp、安全区、IME 收缩 | 同上及 shell overlay host | bounds evidence、AVD | adopted / frozen / direct reuse | 直接采用行为 | 训练页 / confirm-record / IME 回归 |
+| 已批准 HTML 高保真方案 | `docs/design/e16-3-heart-rate-ui-html/` | interactive prototype | adopted / frozen / direct reuse | 作为 E17 已采用视觉资产 | 不重新做视觉评审 |
+| `HeartRateFloatingCapsuleState.kt` presentation / runtime DTO | E16-8 / E16-9 | mapper tests | not frozen / compatibility decision if needed | 不自动继承旧 runtime 语义；外部 mapper 优先 | 新 mapper 定义后重测 |
+| provider 状态、文案、mapper、优先级 | E16-9；`HeartRateFloatingCapsuleState.kt` | unit + Band 9 历史反馈 | runtime / redesignable | E17-2 / E17-3 重新定义 | 产品语义、状态转换、真机一致性 |
 | Band 9 标准 HRS 可行性 | E16 retest / E16-1 / E16-2 | 真实设备 `0x180D` / `0x2A37` / CCCD / bpm | revalidate | E17-1 重新复验 | 新 APK、新清单、用户真机证据 |
 | payload parser | `HeartRateMeasurementParser.kt` | JVM tests + 历史 notify | revalidate | 作为候选最小纯 Kotlin资产 | parser matrix + E17-1 payload |
 | opt-in / permission / privacy | E16-4 至 E16-6 | 文档、AVD、manifest tests | revalidate | E17-2 重新确认产品范围 | 产品 review + AVD 权限矩阵 |
@@ -114,9 +130,9 @@ E16-10b-2 的范围失控。失败分支相对 `origin/main` 涉及 20 个文件
 | E16-10b-2 controller / wrappers | failed branch `89d1e23...` | review findings、injected tests、AVD | reject | 永久禁止合并；只作反例 | 不验收，不移植 |
 | E16-11 / E16-12 记录与分析规划 | 历史 backlog / visual reference | docs-only | reference-only | E17 不自动继承 | 如重启需新产品、数据、隐私和视觉 gate |
 
-唯一预先确定的 `freeze` 是心率胶囊视觉与互动：视觉设计、布局与信息层级、collapsed / expanded、拖动、movement threshold、左右吸附、viewport clamp、安全区避让、IME 收缩、互动动画 / motion 和已批准 HTML 方案。
+心率胶囊视觉与互动的正式状态是 `adopted / frozen / direct reuse`，不是 reference-only、revalidate、rewrite、provisional 或待重新设计。E17 直接采用 `HeartRateFloatingCapsule.kt` 的视觉与互动，以及 `HeartRateCapsuleGeometry.kt` 的 geometry、clamp、safe-zone 和 snap 行为；范围包括 collapsed / expanded 视觉、信息布局与层级、拖动和 movement threshold、左右吸附、viewport clamp、status bar / bottom nav / 训练固定区域避让、IME 收缩、展开 / 收起 / 移动 / 吸附动画、已批准 HTML 高保真方案与相关 motion。E17 不再进行胶囊视觉或交互设计、HTML 视觉方案、动画探索、颜色 / 尺寸 / 布局 / motion 变体，也不使用 `huashu-design` 重做这些资产。
 
-冻结的不是 runtime 语义。provider 状态、状态文案、mapper、状态优先级、state source 和 runtime wiring 均可重新设计。`HeartRateFloatingCapsuleState.kt` 中混入的旧 runtime 语义不属于冻结项。E16 其他产品、技术和测试结论全部必须重新评估；历史证据不能自动成为 E17 acceptance。
+冻结的不是 runtime 语义。E17 新 provider/runtime 必须通过胶囊外部的 presentation mapper 适配现有胶囊，不让胶囊迁就 BLE 架构，不把 Android BLE 对象传入胶囊，也不在胶囊内部实现 permission、scan、connect 或 reconnect。provider state、状态文案、优先级、state source 和 runtime wiring 均可重新设计；`HeartRateFloatingCapsuleState.kt` 中混入的旧 runtime 语义不自动继承。如现有 presentation DTO 确实无法表达 E17 接受的必要状态，必须另开兼容性 decision，不能借此修改视觉与互动。
 
 ## 8. 历史教训
 

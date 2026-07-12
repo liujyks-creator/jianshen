@@ -4,8 +4,6 @@
 **Date:** 2026-07-08
 **Scope:** HTML / CSS / JS high-fidelity visual planning only
 
-> **E17 freeze clarification（2026-07-12）：** 本 HTML 继续作为冻结的视觉与互动参考；其中出现的 provider 状态、文案、区间、记录或 runtime 假设不构成 E17 acceptance，可在不改变冻结视觉 / 互动合同的前提下重新映射。
-
 ## Entry
 
 - `docs/design/e16-3-heart-rate-ui-html/index.html`
