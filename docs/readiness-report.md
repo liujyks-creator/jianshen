@@ -52,6 +52,8 @@ stepsCompleted:
 
 > 2026-07-12 E16-10 closeout 刷新：E16-10a docs-only policy 已 reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；E16-10b umbrella 保持 in progress。E16-10b-1 Heart-rate freshness policy core 已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`），只合入 `core.health` 纯 Kotlin monotonic timeline / policy / reason codes 与 JVM tests。production provider/controller、浮动胶囊、设置页和 GATT runtime 尚未消费该 policy，运行时行为不变。E16-10b-2 仅为 unlocked / not started，可在 docs-sync 合入并通过独立 Review gate 后创建独立 Story；真实 timer、scheduler、watchdog、retry controller、callback race、old-target guard、lifecycle cancellation 与 reconnect 仍未实现。E16-10b-3 / E16-10b-4 保持 locked / not started；纯 JVM tests 不代表真实 BLE / reconnect readiness。该结果不是 E16-11 recording / 1 秒持久化或 E16-12 analysis / recap 许可。
 
+> 2026-07-12 E17 correct-course 刷新：上段 E16-10b 的“下一阶段”描述现仅为历史快照。E16 umbrella 已以 `closed by correct-course / superseded by E17` 关闭；E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，状态保持 `changes requested` 并永久禁止合并。**E17 implementation readiness 未通过。** 阻塞项是 E17-1 Band 9 / 标准 HRS 复验、E17-2 产品边界、E17-3 最小架构与 E17-4 跨文档 / 测试 / Story 一致性审查。旧 E16 代码存在于 `main`、旧自动测试通过或历史真机证据均不能写成 E17 ready。唯一冻结项是胶囊视觉与互动；runtime 状态、mapper、文案、优先级和接线重新设计。当前只允许 E17-0 独立 Code Review，E17-1 至 E17-4 locked，E17-4 通过前禁止 production implementation。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |

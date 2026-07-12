@@ -108,6 +108,16 @@ Android 虚拟测试环境（UI / APK / 真机截图修复 / smoke 类 Story 必
 - 如果提示词声称前置已 merged，但 ancestry 检查失败，必须停止；不得自行把已 push 分支当作 main 基线，也不得绕过缺失的 review / docs-sync gate。
 - 如果 main 文档仍写 pending，而 Git 已合并，或文档写 merged 但 Git 未合并，先报告并完成独立 docs-sync / review，不能在矛盾状态上继续实现。
 
+Repair / Evidence / Correct-course 硬门禁：
+- 开始 Repair 前，先列出 finding 直接要求修改的 production 文件、允许的 test / docs 文件，以及预计结构变化；未列清单不得编辑。
+- Repair Story 不得未经主管理批准新增核心 interface、平台 wrapper、callback ownership 层或数据模型。finding 无法在既有结构内最小修复时，立即停止并报告设计阻塞，不得自行升级为架构重构。
+- 实际 production 文件或结构范围超过 finding 的直接需要时停止；不得为 fake、injection 或测试便利扩大 production 架构。
+- 同一 Story 已连续两轮 Review 保留 must-fix，且继续修复需要核心抽象、callback ownership、数据所有权或跨模块结构变化时，不再执行局部 Repair；报告应进入 correct-course / architecture planning，并保持下游 locked。
+- 文档只能声明测试实际执行并断言过的行为。源码字符串搜索、helper 存在、可能 no-op 的 helper / scheduler 调用不能写成 production coverage。
+- injection / deterministic fake、AVD 和真实设备证据分层报告：injection 不等于 Android 平台或设备验证，AVD 不等于真实外设验证，真实设备结论必须来自对应设备证据。
+- 稳定规则引用 `AGENTS.md`、本模板和 Story 文档；不要在 Fix 提示词重复全部历史 finding。历史风险写入 retrospective / test matrix。
+- 触发 correct-course 后不得开始下游 Story，不得借 Repair 修改 roadmap 解锁状态。
+
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
 - 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；生成 UI 前仍必须读取 DESIGN.md 和项目文档，不得猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞开发。

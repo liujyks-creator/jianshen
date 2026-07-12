@@ -71,6 +71,15 @@
 - 人工真机测试：由用户执行；主对话把结果写成明确验收结论，再决定修复或最终 review。
 - 主管理对话不为了“推进”而跳过 review、真机证据或既定视觉 gate。
 
+## Correct-course 与 Repair 硬门禁
+
+- **连续 Review 门禁：** 同一 Story 连续两轮 Review 仍存在 must-fix，且下一轮修复涉及核心抽象、callback ownership、数据所有权或跨模块结构变化时，主管理不得继续生成局部 Fix 提示词；必须切换到独立 correct-course 或 architecture planning，并保持下游 locked。
+- **Repair 结构门禁：** Repair Story 不得未经主管理批准新增核心 interface、平台 wrapper、callback ownership 层或数据模型。finding 无法在既有结构内最小修复时，Dev / Review 对话必须停止并报告设计阻塞，不能自行把 Repair 升级为架构重构。
+- **最小修改门禁：** 生成 Repair 提示词前，要求开发对话列出预计修改的 production 文件和结构变化；实际范围超过 finding 直接需要时必须停止，不得以测试便利扩大 production 架构。
+- **Evidence 门禁：** 只接受测试实际执行并断言过的行为。源码字符串搜索、helper 存在、可能 no-op 的 helper / scheduler 调用不得写成 production coverage；injection、AVD 和真实设备证据必须分层，互不替代。
+- **提示词体积控制：** 稳定规则引用 `AGENTS.md`、模板和 Story 设计 / 测试文档，不在每轮提示词复制全部历史 finding。Fix / Review 提示词只保留当前 Story 所需事实；历史风险进入 retrospective 和 test matrix。
+- **Correct-course 职责：** 主管理负责识别 Story 膨胀和局部补丁循环；Dev / Review 不得自行扩大 Repair。触发 correct-course 后，所有依赖 Story 继续 locked，直到新的 planning / architecture / readiness gate 通过。
+
 ## 子代理策略
 
 - 主对话通常不拆实现；它负责把任务拆成独立 Dev Story / Code Review 对话。

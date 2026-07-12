@@ -138,6 +138,13 @@ feature:settings
 
 ### 4.9 `core:health`
 
+> **E17 correct-course 状态（2026-07-12）：** 下方 E11 / E16 描述保留为 historical / reference，用于说明 `main` 中已有代码和当时决策，不是 E17 默认架构。E16 已以 `closed by correct-course / superseded by E17` 关闭；失败的 E16-10b-2 分支永久禁止合并。E17-3 将重新设计适合小型 App 的最小 BLE 架构，E17-4 readiness 通过前不得把旧 provider / policy / reconnect 设计继续扩展或生成 production Story。此处不提前规定新的最终 BLE 架构。
+
+- E17 唯一冻结边界是浮动心率胶囊的视觉与互动：`HeartRateFloatingCapsule.kt`、`HeartRateCapsuleGeometry.kt`、相关 motion 表现、approved HTML、collapsed / expanded、拖动 threshold、左右吸附、viewport clamp、安全区与 IME 避让。
+- `HeartRateFloatingCapsuleState.kt` 中的旧 provider 状态、文案、mapper、优先级不冻结；state source、presentation state 和 `TrainFlowApp` runtime wiring 可在 E17-2 / E17-3 重做。
+- E17-3 必须先明确原生 GATT ownership、callback 串行化、permission failure、scan/connect/close、事实状态与 presentation 分离和测试层级；默认优先直接使用 Android BLE 类型，不构建通用 BLE 框架，不复制完整 GATT 对象模型。
+- freshness 与自动重连不得默认绑在同一 Story；自动重连需要独立价值决策、独立架构和独立真机验收。
+
 - `HeartRateProvider` source-aware 抽象接口与 disabled / mock / source-unavailable 实现。
 - E11.1 只收口 provider boundary 和不可用状态表达，不绑定具体手环 SDK，不接 Health Connect、Wear OS、BLE 或厂商 SDK。
 - 后续真实设备接入必须通过 provider adapter 转换为 `HeartRateState`，不能把 SDK model 泄漏到 UI、训练执行引擎、历史统计或 analytics。
@@ -356,7 +363,7 @@ interface HeartRateProvider {
 - E16-3 初版顶部 pill 方案不再作为推荐实现；当前未来 UI 方向是 App 内可拖动浮动心率胶囊，不使用 `SYSTEM_ALERT_WINDOW` / “显示在其他应用上层”权限。胶囊属于 TrainFlow app shell overlay，不参与训练页布局，不得遮挡主按钮、底部导航、confirm-record 控件、输入框、键盘区域、状态栏或手势导航；松手后必须吸附到安全边缘。
 - E16-4 明确未来心率功能默认关闭，canonical 入口是 `设置 -> 训练偏好 -> 心率`；设备状态入口和胶囊展开态只能作为已启用后的状态 / 设置捷径。首次开启前必须展示用途、权限、隐私和非医疗说明；BLE scan / connect 权限只能在用户主动开启 / 选择设备 / 重新扫描后触发，不得在 app 启动、进入训练页或开始训练时触发。
 - 未来心率设备选择只保存 provider identifier / display name，不保存 `BluetoothDevice`、`BluetoothGatt`、GATT / SDK model、bpm 样本或 session summary。关闭心率后 provider 必须停止扫描、断开连接、不重连、不记录；可保留已保存设备名称作为 convenience hint，并提供清除入口。
-- E16-10a freshness / offline / reconnect docs-only policy 已 approved、reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`），详见 `docs/testing/e16-10-heart-rate-freshness-reconnect-policy.md` 和 D-078。只允许当前前台进程中本次已进入 live bpm 的同一 runtime target 进行有限 direct GATT reconnect，且不 scan、不按保存 identifier 自动发现、不切换 target；冷启动、回到前台、蓝牙恢复、权限重新授予和 retry 耗尽后均不自动创建 retry queue，不自动 scan/connect，也不恢复旧 attempt。权限丢失时必须取消 retry、stop scan、关闭 GATT并停止相关动作；重新授予后必须等待用户明确点击 `连接已保存设备` 或选择新设备。默认 freshness 为 10 秒 live stale、15 秒 waiting-first-bpm stale、30 秒 notify silence -> `连接异常`；明确 GATT 断开 -> `离线`。重连预算为 2 / 5 / 10 秒退避、最多 3 次、每次 10 秒 watchdog。设置页必须提供 `停止连接` 以取消队列并 suppress 本前台周期自动恢复；retry exhausted 本身不产生事实状态，最近明确断开保持 `离线`，最近 connect / service discovery / CCCD / notify silence / parse 技术失败保持 `连接异常`，停止文案不得改变底层状态。E16-10b umbrella 为 in progress；E16-10b-1 纯 Kotlin policy core 已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`），但 production provider/controller/runtime 尚未接入。下一架构阶段是 E16-10b-2 foreground reconnect controller，当前仅 unlocked / not started；真实 timer、scheduler、watchdog、retry controller、callback race、old-target guard 与 lifecycle cancellation 仍未实现。
+- Historical E16 reference：E16-10a freshness / offline / reconnect docs-only policy 曾 approved、reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`），E16-10b-1 policy core 也曾 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。其 10 / 15 / 30 秒 freshness、2 / 5 / 10 秒 retry 与 direct reconnect 设计现只作 reference，不是 E17 默认方案；旧 E16-10b-2 的 unlocked 状态已失效，失败分支永久禁止合并。
 - 未来心率显示必须区分连接 / 数据状态和心率区间状态。无可用 bpm 时只能显示 `未启用`、`未连接源`、`权限未赋予`、`蓝牙关闭`、`正在连接`、`等待数据`、`数据过期`、`离线` 等来源状态；有 bpm 且用户已设置年龄时才显示“区间 + bpm”，例如 `热身 105 bpm`。未设置年龄时只显示 bpm，不计算区间。区间可基于用户年龄估算最大心率，用户后续可覆盖最大心率或提醒阈值。
 - 未来记录边界：未训练时只显示不记录；timed 和 strength 训练中允许按 1 秒采样记录心率，覆盖 strength active、rest 与 confirm-record。该记录模型、Room / session schema、summary、history / trends 和训练后分析必须另拆 story；E16-3a 仍只做视觉规划。
 - `超过上限` 表示超过用户设置的提醒阈值，首版只做深红视觉提示，不播放声音、不震动、不强制暂停，不做医疗、危险或训练中断判断。

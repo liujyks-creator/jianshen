@@ -4,6 +4,8 @@
 **Date:** 2026-07-07
 **Scope:** Heart-rate display, recording boundary, and E16-3a visual planning input
 
+> **E17 freeze clarification（2026-07-12）：** 本文只冻结胶囊视觉、布局 / 信息层级、collapsed / expanded、拖动 threshold、左右吸附、安全区 / IME 避让与互动 motion。本文的 provider 状态、状态文案、zone / recording / runtime 语义不冻结，必须在 E17 重新评估。
+
 ## Decision Summary
 
 Future TrainFlow heart-rate display should use an **in-app draggable floating heart-rate capsule**.
