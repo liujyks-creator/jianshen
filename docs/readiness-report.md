@@ -174,47 +174,8 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 ## 10. 下一轮建议
 
-当前阶段不再从本报告的 E0.1 模板启动。E15 和 E16 retest 已收口，下一轮进入：
+原 `MVP Alpha readiness 前检查` 及其可复制提示词已经失效，只保留在 Git 历史中，不得继续使用。E16 umbrella 已由 correct-course 关闭并被 E17 替代；旧 E16-1 / E16-2 只能作为 historical / reference 或 revalidation 输入，不能直接作为 E17 provider 地基合同。自动重连不得作为默认前置。
 
-```text
-MVP Alpha readiness 前检查
-```
+当前 active Story 是 E17-0，状态为 `implemented / needs review`；唯一允许动作是新的独立 E17-0 Code Review。E17-1 至 E17-4 全部 `locked`。E17-0 Review 与 merge 通过后，仍必须完成独立 E17-0 closeout docs-sync；只有 closeout docs-sync reviewed / merged 且状态文档一致，E17-1 才可解锁。
 
-建议新对话启动提示词：
-
-```text
-继续 TrainFlow 项目。
-
-当前任务：MVP Alpha readiness 前检查。
-
-启动前请先读取：
-- AGENTS.md
-- docs/project-status.md
-- docs/planning/decision-log.md
-- docs/readiness-report.md
-- docs/architecture.md
-- docs/roadmap-backlog.md
-- DESIGN.md
-- docs/ui-extension-guide.md
-- docs/testing/e15-maintenance-lessons-learned.md
-- docs/testing/e16-heart-rate-broadcast-feasibility-retest.md
-- docs/testing/e16-2-production-ble-hrs-provider-hardening.md
-
-任务范围：
-- 只做 MVP Alpha readiness / release-blocking 前检查。
-- 复核 E15 已收口、用户 APK 测试通过和 E15 maintenance lessons 是否已被后续维护入口引用。
-- 复核 E16 heart-rate broadcast retest 已合入 main，且 E16-1 / E16-2 只作为未来健康设备阶段的 provider 地基输入。
-- 核对是否还有 P0 / release blocker、真机 smoke 缺口、音频共存风险、禁区文件风险、handoff 文档缺口。
-- 不启动新功能，不改 Kotlin / Compose / Gradle / Room / APK / 测试代码。
-- 不恢复心率卡片、未获取心率、手动心率输入或平均心率趋势。
-- 不把 Band 9 正向 BLE HRS 证据解释为当前生产心率 UI 或生产设备接入；未来展示心率前必须先完成 E16-3a App 内可拖动浮动心率胶囊 HTML 视觉方案 / 高保真案例评审。
-- 不恢复力量目标组颜色占位；若未来重新引入，必须先做 model / serializer decision。
-- 若用户给出新的具体真机问题，另拆 User Test Fix Pack 2。
-
-完成后请说明：
-- readiness 结论和 release-blocking 项。
-- 是否需要 User Test Fix Pack 2。
-- E15 maintenance lessons 是否已纳入后续维护入口。
-- 禁区文件是否未 stage / 未提交。
-- 下一轮应该进入哪个 Story 或 gate。
-```
+在此之前，不得开始 Band 9 / HRS 复验、E17 产品边界、E17 最小架构、E17 readiness 或任何 production 实现。
