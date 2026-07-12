@@ -52,6 +52,8 @@ stepsCompleted:
 
 > 2026-07-12 E16-10 closeout 刷新：E16-10a docs-only policy 已 reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；E16-10b umbrella 保持 in progress。E16-10b-1 Heart-rate freshness policy core 已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`），只合入 `core.health` 纯 Kotlin monotonic timeline / policy / reason codes 与 JVM tests。production provider/controller、浮动胶囊、设置页和 GATT runtime 尚未消费该 policy，运行时行为不变。E16-10b-2 仅为 unlocked / not started，可在 docs-sync 合入并通过独立 Review gate 后创建独立 Story；真实 timer、scheduler、watchdog、retry controller、callback race、old-target guard、lifecycle cancellation 与 reconnect 仍未实现。E16-10b-3 / E16-10b-4 保持 locked / not started；纯 JVM tests 不代表真实 BLE / reconnect readiness。该结果不是 E16-11 recording / 1 秒持久化或 E16-12 analysis / recap 许可。
 
+> 2026-07-12 E17 correct-course 刷新：上段 E16-10b 的“下一阶段”描述现仅为历史快照。E16 umbrella 已以 `closed by correct-course / superseded by E17` 关闭；E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，状态保持 `changes requested` 并永久禁止合并。**E17 implementation readiness 未通过。** 阻塞项是 E17-1 Band 9 / 标准 HRS 复验、E17-2 产品边界、E17-3 最小架构与 E17-4 跨文档 / 测试 / Story 一致性审查。旧 E16 代码存在于 `main`、旧自动测试通过或历史真机证据均不能写成 E17 ready。唯一冻结项是胶囊视觉与互动；runtime 状态、mapper、文案、优先级和接线重新设计。当前只允许 E17-0 独立 Code Review，E17-1 至 E17-4 locked，E17-4 通过前禁止 production implementation。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |
@@ -142,8 +144,8 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
-- `O-006` 健康数据和可穿戴策略不阻塞 MVP 核心闭环。E16 已证明 Band 9 心率广播可暴露 BLE HRS，E16-1 已提供 debug-only adapter spike，E16-2 已完成 provider / permission / lifecycle 地基并通过 2026-07-07 真机 smoke，E16-3a 已完成 App 内可拖动浮动心率胶囊 HTML 修订，E16-4 已完成 opt-in / settings / permission rationale / privacy / non-medical planning，E16-5 已完成 settings / opt-in UI，E16-6 已完成 BLE permission request flow，E16-7 已完成 device picker / source status，E16-8 已完成 app-shell floating capsule implementation，E16-9 已完成 provider/source/live state 到胶囊的只读映射和受约束 selected-device connect lifecycle。进入训练记录和分析前仍必须另拆 E16-10 stale / offline policy、E16-11 recording model 和 E16-12 analysis；不得直接进入记录落库或分析。
-- E16-10a freshness / offline / reconnect docs-only policy 已 approved、reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`），详见 `docs/testing/e16-10-heart-rate-freshness-reconnect-policy.md` 和 D-078 / O-009 Accepted。已批准仅当前前台进程、本次已 live bpm 的同一 runtime target 做有限 direct reconnect，采用 10 / 15 / 30 秒 freshness、2/5/10 秒退避、最多 3 次、每次 10 秒 watchdog；禁止自动 scan、自动换 target、后台连接，以及冷启动、回前台、蓝牙恢复、权限重新授予或 retry 耗尽后的自动恢复。权限丢失时取消 retry、stop scan、关闭 GATT并停止相关动作；权限重新授予后不得自动创建 queue、scan/connect 或恢复旧 attempt，必须等待用户明确点击 `连接已保存设备` 或选择新设备。retry exhausted 本身不产生事实状态，最近明确断开保持 `离线`，最近 connect / service discovery / CCCD / notify silence / parse 技术失败保持 `连接异常`；设置页停止文案不能改变底层状态。E16-10b umbrella 为 in progress：E16-10b-1 policy core 已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）；production provider 尚未消费该 policy，runtime integration 尚未开始。E16-10b-2 foreground reconnect controller 为 unlocked / not started，只允许创建独立 Story，不代表 runtime readiness；真实 timer、scheduler、watchdog、retry controller、callback race / old-target guard 和 lifecycle cancellation 均未实现。E16-10b-3 mapper/settings copy 与 E16-10b-4 AVD / 真实 Band 9 验证保持 locked / not started。现有纯 policy JVM tests 不代表真实 BLE / reconnect readiness。E16-11 recording / 1 秒持久化和 E16-12 analysis / recap 均为 not started 并继续隔离。
+- `O-006` / E16 历史快照：E16 曾验证 Band 9 可通过心率广播暴露标准 BLE HRS；E16-1 至 E16-10b-1 中已经合入 `main` 的 Story 继续保留各自 immutable merge fact。E16-10a 当时接受的有限前台 direct reconnect 与 10 / 15 / 30 秒 freshness policy 已 reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；E16-10b-1 纯 Kotlin policy core 也已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。这些 `reviewed / merged` 仅是历史事实，不表示 E17 继承其产品或技术合同。
+- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` 的 immutable tip 为 `89d1e23f870185a2e279d35bb293883f64fe70ba`，disposition 为 `superseded by E17 / permanently prohibited from merge`。E16-10b-3 / E16-10b-4 旧路线终止，E16-11 / E16-12 不自动进入 E17；D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17 implementation readiness 未通过；E17-0 当前为 `implemented / needs review`；上一轮唯一 readiness 状态 finding 已完成最小修复并推送，E17-1 至 E17-4 全部 locked。当前只能重新进行 E17-0 独立 Code Review，不得开始 Band 9 复验、产品边界、架构或 production 实现，自动重连不得作为默认前置。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查
@@ -172,47 +174,8 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 ## 10. 下一轮建议
 
-当前阶段不再从本报告的 E0.1 模板启动。E15 和 E16 retest 已收口，下一轮进入：
+原 `MVP Alpha readiness 前检查` 及其可复制提示词已经失效，只保留在 Git 历史中，不得继续使用。E16 umbrella 已由 correct-course 关闭并被 E17 替代；旧 E16-1 / E16-2 只能作为 historical / reference 或 revalidation 输入，不能直接作为 E17 provider 地基合同。自动重连不得作为默认前置。
 
-```text
-MVP Alpha readiness 前检查
-```
+当前 active Story 是 E17-0，状态为 `implemented / needs review`；唯一允许动作是新的独立 E17-0 Code Review。E17-1 至 E17-4 全部 `locked`。E17-0 Review 与 merge 通过后，仍必须完成独立 E17-0 closeout docs-sync；只有 closeout docs-sync reviewed / merged 且状态文档一致，E17-1 才可解锁。
 
-建议新对话启动提示词：
-
-```text
-继续 TrainFlow 项目。
-
-当前任务：MVP Alpha readiness 前检查。
-
-启动前请先读取：
-- AGENTS.md
-- docs/project-status.md
-- docs/planning/decision-log.md
-- docs/readiness-report.md
-- docs/architecture.md
-- docs/roadmap-backlog.md
-- DESIGN.md
-- docs/ui-extension-guide.md
-- docs/testing/e15-maintenance-lessons-learned.md
-- docs/testing/e16-heart-rate-broadcast-feasibility-retest.md
-- docs/testing/e16-2-production-ble-hrs-provider-hardening.md
-
-任务范围：
-- 只做 MVP Alpha readiness / release-blocking 前检查。
-- 复核 E15 已收口、用户 APK 测试通过和 E15 maintenance lessons 是否已被后续维护入口引用。
-- 复核 E16 heart-rate broadcast retest 已合入 main，且 E16-1 / E16-2 只作为未来健康设备阶段的 provider 地基输入。
-- 核对是否还有 P0 / release blocker、真机 smoke 缺口、音频共存风险、禁区文件风险、handoff 文档缺口。
-- 不启动新功能，不改 Kotlin / Compose / Gradle / Room / APK / 测试代码。
-- 不恢复心率卡片、未获取心率、手动心率输入或平均心率趋势。
-- 不把 Band 9 正向 BLE HRS 证据解释为当前生产心率 UI 或生产设备接入；未来展示心率前必须先完成 E16-3a App 内可拖动浮动心率胶囊 HTML 视觉方案 / 高保真案例评审。
-- 不恢复力量目标组颜色占位；若未来重新引入，必须先做 model / serializer decision。
-- 若用户给出新的具体真机问题，另拆 User Test Fix Pack 2。
-
-完成后请说明：
-- readiness 结论和 release-blocking 项。
-- 是否需要 User Test Fix Pack 2。
-- E15 maintenance lessons 是否已纳入后续维护入口。
-- 禁区文件是否未 stage / 未提交。
-- 下一轮应该进入哪个 Story 或 gate。
-```
+在此之前，不得开始 Band 9 / HRS 复验、E17 产品边界、E17 最小架构、E17 readiness 或任何 production 实现。

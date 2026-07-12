@@ -113,6 +113,16 @@ Android 虚拟测试环境（审查 UI / APK / smoke / 真机截图修复时必�
 - Review 必须从当前 Git diff、accepted decision IDs、Story 文档、测试和证据重建事实，不依赖开发模型的隐性记忆或交付摘要中的未验证结论。
 - `implemented`、branch 已 push、review 文本写 PASS、人工测试通过都不等于已合入；人工测试仅在它被明确列为本 Story merge prerequisite 时参与本次合并判定。在 merge commit 推送并通过 ancestry / sync 检查前，下游 Story 保持 locked。
 - 如果 Git ancestry、状态文档和交付报告互相矛盾，停止合并并给出 scoped docs-sync / fix finding；不得用模型判断替代可验证的 merge 事实。
+- 只有 accepted correct-course decision 明确指定时，旧阶段文档才是 `sealed historical archive`：其当时的 current / next / dependency 历史措辞不属于当前指令，也不要求与当前状态逐行同步；当前任务只由 accepted superseding decision 和当前权威状态文档决定。Dev / Review 未经明确 Story 授权不得修改 sealed archive，Review 不得仅因历史措辞提出当前状态 finding，但 sealed archive 在 Story diff 中出现未经授权的修改时必须提出 finding；正常读取历史证据不受限制。
+
+连续 Review / Repair / Evidence 硬门禁：
+- Review 必须核对实现报告中的“预计 production 文件 / 结构变化”与 three-dot Story diff；实际范围超过 finding 或 Story 直接需要时，列为 finding，不能用新增测试便利解释范围扩张。
+- Repair 不得未经主管理批准新增核心 interface、平台 wrapper、callback ownership 层或数据模型。若必须新增才能解决 finding，应判定为设计阻塞，建议 correct-course / architecture planning，而不是继续生成局部 Fix。
+- 同一 Story 连续两轮 Review 仍有 must-fix，且下一轮涉及核心抽象、callback ownership、数据所有权或跨模块结构变化时，停止局部补丁循环；不得合并，不得解锁下游。
+- Evidence 只能按实际断言层级描述。源码字符串搜索、helper 存在、helper 调用或可能 no-op 的 canceled closure 不能证明 production behavior；review 必须分别标注纯逻辑 / injection、Android provider、AVD 和真实设备证据。
+- 不把 AVD / injected callback 写成真实 BLE、射频或设备证据；真实设备 prerequisite 未满足时按 Story 规则保持 pending / locked。
+- Fix / Review 提示词只包含当前 Story 所需事实，稳定规则引用 `AGENTS.md`、模板和 Story 文档；历史 finding 进入 retrospective / test matrix。
+- Review 负责识别范围膨胀并向主管理建议 correct-course，但不得自行把 Repair 改造成架构重构。correct-course 触发后，下游保持 locked。
 
 本地技能：
 - 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
