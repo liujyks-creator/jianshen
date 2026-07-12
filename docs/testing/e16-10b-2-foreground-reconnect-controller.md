@@ -67,11 +67,32 @@ live 状态下用户扫描其他设备继续与 provider/GATT 分离，candidate
 
 - intentional cancellation现在只取消scheduler、增加recovery epoch、失效attempt、冻结自动恢复并按需关闭资源。只有当前target / attempt / GATT identity gate接受的真实`STATE_DISCONNECTED` callback会调用`timeline.disconnected()`并形成`gatt_disconnected`；background、display off、user stop、permission loss、Bluetooth off与provider close不再伪造offline fact。已有technical/offline fact保持不变；没有failure fact的live/waiting/stale intentional close使用不携带bpm、`measuredAt`或failure reason的STOPPED presentation。旧GATT迟到disconnect仍由generation / identity guard拒绝。
 - production provider新增可注入、窄范围`BlePlatformCallBoundary`，实际包住adapter enabled/scanner读取、start/stop scan、bonded devices、device identifier/name、connectGatt、discoverServices、GATT service读取、notification/descriptor配置以及disconnect/close。它只收敛`SecurityException`和Bluetooth状态竞争的`IllegalStateException`，未知programming error继续抛出。异常先失效scan/lifecycle/attempt generation并取消timeout、watchdog、freshness/retry，再幂等关闭资源；permission/Bluetooth恢复仍不自动scan/connect。
-- `BlePlatformCallBoundaryTest`直接覆盖production boundary在startScan、connect、discover、notification/descriptor、availability与cleanup operation上的异常分类，验证未知错误不被吞掉、连接阶段不会映射为`gatt_disconnected`，并锁定production provider对每个operation的实际接线。controller focused tests另覆盖异常/cancellation后的generation失效、迟到callback拒绝、旧closure不可resurrect及旧measurement清除。独立`HeartRateProviderCallbackGate`测试仍只证明gate本身，不再表述为production provider callback-path注入覆盖。
+- `BlePlatformCallBoundaryTest`只覆盖异常分类：所有typed BLE API入口收敛permission TOCTOU `SecurityException`，只有scanner start/stop入口收敛Android adapter-state `IllegalStateException`；非Bluetooth `IllegalStateException`、未知`RuntimeException`与descriptor mutation继续抛出。production接线与状态、generation、cleanup、callback rejection不再由helper或源码字符串搜索声称覆盖，而由Review Fix 3的production provider injected failure-path tests证明。独立`HeartRateProviderCallbackGate`测试仍只证明gate本身。
 
 这些是JVM injection / deterministic tests；AVD smoke只验证无真实BLE target时的permission、Bluetooth与lifecycle行为；真实HUAWEI Band 9的discover / CCCD / notify与direct reconnect仍未在本Story验证。Review Fix 2完成后Story仍为 **Implemented / Needs review**。
 
 Review-fix AVD smoke 使用固定 `TrainFlow_Pixel_API_36` / `emulator-5554`，证据位于 `.local/smoke/e16-10b-2-foreground-reconnect-controller-review-fix/`（未提交）。已确认 active scan 后按 Home 触发 `ON_STOP`，恢复后不再显示 scanning 且不自动 connect；active scan 中关闭心率显示后立即进入“未开启”、不再显示 scanning；撤销 Bluetooth permissions 后 cold launch 无崩溃且不 scan / connect，重新授予后也不自动恢复；通过 emulator Bluetooth shell disable / enable 覆盖关闭与恢复 cold launch，未出现 TrainFlow FATAL / ANR，恢复后不自动 scan / connect。AVD 无真实 BLE HRS target，因此没有声称或伪造 Band 9 reconnect / live bpm 证据。
+
+## Review Fix 3（2026-07-12）
+
+- generic `call(operation, block)`已由production-consumed typed `BlePlatformCallBoundary`取代。每个adapter方法只执行一个明确Android BLE API调用；统一收敛permission TOCTOU `SecurityException`。只有`BluetoothLeScanner.startScan()` / `stopScan()`使用专用scanner-state分类，因为这两个入口由Android scanner adapter-state check结构上允许Bluetooth状态竞争`IllegalStateException`。connect、discover、service/characteristic/descriptor read、notification、descriptor write和cleanup均不收敛`IllegalStateException`；不使用exception message或厂商字符串。
+- legacy `BluetoothGattDescriptor.value` mutation位于typed write API边界之外；provider mapping、state mutation与controller transition同样不进入平台异常helper。非Bluetooth `IllegalStateException`和未知`RuntimeException`经production provider connect path继续抛出，不发布permission / Bluetooth unavailable，不取消合法attempt；descriptor mutation `IllegalStateException`也经production callback path继续抛出。
+- production GATT seam保持`core.health` internal，只暴露窄`BleGattConnection` / service / characteristic / descriptor handle，不进入core model、UI、engine、records或history。`AndroidBleHeartRateProviderPlatformFailureTest`从真实provider入口驱动bonded target selection、manual connect与production callback adapter，实际执行availability read、start scan、connectGatt、discoverServices、GATT service read、notification configuration、descriptor write、disconnect和close失败路径；不再读取provider源码或搜索operation字符串。
+- 对connect-stage failure，tests断言正确permission fact、不伪造`GATT_DISCONNECTED`、attempt/identity失效、active scan结束、watchdog/freshness/retry取消、disconnect/close调用、迟到旧callback拒绝、恢复后不自动scan/connect、manual cycle仍可开始。disconnect/close failure另断言identity先释放、cleanup调用幂等、STOPPED presentation不携带旧bpm/`measuredAt`/failure reason，迟到disconnect不能伪造offline。
+- post-live production test实际走到valid bpm，再制造disconnect、执行scheduled direct retry并在retry discover入口注入失败；随后主动执行已取消的watchdog、freshness与retry closure，并调用旧attempt和失败attempt callback，均不能resurrect或增加connect count。`technicalFailureReason()`因无production消费者已删除。
+
+Coverage必须按以下层次解释：
+
+1. `BlePlatformCallBoundaryTest`：typed boundary exception classification unit test；不证明provider state、generation、cleanup或callback rejection。
+2. `AndroidBleHeartRateProviderPlatformFailureTest`：production provider injected failure-path test；执行真实provider state transition、generation/identity gate、effect处理与callback adapter，platform/GATT handle为deterministic fake，不是真实硬件。
+3. `HeartRateForegroundReconnectControllerTest`：pure controller deterministic scheduler / race test；覆盖10 / 15 / 30秒、2 / 5 / 10秒、watchdog、budget与canceled closure，不证明Android BLE API wiring。
+4. `AndroidBleHeartRateProviderCallbackAdapterTest`：callback gate unit test；只证明token/generation gate本身。
+5. AVD smoke：无真实BLE target的permission、Bluetooth、display与lifecycle smoke；不覆盖discover、CCCD、notify或真实direct reconnect。
+6. 真实BLE / HUAWEI Band 9：本Story仍未验证discover、CCCD、notify、2 / 5 / 10秒direct reconnect、exhaustion或manual recovery；只能在后续locked的E16-10b-4独立closeout执行。
+
+Review Fix 3后Story仍为 **Implemented / Needs review**。E16-10b-3 / E16-10b-4继续 **locked / not started**，E16-11 / E16-12继续 **not started**。
+
+Review Fix 3 AVD smoke使用固定`TrainFlow_Pixel_API_36` / `emulator-5554`，新证据位于`.local/smoke/e16-10b-2-ble-platform-boundary-review-fix-3/`（未提交）。active scan中撤销Bluetooth permissions时Android系统结束App进程；重新启动后scan已结束，权限恢复后不自动scan/connect。active scan中通过emulator Bluetooth shell关闭Bluetooth后scan结束且App不崩溃，恢复后不自动scan/connect。Home触发`ON_STOP`后回前台不恢复旧scan/retry；display off/on不自动恢复；logcat与crash buffer无TrainFlow FATAL / ANR。该AVD无真实BLE HRS target，因此未覆盖discover、CCCD、notify、真实direct reconnect或Band 9；production injected GATT tests也不描述为真实设备验证。
 
 ## AVD non-BLE smoke
 
