@@ -389,7 +389,57 @@ class HeartRateForegroundReconnectControllerTest {
         fixture.controller.setDisplayEnabled(false)
         fixture.controller.setDisplayEnabled(true)
         fixture.scheduler.runCanceled(HeartRateScheduledTask.FRESHNESS)
-        assertEquals(HeartRateReconnectRuntimeKind.OFFLINE, fixture.state.kind)
+        assertEquals(HeartRateReconnectRuntimeKind.STOPPED, fixture.state.kind)
+        assertNull(fixture.state.reason)
+        assertNull(fixture.state.bpm)
+    }
+
+    @Test
+    fun intentionalCancellationPreservesTechnicalFactsAndNeverInventsDisconnect() {
+        val cancellations: List<(HeartRateForegroundReconnectController) -> Unit> = listOf(
+            { it.setForeground(false) },
+            { it.setPermissionGranted(false) },
+            { it.setBluetoothEnabled(false) }
+        )
+        cancellations.forEach { cancel ->
+            val fixture = Fixture()
+            val live = fixture.liveManualAttempt()
+            fixture.controller.technicalFailure(
+                live.targetGeneration,
+                live.attemptGeneration,
+                HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED
+            )
+
+            cancel(fixture.controller)
+
+            assertEquals(HeartRateReconnectRuntimeKind.TECHNICAL_ERROR, fixture.state.kind)
+            assertEquals(HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED, fixture.state.reason)
+            assertFalse(fixture.effects.filterIsInstance<HeartRateReconnectEffect.StateChanged>()
+                .any { it.state.reason == HeartRateFreshnessReason.GATT_DISCONNECTED })
+        }
+    }
+
+    @Test
+    fun liveIntentionalCloseUsesStoppedPresentationWithoutCachedMeasurementOrDisconnectFact() {
+        val cancellations: List<(HeartRateForegroundReconnectController) -> Unit> = listOf(
+            { it.setForeground(false) },
+            { it.setDisplayEnabled(false) },
+            { it.userStop() },
+            { it.close() }
+        )
+        cancellations.forEach { cancel ->
+            val fixture = Fixture()
+            fixture.liveManualAttempt()
+            fixture.effects.clear()
+
+            cancel(fixture.controller)
+
+            assertEquals(HeartRateReconnectRuntimeKind.STOPPED, fixture.state.kind)
+            assertNull(fixture.state.reason)
+            assertNull(fixture.state.bpm)
+            assertFalse(fixture.effects.filterIsInstance<HeartRateReconnectEffect.StateChanged>()
+                .any { it.state.reason == HeartRateFreshnessReason.GATT_DISCONNECTED })
+        }
     }
 
     private class Fixture {

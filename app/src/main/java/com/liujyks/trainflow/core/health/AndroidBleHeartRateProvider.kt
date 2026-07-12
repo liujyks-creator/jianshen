@@ -36,7 +36,8 @@ internal class AndroidBleHeartRateProvider(
     private val now: () -> Instant = { Instant.now() },
     private val onScanState: (BleHeartRateScanState) -> Unit = {},
     private val onCandidate: (BleHeartRateDeviceCandidate) -> Unit = {},
-    private val onState: (BleHeartRateProviderState) -> Unit = {}
+    private val onState: (BleHeartRateProviderState) -> Unit = {},
+    private val platformCalls: BlePlatformCallBoundary = AndroidBlePlatformCallBoundary
 ) : HeartRateProvider, AutoCloseable {
     private data class GattAttempt(
         val targetGeneration: Long,
@@ -47,7 +48,9 @@ internal class AndroidBleHeartRateProvider(
     private val bluetoothAdapter by lazy {
         appContext.getSystemService(BluetoothManager::class.java)?.adapter
     }
-    private val scanner get() = bluetoothAdapter?.bluetoothLeScanner
+    private val scanner get() = bluetoothAdapter?.let { adapter ->
+        platformValue(BlePlatformOperation.READ_SCANNER) { adapter.bluetoothLeScanner }
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
     private val callbackGate = HeartRateProviderCallbackGate()
     private val controllerScheduler = HandlerHeartRateControllerScheduler(mainHandler)
@@ -79,6 +82,7 @@ internal class AndroidBleHeartRateProvider(
     private var foregroundActive = true
     private var activeScanCallback: ScanCallback? = null
     private var activeScanTimeout: Runnable? = null
+    private var lastPlatformFailure: BlePlatformCallResult.ExpectedFailure? = null
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -152,13 +156,27 @@ internal class AndroidBleHeartRateProvider(
         val leScanner = scanner
         if (leScanner == null) {
             controller.onManualScanEnded()
-            publishScanState(BleHeartRateScanState(BleHeartRateScanStateKind.ERROR, "Bluetooth LE scanner is unavailable", BleHeartRateRecoverableReason.SCAN_FAILED))
+            if (lastPlatformFailure?.operation == BlePlatformOperation.READ_SCANNER) {
+                publishScanState(platformScanFailureState(BlePlatformOperation.READ_SCANNER))
+                publishPlatformAvailabilityFailure(BlePlatformOperation.READ_SCANNER)
+            } else {
+                publishScanState(BleHeartRateScanState(BleHeartRateScanStateKind.ERROR, "Bluetooth LE scanner is unavailable", BleHeartRateRecoverableReason.SCAN_FAILED))
+            }
             return
         }
         val token = callbackGate.beginScan()
         val callback = createScanCallback(token)
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        leScanner.startScan(heartRateServiceScanFilters(), settings, callback)
+        val started = platformUnit(BlePlatformOperation.START_SCAN) {
+            leScanner.startScan(heartRateServiceScanFilters(), settings, callback)
+        }
+        if (!started) {
+            callbackGate.invalidateScan()
+            controller.onManualScanEnded()
+            publishScanState(platformScanFailureState(BlePlatformOperation.START_SCAN))
+            publishPlatformAvailabilityFailure(BlePlatformOperation.START_SCAN)
+            return
+        }
         activeScanCallback = callback
         isScanning = true
         val timeout = Runnable {
@@ -180,7 +198,12 @@ internal class AndroidBleHeartRateProvider(
             publish(availability)
             return
         }
-        bluetoothAdapter?.bondedDevices.orEmpty().forEach { addCandidate(it, null, false) }
+        val bonded = bluetoothAdapter?.let { adapter ->
+            platformValue(BlePlatformOperation.READ_BONDED_DEVICES) { adapter.bondedDevices }
+        } ?: return if (hasExpectedPlatformFailure(BlePlatformOperation.READ_BONDED_DEVICES)) {
+            publishPlatformAvailabilityFailure(BlePlatformOperation.READ_BONDED_DEVICES)
+        } else Unit
+        bonded.forEach { addCandidate(it, null, false) }
     }
 
     fun selectDevice(identifier: String): BleHeartRateDeviceSelection? {
@@ -192,7 +215,7 @@ internal class AndroidBleHeartRateProvider(
         controller.onManualScanEnded()
         callbackGate.invalidateLifecycle()
         controller.clearTarget()
-        val selection = device.toSelection()
+        val selection = device.toSelection() ?: return null
         runtimeTarget = device
         controller.selectNewTarget()
         selectedDevice = selection
@@ -249,8 +272,8 @@ internal class AndroidBleHeartRateProvider(
     override fun close() {
         if (!callbackGate.isOpen()) return
         stopBleScan()
-        callbackGate.close()
         controller.close()
+        callbackGate.close()
         attemptGuard.clear()
         runtimeTarget = null
         selectedDevice = null
@@ -294,22 +317,27 @@ internal class AndroidBleHeartRateProvider(
         currentAttempt = attempt
         val lifecycleToken = callbackGate.lifecycleToken()
         val callback = createGattCallback(attempt, lifecycleToken)
-        val gatt = runCatching {
+        val gatt = platformValue(BlePlatformOperation.CONNECT_GATT) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 device.connectGatt(appContext, false, callback, BluetoothDevice.TRANSPORT_LE)
             } else {
                 device.connectGatt(appContext, false, callback)
             }
-        }.getOrNull()
+        }
+        val connectFailure = lastPlatformFailure?.takeIf { it.operation == BlePlatformOperation.CONNECT_GATT }
         if (gatt == null) {
             currentAttempt = null
             mainHandler.post {
                 if (!callbackGate.accepts(lifecycleToken)) return@post
-                controller.technicalFailure(
-                    effect.targetGeneration,
-                    effect.attemptGeneration,
-                    HeartRateFreshnessReason.CONNECT_FAILED
-                )
+                if (connectFailure != null) {
+                    publishPlatformAvailabilityFailure(BlePlatformOperation.CONNECT_GATT, connectFailure)
+                } else {
+                    controller.technicalFailure(
+                        effect.targetGeneration,
+                        effect.attemptGeneration,
+                        HeartRateFreshnessReason.CONNECT_FAILED
+                    )
+                }
             }
             return
         }
@@ -368,8 +396,13 @@ internal class AndroidBleHeartRateProvider(
             return
         }
         if (newState == BluetoothProfile.STATE_CONNECTED) {
-            if (!gatt.discoverServices()) {
-                controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED)
+            val discovered = platformValue(BlePlatformOperation.DISCOVER_SERVICES) { gatt.discoverServices() }
+            if (discovered != true) {
+                if (hasExpectedPlatformFailure(BlePlatformOperation.DISCOVER_SERVICES)) {
+                    publishPlatformAvailabilityFailure(BlePlatformOperation.DISCOVER_SERVICES)
+                } else {
+                    controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED)
+                }
             }
         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
             currentGatt = null
@@ -386,9 +419,13 @@ internal class AndroidBleHeartRateProvider(
             controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED)
             return
         }
-        val service = gatt.getService(HEART_RATE_SERVICE_UUID)
+        val service = platformValue(BlePlatformOperation.READ_GATT_SERVICE) { gatt.getService(HEART_RATE_SERVICE_UUID) }
         if (service == null) {
-            controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED)
+            if (hasExpectedPlatformFailure(BlePlatformOperation.READ_GATT_SERVICE)) {
+                publishPlatformAvailabilityFailure(BlePlatformOperation.READ_GATT_SERVICE)
+            } else {
+                controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED)
+            }
             return
         }
         subscribeHeartRateMeasurement(gatt, attempt, service)
@@ -424,21 +461,34 @@ internal class AndroidBleHeartRateProvider(
         if (!canNotify && !canIndicate) return controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
         val cccd = measurement.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID)
             ?: return controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
-        if (!gatt.setCharacteristicNotification(measurement, true)) {
-            return controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
+        val notificationConfigured = platformValue(BlePlatformOperation.CONFIGURE_NOTIFICATION) {
+            gatt.setCharacteristicNotification(measurement, true)
+        }
+        if (notificationConfigured != true) {
+            return if (hasExpectedPlatformFailure(BlePlatformOperation.CONFIGURE_NOTIFICATION)) {
+                publishPlatformAvailabilityFailure(BlePlatformOperation.CONFIGURE_NOTIFICATION)
+            } else {
+                controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
+            }
         }
         val value = if (canNotify) BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE else BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
-        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeDescriptor(cccd, value)
-        } else {
-            @Suppress("DEPRECATION")
-            run {
-                cccd.value = value
-                if (gatt.writeDescriptor(cccd)) BluetoothGatt.GATT_SUCCESS else -1
+        val result = platformValue(BlePlatformOperation.WRITE_DESCRIPTOR) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeDescriptor(cccd, value)
+            } else {
+                @Suppress("DEPRECATION")
+                run {
+                    cccd.value = value
+                    if (gatt.writeDescriptor(cccd)) BluetoothGatt.GATT_SUCCESS else -1
+                }
             }
         }
         if (result != BluetoothGatt.GATT_SUCCESS) {
-            controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
+            if (hasExpectedPlatformFailure(BlePlatformOperation.WRITE_DESCRIPTOR)) {
+                publishPlatformAvailabilityFailure(BlePlatformOperation.WRITE_DESCRIPTOR)
+            } else {
+                controller.technicalFailure(attempt.targetGeneration, attempt.attemptGeneration, HeartRateFreshnessReason.CCCD_FAILED)
+            }
         }
     }
 
@@ -509,8 +559,8 @@ internal class AndroidBleHeartRateProvider(
 
     @SuppressLint("MissingPermission")
     private fun closeGattInstance(gatt: BluetoothGatt, disconnectFirst: Boolean) {
-        if (disconnectFirst) runCatching { gatt.disconnect() }
-        runCatching { gatt.close() }
+        if (disconnectFirst) platformUnit(BlePlatformOperation.DISCONNECT_GATT) { gatt.disconnect() }
+        platformUnit(BlePlatformOperation.CLOSE_GATT) { gatt.close() }
     }
 
     private fun isCurrent(gatt: BluetoothGatt, attempt: GattAttempt): Boolean =
@@ -528,8 +578,11 @@ internal class AndroidBleHeartRateProvider(
 
     @SuppressLint("MissingPermission")
     private fun addCandidate(device: BluetoothDevice, rssi: Int?, advertisesHeartRateService: Boolean) {
-        devices[device.address] = device
-        val candidate = BleHeartRateDeviceCandidate(device.address, device.displayName(), rssi, advertisesHeartRateService)
+        val identifier = platformValue(BlePlatformOperation.READ_DEVICE_IDENTIFIER) { device.address }
+            ?: return publishPlatformAvailabilityFailure(BlePlatformOperation.READ_DEVICE_IDENTIFIER)
+        devices[identifier] = device
+        val displayName = device.displayName() ?: return
+        val candidate = BleHeartRateDeviceCandidate(identifier, displayName, rssi, advertisesHeartRateService)
         mutableCandidates.value = mutableCandidates.value.filterNot { it.identifier == candidate.identifier } + candidate
         onCandidate(candidate)
     }
@@ -537,7 +590,10 @@ internal class AndroidBleHeartRateProvider(
     @SuppressLint("MissingPermission")
     private fun stopBleScan(state: BleHeartRateScanState? = null) {
         val callback = activeScanCallback
-        if (isScanning && callback != null) runCatching { scanner?.stopScan(callback) }
+        if (isScanning && callback != null) {
+            val activeScanner = scanner
+            if (activeScanner != null) platformUnit(BlePlatformOperation.STOP_SCAN) { activeScanner.stopScan(callback) }
+        }
         isScanning = false
         activeScanCallback = null
         activeScanTimeout?.let(mainHandler::removeCallbacks)
@@ -558,7 +614,8 @@ internal class AndroidBleHeartRateProvider(
         val adapter = bluetoothAdapter
         return when {
             adapter == null -> BleHeartRateProviderState(BleHeartRateProviderStateKind.UNAVAILABLE, "Bluetooth adapter is unavailable on this device")
-            !adapter.isEnabled -> BleHeartRateProviderState(BleHeartRateProviderStateKind.BLUETOOTH_DISABLED, "Bluetooth is disabled")
+            platformValue(BlePlatformOperation.READ_ADAPTER_ENABLED) { adapter.isEnabled } != true ->
+                platformAvailabilityFailureState(BlePlatformOperation.READ_ADAPTER_ENABLED)
             else -> BleHeartRateProviderState.noSource()
         }
     }
@@ -588,10 +645,83 @@ internal class AndroidBleHeartRateProvider(
     }
 
     @SuppressLint("MissingPermission")
-    private fun BluetoothDevice.toSelection() = BleHeartRateDeviceSelection(address, displayName())
+    private fun BluetoothDevice.toSelection(): BleHeartRateDeviceSelection? {
+        val identifier = platformValue(BlePlatformOperation.READ_DEVICE_IDENTIFIER) { address }
+            ?: return null.also { publishPlatformAvailabilityFailure(BlePlatformOperation.READ_DEVICE_IDENTIFIER) }
+        val displayName = displayName() ?: return null
+        return BleHeartRateDeviceSelection(identifier, displayName)
+    }
 
     @SuppressLint("MissingPermission")
-    private fun BluetoothDevice.displayName(): String = runCatching { name }.getOrNull().takeUnless { it.isNullOrBlank() } ?: "(unknown BLE device)"
+    private fun BluetoothDevice.displayName(): String? {
+        val displayName = platformValue(BlePlatformOperation.READ_DEVICE_NAME) { name }
+        if (displayName == null && hasExpectedPlatformFailure(BlePlatformOperation.READ_DEVICE_NAME)) {
+            publishPlatformAvailabilityFailure(BlePlatformOperation.READ_DEVICE_NAME)
+            return null
+        }
+        return displayName.takeUnless { it.isNullOrBlank() } ?: "(unknown BLE device)"
+    }
+
+    private fun <T> platformValue(operation: BlePlatformOperation, block: () -> T): T? {
+        lastPlatformFailure = null
+        return when (val result = platformCalls.call(operation, block)) {
+            is BlePlatformCallResult.Success -> result.value
+            is BlePlatformCallResult.ExpectedFailure -> {
+                lastPlatformFailure = result
+                null
+            }
+        }
+    }
+
+    private fun hasExpectedPlatformFailure(operation: BlePlatformOperation): Boolean =
+        lastPlatformFailure?.operation == operation
+
+    private fun platformUnit(operation: BlePlatformOperation, block: () -> Unit): Boolean {
+        lastPlatformFailure = null
+        return when (val result = platformCalls.call(operation, block)) {
+            is BlePlatformCallResult.Success -> true
+            is BlePlatformCallResult.ExpectedFailure -> {
+                lastPlatformFailure = result
+                false
+            }
+        }
+    }
+
+    private fun platformAvailabilityFailureState(
+        operation: BlePlatformOperation,
+        capturedFailure: BlePlatformCallResult.ExpectedFailure? = lastPlatformFailure?.takeIf { it.operation == operation }
+    ): BleHeartRateProviderState {
+        val failure = capturedFailure
+        return if (failure?.exception is SecurityException) {
+            BleHeartRateProviderState(
+                BleHeartRateProviderStateKind.PERMISSION_REQUIRED,
+                "Bluetooth permission became unavailable during a BLE operation",
+                missingPermissions = missingPermissions()
+            )
+        } else {
+            BleHeartRateProviderState(
+                BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
+                "Bluetooth became unavailable during a BLE operation"
+            )
+        }
+    }
+
+    private fun publishPlatformAvailabilityFailure(
+        operation: BlePlatformOperation,
+        capturedFailure: BlePlatformCallResult.ExpectedFailure? = lastPlatformFailure?.takeIf { it.operation == operation }
+    ) {
+        val state = platformAvailabilityFailureState(operation, capturedFailure).copy(selectedDevice = selectedDevice)
+        callbackGate.invalidateLifecycle()
+        stopBleScan()
+        syncControllerAvailability(state)
+        publish(state)
+    }
+
+    private fun platformScanFailureState(operation: BlePlatformOperation) = BleHeartRateScanState(
+        BleHeartRateScanStateKind.ERROR,
+        "BLE scan stopped because permission or Bluetooth state changed",
+        BleHeartRateRecoverableReason.SCAN_FAILED
+    )
 
     private class HandlerHeartRateControllerScheduler(private val handler: Handler) : HeartRateControllerScheduler {
         private val callbacks = EnumMap<HeartRateScheduledTask, Runnable>(HeartRateScheduledTask::class.java)

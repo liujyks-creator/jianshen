@@ -138,8 +138,8 @@ stateDiagram-v2
 
 ## 8. E16-10b 实现拆分与当前状态
 
-1. **E16-10b-1 policy/core — reviewed / merged:** 纯 Kotlin freshness policy core 已合入 `main`（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）；production provider/runtime 尚未消费该 policy。
-2. **E16-10b-2 foreground reconnect controller — unlocked / not started:** 下一步允许创建独立 Dev Story；真实 timer、scheduler、watchdog、retry controller、GATT callback race、old-target guard、scan conflict 和 lifecycle cancellation 仍未实现，且继续禁止自动 scan。
+1. **E16-10b-1 policy/core — reviewed / merged:** 纯 Kotlin freshness policy core 已合入 `main`（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）；production provider/runtime 已由 E16-10b-2 消费该 policy。
+2. **E16-10b-2 foreground reconnect controller — implemented / needs review:** production 已实现单一 pure controller、monotonic scheduler、freshness、2 / 5 / 10 秒有限 retry、10 秒 watchdog、target / attempt / GATT identity race guard、scan coexistence及 lifecycle cancellation；intentional close 不伪造 disconnect fact，BLE permission / Bluetooth TOCTOU 通过 production-consumed narrow platform boundary 收敛。固定 AVD 仅提供 non-BLE lifecycle / permission smoke，不代表真实 Band 9 reconnect 验收。
 3. **E16-10b-3 UI mapper/settings copy — locked / not started:** 继续依赖 E16-10b-2；不得提前接入 approved reason / attempt 文案、弱状态色或 `停止连接` UI。
 4. **E16-10b-4 verification / closeout — locked / not started:** 继续依赖 E16-10b-2 / E16-10b-3；尚无 AVD non-BLE mapping closeout 或真实 Band 9 reconnect 验收。
 
@@ -175,4 +175,4 @@ stateDiagram-v2
 
 2026-07-11，主管理对话确认方案 B、10 / 15 / 30 秒 freshness、2 / 5 / 10 秒退避、最多 3 次 retry、每次 10 秒 watchdog、前台同 runtime target 资格、设置页 `停止连接` 操作，以及 retry exhausted 不产生新事实状态、沿用最近真实失败原因对应的 `离线` / `连接异常` 并补充手动恢复文案。权限丢失必须取消 retry、stop scan、关闭 GATT并停止相关动作；重新授予后不得自动创建 queue、scan/connect 或恢复旧 attempt，必须等待用户明确连接。方案 C 的自动扫描恢复不进入当前策略。
 
-E16-10a 的 docs-only 策略已 **reviewed / merged**（merge commit `56d8029719889d329680f3dc099a77ae94909142`）。E16-10b umbrella 当前为 **in progress**：E16-10b-1 纯 Kotlin policy core 已 **reviewed / merged**（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`），但 production provider/runtime 尚未消费该 policy；E16-10b-2 仅为 **unlocked / not started**。不得把这些状态写成 timer、自动重连、自动扫描、UI 操作或真实 BLE 验证已经实现。
+E16-10a 的 docs-only 策略已 **reviewed / merged**（merge commit `56d8029719889d329680f3dc099a77ae94909142`）。E16-10b umbrella 当前为 **in progress**：E16-10b-1 纯 Kotlin policy core 已 **reviewed / merged**；E16-10b-2 已 **implemented / needs review**，production provider/runtime 已消费 policy并实现 controller、scheduler、watchdog、有限 retry、race guards与 lifecycle cancellation。E16-10b-3 / E16-10b-4 仍 **locked / not started**，E16-11 / E16-12 仍 **not started**。不得把 AVD non-BLE evidence 写成真实 HUAWEI Band 9 reconnect、retry exhaustion或手动恢复验收，也不得提前写成 reviewed / merged。

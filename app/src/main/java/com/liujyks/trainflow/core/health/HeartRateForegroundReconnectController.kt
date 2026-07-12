@@ -338,11 +338,26 @@ internal class HeartRateForegroundReconnectController(
         scanMayResumeQueue = false
         freshnessGeneration += 1
         if (close) invalidateAttempt(close = true, cancelRecovery = false) else activeAttempt = false
-        if (hasRuntimeTarget && state.kind !in setOf(HeartRateReconnectRuntimeKind.IDLE, HeartRateReconnectRuntimeKind.STOPPED)) {
-            timeline = timeline.disconnected()
-            publish(state.copy(kind = HeartRateReconnectRuntimeKind.OFFLINE, reason = HeartRateFreshnessReason.GATT_DISCONNECTED,
-                reconnectInProgress = false, bpm = null, attemptGeneration = attemptGeneration))
-        }
+        if (!hasRuntimeTarget || state.kind in setOf(HeartRateReconnectRuntimeKind.IDLE, HeartRateReconnectRuntimeKind.STOPPED)) return
+
+        // Cancellation is an intent, not a GATT fact. Preserve an already accepted failure fact;
+        // otherwise expose a neutral stopped presentation with no cached measurement.
+        val stopped = state.copy(
+            kind = when (state.kind) {
+                HeartRateReconnectRuntimeKind.OFFLINE,
+                HeartRateReconnectRuntimeKind.TECHNICAL_ERROR -> state.kind
+                else -> HeartRateReconnectRuntimeKind.STOPPED
+            },
+            reason = when (state.kind) {
+                HeartRateReconnectRuntimeKind.OFFLINE,
+                HeartRateReconnectRuntimeKind.TECHNICAL_ERROR -> state.reason
+                else -> null
+            },
+            reconnectInProgress = false,
+            bpm = null,
+            attemptGeneration = attemptGeneration
+        )
+        publish(stopped)
     }
 
     private fun invalidateCurrent(close: Boolean) {
