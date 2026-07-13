@@ -2,7 +2,8 @@
 
 **状态：** E16 已由 correct-course 关闭；sealed historical archive / reference only；由 E17 重新规划
 **日期：** 2026-07-12
-**当前 Story：** E17-0（docs-only）
+**E17-0 状态引用：** `reviewed / merged`；immutable Story SHA `abce4b712139c373f534a6fabab423fe138fc29c`；merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085`
+**Closeout 门禁引用：** immutable SHA 尚未成为 `main` ancestor 时仅允许独立 Review / merge；Review、merge / push、ancestry、`main...origin/main = 0 0` 与权威文档一致性全部满足后门禁自动满足，并由主管理生成 E17-1 提示词；不需要也不得创建“closeout 的 closeout”
 
 ## 1. E16 历史定位
 
