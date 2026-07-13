@@ -33,6 +33,11 @@
             android:exported="true"
             android:label="HR Broadcast Smoke"
             android:theme="@style/Theme.TrainFlow" />
+        <activity
+            android:name=".app.E17Band9HrsRevalidationActivity"
+            android:exported="true"
+            android:label="E17-1 Band 9 HRS Revalidation"
+            android:theme="@style/Theme.TrainFlow" />
     </application>
 
 </manifest>
