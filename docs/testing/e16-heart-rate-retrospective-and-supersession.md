@@ -2,7 +2,8 @@
 
 **状态：** E16 已由 correct-course 关闭；sealed historical archive / reference only；由 E17 重新规划
 **日期：** 2026-07-12
-**当前 Story：** E17-0（docs-only）
+**E17-0 状态引用：** `reviewed / merged`；immutable Story SHA `abce4b712139c373f534a6fabab423fe138fc29c`；merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085`
+**当前 Story：** E17-0 closeout docs-sync（docs-only；独立 Code Review gate；E17-1 未启动）
 
 ## 1. E16 历史定位
 

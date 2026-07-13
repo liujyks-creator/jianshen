@@ -1,6 +1,6 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态：** E17-0 implemented / needs review；E17-1 至 E17-4 locked
+**状态：** E17-0 reviewed / merged；E17-1 planned / prerequisite-gated；E17-2 至 E17-4 planned / locked
 **日期：** 2026-07-12
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
@@ -34,8 +34,10 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - 正式关闭 E16 历史支线并记录 supersession。
 - 只读审计 main 与失败分支，分类 freeze / revalidate / reference-only / rewrite / reject。
 - 重置 project status、decision、roadmap、readiness、architecture 和提示词流程。
-- 状态：`implemented / needs review`。
-- 下一步：独立 E17-0 Code Review；E17-1 仍 locked。
+- 状态：`reviewed / merged`。
+- Immutable Story SHA：`abce4b712139c373f534a6fabab423fe138fc29c`；merge commit：`2eee72cc44c2c7733cb565ea665ebfae48610085`。
+- Story SHA 已是 `main` ancestor，`main == origin/main == 2eee72cc44c2c7733cb565ea665ebfae48610085`、`main...origin/main = 0 0`；E17-0 本体 Review 无 finding 并完成 merge / push。
+- 下一步：独立 E17-0 closeout docs-sync Code Review；本 closeout 开发期间不得启动 E17-1。
 
 ### E17-1：Band 9 与标准 HRS 重新复验
 
@@ -43,7 +45,7 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - 只做设备与协议可行性复验，不形成 production provider 架构。
 - 真机截图、日志、APK 与设备输出只进入 `.local/`；可追溯结论进入文档。
 - 真实操作由用户执行；开发对话只准备 APK、日志入口和清单。
-- 当前状态：`planned / locked`。
+- 当前状态：`planned / prerequisite-gated`；本 closeout Story 开发期间未启动。
 
 ### E17-2：重新定义产品范围
 
@@ -132,10 +134,10 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 ## 7. E17 解锁规则
 
-1. E17-0 独立 Code Review 通过。
-2. E17-0 Story 分支以 `--no-ff` 合入 `main` 并推送，E17-0 immutable Story full SHA 成为 `main` ancestor。
-3. 随后完成独立 E17-0 closeout docs-sync；该 docs-sync 必须独立开发、独立 Review、合入 `main` 并推送，其 immutable full SHA 成为 `main` ancestor。
-4. `main` 与 `origin/main` 同步为 `0 0`，且 project-status、roadmap、readiness 与本计划状态一致后，E17-1 才可解锁。
+1. E17-0 独立 Code Review 已通过，本体 Review 无 finding。
+2. E17-0 Story 分支已合入 `main` 并推送；immutable Story full SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已是 `main` ancestor，merge commit 为 `2eee72cc44c2c7733cb565ea665ebfae48610085`，且此时 `main` 与 `origin/main` 同步为 `0 0`。
+3. 当前独立 E17-0 closeout docs-sync 必须完成独立 Review、merge / push，且 closeout immutable full SHA 成为 `main` ancestor。
+4. closeout 合入后再次确认 `main` 与 `origin/main` 同步为 `0 0`，且 project-status、roadmap、readiness 与本计划状态一致，主管理才可通过 Git 解析 closeout immutable SHA、生成 E17-1 提示词并启动 E17-1。该状态交接不要求再创建“closeout 的 closeout”。
 5. E17-1 reviewed / merged，并完成该 Story 明确要求的 Band 9 真机复验后，才可开始 E17-2。
 6. E17-2 reviewed / merged 后才可开始 E17-3。
 7. E17-3 reviewed / merged 后才可开始 E17-4。
@@ -150,7 +152,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 push、Review 文本、人工测试或分支存在都不等于已合入。E16 分支、E16 Story tip 和 `89d1e23f870185a2e279d35bb293883f64fe70ba` 均不得作为 E17 解锁前置。
 
-当前仍为 E17-0 `implemented / needs review`，E17-1 至 E17-4 `locked`。下一步只能是 E17-0 独立 Code Review；不得开始 Band 9 / HRS 复验，不得开始 E17 产品、架构、readiness 或 production 实现。E17-0 merge 本身不会立即解锁 E17-1，必须先完成上述独立 closeout docs-sync 全部门禁。
+E17-0 当前为 `reviewed / merged`，E17-1 为 `planned / prerequisite-gated`，E17-2 至 E17-4 为 `planned / locked`。下一步只能是 E17-0 closeout docs-sync 独立 Code Review；本 closeout Review / merge 门禁完成前，不得声称 E17-1 已启动，也不得开始 Band 9 / HRS 复验、E17 产品、架构、readiness 或 production 实现。closeout 全部门禁满足后可直接由主管理进入 E17-1 提示词生成，不再产生递归 docs-sync。
 
 ## 8. E17-0 验收
 
@@ -158,8 +160,9 @@ push、Review 文本、人工测试或分支存在都不等于已合入。E16 �
 - E16-10b-2 保持 `changes requested` 且永久禁止合并。
 - 胶囊 `adopted / frozen / direct reuse` 范围在 retrospective、E17 计划、decision log 与 project-status 一致。
 - E16 原始代码与文档作为 sealed historical archive，不参与 E17 当前状态逐行一致性检查。
-- E17-0 merge 后仍须独立 closeout docs-sync reviewed / merged / ancestry / sync / docs consistency 全部通过，才能解锁 E17-1。
-- E17-1 至 E17-4 全部 locked。
+- E17-0 已 reviewed / merged；Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 成为 `main` ancestor。
+- 当前仍须独立 closeout docs-sync Review / merge / push / ancestry / sync / docs consistency 全部通过，才能解锁 E17-1；closeout 合入后无需再做 closeout 的 closeout。
+- E17-1 为 planned / prerequisite-gated；E17-2 至 E17-4 全部 planned / locked。
 - E17 implementation readiness 明确未通过。
 - 通用提示词流程包含连续 Review、Repair 结构、最小修改、Evidence、体积控制与 correct-course 职责门禁。
 - 本 Story 只修改 Markdown / 根目录提示词模板，不修改生产或测试代码。
