@@ -36,11 +36,12 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 | 字段 | 当前值 |
 |---|---|
 | Story branch | `codex/e17-1-band9-hrs-revalidation` |
-| Preparation APK Git commit | 待阶段 A preparation commit 后记录 |
-| APK file | `.local/smoke/e17-1-band9-hrs-revalidation/trainflow-e17-1-debug.apk`（待生成） |
-| APK SHA256 | 待阶段 A build 后记录 |
+| Preparation APK Git commit | `a55aa59fe4ee897f604938d78e087d9a1f203484` |
+| APK file | `.local/smoke/e17-1-band9-hrs-revalidation/trainflow-e17-1-debug.apk` |
+| APK SHA256 | `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` |
 | Build variant | `debug` |
 | Evidence log tag | `TrainFlowE17Hrs` |
+| Launcher path | `TrainFlow Debug` -> `E17-1 Band 9 HRS Revalidation` |
 
 最终结论必须记录用户实际安装 APK 对应的完整 Git commit 与 SHA256。若测试期间 APK 变化，必须重新计算 SHA256，并明确哪一轮证据属于哪个 APK；不得把不同构建的证据混成同一条链路。
 
@@ -53,7 +54,7 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 | HUAWEI Band 9 固件 | 未确认 |
 | Huawei Health 版本 | 未确认 |
 | Band 9 佩戴 / 测量条件 | 待用户真机回传 |
-| AVD | `TrainFlow_Pixel_API_36`；仅用于 Activity / 权限入口 / 日志 UI smoke |
+| AVD | `TrainFlow_Pixel_API_36`；两个 launcher 均可查询，`TrainFlow Debug` 可进入 E17-1 Activity；仅用于 Activity / 权限入口 / 日志 UI smoke |
 
 无法从证据可靠确认的版本或环境字段必须保持“未确认”，不得推测。
 
