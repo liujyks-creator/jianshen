@@ -37,7 +37,7 @@ class HeartRatePermissionBoundaryTest {
     }
 
     @Test
-    fun debugHeartRateSmokeDoesNotReplaceDefaultLauncher() {
+    fun debugHeartRateSmokeAddsSeparateDiagnosticLauncherWithoutReplacingMain() {
         val mainManifest = File("src/main/AndroidManifest.xml").readText()
         val debugManifest = File("src/debug/AndroidManifest.xml").readText()
 
@@ -50,6 +50,9 @@ class HeartRatePermissionBoundaryTest {
 
         assertTrue(debugManifest.contains(".app.DebugEntryActivity"))
         assertTrue(debugManifest.contains(".app.HeartRateBroadcastSmokeActivity"))
-        assertFalse(debugManifest.contains("android.intent.category.LAUNCHER"))
+        assertTrue(debugManifest.contains(".app.E17Band9HrsRevalidationActivity"))
+        assertTrue(debugManifest.contains("android:label=\"TrainFlow Debug\""))
+        assertTrue(debugManifest.contains("android.intent.action.MAIN"))
+        assertTrue(debugManifest.contains("android.intent.category.LAUNCHER"))
     }
 }
