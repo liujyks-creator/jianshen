@@ -19,6 +19,12 @@ class DebugEntryActivity : ComponentActivity() {
             setPadding(28, 28, 28, 28)
             addView(debugButton("进入 TrainFlow", MainActivity::class.java))
             addView(debugButton("HR Broadcast Smoke", HeartRateBroadcastSmokeActivity::class.java))
+            addView(
+                debugButton(
+                    "E17-1 Band 9 HRS Revalidation",
+                    E17Band9HrsRevalidationActivity::class.java
+                )
+            )
         }
     }
 

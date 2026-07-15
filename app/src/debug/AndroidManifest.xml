@@ -23,7 +23,13 @@
             android:name=".app.DebugEntryActivity"
             android:exported="true"
             android:label="TrainFlow Debug"
-            android:theme="@style/Theme.TrainFlow" />
+            android:theme="@style/Theme.TrainFlow">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".app.ShortTargetTimerDialDiagnosticActivity"
             android:exported="true"
@@ -32,6 +38,11 @@
             android:name=".app.HeartRateBroadcastSmokeActivity"
             android:exported="true"
             android:label="HR Broadcast Smoke"
+            android:theme="@style/Theme.TrainFlow" />
+        <activity
+            android:name=".app.E17Band9HrsRevalidationActivity"
+            android:exported="true"
+            android:label="E17-1 Band 9 HRS Revalidation"
             android:theme="@style/Theme.TrainFlow" />
     </application>
 
