@@ -1,6 +1,6 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态：** E17-0、E17-1 reviewed / merged；E17-2 implemented / needs review；E17-3 planned / prerequisite-gated；E17-4 planned / locked
+**状态判定：** E17-0、E17-1 `reviewed / merged`；E17-2 合并门禁未全部满足时为 `implemented / needs review`、E17-3 为 `planned / prerequisite-gated`，全部满足后 E17-2 自动视为 `reviewed / merged`、E17-3 gate 自动视为 satisfied；E17-4 `planned / locked`
 **日期：** 2026-07-12；状态同步：2026-07-16
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
@@ -62,14 +62,14 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - 训练中心率记录、平均 / 最高心率、曲线、区间时长 / 占比、覆盖缺口、用户主动导出到电脑和由用户导入外部模型分析是接受的后续方向，但数据、分析、导出和复盘视觉审查必须另拆。
 - 前台持续自动恢复及活跃训练后台断连自动恢复已确认有产品价值，Disposition 为 `accepted product value / deferred implementation / requires separate product decision refinement and Story`；初始可交付恢复基线仍为手动恢复，不恢复 D-078。
 - 两张划船机截图只作为未来单次训练详情的信息层级与效果参考，不复制或提交；后续按产品 / 数据讨论 -> 数据能力 -> 独立视觉审查 -> 用户确认 -> UI 实现推进。
-- 当前状态：`implemented / needs review`；只完成产品范围定义，不进入技术架构或 production implementation。
+- 合并门禁未全部满足时状态为 `implemented / needs review`；门禁全部满足后自动视为 `reviewed / merged`。本 Story 只完成产品范围定义，不进入技术架构或 production implementation。
 
 ### E17-3：最小技术架构
 
 - 设计原生 GATT 所有权、callback 串行化、permission failure、scan / connect / close、状态事实与 presentation 分离和测试 seam。
 - 架构必须与小型 App 体量匹配，默认优先直接使用 Android BLE 类型。
 - 明确 callback ownership 后才能切 implementation Story。
-- 当前状态：`planned / prerequisite-gated`；E17-2 最终 immutable Story SHA 成为 `main` ancestor 前不得启动。
+- E17-2 合并门禁未全部满足时状态为 `planned / prerequisite-gated`；门禁全部满足后自动视为 satisfied，才可由主管理生成并启动 E17-3。
 
 ### E17-4：Implementation readiness
 
@@ -161,7 +161,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 push、Review 文本、人工测试或分支存在都不等于已合入。E16 分支、E16 Story tip 和 `89d1e23f870185a2e279d35bb293883f64fe70ba` 均不得作为 E17 解锁前置。
 
-E17-0 与 E17-1 为 `reviewed / merged`，E17-2 为 `implemented / needs review`，E17-3 为 `planned / prerequisite-gated`，E17-4 为 `planned / locked`。E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时，不得启动 E17-3；门禁满足后主管理直接从 Git 解析最终 SHA 并生成 E17-3 提示词，不产生递归 docs-sync。
+E17-0 与 E17-1 为 `reviewed / merged`，E17-4 为 `planned / locked`。只要 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、权威文档一致性任一条件尚未满足，E17-2 即为 `implemented / needs review`，E17-3 即为 `planned / prerequisite-gated`，不得启动 E17-3；全部满足后 E17-2 自动视为 `reviewed / merged`、E17-3 gate 自动视为 satisfied，主管理直接从 Git 解析最终 SHA 并生成 E17-3 提示词，不产生额外状态 docs-sync 或递归 closeout。
 
 ## 8. E17-0 验收
 
@@ -171,7 +171,7 @@ E17-0 与 E17-1 为 `reviewed / merged`，E17-2 为 `implemented / needs review`
 - E16 原始代码与文档作为 sealed historical archive，不参与 E17 当前状态逐行一致性检查。
 - E17-0 已 reviewed / merged；Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 成为 `main` ancestor。
 - E17-0 closeout 后续已完成独立 Review / merge / push / ancestry / sync / docs consistency 门禁；未创建递归 closeout。
-- 当前 E17-1 已 `reviewed / merged`；E17-2 产品合同已获用户确认并为 `implemented / needs review`，E17-3 为 `planned / prerequisite-gated`，E17-4 为 `planned / locked`。
+- 当前 E17-1 已 `reviewed / merged`；E17-2 产品合同已获用户确认，其与 E17-3 按第 7 节条件式门禁判定状态，E17-4 为 `planned / locked`。
 - E17 implementation readiness 明确未通过。
 - 通用提示词流程包含连续 Review、Repair 结构、最小修改、Evidence、体积控制与 correct-course 职责门禁。
 - 本 Story 只修改 Markdown / 根目录提示词模板，不修改生产或测试代码。

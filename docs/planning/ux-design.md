@@ -426,7 +426,8 @@ Timer Dial 动效必须来自 TrainFlow engine state，不允许视觉假进度�
 - 胶囊不参与训练页排版，不挤压 TimerDial、力量 active/rest/confirm-record、底部固定主按钮或完成页返回按钮。
 - 支持拖动和左右贴边；落点不得覆盖主按钮、confirm-record 输入 / 感受选择、底部导航、系统手势区和顶部状态关键标签。
 - 点击胶囊只展开心率详情；当胶囊覆盖某处时，点击命中胶囊本身，不透传到底层按钮。拖动后松手应自动吸附到安全位置。
-- `huashu-design` HTML 高保真视觉评审必须先覆盖 720x1280 等小屏：collapsed、expanded、dragging、snap、所有连接状态、所有区间颜色、超过上限深红、TimerDial、strength active/rest/confirm-record 和 completion 页面。
+- 胶囊的 `huashu-design` / HTML 高保真视觉 gate 已在 E16 历史过程中完成；D-079 / D-080 已将其视觉与互动定为 `adopted / frozen / direct reuse`，不再重新进行 HTML、高保真、颜色、尺寸、布局、互动或 motion 变体评审。
+- 冻结胶囊继续直接复用既有小屏、安全区、拖动、左右吸附和状态呈现能力。未来训练复盘页仍需独立视觉审查，但该审查只作用于未来复盘页面，不得反向生成胶囊重做任务。
 
 ## 9. 力量训练执行页
 

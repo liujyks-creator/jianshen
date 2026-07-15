@@ -56,7 +56,7 @@ stepsCompleted:
 
 > 2026-07-16 E17-1 closeout 刷新：E17-1 已 `reviewed / merged`，最终设备/协议结论为 `passed`。Immutable Story SHA `b7a48b980b54e34763212699c64ce387866ec064` 已通过 merge commit `17a305725a4241810ea4dbd26a29414c2be2582b` 合入并成为 `main` ancestor；E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。独立 Review 无 blocker、must-fix 或 should-fix；持续 notify 后顶部 Stop 不易访问，以及 debug 工具 `currentGatt` callback / UI 共享状态未显式串行化，均为 debug-only nice-to-have，不扩展为 production 重构任务。当前 `PLU110`、Android 16 / SDK 36、HUAWEI Band 9 与 APK SHA256 `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` 的证据已确认广播关闭扫描无标准 HRS source、四个广播开启周期的 `0x180D`、GATT、notify 型 `0x2A37 properties=0x10`、`0x2902`、CCCD `01 00`、连续 notify、真实 raw payload / parser bpm 一致，以及 Huawei Health 广播开启时断开、广播关闭后可恢复。四周期 label / address 相同不证明永久身份；两次 `status=19` 是链路不稳定事实；Band 固件与 Huawei Health 版本未确认；最终恢复缺少额外截图但有周期间恢复截图与用户现场观察。上述结果不证明 production provider 稳定、production 架构完成、lifecycle / reconnect 正确、自动重连可用、其他环境通用，也不能用 AVD 代替真实 BLE / GATT。**E17 implementation readiness 仍未通过。** E17-2 为 `planned / prerequisite-gated`，只负责重新定义产品范围；E17-3 与 E17-4 为 `planned / locked`，E17-4 通过前禁止 production implementation。胶囊视觉与互动继续 `adopted / frozen / direct reuse`，runtime、provider state、mapper、文案、优先级和 wiring 不冻结；自动重连不是默认前置。
 
-> 2026-07-16 E17-2 刷新：用户已确认 `docs/planning/e17-2-heart-rate-product-scope.md` 的完整产品合同，决策为 D-080，开发分支状态为 `implemented / needs review`。心率默认关闭；用户在训练偏好显式开启后是重要训练能力，胶囊在 TrainFlow 前台跨页面显示 bpm、非医疗区间和用户上限视觉提示，未训练只显示不记录。权限只在主动扫描 / 连接时请求；saved device 只作便利提示，用户点击后才有限时精确匹配。训练中心率记录、平均 / 最高心率、曲线、区间时长 / 占比、覆盖缺口、用户主动导出到电脑和由用户导入外部模型分析均为接受的后续方向，但 Room、采样、分析、导出和复盘视觉审查另拆。前台持续自动恢复及活跃训练后台断连自动恢复已确认有价值，但为 `accepted product value / deferred implementation / requires separate product decision refinement and Story`，初始恢复基线仍是手动恢复。**E17 implementation readiness 仍未通过。** E17-3 为 `planned / prerequisite-gated`，E17-4 为 `planned / locked`；E17-2 最终 immutable Story SHA 成为 `main` ancestor、`main...origin/main = 0 0` 且权威文档一致前，只允许 E17-2 独立 Review / merge，不得启动 E17-3。
+> 2026-07-16 E17-2 刷新：用户已确认 `docs/planning/e17-2-heart-rate-product-scope.md` 的完整产品合同，决策为 D-080。心率默认关闭；用户在训练偏好显式开启后是重要训练能力，胶囊在 TrainFlow 前台跨页面显示 bpm、非医疗区间和用户上限视觉提示，未训练只显示不记录。权限只在主动扫描 / 连接时请求；saved device 只作便利提示，用户点击后才有限时精确匹配。训练中心率记录、平均 / 最高心率、曲线、区间时长 / 占比、覆盖缺口、用户主动导出到电脑和由用户导入外部模型分析均为接受的后续方向，但 Room、采样、分析、导出和复盘视觉审查另拆。前台持续自动恢复及活跃训练后台断连自动恢复已确认有价值，但为 `accepted product value / deferred implementation / requires separate product decision refinement and Story`，初始恢复基线仍是手动恢复。**E17 implementation readiness 仍未通过。** E17-2 / E17-3 状态按本报告第 6、10 节的条件式合并门禁判定；E17-4 为 `planned / locked`。
 
 ## 1. Readiness Decision
 
@@ -95,23 +95,29 @@ stepsCompleted:
 
 ## 4. 范围边界
 
-### MVP 内
+### 已实现 MVP 与历史心率基线
 
 - Android-first 原生 App。
 - 计时训练和力量训练两个可用闭环。
 - 动作库基础内容、计划创建、执行页、训练总结、历史和基础恢复建议。
 - 跟练雏形，复用计时训练流程。
-- 心率状态抽象和 provider 边界；当前 MVP 不显示、不录入、不统计心率。
+- E11 / E16 之前的 MVP 曾全面撤下页面内联心率显示、手动心率输入、`未获取心率` 占位和旧平均心率趋势，并未接入生产真实设备；这是历史范围事实，不是 D-080 之后的永久产品排除项。
 - 通知、声音、震动和偏好设置的基础能力。
 - 官方默认设计系统和可 fork 的 UI shell 边界。
 
-### MVP 外
+### 当前 E17 已接受但尚未 implementation-ready
+
+- D-080 已接受默认关闭、用户显式 opt-in 后读取标准 HRS 设备心率，并通过已冻结胶囊在 TrainFlow 前台跨页面显示 bpm、非医疗区间和用户上限视觉提示。
+- 当前 production implementation 尚未完成；必须先完成 E17-3 最小技术架构和 E17-4 readiness，E17-4 通过前不得开始 production implementation。
+- 训练记录、复盘分析、覆盖缺口、用户导出和自动恢复仍是后续独立能力，不是 E17-3 默认前置。
+
+### 当前未纳入或继续排除
 
 - 云同步、账号体系、社交、排行和内容信息流。
 - 完整课程运营平台和大型教练视频库。
 - 自动语音教练、AI 实时动作纠错、音乐节拍编排。
-- 医疗级心率告警、疾病判断、康复治疗建议。
-- 真实可穿戴设备接入和 Health Connect 历史数据读取。
+- 医疗级心率告警、疾病判断、声音 / 震动强制提醒、自动暂停、训练中断和康复治疗建议。
+- Health Connect 历史读取、全天候健康监测，以及未经单独接受的通用品牌 / 设备兼容承诺；D-080 对标准 HRS + 当前 Band 9 验证目标的接受不自动扩张这些范围。
 - 运行时插件市场、远程主题下载和 App 内安装第三方 UI 包。
 
 ## 5. E0.1 启动条件
@@ -149,7 +155,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
 - `O-006` / E16 历史快照：E16 曾验证 Band 9 可通过心率广播暴露标准 BLE HRS；E16-1 至 E16-10b-1 中已经合入 `main` 的 Story 继续保留各自 immutable merge fact。E16-10a 当时接受的有限前台 direct reconnect 与 10 / 15 / 30 秒 freshness policy 已 reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；E16-10b-1 纯 Kotlin policy core 也已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。这些 `reviewed / merged` 仅是历史事实，不表示 E17 继承其产品或技术合同。
-- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17 implementation readiness 未通过。E17-0 与 E17-1 已 `reviewed / merged`；E17-2 产品合同已获用户确认，决策为 D-080，当前为 `implemented / needs review`。E17-3 为 `planned / prerequisite-gated`，E17-4 为 `planned / locked`。E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时只允许独立 Review / merge；当 E17-2 Review、merge / push、最终 SHA ancestry、`main...origin/main = 0 0` 和权威文档一致全部满足时，E17-3 门禁自动满足。主管理从 Git 解析最终 SHA 并生成 E17-3 提示词，不做 E17-2 状态 docs-sync，不创建 closeout 的 closeout。自动恢复为已接受价值的延后独立候选，不是 E17-3 默认前置。
+- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17 implementation readiness 未通过，E17-0 与 E17-1 已 `reviewed / merged`，E17-4 为 `planned / locked`。只要 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、权威文档一致性任一条件尚未满足，E17-2 即为 `implemented / needs review`、E17-3 即为 `planned / prerequisite-gated`；全部满足后 E17-2 自动视为 `reviewed / merged`、E17-3 gate 自动视为 satisfied。主管理从 Git 解析最终 SHA 并生成 E17-3 提示词，不做 E17-2 状态 docs-sync，不创建 closeout 的 closeout。自动恢复为已接受价值的延后独立候选，不是 E17-3 默认前置。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查
@@ -159,7 +165,8 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 - `WorkoutPlan` 表达目标和结构，`WorkoutSession` 表达实际执行和结果，二者不能混写。
 - Room entity 不能泄漏到 feature UI。
 - 通知、音频、震动、心率和媒体属于平台适配边界，不应反向依赖 feature UI。
-- 心率首版是抽象状态和 provider 边界，不读取生产真实设备、不显示 UI、不做医疗告警。
+- 历史 MVP 曾只保留抽象心率状态 / provider 边界，并撤下生产真实设备读取和 UI；D-080 已 supersede 其中的全面排除范围，接受显式 opt-in 后的标准 HRS 设备心率与冻结胶囊显示，但当前 production implementation 仍须先通过 E17-3 与 E17-4。
+- 当前心率接入继续消费抽象状态 / 平台边界，不把设备 SDK 模型泄漏到 UI；医疗判断、危险告警、声音 / 震动强制提醒、自动暂停或训练中断继续排除。
 
 ## 8. UI 与开源定制检查
 
@@ -180,6 +187,6 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 原 `MVP Alpha readiness 前检查` 及其可复制提示词已经失效，只保留在 Git 历史中，不得继续使用。E16 umbrella 已由 correct-course 关闭并被 E17 替代；旧 E16-1 / E16-2 只能作为 historical / reference 或 revalidation 输入，不能直接作为 E17 provider 地基合同。自动重连不得作为默认前置。
 
-E17-0 与 E17-1 已 `reviewed / merged`。E17-2 产品合同已获用户确认，决策为 D-080，当前为 `implemented / needs review`；主文档为 `docs/planning/e17-2-heart-rate-product-scope.md`。E17-3 为 `planned / prerequisite-gated`，E17-4 为 `planned / locked`。
+E17-0 与 E17-1 已 `reviewed / merged`。E17-2 产品合同已获用户确认，决策为 D-080，主文档为 `docs/planning/e17-2-heart-rate-product-scope.md`；E17-2 / E17-3 状态按下述条件判定，E17-4 为 `planned / locked`。
 
 当 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时，只允许 E17-2 独立 Code Review / merge，不得启动 E17-3。当 E17-2 通过独立 Review、merge / push，其最终 SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且权威文档一致时，E17-3 门禁自动满足；主管理从 Git 解析最终 SHA 并生成 E17-3 提示词，不要求额外状态 docs-sync。E17-3 只负责最小技术架构；E17-4 readiness 通过前不得开始 production implementation。记录、分析、用户导出与自动恢复均需各自后续门禁。

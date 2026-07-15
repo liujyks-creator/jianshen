@@ -1,6 +1,6 @@
 # E17-2 心率产品范围合同
 
-**状态：** implemented / needs review
+**状态判定：** E17-2 合并门禁未全部满足时为 `implemented / needs review`，全部满足后自动视为 `reviewed / merged`；对应的 E17-3 gate 同步由 `planned / prerequisite-gated` 转为 satisfied
 **日期：** 2026-07-16
 **性质：** 用户已确认的产品合同；docs-only；不是技术架构或 production implementation
 
@@ -213,9 +213,8 @@ E17-3 后续只能把以下产品事实作为输入：默认关闭和设置页 o
 
 - 用户已明确确认本完整合同。
 - 本 Story 只修改批准的 Markdown，不修改 production、测试、architecture、sealed E16 或胶囊冻结资产。
-- E17-2 本开发分支状态为 `implemented / needs review`；E17 implementation readiness 仍未通过。
-- E17-3 保持 `planned / prerequisite-gated`，E17-4 保持 `planned / locked`。
-- 当 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时，只允许独立 Code Review / merge，不得启动 E17-3。
-- 当 E17-2 通过独立 Review、merge / push，其最终 immutable Story SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且权威文档一致时，E17-3 门禁自动满足。主管理从 Git 解析最终 Story SHA 并生成 E17-3 提示词，不做额外 E17-2 状态 docs-sync，不创建“closeout 的 closeout”。
+- E17 implementation readiness 仍未通过，E17-4 保持 `planned / locked`。
+- 只要 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、权威文档一致性任一条件尚未满足，E17-2 即为 `implemented / needs review`，E17-3 即为 `planned / prerequisite-gated`；此时只允许 E17-2 独立 Code Review / merge，不得启动 E17-3。
+- 上述条件全部满足后，E17-2 自动视为 `reviewed / merged`，E17-3 gate 自动视为 satisfied。主管理从 Git 解析最终 Story SHA 并生成 E17-3 提示词，不做额外 E17-2 状态 docs-sync，不创建“closeout 的 closeout”。
 - 不在文档中硬编码尚未产生的最终 Story SHA，不使用 branch tip 代替 immutable SHA。
 - E17-3 只负责最小技术架构；E17-4 通过前禁止 production implementation。

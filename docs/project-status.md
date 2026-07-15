@@ -6,11 +6,11 @@
 
 ## 当前状态
 
-2026-07-16 E17-2 Heart-rate Product Scope Redefinition 已完成用户产品合同确认，当前开发分支状态为 **implemented / needs review**，新决策为 D-080，主文档为 `docs/planning/e17-2-heart-rate-product-scope.md`。心率默认关闭，不影响无设备用户的训练闭环；用户在 `设置 -> 训练偏好 -> 心率与设备` 显式开启后，心率是重要训练能力。权限只在用户主动扫描 / 连接时请求；Band 9 广播需用户手动开启，设置说明记录其与 Huawei Health 当前互斥；只做用户主动有限时扫描与选择，saved display name / identifier 只是便利提示，用户点击“连接已保存设备”后才做有限时精确匹配，名称 / 地址不是永久身份。
+2026-07-16 E17-2 Heart-rate Product Scope Redefinition 已完成用户产品合同确认，新决策为 D-080，主文档为 `docs/planning/e17-2-heart-rate-product-scope.md`。其状态按下述合并门禁条件判定，不把开发分支时点写成永久状态。心率默认关闭，不影响无设备用户的训练闭环；用户在 `设置 -> 训练偏好 -> 心率与设备` 显式开启后，心率是重要训练能力。权限只在用户主动扫描 / 连接时请求；Band 9 广播需用户手动开启，设置说明记录其与 Huawei Health 当前互斥；只做用户主动有限时扫描与选择，saved display name / identifier 只是便利提示，用户点击“连接已保存设备”后才做有限时精确匹配，名称 / 地址不是永久身份。
 
 开启后胶囊可在 TrainFlow 前台跨页面显示 bpm、非医疗强度区间和用户上限视觉提示；未训练只显示不记录。活跃训练允许锁屏 / 临时后台维持当前连接；前台持续自动恢复及活跃训练后台断连自动恢复已确认有价值，但 Disposition 为 `accepted product value / deferred implementation / requires separate product decision refinement and Story`，初始可交付恢复基线仍为明确状态 + 用户手动恢复，不恢复 D-078。训练中心率记录、平均 / 最高心率、时间曲线、区间时长 / 占比、覆盖缺口、用户主动导出到电脑并由用户导入外部模型分析均为接受的后续方向；Room、采样、分析、导出和复盘 UI 必须另拆。两张划船机截图只作为未来单次训练详情的信息层级与效果参考，保留在用户 Downloads，不复制或提交；后续按产品 / 数据讨论 -> 数据能力 -> 独立视觉审查 -> 用户确认 -> UI 实现推进。
 
-E17 implementation readiness 仍未通过。E17-3 为 `planned / prerequisite-gated`，E17-4 为 `planned / locked`。当 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时，只允许 E17-2 独立 Code Review / merge，不得启动 E17-3；当 E17-2 通过独立 Review、merge / push，其最终 immutable SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且权威文档一致时，门禁自动满足。主管理从 Git 解析最终 SHA 并生成 E17-3 提示词，不做额外 E17-2 状态 docs-sync，不创建“closeout 的 closeout”，也不在当前文档硬编码尚未产生的 SHA。
+E17 implementation readiness 仍未通过，E17-4 为 `planned / locked`。只要 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、权威文档一致性任一条件尚未满足，E17-2 即为 `implemented / needs review`，E17-3 即为 `planned / prerequisite-gated`；此时只允许 E17-2 独立 Code Review / merge，不得启动 E17-3。上述条件全部满足后，E17-2 自动视为 `reviewed / merged`，E17-3 gate 自动视为 satisfied。主管理从 Git 解析最终 SHA 并生成 E17-3 提示词，不做额外 E17-2 状态 docs-sync，不创建“closeout 的 closeout”，也不在当前文档硬编码尚未产生的 SHA。
 
 2026-07-16 E17-1 Band 9 与标准 HRS 重新复验已完成独立 Review、merge 与 push，最终状态为 **reviewed / merged**，设备/协议结论为 **passed**。Immutable Story SHA 为 `b7a48b980b54e34763212699c64ce387866ec064`，merge commit 为 `17a305725a4241810ea4dbd26a29414c2be2582b`；Story SHA 已是 `main` ancestor。E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。Review 无 blocker、must-fix 或 should-fix；仅保留两项 debug-only nice-to-have：持续 notify 导致 debug 页面顶部 `Stop / Disconnect` 不易访问，以及 debug 工具的 `currentGatt` callback / UI 共享状态未显式串行化。这两项不扩展为 production 重构任务。
 
@@ -299,7 +299,7 @@ E14.4-2 Plan edit / detail low-coupling implementation 已完成并完成 review
 2. E10.13 Ready Start Gate 已完成；计时训练从编辑页或计划详情开始后先进入极简 ready gate，点击中心圆才真正 `StartSession`。
 3. E10.12 Timer Dial Compose landing 已把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产 Timer Dial：执行页减字、总剩余时间放大居中、圆盘放大、线条变细、宽底层圆环、同源动态浅点和阶段色中心圆；继续保留 continuous progress、pause freeze、terminal freeze、rest extension monotonic progress。
 4. E10.16 Motion Landing 已完成；后续若继续训练执行页 polish，仍只消费既有 motion token，不改变训练语义、真实记录或倒计时口径。
-5. E17-2 心率产品合同已获用户确认，当前只允许独立 E17-2 Code Review / merge。最终 immutable Story SHA 成为 main ancestor、main 与 origin/main 同步且权威文档一致后，主管理从 Git 解析最终 SHA 并生成 E17-3 最小技术架构提示词；不做额外 E17-2 状态 docs-sync，不提前开始 production implementation。
+5. E17-2 心率产品合同已获用户确认；合并门禁未全部满足时只允许独立 E17-2 Code Review / merge，全部满足后主管理从 Git 解析最终 SHA 并生成 E17-3 最小技术架构提示词；不做额外 E17-2 状态 docs-sync，不提前开始 production implementation。
 6. E12 Stats / Records 已具备真实基础统计、非心率聚合图表、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势。心率单次复盘的平均 / 最高心率、时间曲线、区间时长 / 占比和覆盖缺口已由 E17-2 接受为后续方向；记录数据成立后再做独立视觉审查和用户确认。跨训练趋势、训练压力、恢复时间与用户数据导出继续分独立后续 Story。
 7. E13.1 Sound Cue System 已实现短提示音播放与音频共存；E13 audit / QA gate 已确认现有实现、两个生产 raw 资源、根目录和 `.local/audio/` 禁区边界、测试覆盖和真机 QA 计划。下一步优先补手机扬声器 / 蓝牙耳机音频共存 smoke；若真机发现外部音乐 / 视频被暂停、降低、duck 或提示音不可闻，再拆 platform audio adaptation story。E13.2 固定女声 cue / 阶段名朗读仍是后续增强，不做用户任意 TTS 或自动语音教练。
 8. E14.2 Timer Dial real-device proportion restore 已实现；E14.4-1 继续保留底部 `确认+15s` 稳定态并补计时状态矩阵语义回归。E14.3 已完成 UI quality audit and polish sequencing，审计文档记录了各功能 UI 问题清单、截图矩阵、影响等级和用户测试前优先项。
