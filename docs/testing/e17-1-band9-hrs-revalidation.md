@@ -1,8 +1,8 @@
 # E17-1 HUAWEI Band 9 与标准 BLE HRS 重新复验
 
-**Story 状态：** in progress / pending real-device acceptance
-**当前结论：** evidence inconclusive（阶段 A 尚未取得本 Story 的 Band 9 真机证据）
-**日期：** 2026-07-13
+**Story 状态：** implemented / needs review
+**当前结论：** passed（当前真机证据满足 E17-1 设备与协议复验条件）
+**日期：** 2026-07-15
 **性质：** 设备与标准 BLE HRS 协议可行性复验；不是 production provider 实现
 
 ## Scope
@@ -49,11 +49,11 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 | 字段 | 当前值 |
 |---|---|
-| 手机型号 | 待用户真机回传 |
-| Android 版本 / SDK | 待用户真机回传 |
+| 手机型号 | `PLU110`（debug Activity 运行时日志） |
+| Android 版本 / SDK | Android 16 / SDK 36（debug Activity 运行时日志） |
 | HUAWEI Band 9 固件 | 未确认 |
 | Huawei Health 版本 | 未确认 |
-| Band 9 佩戴 / 测量条件 | 待用户真机回传 |
+| Band 9 佩戴 / 测量条件 | 用户按两轮广播测试清单操作；其他细节未确认 |
 | AVD | `TrainFlow_Pixel_API_36`；两个 launcher 均可查询，`TrainFlow Debug` 可进入 E17-1 Activity；仅用于 Activity / 权限入口 / 日志 UI smoke |
 
 无法从证据可靠确认的版本或环境字段必须保持“未确认”，不得推测。
@@ -62,17 +62,17 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 | ID | 条件 / 操作 | 必须采集的当前证据 | Pass 条件 | Failed / inconclusive 条件 | 状态 |
 |---|---|---|---|---|---|
-| M1 | 心率广播关闭，Huawei Health 已连接；在 E17-1 工具扫描 12 秒 | Huawei Health 状态、Band label / identifier 是否出现、扫描起止日志 | 实际观察被记录；不预设必须发现或不得发现 | 缺截图 / 日志，或无法确认广播确已关闭 | pending real device |
-| M2 | 开启 Band 9 心率广播 | Band 提示、Huawei Health 状态变化 | 互斥 / 不互斥事实被当前证据记录 | 仅沿用旧 E16 描述 | pending real device |
-| M3 | 广播开启后的第一次标准 HRS 扫描 | `SCAN_SOURCE` 的 label、identifier、RSSI、services | Band source 被发现，advertised services 含 `0x180D` | Band 不出现为 failed；环境状态不清为 inconclusive | pending real device |
-| M4 | 选择 M3 的同一 source 并连接 | `CONNECT_REQUEST`、`GATT_CONNECTION`、`SERVICE_DISCOVERY_RESULT` | 同一 source 连接成功且 service list 含 `0x180D` | status 非成功、断开、超时或 source 对不上 | pending real device |
-| M5 | 检查 Heart Rate Measurement | `HRS_MEASUREMENT` properties | 同一连接发现 `0x2A37`，且 notify 或 indicate 至少一个为真 | characteristic 缺失或两种属性都无 | pending real device |
-| M6 | 订阅 `0x2A37` | `CCCD_DISCOVERY`、`LOCAL_NOTIFICATION`、`CCCD_WRITE_START`、`CCCD_WRITE` | `0x2902` 存在，本地通知开启成功，write start 与 callback 均成功 | descriptor 缺失、任一步失败或 callback 未返回 | pending real device |
-| M7 | 维持同一连接短时间 | 多条连续 `NOTIFY` | notify enabled 后，同一 source identifier 收到至少 3 条连续通知 | 只有 0–1 条、source 变化、断流或时间线不完整 | pending real device |
-| M8 | 对照 raw payload 与 parser | 同一 `NOTIFY` 行中的 raw、flags、format、parsed bpm | 至少一个代表性 raw payload 可由当前 parser 得到该行 bpm；最终文档记录至少 2 条代表样例 | 只有 bpm 无 raw、只有 raw 无 parser 输出、解析为 null | pending real device |
-| M9 | 点击 Stop / Disconnect | `CLEANUP`、后续 disconnect 观察 | scan 停止、GATT disconnect requested / closed 被记录；无继续 notify | cleanup 不完整或停止后仍持续收到同一连接通知 | pending real device |
-| M10 | 关闭广播并重新开启，执行第二轮扫描 / 链路 | 第二次 label、identifier、`0x180D`、GATT / CCCD / notify | 第二周期记录 label + identifier，且仍可完成标准 HRS 链路 | 只有一次扫描周期，或第二轮关键链路缺失 | pending real device |
-| M11 | 最终关闭广播并恢复 Huawei Health | 广播关闭、工具 cleanup、Huawei Health 状态 | stop / disconnect / 广播关闭与 Huawei Health 恢复结果均有记录 | 恢复未测试或证据不足 | pending real device |
+| M1 | 心率广播关闭，Huawei Health 已连接；在 E17-1 工具扫描 12 秒 | Huawei Health 状态、Band label / identifier 是否出现、扫描起止日志 | 实际观察被记录；不预设必须发现或不得发现 | 缺截图 / 日志，或无法确认广播确已关闭 | passed：用户确认广播关闭且 Huawei Health 已连接；`22:34:30.660` 至 `22:34:42.665` 无 `SCAN_SOURCE` |
+| M2 | 开启 Band 9 心率广播 | Band 提示、Huawei Health 状态变化 | 互斥 / 不互斥事实被当前证据记录 | 仅沿用旧 E16 描述 | passed：用户现场观察为开启广播后 Huawei Health 断开 |
+| M3 | 广播开启后的第一次标准 HRS 扫描 | `SCAN_SOURCE` 的 label、identifier、RSSI、services | Band source 被发现，advertised services 含 `0x180D` | Band 不出现为 failed；环境状态不清为 inconclusive | passed：`HUAWEI Band HR-OD7` / `D8:F0:42:01:90:D7` / `[0x180D]` |
+| M4 | 选择 M3 的同一 source 并连接 | `CONNECT_REQUEST`、`GATT_CONNECTION`、`SERVICE_DISCOVERY_RESULT` | 同一 source 连接成功且 service list 含 `0x180D` | status 非成功、断开、超时或 source 对不上 | passed：`status=0 state=2 success=true`；service list 含 `0x180D` |
+| M5 | 检查 Heart Rate Measurement | `HRS_MEASUREMENT` properties | 同一连接发现 `0x2A37`，且 notify 或 indicate 至少一个为真 | characteristic 缺失或两种属性都无 | passed：`0x2A37 found=true properties=0x10 modes=[notify]` |
+| M6 | 订阅 `0x2A37` | `CCCD_DISCOVERY`、`LOCAL_NOTIFICATION`、`CCCD_WRITE_START`、`CCCD_WRITE` | `0x2902` 存在，本地通知开启成功，write start 与 callback 均成功 | descriptor 缺失、任一步失败或 callback 未返回 | passed：两轮均发现 `0x2902`，写入 `01 00`，callback `status=0 success=true` |
+| M7 | 维持同一连接短时间 | 多条连续 `NOTIFY` | notify enabled 后，同一 source identifier 收到至少 3 条连续通知 | 只有 0–1 条、source 变化、断流或时间线不完整 | passed：两轮均从同一 source 连续收到远多于 3 条通知 |
+| M8 | 对照 raw payload 与 parser | 同一 `NOTIFY` 行中的 raw、flags、format、parsed bpm | 至少一个代表性 raw payload 可由当前 parser 得到该行 bpm；最终文档记录至少 2 条代表样例 | 只有 bpm 无 raw、只有 raw 无 parser 输出、解析为 null | passed：例如 `06 57 -> 87`、`06 5D -> 93`、`06 55 -> 85` |
+| M9 | 点击 Stop / Disconnect | `CLEANUP`、后续 disconnect 观察 | scan 停止、GATT disconnect requested / closed 被记录；无继续 notify | cleanup 不完整或停止后仍持续收到同一连接通知 | passed with observation：第二轮 `CLEANUP reason=user_stop ... requested=true ... closed=true`；第一轮先发生 `status=19` 断开 |
+| M10 | 关闭广播并重新开启，执行第二轮扫描 / 链路 | 第二次 label、identifier、`0x180D`、GATT / CCCD / notify | 第二周期记录 label + identifier，且仍可完成标准 HRS 链路 | 只有一次扫描周期，或第二轮关键链路缺失 | passed：第二轮同一观察字段并再次完成完整标准 HRS 链路 |
+| M11 | 最终关闭广播并恢复 Huawei Health | 广播关闭、工具 cleanup、Huawei Health 状态 | stop / disconnect / 广播关闭与 Huawei Health 恢复结果均有记录 | 恢复未测试或证据不足 | passed：用户执行最终关闭广播并观察 Huawei Health 自动重新连接 |
 
 ### Overall pass rule
 
@@ -80,26 +80,36 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 ## Raw evidence summary
 
-阶段 A 尚无当前 Band 9 raw evidence。阶段 B 只按时间顺序摘录用户回传证据实际显示的行，不复制旧 E16 结果。
+以下时间来自 2026-07-15 用户回传的 E17-1 debug Activity 截图内日志。截图按日志时间而非 Downloads 文件时间排序；Huawei Health 状态来自用户对现场操作的明确回传，不冒充截图内日志。
 
 | 时间 / 轮次 | 证据摘录 | 解释 |
 |---|---|---|
-| pending | 未取得 | 不形成设备或协议结论 |
+| `22:30:50.748` | `E17_1_HRS_REVALIDATION_READY model="PLU110" android=16 sdk=36` | 当前真机运行环境 |
+| 广播关闭 / `22:34:30.660–22:34:42.665` | `SCAN_STARTED filter_service=0x180D window_ms=12000`，随后 `SCAN_STOPPED reason=scan_window_ended`；窗口内无 `SCAN_SOURCE` | 在用户确认广播关闭的条件下未发现标准 HRS source |
+| 第一轮 / `22:35:38.007` 起 | `SCAN_SOURCE label="HUAWEI Band HR-OD7" identifier="D8:F0:42:01:90:D7" ... services=[0x180D]` | 广播开启后 source 被过滤扫描发现；字段仅关联本次观察 |
+| 第一轮 / `22:36:21.398–22:36:22.444` | GATT `status=0 state=2 success=true`；service discovery 含 `0x180D`；`0x2A37 properties=0x10 modes=[notify]`；`0x2902 found=true`；写入 `01 00`，callback `status=0 success=true` | 同一 source 完成标准 HRS 发现与 notify 订阅 |
+| 第一轮 / `22:36:22.928` 起 | 同一 source 连续 `NOTIFY`，包括 `raw="06 57" parsed_bpm=87`、`raw="06 5D" parsed_bpm=93`、`raw="06 5A" parsed_bpm=90` | 当前 parser 在真实 payload 上输出 uint8 bpm |
+| 第一轮 / `22:36:58.547` | `GATT_CONNECTION ... status=19 state=0 success=false` | 通知持续约 36 秒后出现非成功断开；截图未显示该轮 `CLEANUP reason=user_stop`，不得写成主动 Stop 成功 |
+| 第二轮 / `22:37:35–22:37:43` | 再次连续出现同一 label、identifier 与 `services=[0x180D]` | 关闭并重新开启广播后的第二个观察周期；本轮字段与第一轮相同 |
+| 第二轮 / `22:37:42.304` | `VISIBLE_LOG_CLEARED active_connection_unchanged=false` | 用户确认在第一轮已断开后清理过可见日志；只清空页面日志，不代表仍有 active connection，也不替代第二轮链路证据 |
+| 第二轮 / `22:37:50.130–22:37:51.299` | 再次 GATT 成功；发现 `0x180D`、`0x2A37 properties=0x10 modes=[notify]`、`0x2902`；CCCD callback 成功 | 第二周期再次完成标准 HRS 链路 |
+| 第二轮 / `22:37:51.459` 起 | 同一 source 连续 `NOTIFY`，包括 `06 59 -> 89`、`06 5A -> 90`、`06 58 -> 88`、`06 55 -> 85` | 第二轮连续真实 payload 与 parser 对照 |
+| 第二轮 / `22:38:28.199` | `CLEANUP reason=user_stop ... gatt_disconnect_requested=true gatt_closed=true` | 明确的用户 Stop / disconnect / close 证据；之后截图中无继续 notify |
 
 ## Protocol observations
 
 | 项目 | 当前观察 |
 |---|---|
-| Band source scan | 未确认 |
-| `0x180D` advertised | 未确认 |
-| GATT connection | 未确认 |
-| `0x180D` discovered | 未确认 |
-| `0x2A37` discovered | 未确认 |
-| notify / indicate properties | 未确认 |
-| `0x2902` discovered | 未确认 |
-| CCCD write start / callback | 未确认 |
-| Continuous notifications from same source | 未确认 |
-| Stop / disconnect cleanup | 未确认 |
+| Band source scan | 两个广播周期均发现 `HUAWEI Band HR-OD7` / `D8:F0:42:01:90:D7` |
+| `0x180D` advertised | 两轮 `SCAN_SOURCE services=[0x180D]` |
+| GATT connection | 两轮均 `status=0 state=2 success=true` |
+| `0x180D` discovered | 两轮均 `found=true`，service discovery list 亦含 `0x180D` |
+| `0x2A37` discovered | 两轮均 `found=true` |
+| notify / indicate properties | `properties=0x10 modes=[notify]`；未观察到 indicate |
+| `0x2902` discovered | 两轮均 `descriptor=0x2902 found=true` |
+| CCCD write start / callback | 两轮均写入 notify 值 `01 00`，start 成功且 callback `status=0 success=true` |
+| Continuous notifications from same source | 两轮均在订阅成功后从同一 source 收到多条连续通知 |
+| Stop / disconnect cleanup | 第二轮主动 cleanup 完整；第一轮以 `status=19` 非成功断开结束，是应保留的稳定性观察 |
 
 ## Identifier observations
 
@@ -107,8 +117,8 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 | 周期 | 广播条件 | label | identifier | `0x180D` | 标准 HRS 链路 |
 |---|---|---|---|---|---|
-| 1 | 待测试 | 未确认 | 未确认 | 未确认 | 未确认 |
-| 2 | 待测试 | 未确认 | 未确认 | 未确认 | 未确认 |
+| 1 | 关闭后开启 | `HUAWEI Band HR-OD7` | `D8:F0:42:01:90:D7` | advertised / discovered | completed；末尾 `status=19` 断开 |
+| 2 | 再次关闭后重新开启 | `HUAWEI Band HR-OD7` | `D8:F0:42:01:90:D7` | advertised / discovered | completed；`user_stop` cleanup |
 
 无论两个周期的字段相同或不同，最终结论都不得依赖静态名称或地址。一次 label、一次 Bluetooth address、bonded-device label 或系统配对视图均不能证明稳定设备身份。
 
@@ -116,21 +126,26 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 | 条件 | 当前观察 |
 |---|---|
-| 广播关闭、Huawei Health 已连接 | 未确认 |
-| 开启心率广播后的 Huawei Health 状态 | 未确认 |
-| E17 工具连接期间 Huawei Health 状态 | 未确认 |
-| Stop / disconnect 后状态 | 未确认 |
-| 关闭广播后 Huawei Health 恢复 | 未确认 |
+| 广播关闭、Huawei Health 已连接 | 用户现场确认已连接；该状态未出现在 E17 工具截图中 |
+| 开启心率广播后的 Huawei Health 状态 | 用户现场观察为断开 |
+| E17 工具连接期间 Huawei Health 状态 | 广播开启期间保持与 Huawei Health 断开；未单独取得 Huawei Health 页面截图 |
+| Stop / disconnect 后状态 | 工具第二轮完成主动 cleanup；仅 Stop 后、广播仍开启时 Huawei Health 是否立即恢复未单独确认 |
+| 关闭广播后 Huawei Health 恢复 | 用户现场观察为自动重新连接，包含最终关闭广播后的恢复 |
+
+这组证据支持“当前 Band 9 / 手机环境中，心率广播开启与 Huawei Health 常规连接互斥，关闭广播后 Huawei Health 可恢复连接”。它不证明所有固件、Huawei Health 版本或其他手机均有相同行为。
 
 ## Parser evidence
 
 纯 Kotlin parser 测试只证明指定 payload 的解析逻辑，不证明 Android BLE wiring 或 Band 9 行为。当前 `HeartRateMeasurementParserTest` 覆盖 8-bit、16-bit、flags 与 malformed payload；E17 formatter 测试锁定同一日志行同时包含 source、raw bytes、flags、format 与 parsed bpm。
 
-真机代表样例待阶段 B 填写：
+真机代表样例：
 
 | source | raw payload | flags / format | parsed bpm | 证据状态 |
 |---|---|---|---|---|
-| 未确认 | 未确认 | 未确认 | 未确认 | pending real device |
+| `D8:F0:42:01:90:D7` | `06 57` | flags `0x06` / `uint8` | 87 | 第一轮 screenshot evidence |
+| `D8:F0:42:01:90:D7` | `06 5D` | flags `0x06` / `uint8` | 93 | 第一轮 screenshot evidence |
+| `D8:F0:42:01:90:D7` | `06 5A` | flags `0x06` / `uint8` | 90 | 第一、二轮 screenshot evidence |
+| `D8:F0:42:01:90:D7` | `06 55` | flags `0x06` / `uint8` | 85 | 第二轮 screenshot evidence |
 
 ## Evidence-layer limitations
 
@@ -145,7 +160,11 @@ AVD、fake、injection、源码搜索、旧 E16 证据和 parser unit tests 都�
 
 ## Pass/fail/inconclusive conclusion
 
-**当前结论：evidence inconclusive。** 阶段 A 只准备了 E17-1 debug-only 证据工具、测试矩阵和构建流程；尚未由用户在真实 Band 9 上执行 M1–M11，因此不能写 `passed`，也不能解锁 E17-2。
+**最终结论：passed。** 用户使用与 preparation commit `a55aa59fe4ee897f604938d78e087d9a1f203484` 对应、SHA256 为 `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` 的 debug APK，在 `PLU110` / Android 16 上完成了广播关闭基线和两个广播开启周期。证据覆盖两轮标准 HRS 扫描、GATT、`0x180D`、notify 型 `0x2A37`、`0x2902` 写入成功、同一 source 连续通知、raw payload / parser bpm，以及第二轮主动 cleanup；用户同时回传了 Huawei Health 在广播开启时断开、广播关闭后重新连接的现场观察。
+
+第一轮在连续通知后出现 `GATT status=19` 非成功断开，说明当前链路并非没有不稳定现象；E17-1 只确认当前环境中的设备与标准协议可行性，不把这一轮断开解释为 production 稳定性、重连能力或生命周期正确性。两个周期的 label 与 identifier 相同只证明这两次观察未变化，不构成永久设备身份。
+
+该 `passed` 结论不解锁 E17-2。Story 当前仍是 `implemented / needs review`，必须经过独立 Code Review、合并、push、immutable Story SHA ancestry 与 `main` / `origin/main` 同步 gate 后，主管理才能生成 E17-2 提示词。
 
 ## Non-goals
 
@@ -193,6 +212,8 @@ AVD 只执行 debug Activity 启动、权限入口和日志 UI smoke；真实协
 - `avd-logcat.txt`
 - 用户回传的真机截图 / 日志 / 设备信息（文件名按实际证据记录）
 
+本次八张原始真机截图已复制（未移动）到上述目录，文件名保持用户回传原名，覆盖 `22:34:30` 至 `22:38:28` 的日志时间线。没有独立 Huawei Health 页面截图，其互斥 / 恢复结论按用户现场观察分层记录。
+
 `.local/`、APK、SHA 文件、截图、日志与设备输出不得被 Git 跟踪、暂存或提交。
 
 ## Cleanup steps
@@ -209,8 +230,8 @@ AVD 只执行 debug Activity 启动、权限入口和日志 UI smoke；真实协
 ## Review and merge gate
 
 - 当前 Story 未 reviewed、未 merged。
-- 阶段 A 完成后必须暂停，等待用户真实 Band 9 证据。
-- 真机矩阵、自动验证与范围检查全部完成后，Story 才可写为 `implemented / needs review` 并完成最终提交 / push。
+- 当前真机矩阵已完成，Story 状态为 `implemented / needs review`；这不表示 reviewed 或 merged。
+- 自动验证与范围检查通过后，只提交 / push 本 Story 分支，等待独立 Code Review。
 - E17-2 保持 locked。只有 E17-1 通过独立 Code Review、merge / push、immutable Story SHA ancestry 与 `main...origin/main = 0 0` 同步检查后，主管理才可生成 E17-2 提示词。
 - 不创建递归 closeout，不在本 Story 中宣称 reviewed / merged，不自行合入 `main`。
 - 本 Story 未形成新的产品或架构决策，因此不修改 D-079，也不新增 decision。
