@@ -1,6 +1,6 @@
 # E17-1 HUAWEI Band 9 与标准 BLE HRS 重新复验
 
-**Story 状态：** implemented / needs review
+**Story 状态：** reviewed / merged
 **当前结论：** passed（当前真机证据满足 E17-1 设备与协议复验条件）
 **日期：** 2026-07-15
 **性质：** 设备与标准 BLE HRS 协议可行性复验；不是 production provider 实现
@@ -36,6 +36,9 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 | 字段 | 当前值 |
 |---|---|
 | Story branch | `codex/e17-1-band9-hrs-revalidation` |
+| Immutable Story SHA | `b7a48b980b54e34763212699c64ce387866ec064` |
+| Merge commit | `17a305725a4241810ea4dbd26a29414c2be2582b` |
+| Main ancestry | Story SHA 已是 `main` ancestor；E17-1 合并完成时的基线已确认 `main...origin/main = 0 0` |
 | Preparation APK Git commit | `a55aa59fe4ee897f604938d78e087d9a1f203484` |
 | APK file | `.local/smoke/e17-1-band9-hrs-revalidation/trainflow-e17-1-debug.apk` |
 | APK SHA256 | `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` |
@@ -171,7 +174,7 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 AVD、fake、injection、源码搜索、旧 E16 证据和 parser unit tests 都不得写成当前 Band 9 evidence。
 
-补充复验暴露了 debug-only UI 可用性限制：持续 notify 会让页面日志自动滚动，用户无法稳定回到并点击顶部 `Stop / Disconnect`。本 Story 不用 production 架构修改掩盖该问题；它不否定已由初始第二周期取得的真实 cleanup evidence，但作为 Code Review 的 should-fix 风险保留。若要求修复，只允许后续最小 debug-only UI 调整，且修复后的新 APK 不能反向冒充本次已测试 APK。
+补充复验与独立 Review 保留两项 debug-only nice-to-have：持续 notify 会让页面日志自动滚动，用户无法稳定回到并点击顶部 `Stop / Disconnect`；debug 工具的 `currentGatt` callback / UI 共享状态未显式串行化。它们不否定初始第二周期取得的真实 cleanup evidence，不构成 blocker、must-fix 或 should-fix，也不得扩展为 production 重构任务。若未来另行处理，只能保持最小 debug-only 范围，且新 APK 不能反向冒充本次已测试 APK。
 
 ## Pass/fail/inconclusive conclusion
 
@@ -179,7 +182,7 @@ AVD、fake、injection、源码搜索、旧 E16 证据和 parser unit tests 都�
 
 初始第一周期与补充第一周期都在连续通知后出现 `GATT status=19` 非成功断开，说明当前链路并非没有不稳定现象；E17-1 只确认当前环境中的设备与标准协议可行性，不把这些断开解释为 production 稳定性、重连能力或生命周期正确性。四个广播开启周期的 label 与 identifier 相同只证明这些观察中未变化，不构成永久设备身份。
 
-该 `passed` 结论不解锁 E17-2。Story 当前仍是 `implemented / needs review`，必须经过独立 Code Review、合并、push、immutable Story SHA ancestry 与 `main` / `origin/main` 同步 gate 后，主管理才能生成 E17-2 提示词。
+该 `passed` 结论本身不直接解锁 E17-2。E17-1 已完成独立 Code Review、merge / push；Review 无 blocker、must-fix 或 should-fix，immutable Story SHA `b7a48b980b54e34763212699c64ce387866ec064` 已通过 merge commit `17a305725a4241810ea4dbd26a29414c2be2582b` 成为 `main` ancestor。E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。
 
 ## Non-goals
 
@@ -244,9 +247,10 @@ AVD 只执行 debug Activity 启动、权限入口和日志 UI smoke；真实协
 
 ## Review and merge gate
 
-- 当前 Story 未 reviewed、未 merged。
-- 当前真机矩阵已完成，Story 状态为 `implemented / needs review`；这不表示 reviewed 或 merged。
-- 自动验证与范围检查通过后，只提交 / push 本 Story 分支，等待独立 Code Review。
-- E17-2 保持 locked。只有 E17-1 通过独立 Code Review、merge / push、immutable Story SHA ancestry 与 `main...origin/main = 0 0` 同步检查后，主管理才可生成 E17-2 提示词。
-- 不创建递归 closeout，不在本 Story 中宣称 reviewed / merged，不自行合入 `main`。
+- E17-1 已完成独立 Code Review、merge / push；最终状态为 `reviewed / merged`，设备/协议结论保持 `passed`。
+- Review 无 blocker、must-fix 或 should-fix；两项 debug-only nice-to-have 不扩大为 production 重构任务。
+- Immutable Story SHA `b7a48b980b54e34763212699c64ce387866ec064` 已通过 merge commit `17a305725a4241810ea4dbd26a29414c2be2582b` 成为 `main` ancestor；E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。
+- E17-2 为 `planned / prerequisite-gated`，不得在本状态 docs-sync Review / merge gate 完成前启动。
+- 当本 E17-1 状态 docs-sync 的 immutable SHA 尚未成为 `main` ancestor 时，只允许该 docs-sync 的独立 Review / merge；当该 docs-sync 通过独立 Review、merge / push，其 immutable SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且当前权威文档一致时，门禁自动满足。
+- 门禁满足后，主管理可直接从 Git 解析 docs-sync immutable SHA 并生成 E17-2 提示词；不需要也不得创建“closeout 的 closeout”。
 - 本 Story 未形成新的产品或架构决策，因此不修改 D-079，也不新增 decision。
