@@ -80,7 +80,7 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 ## Raw evidence summary
 
-以下时间来自 2026-07-15 用户回传的 E17-1 debug Activity 截图内日志。截图按日志时间而非 Downloads 文件时间排序；Huawei Health 状态来自用户对现场操作的明确回传，不冒充截图内日志。
+以下时间来自 2026-07-15 用户回传的 E17-1 debug Activity 截图内日志。截图按日志时间而非 Downloads 文件时间排序。`22:30–22:38` 为初始验收，`23:07–23:12` 为补充复验；补充复验同时提供了 Huawei Health 连接 / 断开页面截图。
 
 | 时间 / 轮次 | 证据摘录 | 解释 |
 |---|---|---|
@@ -95,21 +95,30 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 | 第二轮 / `22:37:50.130–22:37:51.299` | 再次 GATT 成功；发现 `0x180D`、`0x2A37 properties=0x10 modes=[notify]`、`0x2902`；CCCD callback 成功 | 第二周期再次完成标准 HRS 链路 |
 | 第二轮 / `22:37:51.459` 起 | 同一 source 连续 `NOTIFY`，包括 `06 59 -> 89`、`06 5A -> 90`、`06 58 -> 88`、`06 55 -> 85` | 第二轮连续真实 payload 与 parser 对照 |
 | 第二轮 / `22:38:28.199` | `CLEANUP reason=user_stop ... gatt_disconnect_requested=true gatt_closed=true` | 明确的用户 Stop / disconnect / close 证据；之后截图中无继续 notify |
+| 补充广播关闭基线 / `23:07:49.791–23:08:01.813`、`23:08:46.157–23:08:58.179` | 两个 12 秒 `0x180D` 过滤扫描均以 window ended 结束，窗口内无 `SCAN_SOURCE` | 再次支持广播关闭时 HRS source 不可发现 |
+| 补充第一周期 / `23:09` | Huawei Health 的 Band 9 卡片显示红色 `重新连接` | 广播开启后的 Huawei Health 断开截图证据 |
+| 补充第一周期 / `23:10:00.708–23:10:43.131` | 扫描得到同一 label / identifier / `[0x180D]`；GATT、`0x180D`、notify 型 `0x2A37`、`0x2902` 与 CCCD callback 再次成功 | 第三个广播观察周期再次完成标准 HRS 链路 |
+| 补充第一周期 / `23:10:43.314–23:11:02.833` | 连续通知包含 `06 55 -> 85`、`06 54 -> 84`、`06 56 -> 86`；随后 `status=19 state=0 success=false` | 再次观察到约 20 秒后由 status 19 结束，不是主动 Stop |
+| 周期间关闭广播 / `23:11` | Huawei Health 卡片显示 Band 电量 `89%`，不再显示 `重新连接` | 广播关闭后 Huawei Health 恢复连接的截图证据 |
+| 补充第二周期 / `23:11` | Huawei Health 再次显示红色 `重新连接` | 再次开启广播后 Huawei Health 再次断开的截图证据 |
+| 补充第二周期 / `23:12:17–23:12:27.098` | 扫描再次得到同一 label / identifier / `[0x180D]`；GATT、HRS、CCCD callback 再次成功 | 第四个广播观察周期完成标准 HRS 链路 |
+| 补充第二周期 / `23:12:27.235` 起 | 连续 `06 58 -> 88` 通知 | 同一 source 连续通知；截图未记录该周期的主动 cleanup |
+| 补充第二周期结束 | 用户报告 notify 日志自动向下滚动，无法稳定点击顶部 `Stop / Disconnect`，随后直接关闭 Band 心率广播并确认 Huawei Health 最终重新连接 | 这是 debug-only 工具可用性限制；不得写成本周期 `user_stop` 成功。整体 cleanup acceptance 仍来自 `22:38:28.199` 的独立真实记录 |
 
 ## Protocol observations
 
 | 项目 | 当前观察 |
 |---|---|
-| Band source scan | 两个广播周期均发现 `HUAWEI Band HR-OD7` / `D8:F0:42:01:90:D7` |
-| `0x180D` advertised | 两轮 `SCAN_SOURCE services=[0x180D]` |
-| GATT connection | 两轮均 `status=0 state=2 success=true` |
-| `0x180D` discovered | 两轮均 `found=true`，service discovery list 亦含 `0x180D` |
-| `0x2A37` discovered | 两轮均 `found=true` |
+| Band source scan | 初始两周期与补充两周期均发现 `HUAWEI Band HR-OD7` / `D8:F0:42:01:90:D7` |
+| `0x180D` advertised | 四个广播开启周期均有 `SCAN_SOURCE services=[0x180D]` |
+| GATT connection | 四个周期均至少一次 `status=0 state=2 success=true` |
+| `0x180D` discovered | 四个周期均 `found=true`，service discovery list 亦含 `0x180D` |
+| `0x2A37` discovered | 四个周期均 `found=true` |
 | notify / indicate properties | `properties=0x10 modes=[notify]`；未观察到 indicate |
-| `0x2902` discovered | 两轮均 `descriptor=0x2902 found=true` |
-| CCCD write start / callback | 两轮均写入 notify 值 `01 00`，start 成功且 callback `status=0 success=true` |
-| Continuous notifications from same source | 两轮均在订阅成功后从同一 source 收到多条连续通知 |
-| Stop / disconnect cleanup | 第二轮主动 cleanup 完整；第一轮以 `status=19` 非成功断开结束，是应保留的稳定性观察 |
+| `0x2902` discovered | 四个周期均 `descriptor=0x2902 found=true` |
+| CCCD write start / callback | 四个周期均写入 notify 值 `01 00`，start 成功且 callback `status=0 success=true` |
+| Continuous notifications from same source | 四个周期均在订阅成功后从同一 source 收到多条连续通知 |
+| Stop / disconnect cleanup | 初始第二周期主动 cleanup 完整；初始第一周期与补充第一周期以 `status=19` 结束；补充第二周期因自动滚屏未点到 Stop，不能计作 cleanup 成功 |
 
 ## Identifier observations
 
@@ -119,18 +128,20 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 |---|---|---|---|---|---|
 | 1 | 关闭后开启 | `HUAWEI Band HR-OD7` | `D8:F0:42:01:90:D7` | advertised / discovered | completed；末尾 `status=19` 断开 |
 | 2 | 再次关闭后重新开启 | `HUAWEI Band HR-OD7` | `D8:F0:42:01:90:D7` | advertised / discovered | completed；`user_stop` cleanup |
+| 3（补充） | 关闭后开启 | `HUAWEI Band HR-OD7` | `D8:F0:42:01:90:D7` | advertised / discovered | completed；末尾再次 `status=19` |
+| 4（补充） | 再次关闭后重新开启 | `HUAWEI Band HR-OD7` | `D8:F0:42:01:90:D7` | advertised / discovered | completed；未点到 Stop，最终关闭广播 |
 
-无论两个周期的字段相同或不同，最终结论都不得依赖静态名称或地址。一次 label、一次 Bluetooth address、bonded-device label 或系统配对视图均不能证明稳定设备身份。
+无论各周期的字段相同或不同，最终结论都不得依赖静态名称或地址。一次 label、一次 Bluetooth address、bonded-device label 或系统配对视图均不能证明稳定设备身份。
 
 ## Huawei Health mutual-exclusion observations
 
 | 条件 | 当前观察 |
 |---|---|
-| 广播关闭、Huawei Health 已连接 | 用户现场确认已连接；该状态未出现在 E17 工具截图中 |
-| 开启心率广播后的 Huawei Health 状态 | 用户现场观察为断开 |
-| E17 工具连接期间 Huawei Health 状态 | 广播开启期间保持与 Huawei Health 断开；未单独取得 Huawei Health 页面截图 |
+| 广播关闭、Huawei Health 已连接 | 用户现场确认；补充复验 `23:11` Huawei Health 卡片显示 Band 电量 `89%`，作为已恢复连接的页面证据 |
+| 开启心率广播后的 Huawei Health 状态 | 用户现场观察为断开；补充复验两次显示红色 `重新连接`，提供页面截图证据 |
+| E17 工具连接期间 Huawei Health 状态 | 广播开启期间 Huawei Health 显示 `重新连接`；E17 工具同时取得标准 HRS 链路 |
 | Stop / disconnect 后状态 | 工具第二轮完成主动 cleanup；仅 Stop 后、广播仍开启时 Huawei Health 是否立即恢复未单独确认 |
-| 关闭广播后 Huawei Health 恢复 | 用户现场观察为自动重新连接，包含最终关闭广播后的恢复 |
+| 关闭广播后 Huawei Health 恢复 | 周期间关闭广播后有 `89%` 已连接页面截图；补充第二周期最终关闭广播后的再次恢复由用户现场确认，未另附最终页面截图 |
 
 这组证据支持“当前 Band 9 / 手机环境中，心率广播开启与 Huawei Health 常规连接互斥，关闭广播后 Huawei Health 可恢复连接”。它不证明所有固件、Huawei Health 版本或其他手机均有相同行为。
 
@@ -146,6 +157,8 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 | `D8:F0:42:01:90:D7` | `06 5D` | flags `0x06` / `uint8` | 93 | 第一轮 screenshot evidence |
 | `D8:F0:42:01:90:D7` | `06 5A` | flags `0x06` / `uint8` | 90 | 第一、二轮 screenshot evidence |
 | `D8:F0:42:01:90:D7` | `06 55` | flags `0x06` / `uint8` | 85 | 第二轮 screenshot evidence |
+| `D8:F0:42:01:90:D7` | `06 54` | flags `0x06` / `uint8` | 84 | 补充第一周期 screenshot evidence |
+| `D8:F0:42:01:90:D7` | `06 58` | flags `0x06` / `uint8` | 88 | 补充第二周期 screenshot evidence |
 
 ## Evidence-layer limitations
 
@@ -158,11 +171,13 @@ E17-1 不继承旧 APK、旧截图、旧日志、旧 label / address、旧 parse
 
 AVD、fake、injection、源码搜索、旧 E16 证据和 parser unit tests 都不得写成当前 Band 9 evidence。
 
+补充复验暴露了 debug-only UI 可用性限制：持续 notify 会让页面日志自动滚动，用户无法稳定回到并点击顶部 `Stop / Disconnect`。本 Story 不用 production 架构修改掩盖该问题；它不否定已由初始第二周期取得的真实 cleanup evidence，但作为 Code Review 的 should-fix 风险保留。若要求修复，只允许后续最小 debug-only UI 调整，且修复后的新 APK 不能反向冒充本次已测试 APK。
+
 ## Pass/fail/inconclusive conclusion
 
-**最终结论：passed。** 用户使用与 preparation commit `a55aa59fe4ee897f604938d78e087d9a1f203484` 对应、SHA256 为 `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` 的 debug APK，在 `PLU110` / Android 16 上完成了广播关闭基线和两个广播开启周期。证据覆盖两轮标准 HRS 扫描、GATT、`0x180D`、notify 型 `0x2A37`、`0x2902` 写入成功、同一 source 连续通知、raw payload / parser bpm，以及第二轮主动 cleanup；用户同时回传了 Huawei Health 在广播开启时断开、广播关闭后重新连接的现场观察。
+**最终结论：passed。** 用户使用与 preparation commit `a55aa59fe4ee897f604938d78e087d9a1f203484` 对应、SHA256 为 `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` 的 debug APK，在 `PLU110` / Android 16 上完成了初始两周期与补充两周期复验。证据覆盖标准 HRS 扫描、GATT、`0x180D`、notify 型 `0x2A37`、`0x2902` 写入成功、同一 source 连续通知、raw payload / parser bpm，以及初始第二周期主动 cleanup；补充截图直接显示 Huawei Health 在广播开启时为 `重新连接`、广播关闭后恢复为显示 Band 电量的已连接状态。
 
-第一轮在连续通知后出现 `GATT status=19` 非成功断开，说明当前链路并非没有不稳定现象；E17-1 只确认当前环境中的设备与标准协议可行性，不把这一轮断开解释为 production 稳定性、重连能力或生命周期正确性。两个周期的 label 与 identifier 相同只证明这两次观察未变化，不构成永久设备身份。
+初始第一周期与补充第一周期都在连续通知后出现 `GATT status=19` 非成功断开，说明当前链路并非没有不稳定现象；E17-1 只确认当前环境中的设备与标准协议可行性，不把这些断开解释为 production 稳定性、重连能力或生命周期正确性。四个广播开启周期的 label 与 identifier 相同只证明这些观察中未变化，不构成永久设备身份。
 
 该 `passed` 结论不解锁 E17-2。Story 当前仍是 `implemented / needs review`，必须经过独立 Code Review、合并、push、immutable Story SHA ancestry 与 `main` / `origin/main` 同步 gate 后，主管理才能生成 E17-2 提示词。
 
@@ -212,7 +227,7 @@ AVD 只执行 debug Activity 启动、权限入口和日志 UI smoke；真实协
 - `avd-logcat.txt`
 - 用户回传的真机截图 / 日志 / 设备信息（文件名按实际证据记录）
 
-本次八张原始真机截图已复制（未移动）到上述目录，文件名保持用户回传原名，覆盖 `22:34:30` 至 `22:38:28` 的日志时间线。没有独立 Huawei Health 页面截图，其互斥 / 恢复结论按用户现场观察分层记录。
+初始八张与补充十张原始真机截图均已复制（未移动）到上述目录，文件名保持用户回传原名。初始组覆盖 `22:34:30` 至 `22:38:28`；补充组覆盖 `23:07:49` 至 `23:12:29`，其中包括 Huawei Health 的断开、周期间恢复连接及再次断开页面。补充第二周期最终关闭广播后的恢复仍按用户现场观察分层记录。
 
 `.local/`、APK、SHA 文件、截图、日志与设备输出不得被 Git 跟踪、暂存或提交。
 
