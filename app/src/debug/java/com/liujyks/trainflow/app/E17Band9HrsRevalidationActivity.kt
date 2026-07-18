@@ -283,7 +283,7 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
         deviceList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(deviceList)
         root.addView(TextView(this).apply {
-            text = "Evidence log (also emitted as logcat tag $LOG_TAG)"
+            text = "M0 evidence only (logcat tag $LOG_TAG; verbose diagnostics use $VERBOSE_LOG_TAG)"
             textSize = 18f
         })
         logView = TextView(this).apply {
@@ -691,10 +691,13 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
     private fun logEvidence(message: String) {
         val timestamp = synchronized(timeFormat) { timeFormat.format(Date()) }
         val line = "$timestamp $message"
-        Log.i(LOG_TAG, line)
-        runOnUiThread {
-            logView.append(line)
-            logView.append("\n")
+        val isM0Evidence = M0_EVIDENCE_PREFIXES.any(message::startsWith)
+        Log.i(if (isM0Evidence) LOG_TAG else VERBOSE_LOG_TAG, line)
+        if (isM0Evidence) {
+            runOnUiThread {
+                logView.append(line)
+                logView.append("\n")
+            }
         }
     }
 
@@ -715,8 +718,18 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
 
     private companion object {
         const val LOG_TAG = "TrainFlowE17Hrs"
+        const val VERBOSE_LOG_TAG = "TrainFlowE17HrsVerbose"
         const val REQUEST_BLUETOOTH = 17101
         const val SCAN_WINDOW_MILLIS = 12_000L
+        val M0_EVIDENCE_PREFIXES = listOf(
+            "M0_CONNECTION_SESSION_STARTED",
+            "M0_NOTIFY_ENABLED",
+            "VALID_SAMPLE",
+            "MALFORMED_PAYLOAD",
+            "EXPLICIT_DISCONNECT",
+            "PLATFORM_FAILURE",
+            "CLEANUP"
+        )
         val HEART_RATE_SERVICE_UUID: UUID =
             UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
         val HEART_RATE_MEASUREMENT_UUID: UUID =

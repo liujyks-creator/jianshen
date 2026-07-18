@@ -32,19 +32,37 @@
 - 当前连接收到明确 `STATE_DISCONNECTED` 时记录 `EXPLICIT_DISCONNECT`。
 - scan / GATT / discovery / service / characteristic / CCCD 的明确失败使用 `PLATFORM_FAILURE` + typed stage / failure code / numeric platform status；不按 exception message 或厂商字符串分类。
 
-### 3.2 第一轮 preparation APK identity
+### 3.2 第一版 preparation APK identity（M0 前已作废）
 
 以下字段在 preparation commit、build 和 install 后填写：
 
-- Preparation full SHA：pending
+- Preparation full SHA：`b703deae923dd293fdef03e30016fdc0723c7a89`
 - APK 路径：`.local/smoke/e17-5-heart-rate-fact-core/trainflow-e17-5-m0-preparation-debug.apk`
 - Build variant：`debug`
-- Application ID：pending build verification
+- Application ID：`com.liujyks.trainflow`
 - Activity：`com.liujyks.trainflow.app.E17Band9HrsRevalidationActivity`
-- APK SHA256：pending
-- Build time：pending
-- JDK / Gradle：pending
+- APK SHA256：`1f6a640403b84db7057311b38699a07c35bb580f0f53bfa874289568d44f5dad`
+- APK size：`15215429` bytes
+- Build / copy time：2026-07-18 22:32:49 +08:00
+- JDK：Eclipse Temurin OpenJDK `17.0.19+10`
+- Gradle：`9.4.1`（Launcher / Daemon JVM 17.0.19）
 - adb serial / model / Android / API / install time：pending
+
+Preparation commit 上的 focused `E17HrsEvidenceFormatterTest` + `HeartRateMeasurementParserTest` 和 `:app:assembleDebug` 均为 `BUILD SUCCESSFUL`。第一次执行在外层 2 分钟工具时限内未返回，不能作为结果；确认孤儿 Gradle 进程退出后重跑成功。首次 `adb devices -l` 于 2026-07-18 22:33 +08:00 返回空设备列表，因此安装与真机身份记录等待用户连接 / 授权真实手机。
+
+用户在 M0 开始前指出旧详细日志与新 measurement 日志同时滚动，不利于现场识别。为保持所有 interval 可审计同时消除重复刷新，debug Activity 的主标签 `TrainFlowE17Hrs` 和手机可见日志只保留：connection / notify cycle 起点、`VALID_SAMPLE`、`MALFORMED_PAYLOAD`、`EXPLICIT_DISCONNECT`、`PLATFORM_FAILURE` 与 `CLEANUP`。原 scan / service / characteristic / legacy `NOTIFY` 诊断保留在独立 `TrainFlowE17HrsVerbose` 标签，不改变 scanner、GATT、CCCD、notify 或 cleanup 行为。
+
+该改动影响 debug APK 可执行代码，因此上方 `b703deae923dd293fdef03e30016fdc0723c7a89` APK 在任何 M0 取证前即作废，不得用于 threshold evidence。
+
+### 3.3 精简日志后的 M0 preparation APK identity
+
+- Preparation full SHA：pending filtered preparation commit
+- APK 路径：`.local/smoke/e17-5-heart-rate-fact-core/trainflow-e17-5-m0-preparation-filtered-debug.apk`
+- Build variant：`debug`
+- Application ID：`com.liujyks.trainflow`
+- Activity：`com.liujyks.trainflow.app.E17Band9HrsRevalidationActivity`
+- APK SHA256 / size / build time：pending rebuild
+- adb serial / model / Android / API / install time：由用户实机测试记录
 
 ## 4. 第一次 M0 与 provisional threshold
 
