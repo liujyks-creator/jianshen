@@ -62,6 +62,8 @@ stepsCompleted:
 
 > 2026-07-18 E17-4 刷新：E17-3 immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor，E17-4 gate 已 satisfied。`docs/planning/e17-4-heart-rate-implementation-readiness.md` 已按真实 production 代码形成迁移清单、产品—架构—实现—证据矩阵、状态 / 平台 / ID `7200` handoff 矩阵和六段风险隔离 Story，候选结论为 `ready for implementation review`。默认不新增 BLE operations seam；freshness 先做前台 monotonic Band 9 测量，待 E17-9 runnable FGS 后补锁屏 / 后台余量并锁定最终阈值。当前 E17-4 为 `implemented / needs review`，production implementation locked；只有 immutable SHA ancestry、独立 Review、merge / push、`main...origin/main = 0 0` 与五份文档一致性全部完成且结论仍通过后，E17-4 才自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied。下一步只能是独立 E17-4 Implementation Readiness Review。
 
+> 2026-07-18 E17-4 Review Repair 1 刷新：E17-6只新增并确定性测试test-only可达的新`HeartRateRuntimeOwner`；旧provider/scanner/DTO继续维持production/debug编译并仍是唯一production可达BLE owner。E17-7必须在同一Story从`TrainFlowApplication`唯一创建点切换Application、Activity、Compose、settings、manual/saved-device、capsule与debug `HeartRateBroadcastSmokeActivity.kt`，再退休旧scanner/GATT ownership及旧DTO production consumer，切换后不留可重新实例化旧owner的production入口。E17-7 process visibility固定为main-looper reducer，以Activity identity集合和foreground/background/configuration-transition/unknown等价facts工作，configuration transition使用generation及确定性completion/timeout，异常事件fail-closed；E17-9前active training真实后台仍cleanup。ID `7200` release ack仅是Service调用`stopForeground(STOP_FOREGROUND_REMOVE)`正常返回后的进程内generation事实，不是系统UI删除确认；ordinary writer必须等待当前匹配ack并只replay latest state。E17-10现为evidence-only，production files/lines/methods均为0，production问题返回E17-6/7/8/9独立Repair并重建APK、重跑受影响gate。E17-5 debug M0工具变更后必须重新build/install并记录source preparation SHA与APK SHA256；任何后续影响debug APK的可执行变化使旧证据失效，禁止沿用E17-1 APK。
+
 ## 1. Readiness Decision
 
 | 范围 | 结论 | 说明 |
@@ -71,7 +73,7 @@ stepsCompleted:
 | E1 动作库 | Partially ready after E1.1 | `O-001` 已由 `docs/planning/action-content-slice.md` 收敛；E1.2 可进入 fixture 导入，但仍不得提前实现完整动作库业务层或 UI 闭环。 |
 | E6 跟练雏形 | Not yet | 需要先收敛 `O-002` 跟练边界。 |
 | E7 通知、声音、震动 | Partially ready | D-027 / E7.2 ordinary notification 基线与 D-081 `connectedDevice` FGS 窄例外策略均已确认；E17-4 已定义 E17-8 单一 ordinary coordinator 与 E17-9 ID `7200` / FGS handoff evidence，但当前仍待独立 Review / merge，production 未授权。 |
-| E17 真实心率能力 | Ready for implementation review / implementation locked | D-080 / D-081 无冲突；真实代码迁移清单、六段 Story、freshness 无循环门禁、optional seam 结论及 AVD / Band 9 evidence 层级已形成。E17-4 当前为 `implemented / needs review`；门禁全部完成且结论仍通过后才自动解锁 E17-5。 |
+| E17 真实心率能力 | Ready for implementation review / implementation locked | D-080 / D-081 无冲突；真实代码迁移清单、E17-6 test-only新owner到E17-7原子production切换、fail-closed process visibility、ID`7200`进程内generation ack、E17-5 APK身份、E17-10 evidence-only、freshness无循环门禁及AVD/Band 9层级均已形成。E17-4 当前为 `implemented / needs review`；门禁全部完成且结论仍通过后才自动解锁 E17-5。 |
 
 ## 2. 已检查文档
 

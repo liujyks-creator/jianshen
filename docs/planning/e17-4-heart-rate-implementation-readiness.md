@@ -30,9 +30,9 @@
 | 路径 / 类 | 当前责任 | E17 分类 | Implementation Story | 迁移风险 |
 |---|---|---|---|---|
 | `core/health/HeartRateBoundary.kt` / `HeartRateProvider` | 单一 `Flow<HeartRateState>` provider 边界；另含 disabled / mock provider | adopt as-is（fixture 语义 adapt） | E17-5 | 若另建 provider 会形成双抽象；禁止平行 provider |
-| `core/health/AndroidBleHeartRateProvider.kt` | 627 行 scan + device map + selected address + 单 callback + GATT + CCCD + parser + provider mapping | replace | E17-6 | Compose owner、无 generation / attempt、只按 address 匹配、callback 非统一 main queue、早到 callback、malformed 立即 ERROR、宽 `runCatching` cleanup、旧 bpm 泄漏 |
-| `core/health/BleHeartRateProviderBoundary.kt` | BLE candidate / selection / provider / scan DTO，message 与 public mapping 混合 | replace（candidate presentation 可窄 adapt） | E17-5 / E17-6 / E17-7 | 技术 message 成为用户状态输入；STALE / DISCONNECTED 均携带旧 bpm；STOPPED 映射成 NO_SOURCE |
-| `core/health/HeartRateDeviceScanner.kt` / `AndroidHeartRateDeviceScanner` | 再包一层 provider，供 Compose 创建、关闭并直接操作 | isolate/retire | E17-6 / E17-7 | 保留会成为第二 runtime owner；不得由 settings / Compose 持有资源 |
+| `core/health/AndroidBleHeartRateProvider.kt` | 627 行 scan + device map + selected address + 单 callback + GATT + CCCD + parser + provider mapping | E17-6 暂留 compatibility；E17-7 retire runtime path | E17-6 / E17-7 | E17-6 合并后仍是唯一 production 可达 BLE owner，仅维持既有接线编译；新 owner 只由测试实例化。E17-7 必须原子切走全部 consumer，不能让新旧 owner 同进程运行 |
+| `core/health/BleHeartRateProviderBoundary.kt` | BLE candidate / selection / provider / scan DTO，message 与 public mapping 混合 | E17-6 暂留旧接线；E17-7 移除 production consumer | E17-5 / E17-6 / E17-7 | 技术 message 成为用户状态输入；STALE / DISCONNECTED 均携带旧 bpm；STOPPED 映射成 NO_SOURCE。遗留类型若保留只能缩减为不持有 scanner / GATT 的纯 compatibility 数据映射 |
+| `core/health/HeartRateDeviceScanner.kt` / `AndroidHeartRateDeviceScanner` | 再包一层 provider，供 Compose 创建、关闭并直接操作 | E17-6 暂留 compatibility；E17-7 删除 ownership path | E17-6 / E17-7 | E17-6 不新增第二 production 可达 owner；E17-7 切换后不得保留可重新实例化 scanner / GATT owner 的 production 入口 |
 | `core/health/BleHeartRatePermissionPlanner.kt` | API 31+ scan/connect 与 API <=30 location 权限计划，只允许 explicit action request | adapt | E17-6 / E17-7 | availability check 不能覆盖调用点 TOCTOU；permission recovery 不得自动动作 |
 | `core/health/HeartRateMeasurementParser.kt` | 标准 HRS `0x2A37` 8 / 16-bit、flags、malformed null | adopt as-is | E17-5 验证；E17-6 消费 | parser 不是 BLE / Band 证据；malformed 不得刷新有效样本时间 |
 | `core/health/HeartRateFreshnessPolicy.kt` | E16 10 / 15 / 30 秒 policy；malformed 被写为 `PARSE_FAILED` technical failure | replace policy 数值与 malformed 语义，adopt monotonic / fail-closed 思路 | E17-5；E17-9 最终锁值 | 旧数字与 D-081 冲突；production 当前尚未消费，不能复制为 E17 默认 |
@@ -89,6 +89,7 @@
 | 资产 | 当前责任 | E17 分类 | 后续用途 | 风险 |
 |---|---|---|---|---|
 | `app/src/debug/.../E17Band9HrsRevalidationActivity.kt` | debug-only scan/GATT/HRS/CCCD/raw notify/cleanup 工具 | adapt 仅作测量工具 | E17-5 foreground monotonic measurement；E17-9 screen-off margin measurement | 不能成为 production owner或架构证据；新改动不能冒充 E17-1 已测 APK |
+| `app/src/debug/java/com/liujyks/trainflow/app/HeartRateBroadcastSmokeActivity.kt` | debug-only harness 直接实例化旧 `AndroidBleHeartRateProvider` 并消费旧 DTO | E17-6 保持编译兼容；E17-7 最小迁移或退休 | E17-6 / E17-7 | E17-6 不能先删除旧类型导致 debug 编译失败；E17-7 必须移除对旧 provider 的直接引用，但不得把 debug harness 变成 production owner 或第二 runtime owner |
 | `docs/testing/e17-1-band9-hrs-revalidation.md` | 当前设备/协议 feasibility `passed` | reference only | 两个新真机 gate 的前置可行性 | 不能替代新 owner / FGS 验收 |
 | `.local/smoke/e17-1-band9-hrs-revalidation/` | APK、截图、日志、设备输出 | read-only / never commit | 历史对照 | 存在不等于新 production evidence；后续各 Story 使用独立目录 |
 
@@ -176,6 +177,17 @@ E17 不继承 D-078 / E16 的 10 / 15 / 30 秒。顺序固定如下：
 
 因此锁屏余量依赖FGS，但不形成循环：前台 provisional threshold只支持E17-7前台能力；FGS在E17-9内先可运行、后测量、再锁最终值、最后合并。没有任何阶段把旧bpm或未测数字宣传为最终Live合同。
 
+### 8.1 E17-5 M0 APK 身份门禁
+
+E17-5 修改 debug `E17Band9HrsRevalidationActivity.kt` 后必须重新 build、install 并形成新的 M0 APK 身份；禁止沿用 E17-1 APK 或其 SHA256。E17-5 evidence 文档必须记录：
+
+- 包含 debug 测量工具修改的完整 source / preparation commit SHA、APK 路径、build variant、applicationId、测量 Activity 与 APK SHA256。
+- build / install 时间，以及测试手机 serial、型号、Android 版本与 API level。
+- Band 9 测试条件、M0 monotonic 日志路径与采样窗口，并分别记录 valid payload 间隔、malformed、真实 disconnect 和平台失败。
+- 后续 Story tip 相对 APK preparation commit 是否只有文档变化；仅当 Git diff 证明没有任何可执行变化时，该 APK 身份才可继续使用。
+
+APK preparation commit 之后，只要存在任何影响 debug APK 的代码、Manifest、Gradle 或资源变化，旧 M0 APK 证据立即失效；必须重新 build / install、重新计算 SHA256 并重跑 M0。`.local` 中的 APK、日志、截图和设备输出不得提交。E17-5 独立 Review 必须交叉核验 source SHA、APK SHA256 与真实 Band 9 日志一致，不能把 E17-1 feasibility 证据当作 E17-5 threshold evidence。
+
 ## 9. Android 平台与 Manifest 矩阵
 
 | 项目 | 当前事实 | E17 implementation规则 | Story / evidence |
@@ -195,6 +207,24 @@ E17 不继承 D-078 / E16 的 10 / 15 / 30 秒。顺序固定如下：
 | Task Manager stop | 无Service | 尊重用户停止，不自动重启/重连 | E17-10真机观察 |
 | process death | Compose冷启动只恢复preference | 不依赖finally/onDestroy；新进程无old bpm，Service不sticky | E17-9/10 AVD |
 | cleanup / return foreground | 当前非训练后台无明确cleanup | 无自动scan/connect/reconnect；manual recovery | E17-7/9 AVD + Band |
+
+### 9.1 E17-7 process visibility reducer 合同
+
+E17-7 必须实现一个全部输入与状态转换都串行到 Android main looper 的进程可见性 reducer；只写“使用 `ActivityLifecycleCallbacks`”不构成验收。实现不要求创建同名 Kotlin enum，但必须能表达等价的 `ForegroundConfirmed`、`BackgroundConfirmed`、`ConfigurationTransition` 与 `Unknown` 四类概念 fact，且不引入第三方 lifecycle framework。
+
+输入与计数规则固定如下：
+
+- 使用 Activity object identity 集合跟踪 started Activity，而不是单个布尔值或可为负的计数器。resumed Activity identity 集合可用于诊断与测试，但 terminal 是否保留连接以 started visibility 和明确 transition fact 为准。
+- 所有 lifecycle callback 先投递到 main looper，再修改集合、generation 或发布 fact。重复、迟到、无法匹配、不平衡或无法解释的 callback 一律进入 `Unknown`，不得猜测前台。
+- 至少一个 Activity 已 started 时为 `ForegroundConfirmed`；普通 paused 但仍 started 的 Activity 继续属于明确前台。
+- 最后一个 started Activity 在非 configuration-change 条件下停止时为 `BackgroundConfirmed`。Home、真实 `ON_STOP`、screen off 与 lockscreen 都必须进入后台路径。
+- Route 是否存在、Compose 是否仍在 composition、通知是否存在均不能替代进程可见性 fact。
+
+Configuration change 使用受控 generation：最后一个 Activity 以 `isChangingConfigurations=true` 停止时进入 `ConfigurationTransition`，记录 transition generation，且不立即 cleanup；replacement Activity start 只有匹配当前 generation 才恢复 `ForegroundConfirmed`。generation mismatch、重复 replacement、超出受控 transition 或其他无法解释事件进入 `Unknown` 并 fail-closed cleanup。实现 Story 必须定义确定性的 main-queue transition completion、timeout 或失效门禁，不能无限等待 replacement，也不能把 configuration change 误判为真实后台或永久阻止 cleanup。
+
+terminal 保留规则固定为：terminal 发生时，只有 `ForegroundConfirmed` 或仍受控且 generation 匹配的 `ConfigurationTransition` 可以保留同一 eligible attempt；`Unknown`、竞态、集合异常、generation mismatch 和无法确认状态全部按非前台 cleanup。E17-9 尚未合并时，即使训练 active，进入真实后台也必须 cleanup；E17-9 合并后，只有合法 FGS 已建立且训练 / 连接 eligibility 仍成立时才允许在后台维持当前连接。
+
+E17-7 确定性测试矩阵必须覆盖：cold start、first Activity start、pause 但仍 started、Home / `ON_STOP`、screen off / lockscreen、configuration-change stop / start、replacement Activity 迟到或缺失、快速 Activity 切换、多 Activity 重叠、duplicate / unbalanced callback、terminal 分别发生在 foreground / background / configuration transition / unknown、Activity recreation 不创建第二 owner，以及 E17-9 前 active training background 必须 cleanup。
 
 Android一手资料（核验日期2026-07-18）：
 
@@ -231,6 +261,28 @@ Route只提交最新训练状态；唯一 Application-scoped `ActiveWorkoutNotif
 
 E17-9的固定基线是：Service先以`STOP_FOREGROUND_REMOVE`移除自身的7200并ack；目标为ordinary时，coordinator只在ack后按latest state重发同一ID，目标为NONE时不再调用第二次cancel。允许短暂无通知窗口，不允许双writer或两条常驻通知。若Android实测证明该顺序无法满足平台合法性或用户可观察验收，E17-9必须停止并返回主管理复核；不得在implementation内自行切换detach handoff或新增协调抽象。
 
+### 10.1 `ForegroundWriterReleased` 进程内 ack 协议
+
+这里的 ack 只表示：Service 在 main-looper 串行路径中调用 `stopForeground(STOP_FOREGROUND_REMOVE)`，并且该调用正常返回后，向 Application coordinator 发布 `ForegroundWriterReleased(generation)` 进程内协议事实。它不是 Android framework 提供的系统 UI 通知移除确认，不是 `NotificationManager` callback，不是用户已经看不到通知的证据，也不是 binder 或 System UI completion event。实现和证据不得把该进程内 release 事实描述成系统 UI 删除成功。
+
+概念 handoff 状态至少携带：`handoffGeneration`、`desiredTargetMode`、latest workout notification state / version，以及当前 FGS writer generation。降级顺序固定如下：
+
+1. coordinator 创建新的 handoff generation，保存 latest state / version，并冻结 ordinary writer 发布权。
+2. coordinator 向当前 Service writer 发出 demote / stop 请求；Service 只接受匹配当前 FGS writer generation 的请求。
+3. Service 在 main-looper 串行路径调用 `stopForeground(STOP_FOREGROUND_REMOVE)`。
+4. 只有该调用正常返回后，Service 才发布 `ForegroundWriterReleased(generation)` 进程内事实。
+5. coordinator 只接受当前 pending handoff generation 的 release；stale、duplicate 或 generation mismatch ack 全部忽略。
+6. 若 latest desired mode 仍为 ordinary，coordinator 取得 writer 权并只用最新训练状态重新发布同一 ID `7200`；若 latest desired mode 为 `NONE`，不发布 ordinary，也不再调用第二次 cancel。
+7. handoff 期间 desired mode 再次变为 FGS 时必须创建新 generation，不得复用旧 ack 或旧 writer generation。
+
+handoff 期间训练状态变化只更新 latest state / version，取得 writer 权后只 replay 最新状态。desired mode 从 ordinary 改为 `NONE` 时不发布 ordinary。terminal 重复、Service stop 重复、Route dispose 和 cleanup 都必须幂等，且不得形成 concurrent Service / ordinary writer。
+
+失败语义同样固定：`stopForeground()` 抛出或未正常完成时不得发布 release ack；未收到当前匹配 ack 前 ordinary coordinator 不得取得 writer 权，失败路径不得创建第二 writer。实现记录准确的内部失败 fact，并按当前 terminal / cleanup 策略停止，不能伪造系统 UI 删除成功。Service destroyed-before-ack 或 process death 不依赖 ack 完成；新进程不恢复旧 writer generation、旧 handoff 或旧 live state。
+
+### 10.2 E17-9 handoff 必测矩阵
+
+E17-9 的 pure / Android / AVD 计划必须覆盖 normal `FGS -> ORDINARY`、`FGS -> NONE`、stale ack、duplicate ack、wrong generation、latest-state replay、handoff 中 target mode 改变、`stopForeground` failure injection、Service destroyed before ack、repeated terminal，以及 no double notify / cancel。该协议不授权新增 notification 核心 interface。
+
 ## 11. 风险隔离后的 implementation Story 序列
 
 每个后续Story只有在前一个Story独立Review / merge / push完成、其immutable full SHA成为`main` ancestor、`main...origin/main = 0 0`且权威文档一致时才解锁。分支名不是解锁事实；不增加状态docs-sync或递归closeout。
@@ -242,28 +294,28 @@ E17-9的固定基线是：Service先以`STOP_FOREGROUND_REMOVE`移除自身的72
 - **禁止：** scanner/GATT owner、Application wiring、Route、Service、Manifest、notification、Room、记录、reconnect、胶囊本体/geometry。
 - **前置：** E17-4 reviewed/merged immutable SHA为main ancestor且main同步。
 - **Acceptance：** M0证据成立；状态矩阵完整；malformed不failure/不续命；旧bpm不live；presentation不改视觉DTO；不复制旧数字。
-- **Evidence：** pure Kotlin + `.local/smoke/e17-5-heart-rate-fact-core/` Band 9前台间隔；独立Review锁provisional阈值。
+- **Evidence：** pure Kotlin + `.local/smoke/e17-5-heart-rate-fact-core/` Band 9前台间隔；修改 debug 测量 Activity 后重新 build / install，按第 8.1 节记录 source preparation SHA、APK path / variant / applicationId / Activity / SHA256、build / install time、设备与分层日志；独立Review交叉核验APK身份并锁provisional阈值。
 - **Rollback / disabled：** 仅core未接新owner；回滚不影响现有训练；默认opt-in仍false。
 
 ### E17-6 Deterministic Android BLE Runtime Owner
 
 - **唯一主要风险轴：** scanner/GATT/callback identity、main-queue serialization与cleanup确定性。
-- **允许范围：** 新`HeartRateRuntimeOwner.kt`；替换/退休`AndroidBleHeartRateProvider.kt`、`HeartRateDeviceScanner.kt`与旧BLE DTO；adapt permission planner；owner/callback/platform tests；parser只消费不修改。
-- **禁止：** Application/settings/capsule wiring、notification/Route/Service/Manifest、FGS、Room、reconnect/scheduler、`AndroidBleOperations` seam。
+- **允许范围：** 新增并完成`HeartRateRuntimeOwner.kt`、确定性 owner/callback/platform tests，adapt permission planner，parser只消费不修改；实现 main queue、generation、attempt ID、raw GATT identity、具体 BLE 调用、TOCTOU 与 cleanup。新 owner 只在测试中实例化。旧`AndroidBleHeartRateProvider`、`HeartRateDeviceScanner`与旧 DTO 暂留，仅维持现有 production / debug 接线编译。
+- **禁止：** Application/settings/capsule wiring、notification/Route/Service/Manifest、FGS、Room、reconnect/scheduler、`AndroidBleOperations` seam；禁止 production composition root、Activity、Compose、settings、debug launcher取得或实例化新owner；禁止自动启动、Service入口或隐式singleton getter；禁止在本Story宣称旧runtime已删除或retire。
 - **前置：** E17-5 独立 Review / merge / push完成，immutable full SHA为同步`main` ancestor且文档一致。
-- **Acceptance：** main queue；generation/attempt/raw GATT首次绑定；callback早于返回；old callback/target/generation拒绝；permission TOCTOU；具体BLE调用；cleanup顺序/幂等；intentional stop不伪造disconnect；unknown exception继续抛；无parallel owner。
+- **Acceptance：** main queue；generation/attempt/raw GATT首次绑定；callback早于返回；old callback/target/generation拒绝；permission TOCTOU；具体BLE调用；cleanup顺序/幂等；intentional stop不伪造disconnect；unknown exception继续抛。E17-6合并后旧runtime仍是唯一production可达BLE owner；新owner默认不可从production composition root取得。测试实例化新owner不等于production双owner；新旧源码可暂时共存，但不得在同一production进程中同时实例化、扫描或持有GATT。
 - **Evidence：** owner确定性tests + Android平台tests；AVD只做permission/Bluetooth/no-crash，不声称RF。
-- **Rollback / disabled：** owner尚未接production UI；旧provider不得与新owner同时production可达。
+- **Rollback / disabled：** owner尚未接production UI；E17-6切换前仍可编译，`HeartRateBroadcastSmokeActivity.kt`继续通过旧provider编译。旧runtime的production retirement只属于E17-7原子切换。
 
 ### E17-7 Application / Settings / Capsule Production Wiring
 
 - **唯一主要风险轴：** composition root、process visibility、manual user flow与跨页面同owner接线。
-- **允许范围：** `TrainFlowApplication.kt`、`MainActivity.kt`、`TrainFlowApp.kt`、新窄`ProcessVisibilityTracker.kt`（平台`ActivityLifecycleCallbacks`）、settings state/route/app mapper、DataStore兼容、capsule mapper tests、Application owner tests。
+- **允许范围：** `TrainFlowApplication.kt`、`MainActivity.kt`、`TrainFlowApp.kt`、新窄`ProcessVisibilityTracker.kt`（平台`ActivityLifecycleCallbacks`）、settings state/route/app mapper、DataStore兼容、capsule mapper tests、Application owner tests；以及 debug `app/src/debug/java/com/liujyks/trainflow/app/HeartRateBroadcastSmokeActivity.kt` 对旧provider直接引用的最小迁移或删除。debug harness不得成为production owner。
 - **禁止：** FGS/Service/notification ownership、Route notification代码、Room/session HR、自动恢复、胶囊visual/geometry。
 - **前置：** E17-6 独立 Review / merge / push完成，immutable full SHA为同步`main` ancestor且文档一致。
-- **Acceptance：** Application只创建一个owner；Activity recreation/page navigation不重建；离开settings只停scan；cold start只恢复saved hint；opt-out/permission loss/Bluetooth off/non-training background cleanup；主动permission/scan/saved exact match/manual select/connect；active training background在FGS未实现时也cleanup且不宣称保证。
-- **Evidence：** pure/UI mapping、Application/platform tests、AVD grant/deny/revoke/navigation/Home/process recreation；**Band 9 basic gate必须通过后才merge**。
-- **Rollback / disabled：** default off；若Band gate失败不merge；不保留第二owner或假“后台持续”copy。
+- **Acceptance：** 在同一Story原子完成：`TrainFlowApplication`创建唯一新owner；`MainActivity`、`TrainFlowApp`、settings、manual scan/connect、saved-device与capsule mapper全部切换；迁移/退休debug smoke旧provider引用；删除旧`HeartRateDeviceScanner`资源ownership路径；删除旧`AndroidBleHeartRateProvider`可实例化runtime路径，或只保留不持有scanner/GATT的纯compatibility数据映射；移除旧BLE DTO的production consumer；通过`rg`与测试证明production composition只有一个owner创建点。Activity recreation/page navigation不重建；离开settings只停scan；cold start只恢复saved hint；opt-out/permission loss/Bluetooth off/non-training backgroundcleanup；主动permission/scan/saved exact match/manual select/connect；active training background在FGS未实现时也cleanup且不宣称保证。E17-7合并后不得保留可重新实例化旧scanner/GATT owner的production入口。
+- **Evidence：** pure/UI mapping、Application/platform tests、第9.1节visibility reducer全矩阵、`rg`唯一owner创建点、AVD grant/deny/revoke/navigation/Home/screen-off/lockscreen/process recreation；**Band 9 basic gate必须通过后才merge**。E17-6切换前与E17-7切换后都必须可编译。
+- **Rollback / disabled：** default off；若Band gate失败不merge；原子切换不得落在新旧production owner并存的中间态，也不得保留假“后台持续”copy。
 
 ### E17-8 Application-scoped Ordinary Notification Coordinator
 
@@ -281,19 +333,22 @@ E17-9的固定基线是：Service先以`STOP_FOREGROUND_REMOVE`移除自身的72
 - **允许范围：** 新`ActiveWorkoutHeartRateService.kt`、Manifest、active notification contracts/controller、Application coordinator与必要first-party AndroidX direct dependency声明、Service/platform tests、最终freshness阈值/test更新、该Story evidence doc。
 - **禁止：** 新GATT owner、Service持有scanner/GATT、background scan/connect/reconnect、notification core新interface、Room/record、胶囊visual。
 - **前置：** E17-8 独立 Review / merge / push完成，immutable full SHA为同步`main` ancestor且文档一致。
-- **Acceptance：** 全7200矩阵；visible-start；immediateServiceCompat.startForeground；connectedDevice type；ordinary vs FGS deny分支；`START_NOT_STICKY`；failure、process death、Task Manager、terminal visibility；M1锁屏调度测量后锁最终freshness。
+- **Acceptance：** 全7200矩阵与第10.1节进程内release协议；visible-start；immediateServiceCompat.startForeground；connectedDevice type；ordinary vs FGS deny分支；`START_NOT_STICKY`；failure、process death、Task Manager、terminal visibility；stale/duplicate/wrong-generation ack、latest replay、handoff target变化、stopForeground失败、Service destroyed-before-ack、repeated terminal与no double notify/cancel；M1锁屏调度测量后锁最终freshness。
 - **Evidence：** pure coordinator、Android Service/Manifest、AVD全handoff + **Band 9 active-training lockscreen/background gate**；两者未全过不merge。
 - **Rollback / disabled：** 在M1/真机gate完成前不启用后台保证；失败保持E17-7前台manual能力与后台cleanup。零新增第三方依赖。
 
 ### E17-10 Integrated AVD / Band 9 Production Acceptance
 
-- **唯一主要风险轴：** 已合并组件的端到端证据与发布资格，不再设计owner/GATT/FGS。
-- **允许范围：** 新testing/evidence文档；必要时仅修测试fixture或已批准threshold/activation常量，总production修改上限80行。超过上限或需要ownership变化则停止并拆Repair。
-- **禁止：** 新抽象、wrapper、seam、reconnect、Room/record/analysis/export、UI redesign。
+- **性质：** evidence-only acceptance，不是implementation Story。
+- **唯一主要风险轴：** 已合并组件的端到端证据与发布资格，不再设计或修改owner/GATT/FGS/production合同。
+- **允许范围：** testing/evidence文档；`.local`中的AVD、Band 9、APK、日志、截图和设备证据；不改变production行为的test fixture或debug evidence harness修正；必要的测试断言修正，但不得改变被验收production合同。
+- **禁止：** 任何`app/src/main`行为变化，包括ownership、Application activation、BLE runtime、FGS、notification handoff、Manifest、final freshness threshold、presentation mapping、permission行为、cleanup、lifecycle与production activation constant；也禁止新抽象、wrapper、seam、reconnect、Room/record/analysis/export或UI redesign。
 - **前置：** E17-9 独立 Review / merge / push完成，immutable full SHA为同步`main` ancestor且文档一致；M1与final freshness已在E17-9合并前锁定。
 - **Acceptance：** 本文第12节AVD与两个Band gate全通过；APK/build identity可追溯；无crash/ANR；未通过即结论failed/inconclusive，不把E17-1证据代替。
 - **Evidence：** `.local/smoke/e17-10-heart-rate-production-acceptance/` + committed conclusion doc。
-- **Rollback / disabled：** 未通过不宣称production ready；按finding返回最小E17-7/8/9 Repair，功能默认off保持核心训练可用。
+- **Repair routing：** owner/GATT/callback问题返回E17-6或E17-7 scoped Repair；Application/settings/capsule问题返回E17-7 Repair；ordinary notification问题返回E17-8 Repair；FGS/ID`7200`/final freshness问题返回E17-9 Repair。Repair必须独立Review、merge/push并成为同步`main` ancestor，随后重新build APK并重跑全部受影响的AVD/Band 9 gate；旧APK、旧截图与旧日志不得继续作为修复后证据。
+- **Fixture / harness规则：** 必须证明变更不改变production行为；重新build受影响APK，记录新source SHA与APK SHA256，并重跑全部受影响evidence；不得用fixture修改掩盖production缺陷。
+- **Rollback / disabled：** 未通过不宣称production ready；功能默认off保持核心训练可用。E17-10本身不修production，必须返回对应前置Story Repair。
 
 六个Story没有把owner、GATT、FGS与真机acceptance重新塞进同一变更：E17-5隔离事实/时间；E17-6隔离平台runtime；E17-7隔离composition/user wiring；E17-8先消除notification多writer；E17-9只做FGS/handoff并在同Story锁必要锁屏threshold；E17-10只做端到端证据。这比机械五段多一个ordinary coordinator收口，避免E16-10b-2把owner、callback、scheduler、FGS与验收同时扩张。
 
@@ -355,10 +410,10 @@ E17-1只作设备/协议feasibility参考，不能替代两个新gate。
 | E17-7 | 7–10 / 5–8 | 260–430 | 350–600 | 15–25 | 0 | release APK + apkanalyzer package delta |
 | E17-8 | 6–8 / 4–6 | 220–360 | 300–500 | 12–20 | 0 | notification core package delta |
 | E17-9 | 4–7 / 5–8 | 280–460 | 400–700 | 15–25 | 0 | Service/Manifest前后release APK与DEX包差异 |
-| E17-10 | 0–2 / 0–3 | 0–80 | 0–180 | 0–5 | 0 | 最终release APK、SHA256、apkanalyzer复核 |
-| **总计** | 去重后约20–27 / 18–30 | **1,630–2,640** | **1,900–3,330** | **84–140** | **0** | 规划净APK区间30–120KiB，必须实测 |
+| E17-10 | **0 / 0–3** | **0** | 0–180 | **0** | 0 | evidence-only；最终release APK、SHA256、apkanalyzer复核 |
+| **总计** | 去重后约20–27 / 18–30 | **1,630–2,560** | **1,900–3,330** | **84–135** | **0** | 规划净APK区间30–120KiB，必须实测 |
 
-总行数是新增/重写工作量，不等于净仓库增长；旧627行provider、旧DTO与Route writer会被删除/重写，因此净行数更低。`<50 KiB`不再作为先验承诺；新的规划净release APK区间为30–120KiB，只有各Story同toolchain的before/after release APK、`apkanalyzer dex packages`与最终SHA才是事实。
+总行数是新增/重写工作量，不等于净仓库增长；旧627行provider、旧DTO与Route writer会在E17-7原子切换中被删除、退休或重写，因此净行数更低。E17-10 production files、production新增/重写行数与production方法均为0，只保留test / evidence估算。`<50 KiB`不再作为先验承诺；新的规划净release APK区间为30–120KiB，只有各Story同toolchain的before/after release APK、`apkanalyzer dex packages`与最终SHA才是事实。
 
 不引入厂商SDK、BLE library、DI library、scheduler、通用framework或新第三方依赖。若`ServiceCompat`需要停止依赖transitive classpath，E17-9可把现有AndroidX Core作为直接first-party坐标声明；它不计第三方依赖，但必须记录版本和dependency delta。全序列最多一个runtime owner、**零默认BLE seam**、一个concrete Service，不新增notification core interface。
 
@@ -368,10 +423,13 @@ E17-1只作设备/协议feasibility参考，不能替代两个新gate。
 |---|---|
 | D-080与D-081无矛盾 | Pass |
 | 当前代码迁移清单完整 | Pass；已按真实627行provider、空Application、三Route writer校正 |
-| 目标无双runtime owner / 双notification writer | Pass；E17-6与E17-8分别设置不可merge门禁 |
+| 目标无双runtime owner / 双notification writer | Pass；E17-6新owner仅test可达且旧runtime继续唯一production owner，E17-7同Story原子切换/退休旧入口；E17-8收口ordinary writer，E17-9按generation ack交接7200 |
 | optional seam明确 | Pass；默认不新增，无法实现则stop / management review |
 | freshness无循环 | Pass；E17-5前台M0 -> E17-9可运行FGS M1 -> final lock |
 | Story按风险拆分 | Pass；E17-5至E17-10六段 |
+| process visibility fail-closed | Pass；E17-7固定四类fact、Activity identity集合、configuration generation/失效门禁与确定性测试矩阵 |
+| E17-5 M0 APK身份 | Pass；debug测量变更后必须重新build/install并记录source SHA与APK SHA256，任何后续可执行变化使旧证据失效 |
+| E17-10无production修改 | Pass；evidence-only，production finding返回E17-6/7/8/9独立Repair并重跑受影响证据 |
 | 每Story范围、验收、证据、禁止项 | Pass |
 | AVD / Band 9 evidence层级准确 | Pass；两个Band gate独立，E17-1仅reference |
 | 排除Room/记录/分析/导出/自动恢复 | Pass |
