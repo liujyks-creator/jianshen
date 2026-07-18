@@ -1,6 +1,6 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态判定：** E17-0、E17-1、E17-2 `reviewed / merged`；E17-3 合并门禁未全部满足时为 `implemented / needs review`，全部满足后自动视为 `reviewed / merged`、E17-4 gate 自动视为 satisfied；E17-4 `planned / prerequisite-gated`
+**状态判定：** E17-0、E17-1、E17-2、E17-3 `reviewed / merged`；E17-4 immutable SHA 尚非 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、五份文档一致性任一未完成时为 `implemented / needs review`，production implementation 继续 locked；全部门禁满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied
 **日期：** 2026-07-12；状态同步：2026-07-18
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
@@ -76,13 +76,15 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - 训练 terminal 明确在前台时停止 FGS / 移除 `7200` 后，可在 eligibility 仍合法时保留同一条从未 cleanup 的 live attempt，并转为非训练前台只显示不记录；后台、锁屏或进程可见性不确定时必须 cleanup。两者均不自动 scan / connect / reconnect。
 - 非训练后台停止，`START_NOT_STICKY`，process death 后手动恢复。用户已接受持续通知 / 系统任务管理器可见成本。
 - 零新增第三方依赖；最多一个唯一 owner、一个确有需要的窄 typed BLE seam和一个 concrete Service，不构建通用 BLE framework。
-- 合并门禁未全部满足时状态为 `implemented / needs review`；独立 Review、`--no-ff` merge / push、最终 immutable Story SHA ancestry、`main...origin/main = 0 0` 与权威文档一致全部满足后，自动视为 `reviewed / merged`，E17-4 gate 自动视为 satisfied。不硬编码尚未产生的 merge / Story SHA。
+- 最终状态为 `reviewed / merged`；immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor，E17-4 gate 已 satisfied。
 
 ### E17-4：Implementation readiness
 
-- 对齐产品、设备证据、架构、胶囊状态接线、测试矩阵和 Story 拆分。
-- readiness 未通过不得写 production 代码。
-- 条件式状态：E17-3 immutable SHA 尚不是 `main` ancestor，或其独立 Review、merge / push、`main...origin/main = 0 0`、权威文档一致性任一未满足时，E17-4 为 `planned / prerequisite-gated` 且不得开始；全部满足后 gate 自动 satisfied，由主管理从 Git 解析最终 SHA 并生成 E17-4 readiness 提示词。
+- 主文档为 `docs/planning/e17-4-heart-rate-implementation-readiness.md`；真实代码盘点校正了旧 provider、空 Application composition root、Compose owner、三个 Route 通知 writer、Manifest / Service 缺口和冻结胶囊适配范围。
+- 候选结论为 `ready for implementation review`；默认不新增 `AndroidBleOperations` seam，采用原生 Android BLE 类型加窄 callback identity harness。无法安全覆盖早到 callback 时必须停止并返回主管理，implementation 不得自行扩张 seam。
+- freshness 采用无循环门禁：E17-5 以前台 Band 9 monotonic notify 测量形成 provisional internal threshold；E17-9 在 runnable FGS 后补测锁屏 / 临时后台余量，并在最终 presentation 启用前锁定纯 Kotlin 边界。
+- implementation 拆为 E17-5 facts / freshness / presentation core、E17-6 deterministic BLE owner、E17-7 Application / settings / capsule wiring、E17-8 ordinary notification coordinator、E17-9 connected-device FGS / ID `7200` handoff、E17-10 integrated acceptance。记录、Room、分析、导出和自动恢复均排除。
+- 条件式状态：E17-4 immutable SHA 尚非 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、五份文档一致性任一未完成时，E17-4 为 `implemented / needs review`，production implementation 继续 locked；全部门禁满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied。不创建状态 docs-sync，不硬编码未来 merge commit。
 
 ### E17 后续 implementation Story
 
@@ -157,9 +159,9 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 4. 当 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时，只允许 E17-2 独立 Code Review / merge，不得启动 E17-3。
 5. 当 E17-2 通过独立 Review、merge / push，其最终 immutable Story SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且权威文档一致时，E17-3 门禁自动满足。主管理从 Git 解析 E17-2 最终 SHA 并生成 E17-3 提示词；不要求 E17-2 状态 docs-sync，也不得创建“closeout 的 closeout”。
 6. E17-2 immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 已是 `main` ancestor，E17-3 gate 已满足并已完成用户方案 A 确认与 docs-only 架构。
-7. 当 E17-3 尚未通过独立 Architecture Code Review、`--no-ff` merge / push、最终 immutable Story SHA ancestry、`main...origin/main = 0 0` 和权威文档一致性门禁时，E17-3 为 `implemented / needs review`，E17-4 为 `planned / prerequisite-gated`，只允许 E17-3 独立 Review / Repair。
-8. 上述门禁全部满足后，E17-3 自动视为 `reviewed / merged`，E17-4 gate 自动视为 satisfied；主管理从 Git 解析最终 SHA，不做递归 closeout 或状态 docs-sync。
-9. E17-4 implementation readiness reviewed / merged 且结论通过后，才能创建正式 production implementation Story。
+7. E17-3 immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor；E17-3 为 `reviewed / merged`，E17-4 gate 已 satisfied。
+8. 当 E17-4 immutable SHA 尚非 `main` ancestor，或独立 Implementation Readiness Review、merge / push、`main...origin/main = 0 0` 和五份文档一致性任一未完成时，E17-4 为 `implemented / needs review`，production implementation locked；只允许 E17-4 独立 Review / Repair。
+9. 上述门禁全部满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`，E17-5 gate 自动 satisfied；主管理从 Git 解析最终 SHA，不做递归 closeout 或状态 docs-sync。
 
 每一关都必须：
 
@@ -170,7 +172,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 push、Review 文本、人工测试或分支存在都不等于已合入。E16 分支、E16 Story tip 和 `89d1e23f870185a2e279d35bb293883f64fe70ba` 均不得作为 E17 解锁前置。
 
-E17-0、E17-1 与 E17-2 为 `reviewed / merged`。E17-3 immutable SHA 尚不是 `main` ancestor，或独立 Review / merge / push、`main...origin/main = 0 0`、权威文档一致性任一未满足时，E17-3 为 `implemented / needs review`、E17-4 为 `planned / prerequisite-gated`；全部满足后，E17-3 自动视为 `reviewed / merged`、E17-4 gate 自动视为 satisfied。主管理直接从 Git 解析最终 SHA，不产生额外状态 docs-sync 或递归 closeout。
+E17-0、E17-1、E17-2 与 E17-3 为 `reviewed / merged`。E17-4 immutable SHA 尚非 `main` ancestor，或独立 Review / merge / push、`main...origin/main = 0 0`、五份文档一致性任一未完成时，E17-4 为 `implemented / needs review`，production implementation locked；全部门禁满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied。主管理直接从 Git 解析最终 SHA，不产生额外状态 docs-sync 或递归 closeout。
 
 ## 8. E17-0 验收
 
@@ -180,7 +182,7 @@ E17-0、E17-1 与 E17-2 为 `reviewed / merged`。E17-3 immutable SHA 尚不是 
 - E16 原始代码与文档作为 sealed historical archive，不参与 E17 当前状态逐行一致性检查。
 - E17-0 已 reviewed / merged；Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 成为 `main` ancestor。
 - E17-0 closeout 后续已完成独立 Review / merge / push / ancestry / sync / docs consistency 门禁；未创建递归 closeout。
-- E17-0、E17-1、E17-2 已 `reviewed / merged`；E17-3 / E17-4 状态按第 7 节条件式门禁自动判定，本 Repair 不宣称门禁已满足。
-- E17 implementation readiness 明确未通过。
+- E17-0、E17-1、E17-2、E17-3 已 `reviewed / merged`；E17-4 状态按第 7 节条件式门禁自动判定，本开发对话不宣称 reviewed / merged。
+- E17-4 readiness 候选结论为 `ready for implementation review`；production implementation 在 E17-4 独立 Review / merge 门禁完成前继续 locked。
 - 通用提示词流程包含连续 Review、Repair 结构、最小修改、Evidence、体积控制与 correct-course 职责门禁。
 - 本 Story 只修改 Markdown / 根目录提示词模板，不修改生产或测试代码。
