@@ -38,7 +38,7 @@ stepsCompleted:
 2. **业务核心与平台能力分离。** 训练计划模型、训练执行引擎、训练命令、训练事件和恢复规则放在业务层；通知、音频、震动、健康数据和设备接入放在平台适配层。
 3. **本地优先。** 首版以本地持久化为主，不依赖云同步，不要求登录账号。
 4. **执行引擎优先于页面状态。** UI 只发命令并展示状态；训练推进、计时、事件产生和记录写入由可测试的业务组件负责。
-5. **先保留接口，不展示假能力。** 心率、语音、课程、音乐节拍、AI 纠错等能力只保留模型和适配边界，首版页面不提供不可工作的假入口。
+5. **先保留接口，不展示假能力。** 语音、课程、音乐节拍、AI 纠错等未实现能力只保留模型和适配边界；心率在 D-080 / D-081 后进入显式 opt-in 的 E17 路线，但 E17-4 通过前仍不得伪装为已完成 production 能力。
 
 ## 3. 技术基线
 
@@ -51,7 +51,7 @@ stepsCompleted:
 | 架构风格 | 分层架构 + feature 模块 | UI、domain、data、platform adapter 分离。 |
 | 异步 | Kotlin Coroutines + Flow | 训练计时、状态订阅、数据库流式观察。 |
 | 本地数据库 | Room | 保存动作、计划、会话、组记录、恢复映射。 |
-| 偏好设置 | DataStore | 保存提醒偏好、健康数据边界偏好预留和训练默认值；当前 MVP 不显示心率。 |
+| 偏好设置 | DataStore | 保存提醒偏好、训练默认值、默认关闭的心率 opt-in 与 saved-device convenience hint；心率 production implementation 仍受 E17-4 gate 约束。 |
 | 依赖注入 | Hilt | 生产实现与测试替身解耦。 |
 | 后台与提醒 | Notification + WorkManager/Alarm 边界 | 首版普通提醒，不做闹铃级强提醒硬依赖。 |
 | 最小网络 | 无必需网络 | 首版动作内容可随包或本地导入，后续再加同步。 |
@@ -120,14 +120,14 @@ feature:settings
   - 默认临近结束提醒秒数。
   - 声音、震动、强化动画开关。
   - 力量训练本组计时默认模式。
-  - 健康数据边界偏好预留；首版不显示心率占位。
+  - 默认关闭的心率 opt-in 与 saved identifier / display name convenience hint；不保存 GATT、bpm 或 session summary。
 
 ### 4.7 `core:notifications`
 
 - 计划提醒通知。
 - 活跃训练通知。
 - 前台训练服务边界。
-- E7.2 首版不启用 foreground service；只提供普通 ongoing active workout notification，显示 session 摘要并在 terminal / route disposed 时清理。
+- E7.2 / D-027 是普通训练的历史与当前基线：普通 active / paused 训练不启用 foreground service，只提供 ordinary ongoing active workout notification。D-081 是窄例外和部分 supersession：只有“活跃训练 + 已有合法当前心率连接”升级 `connectedDevice` FGS；心率结束而训练继续时降级回普通通知。Route dispose 不再拥有最终清理权，完整单一 writer 合同见第 8.1 节。
 - 不包含训练状态机，只消费 `WorkoutEvent`、训练 UI state 或 engine state 摘要。
 
 ### 4.8 `core:media`
@@ -138,11 +138,14 @@ feature:settings
 
 ### 4.9 `core:health`
 
-> **E17 correct-course 状态（2026-07-12）：** 下方 E11 / E16 描述保留为 historical / reference，用于说明 `main` 中已有代码和当时决策，不是 E17 默认架构。E16 已以 `closed by correct-course / superseded by E17` 关闭；失败的 E16-10b-2 分支永久禁止合并。E17-3 将重新设计适合小型 App 的最小 BLE 架构，E17-4 readiness 通过前不得把旧 provider / policy / reconnect 设计继续扩展或生成 production Story。此处不提前规定新的最终 BLE 架构。
+> **E17 当前架构（D-081，2026-07-18）：** 采用 Application / 进程级唯一 `HeartRateRuntimeOwner`，实现并复用现有 `HeartRateProvider`；所有 action、scan callback、GATT callback、timeout 和 freshness tick 串行到 Android main looper，并以 generation + attempt ID + raw GATT identity 拒绝旧 callback。活跃训练已有当前连接时使用 `connectedDevice` foreground service 维持锁屏 / 临时后台，复用训练通知；非训练后台停止。完整合同见 `docs/planning/e17-3-heart-rate-minimum-architecture.md`。E17-4 通过前不得开始 production implementation。
 
 - E17 唯一冻结边界是浮动心率胶囊的视觉与互动：`HeartRateFloatingCapsule.kt`、`HeartRateCapsuleGeometry.kt`、相关 motion 表现、approved HTML、collapsed / expanded、拖动 threshold、左右吸附、viewport clamp、安全区与 IME 避让。
 - `HeartRateFloatingCapsuleState.kt` 中的旧 provider 状态、文案、mapper、优先级不冻结；state source、presentation state 和 `TrainFlowApp` runtime wiring 可在 E17-2 / E17-3 重做。
-- E17-3 必须先明确原生 GATT ownership、callback 串行化、permission failure、scan/connect/close、事实状态与 presentation 分离和测试层级；默认优先直接使用 Android BLE 类型，不构建通用 BLE 框架，不复制完整 GATT 对象模型。
+- `HeartRateRuntimeOwner` 唯一持有 scanner、scan callback、target、`BluetoothGatt` 和 `BluetoothGattCallback`；settings、胶囊、Compose 页面和 foreground service 只能发动作或观察状态，不能成为第二 owner。
+- permission TOCTOU 只在具体 Android BLE 调用处窄捕获 `SecurityException`；不捕获 arbitrary lambda 的 `IllegalStateException`，不按异常 message / 厂商字符串分类。
+- Android BLE runtime facts、用户事实 `HeartRateState` 和胶囊 presentation state 分层；旧 bpm 在 freshness 失效后不得继续显示为 live。
+- malformed payload 仅是内部 runtime diagnostic：不刷新 `lastValidSampleAt`，不以旧 bpm + 新时间戳续写 `Live`，也不立即发布公共 `TechnicalFailure`；已有 fresh 样本只支撑到原 freshness 截止点，无有效样本时保持 waiting / 当前合法状态。只有独立的平台、连接、discovery、characteristic 或 CCCD 失败才形成公共技术失败。
 - freshness 与自动重连不得默认绑在同一 Story；自动重连需要独立价值决策、独立架构和独立真机验收。
 
 - `HeartRateProvider` source-aware 抽象接口与 disabled / mock / source-unavailable 实现。
@@ -182,7 +185,7 @@ feature:settings
 | `feature:workout-session` | 计时训练执行页、力量训练执行页、跟练雏形页、确认层。 |
 | `feature:history` | 训练总结、训练记录、基础趋势。 |
 | `feature:recovery` | 训练后恢复建议。 |
-| `feature:settings` | 训练偏好、通知偏好、未来健康数据边界偏好；未来心率 opt-in 的 canonical setup 入口。 |
+| `feature:settings` | 训练偏好、通知偏好和健康数据边界偏好；E17 心率 opt-in、权限说明与用户主动设备操作的 canonical setup 入口。 |
 
 ## 5. 分层数据流
 
@@ -329,8 +332,14 @@ stateDiagram-v2
 首版采用普通训练提醒，不把闹铃级强提醒作为 MVP 硬依赖。
 
 - 计划提醒：通过通知调度实现，允许系统延迟。
-- 活跃训练：训练进行中可显示普通 ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎。
-- 后台训练：E7.2 首版不启用 foreground service，不承诺后台精确计时；若后续要可靠后台推进，必须重新评估 foreground service 类型、权限和恢复策略。
+- 普通活跃训练：沿用 D-027 / E7.2 ordinary ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎；active / paused 本身不普遍变成 FGS，也不承诺普通训练后台精确计时。
+- D-081 窄例外：只有“活跃训练 + 已有合法当前心率连接”使用 `connectedDevice` FGS；心率停止 / 断连但训练继续时退回普通通知。它只 supersede D-027 中“任何首版训练情形都不使用 FGS”的绝对范围。
+- 不新增第三个核心 notification interface。适配现有 `ActiveWorkoutNotificationController` contract，使其 production instance 成为 Application / 进程级唯一协调者；Route 只提交训练状态。固定 ID `7200` 概念上只有 `NONE`、`ORDINARY_WORKOUT_NOTIFICATION`、`HEART_RATE_FOREGROUND_SERVICE` 三种模式，任一时刻只有一个 writer，不产生第二条常驻通知。
+- FGS 升级：协调者保存最新状态并进入 handoff，从允许的可见前台调用 `startForegroundService()`；Service 在 `onStartCommand()` 路径立即调用 `ServiceCompat.startForeground(7200, notification, FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)`，不加人为延时。FGS content 必须准确说明后台心率连接，不能沿用普通通知“不是 foreground service”的文案。
+- `POST_NOTIFICATIONS` 拒绝时，ordinary notification 可以不发布；FGS 仍必须构造 notification 并传给 `startForeground()`，不得复用现有 `Ignored -> clear / no content` 分支。系统仍可能在 Task Manager / Active apps 展示 FGS。
+- FGS 降级：先有序停止 / demote FGS并交还 ID `7200` writer，再由协调者以同一 ID 恢复 ordinary notification；若通知权限拒绝则可不发布。E17-4 决定具体 `stopForeground()` flag，但必须证明 handoff 有序、幂等、无重复 cancel。
+- Route dispose 不能取消仍活跃训练的通知；terminal 时协调者停止 FGS并对 `7200` 最终移除一次。重复 terminal、Service stop、Route dispose 与 cleanup 必须幂等。
+- FGS 启动 / 提升失败不创建第二个 GATT owner；明确前台可保留前台连接并发布准确失败事实，随后无合法 FGS 而进入后台必须 cleanup。
 - 权限：清楚解释通知权限用途。
 
 ### 8.2 声音与震动
@@ -342,7 +351,7 @@ stateDiagram-v2
 
 ### 8.3 心率与健康数据
 
-首版只保留 source-aware 抽象状态和 provider 边界；当前生产 UI、记录和统计不消费心率：
+D-080 / D-081 已 supersede 早期“首版全面不显示心率”的当前式产品范围。当前 E17 接受默认关闭、用户显式 opt-in 后通过标准 HRS 与冻结胶囊显示实时心率，但 production 尚未实现，必须先通过 E17-4 readiness：
 
 ```kotlin
 interface HeartRateProvider {
@@ -350,21 +359,26 @@ interface HeartRateProvider {
 }
 ```
 
-- 默认实现可以是 `DisabledHeartRateProvider`、mock provider 或 source-unavailable provider。
-- `HeartRateState` 可以表达未获取、设备已连接但无读数、设备读数、手动读数来源、过期读数、provider 不可用和权限不可用等状态，但 E11.3 后当前生产 UI、历史和统计不消费它。
-- E11.1 / E11.3 不申请真实健康、蓝牙或身体传感器权限，不实现或保留手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK。
+- 唯一 Application / 进程级 `HeartRateRuntimeOwner` 实现现有 `HeartRateProvider`；不创建平行 provider、通用 BLE framework 或完整 GATT wrapper。
+- owner 使用 Android main looper 串行化全部状态转换；connect attempt 先建立，再调用带 main `Handler` 的 `connectGatt()`，并以 attempt ID + raw GATT 对象引用绑定 callback。
+- `HeartRateState` 区分 disabled、permission unavailable、Bluetooth off、not connected、connecting、waiting data、live、data interrupted / stale、explicit link disconnect、technical failure 和 intentional stop；Android BLE 对象与用户文案都不能成为 core 状态输入。
+- 用户主动发起有限时 HRS scan、saved identifier 精确匹配或手动选择；权限失败、Bluetooth off、opt-out、非训练后台和 user stop 都先失效 attempt，再幂等 stop / disconnect / close。训练 terminal 是否 cleanup 由下条进程可见性规则决定，不再无条件绑定。
+- 活跃训练已有合法当前连接且进入锁屏 / 临时后台时使用 `connectedDevice` foreground service；Service 经唯一通知协调者复用 ID `7200` 且不持有 GATT。训练完成 / 放弃且 App 明确仍在前台时，停止 / demote FGS并最终移除训练通知；若同一 live attempt 从未 cleanup 且 opt-in、权限、Bluetooth、target eligibility 仍合法，owner 转为非训练前台只显示不记录并保留该连接，胶囊可继续显示 fresh bpm。这不是自动恢复 / 自动连接 / reconnect，之后断连仍手动恢复。terminal 在后台、锁屏或进程可见性不确定时必须停止 FGS并 cleanup；Route 存在不等于进程前台。非训练后台不持续连接，process death 后 `START_NOT_STICKY` 并手动恢复。
+- freshness 只使用 monotonic time 判断最近有效 bpm 是否仍 current，与 reconnect 完全解耦；具体阈值由首个 runtime implementation Story 在编码前依据 Band 9 notify 间隔、锁屏调度余量和边界测试确认，不继承 D-078。
+- 以下 E11 / E16 条目保留为 historical / reference，不能覆盖 D-080 / D-081，也不能解锁 production implementation。
+- E11.1 / E11.3 当时不申请真实健康、蓝牙或身体传感器权限，不实现或保留手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK；这是历史 Story 范围。
 - 不做实时心率预警闭环，不做医疗、危险或训练中断判断。
-- 不因没有设备或没有手动输入而阻塞训练闭环；首版直接隐藏心率能力。
+- 不因没有设备或没有手动输入而阻塞训练闭环；默认关闭或无可用实时数据时不得显示假 bpm。
 - E11.2a 和 E16 retest 都不持久化心率，不绘制平均心率趋势，不把执行页瞬时 `HeartRateState` 当历史事实，不申请生产健康 / 蓝牙 / 身体传感器权限。
 - 后续 Apple Watch / iOS 保留为 iOS 第一优先路线，合理架构是 iOS app + watchOS companion + HealthKit / HKWorkoutSession / HKLiveWorkoutBuilder；当前 Android-first 阶段不进入 dev，且 Apple SDK model 不能泄漏到 TrainFlow UI / history / analytics。
 - HUAWEI Band 9 当前只作为 feasibility 样本。E11.2a 原条件没有发现标准 BLE HRS；E16 广播开启 retest 已发现 `HUAWEI Band HR-OD7` 广播 `0x180D`，连接后发现 `0x2A37 props=notify`，CCCD 写入成功并收到 bpm notify。后续若优先做心率设备，只能另拆 `E16-1 BLE HRS adapter spike`，先处理连接生命周期、来源标注、权限、用户 opt-in 和非医疗边界。
 - E16-1 已实现 debug-only BLE HRS adapter spike：标准 payload parser 可测试 8-bit / 16-bit bpm 与 flags；debug provider 可在真机上输出 scanning、device found、connecting、service discovered、notify enabled、bpm received、disconnected / stopped 状态，并把 bpm 映射为 `HeartRateState`。这仍不是生产接入。
 - E16-2 已将 BLE HRS provider 基础生产化到 `core.health`：状态边界覆盖 no source、permission required、bluetooth disabled、scanning、device found / selected、connecting、connected waiting for data、live bpm、stale / disconnected 和 recoverable error；权限规划明确 Android 12+ 的 `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` 与 Android 11 及以下 scan compatibility 的 `ACCESS_FINE_LOCATION`，但权限请求只能由未来显式用户动作触发，不在 app 启动时触发。DataStore 只保存可选 device identifier / display name；Android privacy、BLE private address 和 Band broadcast label/address 变化意味着该 identifier 不能被当作稳定医疗设备身份。
 - E16-3 初版顶部 pill 方案不再作为推荐实现；当前未来 UI 方向是 App 内可拖动浮动心率胶囊，不使用 `SYSTEM_ALERT_WINDOW` / “显示在其他应用上层”权限。胶囊属于 TrainFlow app shell overlay，不参与训练页布局，不得遮挡主按钮、底部导航、confirm-record 控件、输入框、键盘区域、状态栏或手势导航；松手后必须吸附到安全边缘。
-- E16-4 明确未来心率功能默认关闭，canonical 入口是 `设置 -> 训练偏好 -> 心率`；设备状态入口和胶囊展开态只能作为已启用后的状态 / 设置捷径。首次开启前必须展示用途、权限、隐私和非医疗说明；BLE scan / connect 权限只能在用户主动开启 / 选择设备 / 重新扫描后触发，不得在 app 启动、进入训练页或开始训练时触发。
-- 未来心率设备选择只保存 provider identifier / display name，不保存 `BluetoothDevice`、`BluetoothGatt`、GATT / SDK model、bpm 样本或 session summary。关闭心率后 provider 必须停止扫描、断开连接、不重连、不记录；可保留已保存设备名称作为 convenience hint，并提供清除入口。
+- E16-4 当时已明确、D-080 现继续要求：心率默认关闭，canonical 入口是 `设置 -> 训练偏好 -> 心率与设备`；设备状态入口和胶囊展开态只能作为已启用后的状态 / 设置捷径。首次开启前必须展示用途、权限、隐私和非医疗说明；BLE scan / connect 权限只能在用户主动扫描 / 连接时触发，不得在 app 启动、进入训练页或开始训练时触发。
+- E17 心率设备选择只保存 provider identifier / display name，不保存 `BluetoothDevice`、`BluetoothGatt`、GATT / SDK model、bpm 样本或 session summary。关闭心率后 owner 必须停止扫描、断开连接、不重连、不记录；可保留已保存设备名称作为 convenience hint，并提供清除入口。
 - Historical E16 reference：E16-10a freshness / offline / reconnect docs-only policy 曾 approved、reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`），E16-10b-1 policy core 也曾 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。其 10 / 15 / 30 秒 freshness、2 / 5 / 10 秒 retry 与 direct reconnect 设计现只作 reference，不是 E17 默认方案；旧 E16-10b-2 的 unlocked 状态已失效，失败分支永久禁止合并。
-- 未来心率显示必须区分连接 / 数据状态和心率区间状态。无可用 bpm 时只能显示 `未启用`、`未连接源`、`权限未赋予`、`蓝牙关闭`、`正在连接`、`等待数据`、`数据过期`、`离线` 等来源状态；有 bpm 且用户已设置年龄时才显示“区间 + bpm”，例如 `热身 105 bpm`。未设置年龄时只显示 bpm，不计算区间。区间可基于用户年龄估算最大心率，用户后续可覆盖最大心率或提醒阈值。
+- E17 心率显示必须区分连接 / 数据状态和心率区间状态。无可用 bpm 时只能显示 `未启用`、`未连接源`、`权限未赋予`、`蓝牙关闭`、`正在连接`、`等待数据`、`数据过期`、`离线` 等来源状态；有 bpm 且用户已设置年龄时才显示“区间 + bpm”，例如 `热身 105 bpm`。未设置年龄时只显示 bpm，不计算区间。区间可基于用户年龄估算最大心率，用户后续可覆盖最大心率或提醒阈值。
 - 未来记录边界：未训练时只显示不记录；timed 和 strength 训练中允许按 1 秒采样记录心率，覆盖 strength active、rest 与 confirm-record。该记录模型、Room / session schema、summary、history / trends 和训练后分析必须另拆 story；E16-3a 仍只做视觉规划。
 - `超过上限` 表示超过用户设置的提醒阈值，首版只做深红视觉提示，不播放声音、不震动、不强制暂停，不做医疗、危险或训练中断判断。
 - Huawei Health Kit / Health Service Kit、Health Connect、Wear OS、HealthKit 或厂商 SDK 仍只作为未来独立阶段调研。Health Connect 更适合历史摘要 / 趋势候选，不作为当前实时执行页来源。
@@ -383,13 +397,13 @@ interface HeartRateProvider {
 | 权限/能力 | 首版用途 | 约束 |
 |---|---|---|
 | 通知权限 | 训练提醒、活跃训练提示 | 必须说明用途，可关闭。 |
-| 前台服务 | E7.2 不启用 | 后续只有在确需后台训练可靠推进且能匹配合法 foreground service 类型时再引入。 |
+| 前台服务 | E17 活跃训练已有合法心率连接时维持锁屏 / 临时后台连接 | D-081 对 D-027 / E7.2 的窄例外；使用 `connectedDevice` 类型，声明 `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_CONNECTED_DEVICE`，由唯一 Application-scoped notification coordinator 复用 ID `7200`。通知权限拒绝仍须向 `startForeground()` 提交 notification；非训练后台不启用，process death 不自动恢复。 |
 | 震动 | 临近结束提醒 | 由用户偏好控制。 |
 | 健康数据 | 首版预留 | 未接入时不请求。 |
-| BLE scan / connect | 未来心率设备 opt-in 后扫描和连接用户选择的设备 | 不在 app 启动、训练页进入或训练开始时请求；只在用户主动开启 / 选择设备 / 重新扫描后请求。Android 11 及以下 location scan compatibility 只能用于蓝牙扫描说明，不得写成定位能力。 |
+| BLE scan / connect | E17 心率 opt-in 后扫描和连接用户选择的设备 | 不在 app 启动、训练页进入或训练开始时请求；只在用户主动扫描 / 连接时请求。Android 11 及以下 location scan compatibility 只能用于蓝牙扫描说明，不得写成定位能力。 |
 | 系统悬浮窗 | 不使用 | 浮动心率胶囊只在 TrainFlow app shell 内显示，不申请 `SYSTEM_ALERT_WINDOW` / “显示在其他应用上层”。 |
 
-首版不采集医疗数据，不做医疗结论，不上传训练数据到远端服务。未来心率展示和区间必须保持非医疗文案：`超过上限` 只表示超过用户设置的视觉提醒阈值，不播放声音、不震动、不强制暂停、不自动中断训练。
+首版不采集医疗数据，不做医疗结论，不上传训练数据到远端服务。E17 心率展示和区间必须保持非医疗文案：`超过上限` 只表示超过用户设置的视觉提醒阈值，不播放声音、不震动、不强制暂停、不自动中断训练。
 
 ## 10. 测试策略
 
@@ -417,6 +431,13 @@ interface HeartRateProvider {
 - 关键导航路径。
 - 通知权限关闭时训练闭环仍可使用。
 - 横竖屏或进后台后训练状态恢复。
+
+### 10.4 E17 心率证据层级
+
+- 纯 Kotlin：parser、facts、freshness 和 presentation mapper。
+- runtime owner：generation、attempt / raw GATT identity、早到 / 迟到 callback、TOCTOU 与幂等 cleanup 的确定性 race 测试。
+- Android / AVD：权限、foreground service、通知、前后台、process recreation 和 no-crash；不能替代真实 BLE。
+- Band 9 真机：scan / connect / discover / CCCD / notify / manual cleanup，以及活跃训练锁屏 / 临时后台维持当前连接；E17-1 只证明旧 debug 设备 / 协议可行性，新架构必须重新取证。
 
 ## 11. 未来 iOS 与共享边界
 
@@ -463,7 +484,7 @@ interface HeartRateProvider {
 1. 最低 Android 版本与目标 Android SDK。
 2. 是否首版要求训练退到后台后仍持续准确计时。
 3. 首批动作内容是随包静态 JSON，还是 Room seed 数据。
-4. 若未来重新进入健康设备阶段，是否恢复心率显示、放在何处、以及如何避免挤压训练主信息。
+4. E17-4 是否已对齐 D-081、单一 owner、freshness 阈值测量任务、`connectedDevice` FGS / 单一通知和 AVD / Band 9 真机证据矩阵；未通过前不得开始心率 production implementation。
 5. 训练提醒是否只做普通通知，还是在后续版本增加精确提醒选项。
 6. 官方默认 UI 是否先只做浅色工作区 + 深色训练执行页，还是首版同时提供暗色主题。
 
@@ -477,3 +498,4 @@ interface HeartRateProvider {
 - Android 官方 App Architecture 指南
 - Android 官方 Jetpack Compose 文档
 - Android 官方 Room、DataStore、WorkManager 与 Health Connect 文档
+- `docs/planning/e17-3-heart-rate-minimum-architecture.md`
