@@ -70,7 +70,11 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - 一个 Application / 进程级 `HeartRateRuntimeOwner` 实现现有 `HeartRateProvider`，唯一持有 scanner、target、GATT 与 callback；settings、胶囊、Compose 和 Service 不能成为第二 owner。
 - 所有动作 / callback / timer 串行到 Android main looper；generation、attempt ID 与 raw GATT identity 拒绝旧 callback；cleanup 先失效引用再幂等 stop / disconnect / close。
 - Android BLE facts、用户 `HeartRateState` 与 capsule presentation 分层；permission TOCTOU 只在具体 BLE 调用处窄捕获 `SecurityException`；freshness 与 reconnect 解耦。
-- 活跃训练已有当前连接时采用 `connectedDevice` foreground service，复用训练通知；非训练后台停止，`START_NOT_STICKY`，process death 后手动恢复。用户已接受持续通知 / 系统任务管理器可见成本。
+- malformed payload 只作为内部 diagnostic，不刷新 last-valid-sample、不续写 Live、不立即形成公共 `TechnicalFailure`；公共状态只按有效样本 freshness 或独立平台 / 连接失败事实推进。
+- D-081 是 D-027 / E7.2 的窄例外和部分 supersession：普通训练继续使用 ordinary notification；只有活跃训练已有合法当前心率连接时采用 `connectedDevice` FGS，连接结束而训练继续则降级回 ordinary notification。
+- 复用现有 `ActiveWorkoutNotificationController` contract 的唯一 Application-scoped production coordinator；Route 只提交状态，固定 ID `7200` 在 `NONE` / ordinary / FGS 三种概念模式间有序、幂等交接。`POST_NOTIFICATIONS` 拒绝不免除 FGS 构造并向 `startForeground()` 提交 notification 的义务。
+- 训练 terminal 明确在前台时停止 FGS / 移除 `7200` 后，可在 eligibility 仍合法时保留同一条从未 cleanup 的 live attempt，并转为非训练前台只显示不记录；后台、锁屏或进程可见性不确定时必须 cleanup。两者均不自动 scan / connect / reconnect。
+- 非训练后台停止，`START_NOT_STICKY`，process death 后手动恢复。用户已接受持续通知 / 系统任务管理器可见成本。
 - 零新增第三方依赖；最多一个唯一 owner、一个确有需要的窄 typed BLE seam和一个 concrete Service，不构建通用 BLE framework。
 - 合并门禁未全部满足时状态为 `implemented / needs review`；独立 Review、`--no-ff` merge / push、最终 immutable Story SHA ancestry、`main...origin/main = 0 0` 与权威文档一致全部满足后，自动视为 `reviewed / merged`，E17-4 gate 自动视为 satisfied。不硬编码尚未产生的 merge / Story SHA。
 
@@ -78,7 +82,7 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 
 - 对齐产品、设备证据、架构、胶囊状态接线、测试矩阵和 Story 拆分。
 - readiness 未通过不得写 production 代码。
-- 当前状态：`planned / prerequisite-gated`；只允许等待 E17-3 独立 Architecture Code Review / merge 门禁，不得提前开始。
+- 条件式状态：E17-3 immutable SHA 尚不是 `main` ancestor，或其独立 Review、merge / push、`main...origin/main = 0 0`、权威文档一致性任一未满足时，E17-4 为 `planned / prerequisite-gated` 且不得开始；全部满足后 gate 自动 satisfied，由主管理从 Git 解析最终 SHA 并生成 E17-4 readiness 提示词。
 
 ### E17 后续 implementation Story
 
@@ -153,7 +157,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 4. 当 E17-2 最终 immutable Story SHA 尚未成为 `main` ancestor 时，只允许 E17-2 独立 Code Review / merge，不得启动 E17-3。
 5. 当 E17-2 通过独立 Review、merge / push，其最终 immutable Story SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且权威文档一致时，E17-3 门禁自动满足。主管理从 Git 解析 E17-2 最终 SHA 并生成 E17-3 提示词；不要求 E17-2 状态 docs-sync，也不得创建“closeout 的 closeout”。
 6. E17-2 immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 已是 `main` ancestor，E17-3 gate 已满足并已完成用户方案 A 确认与 docs-only 架构。
-7. 当 E17-3 尚未通过独立 Architecture Code Review、`--no-ff` merge / push、最终 immutable Story SHA ancestry、`main...origin/main = 0 0` 和权威文档一致性门禁时，E17-3 为 `implemented / needs review`，E17-4 为 `planned / prerequisite-gated`，唯一下一步是 E17-3 独立 Review。
+7. 当 E17-3 尚未通过独立 Architecture Code Review、`--no-ff` merge / push、最终 immutable Story SHA ancestry、`main...origin/main = 0 0` 和权威文档一致性门禁时，E17-3 为 `implemented / needs review`，E17-4 为 `planned / prerequisite-gated`，只允许 E17-3 独立 Review / Repair。
 8. 上述门禁全部满足后，E17-3 自动视为 `reviewed / merged`，E17-4 gate 自动视为 satisfied；主管理从 Git 解析最终 SHA，不做递归 closeout 或状态 docs-sync。
 9. E17-4 implementation readiness reviewed / merged 且结论通过后，才能创建正式 production implementation Story。
 
@@ -166,7 +170,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 push、Review 文本、人工测试或分支存在都不等于已合入。E16 分支、E16 Story tip 和 `89d1e23f870185a2e279d35bb293883f64fe70ba` 均不得作为 E17 解锁前置。
 
-E17-0、E17-1 与 E17-2 为 `reviewed / merged`。E17-3 当前为 `implemented / needs review`，E17-4 为 `planned / prerequisite-gated`。E17-3 独立 Review / merge / push、immutable SHA ancestry、`main...origin/main = 0 0` 与权威文档一致性全部满足后，E17-3 自动视为 `reviewed / merged`、E17-4 gate 自动视为 satisfied；主管理直接从 Git 解析最终 SHA，不产生额外状态 docs-sync 或递归 closeout。
+E17-0、E17-1 与 E17-2 为 `reviewed / merged`。E17-3 immutable SHA 尚不是 `main` ancestor，或独立 Review / merge / push、`main...origin/main = 0 0`、权威文档一致性任一未满足时，E17-3 为 `implemented / needs review`、E17-4 为 `planned / prerequisite-gated`；全部满足后，E17-3 自动视为 `reviewed / merged`、E17-4 gate 自动视为 satisfied。主管理直接从 Git 解析最终 SHA，不产生额外状态 docs-sync 或递归 closeout。
 
 ## 8. E17-0 验收
 
@@ -176,7 +180,7 @@ E17-0、E17-1 与 E17-2 为 `reviewed / merged`。E17-3 当前为 `implemented /
 - E16 原始代码与文档作为 sealed historical archive，不参与 E17 当前状态逐行一致性检查。
 - E17-0 已 reviewed / merged；Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 成为 `main` ancestor。
 - E17-0 closeout 后续已完成独立 Review / merge / push / ancestry / sync / docs consistency 门禁；未创建递归 closeout。
-- 当前 E17-0、E17-1、E17-2 已 `reviewed / merged`；E17-3 已完成方案 A 架构并为 `implemented / needs review`，E17-4 为 `planned / prerequisite-gated`。
+- E17-0、E17-1、E17-2 已 `reviewed / merged`；E17-3 / E17-4 状态按第 7 节条件式门禁自动判定，本 Repair 不宣称门禁已满足。
 - E17 implementation readiness 明确未通过。
 - 通用提示词流程包含连续 Review、Repair 结构、最小修改、Evidence、体积控制与 correct-course 职责门禁。
 - 本 Story 只修改 Markdown / 根目录提示词模板，不修改生产或测试代码。

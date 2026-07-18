@@ -127,7 +127,7 @@ feature:settings
 - 计划提醒通知。
 - 活跃训练通知。
 - 前台训练服务边界。
-- E7.2 首版不启用 foreground service；只提供普通 ongoing active workout notification，显示 session 摘要并在 terminal / route disposed 时清理。
+- E7.2 / D-027 是普通训练的历史与当前基线：普通 active / paused 训练不启用 foreground service，只提供 ordinary ongoing active workout notification。D-081 是窄例外和部分 supersession：只有“活跃训练 + 已有合法当前心率连接”升级 `connectedDevice` FGS；心率结束而训练继续时降级回普通通知。Route dispose 不再拥有最终清理权，完整单一 writer 合同见第 8.1 节。
 - 不包含训练状态机，只消费 `WorkoutEvent`、训练 UI state 或 engine state 摘要。
 
 ### 4.8 `core:media`
@@ -145,6 +145,7 @@ feature:settings
 - `HeartRateRuntimeOwner` 唯一持有 scanner、scan callback、target、`BluetoothGatt` 和 `BluetoothGattCallback`；settings、胶囊、Compose 页面和 foreground service 只能发动作或观察状态，不能成为第二 owner。
 - permission TOCTOU 只在具体 Android BLE 调用处窄捕获 `SecurityException`；不捕获 arbitrary lambda 的 `IllegalStateException`，不按异常 message / 厂商字符串分类。
 - Android BLE runtime facts、用户事实 `HeartRateState` 和胶囊 presentation state 分层；旧 bpm 在 freshness 失效后不得继续显示为 live。
+- malformed payload 仅是内部 runtime diagnostic：不刷新 `lastValidSampleAt`，不以旧 bpm + 新时间戳续写 `Live`，也不立即发布公共 `TechnicalFailure`；已有 fresh 样本只支撑到原 freshness 截止点，无有效样本时保持 waiting / 当前合法状态。只有独立的平台、连接、discovery、characteristic 或 CCCD 失败才形成公共技术失败。
 - freshness 与自动重连不得默认绑在同一 Story；自动重连需要独立价值决策、独立架构和独立真机验收。
 
 - `HeartRateProvider` source-aware 抽象接口与 disabled / mock / source-unavailable 实现。
@@ -331,8 +332,14 @@ stateDiagram-v2
 首版采用普通训练提醒，不把闹铃级强提醒作为 MVP 硬依赖。
 
 - 计划提醒：通过通知调度实现，允许系统延迟。
-- 活跃训练：训练进行中可显示普通 ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎。
-- 后台训练：E7.2 首版不启用 foreground service，不承诺后台精确计时；若后续要可靠后台推进，必须重新评估 foreground service 类型、权限和恢复策略。
+- 普通活跃训练：沿用 D-027 / E7.2 ordinary ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎；active / paused 本身不普遍变成 FGS，也不承诺普通训练后台精确计时。
+- D-081 窄例外：只有“活跃训练 + 已有合法当前心率连接”使用 `connectedDevice` FGS；心率停止 / 断连但训练继续时退回普通通知。它只 supersede D-027 中“任何首版训练情形都不使用 FGS”的绝对范围。
+- 不新增第三个核心 notification interface。适配现有 `ActiveWorkoutNotificationController` contract，使其 production instance 成为 Application / 进程级唯一协调者；Route 只提交训练状态。固定 ID `7200` 概念上只有 `NONE`、`ORDINARY_WORKOUT_NOTIFICATION`、`HEART_RATE_FOREGROUND_SERVICE` 三种模式，任一时刻只有一个 writer，不产生第二条常驻通知。
+- FGS 升级：协调者保存最新状态并进入 handoff，从允许的可见前台调用 `startForegroundService()`；Service 在 `onStartCommand()` 路径立即调用 `ServiceCompat.startForeground(7200, notification, FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)`，不加人为延时。FGS content 必须准确说明后台心率连接，不能沿用普通通知“不是 foreground service”的文案。
+- `POST_NOTIFICATIONS` 拒绝时，ordinary notification 可以不发布；FGS 仍必须构造 notification 并传给 `startForeground()`，不得复用现有 `Ignored -> clear / no content` 分支。系统仍可能在 Task Manager / Active apps 展示 FGS。
+- FGS 降级：先有序停止 / demote FGS并交还 ID `7200` writer，再由协调者以同一 ID 恢复 ordinary notification；若通知权限拒绝则可不发布。E17-4 决定具体 `stopForeground()` flag，但必须证明 handoff 有序、幂等、无重复 cancel。
+- Route dispose 不能取消仍活跃训练的通知；terminal 时协调者停止 FGS并对 `7200` 最终移除一次。重复 terminal、Service stop、Route dispose 与 cleanup 必须幂等。
+- FGS 启动 / 提升失败不创建第二个 GATT owner；明确前台可保留前台连接并发布准确失败事实，随后无合法 FGS 而进入后台必须 cleanup。
 - 权限：清楚解释通知权限用途。
 
 ### 8.2 声音与震动
@@ -355,8 +362,8 @@ interface HeartRateProvider {
 - 唯一 Application / 进程级 `HeartRateRuntimeOwner` 实现现有 `HeartRateProvider`；不创建平行 provider、通用 BLE framework 或完整 GATT wrapper。
 - owner 使用 Android main looper 串行化全部状态转换；connect attempt 先建立，再调用带 main `Handler` 的 `connectGatt()`，并以 attempt ID + raw GATT 对象引用绑定 callback。
 - `HeartRateState` 区分 disabled、permission unavailable、Bluetooth off、not connected、connecting、waiting data、live、data interrupted / stale、explicit link disconnect、technical failure 和 intentional stop；Android BLE 对象与用户文案都不能成为 core 状态输入。
-- 用户主动发起有限时 HRS scan、saved identifier 精确匹配或手动选择；权限失败、Bluetooth off、opt-out、非训练后台、训练结束和 user stop 都先失效 attempt，再幂等 stop / disconnect / close。
-- 活跃训练已有当前连接且进入锁屏 / 临时后台时使用 `connectedDevice` foreground service；Service 复用训练通知且不持有 GATT。非训练后台不持续连接，process death 后 `START_NOT_STICKY` 并手动恢复。
+- 用户主动发起有限时 HRS scan、saved identifier 精确匹配或手动选择；权限失败、Bluetooth off、opt-out、非训练后台和 user stop 都先失效 attempt，再幂等 stop / disconnect / close。训练 terminal 是否 cleanup 由下条进程可见性规则决定，不再无条件绑定。
+- 活跃训练已有合法当前连接且进入锁屏 / 临时后台时使用 `connectedDevice` foreground service；Service 经唯一通知协调者复用 ID `7200` 且不持有 GATT。训练完成 / 放弃且 App 明确仍在前台时，停止 / demote FGS并最终移除训练通知；若同一 live attempt 从未 cleanup 且 opt-in、权限、Bluetooth、target eligibility 仍合法，owner 转为非训练前台只显示不记录并保留该连接，胶囊可继续显示 fresh bpm。这不是自动恢复 / 自动连接 / reconnect，之后断连仍手动恢复。terminal 在后台、锁屏或进程可见性不确定时必须停止 FGS并 cleanup；Route 存在不等于进程前台。非训练后台不持续连接，process death 后 `START_NOT_STICKY` 并手动恢复。
 - freshness 只使用 monotonic time 判断最近有效 bpm 是否仍 current，与 reconnect 完全解耦；具体阈值由首个 runtime implementation Story 在编码前依据 Band 9 notify 间隔、锁屏调度余量和边界测试确认，不继承 D-078。
 - 以下 E11 / E16 条目保留为 historical / reference，不能覆盖 D-080 / D-081，也不能解锁 production implementation。
 - E11.1 / E11.3 当时不申请真实健康、蓝牙或身体传感器权限，不实现或保留手动输入 UI，不持久化心率，不绘制平均心率趋势，也不接 HealthKit、Huawei Health Kit / Health Service Kit、BLE 或厂商 SDK；这是历史 Story 范围。
@@ -390,7 +397,7 @@ interface HeartRateProvider {
 | 权限/能力 | 首版用途 | 约束 |
 |---|---|---|
 | 通知权限 | 训练提醒、活跃训练提示 | 必须说明用途，可关闭。 |
-| 前台服务 | E17 活跃训练已有心率连接时维持锁屏 / 临时后台连接 | 使用 `connectedDevice` 类型，声明 `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_CONNECTED_DEVICE`，复用训练通知；非训练后台不启用，process death 不自动恢复。 |
+| 前台服务 | E17 活跃训练已有合法心率连接时维持锁屏 / 临时后台连接 | D-081 对 D-027 / E7.2 的窄例外；使用 `connectedDevice` 类型，声明 `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_CONNECTED_DEVICE`，由唯一 Application-scoped notification coordinator 复用 ID `7200`。通知权限拒绝仍须向 `startForeground()` 提交 notification；非训练后台不启用，process death 不自动恢复。 |
 | 震动 | 临近结束提醒 | 由用户偏好控制。 |
 | 健康数据 | 首版预留 | 未接入时不请求。 |
 | BLE scan / connect | E17 心率 opt-in 后扫描和连接用户选择的设备 | 不在 app 启动、训练页进入或训练开始时请求；只在用户主动扫描 / 连接时请求。Android 11 及以下 location scan compatibility 只能用于蓝牙扫描说明，不得写成定位能力。 |
