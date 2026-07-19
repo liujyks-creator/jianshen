@@ -2,11 +2,13 @@ package com.liujyks.trainflow.core.health
 
 import android.Manifest
 import android.os.Build
+import com.liujyks.trainflow.core.model.HeartRateFact
 import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
+import com.liujyks.trainflow.core.model.HeartRateTechnicalFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -77,13 +79,17 @@ class BleHeartRateProviderBoundaryTest {
         ).toHeartRateState()
 
         assertEquals(HeartRateStateKind.DEVICE_CONNECTED_NO_READING, waiting.kind)
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, waiting.fact)
         assertEquals(HeartRateSourceKind.DEVICE, waiting.sourceKind)
         assertEquals("D8:F0:42:01:90:D7", waiting.sourceId)
         assertEquals("HUAWEI Band HR-OD7", waiting.sourceLabel)
         assertEquals(HeartRateStateKind.DEVICE_READING, live.kind)
+        assertEquals(HeartRateFact.LIVE, live.fact)
         assertEquals(99, live.bpm)
         assertEquals(HeartRateStateKind.STALE_READING, disconnected.kind)
-        assertEquals(HeartRateUnavailableReason.DEVICE_DISCONNECTED, disconnected.unavailableReason)
+        assertEquals(HeartRateFact.LINK_DISCONNECTED, disconnected.fact)
+        assertNull(disconnected.bpm)
+        assertNull(disconnected.measuredAt)
     }
 
     @Test
@@ -119,18 +125,16 @@ class BleHeartRateProviderBoundaryTest {
             recoverableReason = BleHeartRateRecoverableReason.CONNECTION_FAILED
         )
 
-        assertEquals(HeartRateStateKind.PERMISSION_UNAVAILABLE, permission.toHeartRateState().kind)
-        assertEquals(
-            HeartRateUnavailableReason.PERMISSION_REQUIRED,
-            permission.toHeartRateState().unavailableReason
-        )
-        assertEquals(
-            HeartRateUnavailableReason.BLUETOOTH_DISABLED,
-            bluetoothOff.toHeartRateState().unavailableReason
-        )
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, permission.toHeartRateState().fact)
+        assertEquals(HeartRateFact.BLUETOOTH_OFF, bluetoothOff.toHeartRateState().fact)
         assertEquals(BleHeartRateScanStateKind.SCANNING, scanning.kind)
         assertEquals("D8:F0:42:01:90:D7", selected.toHeartRateState().sourceId)
-        assertEquals(HeartRateUnavailableReason.CONNECTION_FAILED, error.toHeartRateState().unavailableReason)
+        assertEquals(HeartRateFact.NOT_CONNECTED, selected.toHeartRateState().fact)
+        assertEquals(HeartRateFact.TECHNICAL_FAILURE, error.toHeartRateState().fact)
+        assertEquals(
+            HeartRateTechnicalFailure.CONNECT_FAILED,
+            error.toHeartRateState().technicalFailure
+        )
     }
 
     @Test
@@ -142,7 +146,8 @@ class BleHeartRateProviderBoundaryTest {
                 identifier = "D8:F0:42:01:90:D7",
                 displayName = "HUAWEI Band HR-OD7"
             ),
-            bpm = 105
+            bpm = 105,
+            measuredAt = "2026-07-19T13:16:04Z"
         )
 
         val resolved = providerStateAfterAvailabilityRefresh(
@@ -151,5 +156,60 @@ class BleHeartRateProviderBoundaryTest {
         )
 
         assertEquals(live, resolved)
+    }
+
+    @Test
+    fun legacyMalformedErrorDoesNotPublishTechnicalFailureOrRefreshWithNewTime() {
+        val selected = BleHeartRateDeviceSelection("id", "Band")
+        val withPreviousValid = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.ERROR,
+            message = "parser detail must not enter presentation",
+            selectedDevice = selected,
+            bpm = 88,
+            measuredAt = "2026-07-19T13:16:04Z",
+            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+        ).toHeartRateState()
+        val beforeAnyValid = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.ERROR,
+            message = "malformed",
+            selectedDevice = selected,
+            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+        ).toHeartRateState()
+
+        assertEquals(HeartRateFact.LIVE, withPreviousValid.fact)
+        assertEquals("2026-07-19T13:16:04Z", withPreviousValid.measuredAt)
+        assertNull(withPreviousValid.technicalFailure)
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, beforeAnyValid.fact)
+        assertNull(beforeAnyValid.technicalFailure)
+    }
+
+    @Test
+    fun staleFailureAndStopAlwaysClearLegacyReadingFields() {
+        val selected = BleHeartRateDeviceSelection("id", "Band")
+        val states = listOf(
+            BleHeartRateProviderStateKind.STALE,
+            BleHeartRateProviderStateKind.DISCONNECTED,
+            BleHeartRateProviderStateKind.STOPPED,
+            BleHeartRateProviderStateKind.ERROR
+        ).map { kind ->
+            BleHeartRateProviderState(
+                kind = kind,
+                message = "legacy",
+                selectedDevice = selected,
+                bpm = 88,
+                measuredAt = "old",
+                recoverableReason = if (kind == BleHeartRateProviderStateKind.ERROR) {
+                    BleHeartRateRecoverableReason.CONNECTION_FAILED
+                } else {
+                    null
+                }
+            ).toHeartRateState()
+        }
+
+        states.forEach { state ->
+            assertNull(state.bpm)
+            assertNull(state.measuredAt)
+            assertTrue(state.isValidE17State())
+        }
     }
 }

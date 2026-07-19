@@ -56,29 +56,87 @@ Preparation commit 上的 focused `E17HrsEvidenceFormatterTest` + `HeartRateMeas
 
 ### 3.3 精简日志后的 M0 preparation APK identity
 
-- Preparation full SHA：pending filtered preparation commit
+- Preparation full SHA：`e8e9d53844cc188be15d3f00aa58d61d080d4d30`
 - APK 路径：`.local/smoke/e17-5-heart-rate-fact-core/trainflow-e17-5-m0-preparation-filtered-debug.apk`
 - Build variant：`debug`
 - Application ID：`com.liujyks.trainflow`
 - Activity：`com.liujyks.trainflow.app.E17Band9HrsRevalidationActivity`
-- APK SHA256 / size / build time：pending rebuild
+- APK SHA256：`a5566fce828e54e50316faeb9f39fe9d2ff3a41e18d22bd44a5aeb7618004885`
+- APK size：`15215429` bytes
+- Build / copy time：2026-07-19 01:23:32 +08:00
 - adb serial / model / Android / API / install time：由用户实机测试记录
+
+Filtered preparation commit 上的 debug Kotlin compilation、focused formatter / parser tests 与 `:app:assembleDebug` 均为 `BUILD SUCCESSFUL`。该 APK 是第一次 M0 的唯一有效 source identity；上方旧 APK 不得继续使用。
 
 ## 4. 第一次 M0 与 provisional threshold
 
-第一次 M0 必须至少尽量覆盖 3 个独立 connection / notify cycle 和总计不少于 30 个 valid intervals，并记录每周期样本数、持续时间、CCCD 到 first valid delay、valid interval min / median / p95 / max、malformed、explicit disconnect、platform failure 和 `status=19` 等真实链路观察。
+用户使用 preparation SHA `e8e9d53844cc188be15d3f00aa58d61d080d4d30` 对应的 filtered debug APK 和当前 HUAWEI Band 9 完成三个独立前台 connection / notify cycle。六张截图已复制到 `.local/smoke/e17-5-heart-rate-fact-core/m0-first-run-screenshots/`，逐图 SHA256 和重建记录保存在未提交的本地 evidence 目录；wall-clock 前缀只用于排列截图，所有时长和 interval 均取显式 monotonic 字段。
 
-当前结果：pending real Band 9 measurement。证据只存放在 `.local/smoke/e17-5-heart-rate-fact-core/`，不提交 APK、日志、截图或设备输出。M0 证据不足时停止，不修改 policy 数字，不实现 provisional thresholds，不开始 E17-6。
+截图时间顺序为 `21:16` connection-1、`21:17` connection-2、`21:18` / `21:19` connection-3。截图存在中段缺口，因此每周期样本数按可见下限记录，不用约 1 秒 cadence 反推未截图行：
+
+| 周期 | notify enabled | first valid delay | 可见样本 / interval | 可审计持续时间 | interval min / median / p95 / max | 结束事实 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| connection-1 / notify-1 | `1016759832` | `949 ms` | `>=20 / 19` | first-to-last `60090 ms` | `941 / 998 / 1140 / 1140 ms` | `CLEANUP reason=user_stop` |
+| connection-2 / notify-2 | `1016844850` | `253 ms` | `4 / 3` | notify-to-failure `3728 ms` | `925 / 999 / 1028 / 1028 ms` | `PLATFORM_FAILURE`, connection-state `status=19` |
+| connection-3 / notify-3 | `1016922030` | `231 ms` | `>=10 / 8` | first-to-last `66993 ms` | `951 / 990 / 1081 / 1081 ms` | `CLEANUP reason=user_stop` |
+
+三个周期合计有 30 个截图中显式可审计的 `valid_interval_ms`：min `925 ms`、median `992.5 ms`、nearest-rank p95 `1081 ms`、max `1140 ms`。三个 first-valid delay 为 `949 / 253 / 231 ms`，min `231 ms`、median `253 ms`、max `949 ms`。可见 evidence 中 malformed `0`、`EXPLICIT_DISCONNECT` `0`、platform failure `1`、intentional user cleanup `2`；由于截图缺口，两个零计数只限定为“可见 evidence 中为零”，不外推到缺失区间。真实 `status=19` 出现在 connection-2 最后一个 valid sample 后 `523 ms`，因此是独立平台失败事实，不是 silence / freshness 超时。
+
+### 4.1 Provisional threshold 推导
+
+- First-sample waiting boundary = `3000 ms`：`3 * max(first-valid delay) = 3 * 949 = 2847 ms`，向上取下一个 `500 ms` 边界。该余量覆盖三倍实测最坏首样本延迟。
+- Live freshness boundary = `2500 ms`：`2 * max(valid interval) = 2 * 1140 = 2280 ms`，向上取下一个 `500 ms` 边界。该余量允许漏掉一个约 1 秒 notify，并覆盖实测 cadence jitter。
+- 两个边界均采用严格小于语义：边界前保持 waiting / live，精确到达边界即进入 data interrupted，并清除 bpm / `measuredAt`。
+- 时间流逝只形成 data interrupted；没有独立平台 / 连接失败事实时，不形成 technical failure。
+
+这些数字只适用于 E17-5 / E17-7 当前前台 manual 能力，不表示 retry、自动恢复、锁屏 / 后台保证或最终跨生命周期数字。E17-9 M1 仍必须用锁屏 / 后台 evidence 重新锁定 final thresholds。
 
 ## 5. Core / presentation / final APK
 
-Pending sufficient M0 evidence. 本节将在 M0 足以支持明确数值后记录阈值分布、推导公式、余量、公共 fact/state、malformed / silence / disconnect / invalid monotonic 语义、presentation 兼容、implementation commit、最终 APK 身份、最终 M0 复验和 source commit 到 Story tip 的 executable diff 检查。
+### 5.1 Public fact / state contract
 
-Provisional 数字只适用于 E17-5 / E17-7 的前台 manual 能力；E17-9 M1 锁屏 / 后台证据仍必须重新锁定 final thresholds。它不表示自动恢复、后台保证或最终跨生命周期合同。
+纯 Kotlin `HeartRateRuntimeFact` 分层表达 disabled、permission required、Bluetooth off、not connected、scanning、connecting、waiting first data、live、data interrupted、explicit link disconnected、technical failure 和 intentional stop，再映射到公共 `HeartRateState.fact`。Android BLE 对象、SDK model、exception / 厂商字符串和用户文案不进入 runtime fact；technical failure 使用稳定 typed reason。
+
+只有合法 `LIVE` 可携带正 bpm 和非空 `measuredAt`。waiting、interrupted、disconnect、failure、stop、permission / Bluetooth unavailable 和 not connected 均清除当前 reading。`HeartRateState` 提供可测试的 illegal-combination validation；非法 live fact fail-closed 为 typed technical failure，不抛出 App 异常。saved identifier / display name 只作为 hint，不能建立 connected fact。
+
+旧 `HeartRateStateKind`、`HeartRateSourceKind`、`recordedAt`、manual kind、旧 unavailable reason / message 暂留给现有 production owner 编译兼容，删除责任属于 E17-7。新胶囊 mapper 只消费 `HeartRateState.fact`；legacy manual / device kind 不能重新成为 live presentation 输入。
+
+### 5.2 Freshness / malformed contract
+
+`HeartRateFreshnessConfig` 显式保存 `3000 / 2500 ms` provisional 数字；timeline 只用 notify-enabled / last-valid / terminal fact 的 monotonic origin。每个 valid sample 更新 last-valid origin 和当前 reading；malformed 只饱和增加 diagnostic counter，不刷新 origin、不修改原截止点、不创建 `measuredAt`、不发布 public technical failure。首样本前 malformed 保持 waiting 到原 waiting 边界；live 后 malformed 只让旧样本活到原 freshness 边界；后续 valid 可建立新 origin。
+
+explicit disconnect、intentional stop 和 technical failure 是互相独立的 terminal facts。负值、未来值、sample-before-notify、terminal-before-current-cycle、缺字段和非法 config 均 fail-closed 到 `INVALID_MONOTONIC_TIME`，清除 bpm / `measuredAt`。已删除 E16 retry-exhausted、10 / 15 / 30 秒和 `FIRST_SAMPLE_SILENCE` / `NOTIFY_SILENCE` technical-failure 语义。
+
+### 5.3 Frozen capsule presentation compatibility
+
+只修改冻结胶囊外部 mapper；`HeartRateFloatingCapsule.kt`、geometry、DTO 视觉字段、collapsed / expanded、拖动、吸附、safe zone、IME、motion、颜色、尺寸、布局和互动未改。disabled 隐藏；permission / Bluetooth / not connected / scanning / connecting / waiting 使用分离的非医疗文案；live 显示 bpm，并保留年龄区间与 over-limit 的 visual-only 语义；interrupted 不显示旧 bpm；disconnect 和 technical error 文案分离；malformed 不产生新 public error。mapper 不显示 raw identifier / address、exception message 或 BLE reason，也不宣称训练记录、后台心率或自动恢复。
+
+### 5.4 Implementation / final APK identity
+
+- Implementation full SHA：pending implementation commit
+- Final APK path / SHA256 / build time：pending implementation commit build
+- Final APK device identity / install time：pending user device record
+- Final M0 revalidation：pending；可执行代码变化后第一次 M0 只用于初始阈值推导，不能替代最终 APK 复验
+- Final APK source commit 到 Story tip executable diff：pending final evidence docs commit
 
 ## 6. 验证与 evidence 层级
 
-Pending. 纯 Kotlin tests 只能证明 parser、facts、freshness 和 presentation；debug Activity + 当前真机 Band 9 M0 只能证明该 APK、手机、Band 9、前台广播条件下的测量分布。AVD、fake、E17-1 evidence 均不能替代本 Story 的真实 M0。
+Implementation 工作树验证环境为 Eclipse Temurin JDK `17.0.19+10`、Gradle `9.4.1`、Kotlin `2.3.0`、Windows 11。以下命令均为 `BUILD SUCCESSFUL`：
+
+- `:app:testDebugUnitTest --tests "*HeartRateFreshnessPolicyTest*"`
+- `:app:testDebugUnitTest --tests "*HeartRateProviderBoundaryTest*"`
+- `:app:testDebugUnitTest --tests "*BleHeartRateProviderBoundaryTest*"`
+- `:app:testDebugUnitTest --tests "*HeartRateFloatingCapsuleStateTest*"`
+- `:app:testDebugUnitTest --tests "*HeartRateMeasurementParserTest*"`
+- `:app:testDebugUnitTest --tests "*HeartRate*"`
+- `:app:testDebugUnitTest`
+- `:app:assembleDebug`
+- `:app:lintDebug -Dkotlin.incremental=false`
+- `:app:check`
+
+首次 combined focused 执行在外层 2 分钟工具时限内未返回，不能作为结果；确认 wrapper 结束后重跑 combined focused 成功，并再次逐条执行上述五个 focused suite 成功。Implementation commit 前 diff checks 仍在 staging 后记录；final APK 复验后再补最终 evidence 结果。
+
+纯 Kotlin tests 只能证明 parser、facts、freshness 和 presentation；debug Activity + 当前真机 Band 9 M0 只能证明特定 APK、手机、Band 9、前台广播条件下的测量分布。截图不是完整 raw logcat，样本数采用可见下限，零 malformed / disconnect 只对可见 evidence 成立。AVD、fake、E17-1 evidence 均不能替代本 Story 的真实 M0；第一次 M0 也不能替代 implementation commit 对应最终 APK 的第二轮复验。
 
 ## 7. 条件式状态与后续 gate
 

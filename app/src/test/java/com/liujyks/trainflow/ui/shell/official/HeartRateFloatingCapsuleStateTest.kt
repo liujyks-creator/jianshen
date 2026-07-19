@@ -1,15 +1,17 @@
 package com.liujyks.trainflow.ui.shell.official
 
-import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
 import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
 import com.liujyks.trainflow.core.health.BleHeartRateProviderState
 import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
-import com.liujyks.trainflow.core.health.BleHeartRateScanState
-import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
+import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
+import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
+import com.liujyks.trainflow.core.health.HeartRateSourceHint
+import com.liujyks.trainflow.core.health.toHeartRateState
+import com.liujyks.trainflow.core.model.HeartRateFact
 import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
+import com.liujyks.trainflow.core.model.HeartRateTechnicalFailure
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import com.liujyks.trainflow.feature.settings.heartRateSettingsUiState
 import org.junit.Assert.assertEquals
@@ -18,48 +20,44 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HeartRateFloatingCapsuleStateTest {
+    private val source = HeartRateSourceHint("D8:F0:42:01:90:D7", "HUAWEI Band HR-OD7")
+
     @Test
-    fun disabledPreferenceHidesCapsule() {
-        val state = heartRateFloatingCapsuleUiState(
+    fun disabledPreferenceOrDisabledFactHidesCapsule() {
+        val preferenceDisabled = heartRateFloatingCapsuleUiState(
             settings = heartRateSettingsUiState(enabled = false)
         )
+        val factDisabled = capsule(HeartRateRuntimeFact.Disabled.toHeartRateState())
 
-        assertFalse(state.visible)
+        assertFalse(preferenceDisabled.visible)
+        assertFalse(factDisabled.visible)
     }
 
     @Test
-    fun enabledWithoutSourceShowsNoSourceWhenPermissionGranted() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            )
-        )
+    fun permissionBluetoothNotConnectedScanningConnectingAndWaitingUseAccurateCopy() {
+        val permission = capsule(HeartRateRuntimeFact.PermissionRequired(source).toHeartRateState())
+        val bluetooth = capsule(HeartRateRuntimeFact.BluetoothOff(source).toHeartRateState())
+        val notConnected = capsule(HeartRateRuntimeFact.NotConnected(source).toHeartRateState())
+        val scanning = capsule(HeartRateRuntimeFact.Scanning(source).toHeartRateState())
+        val connecting = capsule(HeartRateRuntimeFact.Connecting(source).toHeartRateState())
+        val waiting = capsule(HeartRateRuntimeFact.WaitingFirstData(source).toHeartRateState())
 
-        assertTrue(state.visible)
-        assertEquals(HeartRateFloatingCapsuleStatus.NO_SOURCE, state.status)
-        assertEquals("未连接源", state.collapsedLabel)
-        assertEquals(
-            listOf("来源", "记录", "区间", "更新"),
-            state.infoTiles.map { it.label }
-        )
-        assertEquals("未连接", state.infoTiles.first { it.label == "来源" }.value)
-        assertEquals("未记录", state.infoTiles.first { it.label == "记录" }.value)
+        assertEquals("权限未赋予", permission.collapsedLabel)
+        assertEquals("蓝牙关闭", bluetooth.collapsedLabel)
+        assertEquals("未连接", notConnected.collapsedLabel)
+        assertEquals("正在扫描", scanning.collapsedLabel)
+        assertTrue(scanning.detailBody.contains("不代表设备已经连接"))
+        assertEquals("正在连接", connecting.collapsedLabel)
+        assertTrue(connecting.detailBody.contains("还没有实时心率"))
+        assertEquals("等待数据", waiting.collapsedLabel)
+        assertTrue(waiting.detailBody.contains("第一条有效"))
     }
 
     @Test
-    fun permissionMissingShowsPermissionDeniedState() {
+    fun settingsPermissionStillFailsClosedBeforeContradictoryLiveFact() {
         val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.DENIED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.DEVICE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 105,
-                sourceLabel = "HUAWEI Band HR-OD7"
-            )
+            settings = settings(permission = HeartRateBlePermissionStatus.DENIED),
+            liveState = liveState(105)
         )
 
         assertEquals(HeartRateFloatingCapsuleStatus.PERMISSION_DENIED, state.status)
@@ -67,309 +65,170 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun bluetoothDisabledShowsBluetoothState() {
+    fun savedIdentifierIsAHintNotConnectedFactAndRawAddressIsNotDisplayed() {
+        val rawIdentifier = "D8:F0:42:01:90:D7"
         val state = heartRateFloatingCapsuleUiState(
             settings = heartRateSettingsUiState(
                 enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
-                message = "Bluetooth disabled"
-            ).toHeartRateState()
-        )
-
-        assertEquals(HeartRateFloatingCapsuleStatus.BLUETOOTH_DISABLED, state.status)
-        assertEquals("蓝牙关闭", state.collapsedLabel)
-    }
-
-    @Test
-    fun savedSourceWithoutActiveProviderShowsNotConnectedWithoutFakeBpm() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                savedDeviceIdentifier = "D8:F0:42:01:90:D7",
-                savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+                savedDeviceIdentifier = rawIdentifier,
+                savedDeviceDisplayName = null,
                 blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
             )
         )
+        val allCopy = buildString {
+            append(state.collapsedLabel)
+            append(state.detailTitle)
+            append(state.detailBody)
+            append(state.deviceHint)
+            state.infoTiles.forEach { append(it.value) }
+        }
 
         assertEquals(HeartRateFloatingCapsuleStatus.SAVED_DEVICE, state.status)
         assertEquals("未连接", state.collapsedLabel)
-        assertEquals("HUAWEI Band HR-OD7", state.deviceHint)
-        assertEquals("已保存：HUAWEI Band HR-OD7", state.infoTiles.first { it.label == "来源" }.value)
-        assertEquals("当前只显示状态", state.infoTiles.first { it.label == "记录" }.value)
-        assertEquals("未连接", state.infoTiles.first { it.label == "更新" }.value)
+        assertFalse(allCopy.contains(rawIdentifier))
     }
 
     @Test
-    fun waitingForDataMapsToWaitingState() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.DEVICE_CONNECTED_NO_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                sourceLabel = "HUAWEI Band HR-OD7"
-            )
-        )
+    fun liveBpmAndOptionalZoneRemainVisualOnlyAndDoNotClaimRecording() {
+        val bpmOnly = capsule(liveState(105))
+        val zoned = capsule(liveState(122), age = 40)
+        val overLimit = capsule(liveState(188), age = 40, overLimit = 180)
 
-        assertEquals(HeartRateFloatingCapsuleStatus.WAITING_DATA, state.status)
-        assertEquals("等待数据", state.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, bpmOnly.status)
+        assertEquals("心率 105 bpm", bpmOnly.collapsedLabel)
+        assertEquals("当前只显示", bpmOnly.tile("记录"))
+        assertEquals(HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN, zoned.status)
+        assertEquals("燃脂 122 bpm", zoned.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.OVER_LIMIT, overLimit.status)
+        assertTrue(overLimit.detailBody.contains("不触发声音、震动、强制暂停或医疗告警"))
     }
 
     @Test
-    fun staleAndOfflineDoNotShowOldBpmAsLive() {
-        val stale = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.STALE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 105,
-                unavailableReason = HeartRateUnavailableReason.READ_ERROR
-            )
+    fun interruptedDisconnectFailureAndStopNeverDisplayOldBpmAsCurrent() {
+        val interrupted = capsule(HeartRateRuntimeFact.DataInterrupted(source).toHeartRateState())
+        val disconnected = capsule(HeartRateRuntimeFact.LinkDisconnected(source).toHeartRateState())
+        val failed = capsule(
+            HeartRateRuntimeFact.TechnicalFailure(
+                HeartRateTechnicalFailure.PLATFORM_FAILURE,
+                source
+            ).toHeartRateState()
         )
-        val offline = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.STALE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 105,
-                unavailableReason = HeartRateUnavailableReason.DEVICE_DISCONNECTED
-            )
-        )
+        val stopped = capsule(HeartRateRuntimeFact.IntentionalStop(source).toHeartRateState())
 
-        assertEquals("数据过期", stale.collapsedLabel)
-        assertEquals("离线", offline.collapsedLabel)
+        assertEquals("数据中断", interrupted.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.STALE, interrupted.status)
+        assertEquals("连接已断开", disconnected.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.OFFLINE, disconnected.status)
+        assertEquals("连接异常", failed.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.ERROR, failed.status)
+        assertEquals("已停止", stopped.collapsedLabel)
+        listOf(interrupted, disconnected, failed, stopped).forEach { state ->
+            assertFalse(state.collapsedLabel.contains("105"))
+            assertFalse(state.detailBody.contains("105"))
+        }
     }
 
     @Test
-    fun bpmWithoutAgeShowsBpmOnly() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.DEVICE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 105
-            ),
-            userAgeYears = null
+    fun platformDetailsAddressAndExceptionTextNeverEnterCapsuleCopy() {
+        val raw = "status=19 D8:F0:42:01:90:D7 java.lang.IllegalStateException"
+        val invalidPublicState = HeartRateState(
+            kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
+            sourceKind = HeartRateSourceKind.DEVICE,
+            fact = HeartRateFact.TECHNICAL_FAILURE,
+            sourceId = "D8:F0:42:01:90:D7",
+            message = raw,
+            technicalFailure = HeartRateTechnicalFailure.PLATFORM_FAILURE
         )
-
-        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, state.status)
-        assertEquals("心率 105 bpm", state.collapsedLabel)
-        assertEquals("训练记录：后续开启", state.infoTiles.first { it.label == "记录" }.value)
-    }
-
-    @Test
-    fun bpmWithAgeShowsZoneAndBpm() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.DEVICE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 122
-            ),
-            userAgeYears = 40
-        )
-
-        assertEquals(HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN, state.status)
-        assertEquals("燃脂 122 bpm", state.collapsedLabel)
-        assertEquals("燃脂", state.infoTiles.first { it.label == "区间" }.value)
-        assertEquals("实时", state.infoTiles.first { it.label == "更新" }.value)
-    }
-
-    @Test
-    fun overLimitUsesDeepRedVisualOnlyState() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.DEVICE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = 188
-            ),
-            userAgeYears = 40,
-            overLimitThresholdBpm = 180
-        )
-
-        assertEquals(HeartRateFloatingCapsuleStatus.OVER_LIMIT, state.status)
-        assertEquals("超过上限 188 bpm", state.collapsedLabel)
-        assertTrue(state.detailBody.contains("不触发声音、震动、强制暂停"))
-    }
-
-    @Test
-    fun recoverableProviderErrorShowsCompactErrorState() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                savedDeviceDisplayName = "HUAWEI Band HR-OD7",
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = HeartRateState(
-                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                sourceLabel = "HUAWEI Band HR-OD7",
-                unavailableReason = HeartRateUnavailableReason.CONNECTION_FAILED
-            )
-        )
+        val state = capsule(invalidPublicState)
+        val copy = state.collapsedLabel + state.detailTitle + state.detailBody + state.deviceHint
 
         assertEquals(HeartRateFloatingCapsuleStatus.ERROR, state.status)
-        assertEquals("连接异常", state.collapsedLabel)
-        assertEquals("当前只显示状态", state.infoTiles.first { it.label == "记录" }.value)
-        assertEquals("异常", state.infoTiles.first { it.label == "更新" }.value)
+        assertFalse(copy.contains("status=19"))
+        assertFalse(copy.contains("D8:F0"))
+        assertFalse(copy.contains("IllegalStateException"))
     }
 
     @Test
-    fun connectedLiveBpmRemainsLiveDuringActiveTwelveSecondScanWindow() {
-        val state = capsuleWhileScanning()
+    fun malformedCompatibilityOutcomeProducesNoNewPublicErrorCopy() {
+        val mapped = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.ERROR,
+            message = "raw parse failure",
+            selectedDevice = BleHeartRateDeviceSelection("id", "Band"),
+            bpm = 88,
+            measuredAt = "2026-07-19T13:16:04Z",
+            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+        ).toHeartRateState()
+        val state = capsule(mapped)
 
+        assertEquals(HeartRateFact.LIVE, mapped.fact)
         assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, state.status)
-        assertEquals("心率 105 bpm", state.collapsedLabel)
+        assertFalse(state.detailBody.contains("错误"))
+        assertFalse(state.detailBody.contains("parse"))
     }
 
     @Test
-    fun connectedLiveBpmRemainsLiveWhenScanCandidatesUpdate() {
-        val state = capsuleWhileScanning(
-            candidates = listOf(
-                BleHeartRateDeviceCandidate(
-                    identifier = "AA:BB:CC:DD:EE:FF",
-                    displayName = "Other HRS",
-                    rssi = -52,
-                    advertisesHeartRateService = true
-                )
+    fun legacyManualAndDeviceKindsAreNotNewPresentationInputs() {
+        val legacyStates = listOf(
+            HeartRateState(
+                kind = HeartRateStateKind.MANUAL_READING,
+                sourceKind = HeartRateSourceKind.MANUAL,
+                bpm = 126,
+                recordedAt = "legacy"
+            ),
+            HeartRateState(
+                kind = HeartRateStateKind.DEVICE_READING,
+                sourceKind = HeartRateSourceKind.DEVICE,
+                bpm = 105,
+                measuredAt = "legacy"
             )
         )
 
-        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, state.status)
-        assertEquals("HUAWEI Band HR-OD7", state.deviceHint)
+        legacyStates.forEach { legacy ->
+            val state = capsule(legacy)
+            assertEquals(HeartRateFloatingCapsuleStatus.NO_SOURCE, state.status)
+            assertFalse(state.collapsedLabel.contains("bpm"))
+        }
     }
 
     @Test
-    fun connectedLiveBpmRemainsLiveAfterScanTimeout() {
-        val settings = scanningSettings(
-            scanState = BleHeartRateScanState(
-                kind = BleHeartRateScanStateKind.STOPPED,
-                message = "Scan window ended"
-            )
+    fun frozenPresentationDtoFieldsAndInfoHierarchyRemainAvailable() {
+        val state = capsule(liveState(105), forceCollapsed = true)
+
+        assertTrue(state.visible)
+        assertTrue(state.forceCollapsed)
+        assertEquals(
+            listOf("来源", "记录", "区间", "更新"),
+            state.infoTiles.map { it.label }
         )
-
-        val state = heartRateFloatingCapsuleUiState(settings = settings, liveState = liveBpmState())
-
-        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, state.status)
-        assertEquals("心率 105 bpm", state.collapsedLabel)
+        assertEquals("实时", state.tile("更新"))
     }
 
-    @Test
-    fun unselectedCandidateDoesNotReplaceConnectedLiveSource() {
-        val otherCandidate = BleHeartRateDeviceCandidate(
-            identifier = "AA:BB:CC:DD:EE:FF",
-            displayName = "Other HRS",
-            rssi = -52,
-            advertisesHeartRateService = true
-        )
+    private fun liveState(bpm: Int) = HeartRateRuntimeFact.Live(
+        bpm = bpm,
+        measuredAt = "2026-07-19T13:16:04Z",
+        source = source
+    ).toHeartRateState()
 
-        val state = capsuleWhileScanning(candidates = listOf(otherCandidate))
-
-        assertEquals("HUAWEI Band HR-OD7", state.deviceHint)
-        assertEquals("心率 105 bpm", state.collapsedLabel)
-    }
-
-    @Test
-    fun selectingNewDeviceEntersConnectingForNewSource() {
-        val newSelection = BleHeartRateDeviceSelection(
-            identifier = "11:22:33:44:55:66",
-            displayName = "New HRS"
-        )
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                savedDeviceIdentifier = newSelection.identifier,
-                savedDeviceDisplayName = newSelection.displayName,
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.CONNECTING,
-                message = "Connecting selected device",
-                selectedDevice = newSelection
-            ).toHeartRateState()
-        )
-
-        assertEquals(HeartRateFloatingCapsuleStatus.CONNECTING, state.status)
-        assertEquals("正在连接", state.collapsedLabel)
-        assertEquals("New HRS", state.deviceHint)
-    }
-
-    @Test
-    fun coldStartSavedSourceWithoutProviderDeviceStaysNotConnectedAndDoesNotPersistOldError() {
-        val state = heartRateFloatingCapsuleUiState(
-            settings = heartRateSettingsUiState(
-                enabled = true,
-                savedDeviceIdentifier = "D8:F0:42:01:90:D7",
-                savedDeviceDisplayName = "HUAWEI Band HR-OD7",
-                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED
-            ),
-            liveState = BleHeartRateProviderState.noSource().toHeartRateState()
-        )
-
-        assertEquals(HeartRateFloatingCapsuleStatus.SAVED_DEVICE, state.status)
-        assertEquals("未连接", state.collapsedLabel)
-        assertEquals("未连接", state.infoTiles.first { it.label == "更新" }.value)
-    }
-
-    private fun capsuleWhileScanning(
-        candidates: List<BleHeartRateDeviceCandidate> = emptyList()
-    ): HeartRateFloatingCapsuleUiState {
-        return heartRateFloatingCapsuleUiState(
-            settings = scanningSettings(candidates = candidates),
-            liveState = liveBpmState()
-        )
-    }
-
-    private fun scanningSettings(
-        scanState: BleHeartRateScanState = BleHeartRateScanState(
-            kind = BleHeartRateScanStateKind.SCANNING,
-            message = "Scanning for other devices"
-        ),
-        candidates: List<BleHeartRateDeviceCandidate> = emptyList()
+    private fun settings(
+        permission: HeartRateBlePermissionStatus = HeartRateBlePermissionStatus.GRANTED
     ) = heartRateSettingsUiState(
         enabled = true,
-        savedDeviceIdentifier = "D8:F0:42:01:90:D7",
-        savedDeviceDisplayName = "HUAWEI Band HR-OD7",
-        blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-        providerState = BleHeartRateProviderState(
-            kind = BleHeartRateProviderStateKind.LIVE_BPM,
-            message = "live",
-            selectedDevice = BleHeartRateDeviceSelection(
-                identifier = "D8:F0:42:01:90:D7",
-                displayName = "HUAWEI Band HR-OD7"
-            ),
-            bpm = 105
-        ),
-        scanState = scanState,
-        scannerCandidates = candidates
+        blePermissionStatus = permission
     )
 
-    private fun liveBpmState() = HeartRateState(
-        kind = HeartRateStateKind.DEVICE_READING,
-        sourceKind = HeartRateSourceKind.DEVICE,
-        bpm = 105,
-        sourceId = "D8:F0:42:01:90:D7",
-        sourceLabel = "HUAWEI Band HR-OD7"
+    private fun capsule(
+        state: HeartRateState,
+        age: Int? = null,
+        overLimit: Int? = null,
+        forceCollapsed: Boolean = false
+    ) = heartRateFloatingCapsuleUiState(
+        settings = settings(),
+        liveState = state,
+        userAgeYears = age,
+        overLimitThresholdBpm = overLimit,
+        forceCollapsed = forceCollapsed
     )
+
+    private fun HeartRateFloatingCapsuleUiState.tile(label: String) =
+        infoTiles.first { it.label == label }.value
 }
