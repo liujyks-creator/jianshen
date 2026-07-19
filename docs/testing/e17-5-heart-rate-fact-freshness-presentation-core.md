@@ -1,6 +1,6 @@
 # E17-5 Heart-rate Fact / Freshness / Presentation Core
 
-**状态：** `implemented / needs review` 仅在本 Story 的 M0、实现、最终 APK 复验与自动验证全部完成后成立；当前为 `in progress / M0 preparation`
+**状态：** `implemented / needs review`
 
 **日期：** 2026-07-18
 
@@ -113,11 +113,18 @@ explicit disconnect、intentional stop 和 technical failure 是互相独立的 
 
 ### 5.4 Implementation / final APK identity
 
-- Implementation full SHA：pending implementation commit
-- Final APK path / SHA256 / build time：pending implementation commit build
-- Final APK device identity / install time：pending user device record
-- Final M0 revalidation：pending；可执行代码变化后第一次 M0 只用于初始阈值推导，不能替代最终 APK 复验
-- Final APK source commit 到 Story tip executable diff：pending final evidence docs commit
+- Implementation full SHA：`b3bcac55c92e0863deeba25fc5b0491db357f7db`
+- Final APK path：`.local/smoke/e17-5-heart-rate-fact-core/trainflow-e17-5-m0-implementation-b3bcac55-debug.apk`
+- Variant / applicationId / Activity：`debug` / `com.liujyks.trainflow` / `com.liujyks.trainflow.app.E17Band9HrsRevalidationActivity`
+- Final APK size / SHA256：`14747530` bytes / `2fad2fa2fbcf0fdc58997a338d40482757b032e0ee5862d01f452b3fd279cc65`
+- Final APK forced rebuild / copy time：2026-07-19，`assembleDebug --rerun-tasks` 为 `BUILD SUCCESSFUL`；copy time `21:51:32 +08:00`
+- Final device evidence：用户操作真实手机与当前 HUAWEI Band 9；截图 EXIF software 为 `Android PLU110_16.0.8.300(CN01)`，截图尺寸 `1272 x 2772`，测试时间 2026-07-19 `23:33-23:36 +08:00`。用户侧未提供 adb serial、营销型号、Android API level 或独立 install timestamp，因此 evidence 边界不扩展到这些未记录字段；安装发生在首张 final M0 截图前。
+- Final M0 revalidation：完成。最终 APK 截图重建出四个独立 connection / notify cycle；三个主要周期从 notify origin 到最后可见 valid sample 分别跨 `51152 / 60288 / 12931 ms`，另有一个 `1599 ms` 短周期。
+- Final screenshot subset：28 个去重后的显式 interval，min `897 ms`、median `1005 ms`、nearest-rank p95 `1080 ms`、max `1080 ms`；显式 first-valid delay 为 `310 / 577 ms`，两个较长周期的 first-valid 行被截图裁掉。可见 malformed `0`、explicit disconnect `0`、platform failure `0`；三个带 source 的 intentional cleanup 可见，connection-3 转入 connection-4 前没有可见 typed terminal 行。
+- Threshold comparison：final max `1080 ms` 小于 first-M0 max `1140 ms`，final p95 `1080 ms` 与 first-M0 p95 `1081 ms` 一致；`2500 ms` freshness 比 final max 多 `1420 ms`。final first delays 均低于 first-M0 worst `949 ms`，`3000 ms` waiting 仍超过其三倍。最终分布不要求修改 provisional 数字。
+- Evidence judgment：final 截图子集比初始建议的 30 个显式 interval 少 2 个，但覆盖四个 cycle，并在三个主要周期中形成超过 126 秒的 notify-origin-to-last-visible observation；结合第一次已满足门槛的 30 个 interval / 三个 first delay，足以复核最终 APK 没有推翻阈值依据。没有从截图缺口猜 interval 或 first delay；28 个 final 数字、两个 final first delay 和零 outcome 计数都按可见 evidence 限定。
+- Debug tooling limitation：继承的 Activity 把控制和日志放在同一整页滚动区域，造成现场操作与截图困难。fixed controls、独立 log pane、cycle summary / export 应另拆工具改进；E17-5 明确禁止修 debug UI，且此时修改 Activity 会再次使 APK evidence 失效。
+- Final APK source commit 到 Story tip executable diff：`git diff --name-only b3bcac55c92e0863deeba25fc5b0491db357f7db..HEAD` 只输出 `docs/testing/e17-5-heart-rate-fact-freshness-presentation-core.md`；production、debug Activity 和 tests 均无后续变化。
 
 ## 6. 验证与 evidence 层级
 
@@ -134,7 +141,7 @@ Implementation 工作树验证环境为 Eclipse Temurin JDK `17.0.19+10`、Gradl
 - `:app:lintDebug -Dkotlin.incremental=false`
 - `:app:check`
 
-首次 combined focused 执行在外层 2 分钟工具时限内未返回，不能作为结果；确认 wrapper 结束后重跑 combined focused 成功，并再次逐条执行上述五个 focused suite 成功。Implementation commit 前 diff checks 仍在 staging 后记录；final APK 复验后再补最终 evidence 结果。
+首次 combined focused 执行在外层 2 分钟工具时限内未返回，不能作为结果；确认 wrapper 结束后重跑 combined focused 成功，并再次逐条执行上述五个 focused suite 成功。`git diff --check`、`git diff --cached --check` 和 Story scope diff check 均无 whitespace error；用户既有 dirty / untracked 禁区未 stage、未 stash、未 reset、未移动、未删除。
 
 纯 Kotlin tests 只能证明 parser、facts、freshness 和 presentation；debug Activity + 当前真机 Band 9 M0 只能证明特定 APK、手机、Band 9、前台广播条件下的测量分布。截图不是完整 raw logcat，样本数采用可见下限，零 malformed / disconnect 只对可见 evidence 成立。AVD、fake、E17-1 evidence 均不能替代本 Story 的真实 M0；第一次 M0 也不能替代 implementation commit 对应最终 APK 的第二轮复验。
 
