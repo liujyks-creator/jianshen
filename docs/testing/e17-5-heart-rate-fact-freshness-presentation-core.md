@@ -124,7 +124,16 @@ explicit disconnect、intentional stop 和 technical failure 是互相独立的 
 - Threshold comparison：final max `1080 ms` 小于 first-M0 max `1140 ms`，final p95 `1080 ms` 与 first-M0 p95 `1081 ms` 一致；`2500 ms` freshness 比 final max 多 `1420 ms`。final first delays 均低于 first-M0 worst `949 ms`，`3000 ms` waiting 仍超过其三倍。最终分布不要求修改 provisional 数字。
 - Evidence judgment：final 截图子集比初始建议的 30 个显式 interval 少 2 个，但覆盖四个 cycle，并在三个主要周期中形成超过 126 秒的 notify-origin-to-last-visible observation；结合第一次已满足门槛的 30 个 interval / 三个 first delay，足以复核最终 APK 没有推翻阈值依据。没有从截图缺口猜 interval 或 first delay；28 个 final 数字、两个 final first delay 和零 outcome 计数都按可见 evidence 限定。
 - Debug tooling limitation：继承的 Activity 把控制和日志放在同一整页滚动区域，造成现场操作与截图困难。fixed controls、独立 log pane、cycle summary / export 应另拆工具改进；E17-5 明确禁止修 debug UI，且此时修改 Activity 会再次使 APK evidence 失效。
-- Final APK source commit 到 Story tip executable diff：`git diff --name-only b3bcac55c92e0863deeba25fc5b0491db357f7db..HEAD` 只输出 `docs/testing/e17-5-heart-rate-fact-freshness-presentation-core.md`；production、debug Activity 和 tests 均无后续变化。
+- Final M0 APK 对应的 implementation source 是 `b3bcac55c92e0863deeba25fc5b0491db357f7db`。
+- Implementation source 到 Repair 前 Story tip：`b3bcac55c92e0863deeba25fc5b0491db357f7db..4e7f92c058369f37a3e9c01b3134e365d0f662b5`。three-dot / commit-range 文件结果均只包含 `docs/testing/e17-5-heart-rate-fact-freshness-presentation-core.md`，因此截至 `4e7f92c058369f37a3e9c01b3134e365d0f662b5`，Final M0 APK 之后没有 executable 变化。
+- Repair 前 tip 到 Repair source：`4e7f92c058369f37a3e9c01b3134e365d0f662b5..1874d042fc93596e30d3fb87c96dabb34e02da0a`，精确包含：
+  - `app/src/main/java/com/liujyks/trainflow/core/health/BleHeartRateProviderBoundary.kt`
+  - `app/src/test/java/com/liujyks/trainflow/core/health/BleHeartRateProviderBoundaryTest.kt`
+  - `app/src/test/java/com/liujyks/trainflow/ui/shell/official/HeartRateFloatingCapsuleStateTest.kt`
+  - `docs/testing/e17-5-heart-rate-fact-freshness-presentation-core.md`
+- Repair 修改了 legacy malformed public-state mapper 及其回归测试；没有修改 `E17Band9HrsRevalidationActivity`、scan、GATT、CCCD、notify 或 provisional threshold。因此原 Final M0 APK 不能描述为当前 Story tip 的完整可执行等价物。
+- Repair APK SHA256 `6056804dc23b061230cca5c644ef569c51eb07b7cea546b3d48a3d34b3f56e23` 对应 Repair source `1874d042fc93596e30d3fb87c96dabb34e02da0a`。该 APK 只证明构建身份，不是新的 Band 9、AVD 或设备行为证据。
+- 本次新增提交只修改本 Markdown，不会再次改变 executable / APK identity。
 
 ### 5.5 Code Review Repair：legacy malformed fail-closed
 
