@@ -30,12 +30,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** Explicit inputs only. Construction never starts scanning, connecting, or reconnecting. */
-internal sealed interface HeartRateRuntimeAction {
-    data object StartScan : HeartRateRuntimeAction
-    data object StopScan : HeartRateRuntimeAction
-    data class Connect(val identifier: String) : HeartRateRuntimeAction
-    data object Disconnect : HeartRateRuntimeAction
-    data object Stop : HeartRateRuntimeAction
+internal sealed class HeartRateRuntimeAction {
+    data object StartScan : HeartRateRuntimeAction()
+    data object StopScan : HeartRateRuntimeAction()
+    data class Connect(val identifier: String) : HeartRateRuntimeAction()
+    data object Disconnect : HeartRateRuntimeAction()
+    data object Stop : HeartRateRuntimeAction()
 }
 
 /**

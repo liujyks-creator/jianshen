@@ -195,8 +195,8 @@ AVD 不能证明 RF、GATT、`0x180D`、`0x2A37`、`0x2902`、CCCD、notify 或 
 AVD：
 
 - `TrainFlow_Pixel_API_36` / `emulator-5554` / `sdk_gphone64_x86_64` / Android 16 / API 36。
-- 当前 forced debug APK SHA256：`C2B740775AE592D95F0BB72744CB0E481FF7B8C948F63440C5A46C7AE94C2CFC`；`adb install -r` 成功。
-- ordinary `MainActivity`启动、既有心率设置入口、permission deny / grant、Bluetooth off / on与显式旧路径 scan / stop均无立即崩溃。
+- 当前 forced debug APK SHA256：`1787BC79711C45AEBD3176D41D7131799C99C9C480E564742AD05C10994AC2EF`；`adb install -r` 成功。
+- ordinary `MainActivity`启动、既有心率设置入口、permission deny / grant、Bluetooth off / on、显式旧路径 scan及有限窗口结束均无立即崩溃。
 - `logcat`、crash buffer与`dumpsys activity lastanr` 搜索 TrainFlow FATAL / ANR 为 0；最终进程仍存活。
 - evidence：`.local/smoke/e17-6-deterministic-android-ble-runtime-owner/`，未提交。
 - 此 smoke只证明 API 36 当前 launcher/settings/旧production runtime no-regression；不执行或证明新 owner，不证明 RF / GATT / HRS / CCCD / notify / Band 9。
