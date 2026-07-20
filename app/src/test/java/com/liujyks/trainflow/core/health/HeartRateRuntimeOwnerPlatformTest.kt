@@ -1,0 +1,692 @@
+package com.liujyks.trainflow.core.health
+
+import android.Manifest
+import android.app.Application
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothGattService
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.BluetoothLeScanner
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import android.os.Looper
+import android.os.ParcelUuid
+import androidx.test.core.app.ApplicationProvider
+import com.liujyks.trainflow.core.model.HeartRateFact
+import com.liujyks.trainflow.core.model.HeartRateTechnicalFailure
+import java.time.Duration
+import java.util.UUID
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowBluetoothDevice
+import org.robolectric.shadows.ShadowBluetoothGatt
+import org.robolectric.shadows.ShadowBluetoothLeScanner
+
+@RunWith(RobolectricTestRunner::class)
+@Config(
+    sdk = [35],
+    shadows = [E17GattShadow::class, E17ScannerShadow::class]
+)
+@LooperMode(LooperMode.Mode.PAUSED)
+class HeartRateRuntimeOwnerPlatformTest {
+    private lateinit var application: Application
+    private lateinit var owner: HeartRateRuntimeOwner
+
+    @Before
+    fun setUp() {
+        application = ApplicationProvider.getApplicationContext()
+        shadowOf(application).grantPermissions(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        shadowOf(application.getSystemService(BluetoothManager::class.java).adapter).setEnabled(true)
+        owner = HeartRateRuntimeOwner(
+            application,
+            mainHandler = android.os.Handler(Looper.getMainLooper())
+        )
+        E17GattShadow.resetFailures()
+        E17ScannerShadow.resetFailures()
+    }
+
+    @Test
+    fun productionScanUsesStandardHeartRateServiceFilter() {
+        val scanner = application.getSystemService(BluetoothManager::class.java)
+            .adapter.bluetoothLeScanner
+
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+
+        val filters = shadowOf(scanner).activeScans.single().scanFilters()
+        assertEquals(
+            ParcelUuid.fromString("0000180d-0000-1000-8000-00805f9b34fb"),
+            filters.single().serviceUuid
+        )
+    }
+
+    @Test
+    fun api33NotifyPathWritesCccdWaitsAndConsumesBothCallbackOverloadsOnce() {
+        val connected = connect(
+            address = "AA:BB:CC:DD:EE:21",
+            properties = BluetoothGattCharacteristic.PROPERTY_NOTIFY
+        )
+
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        assertArrayEquals(
+            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+            connected.shadowGatt.latestWrittenBytes
+        )
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 88)
+        )
+        val freshnessAfterApi33 = privateRunnable("freshnessRunnable")
+        @Suppress("DEPRECATION")
+        connected.characteristic.value = byteArrayOf(0x00, 88)
+        @Suppress("DEPRECATION")
+        connected.callback.onCharacteristicChanged(connected.gatt, connected.characteristic)
+
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+        assertEquals(88, owner.heartRateState.value.bpm)
+        assertTrue(freshnessAfterApi33 === privateRunnable("freshnessRunnable"))
+    }
+
+    @Test
+    fun indicateOnlyCharacteristicUsesIndicationCccdValue() {
+        val connected = connect(
+            address = "AA:BB:CC:DD:EE:22",
+            properties = BluetoothGattCharacteristic.PROPERTY_INDICATE
+        )
+
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        assertArrayEquals(
+            BluetoothGattDescriptor.ENABLE_INDICATION_VALUE,
+            connected.shadowGatt.latestWrittenBytes
+        )
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun legacyDescriptorWriteUsesLegacyValueAndReachesWaiting() {
+        val connected = connect(
+            address = "AA:BB:CC:DD:EE:23",
+            properties = BluetoothGattCharacteristic.PROPERTY_NOTIFY
+        )
+
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        @Suppress("DEPRECATION")
+        assertArrayEquals(
+            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+            connected.descriptor.value
+        )
+        assertArrayEquals(
+            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+            connected.shadowGatt.latestWrittenBytes
+        )
+    }
+
+    @Test
+    fun malformedPayloadDoesNotRefreshLiveAndFreshnessClearsAtExactDeadline() {
+        val connected = connect("AA:BB:CC:DD:EE:24")
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 90)
+        )
+        val live = owner.heartRateState.value
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x01, 0x20)
+        )
+
+        assertEquals(live, owner.heartRateState.value)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_499))
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, owner.heartRateState.value.fact)
+        assertNull(owner.heartRateState.value.bpm)
+        assertNull(owner.heartRateState.value.measuredAt)
+    }
+
+    @Test
+    fun waitingFirstDataInterruptsAtExactBoundaryWithoutTechnicalFailure() {
+        connect("AA:BB:CC:DD:EE:35")
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_999))
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, owner.heartRateState.value.fact)
+        assertNull(owner.heartRateState.value.technicalFailure)
+    }
+
+    @Test
+    fun gattCallbackFromBackgroundThreadWaitsForMainQueue() {
+        val connected = connect("AA:BB:CC:DD:EE:36")
+        val worker = Thread {
+            connected.callback.onCharacteristicChanged(
+                connected.gatt,
+                connected.characteristic,
+                byteArrayOf(0x00, 92)
+            )
+        }
+
+        worker.start()
+        worker.join()
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+
+        idleMain()
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+        assertEquals(92, owner.heartRateState.value.bpm)
+    }
+
+    @Test
+    fun serviceCharacteristicCccdAndNotificationFailuresAreTypedAndCleaned() {
+        val missingService = connectWithConfiguration("AA:BB:CC:DD:EE:25") { _ -> }
+        assertFailure(
+            HeartRateTechnicalFailure.SERVICE_DISCOVERY_FAILED,
+            missingService
+        )
+
+        val missingCharacteristic = connectWithConfiguration("AA:BB:CC:DD:EE:26") { shadowGatt ->
+            shadowGatt.addDiscoverableService(
+                BluetoothGattService(HRS_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            )
+        }
+        assertFailure(
+            HeartRateTechnicalFailure.SERVICE_DISCOVERY_FAILED,
+            missingCharacteristic
+        )
+
+        val missingCccd = connectWithConfiguration("AA:BB:CC:DD:EE:27") { shadowGatt ->
+            val service = BluetoothGattService(HRS_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            service.addCharacteristic(
+                BluetoothGattCharacteristic(
+                    MEASUREMENT_UUID,
+                    BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+                    BluetoothGattCharacteristic.PERMISSION_READ
+                )
+            )
+            shadowGatt.addDiscoverableService(service)
+        }
+        assertFailure(HeartRateTechnicalFailure.CCCD_FAILED, missingCccd)
+
+        val notificationRejected = connectWithConfiguration("AA:BB:CC:DD:EE:28") { shadowGatt ->
+            addHrs(shadowGatt, BluetoothGattCharacteristic.PROPERTY_NOTIFY, allowNotification = false)
+        }
+        assertFailure(HeartRateTechnicalFailure.CCCD_FAILED, notificationRejected)
+
+        owner = HeartRateRuntimeOwner(application)
+        val descriptorStatusFailure = connect("AA:BB:CC:DD:EE:37")
+        descriptorStatusFailure.callback.onDescriptorWrite(
+            descriptorStatusFailure.gatt,
+            descriptorStatusFailure.descriptor,
+            BluetoothGatt.GATT_FAILURE
+        )
+        assertFailure(HeartRateTechnicalFailure.CCCD_FAILED, descriptorStatusFailure)
+    }
+
+    @Test
+    fun activeExplicitDisconnectPublishesLinkDisconnectedButIntentionalStopDoesNot() {
+        val connected = connect("AA:BB:CC:DD:EE:29")
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            BluetoothGatt.GATT_SUCCESS,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+
+        assertEquals(HeartRateFact.LINK_DISCONNECTED, owner.heartRateState.value.fact)
+        assertTrue(connected.shadowGatt.isClosed)
+
+        owner.submit(HeartRateRuntimeAction.Stop)
+        idleMain()
+        val stopped = owner.heartRateState.value
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            BluetoothGatt.GATT_SUCCESS,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+        assertEquals(stopped, owner.heartRateState.value)
+        assertFalse(owner.heartRateState.value.fact == HeartRateFact.LINK_DISCONNECTED)
+    }
+
+    @Test
+    fun payloadFromNonMatchingRawGattCannotPublishLive() {
+        val connected = connect("AA:BB:CC:DD:EE:30")
+        val wrongGatt = ShadowBluetoothGatt.newInstance(connected.device)
+
+        connected.callback.onCharacteristicChanged(
+            wrongGatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 111)
+        )
+
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        assertTrue(Shadow.extract<ShadowBluetoothGatt>(wrongGatt).isClosed)
+    }
+
+    @Test
+    fun scanStartAndStopSecurityExceptionsPublishPermissionAndClearGeneration() {
+        E17ScannerShadow.throwStartSecurity = true
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
+        assertTrue(
+            shadowOf(
+                application.getSystemService(BluetoothManager::class.java)
+                    .adapter.bluetoothLeScanner
+            ).scanCallbacks.isEmpty()
+        )
+
+        E17ScannerShadow.throwStartSecurity = false
+        owner = HeartRateRuntimeOwner(application)
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val callback = shadowOf(
+            application.getSystemService(BluetoothManager::class.java).adapter.bluetoothLeScanner
+        ).scanCallbacks.single()
+        E17ScannerShadow.throwStopSecurity = true
+        owner.submit(HeartRateRuntimeAction.Stop)
+        idleMain()
+        val terminal = owner.heartRateState.value
+        callback.onScanFailed(ScanCallback.SCAN_FAILED_INTERNAL_ERROR)
+        idleMain()
+
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, terminal.fact)
+        assertEquals(terminal, owner.heartRateState.value)
+    }
+
+    @Test
+    fun connectPermissionToctouUsesRealConnectGattCallAndDoesNotAutoRetry() {
+        val snapshotContext = PermissionSnapshotContext(application)
+        owner = HeartRateRuntimeOwner(snapshotContext)
+        val device = scanDevice("AA:BB:CC:DD:EE:31", "TOCTOU connect")
+        val shadowDevice = Shadow.extract<ShadowBluetoothDevice>(device)
+        shadowDevice.setShouldThrowSecurityExceptions(true)
+        shadowOf(application).denyPermissions(Manifest.permission.BLUETOOTH_CONNECT)
+
+        owner.submit(HeartRateRuntimeAction.Connect(device.address))
+        idleMain()
+
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
+        assertTrue(shadowDevice.bluetoothGatts.isEmpty())
+
+        shadowOf(application).grantPermissions(Manifest.permission.BLUETOOTH_CONNECT)
+        idleMain()
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
+        assertTrue(shadowDevice.bluetoothGatts.isEmpty())
+    }
+
+    @Test
+    fun permissionGatedDeviceNameReadHandlesRevocationAtScanCallback() {
+        owner = HeartRateRuntimeOwner(PermissionSnapshotContext(application))
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val adapter = application.getSystemService(BluetoothManager::class.java).adapter
+        val callback = shadowOf(adapter.bluetoothLeScanner).scanCallbacks.single()
+        val device = ShadowBluetoothDevice.newInstance("AA:BB:CC:DD:EE:32")
+        val shadowDevice = Shadow.extract<ShadowBluetoothDevice>(device)
+        shadowDevice.setName("Revoked name")
+        shadowDevice.setShouldThrowSecurityExceptions(true)
+        shadowOf(application).denyPermissions(Manifest.permission.BLUETOOTH_CONNECT)
+
+        @Suppress("DEPRECATION")
+        callback.onScanResult(
+            ScanSettings.CALLBACK_TYPE_ALL_MATCHES,
+            ScanResult(device, null, -40, 2L)
+        )
+        idleMain()
+
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
+        assertTrue(owner.candidates.value.isEmpty())
+    }
+
+    @Test
+    fun discoveryNotificationAndDescriptorSecurityExceptionsUseNarrowPermissionPath() {
+        listOf(
+            GattFailure.DISCOVER_SECURITY,
+            GattFailure.NOTIFICATION_SECURITY,
+            GattFailure.DESCRIPTOR_SECURITY
+        ).forEachIndexed { index, failure ->
+            E17GattShadow.resetFailures()
+            E17GattShadow.failure = failure
+            owner = HeartRateRuntimeOwner(application)
+            val connected = connectWithConfiguration(
+                "AA:BB:CC:DD:EF:${40 + index}"
+            ) { shadowGatt ->
+                addHrs(
+                    shadowGatt,
+                    BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+                    allowNotification = true
+                )
+            }
+
+            assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
+            assertTrue(connected.shadowGatt.isClosed)
+        }
+    }
+
+    @Test
+    fun disconnectAndCloseRevocationStillClearsReferencesAndIsIdempotent() {
+        val connected = connect("AA:BB:CC:DD:EE:33")
+        E17GattShadow.throwDisconnectSecurity = true
+        E17GattShadow.throwCloseSecurity = true
+
+        owner.submit(HeartRateRuntimeAction.Stop)
+        idleMain()
+        val disconnectCalls = E17GattShadow.disconnectCalls
+        val closeCalls = E17GattShadow.closeCalls
+        val terminal = owner.heartRateState.value
+
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, terminal.fact)
+        assertTrue(disconnectCalls >= 1)
+        assertTrue(closeCalls >= 1)
+
+        owner.submit(HeartRateRuntimeAction.Stop)
+        idleMain()
+        assertEquals(disconnectCalls, E17GattShadow.disconnectCalls)
+        assertEquals(closeCalls, E17GattShadow.closeCalls)
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            BluetoothGatt.GATT_SUCCESS,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+
+        assertEquals(disconnectCalls, E17GattShadow.disconnectCalls)
+        assertTrue(E17GattShadow.closeCalls >= closeCalls)
+        assertEquals(terminal, owner.heartRateState.value)
+    }
+
+    @Test
+    fun unknownIllegalStateExceptionIsNotClassifiedAsPermissionOrBluetoothFailure() {
+        E17GattShadow.failure = GattFailure.DISCOVER_ILLEGAL_STATE
+        val device = scanDevice("AA:BB:CC:DD:EE:34", "Unknown failure")
+        Shadow.extract<ShadowBluetoothDevice>(device).setGattConnectionInterceptor { gatt ->
+            val shadowGatt = Shadow.extract<ShadowBluetoothGatt>(gatt)
+            addHrs(
+                shadowGatt,
+                BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+                allowNotification = true
+            )
+            shadowGatt.gattCallback.onConnectionStateChange(
+                gatt,
+                BluetoothGatt.GATT_SUCCESS,
+                BluetoothProfile.STATE_CONNECTED
+            )
+        }
+        owner.submit(HeartRateRuntimeAction.Connect(device.address))
+
+        assertThrows(IllegalStateException::class.java) { idleMain() }
+        assertFalse(owner.heartRateState.value.fact == HeartRateFact.PERMISSION_REQUIRED)
+        assertFalse(owner.heartRateState.value.fact == HeartRateFact.BLUETOOTH_OFF)
+    }
+
+    private fun connect(
+        address: String,
+        properties: Int = BluetoothGattCharacteristic.PROPERTY_NOTIFY
+    ): ConnectedGatt {
+        return connectWithConfiguration(address) { shadowGatt ->
+            addHrs(shadowGatt, properties, allowNotification = true)
+        }
+    }
+
+    private fun connectWithConfiguration(
+        address: String,
+        configure: (ShadowBluetoothGatt) -> Unit
+    ): ConnectedGatt {
+        val device = scanDevice(address, "HRS $address")
+        lateinit var connected: ConnectedGatt
+        Shadow.extract<ShadowBluetoothDevice>(device).setGattConnectionInterceptor { gatt ->
+            val shadowGatt = Shadow.extract<ShadowBluetoothGatt>(gatt)
+            configure(shadowGatt)
+            val callback = shadowGatt.gattCallback
+            callback.onConnectionStateChange(
+                gatt,
+                BluetoothGatt.GATT_SUCCESS,
+                BluetoothProfile.STATE_CONNECTED
+            )
+            val characteristic = shadowGatt.getServiceOrNull(HRS_UUID)
+                ?.getCharacteristic(MEASUREMENT_UUID)
+            connected = ConnectedGatt(
+                device = device,
+                gatt = gatt,
+                shadowGatt = shadowGatt,
+                callback = callback,
+                characteristicOrNull = characteristic,
+                descriptorOrNull = characteristic?.getDescriptor(CCCD_UUID)
+            )
+        }
+        owner.submit(HeartRateRuntimeAction.Connect(address))
+        idleMain()
+        return connected
+    }
+
+    private fun scanDevice(address: String, name: String): BluetoothDevice {
+        val adapter = application.getSystemService(BluetoothManager::class.java).adapter
+        val device = ShadowBluetoothDevice.newInstance(address)
+        Shadow.extract<ShadowBluetoothDevice>(device).setName(name)
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val callback = shadowOf(adapter.bluetoothLeScanner).scanCallbacks.single()
+        @Suppress("DEPRECATION")
+        callback.onScanResult(
+            ScanSettings.CALLBACK_TYPE_ALL_MATCHES,
+            ScanResult(device, null, -45, 1L)
+        )
+        idleMain()
+        return device
+    }
+
+    private fun addHrs(
+        shadowGatt: ShadowBluetoothGatt,
+        properties: Int,
+        allowNotification: Boolean
+    ): BluetoothGattCharacteristic {
+        val service = BluetoothGattService(HRS_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+        val characteristic = BluetoothGattCharacteristic(
+            MEASUREMENT_UUID,
+            properties,
+            BluetoothGattCharacteristic.PERMISSION_READ
+        )
+        characteristic.addDescriptor(
+            BluetoothGattDescriptor(CCCD_UUID, BluetoothGattDescriptor.PERMISSION_WRITE)
+        )
+        service.addCharacteristic(characteristic)
+        shadowGatt.addDiscoverableService(service)
+        if (allowNotification) shadowGatt.allowCharacteristicNotification(characteristic)
+        return characteristic
+    }
+
+    private fun assertFailure(
+        expected: HeartRateTechnicalFailure,
+        connected: ConnectedGatt
+    ) {
+        assertEquals(HeartRateFact.TECHNICAL_FAILURE, owner.heartRateState.value.fact)
+        assertEquals(expected, owner.heartRateState.value.technicalFailure)
+        assertTrue(connected.shadowGatt.isClosed)
+    }
+
+    private fun ShadowBluetoothGatt.getServiceOrNull(uuid: UUID): BluetoothGattService? {
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            val field = ShadowBluetoothGatt::class.java.getDeclaredField("discoverableServices")
+            field.isAccessible = true
+            (field.get(this) as Set<BluetoothGattService>).firstOrNull { it.uuid == uuid }
+        } catch (_: ReflectiveOperationException) {
+            null
+        }
+    }
+
+    private fun idleMain() {
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun privateRunnable(fieldName: String): Runnable {
+        val field = HeartRateRuntimeOwner::class.java.getDeclaredField(fieldName)
+        field.isAccessible = true
+        return requireNotNull(field.get(owner) as Runnable?)
+    }
+
+    private class PermissionSnapshotContext(base: Context) : ContextWrapper(base) {
+        override fun getApplicationContext(): Context = this
+
+        override fun checkSelfPermission(permission: String): Int {
+            return PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private data class ConnectedGatt(
+        val device: BluetoothDevice,
+        val gatt: BluetoothGatt,
+        val shadowGatt: ShadowBluetoothGatt,
+        val callback: BluetoothGattCallback,
+        val characteristicOrNull: BluetoothGattCharacteristic?,
+        val descriptorOrNull: BluetoothGattDescriptor?
+    ) {
+        val characteristic: BluetoothGattCharacteristic
+            get() = requireNotNull(characteristicOrNull)
+        val descriptor: BluetoothGattDescriptor
+            get() = requireNotNull(descriptorOrNull)
+    }
+
+    private companion object {
+        val HRS_UUID: UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
+        val MEASUREMENT_UUID: UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb")
+        val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    }
+}
+
+enum class GattFailure {
+    NONE,
+    DISCOVER_SECURITY,
+    NOTIFICATION_SECURITY,
+    DESCRIPTOR_SECURITY,
+    DISCOVER_ILLEGAL_STATE
+}
+
+@Implements(BluetoothGatt::class)
+class E17GattShadow : ShadowBluetoothGatt() {
+    @Implementation
+    override fun discoverServices(): Boolean {
+        when (failure) {
+            GattFailure.DISCOVER_SECURITY -> throw SecurityException("test discovery revocation")
+            GattFailure.DISCOVER_ILLEGAL_STATE -> throw IllegalStateException("unknown test defect")
+            else -> Unit
+        }
+        return super.discoverServices()
+    }
+
+    @Implementation
+    override fun setCharacteristicNotification(
+        characteristic: BluetoothGattCharacteristic,
+        enable: Boolean
+    ): Boolean {
+        if (failure == GattFailure.NOTIFICATION_SECURITY) {
+            throw SecurityException("test notification revocation")
+        }
+        return super.setCharacteristicNotification(characteristic, enable)
+    }
+
+    @Implementation(minSdk = 33)
+    override fun writeDescriptor(descriptor: BluetoothGattDescriptor, value: ByteArray): Int {
+        if (failure == GattFailure.DESCRIPTOR_SECURITY) {
+            throw SecurityException("test descriptor revocation")
+        }
+        return super.writeDescriptor(descriptor, value)
+    }
+
+    @Implementation(maxSdk = 32)
+    override fun writeDescriptor(descriptor: BluetoothGattDescriptor): Boolean {
+        if (failure == GattFailure.DESCRIPTOR_SECURITY) {
+            throw SecurityException("test descriptor revocation")
+        }
+        return super.writeDescriptor(descriptor)
+    }
+
+    @Implementation
+    override fun disconnect() {
+        disconnectCalls += 1
+        if (throwDisconnectSecurity) throw SecurityException("test disconnect revocation")
+        super.disconnect()
+    }
+
+    @Implementation
+    override fun close() {
+        closeCalls += 1
+        if (throwCloseSecurity) throw SecurityException("test close revocation")
+        super.close()
+    }
+
+    companion object {
+        var failure: GattFailure = GattFailure.NONE
+        var throwDisconnectSecurity: Boolean = false
+        var throwCloseSecurity: Boolean = false
+        var disconnectCalls: Int = 0
+        var closeCalls: Int = 0
+
+        fun resetFailures() {
+            failure = GattFailure.NONE
+            throwDisconnectSecurity = false
+            throwCloseSecurity = false
+            disconnectCalls = 0
+            closeCalls = 0
+        }
+    }
+}
+
+@Implements(BluetoothLeScanner::class)
+class E17ScannerShadow : ShadowBluetoothLeScanner() {
+    @Implementation
+    override fun startScan(
+        filters: List<ScanFilter>,
+        settings: ScanSettings,
+        callback: ScanCallback
+    ) {
+        if (throwStartSecurity) throw SecurityException("test scan start revocation")
+        super.startScan(filters, settings, callback)
+    }
+
+    @Implementation
+    override fun stopScan(callback: ScanCallback) {
+        if (throwStopSecurity) throw SecurityException("test scan stop revocation")
+        super.stopScan(callback)
+    }
+
+    companion object {
+        var throwStartSecurity: Boolean = false
+        var throwStopSecurity: Boolean = false
+
+        fun resetFailures() {
+            throwStartSecurity = false
+            throwStopSecurity = false
+        }
+    }
+}
