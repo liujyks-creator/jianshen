@@ -74,13 +74,9 @@ internal data class BleHeartRateProviderState(
 
     private fun legacyErrorFact(source: HeartRateSourceHint?): HeartRateRuntimeFact {
         if (recoverableReason == BleHeartRateRecoverableReason.PARSE_FAILED) {
-            return if (bpm != null && bpm > 0 && !measuredAt.isNullOrBlank()) {
-                // A malformed payload is diagnostic-only. Preserve the previous valid reading;
-                // the E17 timeline owns its original freshness deadline.
-                HeartRateRuntimeFact.Live(bpm = bpm, measuredAt = measuredAt, source = source)
-            } else {
-                HeartRateRuntimeFact.WaitingFirstData(source)
-            }
+            // The legacy runtime has no monotonic freshness timeline. A cached wall-clock
+            // reading therefore cannot prove that the previous sample is still fresh.
+            return HeartRateRuntimeFact.DataInterrupted(source)
         }
         return HeartRateRuntimeFact.TechnicalFailure(
             reason = recoverableReason.toTechnicalFailure(),

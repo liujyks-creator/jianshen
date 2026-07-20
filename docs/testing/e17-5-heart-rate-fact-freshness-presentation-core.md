@@ -126,6 +126,16 @@ explicit disconnect、intentional stop 和 technical failure 是互相独立的 
 - Debug tooling limitation：继承的 Activity 把控制和日志放在同一整页滚动区域，造成现场操作与截图困难。fixed controls、独立 log pane、cycle summary / export 应另拆工具改进；E17-5 明确禁止修 debug UI，且此时修改 Activity 会再次使 APK evidence 失效。
 - Final APK source commit 到 Story tip executable diff：`git diff --name-only b3bcac55c92e0863deeba25fc5b0491db357f7db..HEAD` 只输出 `docs/testing/e17-5-heart-rate-fact-freshness-presentation-core.md`；production、debug Activity 和 tests 均无后续变化。
 
+### 5.5 Code Review Repair：legacy malformed fail-closed
+
+Code Review 发现 legacy compatibility adapter 在 `PARSE_FAILED + cached reading` 时会继续发布旧 `Live`。由于 legacy runtime 没有 monotonic freshness timeline，旧 wall-clock bpm / `measuredAt` 无法证明仍在原 freshness 截止点内；该路径可能永久保留旧 Live。
+
+Repair 将 legacy `PARSE_FAILED` fail-closed 为 `DataInterrupted`：公共状态为 `DATA_INTERRUPTED`，清除旧 bpm、`measuredAt`、`recordedAt` 和其他旧测量字段，不发布公共 `TechnicalFailure`，也不刷新 freshness。后续合法 reading 仍可重新建立 `Live`，但只使用该条新 reading。`DISCONNECTED`、`STOPPED`、saved hint 和其他真正 typed technical reason 的独立映射保持不变。直接依赖旧合同的 `HeartRateFloatingCapsuleStateTest` malformed compatibility 用例已随合同迁移，断言 capsule presentation 为 `STALE`，不显示缓存 bpm，不泄漏 raw parse message，也不把 malformed 映射为 disconnect、technical failure 或 Live。
+
+原第一次 M0 和 final M0 仍只用于支持前台 provisional `3000 / 2500 ms` threshold；本 Repair 不重写、不替换或冒充原 Band 9 evidence、APK、截图和 interval 分布。Debug `E17Band9HrsRevalidationActivity` 未修改。Repair 后重新构建的 debug APK 只证明 Repair source commit 对应的构建身份，不属于新的 Band 9 或设备行为证据。本轮不安装 APK，不运行 adb / AVD / Band 9，也不要求用户重新测试。
+
+Repair 后 E17-5 继续为 `implemented / needs review`；E17-6 继续为 `planned / prerequisite-gated`。下一步只能是新的独立 E17-5 Code Review。
+
 ## 6. 验证与 evidence 层级
 
 Implementation 工作树验证环境为 Eclipse Temurin JDK `17.0.19+10`、Gradle `9.4.1`、Kotlin `2.3.0`、Windows 11。以下命令均为 `BUILD SUCCESSFUL`：

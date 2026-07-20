@@ -16,6 +16,7 @@ import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import com.liujyks.trainflow.feature.settings.heartRateSettingsUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -149,7 +150,7 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun malformedCompatibilityOutcomeProducesNoNewPublicErrorCopy() {
+    fun malformedCompatibilityOutcomeFailsClosedWithoutCachedReadingOrErrorCopy() {
         val mapped = BleHeartRateProviderState(
             kind = BleHeartRateProviderStateKind.ERROR,
             message = "raw parse failure",
@@ -159,11 +160,27 @@ class HeartRateFloatingCapsuleStateTest {
             recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
         ).toHeartRateState()
         val state = capsule(mapped)
+        val copy = buildString {
+            append(state.collapsedLabel)
+            append(state.detailTitle)
+            append(state.detailBody)
+            append(state.deviceHint)
+            state.infoTiles.forEach { append(it.value) }
+        }
 
-        assertEquals(HeartRateFact.LIVE, mapped.fact)
-        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, state.status)
-        assertFalse(state.detailBody.contains("错误"))
-        assertFalse(state.detailBody.contains("parse"))
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, mapped.fact)
+        assertEquals(HeartRateFloatingCapsuleStatus.STALE, state.status)
+        assertNull(mapped.bpm)
+        assertNull(mapped.measuredAt)
+        assertNull(mapped.recordedAt)
+        assertNull(mapped.message)
+        assertNull(mapped.technicalFailure)
+        assertFalse(mapped.fact == HeartRateFact.LIVE)
+        assertFalse(mapped.fact == HeartRateFact.LINK_DISCONNECTED)
+        assertFalse(mapped.fact == HeartRateFact.TECHNICAL_FAILURE)
+        assertFalse(copy.contains("88"))
+        assertFalse(copy.contains("raw parse failure"))
+        assertFalse(copy.contains("parse"))
     }
 
     @Test

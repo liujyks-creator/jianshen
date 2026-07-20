@@ -159,9 +159,9 @@ class BleHeartRateProviderBoundaryTest {
     }
 
     @Test
-    fun legacyMalformedErrorDoesNotPublishTechnicalFailureOrRefreshWithNewTime() {
+    fun legacyMalformedWithCachedReadingFailsClosedAndClearsAllReadingFields() {
         val selected = BleHeartRateDeviceSelection("id", "Band")
-        val withPreviousValid = BleHeartRateProviderState(
+        val state = BleHeartRateProviderState(
             kind = BleHeartRateProviderStateKind.ERROR,
             message = "parser detail must not enter presentation",
             selectedDevice = selected,
@@ -169,18 +169,87 @@ class BleHeartRateProviderBoundaryTest {
             measuredAt = "2026-07-19T13:16:04Z",
             recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
         ).toHeartRateState()
-        val beforeAnyValid = BleHeartRateProviderState(
+
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, state.fact)
+        assertFalse(state.fact == HeartRateFact.LIVE)
+        assertNull(state.bpm)
+        assertNull(state.measuredAt)
+        assertNull(state.recordedAt)
+        assertNull(state.technicalFailure)
+        assertTrue(state.isValidE17State())
+    }
+
+    @Test
+    fun legacyMalformedWithoutCachedReadingIsInterruptedNotTechnicalFailure() {
+        val state = BleHeartRateProviderState(
             kind = BleHeartRateProviderStateKind.ERROR,
             message = "malformed",
-            selectedDevice = selected,
+            selectedDevice = BleHeartRateDeviceSelection("id", "Band"),
             recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
         ).toHeartRateState()
 
-        assertEquals(HeartRateFact.LIVE, withPreviousValid.fact)
-        assertEquals("2026-07-19T13:16:04Z", withPreviousValid.measuredAt)
-        assertNull(withPreviousValid.technicalFailure)
-        assertEquals(HeartRateFact.WAITING_FIRST_DATA, beforeAnyValid.fact)
-        assertNull(beforeAnyValid.technicalFailure)
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, state.fact)
+        assertNull(state.technicalFailure)
+        assertNull(state.bpm)
+        assertNull(state.measuredAt)
+        assertNull(state.recordedAt)
+    }
+
+    @Test
+    fun repeatedLegacyMalformedNeverRestoresCachedLiveReading() {
+        val selected = BleHeartRateDeviceSelection("id", "Band")
+        val live = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.LIVE_BPM,
+            message = "valid",
+            selectedDevice = selected,
+            bpm = 88,
+            measuredAt = "2026-07-19T13:16:04Z"
+        ).toHeartRateState()
+
+        val malformedStates = List(2) {
+            BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.ERROR,
+                message = "malformed $it",
+                selectedDevice = selected,
+                bpm = live.bpm,
+                measuredAt = live.measuredAt,
+                recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+            ).toHeartRateState()
+        }
+
+        assertEquals(HeartRateFact.LIVE, live.fact)
+        malformedStates.forEach { state ->
+            assertEquals(HeartRateFact.DATA_INTERRUPTED, state.fact)
+            assertNull(state.bpm)
+            assertNull(state.measuredAt)
+            assertNull(state.recordedAt)
+        }
+    }
+
+    @Test
+    fun validLegacySampleAfterMalformedCreatesLiveFromOnlyTheNewReading() {
+        val selected = BleHeartRateDeviceSelection("id", "Band")
+        val malformed = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.ERROR,
+            message = "malformed",
+            selectedDevice = selected,
+            bpm = 88,
+            measuredAt = "2026-07-19T13:16:04Z",
+            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+        ).toHeartRateState()
+        val nextValid = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.LIVE_BPM,
+            message = "valid",
+            selectedDevice = selected,
+            bpm = 93,
+            measuredAt = "2026-07-19T13:16:06Z"
+        ).toHeartRateState()
+
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, malformed.fact)
+        assertEquals(HeartRateFact.LIVE, nextValid.fact)
+        assertEquals(93, nextValid.bpm)
+        assertEquals("2026-07-19T13:16:06Z", nextValid.measuredAt)
+        assertNull(nextValid.recordedAt)
     }
 
     @Test
@@ -210,6 +279,66 @@ class BleHeartRateProviderBoundaryTest {
             assertNull(state.bpm)
             assertNull(state.measuredAt)
             assertTrue(state.isValidE17State())
+        }
+    }
+
+    @Test
+    fun otherLegacyReasonsKeepTheirDistinctPublicFacts() {
+        val selected = BleHeartRateDeviceSelection("saved-id", "Saved Band")
+        val disconnected = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.DISCONNECTED,
+            message = "explicit disconnect",
+            selectedDevice = selected,
+            bpm = 88,
+            measuredAt = "old"
+        ).toHeartRateState()
+        val technicalReasons = listOf(
+            BleHeartRateRecoverableReason.CONNECTION_FAILED to
+                HeartRateTechnicalFailure.CONNECT_FAILED,
+            BleHeartRateRecoverableReason.SERVICE_MISSING to
+                HeartRateTechnicalFailure.SERVICE_DISCOVERY_FAILED,
+            BleHeartRateRecoverableReason.DESCRIPTOR_WRITE_FAILED to
+                HeartRateTechnicalFailure.CCCD_FAILED
+        )
+        val stopped = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.STOPPED,
+            message = "user stop",
+            selectedDevice = selected,
+            bpm = 88,
+            measuredAt = "old"
+        ).toHeartRateState()
+        val savedHint = BleHeartRateProviderState(
+            kind = BleHeartRateProviderStateKind.DEVICE_SELECTED,
+            message = "saved hint",
+            selectedDevice = selected,
+            bpm = 88,
+            measuredAt = "old"
+        ).toHeartRateState()
+
+        assertEquals(HeartRateFact.LINK_DISCONNECTED, disconnected.fact)
+        assertEquals(HeartRateFact.INTENTIONAL_STOP, stopped.fact)
+        assertEquals(HeartRateFact.NOT_CONNECTED, savedHint.fact)
+        assertFalse(savedHint.fact == HeartRateFact.LIVE)
+        listOf(disconnected, stopped, savedHint).forEach { state ->
+            assertNull(state.bpm)
+            assertNull(state.measuredAt)
+            assertNull(state.recordedAt)
+        }
+        technicalReasons.forEach { (legacyReason, expectedFailure) ->
+            val state = BleHeartRateProviderState(
+                kind = BleHeartRateProviderStateKind.ERROR,
+                message = "must not classify by message",
+                selectedDevice = selected,
+                bpm = 88,
+                measuredAt = "old",
+                recoverableReason = legacyReason
+            ).toHeartRateState()
+
+            assertEquals(HeartRateFact.TECHNICAL_FAILURE, state.fact)
+            assertEquals(expectedFailure, state.technicalFailure)
+            assertNull(state.bpm)
+            assertNull(state.measuredAt)
+            assertNull(state.recordedAt)
         }
     }
 }
