@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.os.SystemClock
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
@@ -48,6 +49,13 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
     private lateinit var logView: TextView
     private var isScanning = false
     private var currentGatt: BluetoothGatt? = null
+    private val measurementLock = Any()
+    private var connectionSequence = 0L
+    private var notifyCycleSequence = 0L
+    private var activeConnectionSessionId = "none"
+    private var activeNotifyCycleId = "none"
+    private var notifyEnabledElapsedMs: Long? = null
+    private var lastValidSampleElapsedMs: Long? = null
 
     private val scanTimeout = Runnable {
         stopScan("scan_window_ended")
@@ -65,6 +73,11 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
         override fun onScanFailed(errorCode: Int) {
             isScanning = false
             mainHandler.removeCallbacks(scanTimeout)
+            logPlatformFailure(
+                stage = "scan",
+                failureCode = "SCAN_CALLBACK_FAILED",
+                platformStatus = errorCode
+            )
             logEvidence("SCAN_FAILED error_code=$errorCode")
             showStatus("Scan failed: $errorCode")
         }
@@ -84,6 +97,12 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
             )
             when {
                 status != BluetoothGatt.GATT_SUCCESS -> {
+                    logPlatformFailure(
+                        stage = "connection_state",
+                        failureCode = "GATT_STATUS_NON_SUCCESS",
+                        platformStatus = status,
+                        gatt = gatt
+                    )
                     closeGatt(gatt, requestDisconnect = false)
                     showStatus("GATT connection failed: $status")
                 }
@@ -92,10 +111,22 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
                     showStatus("Connected; discovering services")
                     val started = gatt.discoverServices()
                     logEvidence("SERVICE_DISCOVERY_START ${sourceFields(gatt)} started=$started")
-                    if (!started) closeGatt(gatt, requestDisconnect = true)
+                    if (!started) {
+                        logPlatformFailure(
+                            stage = "service_discovery_start",
+                            failureCode = "PLATFORM_CALL_NOT_STARTED",
+                            gatt = gatt
+                        )
+                        closeGatt(gatt, requestDisconnect = true)
+                    }
                 }
 
                 newState == BluetoothProfile.STATE_DISCONNECTED -> {
+                    logTypedOutcome(
+                        outcome = "EXPLICIT_DISCONNECT",
+                        gatt = gatt,
+                        fields = "gatt_status=$status new_state=$newState"
+                    )
                     logEvidence("GATT_DISCONNECTED ${sourceFields(gatt)}")
                     closeGatt(gatt, requestDisconnect = false)
                     showStatus("Disconnected")
@@ -113,6 +144,12 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
                     "success=${status == BluetoothGatt.GATT_SUCCESS} services=[$services]"
             )
             if (status != BluetoothGatt.GATT_SUCCESS) {
+                logPlatformFailure(
+                    stage = "service_discovery_result",
+                    failureCode = "GATT_STATUS_NON_SUCCESS",
+                    platformStatus = status,
+                    gatt = gatt
+                )
                 closeGatt(gatt, requestDisconnect = true)
                 return
             }
@@ -120,6 +157,11 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
             val service = gatt.getService(HEART_RATE_SERVICE_UUID)
             logEvidence("HRS_SERVICE ${sourceFields(gatt)} uuid=0x180D found=${service != null}")
             if (service == null) {
+                logPlatformFailure(
+                    stage = "service_validation",
+                    failureCode = "HRS_SERVICE_MISSING",
+                    gatt = gatt
+                )
                 closeGatt(gatt, requestDisconnect = true)
                 return
             }
@@ -134,6 +176,11 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
                     }
             )
             if (characteristic == null) {
+                logPlatformFailure(
+                    stage = "characteristic_validation",
+                    failureCode = "HEART_RATE_MEASUREMENT_MISSING",
+                    gatt = gatt
+                )
                 closeGatt(gatt, requestDisconnect = true)
                 return
             }
@@ -158,7 +205,17 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
                     "CCCD write failed: $status"
                 }
             )
-            if (status != BluetoothGatt.GATT_SUCCESS) closeGatt(gatt, requestDisconnect = true)
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                beginNotifyCycle(gatt)
+            } else {
+                logPlatformFailure(
+                    stage = "cccd_write_result",
+                    failureCode = "GATT_STATUS_NON_SUCCESS",
+                    platformStatus = status,
+                    gatt = gatt
+                )
+                closeGatt(gatt, requestDisconnect = true)
+            }
         }
 
         override fun onCharacteristicChanged(
@@ -226,7 +283,7 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
         deviceList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(deviceList)
         root.addView(TextView(this).apply {
-            text = "Evidence log (also emitted as logcat tag $LOG_TAG)"
+            text = "M0 evidence only (logcat tag $LOG_TAG; verbose diagnostics use $VERBOSE_LOG_TAG)"
             textSize = 18f
         })
         logView = TextView(this).apply {
@@ -308,6 +365,7 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
     private fun connect(device: BluetoothDevice) {
         stopScan("source_selected")
         closeGatt(currentGatt, requestDisconnect = true)
+        beginConnectionSession(device)
         showStatus("Connecting ${deviceLabel(device)}")
         logEvidence("CONNECT_REQUEST label=${quoted(deviceLabel(device))} identifier=${quoted(device.address)} transport=LE auto_connect=false")
         currentGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -315,7 +373,13 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
         } else {
             device.connectGatt(applicationContext, false, gattCallback)
         }
-        if (currentGatt == null) logEvidence("CONNECT_REQUEST_RETURNED_NULL identifier=${quoted(device.address)}")
+        if (currentGatt == null) {
+            logPlatformFailure(
+                stage = "connect_request",
+                failureCode = "PLATFORM_CALL_RETURNED_NULL"
+            )
+            logEvidence("CONNECT_REQUEST_RETURNED_NULL identifier=${quoted(device.address)}")
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -323,6 +387,11 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
         val canNotify = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
         val canIndicate = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
         if (!canNotify && !canIndicate) {
+            logPlatformFailure(
+                stage = "characteristic_validation",
+                failureCode = "NOTIFY_OR_INDICATE_UNSUPPORTED",
+                gatt = gatt
+            )
             logEvidence("SUBSCRIBE_BLOCKED ${sourceFields(gatt)} notify=false indicate=false")
             closeGatt(gatt, requestDisconnect = true)
             return
@@ -330,6 +399,11 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
         val cccd = characteristic.getDescriptor(CCCD_UUID)
         logEvidence("CCCD_DISCOVERY ${sourceFields(gatt)} descriptor=0x2902 found=${cccd != null}")
         if (cccd == null) {
+            logPlatformFailure(
+                stage = "descriptor_validation",
+                failureCode = "CCCD_MISSING",
+                gatt = gatt
+            )
             closeGatt(gatt, requestDisconnect = true)
             return
         }
@@ -345,6 +419,11 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
             "LOCAL_NOTIFICATION ${sourceFields(gatt)} characteristic=0x2A37 enabled=$localNotification mode=$mode"
         )
         if (!localNotification) {
+            logPlatformFailure(
+                stage = "local_notification_enable",
+                failureCode = "PLATFORM_CALL_NOT_STARTED",
+                gatt = gatt
+            )
             closeGatt(gatt, requestDisconnect = true)
             return
         }
@@ -363,7 +442,15 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
                 "value=${quoted(E17HrsEvidenceFormatter.bytes(value))} result=$result " +
                 "started=${result == BluetoothGatt.GATT_SUCCESS}"
         )
-        if (result != BluetoothGatt.GATT_SUCCESS) closeGatt(gatt, requestDisconnect = true)
+        if (result != BluetoothGatt.GATT_SUCCESS) {
+            logPlatformFailure(
+                stage = "cccd_write_start",
+                failureCode = "PLATFORM_CALL_NOT_STARTED",
+                platformStatus = result,
+                gatt = gatt
+            )
+            closeGatt(gatt, requestDisconnect = true)
+        }
     }
 
     private fun recordNotification(
@@ -376,11 +463,36 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
             logEvidence("IGNORED_CHARACTERISTIC uuid=${E17HrsEvidenceFormatter.uuid(characteristic.uuid)} ${sourceFields(gatt)}")
             return
         }
+        val receivedElapsedMs = SystemClock.elapsedRealtime()
         val measurement = HeartRateMeasurementParser.parse(value)
         val format = when (measurement?.flags?.bpmFormat) {
             HeartRateBpmFormat.UINT8 -> "uint8"
             HeartRateBpmFormat.UINT16 -> "uint16"
             null -> null
+        }
+        val rawPayload = E17HrsEvidenceFormatter.bytes(value)
+        if (measurement == null) {
+            val measurementSnapshot = measurementSnapshot()
+            logTypedOutcome(
+                outcome = "MALFORMED_PAYLOAD",
+                gatt = gatt,
+                receivedElapsedMs = receivedElapsedMs,
+                fields = "raw_payload=${quoted(rawPayload)} " +
+                    "last_valid_interval_origin_unchanged=true " +
+                    "last_valid_sample_elapsed_ms=${measurementSnapshot.lastValidSampleElapsedMs ?: "none"}"
+            )
+        } else {
+            val timing = recordValidSample(receivedElapsedMs)
+            logTypedOutcome(
+                outcome = "VALID_SAMPLE",
+                gatt = gatt,
+                receivedElapsedMs = receivedElapsedMs,
+                fields = "notify_enabled_elapsed_ms=${timing.notifyEnabledElapsedMs ?: "none"} " +
+                    "first_valid_sample_delay_ms=${timing.firstValidSampleDelayMs ?: "not_first"} " +
+                    "valid_interval_ms=${timing.validIntervalMs ?: "first"} " +
+                    "bpm=${measurement.bpm} raw_payload=${quoted(rawPayload)} " +
+                    "flags=${measurement.flags.raw} bpm_format=${format ?: "unknown"}"
+            )
         }
         logEvidence(
             E17HrsEvidenceFormatter.notifyLine(
@@ -407,6 +519,97 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
                 "gatt_disconnect_requested=${gatt != null} gatt_closed=${gatt != null}"
         )
         showStatus("Stopped / disconnected")
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun beginConnectionSession(device: BluetoothDevice) {
+        val receivedElapsedMs = SystemClock.elapsedRealtime()
+        val snapshot = synchronized(measurementLock) {
+            connectionSequence += 1
+            activeConnectionSessionId = "connection-$connectionSequence"
+            activeNotifyCycleId = "none"
+            notifyEnabledElapsedMs = null
+            lastValidSampleElapsedMs = null
+            measurementSnapshotLocked()
+        }
+        logEvidence(
+            "M0_CONNECTION_SESSION_STARTED connection_session_id=${snapshot.connectionSessionId} " +
+                "notify_cycle_id=${snapshot.notifyCycleId} received_elapsed_ms=$receivedElapsedMs " +
+                "source_label=${quoted(deviceLabel(device))} " +
+                "source_identifier=${quoted(deviceIdentifier(device))} interval_baseline_reset=true"
+        )
+    }
+
+    private fun beginNotifyCycle(gatt: BluetoothGatt) {
+        val enabledElapsedMs = SystemClock.elapsedRealtime()
+        val snapshot = synchronized(measurementLock) {
+            notifyCycleSequence += 1
+            activeNotifyCycleId = "notify-$notifyCycleSequence"
+            notifyEnabledElapsedMs = enabledElapsedMs
+            lastValidSampleElapsedMs = null
+            measurementSnapshotLocked()
+        }
+        logEvidence(
+            "M0_NOTIFY_ENABLED connection_session_id=${snapshot.connectionSessionId} " +
+                "notify_cycle_id=${snapshot.notifyCycleId} notify_enabled_elapsed_ms=$enabledElapsedMs " +
+                "${sourceFields(gatt)} interval_baseline_reset=true"
+        )
+    }
+
+    private fun recordValidSample(receivedElapsedMs: Long): ValidSampleTiming =
+        synchronized(measurementLock) {
+            val previousValidElapsedMs = lastValidSampleElapsedMs
+            val enabledElapsedMs = notifyEnabledElapsedMs
+            lastValidSampleElapsedMs = receivedElapsedMs
+            ValidSampleTiming(
+                notifyEnabledElapsedMs = enabledElapsedMs,
+                firstValidSampleDelayMs = if (previousValidElapsedMs == null && enabledElapsedMs != null) {
+                    receivedElapsedMs - enabledElapsedMs
+                } else {
+                    null
+                },
+                validIntervalMs = previousValidElapsedMs?.let(receivedElapsedMs::minus)
+            )
+        }
+
+    private fun measurementSnapshot(): MeasurementSnapshot =
+        synchronized(measurementLock) { measurementSnapshotLocked() }
+
+    private fun measurementSnapshotLocked(): MeasurementSnapshot = MeasurementSnapshot(
+        connectionSessionId = activeConnectionSessionId,
+        notifyCycleId = activeNotifyCycleId,
+        notifyEnabledElapsedMs = notifyEnabledElapsedMs,
+        lastValidSampleElapsedMs = lastValidSampleElapsedMs
+    )
+
+    private fun logTypedOutcome(
+        outcome: String,
+        gatt: BluetoothGatt? = null,
+        receivedElapsedMs: Long = SystemClock.elapsedRealtime(),
+        fields: String
+    ) {
+        val snapshot = measurementSnapshot()
+        val source = gatt?.let(::sourceFields)
+            ?: "source_label=\"none\" source_identifier=\"none\""
+        logEvidence(
+            "$outcome connection_session_id=${snapshot.connectionSessionId} " +
+                "notify_cycle_id=${snapshot.notifyCycleId} received_elapsed_ms=$receivedElapsedMs " +
+                "$source $fields"
+        )
+    }
+
+    private fun logPlatformFailure(
+        stage: String,
+        failureCode: String,
+        platformStatus: Int? = null,
+        gatt: BluetoothGatt? = null
+    ) {
+        logTypedOutcome(
+            outcome = "PLATFORM_FAILURE",
+            gatt = gatt,
+            fields = "stage=$stage failure_code=$failureCode " +
+                "platform_status=${platformStatus ?: "none"}"
+        )
     }
 
     @SuppressLint("MissingPermission")
@@ -488,19 +691,45 @@ class E17Band9HrsRevalidationActivity : ComponentActivity() {
     private fun logEvidence(message: String) {
         val timestamp = synchronized(timeFormat) { timeFormat.format(Date()) }
         val line = "$timestamp $message"
-        Log.i(LOG_TAG, line)
-        runOnUiThread {
-            logView.append(line)
-            logView.append("\n")
+        val isM0Evidence = M0_EVIDENCE_PREFIXES.any(message::startsWith)
+        Log.i(if (isM0Evidence) LOG_TAG else VERBOSE_LOG_TAG, line)
+        if (isM0Evidence) {
+            runOnUiThread {
+                logView.append(line)
+                logView.append("\n")
+            }
         }
     }
 
     private fun quoted(value: String): String = "\"${value.replace("\"", "'")}\""
 
+    private data class MeasurementSnapshot(
+        val connectionSessionId: String,
+        val notifyCycleId: String,
+        val notifyEnabledElapsedMs: Long?,
+        val lastValidSampleElapsedMs: Long?
+    )
+
+    private data class ValidSampleTiming(
+        val notifyEnabledElapsedMs: Long?,
+        val firstValidSampleDelayMs: Long?,
+        val validIntervalMs: Long?
+    )
+
     private companion object {
         const val LOG_TAG = "TrainFlowE17Hrs"
+        const val VERBOSE_LOG_TAG = "TrainFlowE17HrsVerbose"
         const val REQUEST_BLUETOOTH = 17101
         const val SCAN_WINDOW_MILLIS = 12_000L
+        val M0_EVIDENCE_PREFIXES = listOf(
+            "M0_CONNECTION_SESSION_STARTED",
+            "M0_NOTIFY_ENABLED",
+            "VALID_SAMPLE",
+            "MALFORMED_PAYLOAD",
+            "EXPLICIT_DISCONNECT",
+            "PLATFORM_FAILURE",
+            "CLEANUP"
+        )
         val HEART_RATE_SERVICE_UUID: UUID =
             UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
         val HEART_RATE_MEASUREMENT_UUID: UUID =

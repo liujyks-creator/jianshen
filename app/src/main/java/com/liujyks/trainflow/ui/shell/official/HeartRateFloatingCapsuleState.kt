@@ -1,8 +1,7 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import com.liujyks.trainflow.core.model.HeartRateFact
 import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
 
@@ -75,123 +74,143 @@ internal fun heartRateFloatingCapsuleUiState(
         )
     }
 
-    val liveReading = liveState?.bpm?.takeIf { bpm -> bpm > 0 }?.let { bpm ->
-        when (liveState.kind) {
-            HeartRateStateKind.DEVICE_READING,
-            HeartRateStateKind.MANUAL_READING -> bpm
-            else -> null
-        }
+    val state = liveState
+    if (state?.fact == HeartRateFact.DISABLED) {
+        return HeartRateFloatingCapsuleUiState.Hidden
     }
-    if (liveReading != null) {
-        return heartRateReadingCapsuleUiState(
-            bpm = liveReading,
-            sourceLabel = liveState.sourceLabel ?: settings.savedDeviceDisplayName,
-            userAgeYears = userAgeYears,
-            overLimitThresholdBpm = overLimitThresholdBpm,
+    if (state?.fact != null && !state.isValidE17State()) {
+        return technicalFailureCapsule(
+            deviceHint = state.sourceLabel ?: settings.savedDeviceDisplayName,
             forceCollapsed = forceCollapsed
         )
     }
 
-    liveState?.let { state ->
-        when (state.kind) {
-            HeartRateStateKind.DEVICE_CONNECTED_NO_READING -> {
-                return stateCapsule(
-                    status = HeartRateFloatingCapsuleStatus.WAITING_DATA,
-                    label = "等待数据",
-                    title = "等待心率数据",
-                    body = "设备已连接，但当前还没有可展示的实时心率。",
-                    deviceHint = state.sourceLabel ?: settings.savedDeviceDisplayName,
-                    forceCollapsed = forceCollapsed
-                )
-            }
-
-            HeartRateStateKind.STALE_READING -> {
-                val offline = state.unavailableReason == HeartRateUnavailableReason.DEVICE_DISCONNECTED
-                return stateCapsule(
-                    status = if (offline) {
-                        HeartRateFloatingCapsuleStatus.OFFLINE
-                    } else {
-                        HeartRateFloatingCapsuleStatus.STALE
-                    },
-                    label = if (offline) "离线" else "数据过期",
-                    title = if (offline) "设备离线" else "心率数据过期",
-                    body = if (offline) {
-                        "最近没有找到已选择的设备；不会把旧数据当作实时心率。"
-                    } else {
-                        "最近没有收到新的心率数据；当前不会显示旧 bpm。"
-                    },
-                    deviceHint = state.sourceLabel ?: settings.savedDeviceDisplayName,
-                    forceCollapsed = forceCollapsed
-                )
-            }
-
-            HeartRateStateKind.PERMISSION_UNAVAILABLE -> {
-                return stateCapsule(
-                    status = HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
-                    label = "权限未赋予",
-                    title = "需要蓝牙权限",
-                    body = "授权后才能扫描或连接你主动选择的心率设备。",
-                    deviceHint = settings.savedDeviceDisplayName,
-                    forceCollapsed = forceCollapsed
-                )
-            }
-
-            HeartRateStateKind.PROVIDER_UNAVAILABLE -> {
-                if (state.unavailableReason == HeartRateUnavailableReason.BLUETOOTH_DISABLED) {
-                    return bluetoothDisabledCapsule(settings, forceCollapsed)
-                }
-                if (
-                    state.unavailableReason == HeartRateUnavailableReason.CONNECTION_FAILED ||
-                    state.unavailableReason == HeartRateUnavailableReason.READ_ERROR
-                ) {
-                    return stateCapsule(
-                        status = HeartRateFloatingCapsuleStatus.ERROR,
-                        label = "连接异常",
-                        title = "心率连接异常",
-                        body = "当前只显示错误状态；可到心率与设备中重新处理。",
-                        deviceHint = state.sourceLabel ?: settings.savedDeviceDisplayName,
-                        updateLabel = "异常",
-                        forceCollapsed = forceCollapsed
-                    )
-                }
-                if (state.sourceLabel != null || settings.savedDeviceDisplayName != null) {
-                    return stateCapsule(
-                        status = HeartRateFloatingCapsuleStatus.CONNECTING,
-                        label = "正在连接",
-                        title = "正在连接设备",
-                        body = "TrainFlow 只显示连接状态，不会自动写入训练记录。",
-                        deviceHint = state.sourceLabel ?: settings.savedDeviceDisplayName,
-                        forceCollapsed = forceCollapsed
-                    )
-                }
-            }
-
-            else -> Unit
-        }
+    val deviceHint = state?.sourceLabel ?: settings.savedDeviceDisplayName
+    when (state?.fact) {
+        HeartRateFact.PERMISSION_REQUIRED -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
+            label = "权限未赋予",
+            title = "需要蓝牙权限",
+            body = "授权后才能扫描或连接你主动选择的心率设备。",
+            deviceHint = deviceHint,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.BLUETOOTH_OFF -> return bluetoothDisabledCapsule(settings, forceCollapsed)
+        HeartRateFact.NOT_CONNECTED -> return notConnectedCapsule(
+            deviceHint = deviceHint,
+            hasSavedHint = settings.savedDeviceDisplayName != null ||
+                settings.savedDeviceIdentifier != null,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.SCANNING -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.CONNECTING,
+            label = "正在扫描",
+            title = "正在查找心率设备",
+            body = "正在查找标准心率广播；这不代表设备已经连接。",
+            deviceHint = deviceHint,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.CONNECTING -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.CONNECTING,
+            label = "正在连接",
+            title = "正在连接设备",
+            body = "正在建立前台连接；当前还没有实时心率数据。",
+            deviceHint = deviceHint,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.WAITING_FIRST_DATA -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.WAITING_DATA,
+            label = "等待数据",
+            title = "等待心率数据",
+            body = "连接已建立，正在等待第一条有效心率数据。",
+            deviceHint = deviceHint,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.LIVE -> return heartRateReadingCapsuleUiState(
+            bpm = requireNotNull(state.bpm),
+            sourceLabel = deviceHint,
+            userAgeYears = userAgeYears,
+            overLimitThresholdBpm = overLimitThresholdBpm,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.DATA_INTERRUPTED -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.STALE,
+            label = "数据中断",
+            title = "心率数据已中断",
+            body = "最近没有收到新的有效数据；旧 bpm 不会作为当前值显示。",
+            deviceHint = deviceHint,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.LINK_DISCONNECTED -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.OFFLINE,
+            label = "连接已断开",
+            title = "心率设备已断开",
+            body = "连接已经明确断开；不会把旧数据当作实时心率。",
+            deviceHint = deviceHint,
+            updateLabel = "已断开",
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.TECHNICAL_FAILURE -> return technicalFailureCapsule(
+            deviceHint = deviceHint,
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.INTENTIONAL_STOP -> return stateCapsule(
+            status = HeartRateFloatingCapsuleStatus.SAVED_DEVICE,
+            label = "已停止",
+            title = "心率连接已停止",
+            body = "本次前台心率连接已由用户停止。",
+            deviceHint = deviceHint,
+            updateLabel = "已停止",
+            forceCollapsed = forceCollapsed
+        )
+        HeartRateFact.DISABLED -> return HeartRateFloatingCapsuleUiState.Hidden
+        null -> Unit // Pre-E17 compatibility fields are intentionally not presentation inputs.
     }
 
-    return when {
-        settings.savedDeviceDisplayName != null || settings.savedDeviceIdentifier != null ->
-            stateCapsule(
-                status = HeartRateFloatingCapsuleStatus.SAVED_DEVICE,
-                label = "未连接",
-                title = "尚未连接心率设备",
-                body = "已保存设备仅供你主动连接，不代表设备在附近、已开启广播、正在连接或已经连接。",
-                deviceHint = settings.savedDeviceDisplayName ?: settings.savedDeviceIdentifier,
-                updateLabel = "未连接",
-                forceCollapsed = forceCollapsed
-            )
-
-        else ->
-            stateCapsule(
-                status = HeartRateFloatingCapsuleStatus.NO_SOURCE,
-                label = "未连接源",
-                title = "未连接心率来源",
-                body = "可在心率与设备中选择设备。关闭心率显示后胶囊会消失。",
-                forceCollapsed = forceCollapsed
-            )
-    }
+    return notConnectedCapsule(
+        deviceHint = settings.savedDeviceDisplayName,
+        hasSavedHint = settings.savedDeviceDisplayName != null ||
+            settings.savedDeviceIdentifier != null,
+        forceCollapsed = forceCollapsed
+    )
 }
+
+private fun notConnectedCapsule(
+    deviceHint: String?,
+    hasSavedHint: Boolean,
+    forceCollapsed: Boolean
+): HeartRateFloatingCapsuleUiState = if (hasSavedHint || deviceHint != null) {
+    stateCapsule(
+        status = HeartRateFloatingCapsuleStatus.SAVED_DEVICE,
+        label = "未连接",
+        title = "尚未连接心率设备",
+        body = "已保存设备仅供主动连接，不代表设备在附近、正在连接或已经连接。",
+        deviceHint = deviceHint ?: "已保存设备",
+        updateLabel = "未连接",
+        forceCollapsed = forceCollapsed
+    )
+} else {
+    stateCapsule(
+        status = HeartRateFloatingCapsuleStatus.NO_SOURCE,
+        label = "未连接源",
+        title = "未连接心率来源",
+        body = "可在心率与设备中选择设备。关闭心率显示后胶囊会消失。",
+        forceCollapsed = forceCollapsed
+    )
+}
+
+private fun technicalFailureCapsule(
+    deviceHint: String?,
+    forceCollapsed: Boolean
+) = stateCapsule(
+    status = HeartRateFloatingCapsuleStatus.ERROR,
+    label = "连接异常",
+    title = "心率连接异常",
+    body = "心率连接发生技术异常；可到心率与设备中重新处理。",
+    deviceHint = deviceHint,
+    updateLabel = "异常",
+    forceCollapsed = forceCollapsed
+)
 
 private fun bluetoothDisabledCapsule(
     settings: HeartRateSettingsUiState,
@@ -312,7 +331,7 @@ private fun stateCapsule(
         HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
         HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
         HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
-        HeartRateFloatingCapsuleStatus.OVER_LIMIT -> "训练记录：后续开启"
+        HeartRateFloatingCapsuleStatus.OVER_LIMIT -> "当前只显示"
     }
     return HeartRateFloatingCapsuleUiState(
         visible = true,

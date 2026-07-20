@@ -1,393 +1,247 @@
 package com.liujyks.trainflow.core.health
 
+import com.liujyks.trainflow.core.model.HeartRateFact
+import com.liujyks.trainflow.core.model.HeartRateTechnicalFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HeartRateFreshnessPolicyTest {
-    private val policy = HeartRateFreshnessPolicy()
+    private val config = HeartRateFreshnessConfig(
+        firstSampleWaitingBoundaryMs = 3_000,
+        liveFreshnessBoundaryMs = 2_500
+    )
+    private val policy = HeartRateFreshnessPolicy(config)
 
     @Test
-    fun waitingForFirstSampleUsesExactFifteenAndThirtySecondBoundaries() {
+    fun notifyEnabledWaitsUntilExactProvisionalBoundaryThenInterrupts() {
         val timeline = HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 1_000)
 
-        assertDecision(timeline, 15_999, HeartRateFreshnessKind.WAITING, HeartRateFreshnessReason.WAITING_FIRST_SAMPLE)
-        assertDecision(timeline, 16_000, HeartRateFreshnessKind.STALE, HeartRateFreshnessReason.FIRST_SAMPLE_STALE)
-        assertDecision(timeline, 30_999, HeartRateFreshnessKind.STALE, HeartRateFreshnessReason.FIRST_SAMPLE_STALE)
-        assertDecision(timeline, 31_000, HeartRateFreshnessKind.TECHNICAL_ERROR, HeartRateFreshnessReason.FIRST_SAMPLE_SILENCE)
+        assertDecision(timeline, 1_000, HeartRateFreshnessKind.WAITING)
+        assertDecision(timeline, 3_999, HeartRateFreshnessKind.WAITING)
+        val boundary = assertDecision(timeline, 4_000, HeartRateFreshnessKind.DATA_INTERRUPTED)
+        val after = assertDecision(timeline, 40_000, HeartRateFreshnessKind.DATA_INTERRUPTED)
+
+        assertEquals(HeartRateFreshnessReason.FIRST_SAMPLE_INTERRUPTED, boundary.reason)
+        assertEquals(HeartRateFreshnessReason.FIRST_SAMPLE_INTERRUPTED, after.reason)
+        assertNull(boundary.bpm)
+        assertNull(boundary.measuredAt)
     }
 
     @Test
-    fun validSampleUsesExactTenAndThirtySecondBoundaries() {
-        val timeline = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 5_000)
+    fun firstValidSampleIsLiveAndExactFreshnessBoundaryClearsReading() {
+        val timeline = sampleTimeline(sampleAt = 2_000, bpm = 88)
 
-        assertDecision(timeline, 14_999, HeartRateFreshnessKind.LIVE, HeartRateFreshnessReason.LIVE_VALID_SAMPLE)
-        assertDecision(timeline, 15_000, HeartRateFreshnessKind.STALE, HeartRateFreshnessReason.SAMPLE_STALE)
-        assertDecision(timeline, 34_999, HeartRateFreshnessKind.STALE, HeartRateFreshnessReason.SAMPLE_STALE)
-        assertDecision(timeline, 35_000, HeartRateFreshnessKind.TECHNICAL_ERROR, HeartRateFreshnessReason.NOTIFY_SILENCE)
+        val fresh = assertDecision(timeline, 4_499, HeartRateFreshnessKind.LIVE)
+        val boundary = assertDecision(timeline, 4_500, HeartRateFreshnessKind.DATA_INTERRUPTED)
+        val after = assertDecision(timeline, 30_000, HeartRateFreshnessKind.DATA_INTERRUPTED)
+
+        assertEquals(88, fresh.bpm)
+        assertEquals("wall-A", fresh.measuredAt)
+        assertNull(boundary.bpm)
+        assertNull(boundary.measuredAt)
+        assertNull(after.bpm)
+        assertEquals(HeartRateFreshnessReason.SAMPLE_INTERRUPTED, after.reason)
     }
 
     @Test
-    fun eachValidSampleResetsTheMonotonicFreshnessOrigin() {
-        val before = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 5_000)
-        val after = before.validSample(atElapsedMs = 14_000)
+    fun eachValidSampleResetsMonotonicOriginAndCurrentReading() {
+        val first = sampleTimeline(sampleAt = 2_000, bpm = 88)
+        val second = first.validSample(
+            atElapsedMs = 4_000,
+            bpm = 89,
+            measuredAt = "wall-B"
+        )
 
-        assertDecision(before, 15_000, HeartRateFreshnessKind.STALE, HeartRateFreshnessReason.SAMPLE_STALE)
-        assertDecision(after, 15_000, HeartRateFreshnessKind.LIVE, HeartRateFreshnessReason.LIVE_VALID_SAMPLE)
-        assertEquals(5_000L, before.lastValidSampleElapsedMs)
-        assertEquals(14_000L, after.lastValidSampleElapsedMs)
+        assertDecision(first, 4_500, HeartRateFreshnessKind.DATA_INTERRUPTED)
+        val live = assertDecision(second, 4_500, HeartRateFreshnessKind.LIVE)
+        assertEquals(4_000L, second.lastValidSampleElapsedMs)
+        assertEquals(89, live.bpm)
+        assertEquals("wall-B", live.measuredAt)
     }
 
     @Test
-    fun wallClockDisplayTimestampCannotAffectFreshness() {
-        val timeline = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
+    fun malformedBeforeFirstSampleDoesNotRefreshWaitingOriginOrCreateError() {
+        val waiting = HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 1_000)
+        val malformed = waiting.malformedSample()
 
-        val beforeWallClockChange = policy.evaluate(nowElapsedMs = 11_999, timeline = timeline)
-        val afterWallClockChange = policy.evaluate(nowElapsedMs = 11_999, timeline = timeline)
-
-        assertEquals(beforeWallClockChange, afterWallClockChange)
-        assertEquals(HeartRateFreshnessKind.LIVE, afterWallClockChange.kind)
+        assertEquals(1, malformed.malformedSampleCount)
+        assertNull(malformed.lastValidSampleElapsedMs)
+        assertDecision(malformed, 3_999, HeartRateFreshnessKind.WAITING)
+        assertDecision(malformed, 4_000, HeartRateFreshnessKind.DATA_INTERRUPTED)
     }
 
     @Test
-    fun malformedPayloadAndParseFailureDoNotRefreshLastValidSample() {
-        val live = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
-        val malformed = live.malformedSample()
-        val parseFailed = live.technicalFailure(HeartRateFreshnessReason.PARSE_FAILED)
+    fun consecutiveMalformedSamplesDoNotMoveOriginalLiveDeadline() {
+        val live = sampleTimeline(sampleAt = 2_000, bpm = 88)
+        val malformed = live.malformedSample().malformedSample().malformedSample()
 
+        assertEquals(3, malformed.malformedSampleCount)
         assertEquals(2_000L, malformed.lastValidSampleElapsedMs)
-        assertEquals(2_000L, parseFailed.lastValidSampleElapsedMs)
-        assertDecision(malformed, 12_000, HeartRateFreshnessKind.TECHNICAL_ERROR, HeartRateFreshnessReason.PARSE_FAILED)
-        assertDecision(parseFailed, 2_001, HeartRateFreshnessKind.TECHNICAL_ERROR, HeartRateFreshnessReason.PARSE_FAILED)
+        assertDecision(malformed, 4_499, HeartRateFreshnessKind.LIVE)
+        assertDecision(malformed, 4_500, HeartRateFreshnessKind.DATA_INTERRUPTED)
     }
 
     @Test
-    fun validSampleAfterParseFailureClearsTheFailureAndStartsFreshnessAgain() {
-        val recovered = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
-            .technicalFailure(HeartRateFreshnessReason.PARSE_FAILED)
-            .validSample(atElapsedMs = 8_000)
+    fun validSampleAfterMalformedEstablishesNewOriginNormally() {
+        val recovered = sampleTimeline(sampleAt = 2_000, bpm = 88)
+            .malformedSample()
+            .validSample(atElapsedMs = 5_000, bpm = 90, measuredAt = "wall-C")
 
-        assertEquals(8_000L, recovered.lastValidSampleElapsedMs)
-        assertDecision(recovered, 17_999, HeartRateFreshnessKind.LIVE, HeartRateFreshnessReason.LIVE_VALID_SAMPLE)
-        assertDecision(recovered, 18_000, HeartRateFreshnessKind.STALE, HeartRateFreshnessReason.SAMPLE_STALE)
+        val live = assertDecision(recovered, 7_499, HeartRateFreshnessKind.LIVE)
+        assertDecision(recovered, 7_500, HeartRateFreshnessKind.DATA_INTERRUPTED)
+        assertEquals(90, live.bpm)
+        assertEquals(1, recovered.malformedSampleCount)
     }
 
     @Test
-    fun explicitGattDisconnectRemainsOffline() {
-        val disconnected = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
-            .disconnected()
-
-        assertDecision(disconnected, 60_000, HeartRateFreshnessKind.OFFLINE, HeartRateFreshnessReason.GATT_DISCONNECTED)
-    }
-
-    @Test
-    fun disconnectCannotBypassNotifyTimestampValidation() {
-        val disconnected = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .disconnected()
-
-        assertDecision(
-            disconnected,
-            999,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+    fun explicitDisconnectTechnicalFailureAndIntentionalStopAreIndependentFacts() {
+        val live = sampleTimeline(sampleAt = 2_000, bpm = 88)
+        val disconnected = live.explicitDisconnect(atElapsedMs = 2_100)
+        val failed = live.technicalFailure(
+            reason = HeartRateFreshnessReason.PLATFORM_FAILURE,
+            atElapsedMs = 2_100
         )
-    }
+        val stopped = live.intentionalStop(atElapsedMs = 2_100)
 
-    @Test
-    fun technicalFailureCannotBypassSampleTimestampValidation() {
-        val failed = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
-            .technicalFailure(HeartRateFreshnessReason.PARSE_FAILED)
+        assertDecision(disconnected, 60_000, HeartRateFreshnessKind.LINK_DISCONNECTED)
+        assertDecision(failed, 60_000, HeartRateFreshnessKind.TECHNICAL_FAILURE)
+        assertDecision(stopped, 60_000, HeartRateFreshnessKind.INTENTIONAL_STOP)
 
-        assertDecision(
-            failed,
-            1_999,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-        )
-    }
-
-    @Test
-    fun failureOnlyTimelineStillRejectsNegativeNow() {
-        assertDecision(
-            HeartRateFreshnessTimeline().disconnected(),
-            -1,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-        )
-    }
-
-    @Test
-    fun failureOnlyTimelinesMapFactsWithoutNotifyOrSampleTimestamps() {
-        assertDecision(
-            HeartRateFreshnessTimeline().disconnected(),
-            1_000,
-            HeartRateFreshnessKind.OFFLINE,
-            HeartRateFreshnessReason.GATT_DISCONNECTED
-        )
-        assertDecision(
-            HeartRateFreshnessTimeline().technicalFailure(HeartRateFreshnessReason.CONNECT_FAILED),
-            1_000,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.CONNECT_FAILED
-        )
-    }
-
-    @Test
-    fun failureFactsStillMapAfterValidMonotonicTimestamps() {
-        val validTimeline = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
-
-        assertDecision(
-            validTimeline.disconnected(),
-            2_001,
-            HeartRateFreshnessKind.OFFLINE,
-            HeartRateFreshnessReason.GATT_DISCONNECTED
-        )
-        assertDecision(
-            validTimeline.technicalFailure(HeartRateFreshnessReason.PARSE_FAILED),
-            2_001,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.PARSE_FAILED
-        )
-    }
-
-    @Test
-    fun constructorRejectsEveryNonFailureReasonStoredAsLatestFailure() {
-        val nonFailureReasons = listOf(
-            HeartRateFreshnessReason.WAITING_FIRST_SAMPLE,
-            HeartRateFreshnessReason.LIVE_VALID_SAMPLE,
-            HeartRateFreshnessReason.FIRST_SAMPLE_STALE,
-            HeartRateFreshnessReason.SAMPLE_STALE
-        )
-
-        nonFailureReasons.forEach { reason ->
-            val invalidTimeline = HeartRateFreshnessTimeline(latestFailureReason = reason)
-
-            assertDecision(
-                invalidTimeline,
-                1_000,
-                HeartRateFreshnessKind.TECHNICAL_ERROR,
-                HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-            )
+        listOf(disconnected, failed, stopped).forEach { timeline ->
+            val decision = policy.evaluate(60_000, timeline)
+            assertNull(decision.bpm)
+            assertNull(decision.measuredAt)
         }
     }
 
     @Test
-    fun copyRejectsNonFailureReasonEvenWhenTimestampsAreValid() {
-        val validTimeline = HeartRateFreshnessTimeline()
-            .notifyEnabled(atElapsedMs = 1_000)
-            .validSample(atElapsedMs = 2_000)
-        val invalidTimeline = validTimeline.copy(
-            latestFailureReason = HeartRateFreshnessReason.FIRST_SAMPLE_STALE
-        )
+    fun silenceNeverEscalatesToTechnicalFailureWithoutIndependentFailureFact() {
+        val waiting = HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 1_000)
+        val live = sampleTimeline(sampleAt = 2_000, bpm = 88)
 
-        assertDecision(
-            invalidTimeline,
-            2_001,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-        )
+        assertDecision(waiting, 300_000, HeartRateFreshnessKind.DATA_INTERRUPTED)
+        assertDecision(live, 300_000, HeartRateFreshnessKind.DATA_INTERRUPTED)
     }
 
     @Test
-    fun invalidFailureReasonWithInvalidMonotonicTimestampFailsClosedStably() {
-        val invalidTimeline = HeartRateFreshnessTimeline(
-            notifyEnabledAtElapsedMs = 2_000,
-            latestFailureReason = HeartRateFreshnessReason.LIVE_VALID_SAMPLE
-        )
+    fun wallClockDisplayChangesCannotAffectFreshness() {
+        val firstWall = sampleTimeline(sampleAt = 2_000, bpm = 88)
+        val changedWall = firstWall.copy(lastValidMeasuredAt = "2099-01-01T00:00:00Z")
 
-        assertDecision(
-            invalidTimeline,
-            1_999,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-        )
+        val firstDecision = policy.evaluate(4_499, firstWall)
+        val changedDecision = policy.evaluate(4_499, changedWall)
+
+        assertEquals(firstDecision.kind, changedDecision.kind)
+        assertEquals(firstDecision.reason, changedDecision.reason)
+        assertEquals(HeartRateFreshnessKind.LIVE, changedDecision.kind)
     }
 
     @Test
-    fun constructorAndCopyKeepValidFailureFacts() {
-        val disconnected = HeartRateFreshnessTimeline(
-            latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
-        )
-        val technicalFailure = HeartRateFreshnessTimeline().copy(
-            latestFailureReason = HeartRateFreshnessReason.CONNECT_FAILED
-        )
-
-        assertDecision(
-            disconnected,
-            1_000,
-            HeartRateFreshnessKind.OFFLINE,
-            HeartRateFreshnessReason.GATT_DISCONNECTED
-        )
-        assertDecision(
-            technicalFailure,
-            1_000,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.CONNECT_FAILED
-        )
-    }
-
-    @Test
-    fun technicalFailureStillNormalizesNonTechnicalReason() {
-        val normalized = HeartRateFreshnessTimeline()
-            .technicalFailure(HeartRateFreshnessReason.LIVE_VALID_SAMPLE)
-
-        assertDecision(
-            normalized,
-            1_000,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-        )
-    }
-
-    @Test
-    fun failureTimelineRejectsSampleBeforeNotifyEnabled() {
-        val failed = HeartRateFreshnessTimeline(
-            notifyEnabledAtElapsedMs = 2_000,
-            lastValidSampleElapsedMs = 1_999,
-            latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
-        )
-
-        assertDecision(
-            failed,
-            3_000,
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-        )
-    }
-
-    @Test
-    fun failureTimelineRejectsNegativePresentTimestamps() {
+    fun invalidMonotonicAndImpossibleStructuresFailClosedWithoutThrowing() {
         val cases = listOf(
-            HeartRateFreshnessTimeline(
-                notifyEnabledAtElapsedMs = -1,
-                latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
+            -1L to HeartRateFreshnessTimeline().notifyEnabled(0),
+            999L to HeartRateFreshnessTimeline().notifyEnabled(1_000),
+            1_999L to sampleTimeline(sampleAt = 2_000, bpm = 88),
+            3_000L to HeartRateFreshnessTimeline(
+                notifyEnabledAtElapsedMs = 2_000,
+                lastValidSampleElapsedMs = 1_999,
+                lastValidBpm = 88,
+                lastValidMeasuredAt = "wall"
             ),
-            HeartRateFreshnessTimeline(
-                notifyEnabledAtElapsedMs = 0,
-                lastValidSampleElapsedMs = -1,
-                latestFailureReason = HeartRateFreshnessReason.PARSE_FAILED
-            )
-        )
-
-        cases.forEach { timeline ->
-            assertDecision(
-                timeline,
-                1_000,
-                HeartRateFreshnessKind.TECHNICAL_ERROR,
-                HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-            )
-        }
-    }
-
-    @Test
-    fun technicalFailuresRemainTechnicalErrors() {
-        val reasons = listOf(
-            HeartRateFreshnessReason.CONNECT_FAILED,
-            HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED,
-            HeartRateFreshnessReason.CCCD_FAILED,
-            HeartRateFreshnessReason.NOTIFY_SILENCE,
-            HeartRateFreshnessReason.PARSE_FAILED
-        )
-
-        reasons.forEach { reason ->
-            val timeline = HeartRateFreshnessTimeline().technicalFailure(reason)
-            assertDecision(timeline, 1_000, HeartRateFreshnessKind.TECHNICAL_ERROR, reason)
-        }
-    }
-
-    @Test
-    fun retryExhaustedDoesNotReplaceTheLatestFact() {
-        val disconnected = HeartRateFreshnessTimeline().disconnected()
-        val technicalError = HeartRateFreshnessTimeline()
-            .technicalFailure(HeartRateFreshnessReason.CONNECT_FAILED)
-
-        assertEquals(disconnected, disconnected.retryExhausted())
-        assertEquals(technicalError, technicalError.retryExhausted())
-        assertDecision(disconnected.retryExhausted(), 1_000, HeartRateFreshnessKind.OFFLINE, HeartRateFreshnessReason.GATT_DISCONNECTED)
-        assertDecision(technicalError.retryExhausted(), 1_000, HeartRateFreshnessKind.TECHNICAL_ERROR, HeartRateFreshnessReason.CONNECT_FAILED)
-    }
-
-    @Test
-    fun reasonCodesAreStableAndDoNotExposeGattStatusValues() {
-        assertEquals("gatt_disconnected", HeartRateFreshnessReason.GATT_DISCONNECTED.code)
-        assertEquals("connect_failed", HeartRateFreshnessReason.CONNECT_FAILED.code)
-        assertEquals("service_discovery_failed", HeartRateFreshnessReason.SERVICE_DISCOVERY_FAILED.code)
-        assertEquals("cccd_failed", HeartRateFreshnessReason.CCCD_FAILED.code)
-        assertEquals("first_sample_silence", HeartRateFreshnessReason.FIRST_SAMPLE_SILENCE.code)
-        assertEquals("notify_silence", HeartRateFreshnessReason.NOTIFY_SILENCE.code)
-        assertEquals("parse_failed", HeartRateFreshnessReason.PARSE_FAILED.code)
-    }
-
-    @Test
-    fun invalidTimeInputsFailClosedWithoutFabricatingLiveData() {
-        val cases = listOf(
-            -1L to HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 0),
-            1_000L to HeartRateFreshnessTimeline(),
-            2_000L to HeartRateFreshnessTimeline(lastValidSampleElapsedMs = 1_000),
-            999L to HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 1_000),
-            1_999L to HeartRateFreshnessTimeline()
-                .notifyEnabled(atElapsedMs = 1_000)
-                .validSample(atElapsedMs = 2_000),
-            2_000L to HeartRateFreshnessTimeline(
-                notifyEnabledAtElapsedMs = 1_500,
-                lastValidSampleElapsedMs = 1_000
+            3_000L to HeartRateFreshnessTimeline(
+                notifyEnabledAtElapsedMs = 1_000,
+                lastValidSampleElapsedMs = 2_000,
+                lastValidBpm = null,
+                lastValidMeasuredAt = "wall"
             ),
-            2_000L to HeartRateFreshnessTimeline(notifyEnabledAtElapsedMs = -1)
+            3_000L to HeartRateFreshnessTimeline(
+                notifyEnabledAtElapsedMs = 1_000,
+                terminalReason = HeartRateFreshnessReason.EXPLICIT_LINK_DISCONNECT,
+                terminalAtElapsedMs = 999
+            ),
+            3_000L to HeartRateFreshnessTimeline(malformedSampleCount = -1)
         )
 
         cases.forEach { (now, timeline) ->
-            assertDecision(
-                timeline,
-                now,
-                HeartRateFreshnessKind.TECHNICAL_ERROR,
-                HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
-            )
+            val decision = policy.evaluate(now, timeline)
+            assertEquals(HeartRateFreshnessKind.TECHNICAL_FAILURE, decision.kind)
+            assertEquals(HeartRateFreshnessReason.INVALID_MONOTONIC_TIME, decision.reason)
+            assertNull(decision.bpm)
+            assertNull(decision.measuredAt)
         }
     }
 
     @Test
-    fun evaluationAndTransitionsAreImmutableAndProduceNoActionSideEffects() {
-        val original = HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 1_000)
-        val updated = original.validSample(atElapsedMs = 2_000)
+    fun invalidConfigurationFailsClosedAndContainsNoE16Thresholds() {
+        val timeline = sampleTimeline(sampleAt = 2_000, bpm = 88)
+        val invalidPolicy = HeartRateFreshnessPolicy(
+            HeartRateFreshnessConfig(
+                firstSampleWaitingBoundaryMs = 0,
+                liveFreshnessBoundaryMs = -1
+            )
+        )
 
-        assertNotSame(original, updated)
-        assertEquals(null, original.lastValidSampleElapsedMs)
-        assertEquals(2_000L, updated.lastValidSampleElapsedMs)
+        assertEquals(3_000L, config.firstSampleWaitingBoundaryMs)
+        assertEquals(2_500L, config.liveFreshnessBoundaryMs)
+        assertTrue(
+            listOf(config.firstSampleWaitingBoundaryMs, config.liveFreshnessBoundaryMs)
+                .none { it == 10_000L || it == 15_000L || it == 30_000L }
+        )
         assertEquals(
-            HeartRateFreshnessDecision(
-                kind = HeartRateFreshnessKind.LIVE,
-                reason = HeartRateFreshnessReason.LIVE_VALID_SAMPLE
-            ),
-            policy.evaluate(nowElapsedMs = 2_000, timeline = updated)
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME,
+            invalidPolicy.evaluate(2_001, timeline).reason
         )
     }
+
+    @Test
+    fun freshnessDecisionMapsThroughRuntimeFactAndClearsOldValues() {
+        val liveTimeline = sampleTimeline(sampleAt = 2_000, bpm = 88)
+        val source = HeartRateSourceHint("id", "Band")
+        val liveState = policy.evaluate(4_499, liveTimeline)
+            .toRuntimeFact(source)
+            .toHeartRateState()
+        val interruptedState = policy.evaluate(4_500, liveTimeline)
+            .toRuntimeFact(source)
+            .toHeartRateState()
+        val invalidState = policy.evaluate(1_999, liveTimeline)
+            .toRuntimeFact(source)
+            .toHeartRateState()
+
+        assertEquals(HeartRateFact.LIVE, liveState.fact)
+        assertEquals(88, liveState.bpm)
+        assertEquals(HeartRateFact.DATA_INTERRUPTED, interruptedState.fact)
+        assertNull(interruptedState.bpm)
+        assertNull(interruptedState.measuredAt)
+        assertEquals(HeartRateFact.TECHNICAL_FAILURE, invalidState.fact)
+        assertEquals(HeartRateTechnicalFailure.INVALID_MONOTONIC_TIME, invalidState.technicalFailure)
+    }
+
+    @Test
+    fun transitionsRemainImmutableAndCounterSaturates() {
+        val original = HeartRateFreshnessTimeline().notifyEnabled(1_000)
+        val updated = original.malformedSample()
+        val saturated = updated.copy(malformedSampleCount = Int.MAX_VALUE).malformedSample()
+
+        assertNotSame(original, updated)
+        assertEquals(0, original.malformedSampleCount)
+        assertEquals(1, updated.malformedSampleCount)
+        assertEquals(Int.MAX_VALUE, saturated.malformedSampleCount)
+    }
+
+    private fun sampleTimeline(sampleAt: Long, bpm: Int) = HeartRateFreshnessTimeline()
+        .notifyEnabled(atElapsedMs = 1_000)
+        .validSample(atElapsedMs = sampleAt, bpm = bpm, measuredAt = "wall-A")
 
     private fun assertDecision(
         timeline: HeartRateFreshnessTimeline,
         nowElapsedMs: Long,
-        expectedKind: HeartRateFreshnessKind,
-        expectedReason: HeartRateFreshnessReason
-    ) {
-        assertEquals(
-            HeartRateFreshnessDecision(expectedKind, expectedReason),
-            policy.evaluate(nowElapsedMs = nowElapsedMs, timeline = timeline)
-        )
+        expectedKind: HeartRateFreshnessKind
+    ): HeartRateFreshnessDecision {
+        val decision = policy.evaluate(nowElapsedMs, timeline)
+        assertEquals(expectedKind, decision.kind)
+        return decision
     }
 }

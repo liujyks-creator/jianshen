@@ -1,64 +1,101 @@
 package com.liujyks.trainflow.core.health
 
 /**
- * Monotonic timestamps retained by the BLE adapter around a single notify subscription.
+ * Provisional foreground-manual thresholds derived from the 2026-07-19 Band 9 M0 measurement.
+ * E17-9 M1 lock-screen/background evidence must replace or confirm these values.
+ */
+internal data class HeartRateFreshnessConfig(
+    val firstSampleWaitingBoundaryMs: Long = 3_000L,
+    val liveFreshnessBoundaryMs: Long = 2_500L
+)
+
+/**
+ * Monotonic facts retained around one notify subscription.
  *
- * This type intentionally has no clock, scheduler, Android, scan, connect, or retry dependency.
- * Callers provide elapsed-time values and keep wall-clock display timestamps elsewhere.
+ * Wall-clock [lastValidMeasuredAt] is display data only. Freshness uses only elapsed timestamps.
  */
 internal data class HeartRateFreshnessTimeline(
     val notifyEnabledAtElapsedMs: Long? = null,
     val lastValidSampleElapsedMs: Long? = null,
-    val latestFailureReason: HeartRateFreshnessReason? = null
+    val lastValidBpm: Int? = null,
+    val lastValidMeasuredAt: String? = null,
+    val terminalReason: HeartRateFreshnessReason? = null,
+    val terminalAtElapsedMs: Long? = null,
+    val malformedSampleCount: Int = 0
 ) {
     fun notifyEnabled(atElapsedMs: Long): HeartRateFreshnessTimeline = copy(
         notifyEnabledAtElapsedMs = atElapsedMs,
         lastValidSampleElapsedMs = null,
-        latestFailureReason = null
+        lastValidBpm = null,
+        lastValidMeasuredAt = null,
+        terminalReason = null,
+        terminalAtElapsedMs = null,
+        malformedSampleCount = 0
     )
 
-    fun validSample(atElapsedMs: Long): HeartRateFreshnessTimeline = copy(
+    fun validSample(
+        atElapsedMs: Long,
+        bpm: Int,
+        measuredAt: String
+    ): HeartRateFreshnessTimeline = copy(
         lastValidSampleElapsedMs = atElapsedMs,
-        latestFailureReason = null
+        lastValidBpm = bpm,
+        lastValidMeasuredAt = measuredAt,
+        terminalReason = null,
+        terminalAtElapsedMs = null
     )
 
-    fun malformedSample(): HeartRateFreshnessTimeline =
-        technicalFailure(HeartRateFreshnessReason.PARSE_FAILED)
-
-    fun disconnected(): HeartRateFreshnessTimeline = copy(
-        latestFailureReason = HeartRateFreshnessReason.GATT_DISCONNECTED
-    )
-
-    fun technicalFailure(reason: HeartRateFreshnessReason): HeartRateFreshnessTimeline = copy(
-        latestFailureReason = if (reason.isTechnicalFailure) {
-            reason
+    /** A malformed payload changes diagnostics only and never refreshes the valid origin. */
+    fun malformedSample(): HeartRateFreshnessTimeline = copy(
+        malformedSampleCount = if (malformedSampleCount == Int.MAX_VALUE) {
+            Int.MAX_VALUE
         } else {
-            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+            malformedSampleCount + 1
         }
     )
 
-    /** Retry exhaustion changes recovery budget, not the latest observed connection fact. */
-    fun retryExhausted(): HeartRateFreshnessTimeline = this
+    fun explicitDisconnect(atElapsedMs: Long): HeartRateFreshnessTimeline = copy(
+        terminalReason = HeartRateFreshnessReason.EXPLICIT_LINK_DISCONNECT,
+        terminalAtElapsedMs = atElapsedMs
+    )
+
+    fun intentionalStop(atElapsedMs: Long): HeartRateFreshnessTimeline = copy(
+        terminalReason = HeartRateFreshnessReason.INTENTIONAL_STOP,
+        terminalAtElapsedMs = atElapsedMs
+    )
+
+    fun technicalFailure(
+        reason: HeartRateFreshnessReason,
+        atElapsedMs: Long
+    ): HeartRateFreshnessTimeline = copy(
+        terminalReason = if (reason.isTechnicalFailure) {
+            reason
+        } else {
+            HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        },
+        terminalAtElapsedMs = atElapsedMs
+    )
 }
 
-internal class HeartRateFreshnessPolicy {
+internal class HeartRateFreshnessPolicy(
+    private val config: HeartRateFreshnessConfig = HeartRateFreshnessConfig()
+) {
     fun evaluate(
         nowElapsedMs: Long,
         timeline: HeartRateFreshnessTimeline
     ): HeartRateFreshnessDecision {
-        val validMonotonicStructure = hasValidMonotonicStructure(nowElapsedMs, timeline)
-        val validFailureFact = hasValidFailureFact(timeline.latestFailureReason)
-
-        if (!validMonotonicStructure || !validFailureFact) {
+        if (!hasValidStructure(nowElapsedMs, timeline)) {
             return invalidTimeDecision()
         }
 
-        timeline.latestFailureReason?.let { reason ->
+        timeline.terminalReason?.let { reason ->
             return HeartRateFreshnessDecision(
-                kind = if (reason == HeartRateFreshnessReason.GATT_DISCONNECTED) {
-                    HeartRateFreshnessKind.OFFLINE
-                } else {
-                    HeartRateFreshnessKind.TECHNICAL_ERROR
+                kind = when {
+                    reason == HeartRateFreshnessReason.EXPLICIT_LINK_DISCONNECT ->
+                        HeartRateFreshnessKind.LINK_DISCONNECTED
+                    reason == HeartRateFreshnessReason.INTENTIONAL_STOP ->
+                        HeartRateFreshnessKind.INTENTIONAL_STOP
+                    else -> HeartRateFreshnessKind.TECHNICAL_FAILURE
                 },
                 reason = reason
             )
@@ -67,98 +104,103 @@ internal class HeartRateFreshnessPolicy {
         val notifyEnabledAtElapsedMs = timeline.notifyEnabledAtElapsedMs
             ?: return invalidTimeDecision()
         val lastValidSampleElapsedMs = timeline.lastValidSampleElapsedMs
+        if (lastValidSampleElapsedMs == null) {
+            return if (
+                nowElapsedMs - notifyEnabledAtElapsedMs < config.firstSampleWaitingBoundaryMs
+            ) {
+                HeartRateFreshnessDecision(
+                    kind = HeartRateFreshnessKind.WAITING,
+                    reason = HeartRateFreshnessReason.WAITING_FIRST_SAMPLE
+                )
+            } else {
+                HeartRateFreshnessDecision(
+                    kind = HeartRateFreshnessKind.DATA_INTERRUPTED,
+                    reason = HeartRateFreshnessReason.FIRST_SAMPLE_INTERRUPTED
+                )
+            }
+        }
 
-        return if (lastValidSampleElapsedMs == null) {
-            evaluateFirstSampleWait(nowElapsedMs - notifyEnabledAtElapsedMs)
+        return if (nowElapsedMs - lastValidSampleElapsedMs < config.liveFreshnessBoundaryMs) {
+            HeartRateFreshnessDecision(
+                kind = HeartRateFreshnessKind.LIVE,
+                reason = HeartRateFreshnessReason.LIVE_VALID_SAMPLE,
+                bpm = timeline.lastValidBpm,
+                measuredAt = timeline.lastValidMeasuredAt
+            )
         } else {
-            evaluateValidSampleAge(nowElapsedMs - lastValidSampleElapsedMs)
+            HeartRateFreshnessDecision(
+                kind = HeartRateFreshnessKind.DATA_INTERRUPTED,
+                reason = HeartRateFreshnessReason.SAMPLE_INTERRUPTED
+            )
         }
     }
 
-    private fun hasValidMonotonicStructure(
+    private fun hasValidStructure(
         nowElapsedMs: Long,
         timeline: HeartRateFreshnessTimeline
     ): Boolean {
-        if (nowElapsedMs < 0L) return false
-
-        val notifyEnabledAtElapsedMs = timeline.notifyEnabledAtElapsedMs
-        val lastValidSampleElapsedMs = timeline.lastValidSampleElapsedMs
-        val presentTimestamps = listOfNotNull(
-            notifyEnabledAtElapsedMs,
-            lastValidSampleElapsedMs
-        )
-
-        if (presentTimestamps.any { timestamp -> timestamp < 0L || timestamp > nowElapsedMs }) {
+        if (
+            nowElapsedMs < 0L ||
+            config.firstSampleWaitingBoundaryMs <= 0L ||
+            config.liveFreshnessBoundaryMs <= 0L ||
+            timeline.malformedSampleCount < 0
+        ) {
             return false
         }
 
-        return notifyEnabledAtElapsedMs == null ||
-            lastValidSampleElapsedMs == null ||
-            lastValidSampleElapsedMs >= notifyEnabledAtElapsedMs
-    }
+        val notifyAt = timeline.notifyEnabledAtElapsedMs
+        val sampleAt = timeline.lastValidSampleElapsedMs
+        val terminalAt = timeline.terminalAtElapsedMs
+        val timestamps = listOfNotNull(notifyAt, sampleAt, terminalAt)
+        if (timestamps.any { it < 0L || it > nowElapsedMs }) return false
 
-    private fun hasValidFailureFact(reason: HeartRateFreshnessReason?): Boolean =
-        reason == null ||
-            reason == HeartRateFreshnessReason.GATT_DISCONNECTED ||
-            reason.isTechnicalFailure
+        val hasSampleData = sampleAt != null ||
+            timeline.lastValidBpm != null ||
+            timeline.lastValidMeasuredAt != null
+        if (hasSampleData) {
+            if (
+                notifyAt == null ||
+                sampleAt == null ||
+                timeline.lastValidBpm == null ||
+                timeline.lastValidBpm <= 0 ||
+                timeline.lastValidMeasuredAt.isNullOrBlank() ||
+                sampleAt < notifyAt
+            ) {
+                return false
+            }
+        }
 
-    private fun evaluateFirstSampleWait(ageMs: Long): HeartRateFreshnessDecision = when {
-        ageMs >= TechnicalErrorAfterMs -> HeartRateFreshnessDecision(
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.FIRST_SAMPLE_SILENCE
-        )
+        val hasTerminalFact = timeline.terminalReason != null || terminalAt != null
+        if (hasTerminalFact) {
+            val reason = timeline.terminalReason ?: return false
+            if (terminalAt == null || !reason.isTerminalFact) return false
+            if (notifyAt != null && terminalAt < notifyAt) return false
+            if (sampleAt != null && terminalAt < sampleAt) return false
+        }
 
-        ageMs >= FirstSampleStaleAfterMs -> HeartRateFreshnessDecision(
-            HeartRateFreshnessKind.STALE,
-            HeartRateFreshnessReason.FIRST_SAMPLE_STALE
-        )
-
-        else -> HeartRateFreshnessDecision(
-            HeartRateFreshnessKind.WAITING,
-            HeartRateFreshnessReason.WAITING_FIRST_SAMPLE
-        )
-    }
-
-    private fun evaluateValidSampleAge(ageMs: Long): HeartRateFreshnessDecision = when {
-        ageMs >= TechnicalErrorAfterMs -> HeartRateFreshnessDecision(
-            HeartRateFreshnessKind.TECHNICAL_ERROR,
-            HeartRateFreshnessReason.NOTIFY_SILENCE
-        )
-
-        ageMs >= LiveSampleStaleAfterMs -> HeartRateFreshnessDecision(
-            HeartRateFreshnessKind.STALE,
-            HeartRateFreshnessReason.SAMPLE_STALE
-        )
-
-        else -> HeartRateFreshnessDecision(
-            HeartRateFreshnessKind.LIVE,
-            HeartRateFreshnessReason.LIVE_VALID_SAMPLE
-        )
+        return notifyAt != null || hasTerminalFact
     }
 
     private fun invalidTimeDecision() = HeartRateFreshnessDecision(
-        HeartRateFreshnessKind.TECHNICAL_ERROR,
-        HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
+        kind = HeartRateFreshnessKind.TECHNICAL_FAILURE,
+        reason = HeartRateFreshnessReason.INVALID_MONOTONIC_TIME
     )
-
-    private companion object {
-        const val LiveSampleStaleAfterMs = 10_000L
-        const val FirstSampleStaleAfterMs = 15_000L
-        const val TechnicalErrorAfterMs = 30_000L
-    }
 }
 
 internal data class HeartRateFreshnessDecision(
     val kind: HeartRateFreshnessKind,
-    val reason: HeartRateFreshnessReason
+    val reason: HeartRateFreshnessReason,
+    val bpm: Int? = null,
+    val measuredAt: String? = null
 )
 
 internal enum class HeartRateFreshnessKind {
     WAITING,
     LIVE,
-    STALE,
-    OFFLINE,
-    TECHNICAL_ERROR
+    DATA_INTERRUPTED,
+    LINK_DISCONNECTED,
+    TECHNICAL_FAILURE,
+    INTENTIONAL_STOP
 }
 
 internal enum class HeartRateFreshnessReason(
@@ -167,14 +209,18 @@ internal enum class HeartRateFreshnessReason(
 ) {
     WAITING_FIRST_SAMPLE("waiting_first_sample"),
     LIVE_VALID_SAMPLE("live_valid_sample"),
-    FIRST_SAMPLE_STALE("first_sample_stale"),
-    SAMPLE_STALE("sample_stale"),
-    GATT_DISCONNECTED("gatt_disconnected"),
+    FIRST_SAMPLE_INTERRUPTED("first_sample_interrupted"),
+    SAMPLE_INTERRUPTED("sample_interrupted"),
+    EXPLICIT_LINK_DISCONNECT("explicit_link_disconnect"),
+    INTENTIONAL_STOP("intentional_stop"),
     CONNECT_FAILED("connect_failed", isTechnicalFailure = true),
     SERVICE_DISCOVERY_FAILED("service_discovery_failed", isTechnicalFailure = true),
     CCCD_FAILED("cccd_failed", isTechnicalFailure = true),
-    FIRST_SAMPLE_SILENCE("first_sample_silence", isTechnicalFailure = true),
-    NOTIFY_SILENCE("notify_silence", isTechnicalFailure = true),
-    PARSE_FAILED("parse_failed", isTechnicalFailure = true),
-    INVALID_MONOTONIC_TIME("invalid_monotonic_time", isTechnicalFailure = true)
+    PLATFORM_FAILURE("platform_failure", isTechnicalFailure = true),
+    INVALID_MONOTONIC_TIME("invalid_monotonic_time", isTechnicalFailure = true);
+
+    val isTerminalFact: Boolean
+        get() = this == EXPLICIT_LINK_DISCONNECT ||
+            this == INTENTIONAL_STOP ||
+            isTechnicalFailure
 }

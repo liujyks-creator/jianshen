@@ -49,4 +49,26 @@ class HeartRateMeasurementParserTest {
         assertNull(HeartRateMeasurementParser.parse(byteArrayOf(0x00)))
         assertNull(HeartRateMeasurementParser.parse(byteArrayOf(0x01, 0x2C)))
     }
+
+    @Test
+    fun parsesRepresentativeBand9PayloadWithoutVendorModels() {
+        val measurement = HeartRateMeasurementParser.parse(byteArrayOf(0x06, 0x54))
+
+        requireNotNull(measurement)
+        assertEquals(84, measurement.bpm)
+        assertEquals(0x06, measurement.flags.raw)
+        assertEquals(HeartRateBpmFormat.UINT8, measurement.flags.bpmFormat)
+        assertEquals(
+            HeartRateSensorContactStatus.SUPPORTED_DETECTED,
+            measurement.flags.sensorContactStatus
+        )
+    }
+
+    @Test
+    fun structurallyValidZeroBpmRemainsParserOutputForFactLayerValidation() {
+        val measurement = HeartRateMeasurementParser.parse(byteArrayOf(0x00, 0x00))
+
+        requireNotNull(measurement)
+        assertEquals(0, measurement.bpm)
+    }
 }

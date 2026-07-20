@@ -1,9 +1,7 @@
 package com.liujyks.trainflow.core.health
 
-import com.liujyks.trainflow.core.model.HeartRateSourceKind
 import com.liujyks.trainflow.core.model.HeartRateState
-import com.liujyks.trainflow.core.model.HeartRateStateKind
-import com.liujyks.trainflow.core.model.HeartRateUnavailableReason
+import com.liujyks.trainflow.core.model.HeartRateTechnicalFailure
 
 internal data class BleHeartRateDeviceCandidate(
     val identifier: String,
@@ -27,80 +25,63 @@ internal data class BleHeartRateProviderState(
     val missingPermissions: List<String> = emptyList(),
     val recoverableReason: BleHeartRateRecoverableReason? = null
 ) {
+    /**
+     * Compatibility adapter for the E16 provider. The legacy provider remains the production
+     * owner during this Story, while E17 presentation consumes only the mapped public fact.
+     */
     fun toHeartRateState(): HeartRateState {
-        return when (kind) {
-            BleHeartRateProviderStateKind.UNAVAILABLE,
-            BleHeartRateProviderStateKind.NO_SOURCE,
-            BleHeartRateProviderStateKind.STOPPED -> HeartRateState(
-                kind = HeartRateStateKind.UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.NONE,
-                unavailableReason = HeartRateUnavailableReason.NO_SOURCE,
-                message = message
+        val source = sourceHint()
+        val fact = when (kind) {
+            BleHeartRateProviderStateKind.UNAVAILABLE -> HeartRateRuntimeFact.TechnicalFailure(
+                reason = HeartRateTechnicalFailure.PLATFORM_UNAVAILABLE,
+                source = source
             )
 
-            BleHeartRateProviderStateKind.PERMISSION_REQUIRED -> HeartRateState(
-                kind = HeartRateStateKind.PERMISSION_UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                unavailableReason = HeartRateUnavailableReason.PERMISSION_REQUIRED,
-                message = message
+            BleHeartRateProviderStateKind.NO_SOURCE -> HeartRateRuntimeFact.NotConnected(source)
+            BleHeartRateProviderStateKind.STOPPED -> HeartRateRuntimeFact.IntentionalStop(source)
+            BleHeartRateProviderStateKind.PERMISSION_REQUIRED ->
+                HeartRateRuntimeFact.PermissionRequired(source)
+            BleHeartRateProviderStateKind.BLUETOOTH_DISABLED ->
+                HeartRateRuntimeFact.BluetoothOff(source)
+            BleHeartRateProviderStateKind.DEVICE_SELECTED ->
+                HeartRateRuntimeFact.NotConnected(source)
+            BleHeartRateProviderStateKind.CONNECTING -> HeartRateRuntimeFact.Connecting(source)
+            BleHeartRateProviderStateKind.CONNECTED_WAITING_FOR_DATA ->
+                HeartRateRuntimeFact.WaitingFirstData(source)
+            BleHeartRateProviderStateKind.LIVE_BPM -> HeartRateRuntimeFact.Live(
+                bpm = bpm ?: -1,
+                measuredAt = measuredAt.orEmpty(),
+                source = source
             )
 
-            BleHeartRateProviderStateKind.BLUETOOTH_DISABLED -> HeartRateState(
-                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                unavailableReason = HeartRateUnavailableReason.BLUETOOTH_DISABLED,
-                message = message
-            )
-
-            BleHeartRateProviderStateKind.DEVICE_SELECTED,
-            BleHeartRateProviderStateKind.CONNECTING -> HeartRateState(
-                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                sourceId = selectedDevice?.identifier ?: candidate?.identifier,
-                sourceLabel = selectedDevice?.displayName ?: candidate?.displayName,
-                unavailableReason = HeartRateUnavailableReason.NOT_CONFIGURED,
-                message = message
-            )
-
-            BleHeartRateProviderStateKind.CONNECTED_WAITING_FOR_DATA -> HeartRateState(
-                kind = HeartRateStateKind.DEVICE_CONNECTED_NO_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                sourceId = selectedDevice?.identifier,
-                sourceLabel = selectedDevice?.displayName,
-                message = message
-            )
-
-            BleHeartRateProviderStateKind.LIVE_BPM -> HeartRateState(
-                kind = HeartRateStateKind.DEVICE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = bpm,
-                measuredAt = measuredAt,
-                sourceId = selectedDevice?.identifier,
-                sourceLabel = selectedDevice?.displayName,
-                message = message
-            )
-
-            BleHeartRateProviderStateKind.STALE,
-            BleHeartRateProviderStateKind.DISCONNECTED -> HeartRateState(
-                kind = HeartRateStateKind.STALE_READING,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                bpm = bpm,
-                measuredAt = measuredAt,
-                sourceId = selectedDevice?.identifier,
-                sourceLabel = selectedDevice?.displayName,
-                unavailableReason = HeartRateUnavailableReason.DEVICE_DISCONNECTED,
-                message = message
-            )
-
-            BleHeartRateProviderStateKind.ERROR -> HeartRateState(
-                kind = HeartRateStateKind.PROVIDER_UNAVAILABLE,
-                sourceKind = HeartRateSourceKind.DEVICE,
-                sourceId = selectedDevice?.identifier ?: candidate?.identifier,
-                sourceLabel = selectedDevice?.displayName ?: candidate?.displayName,
-                unavailableReason = recoverableReason.toUnavailableReason(),
-                message = message
-            )
+            BleHeartRateProviderStateKind.STALE -> HeartRateRuntimeFact.DataInterrupted(source)
+            BleHeartRateProviderStateKind.DISCONNECTED ->
+                HeartRateRuntimeFact.LinkDisconnected(source)
+            BleHeartRateProviderStateKind.ERROR -> legacyErrorFact(source)
         }
+        return fact.toHeartRateState()
+    }
+
+    private fun sourceHint(): HeartRateSourceHint? {
+        val identifier = selectedDevice?.identifier ?: candidate?.identifier
+        val displayName = selectedDevice?.displayName ?: candidate?.displayName
+        return if (identifier == null && displayName == null) {
+            null
+        } else {
+            HeartRateSourceHint(identifier = identifier, displayName = displayName)
+        }
+    }
+
+    private fun legacyErrorFact(source: HeartRateSourceHint?): HeartRateRuntimeFact {
+        if (recoverableReason == BleHeartRateRecoverableReason.PARSE_FAILED) {
+            // The legacy runtime has no monotonic freshness timeline. A cached wall-clock
+            // reading therefore cannot prove that the previous sample is still fresh.
+            return HeartRateRuntimeFact.DataInterrupted(source)
+        }
+        return HeartRateRuntimeFact.TechnicalFailure(
+            reason = recoverableReason.toTechnicalFailure(),
+            source = source
+        )
     }
 
     companion object {
@@ -179,10 +160,18 @@ internal enum class BleHeartRateRecoverableReason {
     PARSE_FAILED
 }
 
-private fun BleHeartRateRecoverableReason?.toUnavailableReason(): HeartRateUnavailableReason {
+private fun BleHeartRateRecoverableReason?.toTechnicalFailure(): HeartRateTechnicalFailure {
     return when (this) {
-        BleHeartRateRecoverableReason.CONNECTION_FAILED -> HeartRateUnavailableReason.CONNECTION_FAILED
-        BleHeartRateRecoverableReason.PARSE_FAILED -> HeartRateUnavailableReason.READ_ERROR
-        else -> HeartRateUnavailableReason.NOT_CONFIGURED
+        BleHeartRateRecoverableReason.CONNECTION_FAILED -> HeartRateTechnicalFailure.CONNECT_FAILED
+        BleHeartRateRecoverableReason.SERVICE_MISSING,
+        BleHeartRateRecoverableReason.CHARACTERISTIC_MISSING ->
+            HeartRateTechnicalFailure.SERVICE_DISCOVERY_FAILED
+        BleHeartRateRecoverableReason.NOTIFY_UNAVAILABLE,
+        BleHeartRateRecoverableReason.DESCRIPTOR_MISSING,
+        BleHeartRateRecoverableReason.DESCRIPTOR_WRITE_FAILED -> HeartRateTechnicalFailure.CCCD_FAILED
+        BleHeartRateRecoverableReason.SCAN_FAILED,
+        BleHeartRateRecoverableReason.DEVICE_NOT_FOUND,
+        BleHeartRateRecoverableReason.PARSE_FAILED,
+        null -> HeartRateTechnicalFailure.PLATFORM_FAILURE
     }
 }
