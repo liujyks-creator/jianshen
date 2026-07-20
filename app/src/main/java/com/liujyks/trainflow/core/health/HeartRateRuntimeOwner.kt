@@ -31,6 +31,11 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Explicit inputs only. Construction never starts scanning, connecting, or reconnecting. */
 internal sealed class HeartRateRuntimeAction {
+    data object Enable : HeartRateRuntimeAction()
+    data object Disable : HeartRateRuntimeAction()
+    data object PermissionLost : HeartRateRuntimeAction()
+    data object BluetoothOff : HeartRateRuntimeAction()
+    data object BackgroundCleanup : HeartRateRuntimeAction()
     data object StartScan : HeartRateRuntimeAction()
     data object StopScan : HeartRateRuntimeAction()
     data class Connect(val identifier: String) : HeartRateRuntimeAction()
@@ -55,7 +60,7 @@ internal class HeartRateRuntimeOwner(
     private val appContext = context.applicationContext
     private val freshnessPolicy = HeartRateFreshnessPolicy(freshnessConfig)
     private val mutableHeartRateState = MutableStateFlow(
-        HeartRateRuntimeFact.NotConnected().toHeartRateState()
+        HeartRateRuntimeFact.Disabled.toHeartRateState()
     )
     private val mutableScanState = MutableStateFlow(BleHeartRateScanState.idle())
     private val mutableCandidates = MutableStateFlow<List<BleHeartRateDeviceCandidate>>(emptyList())
@@ -71,6 +76,8 @@ internal class HeartRateRuntimeOwner(
     private var activeAttempt: ActiveAttempt? = null
     private var scanTimeoutRunnable: Runnable? = null
     private var freshnessRunnable: Runnable? = null
+    private var enabled = false
+    private var operationEligible = false
     private var ownerClosed = false
     private var cleanupInProgress = false
     private var cleanupGatt: BluetoothGatt? = null
@@ -89,21 +96,102 @@ internal class HeartRateRuntimeOwner(
         checkMainThread()
         if (ownerClosed) return
         when (action) {
+            HeartRateRuntimeAction.Enable -> enableOnMain()
+            HeartRateRuntimeAction.Disable -> disableOnMain()
+            HeartRateRuntimeAction.PermissionLost -> permissionLostOnMain()
+            HeartRateRuntimeAction.BluetoothOff -> bluetoothOffOnMain()
+            HeartRateRuntimeAction.BackgroundCleanup -> backgroundCleanupOnMain()
             HeartRateRuntimeAction.StartScan -> startScanOnMain()
             HeartRateRuntimeAction.StopScan -> stopScanOnMain()
             is HeartRateRuntimeAction.Connect -> connectOnMain(action.identifier)
-            HeartRateRuntimeAction.Disconnect -> cleanup(
-                HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source)
-            )
+            HeartRateRuntimeAction.Disconnect -> {
+                if (enabled) {
+                    cleanup(HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source))
+                } else {
+                    publish(HeartRateRuntimeFact.Disabled)
+                }
+            }
             HeartRateRuntimeAction.Stop -> {
                 ownerClosed = true
-                cleanup(HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source))
+                cleanup(
+                    if (enabled) {
+                        HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source)
+                    } else {
+                        HeartRateRuntimeFact.Disabled
+                    }
+                )
             }
         }
     }
 
+    private fun enableOnMain() {
+        checkMainThread()
+        if (enabled && (activeScan != null || activeAttempt != null)) return
+        enabled = true
+        operationEligible = true
+        publish(HeartRateRuntimeFact.NotConnected())
+    }
+
+    private fun disableOnMain() {
+        checkMainThread()
+        if (!enabled && activeScan == null && activeAttempt == null) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        enabled = false
+        operationEligible = false
+        cleanup(
+            requestedFact = HeartRateRuntimeFact.Disabled,
+            permissionLossOverridesFact = false
+        )
+    }
+
+    private fun permissionLostOnMain() {
+        checkMainThread()
+        if (!enabled) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        operationEligible = false
+        cleanup(
+            requestedFact = HeartRateRuntimeFact.PermissionRequired(currentSource()),
+            permissionLossOverridesFact = false
+        )
+    }
+
+    private fun bluetoothOffOnMain() {
+        checkMainThread()
+        if (!enabled) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        operationEligible = false
+        cleanup(
+            requestedFact = HeartRateRuntimeFact.BluetoothOff(currentSource()),
+            permissionLossOverridesFact = false
+        )
+    }
+
+    private fun backgroundCleanupOnMain() {
+        checkMainThread()
+        if (!enabled) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        operationEligible = false
+        cleanup(
+            requestedFact = HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source),
+            permissionLossOverridesFact = false
+        )
+    }
+
     private fun startScanOnMain() {
         checkMainThread()
+        if (!enabled) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        if (!operationEligible) return
         if (!hasRequiredPermissions()) {
             cleanup(HeartRateRuntimeFact.PermissionRequired(currentSource()))
             return
@@ -165,6 +253,11 @@ internal class HeartRateRuntimeOwner(
 
     private fun stopScanOnMain() {
         checkMainThread()
+        if (!enabled) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        if (!operationEligible) return
         if (!detachAndStopActiveScan()) return
         mutableScanState.value = BleHeartRateScanState(
             kind = BleHeartRateScanStateKind.STOPPED,
@@ -247,6 +340,24 @@ internal class HeartRateRuntimeOwner(
 
     private fun connectOnMain(identifier: String) {
         checkMainThread()
+        if (!enabled) {
+            publish(HeartRateRuntimeFact.Disabled)
+            return
+        }
+        if (!operationEligible) return
+        val device = candidateDevices[identifier]
+        val candidate = mutableCandidates.value.firstOrNull { it.identifier == identifier }
+        if (device == null || candidate == null) {
+            if (activeAttempt == null) {
+                publish(
+                    HeartRateRuntimeFact.TechnicalFailure(
+                        HeartRateTechnicalFailure.CONNECT_FAILED,
+                        sourceForIdentifier(identifier)
+                    )
+                )
+            }
+            return
+        }
         if (!hasRequiredPermissions()) {
             cleanup(HeartRateRuntimeFact.PermissionRequired(sourceForIdentifier(identifier)))
             return
@@ -260,17 +371,6 @@ internal class HeartRateRuntimeOwner(
         }
         if (!enabled) {
             cleanup(HeartRateRuntimeFact.BluetoothOff(sourceForIdentifier(identifier)))
-            return
-        }
-        val device = candidateDevices[identifier]
-        val candidate = mutableCandidates.value.firstOrNull { it.identifier == identifier }
-        if (device == null || candidate == null) {
-            cleanup(
-                HeartRateRuntimeFact.TechnicalFailure(
-                    HeartRateTechnicalFailure.CONNECT_FAILED,
-                    sourceForIdentifier(identifier)
-                )
-            )
             return
         }
         if (!detachAndStopActiveScan()) return
@@ -334,6 +434,24 @@ internal class HeartRateRuntimeOwner(
             targetIdentifier,
             gatt
         ) ?: return
+        if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            cleanup(
+                if (attempt.phase == AttemptPhase.CONNECTING) {
+                    HeartRateRuntimeFact.TechnicalFailure(
+                        HeartRateTechnicalFailure.CONNECT_FAILED,
+                        attempt.source
+                    )
+                } else {
+                    HeartRateRuntimeFact.LinkDisconnected(attempt.source)
+                }
+            )
+            return
+        }
+        if (newState == BluetoothProfile.STATE_CONNECTED &&
+            attempt.phase != AttemptPhase.CONNECTING
+        ) {
+            return
+        }
         if (status != BluetoothGatt.GATT_SUCCESS) {
             cleanup(
                 HeartRateRuntimeFact.TechnicalFailure(
@@ -343,11 +461,8 @@ internal class HeartRateRuntimeOwner(
             )
             return
         }
-        when (newState) {
-            BluetoothProfile.STATE_CONNECTED -> discoverServices(attempt, gatt)
-            BluetoothProfile.STATE_DISCONNECTED -> cleanup(
-                HeartRateRuntimeFact.LinkDisconnected(attempt.source)
-            )
+        if (newState == BluetoothProfile.STATE_CONNECTED) {
+            discoverServices(attempt, gatt)
         }
     }
 
@@ -384,6 +499,7 @@ internal class HeartRateRuntimeOwner(
             targetIdentifier,
             gatt
         ) ?: return
+        if (attempt.phase != AttemptPhase.DISCOVERING) return
         if (status != BluetoothGatt.GATT_SUCCESS) {
             cleanup(
                 HeartRateRuntimeFact.TechnicalFailure(
@@ -500,6 +616,7 @@ internal class HeartRateRuntimeOwner(
             targetIdentifier,
             gatt
         ) ?: return
+        if (attempt.phase != AttemptPhase.SUBSCRIBING) return
         if (descriptor !== attempt.cccd) return
         if (status != BluetoothGatt.GATT_SUCCESS) {
             failSubscription(attempt, HeartRateTechnicalFailure.CCCD_FAILED)
@@ -685,8 +802,16 @@ internal class HeartRateRuntimeOwner(
     }
 
     /** Invalidates identities and references before touching any detached platform resource. */
-    private fun cleanup(requestedFact: HeartRateRuntimeFact) {
+    private fun cleanup(
+        requestedFact: HeartRateRuntimeFact,
+        permissionLossOverridesFact: Boolean = true
+    ) {
         checkMainThread()
+        if (requestedFact is HeartRateRuntimeFact.PermissionRequired ||
+            requestedFact is HeartRateRuntimeFact.BluetoothOff
+        ) {
+            operationEligible = false
+        }
         scanGeneration += 1L
         attemptSequence += 1L
 
@@ -727,7 +852,7 @@ internal class HeartRateRuntimeOwner(
         cleanupInProgress = false
 
         mutableScanState.value = BleHeartRateScanState.idle("BLE runtime resources absent")
-        val finalFact = if (cleanupObservedPermissionLoss) {
+        val finalFact = if (cleanupObservedPermissionLoss && permissionLossOverridesFact) {
             HeartRateRuntimeFact.PermissionRequired(sourceFrom(requestedFact))
         } else {
             requestedFact

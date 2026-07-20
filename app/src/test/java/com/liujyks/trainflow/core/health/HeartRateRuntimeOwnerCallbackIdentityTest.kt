@@ -18,6 +18,7 @@ import com.liujyks.trainflow.core.model.HeartRateFact
 import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -106,14 +107,14 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
     }
 
     @Test
-    fun returnAfterEarlyFailureFindsInvalidAttemptAndClosesReturnedGatt() {
+    fun status19DisconnectWhileConnectingIsConnectFailureAndClosesReturnedGatt() {
         val device = scanDevice("AA:BB:CC:DD:EE:03", "Failed HRS")
         lateinit var returnedGatt: BluetoothGatt
         Shadow.extract<ShadowBluetoothDevice>(device).setGattConnectionInterceptor { gatt ->
             returnedGatt = gatt
             Shadow.extract<ShadowBluetoothGatt>(gatt).gattCallback.onConnectionStateChange(
                 gatt,
-                BluetoothGatt.GATT_FAILURE,
+                19,
                 BluetoothProfile.STATE_DISCONNECTED
             )
             assertEquals(HeartRateFact.TECHNICAL_FAILURE, owner.heartRateState.value.fact)
@@ -123,7 +124,42 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         idleMain()
 
         assertEquals(HeartRateFact.TECHNICAL_FAILURE, owner.heartRateState.value.fact)
+        assertEquals(
+            com.liujyks.trainflow.core.model.HeartRateTechnicalFailure.CONNECT_FAILED,
+            owner.heartRateState.value.technicalFailure
+        )
+        assertNull(owner.heartRateState.value.bpm)
+        assertNull(owner.heartRateState.value.measuredAt)
         assertTrue(Shadow.extract<ShadowBluetoothGatt>(returnedGatt).isClosed)
+    }
+
+    @Test
+    fun outOfOrderCallbacksWhileConnectingAreIgnoredWithoutClosingCurrentGatt() {
+        val device = scanDevice("AA:BB:CC:DD:EE:07", "Out of order")
+        lateinit var gatt: BluetoothGatt
+        lateinit var callback: BluetoothGattCallback
+        lateinit var characteristic: BluetoothGattCharacteristic
+        Shadow.extract<ShadowBluetoothDevice>(device).setGattConnectionInterceptor { rawGatt ->
+            gatt = rawGatt
+            val shadowGatt = Shadow.extract<ShadowBluetoothGatt>(rawGatt)
+            callback = shadowGatt.gattCallback
+            characteristic = configureHrs(shadowGatt)
+        }
+        owner.submit(HeartRateRuntimeAction.Connect(device.address))
+        idleMain()
+        val connecting = owner.heartRateState.value
+
+        callback.onServicesDiscovered(gatt, BluetoothGatt.GATT_SUCCESS)
+        callback.onDescriptorWrite(
+            gatt,
+            requireNotNull(characteristic.getDescriptor(CCCD_UUID)),
+            BluetoothGatt.GATT_SUCCESS
+        )
+        callback.onCharacteristicChanged(gatt, characteristic, byteArrayOf(0x00, 97))
+
+        assertEquals(HeartRateFact.CONNECTING, connecting.fact)
+        assertEquals(connecting, owner.heartRateState.value)
+        assertFalse(Shadow.extract<ShadowBluetoothGatt>(gatt).isClosed)
     }
 
     @Test
@@ -155,7 +191,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
     fun cleanupRejectsLateServicesDescriptorNotifyAndDisconnectCallbacks() {
         val connected = connectWaiting("AA:BB:CC:DD:EE:06", "Late callbacks")
 
-        owner.submit(HeartRateRuntimeAction.Stop)
+        owner.submit(HeartRateRuntimeAction.BackgroundCleanup)
         idleMain()
         val terminal = owner.heartRateState.value
 
@@ -172,7 +208,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         )
         connected.callback.onConnectionStateChange(
             connected.gatt,
-            BluetoothGatt.GATT_SUCCESS,
+            19,
             BluetoothProfile.STATE_DISCONNECTED
         )
 
@@ -213,6 +249,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         val adapter = application.getSystemService(BluetoothManager::class.java).adapter
         val device = ShadowBluetoothDevice.newInstance(address)
         Shadow.extract<ShadowBluetoothDevice>(device).setName(name)
+        owner.submit(HeartRateRuntimeAction.Enable)
         owner.submit(HeartRateRuntimeAction.StartScan)
         idleMain()
         val callback = shadowOf(adapter.bluetoothLeScanner).scanCallbacks.single()

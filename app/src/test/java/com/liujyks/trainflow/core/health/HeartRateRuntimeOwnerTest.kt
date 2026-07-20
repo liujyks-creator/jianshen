@@ -13,6 +13,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.model.HeartRateFact
 import java.time.Duration
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -56,23 +57,30 @@ class HeartRateRuntimeOwnerTest {
     @Test
     fun constructionDoesNotScanOrConnectAndQueuedActionsWaitForMain() {
         owner.submit(HeartRateRuntimeAction.StartScan)
+        owner.submit(HeartRateRuntimeAction.Connect("AA:BB:CC:DD:EE:00"))
 
-        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
+        assertEquals(HeartRateFact.DISABLED, owner.heartRateState.value.fact)
         assertTrue(shadowScanner.scanCallbacks.isEmpty())
 
         idleMain()
 
-        assertEquals(HeartRateFact.SCANNING, owner.heartRateState.value.fact)
-        assertEquals(1, shadowScanner.scanCallbacks.size)
+        assertEquals(HeartRateFact.DISABLED, owner.heartRateState.value.fact)
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.Enable)
+        assertEquals(HeartRateFact.DISABLED, owner.heartRateState.value.fact)
+        idleMain()
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
     }
 
     @Test
     fun multipleQueuedActionsAreConsumedInSubmissionOrder() {
+        owner.submit(HeartRateRuntimeAction.Enable)
         owner.submit(HeartRateRuntimeAction.StartScan)
         owner.submit(HeartRateRuntimeAction.StopScan)
         owner.submit(HeartRateRuntimeAction.StartScan)
 
-        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
+        assertEquals(HeartRateFact.DISABLED, owner.heartRateState.value.fact)
         idleMain()
 
         assertEquals(HeartRateFact.SCANNING, owner.heartRateState.value.fact)
@@ -81,6 +89,7 @@ class HeartRateRuntimeOwnerTest {
 
     @Test
     fun repeatedScanUsesNewGenerationAndRejectsOldResultAndFailure() {
+        enableOwner()
         owner.submit(HeartRateRuntimeAction.StartScan)
         idleMain()
         val oldCallback = shadowScanner.scanCallbacks.single()
@@ -115,6 +124,7 @@ class HeartRateRuntimeOwnerTest {
             mainHandler = android.os.Handler(Looper.getMainLooper()),
             scanWindowMillis = 100L
         )
+        enableOwner()
         owner.submit(HeartRateRuntimeAction.StartScan)
         idleMain()
         val oldTimeout = privateRunnable("scanTimeoutRunnable")
@@ -140,6 +150,7 @@ class HeartRateRuntimeOwnerTest {
             mainHandler = android.os.Handler(Looper.getMainLooper()),
             scanWindowMillis = 100L
         )
+        enableOwner()
         owner.submit(HeartRateRuntimeAction.StartScan)
         idleMain()
         val callback = shadowScanner.scanCallbacks.single()
@@ -165,6 +176,7 @@ class HeartRateRuntimeOwnerTest {
 
     @Test
     fun permissionRecoveryDoesNotCreateAutomaticAction() {
+        enableOwner()
         shadowOf(application).denyPermissions(
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_CONNECT
@@ -177,14 +189,17 @@ class HeartRateRuntimeOwnerTest {
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_CONNECT
         )
+        owner.submit(HeartRateRuntimeAction.Enable)
+        assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
         idleMain()
 
-        assertEquals(HeartRateFact.PERMISSION_REQUIRED, owner.heartRateState.value.fact)
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
         assertTrue(shadowScanner.scanCallbacks.isEmpty())
     }
 
     @Test
     fun bluetoothOffProducesTypedFactWithoutStartingScan() {
+        enableOwner()
         val adapter = application.getSystemService(BluetoothManager::class.java).adapter
         shadowOf(adapter).setEnabled(false)
 
@@ -197,6 +212,7 @@ class HeartRateRuntimeOwnerTest {
 
     @Test
     fun ownerCloseIsIdempotentAndCannotCreateANewAction() {
+        enableOwner()
         owner.close()
         idleMain()
         val terminal = owner.heartRateState.value
@@ -210,6 +226,90 @@ class HeartRateRuntimeOwnerTest {
         assertTrue(shadowScanner.scanCallbacks.isEmpty())
     }
 
+    @Test
+    fun disableEnableAndExplicitRestartAreReversibleOnTheSameOwner() {
+        enableOwner()
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val result = scanResult("AA:BB:CC:DD:EE:13", "Reusable")
+        shadowScanner.scanCallbacks.single().onScanResult(
+            ScanSettings.CALLBACK_TYPE_ALL_MATCHES,
+            result
+        )
+        idleMain()
+        assertFalse(owner.candidates.value.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.Disable)
+        owner.submit(HeartRateRuntimeAction.Disable)
+        idleMain()
+
+        assertEquals(HeartRateFact.DISABLED, owner.heartRateState.value.fact)
+        assertTrue(owner.candidates.value.isEmpty())
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.Enable)
+        owner.submit(HeartRateRuntimeAction.Enable)
+        idleMain()
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        assertEquals(HeartRateFact.SCANNING, owner.heartRateState.value.fact)
+        assertEquals(1, shadowScanner.scanCallbacks.size)
+    }
+
+    @Test
+    fun lifecycleLossFactsRequireEnableAndNeverAutoResumeQueuedActions() {
+        enableOwner()
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val result = scanResult("AA:BB:CC:DD:EE:14", "Queued target")
+        val device = requireNotNull(result.device)
+        shadowScanner.scanCallbacks.single().onScanResult(
+            ScanSettings.CALLBACK_TYPE_ALL_MATCHES,
+            result
+        )
+        idleMain()
+
+        owner.submit(HeartRateRuntimeAction.PermissionLost)
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        owner.submit(HeartRateRuntimeAction.Connect(device.address))
+        owner.submit(HeartRateRuntimeAction.Enable)
+        idleMain()
+
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+        assertTrue(Shadow.extract<ShadowBluetoothDevice>(device).bluetoothGatts.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.BluetoothOff)
+        idleMain()
+        assertEquals(HeartRateFact.BLUETOOTH_OFF, owner.heartRateState.value.fact)
+        owner.submit(HeartRateRuntimeAction.Enable)
+        idleMain()
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
+
+        owner.submit(HeartRateRuntimeAction.BackgroundCleanup)
+        idleMain()
+        assertEquals(HeartRateFact.INTENTIONAL_STOP, owner.heartRateState.value.fact)
+        owner.submit(HeartRateRuntimeAction.Enable)
+        idleMain()
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
+    }
+
+    @Test
+    fun lifecycleLossInputsWhileDisabledKeepDisabledAndTouchNoBlePlatform() {
+        owner.submit(HeartRateRuntimeAction.PermissionLost)
+        owner.submit(HeartRateRuntimeAction.BluetoothOff)
+        owner.submit(HeartRateRuntimeAction.BackgroundCleanup)
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        owner.submit(HeartRateRuntimeAction.Connect("AA:BB:CC:DD:EE:15"))
+        idleMain()
+
+        assertEquals(HeartRateFact.DISABLED, owner.heartRateState.value.fact)
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+    }
+
     private fun scanResult(address: String, name: String): ScanResult {
         val device = ShadowBluetoothDevice.newInstance(address)
         Shadow.extract<ShadowBluetoothDevice>(device).setName(name)
@@ -219,6 +319,12 @@ class HeartRateRuntimeOwnerTest {
 
     private fun idleMain() {
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun enableOwner() {
+        owner.submit(HeartRateRuntimeAction.Enable)
+        idleMain()
+        assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
     }
 
     private fun privateRunnable(fieldName: String): Runnable {
