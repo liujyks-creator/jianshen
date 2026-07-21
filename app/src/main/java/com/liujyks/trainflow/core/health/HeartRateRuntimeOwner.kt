@@ -447,11 +447,6 @@ internal class HeartRateRuntimeOwner(
             )
             return
         }
-        if (newState == BluetoothProfile.STATE_CONNECTED &&
-            attempt.phase != AttemptPhase.CONNECTING
-        ) {
-            return
-        }
         if (status != BluetoothGatt.GATT_SUCCESS) {
             cleanup(
                 HeartRateRuntimeFact.TechnicalFailure(
@@ -459,6 +454,11 @@ internal class HeartRateRuntimeOwner(
                     attempt.source
                 )
             )
+            return
+        }
+        if (newState == BluetoothProfile.STATE_CONNECTED &&
+            attempt.phase != AttemptPhase.CONNECTING
+        ) {
             return
         }
         if (newState == BluetoothProfile.STATE_CONNECTED) {

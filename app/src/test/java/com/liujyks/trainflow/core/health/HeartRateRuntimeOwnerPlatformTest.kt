@@ -117,11 +117,13 @@ class HeartRateRuntimeOwnerPlatformTest {
     }
 
     @Test
-    fun phaseGateIgnoresDuplicateAndLateCallbacksWithoutCallsOrLiveRegression() {
+    fun successfulDuplicateAndLateCallbacksRemainPhaseGatedWithoutTimelineRegression() {
         val connected = connect("AA:BB:CC:DD:EE:38")
         val discoverCalls = E17GattShadow.discoverCalls
         val notificationCalls = E17GattShadow.notificationCalls
         val descriptorWriteCalls = E17GattShadow.descriptorWriteCalls
+        val waiting = owner.heartRateState.value
+        val waitingFreshness = privateRunnable("freshnessRunnable")
 
         connected.callback.onConnectionStateChange(
             connected.gatt,
@@ -130,7 +132,8 @@ class HeartRateRuntimeOwnerPlatformTest {
         )
         connected.callback.onServicesDiscovered(connected.gatt, BluetoothGatt.GATT_SUCCESS)
 
-        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        assertEquals(waiting, owner.heartRateState.value)
+        assertTrue(waitingFreshness === privateRunnable("freshnessRunnable"))
         assertEquals(discoverCalls, E17GattShadow.discoverCalls)
         assertEquals(notificationCalls, E17GattShadow.notificationCalls)
         assertEquals(descriptorWriteCalls, E17GattShadow.descriptorWriteCalls)
@@ -380,6 +383,120 @@ class HeartRateRuntimeOwnerPlatformTest {
         )
         assertEquals(stopped, owner.heartRateState.value)
         assertFalse(owner.heartRateState.value.fact == HeartRateFact.LINK_DISCONNECTED)
+    }
+
+    @Test
+    fun status19ConnectedWhileWaitingIsConnectFailureAndLateCallbacksCannotRestoreAttempt() {
+        val connected = connect("AA:BB:CC:DD:EE:41")
+        val staleFreshness = privateRunnable("freshnessRunnable")
+        val disconnectCalls = E17GattShadow.disconnectCalls
+        val closeCalls = E17GattShadow.closeCalls
+        val discoverCalls = E17GattShadow.discoverCalls
+        val notificationCalls = E17GattShadow.notificationCalls
+        val descriptorWriteCalls = E17GattShadow.descriptorWriteCalls
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_CONNECTED
+        )
+
+        assertEquals(HeartRateFact.TECHNICAL_FAILURE, owner.heartRateState.value.fact)
+        assertEquals(
+            HeartRateTechnicalFailure.CONNECT_FAILED,
+            owner.heartRateState.value.technicalFailure
+        )
+        assertNull(owner.heartRateState.value.bpm)
+        assertNull(owner.heartRateState.value.measuredAt)
+        assertTrue(connected.shadowGatt.isClosed)
+        assertTrue(E17GattShadow.disconnectCalls > disconnectCalls)
+        assertTrue(E17GattShadow.closeCalls > closeCalls)
+        val failure = owner.heartRateState.value
+
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 111)
+        )
+        connected.callback.onServicesDiscovered(connected.gatt, BluetoothGatt.GATT_SUCCESS)
+        connected.callback.onDescriptorWrite(
+            connected.gatt,
+            connected.descriptor,
+            BluetoothGatt.GATT_SUCCESS
+        )
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            BluetoothGatt.GATT_SUCCESS,
+            BluetoothProfile.STATE_CONNECTED
+        )
+        android.os.Handler(Looper.getMainLooper()).post(staleFreshness)
+        idleMain()
+
+        assertEquals(failure, owner.heartRateState.value)
+        assertEquals(discoverCalls, E17GattShadow.discoverCalls)
+        assertEquals(notificationCalls, E17GattShadow.notificationCalls)
+        assertEquals(descriptorWriteCalls, E17GattShadow.descriptorWriteCalls)
+        assertTrue(connected.shadowGatt.isClosed)
+    }
+
+    @Test
+    fun status19ConnectedWhileLiveClearsReadingAndLateCallbacksCannotRestoreLive() {
+        val connected = connect("AA:BB:CC:DD:EE:42")
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 112)
+        )
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+        val staleFreshness = privateRunnable("freshnessRunnable")
+        val disconnectCalls = E17GattShadow.disconnectCalls
+        val closeCalls = E17GattShadow.closeCalls
+        val discoverCalls = E17GattShadow.discoverCalls
+        val notificationCalls = E17GattShadow.notificationCalls
+        val descriptorWriteCalls = E17GattShadow.descriptorWriteCalls
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_CONNECTED
+        )
+
+        assertEquals(HeartRateFact.TECHNICAL_FAILURE, owner.heartRateState.value.fact)
+        assertEquals(
+            HeartRateTechnicalFailure.CONNECT_FAILED,
+            owner.heartRateState.value.technicalFailure
+        )
+        assertNull(owner.heartRateState.value.bpm)
+        assertNull(owner.heartRateState.value.measuredAt)
+        assertTrue(connected.shadowGatt.isClosed)
+        assertTrue(E17GattShadow.disconnectCalls > disconnectCalls)
+        assertTrue(E17GattShadow.closeCalls > closeCalls)
+        val failure = owner.heartRateState.value
+
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 113)
+        )
+        connected.callback.onServicesDiscovered(connected.gatt, BluetoothGatt.GATT_SUCCESS)
+        connected.callback.onDescriptorWrite(
+            connected.gatt,
+            connected.descriptor,
+            BluetoothGatt.GATT_SUCCESS
+        )
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            BluetoothGatt.GATT_SUCCESS,
+            BluetoothProfile.STATE_CONNECTED
+        )
+        android.os.Handler(Looper.getMainLooper()).post(staleFreshness)
+        idleMain()
+
+        assertEquals(failure, owner.heartRateState.value)
+        assertEquals(discoverCalls, E17GattShadow.discoverCalls)
+        assertEquals(notificationCalls, E17GattShadow.notificationCalls)
+        assertEquals(descriptorWriteCalls, E17GattShadow.descriptorWriteCalls)
+        assertTrue(connected.shadowGatt.isClosed)
     }
 
     @Test
