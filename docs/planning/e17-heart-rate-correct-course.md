@@ -1,7 +1,7 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态判定：** E17-0、E17-1、E17-2、E17-3 `reviewed / merged`；E17-4 immutable SHA 尚非 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、五份文档一致性任一未完成时为 `implemented / needs review`，production implementation 继续 locked；全部门禁满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied
-**日期：** 2026-07-12；状态同步：2026-07-18
+**状态判定：** E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`；E17-7尚未开始并仅受本次Planning Repair独立Review/merge门禁阻挡
+**日期：** 2026-07-12；状态同步：2026-07-22
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
 ## 1. E17 目标
@@ -81,18 +81,19 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 ### E17-4：Implementation readiness
 
 - 主文档为 `docs/planning/e17-4-heart-rate-implementation-readiness.md`；真实代码盘点校正了旧 provider、空 Application composition root、Compose owner、三个 Route 通知 writer、Manifest / Service 缺口和冻结胶囊适配范围。
-- 候选结论为 `ready for implementation review`；默认不新增 `AndroidBleOperations` seam，采用原生 Android BLE 类型加窄 callback identity harness。无法安全覆盖早到 callback 时必须停止并返回主管理，implementation 不得自行扩张 seam。
+- 最终readiness为`passed`；状态为`reviewed / merged`，immutable SHA `1ea67561b4866aa76c41b854da74da85c208aa25`，merge commit `4b354f5116bbf7f7610e79845210d481c839fed6`。默认不新增`AndroidBleOperations` seam，采用原生Android BLE类型加窄callback identity harness。
 - freshness 采用无循环门禁：E17-5 以前台 Band 9 monotonic notify 测量形成 provisional internal threshold；E17-9 在 runnable FGS 后补测锁屏 / 临时后台余量，并在最终 presentation 启用前锁定纯 Kotlin 边界。
 - implementation 拆为 E17-5 facts / freshness / presentation core、E17-6 deterministic BLE owner、E17-7 Application / settings / capsule wiring、E17-8 ordinary notification coordinator、E17-9 connected-device FGS / ID `7200` handoff、E17-10 integrated acceptance。记录、Room、分析、导出和自动恢复均排除。
-- E17-6只新增并确定性测试新`HeartRateRuntimeOwner`；新owner仅test可实例化，旧provider/scanner/DTO继续维持既有production/debug接线编译并仍是唯一production可达BLE owner。E17-7在同一Story从`TrainFlowApplication`唯一创建点切换Application、Activity、Compose、settings、manual/saved-device、capsule与debug `HeartRateBroadcastSmokeActivity.kt`，再退休旧scanner/GATT ownership和旧DTO production consumer；E17-7后不得保留可重新实例化旧owner的production入口。
-- E17-7 process visibility固定为main-looper reducer，以Activity identity集合及`ForegroundConfirmed` / `BackgroundConfirmed` / `ConfigurationTransition` / `Unknown`等价facts判定；configuration transition使用generation与确定性completion/timeout，重复/不平衡/mismatch/未知事件fail-closed。E17-9前active training真实后台仍cleanup。
-- ID `7200`降级ack是Service在main-looper路径调用`stopForeground(STOP_FOREGROUND_REMOVE)`正常返回后发布的进程内`ForegroundWriterReleased(generation)`事实，不是系统UI删除确认。coordinator只接受当前handoff generation，冻结ordinary writer至匹配release，replay latest state；stale/duplicate/wrong-generation ack、失败与Service destroyed-before-ack不得创建第二writer。
+- E17-5已`reviewed / merged`（immutable `959146a7e41a38d654b4988ba0d443f2aea0d874`；merge `bfb065b92d2ec78ca794fa679f7e25e85093bc79`），provisional foreground waiting/live为`3000 / 2500 ms`。E17-6已`reviewed / merged`（immutable `f9188c09275cd01dbf182823b3886635b17105bc`；merge `503d3151d731565837ab76f44fbebc25bb982e0d`）；新`HeartRateRuntimeOwner`已独立Review但production/debug实例化仍为0，旧provider/scanner仍production可达。
+- E17-7在同一Story按准备、原子composition切换、退休/证据三个阶段提交，最终只允许`TrainFlowApplication`创建唯一owner。`BleHeartRateProviderBoundary.kt`不得盲删，精确保留纯compatibility类型为`BleHeartRateScanState`、`BleHeartRateScanStateKind`、`BleHeartRateDeviceCandidate`、`BleHeartRateRecoverableReason`；debug Activity默认保留类和入口，只观察同一Application owner或作为无资源说明页。`ProcessVisibilityTracker`只发布visibility fact，cleanup与training/FGS eligibility属于Application policy。
+- E17-8以真实workout session ID + producer token + 单调`stateVersion`隔离同plan多次训练、旧Route迟到事件与bounded detach/reattach；plan ID不得作为实例唯一身份。
+- E17-9以同一Application owner的debug-only observer完成五阶段measurement/final APK身份链；独立GATT工具不能替代M1。`ReleaseUnconfirmed`或等价态在release未确认时冻结ordinary writer，后台/Unknown执行cleanup且不宣称后台保证；`handoffGeneration`不得复用workout producer generation。
 - E17-10已收窄为evidence-only：production files/lines/methods均为0，任何`app/src/main`行为问题返回E17-6/7/8/9独立Repair并在合入同步main后重建APK、重跑受影响gate。E17-5修改debug M0工具后必须重新build/install并记录source preparation SHA、APK SHA256、设备与分层日志；任何后续影响debug APK的可执行变化立即使旧证据失效，E17-1 APK不得沿用。
-- 条件式状态：E17-4 immutable SHA 尚非 `main` ancestor，或独立 Review、merge / push、`main...origin/main = 0 0`、五份文档一致性任一未完成时，E17-4 为 `implemented / needs review`，production implementation 继续 locked；全部门禁满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied。不创建状态 docs-sync，不硬编码未来 merge commit。
+- 当前Planning Repair为`implemented / needs review`；它尚未成为同步`main` ancestor时只允许独立Review/Repair本Planning Closure。通过独立Review、merge/push、ancestry与七份文档一致性后，E17-7 gate自动`satisfied`；不创建本Repair docs-sync或递归closeout，不硬编码未来SHA或merge commit。
 
 ### E17 后续 implementation Story
 
-D-081 已锁定最小技术架构，但不授权 implementation。只有 E17-4 reviewed / merged 且 readiness 结论通过后，主管理才能生成正式 production implementation Story；自动重连、记录、分析和导出仍需各自后续决策与 Story。
+D-081已锁定最小技术架构，E17-4/5/6已完成各自范围。E17-7仍未授权开始，直到本Planning Repair门禁自动满足；自动重连、记录、分析和导出仍需各自后续决策与Story。E17-7至E17-10详细计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
 
 ## 4. 测试分层
 
@@ -164,8 +165,8 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 5. 当 E17-2 通过独立 Review、merge / push，其最终 immutable Story SHA 成为 `main` ancestor，`main...origin/main = 0 0` 且权威文档一致时，E17-3 门禁自动满足。主管理从 Git 解析 E17-2 最终 SHA 并生成 E17-3 提示词；不要求 E17-2 状态 docs-sync，也不得创建“closeout 的 closeout”。
 6. E17-2 immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 已是 `main` ancestor，E17-3 gate 已满足并已完成用户方案 A 确认与 docs-only 架构。
 7. E17-3 immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor；E17-3 为 `reviewed / merged`，E17-4 gate 已 satisfied。
-8. 当 E17-4 immutable SHA 尚非 `main` ancestor，或独立 Implementation Readiness Review、merge / push、`main...origin/main = 0 0` 和五份文档一致性任一未完成时，E17-4 为 `implemented / needs review`，production implementation locked；只允许 E17-4 独立 Review / Repair。
-9. 上述门禁全部满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`，E17-5 gate 自动 satisfied；主管理从 Git 解析最终 SHA，不做递归 closeout 或状态 docs-sync。
+8. E17-4、E17-5、E17-6的immutable SHA与merge commit均已成为同步`main`历史事实；三者状态为`reviewed / merged`，E17-4 readiness为`passed`。
+9. 本Planning Repair尚未通过独立Review、merge/push、成为同步`main` ancestor并完成七份文档一致性时，只允许Review/Repair本Planning Closure，E17-7保持`planned / prerequisite-gated`。全部门禁满足后E17-7 gate自动`satisfied`；主管理从Git解析Repair最终SHA并直接生成E17-7提示词，不做docs-sync、递归closeout或“closure的closure”。
 
 每一关都必须：
 
@@ -176,7 +177,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 push、Review 文本、人工测试或分支存在都不等于已合入。E16 分支、E16 Story tip 和 `89d1e23f870185a2e279d35bb293883f64fe70ba` 均不得作为 E17 解锁前置。
 
-E17-0、E17-1、E17-2 与 E17-3 为 `reviewed / merged`。E17-4 immutable SHA 尚非 `main` ancestor，或独立 Review / merge / push、`main...origin/main = 0 0`、五份文档一致性任一未完成时，E17-4 为 `implemented / needs review`，production implementation locked；全部门禁满足且 readiness 结论仍通过后，E17-4 自动视为 `reviewed / merged`、E17-5 gate 自动 satisfied。主管理直接从 Git 解析最终 SHA，不产生额外状态 docs-sync 或递归 closeout。
+当前E17-0至E17-6均为`reviewed / merged`，E17-7尚未开始。已完成Story的immutable SHA和merge commit作为稳定历史事实；未完成Story使用条件式门禁，不保留冲突的无条件状态。当前项目阶段由Git ancestry、`main...origin/main = 0 0`与`docs/project-status.md`当前E17状态索引共同判定；后续Story不再创建独立状态docs-sync，并在自身开发分支文档中采用合并后稳定的双条件表述。
 
 ## 8. E17-0 验收
 
@@ -186,7 +187,7 @@ E17-0、E17-1、E17-2 与 E17-3 为 `reviewed / merged`。E17-4 immutable SHA �
 - E16 原始代码与文档作为 sealed historical archive，不参与 E17 当前状态逐行一致性检查。
 - E17-0 已 reviewed / merged；Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 成为 `main` ancestor。
 - E17-0 closeout 后续已完成独立 Review / merge / push / ancestry / sync / docs consistency 门禁；未创建递归 closeout。
-- E17-0、E17-1、E17-2、E17-3 已 `reviewed / merged`；E17-4 状态按第 7 节条件式门禁自动判定，本开发对话不宣称 reviewed / merged。
-- E17-4 readiness 候选结论为 `ready for implementation review`；production implementation 在 E17-4 独立 Review / merge 门禁完成前继续 locked。
+- E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`。
+- E17-7尚未开始，只受本Planning Repair独立Review/merge门禁阻挡；当前下一步只能是独立Planning Repair Code Review。
 - 通用提示词流程包含连续 Review、Repair 结构、最小修改、Evidence、体积控制与 correct-course 职责门禁。
 - 本 Story 只修改 Markdown / 根目录提示词模板，不修改生产或测试代码。
