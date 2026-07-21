@@ -27,7 +27,7 @@
 - 独立 Review 通过、merge / push 完成、E17-6 immutable full SHA 成为 `main` ancestor、`main...origin/main = 0 0` 且权威文档一致后：E17-6 自动为 `reviewed / merged`，E17-7 gate 自动 satisfied。
 - 不创建 E17-6 状态 docs-sync、递归 closeout 或 E17-7 分支。
 
-本轮 Review Repair 的 executable source commit 为 `018332eb13636771b79d6cc8bb8216738ead5093`，commit message 为 `Complete heart-rate owner lifecycle and phase gates`。Repair APK 由该 commit 的 executable tree 生成；后续最终 Story tip 只增加本文档证据记录，不改变 APK、production 或 tests。
+本轮 Review Repair 2 的 executable source commit 为 `2b1a974d67d4774cb0699434ecbbbf5a655c02ed`，commit message 为 `Classify nonzero GATT callback failures`。Repair 2 APK 由该 commit 的 executable tree 强制重建；后续最终 Story tip 只增加本文档证据记录，不改变 APK、production 或 tests。前一 Review Repair 的 executable source `018332eb13636771b79d6cc8bb8216738ead5093` 与其 APK / AVD evidence 只保留为历史分层证据，不是本轮 executable tree 的等价物。
 
 ## 3. 实际文件范围
 
@@ -172,6 +172,10 @@ active 引用在 `disconnect()` 前已清空，因此 Robolectric shadow 的同�
 | `STATE_DISCONNECTED` + `DISCOVERING` / `SUBSCRIBING` / `WAITING_FIRST_DATA` / `LIVE` / `DATA_INTERRUPTED` | `0`、`19` 或其他 | `LinkDisconnected` |
 | 非 disconnected callback | 非零 | 对应 typed technical failure；不按 message、厂商字符串或 status 19 特判 |
 
+Review Repair 2 发现 `handleConnectionStateChange()` 的旧顺序为“明确 disconnected -> 成功 connected phase gate -> 非零 status”，导致 WAITING / LIVE 中非 disconnected 的 `status = 19` 被 phase gate 提前吞掉。当前顺序固定为：先通过 raw GATT、attempt ID、owner generation 与 target identity gate；再按当前 phase 分类明确 `STATE_DISCONNECTED`；随后把任何其他非零 status 发布为 `TechnicalFailure(CONNECT_FAILED)`并统一 cleanup；只有 status 成功后才对 `STATE_CONNECTED` 应用仅允许 `CONNECTING` 的 phase gate。其他成功但无对应转换的 callback 继续无副作用。
+
+production callback 回归在 WAITING_FIRST_DATA 与 LIVE 中分别发送 `onConnectionStateChange(currentGatt, 19, STATE_CONNECTED)`，断言 typed failure、bpm / `measuredAt` 清空、freshness取消、attempt失效、当前GATT disconnect / close，以及旧 freshness closure和迟到 notify / services / descriptor / connected callback均不能恢复 attempt或Live。成功 duplicate connected 对照在 WAITING / LIVE 中仍被 phase gate忽略，不重复`discoverServices()`、不改公共事实或timeline、不关闭合法GATT。
+
 用户 `Disconnect` / `Disable` / background cleanup / `Stop` 已先失效 attempt；随后迟到的 status 19 disconnected callback被 identity gate 拒绝，不覆盖 intentional / disabled fact。测试覆盖 status 19 在 CONNECTING、WAITING、LIVE 与 intentional cleanup 后四种路径；所有非 Live 结果均断言 bpm / `measuredAt` 为空。E17-1 的 status 19 仍只作为历史设备观察，本 Repair 没有运行或宣称 Band 9 验证。
 
 ## 10. Evidence 分层与边界
@@ -205,6 +209,7 @@ AVD 不能证明 RF、GATT、`0x180D`、`0x2A37`、`0x2902`、CCCD、notify 或 
 2. **Must-fix — attempt phase gate：已关闭。** raw identity 之后加入 callback-phase 矩阵；同步早到 callback所需 phase 均在具体平台调用前建立；duplicate / late / out-of-order production callback不产生平台操作、timeline刷新或 Live回退。
 3. **Must-fix — 非零 status 明确断连分类：已关闭。** disconnected先按 phase 分类；CONNECTING -> `CONNECT_FAILED`，已建立链路 phase -> `LinkDisconnected`，status 19不再覆盖明确断连语义；intentional cleanup 后迟到 callback被拒绝。
 4. **Should-fix — invalid target保护当前连接：已关闭。** candidate验证先于旧 attempt cleanup；active Live + stale / invalid保持原 state / timeline / GATT，有效新 target按序切换，无 active attempt invalid仍保留 typed failure。
+5. **Review Repair 2 must-fix — 非 disconnected 的非零 GATT status 被 phase gate 吞掉：已关闭。** 判断顺序已固定为 `disconnected -> nonzero status -> successful connected phase gate`；WAITING / LIVE 的非 disconnected status 19 均形成 `TechnicalFailure(CONNECT_FAILED)`并 cleanup，成功 duplicate connected仍保持忽略。前四项 finding 的 production regression 与完整 owner / HeartRate / unit suites继续通过并保持关闭。
 
 本 Repair 没有开始 E17-7，没有 production 接线，没有 reconnect / retry，也没有修改冻结胶囊、旧 provider / scanner / DTO、E17-5 core、Application、Compose、settings、debug Activity、Manifest、Gradle、Service、FGS、notification、Room或训练 Route。
 
@@ -224,26 +229,32 @@ AVD 不能证明 RF、GATT、`0x180D`、`0x2A37`、`0x2902`、CCCD、notify 或 
 
 - `:app:testDebugUnitTest --tests "*HeartRateRuntimeOwnerTest*"`：`11 / 0 / 0 / 0`。
 - `:app:testDebugUnitTest --tests "*HeartRateRuntimeOwnerCallbackIdentityTest*"`：`6 / 0 / 0 / 0`。
-- `:app:testDebugUnitTest --tests "*HeartRateRuntimeOwnerPlatformTest*"`：`26 / 0 / 0 / 0`。
-- 三个 focused files 合计 `43` tests；原 Story 为 `29`，本 Repair 新增 `14` 个回归。
-- `:app:testDebugUnitTest --tests "*HeartRate*"`：`126 / 0 / 0 / 0`（19 suites）。
-- `:app:testDebugUnitTest`：`745 / 0 / 0 / 0`（76 suites）。
+- `:app:testDebugUnitTest --tests "*HeartRateRuntimeOwnerPlatformTest*"`：`28 / 0 / 0 / 0`。
+- 三个 focused files 合计 `45` tests；原 Story 为 `29`，前一 Repair 新增 `14` 个回归，本 Repair 2 再新增 `2` 个 production callback 回归。
+- `:app:testDebugUnitTest --tests "*HeartRate*"`：`128 / 0 / 0 / 0`（19 suites）。
+- `:app:testDebugUnitTest`：`747 / 0 / 0 / 0`（76 suites）。
 - `:app:assembleDebug --rerun-tasks`：通过。
 - `:app:lintDebug --no-daemon --console=plain "-Dkotlin.incremental=false"`：通过。
 - `:app:check`：通过。
 
-Robolectric API 35执行API 33+ path，method-level API 32执行legacy path；API 36由下述AVD no-regression smoke覆盖，但新owner未接线。
+Robolectric API 35执行API 33+ path，method-level API 32执行legacy path。本 Repair 2未运行AVD；前一 executable source的API 36 AVD只保留为旧production runtime no-regression历史证据，新owner仍未接线。
 
-AVD：
+Repair 2 APK build identity：
 
-- Repair executable source SHA：`018332eb13636771b79d6cc8bb8216738ead5093`。
-- Repair debug APK：variant `debug`，applicationId `com.liujyks.trainflow`，`14763914` bytes，SHA256 `C050DD9F3D793DFD5F6437A4818F1627A448C945DC075C6735470A99D0836478`；`adb install -r` 成功。
+- Executable source SHA：`2b1a974d67d4774cb0699434ecbbbf5a655c02ed`。
+- Debug APK：variant `debug`，applicationId `com.liujyks.trainflow`，`14763914` bytes，SHA256 `C5C3E773C55DE83C8C5CD8255A62BFB6FD3A5CE69ED48FC7E1C6DC57412ACA72`。
+- 该APK只完成强制build与身份记录，未install、未运行AVD、未运行Band 9，也不构成新owner设备验证。由于新owner仍无production consumer，AVD只会执行旧production runtime，本轮确定性production callback Robolectric回归是本finding的行为证据。
+
+前一 Review Repair AVD历史证据：
+
+- 前一 executable source SHA：`018332eb13636771b79d6cc8bb8216738ead5093`。
+- 前一 debug APK：variant `debug`，applicationId `com.liujyks.trainflow`，`14763914` bytes，SHA256 `C050DD9F3D793DFD5F6437A4818F1627A448C945DC075C6735470A99D0836478`；当时`adb install -r`成功。
 - AVD：`TrainFlow_Pixel_API_36` / `emulator-5554` / `sdk_gphone64_x86_64` / Android 16 / API 36。
 - ordinary `MainActivity` cold launch成功；既有心率设置入口可达；通过adb revoke观察permission denied / required事实并重新grant；Bluetooth service OFF / ON均无crash；旧路径明确进入“扫描中 / 约12秒”，到期形成“未发现心率设备 / 重新扫描”。
 - `logcat` TrainFlow FATAL / ANR、crash buffer package match与`dumpsys activity lastanr` package match均为0；最终进程仍存活。
-- Repair evidence：`.local/smoke/e17-6-deterministic-android-ble-runtime-owner/repair/`，未提交。
-- 此 smoke只证明 API 36 当前 launcher/settings/旧production runtime no-regression；不执行或证明新 owner，不证明 RF / GATT / HRS / CCCD / notify / Band 9。
-- 本 Repair不运行Band 9，不要求用户人工测试；旧APK、旧test count均不作为当前Repair executable等价物。
+- 前一 Repair evidence：`.local/smoke/e17-6-deterministic-android-ble-runtime-owner/repair/`，未提交。
+- 此旧 smoke只证明前一 executable source下的API 36 launcher/settings/旧production runtime no-regression；不执行或证明新owner，不证明RF / GATT / HRS / CCCD / notify / Band 9，也不是本轮tip的完整可执行等价物。
+- 本 Repair 2不运行AVD或Band 9，不要求用户人工测试；旧APK、旧AVD与旧test count均不作为当前Repair executable等价物。
 
 Production reachability 静态门禁：
 
