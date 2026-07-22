@@ -1,6 +1,8 @@
 # E17-5 Heart-rate Fact / Freshness / Presentation Core
 
-**状态：** `implemented / needs review`
+**状态：** `reviewed / merged`
+
+**Git 事实：** immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`；merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`
 
 **日期：** 2026-07-18
 
@@ -89,7 +91,7 @@ Filtered preparation commit 上的 debug Kotlin compilation、focused formatter 
 - 两个边界均采用严格小于语义：边界前保持 waiting / live，精确到达边界即进入 data interrupted，并清除 bpm / `measuredAt`。
 - 时间流逝只形成 data interrupted；没有独立平台 / 连接失败事实时，不形成 technical failure。
 
-这些数字只适用于 E17-5 / E17-7 当前前台 manual 能力，不表示 retry、自动恢复、锁屏 / 后台保证或最终跨生命周期数字。E17-9 M1 仍必须用锁屏 / 后台 evidence 重新锁定 final thresholds。
+这些数字只适用于 E17-5 与 E17-7 规划的前台 manual 能力，不表示 retry、自动恢复、锁屏 / 后台保证或最终跨生命周期数字。E17-9 M1 必须由同一Application owner的debug-only observer记录锁屏 / 后台evidence，再锁定final thresholds；E17-1、E17-5 M0、独立GATT工具或measurement APK均不能冒充final evidence，final threshold变化后必须重建最终APK并重跑受影响gate。
 
 ## 5. Core / presentation / final APK
 
@@ -143,7 +145,7 @@ Repair 将 legacy `PARSE_FAILED` fail-closed 为 `DataInterrupted`：公共状�
 
 原第一次 M0 和 final M0 仍只用于支持前台 provisional `3000 / 2500 ms` threshold；本 Repair 不重写、不替换或冒充原 Band 9 evidence、APK、截图和 interval 分布。Debug `E17Band9HrsRevalidationActivity` 未修改。Repair 后重新构建的 debug APK 只证明 Repair source commit 对应的构建身份，不属于新的 Band 9 或设备行为证据。本轮不安装 APK，不运行 adb / AVD / Band 9，也不要求用户重新测试。
 
-Repair 后 E17-5 继续为 `implemented / needs review`；E17-6 继续为 `planned / prerequisite-gated`。下一步只能是新的独立 E17-5 Code Review。
+**Merge前历史分支快照：** Repair完成时E17-5曾为`implemented / needs review`、E17-6曾为`planned / prerequisite-gated`；该开发期状态与旧Review入口已由页首Git事实supersede，不能作为当前项目状态或下一步。
 
 ## 6. 验证与 evidence 层级
 
@@ -164,9 +166,10 @@ Implementation 工作树验证环境为 Eclipse Temurin JDK `17.0.19+10`、Gradl
 
 纯 Kotlin tests 只能证明 parser、facts、freshness 和 presentation；debug Activity + 当前真机 Band 9 M0 只能证明特定 APK、手机、Band 9、前台广播条件下的测量分布。截图不是完整 raw logcat，样本数采用可见下限，零 malformed / disconnect 只对可见 evidence 成立。AVD、fake、E17-1 evidence 均不能替代本 Story 的真实 M0；第一次 M0 也不能替代 implementation commit 对应最终 APK 的第二轮复验。
 
-## 7. 条件式状态与后续 gate
+## 7. 合并状态与后续 gate
 
-- merge 前且全部 acceptance 已完成：E17-5 = `implemented / needs review`。
-- 独立 Review、merge / push、immutable Story SHA ancestry、`main...origin/main = 0 0` 与文档一致后：E17-5 自动为 `reviewed / merged`，E17-6 gate 自动 satisfied。
-- 不创建 E17-5 状态 docs-sync 或递归 closeout。
-- 本 Story 未完成或 M0 证据不足时，E17-6 继续 `planned / prerequisite-gated`；下一步只能是补齐 M0 或独立 E17-5 Code Review，不能开始 E17-6。
+- E17-5已完成独立Review、merge/push并成为`main` ancestor；页首immutable SHA与merge commit是稳定历史事实。
+- 前台provisional threshold保持waiting `3000 ms`、live `2500 ms`；E17-9仍须以shared-owner M1锁定final值。
+- E17-6也已reviewed/merged；本Story旧开发期状态与Review入口仅为merge前历史分支快照。
+- **Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
+- 不创建E17-5状态docs-sync或递归closeout。当前阶段只由Git ancestry、同步main与当前E17状态索引判定。
