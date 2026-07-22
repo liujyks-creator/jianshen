@@ -8,6 +8,16 @@ This is the canonical workflow contract. `AGENTS.md` and the role prompt templat
 
 The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 
+### Skill role mapping
+
+When installed, `$bmad-method`, `$supervised-story-delivery`, and `huashu-design` support distinct responsibilities:
+
+- `$bmad-method` supports planning, readiness, horizontal contract review, Story shaping, and correct-course analysis. It does not grant implementation or merge authority.
+- `$supervised-story-delivery` may orchestrate an explicitly user-authorized approved Story or finite ordered Story sequence. In that mode the management supervisor remains read-only and dispatches separate preflight, writer, fresh independent reviewer, integration, and validation roles under this contract.
+- `huashu-design` remains the UI/visual-design skill. It applies to visual and interaction work without replacing product decisions, Story scope, runtime validation, or independent Review.
+
+The repository's pinned structured scope manifest, protected manifest, accepted validator, and evidence contract are the project-specific delivery gates. They satisfy and specialize the delivery skill's manifest/check requirements. A global skill inspector is supplemental only and MUST NOT replace or weaken the accepted repository validator. No skill overrides this contract, accepted decisions, exact scope, evidence requirements, or user authority.
+
 ## 1. Contract authority and provenance
 
 Every workflow pins these values separately:
@@ -164,14 +174,15 @@ After two unsuccessful Review rounds, the manager MUST perform a root-cause and 
 
 All agents share the same filesystem, branch, index, build outputs, and connected runtime state.
 
-- The main agent decides whether delegation improves speed or quality; the user does not need to request it.
+- In `manual_prompt` mode, the active Dev or Review role's main agent owns its role and may use bounded delegation. In `supervised_automatic` mode, the management supervisor is read-only and `$supervised-story-delivery` dispatches every mutating repository or external action to an explicitly authorized role agent.
+- The management supervisor decides whether read-only exploration improves speed or quality; the user does not need to request individual explorers. Automatic Dev/Review/Repair/integration requires the user's Story or finite-sequence authority and does not extend beyond it.
 - The prompt sets a total agent-tree limit. Child agents MUST NOT delegate again unless the main agent explicitly approves it within that total.
-- Only the main agent may change branch, HEAD, index, stash state, refs, worktrees, commits, pushes, or merges.
+- Only the currently authorized Dev/Repair writer or integration role may change branch, HEAD, index, worktrees, commits, pushes, or merges. A preflight/gate role may fetch declared remote-tracking refs and create pinned manifests outside worktree content, but it MUST NOT change branch, HEAD, index, tracked content, or user-owned state. There is never more than one writer. Stash remains forbidden unless a later explicit accepted rule narrowly authorizes it.
 - Read-only agents MUST NOT mutate files or global runtime state.
 - Editing agents require non-overlapping exact file ownership and MUST report every touched path.
-- Full build/toolchain integration, runtime control, artifact installation, final validation, staging, and Git delivery are serialized by the main agent unless the Story contract explicitly proves isolation.
+- Full build/toolchain integration, runtime control, artifact installation, final validation, staging, and Git delivery are serialized by the active role owner unless the Story contract explicitly proves isolation.
 - Every agent receives the same pinned accepted base and, during Review, the same `STORY_SHA`.
-- The main agent waits for all started agents, integrates their evidence, reviews every diff, and reruns the authoritative validation.
+- The active role owner waits for all started explorers, integrates their evidence, reviews every diff, and reruns the authoritative validation. In supervised mode the management supervisor independently verifies returned immutable facts without mutating repository or external state.
 
 Delegation assists a Dev or Review workflow; it does not replace the independent Dev/Review separation.
 

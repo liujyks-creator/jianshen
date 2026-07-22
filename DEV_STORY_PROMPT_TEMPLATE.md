@@ -18,6 +18,13 @@
 
 从 `{{ACCEPTED_RULES_SHA}}` 读取 accepted 规则；用 `{{STORY_DIFF_BASE_SHA}}` 保持 Story 历史/scope。执行 canonical contract 的 preflight、development/Repair、validation、handoff 条款。所有机械门禁使用该accepted SHA中的validator blob；若本Story修改validator，候选脚本只能作为被测对象，不能为自身产生gate PASS。
 
+## Applicable skills
+
+- 本代理是唯一 Dev/Repair writer，不调用 `$supervised-story-delivery` 另起一套编排，也不自行启动 Reviewer、integration 或下游 Story。
+- `planning` / `governance` Story 或明确授权的 planning Repair 使用 `$bmad-method`；普通 implementation/Repair 若发现未关闭的产品、架构、ownership、lifecycle 或 evidence 决策，停止并返回主管理，不借规划技能扩张当前 scope。
+- UI、设计系统、主题、token、布局、互动、motion、高保真原型或视觉变更继续使用 `huashu-design`（如可用），并遵循 `DESIGN.md` 和已接受视觉决策。不得用 workflow skill 替代 `huashu-design`。
+- 技能不能覆盖 accepted rules、exact scope、run-only/protected paths、validation、evidence 或写权限。
+
 Windows 读取文本前使用 UTF-8：先执行 `chcp 65001 > $null`，再设置 PowerShell Input/OutputEncoding 为无 BOM UTF-8；读取文件显式使用 UTF-8，编辑使用 `apply_patch`。编码异常时先只读检查，不猜测或覆盖。
 
 ## Story identity

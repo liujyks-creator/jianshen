@@ -237,17 +237,16 @@ git commit -m "<short summary>"
 git push -u origin HEAD
 ```
 
-## 12. 本地技能与 Codex QA 技能
+## 12. Codex workflow、UI 与 QA 技能
 
-当前项目可选使用一个本地方法论技能：
+当前项目使用两个全局 workflow skill：
 
-1. `skills/bmad-method`
+1. `$bmad-method`：产品/能力规划、架构决策、PRD/backlog/Story 拆分、readiness、planning Review 和 correct-course。
+2. `$supervised-story-delivery`：自动交付用户已授权的 approved Story 或有限有序 Story 序列；主管理保持只读，分别调度 preflight、唯一 writer、fresh independent Review、Repair、integration 与 post-merge verification。
 
-它是当前电脑的本地工作副本，不是仓库依赖，也不应提交到 GitHub。根目录 `.gitignore` 已忽略 `skills/`。
+它们不是仓库依赖，不应复制或提交到项目 `skills/`。仓库内 ignored `skills/bmad-method` 如仍存在，只是旧本地副本，不再作为当前入口。技能不可覆盖 `AGENTS.md`、canonical workflow contract、accepted decisions、exact scope、validation、evidence 或用户权限；缺失时继续依据仓库文档和薄模板执行，不降低门禁。
 
-如果当前电脑存在 `skills/bmad-method/SKILL.md`，可在产品规划、架构规划、PRD/backlog 拆分和 review 前先读取并遵循。若不存在，继续以仓库文档为准，并把新的长期决策写回 `docs/planning/decision-log.md`。
-
-当前 Codex 环境还可能提供 `huashu-design` 和 Android emulator QA skill。涉及 UI、设计系统、主题、token、界面规则、高保真原型、视觉方案、视觉评审或设计变体时，应读取 `huashu-design`，并继续以 `DESIGN.md` 和项目文档作为 TrainFlow 设计真源；涉及 Android UI、APK、截图反馈、交互 smoke 或虚拟设备验证时，应读取 Android emulator QA skill，并使用下方固定 `.local` 虚拟测试环境路径。
+`huashu-design` 继续作为独立 UI/视觉技能保留。涉及 UI、设计系统、主题、token、界面规则、高保真原型、视觉方案、视觉评审、motion 或设计变体时，应读取 `huashu-design`，并继续以 `DESIGN.md` 和项目文档作为 TrainFlow 设计真源；不得用两个 workflow skill 替代或删除它。涉及 Android UI、APK、截图反馈、交互 smoke 或虚拟设备验证时，应读取 Android emulator QA skill，并使用下方固定 `.local` 虚拟测试环境路径。
 
 ## 13. Android 虚拟测试环境
 

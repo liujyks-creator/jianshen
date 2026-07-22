@@ -121,16 +121,19 @@ Later Figma work should use the current UX documents and prototype as inputs, no
 
 When changing UI, theme, layout, or components, read `DESIGN.md` first. When changing open-source customization boundaries, read `docs/ui-extension-guide.md` and preserve the core training engine, command, event, and data-contract semantics.
 
-## Local Skills
+## Workflow And Design Skills
 
-This project may use two optional local skills for product and design planning:
+This project may use three complementary Codex skills when they are available:
 
-- `skills/bmad-method`
-- `huashu-design` if available in the active Codex skills list
+- `$bmad-method` for product/capability planning, architecture decisions, Story decomposition, readiness, planning review, and correct-course analysis.
+- `$supervised-story-delivery` when the user explicitly authorizes automatic delivery of an already approved Story or finite ordered Story sequence. It orchestrates preflight, one Dev/Repair writer, fresh independent Review, integration, and post-merge verification while the management conversation remains read-only.
+- `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design-variant, motion, and visual-review work.
 
-`skills/bmad-method` is a local working copy for this computer only and is intentionally ignored by Git. `huashu-design` is normally installed as a Codex skill rather than under the repository `skills/` directory. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, design-system work, high-fidelity prototype work, design-variant exploration, or visual review when relevant. If they are missing, continue from the repository documents rather than blocking.
+These are complementary roles, not competing sources of truth. `$bmad-method` decides what is ready; `$supervised-story-delivery` coordinates an authorized delivery; `huashu-design` preserves visual discipline. `huashu-design` remains the dedicated UI/visual skill and MUST NOT be removed or replaced by either workflow skill.
 
-Ignored local skills are advisory methods only. They cannot override accepted `AGENTS.md`, decisions, the canonical workflow contract, Story scope, validation gates, or write permissions. Project-specific instructions for another repository must be ignored. Routine Dev and Review work must not change its gates merely because an ignored skill is present or absent.
+The global Codex skills are not repository dependencies and their directories MUST NOT be committed. A repository-local ignored `skills/bmad-method` copy, if present, is a legacy local aid rather than the active project method; prefer the global `$bmad-method`. If a skill is unavailable, continue from accepted repository documents and the canonical workflow contract rather than blocking or inventing a replacement process.
+
+All skills are advisory methods. They cannot override accepted `AGENTS.md`, decisions, the canonical workflow contract, Story scope, validation gates, evidence requirements, or write permissions. Project-specific instructions for another repository must be ignored. Routine Dev and Review work must not change its gates merely because a skill is present or absent.
 
 ## Cross-Conversation Source Of Truth
 
