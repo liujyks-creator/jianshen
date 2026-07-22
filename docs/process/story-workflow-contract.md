@@ -8,7 +8,7 @@ This is the canonical workflow contract. `AGENTS.md` and the role prompt templat
 
 The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 
-### Skill role mapping
+## Skill role mapping
 
 When installed, `$bmad-method`, `$supervised-story-delivery`, and `huashu-design` support distinct responsibilities:
 
