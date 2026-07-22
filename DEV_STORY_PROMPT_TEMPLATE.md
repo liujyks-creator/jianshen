@@ -1,215 +1,170 @@
-# TrainFlow Dev Story Prompt Template
+# Dev Story 提示词模板（通用）
 
-Use this template when starting a new TrainFlow development story in a fresh execution conversation.
+主管理对话填写全部 `{{...}}` 字段后，只复制下方一个代码框。生成后的提示词不得残留占位符。
 
-## Prompt Packaging
+````text
+你是本 Story 的开发主代理。只实施本提示词定义的范围；不做独立 Review，不合并 main，不启动下游 Story。
 
-When the main control conversation sends a completed Dev Story prompt to a separate execution conversation:
+## Repository and accepted contract
 
-- Return the entire copy-ready prompt in exactly one outer `text` code block so the user can use its top-right copy button.
-- Do not place any required instruction outside that outer block.
-- Do not nest triple-backtick fences inside it. Put command lines directly below a label such as `执行：`; do not create a second Markdown code block for commands.
-- Do not split verification, boundary checks, or merge / handoff rules into separate code blocks.
+- Repository root: {{REPOSITORY_ROOT}}
+- Story workflow contract: {{WORKFLOW_CONTRACT_PATH}}
+- Contract version: {{WORKFLOW_CONTRACT_VERSION}}
+- Accepted rules SHA: {{ACCEPTED_RULES_SHA}}
+- Story diff base SHA: {{STORY_DIFF_BASE_SHA}}
+- Current-status index: {{CURRENT_STATUS_INDEX}}
+- Current-status strategy: {{CURRENT_STATUS_STRATEGY}}
+- Applicable accepted decisions/contracts: {{ACCEPTED_SCOPE_REFERENCES}}
 
-```text
-你是 TrainFlow 项目的阶段开发对话。
+从 `{{ACCEPTED_RULES_SHA}}` 读取 accepted 规则；用 `{{STORY_DIFF_BASE_SHA}}` 保持 Story 历史/scope。执行 canonical contract 的 preflight、development/Repair、validation、handoff 条款。所有机械门禁使用该accepted SHA中的validator blob；若本Story修改validator，候选脚本只能作为被测对象，不能为自身产生gate PASS。
 
-当前任务：
-Dev Story <Story ID>: <Story 名称>
+Windows 读取文本前使用 UTF-8：先执行 `chcp 65001 > $null`，再设置 PowerShell Input/OutputEncoding 为无 BOM UTF-8；读取文件显式使用 UTF-8，编辑使用 `apply_patch`。编码异常时先只读检查，不猜测或覆盖。
 
-工作目录：
-C:/Users/25073/Desktop/jianshen
+## Story identity
 
-固定规则：
-- 不创建新的 git worktree。
-- 不重新 clone 仓库。
-- 不把工程建到临时目录或其他目录。
-- 只在 C:/Users/25073/Desktop/jianshen 工作。
-- 不 reset、不 rebase、不强推。
-- 如确实需要新分支，只能在当前目录创建普通 git branch，并先说明原因。
-- 不提交 skills/、.local/、build 输出、日志、设备输出、node_modules、dist 或本地临时文件。
-- 本阶段完成后只推送阶段分支，不自行合入 main，除非主管理对话明确要求。
-- 根目录 APK、`countdown_beep1.mp3`、`deliverables/`、`人工/`、`.local/`、build 输出、截图、日志和设备输出都属于禁区文件，不得 stage / commit / push。
+- Story ID: {{STORY_ID}}
+- Title: {{STORY_TITLE}}
+- Type: {{STORY_TYPE}}
+- Dev mode (`new_story` or `repair`): {{DEV_MODE}}
+- Branch: {{STORY_BRANCH}}
+- Expected Story parent or explicit none: {{EXPECTED_STORY_PARENT_OR_NONE}}
+- Expected remote Story tip or explicit absent: {{EXPECTED_REMOTE_STORY_TIP_OR_ABSENT}}
+- Story document: {{STORY_DOCUMENT_OR_NONE}}
+- Entry lifecycle: {{ENTRY_LIFECYCLE}}
+- Entry review: {{ENTRY_REVIEW}}
+- Entry merge: {{ENTRY_MERGE}}
+- Entry gate: {{ENTRY_GATE}}
+- Entry evidence: {{ENTRY_EVIDENCE}}
+- Entry archive: {{ENTRY_ARCHIVE}}
+- Required prerequisite full SHAs: {{REQUIRED_PREREQUISITE_SHAS_OR_NONE}}
+- Scope manifest path (outside worktree content, or verified Git common-dir `codex-story-gates`): {{SCOPE_MANIFEST_PATH}}
+- Scope manifest SHA-256: {{SCOPE_MANIFEST_SHA256}}
+- Scope manifest schema: 2
+- Current-segment base SHA: {{CURRENT_SEGMENT_BASE_SHA}}
+- Protected manifest path: {{PROTECTED_MANIFEST_PATH}}
+- Protected manifest SHA-256: {{PROTECTED_MANIFEST_SHA256}}
+- Expected primary protected root: {{EXPECTED_PROTECTED_ROOT}}
+- Expected protected-manifest capture HEAD: {{EXPECTED_CAPTURE_HEAD}}
+- Adopted user-overlay paths: {{ADOPTED_USER_OVERLAY_PATHS_OR_NONE}}
+- Adoption authorization reference: {{ADOPTION_AUTHORIZATION_REFERENCE_OR_NONE}}
+- Protected ignored roots: {{PROTECTED_IGNORED_PATHS_OR_NONE}}
+- Ephemeral generated-output roots: {{EPHEMERAL_IGNORED_PATHS_OR_NONE}}
 
-Windows 文本编码规则：
-- 本仓库文本文件统一按 UTF-8 读取和写入。
-- 读取中文 Markdown、Kotlin、Gradle、JSON 或其他文本文件前，先设置：
-  - `[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)`
-  - `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)`
-  - `$OutputEncoding = [Console]::OutputEncoding`
-- 读取文件使用 `Get-Content -Raw -Encoding UTF8 <path>`，搜索优先使用 `rg`。
-- 优先用 `apply_patch` 编辑代码和文档，避免 PowerShell 默认编码写入。
-- 如必须用 PowerShell 写文本文件，使用 .NET `System.Text.UTF8Encoding($false)` 写入 UTF-8 without BOM；不要用默认 `Set-Content` / `Add-Content` 写中文文本。
-- 如果 UTF-8 读取仍异常，不要猜测内容，不要自动转码覆盖；先只读检查 BOM/字节特征，再报告具体文件。
+在创建/切换分支或编辑前，按 workflow contract 完成 preflight：分别确认 accepted rules、Story history/parent、prerequisite ancestry，index 为空；scope/protected manifest 位于worktree内容区之外或verified Git common-dir专用目录，且SHA匹配；完整分类 tracked dirty、ordinary untracked、protected ignored 与 ephemeral ignored，并区分本 Story 明确接纳的用户改动。任一门禁失败即停止。ignored路径不能原地adopt，只能保持protected input/ephemeral output，或写入另一个精确allowlisted destination。
 
-当前基线：
-- main 状态：<main 当前 commit / 是否已推送>
-- 前一阶段：<Story ID / commit / branch>
-- 前一阶段 review 状态：<reviewed / merged | reviewed / pending real-device acceptance | reviewed / pending merge | changes requested | not reviewed>
-- 前一阶段是否已合入 main：<是/否>
-- 本 Story 的前置完整 commit SHA：<逐项列出不可变完整 SHA；branch 仅可另作定位备注；没有则写无>
-- 当前阶段分支：<codex/...>
-- `push`、`review accepted`、人工测试通过都不等于已合入 main；只有每个前置完整 commit SHA 已是 main ancestor 且 main 与 origin/main 同步，才解锁本 Story。
-- 如存在前置合并、验证、docs sync 或环境阻塞，先处理前置任务；前置任务不清楚时停止并报告。
+新 Story 从 `{{STORY_DIFF_BASE_SHA}}` 创建 `{{STORY_BRANCH}}`；Repair 必须匹配 expected parent/remote tip。
 
-开始前确认：
-- git fetch --prune origin
-- git status
-- git branch --show-current
-- git rev-parse --show-toplevel
-- git log --oneline --decorate -6
-- git rev-parse main origin/main
-- git rev-list --left-right --count main...origin/main
-- 对每个前置完整 commit SHA 执行：git merge-base --is-ancestor <required-full-commit-sha> main
-- branch 仅用于首次定位并核对前置完整 SHA，不得把可移动或已删除的 branch tip 作为下游解锁依据
-- 任一前置 ancestry 检查失败时，在创建 Story branch 或修改文件前停止并报告缺失 gate
-- skills/ 是否仍未被 Git 跟踪
-- .local/ 是否仍未被 Git 跟踪
-- 根目录 APK、countdown_beep1.mp3、deliverables/、人工/ 是否未被 staged 或提交
+## Objective
 
-本地环境恢复：
-- 如果 `.local/env.ps1` 存在，先运行：
-  - `. .\.local\env.ps1`
-- 然后确认：
-  - `java -version`
-  - `.\gradlew.bat --version`
-- `.local/env.ps1` 只应设置当前 PowerShell 会话的 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT` 和 `PATH`，不得提交 `.local/`。
-- 如果 `.local/env.ps1` 不存在或 JDK/Android SDK 不可用，停止并报告，不要修改项目源码来硬编码本机路径。
+{{ONE_SENTENCE_OBJECTIVE}}
 
-Android 虚拟测试环境（UI / APK / 真机截图修复 / smoke 类 Story 必查）：
-- 本项目默认虚拟测试环境位于当前仓库 `.local/` 下，不需要用户再次提醒：
-  - Android SDK: `C:/Users/25073/Desktop/jianshen/.local/android-sdk`
-  - adb: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/platform-tools/adb.exe`
-  - emulator: `C:/Users/25073/Desktop/jianshen/.local/android-sdk/emulator/emulator.exe`
-  - AVD home: `C:/Users/25073/Desktop/jianshen/.local/android-avd`
-  - Android user home: `C:/Users/25073/Desktop/jianshen/.local/android-user`
-  - 默认 AVD: `TrainFlow_Pixel_API_36`
-- 如本 Story 涉及 Android UI、截图反馈、APK handoff、执行页/计划页/记录页视觉验证或交互 smoke，必须先读取并遵循 Android emulator QA skill（如可用），然后至少执行：
-  - `.\.local\android-sdk\platform-tools\adb.exe devices`
-  - `.\.local\android-sdk\emulator\emulator.exe -list-avds`
-- 若没有 online 设备但 `TrainFlow_Pixel_API_36` 存在，应尝试启动该 AVD 后再判断无法 smoke；若启动失败或设备保持 offline，报告具体原因，不要省略模拟测试说明。
-- smoke 截图、UI tree、logcat 只能写入 `.local/smoke/<Story ID>/`，不得写入 `.local/verification`，不得提交 `.local/`。
+## Exact full-Story scope allowlist
 
-规则与文档读取策略：
-- 先运行 `rg --files -g AGENTS.md`，读取根 `AGENTS.md` 及目标目录下更具体的适用规则文件。
-- 核心必读：`docs/project-status.md`、`docs/planning/decision-log.md`、本 Story 的 testing / decision / review 文档。
-- 按 Story 需要补读，不要默认全量阅读不相关长文档：
-  - 新产品能力、PRD、用户流程或产品决策：`docs/planning/product-brief.md`、`docs/planning/prd.md`、`docs/planning/ux-design.md`。
-  - 数据契约、Room、持久化、engine、command/event、session：`docs/planning/data-contracts.md`、`docs/architecture.md`。
-  - UI、Compose、布局、主题、交互、视觉修复：`DESIGN.md`、`docs/ui-extension-guide.md`、相关 HTML / design decision。
-  - backlog、readiness、状态或 docs-only：`docs/roadmap-backlog.md`、`docs/readiness-report.md`。
-  - 环境、Gradle、AVD、APK、adb、测试命令：`docs/setup.md`。
-  - prototype：`prototype/src/data/contracts.ts` 和相关 prototype 文件。
-- 当任务跨边界、现有决策不清楚或已读文档要求引用其他来源时，再扩展阅读范围。
+Production（每项写 `path | add/modify/delete | required/optional | production | responsibility`）：
+{{EXACT_PRODUCTION_PATHS_OR_NONE}}
 
-跨对话 / 跨模型一致性：
-- 不把上一模型、上一对话或主管理摘要中的隐性记忆当作事实源；以当前 main 中的已接受 decision ID、Story 文档、测试、证据和 Git ancestry 重建上下文。
-- Story 提示词应引用具体 decision ID、前置 Story 文档和 required full commit SHA；branch 只作定位备注，不使用“之前已经做过”这类不可验证表述。
-- 如果提示词声称前置已 merged，但 ancestry 检查失败，必须停止；不得自行把已 push 分支当作 main 基线，也不得绕过缺失的 review / docs-sync gate。
-- 如果 main 文档仍写 pending，而 Git 已合并，或文档写 merged 但 Git 未合并，先报告并完成独立 docs-sync / review，不能在矛盾状态上继续实现。
-- 只有 accepted correct-course decision 明确指定时，旧阶段文档才是 `sealed historical archive`：其当时的 current / next / dependency 历史措辞不属于当前指令，也不要求与当前状态逐行同步；当前任务只由 accepted superseding decision 和当前权威状态文档决定。Dev / Review 未经明确 Story 授权不得修改 sealed archive，Review 不得仅因历史措辞提出当前状态 finding，但 sealed archive 在 Story diff 中出现未经授权的修改时必须提出 finding；正常读取历史证据不受限制。
+Debug / fixture / harness（category写 `debug`）：
+{{EXACT_DEBUG_PATHS_OR_NONE}}
 
-Repair / Evidence / Correct-course 硬门禁：
-- 开始 Repair 前，先列出 finding 直接要求修改的 production 文件、允许的 test / docs 文件，以及预计结构变化；未列清单不得编辑。
-- Repair Story 不得未经主管理批准新增核心 interface、平台 wrapper、callback ownership 层或数据模型。finding 无法在既有结构内最小修复时，立即停止并报告设计阻塞，不得自行升级为架构重构。
-- 实际 production 文件或结构范围超过 finding 的直接需要时停止；不得为 fake、injection 或测试便利扩大 production 架构。
-- 同一 Story 已连续两轮 Review 保留 must-fix，且继续修复需要核心抽象、callback ownership、数据所有权或跨模块结构变化时，不再执行局部 Repair；报告应进入 correct-course / architecture planning，并保持下游 locked。
-- 文档只能声明测试实际执行并断言过的行为。源码字符串搜索、helper 存在、可能 no-op 的 helper / scheduler 调用不能写成 production coverage。
-- injection / deterministic fake、AVD 和真实设备证据分层报告：injection 不等于 Android 平台或设备验证，AVD 不等于真实外设验证，真实设备结论必须来自对应设备证据。
-- 稳定规则引用 `AGENTS.md`、本模板和 Story 文档；不要在 Fix 提示词重复全部历史 finding。历史风险写入 retrospective / test matrix。
-- 触发 correct-course 后不得开始下游 Story，不得借 Repair 修改 roadmap 解锁状态。
+Tests（category写 `test`）：
+{{EXACT_TEST_PATHS_OR_NONE}}
 
-本地技能：
-- 如 skills/bmad-method/SKILL.md 存在，产品规划、架构规划、PRD/backlog/story/review 类任务先读取并遵循。
-- 如 huashu-design skill 可用，UI、设计系统、主题、token、界面规则、高保真原型、设计变体或视觉评审类任务先读取并遵循；生成 UI 前仍必须读取 DESIGN.md 和项目文档，不得猜颜色、间距、字号或组件规则。如不可用，继续以 DESIGN.md 和项目文档为准，不阻塞开发。
-- 如 Android emulator QA skill 可用，Android UI / APK / smoke / 截图验证类任务先读取并遵循；如不可用，仍必须使用上方 `.local/android-sdk` 路径尝试 `adb devices` 和 AVD 检查。
-- skills/ 是本地辅助目录，不应提交。
+Docs / governance（category分别写 `docs` 或 `governance`）：
+{{EXACT_DOC_PATHS_OR_NONE}}
 
-子代理策略（已授权，按需使用）：
-- 开始前先由开发主代理做简短拆分，确定当前关键路径由谁直接负责。
-- 可自行决定使用 0–3 个子代理；只在子任务彼此独立、可并行、能实质推进工作，且文件 / 模块责任范围不重叠时调用。
-- 每个子代理先读取适用 `AGENTS.md`，再读取其分配范围所需的核心与任务相关文档；UI / 视觉任务不得跳过 `huashu-design`、`DESIGN.md` 和既有视觉方案。
-- 适合下放：独立 provider/parser/unit test、独立 Compose UI、独立 story testing doc 草稿，或只读边界 / 证据核查。
-- 不要下放：单文件或紧耦合小闭环、尚未确定的产品/架构决策、需要立即依赖结果的关键路径、最终集成、完整验证、stage、commit、push。
-- 实现型子代理必须声明其拥有的文件 / 模块，不得修改其他代理负责的文件，不得回退已有改动，不得处理禁区文件。
-- 子代理回交后，开发主代理必须审阅并整合其产物；共享状态文档（`project-status`、`roadmap-backlog`、`decision-log`、`readiness-report`）由开发主代理统一更新。
-- 子代理不得自行 stage、commit、push、合并或批准 review。子代理不可用或不适合时，开发主代理继续单代理完成。
+Run-only; must not edit:
+{{RUN_ONLY_PATHS_OR_NONE}}
 
-依赖阶段 / 模块：
-- <列出本 Story 依赖的已完成阶段、文件或模块>
-- <例如 E1.2 fixture、E2.2 计时计划编辑、E2.3 力量计划编辑等>
+Story-specific exclusions:
+{{STORY_SPECIFIC_EXCLUSIONS}}
 
-当前 Story 目标：
-- <一句话说明本阶段要交付的最小可验收能力>
+full-Story entries还必须包含此前Story commits曾触碰、即使当前tip已还原的授权路径。不允许用“相关文件”“必要测试”“按需文档”等开放式措辞扩权。需要任何 allowlist 外 tracked 文件时，编辑前停止并报告 exact path、原因和最小扩权建议。
 
-允许范围：
-- <本阶段允许实现的能力 1>
-- <本阶段允许实现的能力 2>
-- <允许使用的临时策略，例如内存态、fixture、skeleton>
-- <允许更新的文档>
+## Exact current-segment scope
 
-禁止范围：
-- 不实现超出 Story 的真实持久化，除非本 Story 明确要求。
-- 不实现 repository 业务层，除非本 Story 明确要求。
-- 不实现训练执行引擎，除非本 Story 明确要求。
-- 不实现 WorkoutSession / session records，除非本 Story 明确要求。
-- 不实现通知调度，除非本 Story 明确要求。
-- 不接入真实心率设备。
-- 不实现语音控制。
-- 不实现完整跟练闭环。
-- 不引入账号、云同步、社交、插件市场或远程主题。
+本轮从 `{{CURRENT_SEGMENT_BASE_SHA}}` 到新 tip 可触碰的 exact entries（每项同样写 `path | add/modify/delete | required/optional | category | responsibility`）：
+{{EXACT_CURRENT_SEGMENT_PATHS}}
 
-状态不变量：
-- Exercise 仍是标准动作库 item，不是 saved plan item。
-- WorkoutPlan 存储目标和结构。
-- WorkoutSession 存储实际执行结果和 plan snapshot。
-- UI 控制与未来 voice control 应映射到 WorkoutCommand。
-- Sound、vibration、animation、analytics、future voice output 应消费 WorkoutEvent。
-- HeartRateState 仍是抽象状态，不包含设备 SDK 细节。
-- core/model 不得污染为 Room/DataStore entity。
-- <补充本 Story 特有不变量，例如“保存仅生成内存草稿预览”>
+`new_story` 的 current-segment entries/envelopes必须与full-Story完全相同；`repair` 只列本轮允许触碰的最小因果闭环。每个segment path也必须存在于full-Story scope且category一致。完整Story与当前segment的每个中间commit touched-path并集都受各自scope约束；先提交未授权文件再删除/还原仍然违规。
 
-文档要求：
-- 如改变产品决策、数据契约、架构边界或 backlog 状态，必须同步更新相关文档。
-- 若只是按既有 backlog 实现，可更新 docs/project-status.md 或 docs/roadmap-backlog.md。
-- 如发现契约不足，记录未决事项，不要静默扩大模型。
+## Scope envelope
 
-验证命令：
-- .\gradlew.bat app:testDebugUnitTest
-- .\gradlew.bat app:assembleDebug
-- .\gradlew.bat app:lintDebug
-- .\gradlew.bat app:check
-- git diff --cached --check
-- 如本 Story 涉及 Android UI / APK / 视觉修复 / 交互 smoke：使用 `TrainFlow_Pixel_API_36` 或已连接设备做 adb smoke，截图保存到 `.local/smoke/<Story ID>/`；如未运行，必须说明是 AVD 缺失、设备 offline、构建失败还是流程不涉及 UI。
+- Expected / hard-max production files (integers): {{PRODUCTION_FILE_ENVELOPE}}
+- Expected / hard-max debug files (integers): {{DEBUG_FILE_ENVELOPE}}
+- Expected / hard-max test files (integers): {{TEST_FILE_ENVELOPE}}
+- Expected / hard-max docs files (integers): {{DOC_FILE_ENVELOPE}}
+- Expected / hard-max governance files (integers): {{GOVERNANCE_FILE_ENVELOPE}}
+- Current-segment expected / hard-max envelopes for all five categories: {{CURRENT_SEGMENT_FILE_ENVELOPES}}
+- Expected production LOC churn: {{PRODUCTION_LOC_ENVELOPE}}
+- Expected methods/types: {{METHOD_TYPE_ENVELOPE}}
+- Allowed new core owner/interface/wrapper/seam/dependency count: {{CORE_ABSTRACTION_ENVELOPE}}
+- Primary risk axis: {{PRIMARY_RISK_AXIS}}
 
-如果改 prototype 或前端共享配置，还必须运行：
-- npm.cmd run lint
-- npm.cmd run build
+超过 hard max、需要未授权核心抽象/ownership/dependency、accepted contracts 冲突、run-only 测试只能靠改合同才能通过、或无法闭合证据身份时，必须停止，不以测试便利扩张架构。
 
-提交与推送：
-- 完成并验证通过后提交本地 Git。
-- commit message 建议：<commit message>
-- 推送到 origin/<阶段分支>。
-- 不自行合入 main，交给主管理对话验收和 review gate。
+## Repair impact scan
 
-完成后必须报告：
-- 创建或修改了哪些代码和文档
-- 当前 Story 状态是什么：implemented / blocked / needs review
-- commit hash 和 commit message
-- 是否已推送 GitHub
-- git status
-- git branch --show-current
-- git rev-parse --show-toplevel
-- 验证命令结果
-- Android 虚拟测试环境检查结果：`.local/android-sdk` / `TrainFlow_Pixel_API_36` / `adb devices` / smoke 截图路径或未运行原因
-- 是否符合允许范围
-- 是否触碰禁止范围
-- 是否保持状态不变量
-- 是否有 blocking / must-fix / should-fix 风险
-- skills/ 是否未提交
-- .local/ 是否未提交
-- 是否有未提交内容
-- 如使用子代理：各子代理的任务、修改文件、验证结果，以及开发主代理的整合检查结果
-- 给主管理对话的交付摘要、风险和下一步建议
-- 下一轮建议：review gate（如无 blocker / must-fix / should-fix 且验证通过，可由 review 对话直接合并 main）/ 修复 / 下一 Story
-```
+{{REPAIR_IMPACT_SCAN_OR_EXPLICIT_NOT_APPLICABLE}}
+
+`repair` 不得填写 `not applicable`。Repair 在编辑前必须覆盖 finding 位置、production consumers、direct/contract tests、docs/evidence assertions 和编译兼容面；发现未授权 consumer/test/doc 时先停止，请主管理生成新的SHA绑定scope manifest并精确扩充current-segment/full-Story scope，不写 message/caller 特判绕过。
+
+本 Repair 的“最小改动”是最小因果闭环，不是只改 cited line/file：只纳入为关闭finding并保持直接合同一致所必需的路径，同时禁止顺手重构、架构替换或无关清理。
+
+## Requirements
+
+{{IMPLEMENTATION_REQUIREMENTS}}
+
+## Acceptance assertions
+
+{{ACCEPTANCE_ASSERTIONS}}
+
+每项 acceptance 必须映射到实现路径与实际执行的 test/evidence。源码搜索、helper 存在或可能 no-op 的调用不是行为覆盖。
+
+## Delegation
+
+- Total agent-tree limit including this agent: {{TOTAL_AGENT_TREE_LIMIT}}
+- Delegation plan: {{DELEGATION_PLAN_OR_NONE}}
+
+所有 agent 共享工作树。只有开发主代理可改变 branch/HEAD/index、运行最终集成验证、stage、commit、push。子 agent 不得再次委派，除非本提示词明确批准并计入总数；编辑任务必须有互斥 exact file ownership，最终回报 touched paths。主代理等待全部结果并独立复核。
+
+## Validation profile
+
+- Selected profile(s): {{VALIDATION_PROFILES}}
+- Mandatory validation: {{MANDATORY_VALIDATION}}
+- Optional validation: {{OPTIONAL_VALIDATION_OR_NONE}}
+- Forbidden / not applicable validation: {{FORBIDDEN_VALIDATION}}
+- Environment/bootstrap instructions: {{ENVIRONMENT_INSTRUCTIONS_OR_NONE}}
+
+不要盲目执行 ignored local environment script。先只读检查，或按本提示词显式设置环境。docs-only 任务不因缺少无关 SDK/runtime 而阻塞。
+
+## Evidence contract
+
+- External acceptance required: {{EXTERNAL_ACCEPTANCE_OR_NONE}}
+- Required evidence identity fields: {{EVIDENCE_IDENTITY_REQUIREMENTS_OR_NONE}}
+- Raw evidence location policy: {{RAW_EVIDENCE_POLICY}}
+- Explicit evidence limitations: {{EVIDENCE_LIMITATIONS}}
+
+Evidence artifact input closure、观测路径或断言语义中的任何变化都会使该证据失效。docs-only 后续提交只有在机械证明 executable tree 相同时才可沿用旧证据。
+
+## Git and delivery
+
+- 禁止 `git add .`、`git add -A`、`git commit -am`、stash、reset、clean、rebase 和 force push。
+- 只用 exact paths stage；commit 前检查 cached path 集合，commit 后检查 merge-base/three-dot Story scope。
+- 结构化scope manifest中的full-Story与current-segment operation、required entry、逐commit touched-path并集与每类hardMax必须同时通过；不得在运行validator时换用另一份scope。
+- 保护清单中的用户文件和未跟踪资产必须保持 SHA-256、存在性和位置不变。
+- Dev 只 push `{{STORY_BRANCH}}`；不合并 main，不宣称 reviewed/merged，不解锁下游。
+- 长期文档不得写入合并后立即失真的无条件“needs review / locked / 下一步只能 Review”。提交前模拟 post-merge truth。
+
+完成后报告：
+
+1. Story objective 与 exit lifecycle/review/merge/gate/evidence/archive 六项状态。
+2. 每个 commit 的 full SHA、message、责任；最终 immutable Story tip。
+3. planned versus actual full-Story/current-segment envelope、各段history-touched paths、exact final changed paths与three-dot scope。
+4. acceptance → implementation → test/evidence 对照。
+5. validation profile、命令、exit result、test counts 与未运行理由。
+6. evidence source/artifact/environment identity及明确不证明的内容。
+7. main/origin、Story local/remote、prerequisite ancestry、index、普通/ignored protected manifest结果。
+8. post-merge truth simulation。
+9. remaining risks/findings。
+10. 唯一下一步为新的独立 Review；不得创建下游 Story。
+````

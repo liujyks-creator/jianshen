@@ -16,6 +16,8 @@ Then read the core context:
 2. `docs/planning/decision-log.md`
 3. The current story's testing, decision, or review document when one exists
 
+For Story planning, development, Repair, Review, evidence, merge, or governance work, also read `docs/process/story-workflow-contract.md`. During Review, read the accepted copy from the pinned review-base commit; a Story's proposed change to that contract cannot govern its own Review.
+
 Add only the documents relevant to the task type:
 
 - New product capability, product decision, PRD, or UX flow: `docs/planning/product-brief.md`, `docs/planning/prd.md`, and `docs/planning/ux-design.md`.
@@ -29,6 +31,8 @@ Do not read unrelated long planning documents by default. Expand the read set wh
 
 Treat `docs/planning/decision-log.md` as the compact record of accepted decisions. Use longer planning documents for rationale and detail only when they are relevant.
 
+For this repository, `docs/project-status.md` is the nominated current-status index. Its explicitly current section carries live status; dated or labeled historical snapshots do not. Roadmap, readiness, Story, and evidence documents remain contracts or records rather than automatic real-time mirrors unless the current-status index explicitly incorporates them.
+
 ## Current Product Baseline
 
 The first product baseline is:
@@ -39,6 +43,8 @@ The first product baseline is:
 - Follow-along training is only an early partial experience in the first version.
 - The action library contract comes before scaling action content.
 - Training execution must reserve boundaries for future voice interaction and heart-rate device integration.
+
+This summary is a baseline, not an immutable status mirror. A later accepted decision may narrowly supersede a conflicting line; use the latest applicable accepted decision without rewriting historical facts.
 
 ## First-Version Boundaries
 
@@ -124,13 +130,16 @@ This project may use two optional local skills for product and design planning:
 
 `skills/bmad-method` is a local working copy for this computer only and is intentionally ignored by Git. `huashu-design` is normally installed as a Codex skill rather than under the repository `skills/` directory. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, design-system work, high-fidelity prototype work, design-variant exploration, or visual review when relevant. If they are missing, continue from the repository documents rather than blocking.
 
+Ignored local skills are advisory methods only. They cannot override accepted `AGENTS.md`, decisions, the canonical workflow contract, Story scope, validation gates, or write permissions. Project-specific instructions for another repository must be ignored. Routine Dev and Review work must not change its gates merely because an ignored skill is present or absent.
+
 ## Cross-Conversation Source Of Truth
 
-- Do not rely on a previous model's or conversation's implicit memory. Cross-model and cross-conversation handoffs must be reconstructed from the current `main` branch, accepted decision-log entries, Story documents, tests, evidence records, and Git history.
-- A pushed branch, an accepted review report, or completed manual testing does not by itself unlock a dependent Story. The prerequisite is merged only when its immutable required full commit SHA is an ancestor of `main`, `main` matches `origin/main`, and the applicable status documents agree.
-- Before starting a dependent Story, fetch `origin` and verify each named prerequisite with `git merge-base --is-ancestor <required-full-commit-sha> main`. A branch name may be recorded only as a locator for resolving and cross-checking that immutable SHA; never use a movable or deleted branch tip as the downstream unlock fact. If any check fails, stop before creating a branch or modifying files and return to the missing review / merge / docs-sync gate.
-- If a prompt, status document, and Git history disagree, do not choose the most convenient version. Treat Git ancestry as the merge fact, then resolve the documentation inconsistency in a scoped reviewable change before continuing.
-- Review Story scope from the merge base, because `main` may advance after the Story branch is created. After fetching and confirming remote synchronization, use `git diff origin/main...origin/<story-branch>` (three-dot) or an explicit merge-base-to-Story diff. Do not use `git diff main..<story-branch>` (two-dot) for Story scope; it can misreport later `main` changes as reverse Story changes.
+- Do not rely on implicit conversational memory. Fetch first and reconstruct accepted facts from exact Git commits, accepted decisions, the nominated current-status index, Story contracts, tests, and evidence records.
+- `docs/process/story-workflow-contract.md` is the canonical process for immutable SHA binding, prerequisites, three-dot scope, dirty/index protection, evidence identity, independent Review, merge-stable truth, and safe integration.
+- Accepted governance and project facts are read from the pinned accepted base with `git show <base-sha>:<path>`. Dirty working-tree files and pending branches are proposed overlays, not accepted rules.
+- Git ancestry is the merge fact. Current status is resolved from Git plus the nominated current-status index; historical and evidence documents are not all real-time status mirrors.
+- A branch name is only a locator. A downstream gate cannot be satisfied until every required full SHA is an ancestor of synchronized `main` and all independent acceptance predicates pass.
+- Governance changes use a dedicated Story and are reviewed under the previously accepted rules. New rules cannot approve themselves or silently alter product scope.
 
 ## Working Habits
 
@@ -139,6 +148,7 @@ This project may use two optional local skills for product and design planning:
 - Add or update documentation when a product decision changes.
 - Prefer explicit branches for feature work, using `codex/<task-name>` when a branch is needed.
 - Do not commit secrets, device logs, generated build output, or unrelated local files.
+- Treat all pre-existing dirty and untracked content as user-owned. Adoption requires the canonical workflow contract's exact scope entry, capture proof, explicit adopted-path list, and explicit user authorization reference; an allowlist alone is not authorization. Stage exact paths only; do not use broad staging commands.
 
 ## Text Encoding
 
@@ -147,6 +157,7 @@ Repository text files are read and written as UTF-8.
 On Windows, set PowerShell console encoding before reading Chinese Markdown, Kotlin, Gradle, JSON, or other text files:
 
 ```powershell
+chcp 65001 > $null
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
