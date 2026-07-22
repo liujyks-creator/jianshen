@@ -26,7 +26,7 @@
 以下为merge前历史分支快照：
 
 - merge前：E17-6曾为`implemented / needs review`；E17-7曾因E17-6前置而`planned / prerequisite-gated`。
-- 该门禁现已满足；E17-6状态以页首Git事实为准。E17-7当前改由本次Planning Repair独立Review/merge门禁控制。
+- 该E17-6门禁现已满足；E17-6状态以页首Git事实为准。此处不生成E17-7当前任务；Planning Repair / E17-7状态按本文末统一条件式真值判定。
 - 未创建E17-6状态docs-sync、递归closeout或E17-7分支。
 
 本轮 Review Repair 2 的 executable source commit 为 `2b1a974d67d4774cb0699434ecbbbf5a655c02ed`，commit message 为 `Classify nonzero GATT callback failures`。Repair 2 APK 由该 commit 的 executable tree 强制重建；后续最终 Story tip 只增加本文档证据记录，不改变 APK、production 或 tests。前一 Review Repair 的 executable source `018332eb13636771b79d6cc8bb8216738ead5093` 与其 APK / AVD evidence 只保留为历史分层证据，不是本轮 executable tree 的等价物。
@@ -266,4 +266,6 @@ Production reachability 静态门禁：
 
 提交前/后另执行 `git diff --check`、`git diff --cached --check` 与 `git diff --check origin/main...HEAD`。
 
-当前交接：E17-6已完成独立Review/merge；新owner的production/debug实例化仍为0，旧`AndroidBleHeartRateProvider` / `AndroidHeartRateDeviceScanner`路径仍production可达。本Planning Repair为`implemented / needs review`；E17-7保持`planned / prerequisite-gated`，当前只受本Repair独立Review/merge门禁阻挡；当前下一步只能是独立Planning Repair Code Review，不得开始E17-7。
+当前交接的稳定事实：E17-6已完成独立Review/merge；新owner的production/debug实例化仍为0，旧`AndroidBleHeartRateProvider` / `AndroidHeartRateDeviceScanner`路径仍production可达。
+
+**Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。

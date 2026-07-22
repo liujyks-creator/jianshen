@@ -8,16 +8,16 @@
 
 ### 当前 E17 状态索引
 
-| 项目 | 当前稳定事实 |
+| 项目 | 合并后稳定事实 |
 |---|---|
 | E17-4 | `reviewed / merged`；immutable SHA `1ea67561b4866aa76c41b854da74da85c208aa25`；merge commit `4b354f5116bbf7f7610e79845210d481c839fed6`；readiness `passed` |
 | E17-5 | `reviewed / merged`；immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`；merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；provisional foreground waiting/live = `3000 / 2500 ms` |
 | E17-6 | `reviewed / merged`；immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`；merge commit `503d3151d731565837ab76f44fbebc25bb982e0d` |
-| 本次 Planning Repair | `implemented / needs review`；尚未成为同步`main` ancestor时，只允许独立Review/Repair本Planning Closure |
-| E17-7 | 尚未开始；`planned / prerequisite-gated`，当前仅受本Planning Repair独立Review/merge门禁阻挡 |
+| 本次 Planning Repair / E17-7 planning prerequisite | 按下方统一条件式真值自动判定 |
+| E17-7 | 按下方统一条件式真值保持`planned / prerequisite-gated`或自动解除planning prerequisite |
 | E17-8 / E17-9 / E17-10 | 依次`planned / prerequisite-gated`；详细合同唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md` |
 
-本Repair通过独立Review、merge/push、成为同步`main` ancestor且七份文档一致后，E17-7 gate自动`satisfied`；不创建本Repair的docs-sync或“closure的closure”，主管理从Git解析本Repair immutable SHA并直接生成E17-7提示词。当前下一步只能是独立Planning Repair Code Review，不得开始E17-7。
+**Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
 
 E17-6的新`HeartRateRuntimeOwner`已完成独立Review，但production/debug实例化仍为0；当前App仍运行旧`AndroidBleHeartRateProvider` / `AndroidHeartRateDeviceScanner`路径。E17-7必须在同一Story内以三阶段提交完成准备、原子composition切换和退休/证据，最终只允许一个由`TrainFlowApplication`创建的production BLE owner；`ProcessVisibilityTracker`只发布visibility fact，cleanup与training/FGS eligibility属于Application policy。
 
@@ -31,7 +31,7 @@ E17-8必须用真实workout session ID + producer token + 单调`stateVersion`�
 
 训练完成 / 放弃且 App 明确仍在前台时，协调者停止 / demote FGS并最终移除 ID `7200`；若同一 live attempt 从未 cleanup 且 opt-in、权限、Bluetooth、target eligibility 仍合法，owner 转为非训练前台只显示不记录并保留该连接，冻结胶囊可继续显示 fresh bpm。这只是同一未关闭 attempt 延续，不是自动恢复 / 自动连接 / reconnect；后续断连仍手动恢复。terminal 发生在后台、锁屏或进程可见性不确定时必须停止 FGS并 cleanup，回前台不自动 scan / connect；Route 是否存在不作为前台事实。Route dispose、重复 terminal、Service stop 与 cleanup 均须幂等，Route 不得直接取消仍活跃训练的通知。
 
-E17-2 immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 与 E17-3 immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 均是 `main` ancestor；E17-3 merge commit 为 `1e0a7a9cf0b118ca829a5843d066795b4420eb5f`，E17-2 / E17-3 均为 `reviewed / merged`。E17-4 状态与 production implementation 解锁以本节上方条件式真值为准。
+E17-2 immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 与 E17-3 immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 均是 `main` ancestor；E17-3 merge commit 为 `1e0a7a9cf0b118ca829a5843d066795b4420eb5f`，E17-2 / E17-3 均为 `reviewed / merged`。E17-4/5/6状态以本节索引中的稳定Git事实为准。
 
 2026-07-16 E17-1 Band 9 与标准 HRS 重新复验已完成独立 Review、merge 与 push，最终状态为 **reviewed / merged**，设备/协议结论为 **passed**。Immutable Story SHA 为 `b7a48b980b54e34763212699c64ce387866ec064`，merge commit 为 `17a305725a4241810ea4dbd26a29414c2be2582b`；Story SHA 已是 `main` ancestor。E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。Review 无 blocker、must-fix 或 should-fix；仅保留两项 debug-only nice-to-have：持续 notify 导致 debug 页面顶部 `Stop / Disconnect` 不易访问，以及 debug 工具的 `currentGatt` callback / UI 共享状态未显式串行化。这两项不扩展为 production 重构任务。
 
@@ -301,7 +301,7 @@ E14.4-2 Plan edit / detail low-coupling implementation 已完成并完成 review
 2. 跟练后续不再通过“计时计划切换为跟练视图”解决完整编排，而是通过统一动作选择页选择动作，再形成热身、动作、休息、轮次、放松结构；完整跟练编排仍待 E10 后续实现。
 3. 固定阶段词 cue 可在后续保留，但用户任意文本 TTS、语音读秒大范围能力和自动语音教练不属于第一版。
 4. Android 工程脚手架 E0.1 已采用 `minSdk 26`、`compileSdk/targetSdk 36`、包名 `com.liujyks.trainflow`、Kotlin DSL、单 `app` module 起步。
-5. E17 心率产品合同已由 D-080 收敛，最小技术架构已由 D-081 与 `docs/planning/e17-3-heart-rate-minimum-architecture.md` 收敛，E17-4 readiness已`passed`，E17-4/5/6均已reviewed/merged。E17-7只受本Planning Repair独立Review/merge门禁阻挡。前台 / 活跃训练后台自动恢复、训练中记录、单次复盘、跨训练趋势和用户数据导出均需各自后续产品 / 数据 / 隐私 / 验收 Story。Apple Watch / HealthKit 保留为未来 iOS 路线；Health Connect 更适合未来独立历史摘要 / 趋势，不作为当前 Band 9 实时来源。胶囊视觉与互动已冻结直接复用；未来需要独立视觉审查的是训练后心率复盘，而不是重新设计胶囊。
+5. E17 心率产品合同已由 D-080 收敛，最小技术架构已由 D-081 与 `docs/planning/e17-3-heart-rate-minimum-architecture.md` 收敛，E17-4 readiness已`passed`，E17-4/5/6均已reviewed/merged。E17-7 planning prerequisite按本页统一条件式真值判定。前台 / 活跃训练后台自动恢复、训练中记录、单次复盘、跨训练趋势和用户数据导出均需各自后续产品 / 数据 / 隐私 / 验收 Story。Apple Watch / HealthKit 保留为未来 iOS 路线；Health Connect 更适合未来独立历史摘要 / 趋势，不作为当前 Band 9 实时来源。胶囊视觉与互动已冻结直接复用；未来需要独立视觉审查的是训练后心率复盘，而不是重新设计胶囊。
 6. 各 story 的详细开发说明、测试清单和验收记录。
 7. 官方默认 UI 是否首版同时提供暗色主题，还是先提供浅色工作区 + 深色训练执行页。
 8. `docs/planning/data-contracts.md` 与 `prototype/src/data/contracts.ts` 的 `WorkoutCommand` 细节需要后续对齐；E0.3 已以文档和决策日志为准，保留文档中的 `update_actual_weight`、`update_actual_reps` 和更细的力量组完成/确认输入结构。
@@ -321,7 +321,7 @@ E14.4-2 Plan edit / detail low-coupling implementation 已完成并完成 review
 2. E10.13 Ready Start Gate 已完成；计时训练从编辑页或计划详情开始后先进入极简 ready gate，点击中心圆才真正 `StartSession`。
 3. E10.12 Timer Dial Compose landing 已把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产 Timer Dial：执行页减字、总剩余时间放大居中、圆盘放大、线条变细、宽底层圆环、同源动态浅点和阶段色中心圆；继续保留 continuous progress、pause freeze、terminal freeze、rest extension monotonic progress。
 4. E10.16 Motion Landing 已完成；后续若继续训练执行页 polish，仍只消费既有 motion token，不改变训练语义、真实记录或倒计时口径。
-5. E17-4、E17-5、E17-6已`reviewed / merged`，当前新owner仍未production/debug实例化。E17-7尚未开始并仅受本Planning Repair门禁阻挡；本Repair成为同步`main` ancestor且七份文档一致后，E17-7 gate自动`satisfied`，不创建状态docs-sync或递归closeout。当前只允许独立Planning Repair Code Review。
+5. E17-4、E17-5、E17-6已`reviewed / merged`，新owner仍未production/debug实例化；Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定，条件未全部满足时只允许独立Planning Repair Review/Repair，条件全部满足后不需要额外docs-sync或递归closeout。
 6. E12 Stats / Records 已具备真实基础统计、非心率聚合图表、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势。心率单次复盘的平均 / 最高心率、时间曲线、区间时长 / 占比和覆盖缺口已由 E17-2 接受为后续方向；记录数据成立后再做独立视觉审查和用户确认。跨训练趋势、训练压力、恢复时间与用户数据导出继续分独立后续 Story。
 7. E13.1 Sound Cue System 已实现短提示音播放与音频共存；E13 audit / QA gate 已确认现有实现、两个生产 raw 资源、根目录和 `.local/audio/` 禁区边界、测试覆盖和真机 QA 计划。下一步优先补手机扬声器 / 蓝牙耳机音频共存 smoke；若真机发现外部音乐 / 视频被暂停、降低、duck 或提示音不可闻，再拆 platform audio adaptation story。E13.2 固定女声 cue / 阶段名朗读仍是后续增强，不做用户任意 TTS 或自动语音教练。
 8. E14.2 Timer Dial real-device proportion restore 已实现；E14.4-1 继续保留底部 `确认+15s` 稳定态并补计时状态矩阵语义回归。E14.3 已完成 UI quality audit and polish sequencing，审计文档记录了各功能 UI 问题清单、截图矩阵、影响等级和用户测试前优先项。

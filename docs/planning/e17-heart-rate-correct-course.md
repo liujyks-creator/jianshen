@@ -1,6 +1,6 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态判定：** E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`；E17-7尚未开始并仅受本次Planning Repair独立Review/merge门禁阻挡
+**状态判定：** E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`；Planning Repair与E17-7 planning prerequisite按下方统一条件式真值自动判定
 **日期：** 2026-07-12；状态同步：2026-07-22
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
@@ -89,11 +89,11 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - E17-8以真实workout session ID + producer token + 单调`stateVersion`隔离同plan多次训练、旧Route迟到事件与bounded detach/reattach；plan ID不得作为实例唯一身份。
 - E17-9以同一Application owner的debug-only observer完成五阶段measurement/final APK身份链；独立GATT工具不能替代M1。`ReleaseUnconfirmed`或等价态在release未确认时冻结ordinary writer，后台/Unknown执行cleanup且不宣称后台保证；`handoffGeneration`不得复用workout producer generation。
 - E17-10已收窄为evidence-only：production files/lines/methods均为0，任何`app/src/main`行为问题返回E17-6/7/8/9独立Repair并在合入同步main后重建APK、重跑受影响gate。E17-5修改debug M0工具后必须重新build/install并记录source preparation SHA、APK SHA256、设备与分层日志；任何后续影响debug APK的可执行变化立即使旧证据失效，E17-1 APK不得沿用。
-- 当前Planning Repair为`implemented / needs review`；它尚未成为同步`main` ancestor时只允许独立Review/Repair本Planning Closure。通过独立Review、merge/push、ancestry与七份文档一致性后，E17-7 gate自动`satisfied`；不创建本Repair docs-sync或递归closeout，不硬编码未来SHA或merge commit。
+- **Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
 
 ### E17 后续 implementation Story
 
-D-081已锁定最小技术架构，E17-4/5/6已完成各自范围。E17-7仍未授权开始，直到本Planning Repair门禁自动满足；自动重连、记录、分析和导出仍需各自后续决策与Story。E17-7至E17-10详细计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
+D-081已锁定最小技术架构，E17-4/5/6已完成各自范围。E17-7 planning prerequisite按上方统一条件式真值自动判定；自动重连、记录、分析和导出仍需各自后续决策与Story。E17-7至E17-10详细计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
 
 ## 4. 测试分层
 
@@ -166,7 +166,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 6. E17-2 immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 已是 `main` ancestor，E17-3 gate 已满足并已完成用户方案 A 确认与 docs-only 架构。
 7. E17-3 immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor；E17-3 为 `reviewed / merged`，E17-4 gate 已 satisfied。
 8. E17-4、E17-5、E17-6的immutable SHA与merge commit均已成为同步`main`历史事实；三者状态为`reviewed / merged`，E17-4 readiness为`passed`。
-9. 本Planning Repair尚未通过独立Review、merge/push、成为同步`main` ancestor并完成七份文档一致性时，只允许Review/Repair本Planning Closure，E17-7保持`planned / prerequisite-gated`。全部门禁满足后E17-7 gate自动`satisfied`；主管理从Git解析Repair最终SHA并直接生成E17-7提示词，不做docs-sync、递归closeout或“closure的closure”。
+9. Planning Repair与E17-7 planning prerequisite按第3节统一条件式真值自动判定；条件未全部满足时只允许独立Planning Repair Review/Repair，条件全部满足后无需docs-sync或递归closeout。
 
 每一关都必须：
 
@@ -177,7 +177,7 @@ E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶�
 
 push、Review 文本、人工测试或分支存在都不等于已合入。E16 分支、E16 Story tip 和 `89d1e23f870185a2e279d35bb293883f64fe70ba` 均不得作为 E17 解锁前置。
 
-当前E17-0至E17-6均为`reviewed / merged`，E17-7尚未开始。已完成Story的immutable SHA和merge commit作为稳定历史事实；未完成Story使用条件式门禁，不保留冲突的无条件状态。当前项目阶段由Git ancestry、`main...origin/main = 0 0`与`docs/project-status.md`当前E17状态索引共同判定；后续Story不再创建独立状态docs-sync，并在自身开发分支文档中采用合并后稳定的双条件表述。
+E17-0至E17-6均为`reviewed / merged`。已完成Story的immutable SHA和merge commit作为稳定历史事实；未完成Story使用条件式门禁，不保留冲突的无条件状态。项目阶段由Git ancestry、`main...origin/main = 0 0`与`docs/project-status.md`当前E17状态索引共同判定；后续Story不再创建独立状态docs-sync，并在自身开发分支文档中采用合并后稳定的双条件表述。
 
 ## 8. E17-0 验收
 
@@ -188,6 +188,6 @@ push、Review 文本、人工测试或分支存在都不等于已合入。E16 �
 - E17-0 已 reviewed / merged；Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 成为 `main` ancestor。
 - E17-0 closeout 后续已完成独立 Review / merge / push / ancestry / sync / docs consistency 门禁；未创建递归 closeout。
 - E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`。
-- E17-7尚未开始，只受本Planning Repair独立Review/merge门禁阻挡；当前下一步只能是独立Planning Repair Code Review。
+- Planning Repair与E17-7 planning prerequisite按第3节统一条件式真值自动判定；条件未全部满足时只允许独立Planning Repair Review/Repair，条件全部满足后无需docs-sync或递归closeout。
 - 通用提示词流程包含连续 Review、Repair 结构、最小修改、Evidence、体积控制与 correct-course 职责门禁。
 - 本 Story 只修改 Markdown / 根目录提示词模板，不修改生产或测试代码。

@@ -64,7 +64,9 @@ stepsCompleted:
 
 > 2026-07-18 E17-4 Review Repair 1 刷新：E17-6只新增并确定性测试test-only可达的新`HeartRateRuntimeOwner`；旧provider/scanner/DTO继续维持production/debug编译并仍是唯一production可达BLE owner。E17-7必须在同一Story从`TrainFlowApplication`唯一创建点切换Application、Activity、Compose、settings、manual/saved-device、capsule与debug `HeartRateBroadcastSmokeActivity.kt`，再退休旧scanner/GATT ownership及旧DTO production consumer，切换后不留可重新实例化旧owner的production入口。E17-7 process visibility固定为main-looper reducer，以Activity identity集合和foreground/background/configuration-transition/unknown等价facts工作，configuration transition使用generation及确定性completion/timeout，异常事件fail-closed；E17-9前active training真实后台仍cleanup。ID `7200` release ack仅是Service调用`stopForeground(STOP_FOREGROUND_REMOVE)`正常返回后的进程内generation事实，不是系统UI删除确认；ordinary writer必须等待当前匹配ack并只replay latest state。E17-10现为evidence-only，production files/lines/methods均为0，production问题返回E17-6/7/8/9独立Repair并重建APK、重跑受影响gate。E17-5 debug M0工具变更后必须重新build/install并记录source preparation SHA与APK SHA256；任何后续影响debug APK的可执行变化使旧证据失效，禁止沿用E17-1 APK。
 
-> 2026-07-22 当前E17索引：E17-4 `reviewed / merged`（immutable `1ea67561b4866aa76c41b854da74da85c208aa25`；merge `4b354f5116bbf7f7610e79845210d481c839fed6`；readiness `passed`）；E17-5 `reviewed / merged`（immutable `959146a7e41a38d654b4988ba0d443f2aea0d874`；merge `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；provisional foreground `3000 / 2500 ms`）；E17-6 `reviewed / merged`（immutable `f9188c09275cd01dbf182823b3886635b17105bc`；merge `503d3151d731565837ab76f44fbebc25bb982e0d`）。新owner已独立Review但production/debug实例化仍为0，旧provider/scanner仍production可达。E17-7尚未开始，只受本Planning Repair独立Review/merge门禁阻挡；本Repair成为同步`main` ancestor且七份文档一致后gate自动`satisfied`，不创建docs-sync或递归closeout。详细计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
+> 2026-07-22 E17稳定索引：E17-4 `reviewed / merged`（immutable `1ea67561b4866aa76c41b854da74da85c208aa25`；merge `4b354f5116bbf7f7610e79845210d481c839fed6`；readiness `passed`）；E17-5 `reviewed / merged`（immutable `959146a7e41a38d654b4988ba0d443f2aea0d874`；merge `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；provisional foreground `3000 / 2500 ms`）；E17-6 `reviewed / merged`（immutable `f9188c09275cd01dbf182823b3886635b17105bc`；merge `503d3151d731565837ab76f44fbebc25bb982e0d`）。新owner已独立Review但production/debug实例化仍为0，旧provider/scanner仍production可达。Planning Repair与E17-7 planning prerequisite按下方统一条件式真值自动判定；详细计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
+
+> **Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
 
 ## 1. Readiness Decision
 
@@ -75,7 +77,7 @@ stepsCompleted:
 | E1 动作库 | Partially ready after E1.1 | `O-001` 已由 `docs/planning/action-content-slice.md` 收敛；E1.2 可进入 fixture 导入，但仍不得提前实现完整动作库业务层或 UI 闭环。 |
 | E6 跟练雏形 | Not yet | 需要先收敛 `O-002` 跟练边界。 |
 | E7 通知、声音、震动 | Partially ready | D-027 / E7.2 ordinary notification基线与D-081 `connectedDevice` FGS窄例外已确认；E17-8必须以真实session ID + token + `stateVersion`收口ordinary writer，E17-9再完成shared-owner M1与ID`7200` handoff。 |
-| E17 真实心率能力 | Readiness passed / sequential Story gates | E17-4/5/6已reviewed/merged；E17-7只受本Planning Repair门禁阻挡。E17-7按14/1/7 envelope原子切换，E17-8闭合session/generation/detach合同，E17-9闭合shared-owner observer、五阶段APK链与`ReleaseUnconfirmed`，E17-10保持evidence-only。 |
+| E17 真实心率能力 | Readiness passed / sequential Story gates | E17-4/5/6已reviewed/merged；E17-7 planning prerequisite按本页统一条件式真值自动判定。E17-7按14/1/7 envelope原子切换，E17-8闭合session/generation/detach合同，E17-9闭合shared-owner observer、五阶段APK链与`ReleaseUnconfirmed`，E17-10保持evidence-only。 |
 
 ## 2. 已检查文档
 
@@ -114,7 +116,7 @@ stepsCompleted:
 - 通知、声音、震动和偏好设置的基础能力。
 - 官方默认设计系统和可 fork 的 UI shell 边界。
 
-### 当前 E17 readiness 已通过，E17-7 仍受 Planning Repair 门禁约束
+### E17 readiness已通过；Planning Repair / E17-7按条件式门禁判定
 
 - D-080 已接受默认关闭、用户显式 opt-in 后读取标准 HRS 设备心率，并通过已冻结胶囊在 TrainFlow 前台跨页面显示 bpm、非医疗区间和用户上限视觉提示。
 - D-081 已接受唯一进程 owner、main-looper serialization、attempt / raw GATT identity、窄 permission TOCTOU、facts / presentation 分层、manual recovery，以及活跃训练 `connectedDevice` FGS / 单一训练通知方案；malformed payload 不立即形成公共 `TechnicalFailure`。
@@ -123,7 +125,7 @@ stepsCompleted:
 - 明确前台 terminal 可保留同一从未 cleanup 且仍 eligible 的 live attempt，转为非训练前台只显示不记录；后台、锁屏或可见性不确定 terminal 必须 cleanup。Route existence 不作为前台事实，两条路径均不自动 scan / connect / reconnect。
 - E17-7固定production 14、debug 1、可修改tests 7；`BleHeartRateProviderBoundary.kt`只保留owner实际消费的四个纯compatibility类型，debug Activity不创建第二owner。`ProcessVisibilityTracker`只发布fact，cleanup与training/FGS eligibility由Application policy决定。
 - E17-8 notification身份使用真实workout session ID + producer token + 单调`stateVersion`，Route dispose只进入bounded detach；E17-9使用同一Application owner的debug-only observer与五阶段APK身份链，release未确认时进入`ReleaseUnconfirmed`或等价稳定态。
-- E17-4/5/6已完成各自范围；production composition仍是旧provider/scanner，新owner尚未production/debug实例化。E17-7只受本Planning Repair门禁阻挡；门禁满足前不得开始E17-7。
+- E17-4/5/6已完成各自范围；production composition仍是旧provider/scanner，新owner尚未production/debug实例化。E17-7 planning prerequisite按本页统一条件式真值自动判定；条件未全部满足前不得开始E17-7。
 - 训练记录、复盘分析、覆盖缺口、用户导出和自动恢复仍是后续独立能力，不进入 E17-5 至 E17-10 production 序列。
 
 ### 当前未纳入或继续排除
@@ -170,7 +172,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
 - `O-006` / E16 历史快照：E16 曾验证 Band 9 可通过心率广播暴露标准 BLE HRS；E16-1 至 E16-10b-1 中已经合入 `main` 的 Story 继续保留各自 immutable merge fact。E16-10a 当时接受的有限前台 direct reconnect 与 10 / 15 / 30 秒 freshness policy 已 reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；E16-10b-1 纯 Kotlin policy core 也已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。这些 `reviewed / merged` 仅是历史事实，不表示 E17 继承其产品或技术合同。
-- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17-0至E17-6已`reviewed / merged`；E17-7尚未开始并只受本Planning Repair独立Review/merge门禁阻挡。自动恢复为已接受价值的延后独立候选，不是本轮production序列。
+- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17-0至E17-6已`reviewed / merged`；Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定。自动恢复为已接受价值的延后独立候选，不是本轮production序列。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查
@@ -202,6 +204,4 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 原 `MVP Alpha readiness 前检查` 及其可复制提示词已经失效，只保留在 Git 历史中，不得继续使用。E16 umbrella 已由 correct-course 关闭并被 E17 替代；旧 E16-1 / E16-2 只能作为 historical / reference 或 revalidation 输入，不能直接作为 E17 provider 地基合同。自动重连不得作为默认前置。
 
-E17-0至E17-6已`reviewed / merged`，E17-4 readiness=`passed`。当前Planning Repair为`implemented / needs review`；它尚未通过独立Review、merge/push、成为同步`main` ancestor并完成七份文档一致性时，只允许Review/Repair本Planning Closure，E17-7保持`planned / prerequisite-gated`。
-
-门禁满足后E17-7 gate自动`satisfied`；主管理从Git解析本Repair immutable SHA并直接生成E17-7提示词，不创建docs-sync或递归closeout。当前下一步只能是独立Planning Repair Code Review。记录、分析、用户导出与自动恢复均需各自后续门禁。
+E17-0至E17-6已`reviewed / merged`，E17-4 readiness=`passed`。Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定；条件未全部满足时只允许独立Planning Repair Review/Repair，条件全部满足后无需docs-sync或递归closeout。记录、分析、用户导出与自动恢复均需各自后续门禁。

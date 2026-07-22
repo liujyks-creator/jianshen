@@ -12,7 +12,7 @@
 
 **结论：passed。** D-080 产品合同与 D-081 最小架构之间未发现矛盾；production 代码迁移点、单 owner / 单 writer 收口、optional BLE seam、freshness 无循环门禁、Android 平台成本、六个风险隔离 Story、AVD / Band 9 evidence 层级及容量预算均已形成可执行计划。没有发现必须新增未经批准核心 ownership 层、修改 `docs/architecture.md` / decision log、重开 D-080 / D-081，或把 readiness 判为失败的待决产品选择。
 
-E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`、merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；E17-6 immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`、merge commit `503d3151d731565837ab76f44fbebc25bb982e0d`。禁止 E16 SHA `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor。E17-7 尚未开始；其当前唯一前置是本次 Planning Repair 的独立 Review / merge 门禁，详见第 14 节。
+E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`、merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；E17-6 immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`、merge commit `503d3151d731565837ab76f44fbebc25bb982e0d`。禁止 E16 SHA `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor。Planning Repair与E17-7 planning prerequisite按第14节统一条件式真值自动判定。
 
 ## 2. 盘点基线与硬边界
 
@@ -200,12 +200,33 @@ E17-9 的 M1 只能由 debug-only shared-owner evidence observer 观察同一个
 E17-9 是同一 Story 内不可拆分合入 `main` 的五阶段链：
 
 1. 提交 runnable FGS implementation 与 shared-owner observer source。
-2. 从该 source commit 强制 build / install measurement APK，记录 source full SHA、APK SHA256、bytes、variant / applicationId、device / API / Band 9 环境。
+2. 从该 source commit 强制 build / install measurement APK，记录下方完整 measurement identity tuple。
 3. 使用该 APK 完成 M1 锁屏 / 临时后台 evidence，并提交 evidence 记录。
 4. 依据 M0 + M1 提交 final freshness threshold 代码与 tests；不得猜测 final threshold。
-5. 从最终 executable source 强制重建 final APK，并重跑全部受影响 unit / platform tests、AVD handoff 与 Band 9 active-training lockscreen / background gate。
+5. 从最终 executable source 强制重建 final APK，记录下方完整 final identity tuple，并重跑全部受影响 unit / platform tests、AVD handoff 与 Band 9 active-training lockscreen / background gate。
 
-任何 production 或 debug executable、Manifest、Gradle 或资源变化都会使此前 APK 身份失效。measurement APK 只能支撑 M1，不能冒充 final APK；final threshold 修改后必须重新 build / install / hash / 验证。E17-1、E17-5 M0、旧 AVD 与旧 E16 截图均不能替代 M1 或 final evidence。M1 不足时 E17-9 不得 merge。
+**Measurement APK identity tuple（M1记录必填）：**
+
+- runnable FGS executable source full SHA；APK SHA256；APK bytes；build variant；applicationId。
+- measurement Activity完整类名或明确入口路径；启动入口与App内导航方式，必须足以让Review复现到shared-owner observer。
+- 设备型号；可取得的设备identifier/serial；无法取得时写`unknown`并记录具体原因，不猜测。Android系统版本与API level分别记录。
+- build timestamp、install timestamp、measurement开始/结束时间或measurement window，三者均记录timezone。
+- 当前实际使用的production Application owner身份：Application完整类名、owner完整类名、唯一创建点路径，以及observer取得同一实例而未创建scanner/GATT/第二owner的核对结果。
+- 对应M1日志、截图和原始数据的精确位置；记录各路径与本measurement APK身份的绑定关系。
+- 已知设备固件版本与配套App名称/版本；任何无法取得的字段写`unknown`并记录原因，不猜测。
+
+**Final APK identity tuple（final gate记录必填）：**
+
+- final threshold代码与tests commit完成后必须强制重新build；记录final executable source full SHA、APK SHA256、APK bytes、build variant与applicationId。
+- Activity完整类名或明确入口、启动入口/导航方式；设备型号与可取得的identifier/serial，无法取得时写`unknown`及原因。
+- Android系统版本与API level；build、install、test开始/结束时间或test window，全部记录timezone。
+- 明确列出final APK实际重跑的每一个受影响AVD gate与Band 9 gate及结果；未实际重跑的gate不得写为通过。
+- final日志、截图和原始数据的精确位置，并把每项证据绑定到final APK identity。
+- 记录measurement APK与final APK是否来自同一executable Git tree，并给出tree/diff核对依据；若不同，必须明确写`not equivalent`，measurement APK及其证据不得证明final executable或final gate。相同文件名不代表相同APK。
+
+**Executable identity与evidence失效规则：** 以下任一变化都会产生新的executable identity，并使旧APK以及绑定旧APK的截图、日志、UI tree和设备输出不能证明新的executable或final gate：`app/src/main` production executable变化、`app/src/debug` harness/observer变化、Android Manifest变化、Gradle或dependency变化、Android资源变化、build variant/applicationId/入口变化，以及任何影响编译产物的build配置变化。发生变化后必须重新build/install/hash并重跑所有受影响gate；measurement APK截图或日志不能证明后续发生executable变化的final APK。
+
+仅文档修改，或完全不改变executable tree的测试证据整理，可以不改变APK identity，但必须以Git tree/diff证明没有任何executable变化。不得用旧E17-1 APK替代E17-9 M1，不得用独立自持GATT工具证明shared Application owner/FGS，不得用相同文件名冒充相同APK，也不得猜测缺失的设备、版本或时间字段。measurement APK只能支撑与其身份绑定的M1；final threshold修改后必须重新build/install/hash/验证。E17-5 M0、旧AVD与旧E16截图均不能替代M1或final evidence；M1不足时E17-9不得merge。
 
 ## 9. Android 平台与 Manifest 矩阵
 
@@ -336,7 +357,7 @@ E17-9 的 pure / Android / AVD 计划必须覆盖 normal `FGS -> ORDINARY`、`FG
 ### E17-7 Application / Settings / Capsule Production Wiring
 
 - **唯一主要风险轴：** composition root、process visibility、manual user flow与跨页面同owner接线。
-- **状态：** `planned / prerequisite-gated`。本次 Planning Repair 尚未通过独立Review、merge/push、成为同步`main` ancestor并完成七份文档一致性前，只允许Review/Repair本Planning Closure；门禁满足后E17-7 gate自动`satisfied`，主管理从Git解析本Repair immutable SHA并直接生成E17-7提示词，不创建本Repair的docs-sync或递归closeout。
+- **状态：** 按第14节Planning Repair / E17-7统一条件式真值自动判定。
 - **允许范围：** 仅限下列原子切换文件、直接legacy tests与验证动作，不得把“原子切换”解释为可修改任意health文件：
   - production composition与consumer接线：`app/src/main/java/com/liujyks/trainflow/app/TrainFlowApplication.kt`创建唯一新owner；`app/src/main/java/com/liujyks/trainflow/app/MainActivity.kt`与`app/src/main/java/com/liujyks/trainflow/ui/shell/official/TrainFlowApp.kt`切换到该owner；`app/src/main/java/com/liujyks/trainflow/feature/settings/TrainingPreferencesUiState.kt`、`app/src/main/java/com/liujyks/trainflow/feature/settings/SettingsRoute.kt`与`app/src/main/java/com/liujyks/trainflow/app/TrainingPreferencesAppMapper.kt`迁移settings、manual scan/connect与saved-device consumer；`app/src/main/java/com/liujyks/trainflow/core/datastore/TrainFlowPreferences.kt`、`app/src/main/java/com/liujyks/trainflow/core/datastore/TrainFlowPreferenceKeys.kt`与`app/src/main/java/com/liujyks/trainflow/core/datastore/TrainFlowPreferencesDataSource.kt`只作DataStore兼容接线；`app/src/main/java/com/liujyks/trainflow/ui/shell/official/HeartRateFloatingCapsuleState.kt`及其`TrainFlowApp.kt`接线迁移capsule presentation mapper。上述文件还明确承载Activity recreation / page navigation不重建owner、离开settings只停scan、cold start只恢复saved hint、opt-out / permission loss / Bluetooth off / non-training background cleanup、E17-9前active training background cleanup，以及主动permission / scan / saved exact match / manual select / connect动作。该授权只用于把E17-6已经规划的新owner接入E17-7 production composition。
   - process visibility与唯一owner验证：新增窄`app/src/main/java/com/liujyks/trainflow/app/ProcessVisibilityTracker.kt`（平台`ActivityLifecycleCallbacks`），以及`app/src/test/java/com/liujyks/trainflow/app/ProcessVisibilityTrackerTest.kt`和`app/src/test/java/com/liujyks/trainflow/app/TrainFlowApplicationHeartRateOwnerTest.kt`，分别覆盖第9.1节reducer全矩阵与Application唯一owner / recreation / navigation不重建行为。
@@ -347,7 +368,7 @@ E17-9 的 pure / Android / AVD 计划必须覆盖 normal `FGS -> ORDINARY`、`FG
   - 必须运行、默认不得修改的回归tests：`core/datastore/TrainFlowPreferencesBoundaryTest.kt`、`app/TrainingPreferencesAppMapperTest.kt`、`ui/shell/official/TrainFlowAppPermissionResultTest.kt`、`feature/workoutsession/HeartRatePermissionBoundaryTest.kt`（同时覆盖debug Manifest）、`feature/settings/HeartRateSettingsActionVisualBoundaryTest.kt`、`core/health/HeartRateMeasurementParserTest.kt`、`core/health/HeartRateFreshnessPolicyTest.kt`、`core/health/HeartRateProviderBoundaryTest.kt`、`core/health/HeartRateRuntimeOwnerTest.kt`、`core/health/HeartRateRuntimeOwnerCallbackIdentityTest.kt`、`core/health/HeartRateRuntimeOwnerPlatformTest.kt`、`ui/shell/official/HeartRateCapsuleGeometryTest.kt`。若正确合同要求修改任一run-only test，停止回主管理。
   - 验证动作：允许执行Application / owner tests、process visibility reducer tests、第12.3节production唯一owner创建点静态搜索、第12.4节E17-7适用AVD矩阵，以及第12.5节Band 9 basic gate；Band 9 basic gate未通过不得merge。
 - **禁止：** FGS/Service/notification ownership、Route notification代码、Room/session HR、自动恢复、胶囊visual/geometry。
-- **前置：** E17-6已reviewed/merged；当前仅受本次Planning Repair的独立Review/merge门禁阻挡。
+- **前置：** E17-6已reviewed/merged；E17-7 planning prerequisite按第14节统一条件式真值自动判定。
 - **Acceptance：** 在同一Story原子完成：`TrainFlowApplication`创建唯一新owner；`MainActivity`、`TrainFlowApp`、settings、manual scan/connect、saved-device与capsule mapper全部切换；迁移/退休debug smoke旧provider引用；删除旧`HeartRateDeviceScanner`资源ownership路径；删除旧`AndroidBleHeartRateProvider`可实例化runtime路径，或只保留不持有scanner/GATT的纯compatibility数据映射；移除旧BLE DTO的production consumer；通过`rg`与测试证明production composition只有一个owner创建点。Activity recreation/page navigation不重建；离开settings只停scan；cold start只恢复saved hint；opt-out/permission loss/Bluetooth off/non-training backgroundcleanup；主动permission/scan/saved exact match/manual select/connect；active training background在FGS未实现时也cleanup且不宣称保证。E17-7合并后不得保留可重新实例化旧scanner/GATT owner的production入口。
 - **Evidence：** pure/UI mapping、Application/platform tests、第9.1节visibility reducer全矩阵、`rg`唯一owner创建点、AVD grant/deny/revoke/navigation/Home/screen-off/lockscreen/process recreation；**Band 9 basic gate必须通过后才merge**。E17-6切换前与E17-7切换后都必须可编译。
 - **Rollback / disabled：** default off；若Band gate失败不merge；原子切换不得落在新旧production owner并存的中间态，也不得保留假“后台持续”copy。
@@ -487,9 +508,6 @@ E17-5实际总churn为production `862`、tests `1386`、debug `247` 行，不能
 
 - E17-4、E17-5、E17-6均为`reviewed / merged`；immutable SHA与merge commit见第1节，E17-4 readiness为`passed`。
 - E17-6新`HeartRateRuntimeOwner`已完成独立Review，但production/debug实例化仍为0；当前App继续运行旧provider/scanner路径，等待E17-7原子退休。
-- E17-7尚未开始，状态为`planned / prerequisite-gated`。本次Planning Repair为`implemented / needs review`且尚未成为同步`main` ancestor时，只允许独立Review/Repair本Planning Closure。
-- 本Repair通过独立Review、merge/push、成为同步`main` ancestor且七份文档一致后，E17-7 gate自动`satisfied`。不创建本Repair的docs-sync或“closure的closure”；主管理从Git解析本Repair immutable SHA并直接生成E17-7提示词。
+- **Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
 - 已完成Story的immutable SHA与merge commit是稳定历史事实；未完成Story只写条件式门禁，不同时保留矛盾的无条件状态。Story开发期状态在合并后必须标为历史分支快照。
 - 当前阶段由Git ancestry、`main...origin/main = 0 0`与`docs/project-status.md`的当前E17状态索引共同判定。后续Story不再创建独立状态docs-sync，并须在自身开发分支文档中使用合并后稳定的双条件表述。
-
-当前下一步只能是独立 **Planning Repair Code Review**；不得开始E17-7。

@@ -91,7 +91,7 @@ Filtered preparation commit 上的 debug Kotlin compilation、focused formatter 
 - 两个边界均采用严格小于语义：边界前保持 waiting / live，精确到达边界即进入 data interrupted，并清除 bpm / `measuredAt`。
 - 时间流逝只形成 data interrupted；没有独立平台 / 连接失败事实时，不形成 technical failure。
 
-这些数字只适用于 E17-5 / E17-7 当前前台 manual 能力，不表示 retry、自动恢复、锁屏 / 后台保证或最终跨生命周期数字。E17-9 M1 必须由同一Application owner的debug-only observer记录锁屏 / 后台evidence，再锁定final thresholds；E17-1、E17-5 M0、独立GATT工具或measurement APK均不能冒充final evidence，final threshold变化后必须重建最终APK并重跑受影响gate。
+这些数字只适用于 E17-5 与 E17-7 规划的前台 manual 能力，不表示 retry、自动恢复、锁屏 / 后台保证或最终跨生命周期数字。E17-9 M1 必须由同一Application owner的debug-only observer记录锁屏 / 后台evidence，再锁定final thresholds；E17-1、E17-5 M0、独立GATT工具或measurement APK均不能冒充final evidence，final threshold变化后必须重建最终APK并重跑受影响gate。
 
 ## 5. Core / presentation / final APK
 
@@ -171,5 +171,5 @@ Implementation 工作树验证环境为 Eclipse Temurin JDK `17.0.19+10`、Gradl
 - E17-5已完成独立Review、merge/push并成为`main` ancestor；页首immutable SHA与merge commit是稳定历史事实。
 - 前台provisional threshold保持waiting `3000 ms`、live `2500 ms`；E17-9仍须以shared-owner M1锁定final值。
 - E17-6也已reviewed/merged；本Story旧开发期状态与Review入口仅为merge前历史分支快照。
-- 当前Planning Repair为`implemented / needs review`；E17-7尚未开始，为`planned / prerequisite-gated`且只受其独立Review/merge门禁阻挡。Repair成为同步`main` ancestor且七份文档一致后E17-7 gate自动`satisfied`，不创建docs-sync或递归closeout。
+- **Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
 - 不创建E17-5状态docs-sync或递归closeout。当前阶段只由Git ancestry、同步main与当前E17状态索引判定。
