@@ -1,10 +1,18 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-07-22
+**状态日期:** 2026-07-23
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
 ## 当前状态
+
+### 工作流自动化基线
+
+- `$bmad-method` 只负责识别任务所处阶段、判断规划与 readiness、选择 Story / Review / correct-course 路线；进入已批准 Story 的交付后退出控制，不作为贯穿 Dev / Review 的第二套流程。
+- `$supervised-story-delivery` 负责用户明确授权后的保守单 Story 或有限顺序自动交付。主管理对话只维护角色与门禁，项目检查、写入、验证、fresh Review、Repair、integration 和 post-merge verification 均由原生 Codex subagent 执行；普通进度不要求用户转述。
+- `huashu-design` 继续作为独立 UI / 视觉技能保留；主观视觉确认和实机 / APK / 可穿戴设备观察仍是用户门禁。
+- 根目录 Dev / Review / 主管理提示词模板仅作手工模式 fallback，不是自动模式的并列权威；自动模式不要求 repository manifest、validator 或额外 canonical workflow 文档。
+- 旧治理候选分支 `codex/workflow-template-protocol-repair` 的远端 immutable tip 为 `e8ac6a32566122747f4ec5cdbb21c63d6554b6f4`，状态为 `changes requested / superseded by native Story automation / permanently prohibited from merge`。保留该分支用于失败历史，不继续 Repair、cherry-pick 或合入 `main`。
 
 ### 当前 E17 状态索引
 

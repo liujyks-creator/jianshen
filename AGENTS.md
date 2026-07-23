@@ -115,14 +115,19 @@ Later Figma work should use the current UX documents and prototype as inputs, no
 
 When changing UI, theme, layout, or components, read `DESIGN.md` first. When changing open-source customization boundaries, read `docs/ui-extension-guide.md` and preserve the core training engine, command, event, and data-contract semantics.
 
-## Local Skills
+## Workflow And Design Skills
 
-This project may use two optional local skills for product and design planning:
+This project may use three complementary Codex skills when they are available:
 
-- `skills/bmad-method`
-- `huashu-design` if available in the active Codex skills list
+- `$bmad-method` for task routing, product or architecture planning, Story decomposition, readiness, planning Review, and correct-course. It decides whether work is ready and which route applies; it does not govern an approved Story's Dev/Review loop.
+- `$supervised-story-delivery` when the user explicitly authorizes automatic delivery of an already approved Story or finite ordered Story sequence. The primary conversation remains the manager while native subagents perform project inspection, writing, validation, fresh Review, Repair, integration, and post-merge verification.
+- `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design-variant, motion, and visual-review work.
 
-`skills/bmad-method` is a local working copy for this computer only and is intentionally ignored by Git. `huashu-design` is normally installed as a Codex skill rather than under the repository `skills/` directory. If they are available, read their `SKILL.md` files before product planning, architecture planning, PRD/backlog work, design-system work, high-fidelity prototype work, design-variant exploration, or visual review when relevant. If they are missing, continue from the repository documents rather than blocking.
+These roles are complementary. BMAD selects or corrects the route, supervised delivery executes an authorized route, and `huashu-design` preserves visual discipline. `huashu-design` MUST NOT be removed or replaced by either workflow skill.
+
+The skills are global Codex capabilities rather than repository dependencies, and their directories MUST NOT be committed. A repository-local ignored `skills/bmad-method` copy, if present, is a legacy local aid rather than the active method. Root prompt templates are manual fallback artifacts; automatic delivery uses the skill plus native subagents and does not treat those templates as a second workflow authority.
+
+Skills cannot override accepted project instructions, decisions, Story scope, validation gates, evidence requirements, or explicit user authority. If a skill is unavailable, continue from accepted repository documents rather than blocking or inventing a replacement process.
 
 ## Cross-Conversation Source Of Truth
 
