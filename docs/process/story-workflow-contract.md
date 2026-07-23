@@ -13,10 +13,59 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 When installed, `$bmad-method`, `$supervised-story-delivery`, and `huashu-design` support distinct responsibilities:
 
 - `$bmad-method` supports planning, readiness, horizontal contract review, Story shaping, and correct-course analysis. It does not grant implementation or merge authority.
-- `$supervised-story-delivery` may orchestrate an explicitly user-authorized approved Story or finite ordered Story sequence. In that mode the management supervisor remains read-only and dispatches separate preflight, writer, fresh independent reviewer, integration, and validation roles under this contract.
+- `$supervised-story-delivery` may orchestrate an explicitly user-authorized approved Story or finite ordered Story sequence. In that mode the management supervisor stays outside the project fact plane and dispatches separate PROJECT_FACTS/PREFLIGHT, Health, Writer, Candidate Validation, fresh Review, Integration, and PostMerge roles under this contract.
 - `huashu-design` remains the UI/visual-design skill. It applies to visual and interaction work without replacing product decisions, Story scope, runtime validation, or independent Review.
 
 The repository's pinned structured scope manifest, protected manifest, accepted validator, and evidence contract are the project-specific delivery gates. They satisfy and specialize the delivery skill's manifest/check requirements. A global skill inspector is supplemental only and MUST NOT replace or weaken the accepted repository validator. No skill overrides this contract, accepted decisions, exact scope, evidence requirements, or user authority.
+
+Only the skill rules applicable to the current role and task SHOULD be loaded. The workflow MUST NOT interpret an ordinary finding, failed test, missing evidence, or scope conflict as model degradation, and MUST NOT automatically load the whole Superpowers suite in response. `huashu-design` remains an independent UI/visual skill and MUST NOT be removed or replaced by a workflow skill.
+
+## Management control plane and isolated roles
+
+Every managed delivery declares:
+
+- `DELIVERY_MODE`: `manual_prompt` or `supervised_automatic`;
+- `INTEGRATION_AUTHORITY`: `none` or `independent_integration_role`.
+
+`supervised_automatic` requires explicit user authority for the current approved Story or finite ordered sequence and `INTEGRATION_AUTHORITY=independent_integration_role`. `manual_prompt` may use `none` until the user authorizes or runs a separately prompted Integration role. A Reviewer, Review explorer, Writer, or management supervisor is never a valid Integration authority.
+
+The management supervisor is a control-plane role, not a read-only repository inspector. It MAY read user messages, applicable Skill rules, and structured role reports; maintain objectives, approved Stories or finite sequences, user authority, orthogonal status, and transition state; dispatch roles in `supervised_automatic`; and produce prompts in `manual_prompt`. It MUST NOT directly read or verify repositories, Git state, code, tests, logs, artifacts, devices, or external facts, and MUST NOT run project or external tools. Agent orchestration and checking report-envelope completeness against user authority are control-plane actions, not project fact verification.
+
+All project facts and actions are separated into these roles:
+
+1. `PROJECT_FACTS/PREFLIGHT`: obtains fresh remote and accepted-rule facts, prerequisites, scope/protected identities, dirty state, and prompt inputs.
+2. `HEALTH`: a fresh read-only role that evaluates whether agents and tools can reliably obey role, authority, identity, and report boundaries.
+3. `WRITER`: the single Dev or Repair writer authorized for the exact Story segment.
+4. `CANDIDATE_VALIDATION`: independently validates the exact immutable candidate and evidence after the Writer stops.
+5. `REVIEW`: a fresh, no-history, read-only semantic Reviewer for each Review or re-Review.
+6. `INTEGRATION`: the separately authorized role that alone performs the reviewed merge, integration validation, and push.
+7. `POSTMERGE`: independently verifies the pushed merge and downstream gate facts.
+
+In `supervised_automatic`, each role above is a role-isolated subagent; no role may silently absorb another role's authority. In `manual_prompt`, the supervisor produces one complete role prompt at a time and waits for its report. A missing, incomplete, stale, or conflicting report MUST cause a new appropriate fact/validation role to be dispatched or prompted; the supervisor MUST NOT inspect the underlying project or external system to fill the gap itself.
+
+Role reports use the compact `story-role-report/v1` envelope. Every field is present; an inapplicable value is `none`:
+
+- `REPORT_SCHEMA=story-role-report/v1`, `ROLE`, `DELIVERY_MODE`, `AUTHORITY_USED`, and `OBJECTIVE`;
+- `IMMUTABLE_INPUTS` for applicable accepted/base/Story SHAs, refs, manifest hashes, validator/evidence identities;
+- `READ_OR_TOUCHED_PATHS` and `COMMANDS_AND_RESULTS`;
+- `FINDINGS_OR_GAPS`, `EVIDENCE_IDENTITY`, and `PROTECTED_STATE`;
+- `STATUS`, `STOP_REASON`, and `RECOMMENDED_TRANSITION`.
+
+The supervisor MAY compare these fields with user authority and prior structured reports. It MUST request fresh role evidence when identity, status, or facts conflict; reports do not authorize the supervisor to open cited files or raw logs.
+
+### Health Gate
+
+A fresh read-only Health role MUST run:
+
+1. before the first Writer/Repair write authorization in a managed delivery;
+2. immediately before Integration;
+3. after any agent or tool anomaly that could affect reliable role, authority, identity, or reporting behavior.
+
+Health results are exactly `healthy`, `suspect`, or `degraded`. `suspect` requires a second fresh no-history Health role using the same fixed inputs. If that second result is not `healthy`, or any result is `degraded`, management enters `FROZEN`. A second `healthy` result restores the gate to `healthy`.
+
+While `FROZEN`, no Writer, Repair, or Integration action may start or continue. Only read-only Health or fact-diagnostic roles and a report to the user are allowed. Recovery requires a later fresh Health report of `healthy`; switching tools, models, or agents without that report does not bypass the freeze.
+
+Ordinary code or documentation findings, test/validation failures, missing evidence, scope conflicts, and `changes_requested` are workflow facts, not by themselves Health degradation or “model intelligence decline.”
 
 ## 1. Contract authority and provenance
 
@@ -54,6 +103,7 @@ A generated Dev or Review prompt MUST resolve all of the following. `none` is a 
 
 - Story ID, title, type, objective, and acceptance assertions. Story type is one of `implementation`, `repair`, `planning`, `governance`, or `evidence`.
 - repository root and Story branch.
+- Review prompts also require `DELIVERY_MODE` and `INTEGRATION_AUTHORITY`, including the exact user-authorization reference when automatic delivery or Integration is enabled. Writer prompts do not gain Integration authority by omission or inheritance.
 - `ACCEPTED_RULES_SHA`, `STORY_BASE_SHA`, expected Story parent/remote tip; Review also requires `REVIEW_BASE_SHA` and `STORY_SHA`.
 - every prerequisite as a full immutable commit SHA.
 - exact full-Story and current-segment production, debug/fixture, test, documentation, and governance paths, mirrored in one pinned structured scope manifest outside every repository worktree.
@@ -67,7 +117,7 @@ A generated Dev or Review prompt MUST resolve all of the following. `none` is a 
 - protected-manifest path and SHA-256, expected primary protected root and capture HEAD, exact adopted user-overlay paths, and the user's exact adoption authorization reference or explicit `none`.
 - scope-manifest path and SHA-256. Its full-Story and current-segment JSON entries bind exact path, `add|modify|delete`, requiredness, category, and responsibility; each scope set has per-category integer `expected` and `hardMax` envelopes, and the current segment has an immutable base SHA.
 - complete ignored-path classification: exact protected ignored roots and exact ephemeral generated-output roots, each or both explicitly `none` when empty.
-- total agent-tree limit, role allocation, and exact write ownership.
+- total agent-tree limit, role allocation, exact write ownership, and the required isolated PROJECT_FACTS/PREFLIGHT, Health, Candidate Validation, fresh Review, Integration, and PostMerge reports.
 
 Open-ended authorization such as “related files”, “necessary tests”, or “update docs as needed” is invalid. If an exact path cannot yet be named, planning is incomplete.
 
@@ -110,7 +160,7 @@ The repository MUST nominate one current-status index in accepted governance. Th
 
 ## 5. Preflight and user-worktree protection
 
-Before branch creation, editing, or stateful validation, the main agent MUST:
+Before branch creation, editing, or stateful validation, the PROJECT_FACTS/PREFLIGHT role MUST perform and report the following. In managed delivery, the management supervisor receives the report but MUST NOT rerun these checks:
 
 1. run `git fetch --prune origin`;
 2. resolve exact accepted base and prerequisite SHAs;
@@ -118,6 +168,8 @@ Before branch creation, editing, or stateful validation, the main agent MUST:
 4. record current branch, HEAD, status, staged paths, tracked dirty paths, ordinary untracked paths, classified ignored paths, and hashes for pre-existing user files;
 5. confirm the index is empty;
 6. distinguish paths explicitly adopted into this Story from paths that remain protected user assets.
+
+Before the first Writer/Repair authorization, the separate fresh Health Gate MUST also report `healthy`. Preflight success does not substitute for Health, and Health does not prove repository facts.
 
 All governed Git reads run with replacement objects disabled. Any `refs/replace/*` entry or legacy `info/grafts` file fails closed; a displayed raw SHA must always resolve to its original commit, tree, and message objects.
 
@@ -149,10 +201,10 @@ If the exact Story or integration tree cannot be verified without contaminating 
 - A new Story branch MUST start at the declared `STORY_BASE_SHA`.
 - New Story commits after `STORY_BASE_SHA`, and new Repair commits after the declared Repair parent, MUST form a linear no-merge segment. Development MUST NOT merge another branch into the Story.
 - Every final Story path and every path touched by an intermediate commit MUST be authorized by the full-Story scope. Every path touched by the current Repair segment MUST additionally be authorized by the segment scope. A final restoration does not erase Git-object exposure or make an out-of-scope edit acceptable.
-- The Dev agent owns implementation, focused integration, complete Story validation, exact staging, commit, and Story-branch push.
+- The Dev agent is the single Writer and owns implementation, focused developer checks, exact staging, commit, and Story-branch push. Its checks are useful development evidence but MUST NOT self-certify the authoritative Candidate Validation gate.
 - Dev MUST NOT merge `main`, claim Review passed, claim merge, or unlock a downstream Story.
 - Exceeding the hard scope envelope, needing a new unapproved owner/interface/wrapper/seam/dependency, or discovering contradictory accepted contracts requires a stop before structural expansion.
-- Completion MUST report planned versus actual scope and map each acceptance assertion to implementation plus test/evidence.
+- Completion MUST report planned versus actual scope and map each acceptance assertion to implementation plus test/evidence. The Writer then stops; a role-isolated Candidate Validation agent rechecks the exact immutable tip before any Review is dispatched.
 
 ### Repair
 
@@ -168,23 +220,25 @@ Before editing, a Repair MUST scan:
 
 The prompt distinguishes direct finding files from transitive files required to keep compilation or the accepted contract coherent. The full-Story scope preserves the complete candidate delta, while the current-segment scope is the Repair's exact edit authorization. If an unapproved consumer or conflicting run-only test appears, stop and request a newly pinned exact scope expansion before editing. Do not add message checks, caller checks, test-only production branches, or new abstraction layers to avoid that gate.
 
-After two unsuccessful Review rounds, the manager MUST perform a root-cause and same-risk-axis audit before issuing another point Repair. Correct-course is required when ownership, core abstraction, data model, or cross-module structure must change; an isolated small defect does not mechanically force correct-course.
+After two unsuccessful Review rounds, management MUST dispatch or prompt a fresh read-only root-cause and same-risk-axis audit role before deciding from its report whether to issue another point Repair. Correct-course is required when ownership, core abstraction, data model, or cross-module structure must change; an isolated small defect does not mechanically force correct-course.
+
+Every Repair invalidates the previous Candidate Validation and Review reports for the changed tip. After the single Repair Writer stops, a new Candidate Validation report and a different fresh no-history Reviewer are required.
 
 ## 7. Subagents in a shared worktree
 
 All agents share the same filesystem, branch, index, build outputs, and connected runtime state.
 
-- In `manual_prompt` mode, the active Dev or Review role's main agent owns its role and may use bounded delegation. In `supervised_automatic` mode, the management supervisor is read-only and `$supervised-story-delivery` dispatches every mutating repository or external action to an explicitly authorized role agent.
-- The management supervisor decides whether read-only exploration improves speed or quality; the user does not need to request individual explorers. Automatic Dev/Review/Repair/integration requires the user's Story or finite-sequence authority and does not extend beyond it.
+- In `manual_prompt` mode, the active role owns only the authority stated in its prompt and may use bounded delegation. In `supervised_automatic` mode, the management supervisor stays outside the project fact plane and `$supervised-story-delivery` dispatches each isolated role under this contract.
+- The management supervisor may decide from reports whether a new read-only explorer or fact role is needed; the user does not need to request individual explorers. Automatic Dev/Review/Repair/Integration requires the user's Story or finite-sequence authority and does not extend beyond it.
 - The prompt sets a total agent-tree limit. Child agents MUST NOT delegate again unless the main agent explicitly approves it within that total.
-- Only the currently authorized Dev/Repair writer or integration role may change branch, HEAD, index, worktrees, commits, pushes, or merges. A preflight/gate role may fetch declared remote-tracking refs and create pinned manifests outside worktree content, but it MUST NOT change branch, HEAD, index, tracked content, or user-owned state. There is never more than one writer. Stash remains forbidden unless a later explicit accepted rule narrowly authorizes it.
+- Only the currently authorized Dev/Repair Writer may edit tracked Story content, stage, commit, and push the Story branch. Only the separate Integration role may create/switch an integration worktree or branch, merge, create the merge receipt, and push the reviewed merge. A PROJECT_FACTS/PREFLIGHT role may fetch declared remote-tracking refs and create pinned manifests outside worktree content, but it MUST NOT change branch, HEAD, index, tracked content, or user-owned state. There is never more than one Writer. Stash remains forbidden unless a later explicit accepted rule narrowly authorizes it.
 - Read-only agents MUST NOT mutate files or global runtime state.
 - Editing agents require non-overlapping exact file ownership and MUST report every touched path.
-- Full build/toolchain integration, runtime control, artifact installation, final validation, staging, and Git delivery are serialized by the active role owner unless the Story contract explicitly proves isolation.
+- Candidate Validation may run only the validation matrix and declared ephemeral outputs authorized by its prompt; it cannot edit tracked content, stage, commit, push, merge, or repair. Runtime control or artifact installation is allowed only when the validation/evidence profile explicitly assigns it to that isolated role. Integration validation belongs to Integration; PostMerge verification belongs to PostMerge.
 - Every agent receives the same pinned accepted base and, during Review, the same `STORY_SHA`.
-- The active role owner waits for all started explorers, integrates their evidence, reviews every diff, and reruns the authoritative validation. In supervised mode the management supervisor independently verifies returned immutable facts without mutating repository or external state.
+- Each active role owner waits for its started explorers and integrates their reports within that role. In supervised mode the management supervisor checks only envelope completeness, identity consistency across reports, user authority, and allowed transitions; it MUST NOT independently inspect or verify returned project facts.
 
-Delegation assists a Dev or Review workflow; it does not replace the independent Dev/Review separation.
+Delegation assists one role; it does not replace PROJECT_FACTS/PREFLIGHT, Health, single Writer, Candidate Validation, fresh Review, separate Integration, or PostMerge separation. Reviewer and Integration MUST always be different agents and conversations.
 
 ## 8. Validation profiles
 
@@ -252,42 +306,44 @@ Source search, helper existence, or a potentially no-op invocation is not behavi
 
 ## 10. Development handoff gate
 
-Before reporting `implemented`, Dev verifies:
+Before reporting `ready_for_candidate_validation`, the Writer performs and reports its own handoff checks:
 
 - `HEAD == origin/<story-branch> == STORY_SHA` and divergence is `0 0`;
 - all required prerequisite SHAs remain ancestors of the accepted base;
 - three-dot Story paths are within the exact allowlist;
-- validation ran against the stated executable source and results include counts/exit status;
+- developer checks ran against the stated executable source and results include counts/exit status;
 - evidence identity is complete or explicitly not required;
 - protected user files and excluded artifacts are unchanged;
 - index is empty;
 - post-merge truth simulation passes.
 
-The handoff includes exact commits, paths, planned/actual envelope, acceptance mapping, validation, evidence limits, Git gates, risks, and the next independent Review gate.
+The handoff includes exact commits, paths, planned/actual envelope, acceptance mapping, developer checks, evidence limits, Git gates, risks, and the next Candidate Validation gate. It is not authoritative Candidate Validation and cannot advance directly to Review.
+
+The Candidate Validation role then independently verifies the exact immutable candidate, including remote-tip identity, full-Story and current-segment scope/history, mandatory validation, evidence identity and invalidation, protected state, index, and post-merge truth simulation. Only its complete passing `story-role-report/v1` report permits dispatch of a fresh Review.
 
 ## 11. Independent Review
 
-Review is read-only with respect to tracked Story content. If the reviewer edits a tracked file, creates a Repair commit, or advances the Story tip, that Review permanently loses approval and merge authority. The new tip requires a new independent Review.
+Every Review and re-Review uses a fresh no-history Reviewer. Review is read-only with respect to all repository, Git, build, device, and external state; it may inspect existing objects and files with non-mutating commands. The Reviewer never has Integration authority. If it mutates any such state, that Review permanently loses approval eligibility. A new tip always requires a different fresh independent Review.
 
 At Review start:
 
-1. fetch and pin `REVIEW_BASE_SHA` and `STORY_SHA`;
-2. verify the local and remote Story refs both equal `STORY_SHA` exactly;
+1. receive fresh PROJECT_FACTS/PREFLIGHT and passing Candidate Validation reports pinned to `REVIEW_BASE_SHA`, `STORY_SHA`, and the same manifest/evidence identities;
+2. confirm from those reports and non-mutating inspection that local and remote Story identities were both exactly `STORY_SHA`; the Reviewer does not fetch;
 3. read accepted rules from `REVIEW_BASE_SHA`;
-4. materialize and execute the accepted validator blob from `REVIEW_BASE_SHA`, outside the candidate tree; a changed candidate validator is only review subject/regression input and cannot produce its own gate PASS;
+4. audit the Candidate Validation record that the accepted validator blob from `REVIEW_BASE_SHA` was materialized outside the candidate tree and executed; a changed candidate validator is only review subject/regression input and cannot produce its own gate PASS;
 5. reconstruct prerequisites from the prompt, accepted decisions/readiness, Story acceptance, and evidence contract, taking their union;
-6. compute full scope and commit-history touched paths from `STORY_BASE_SHA..STORY_SHA`, plus current-segment scope and history from the manifest's pinned segment base;
-7. review and validate a clean tree whose HEAD is exactly `STORY_SHA`.
+6. independently inspect full scope and commit-history touched paths from `STORY_BASE_SHA..STORY_SHA`, plus current-segment scope and history from the manifest's pinned segment base;
+7. perform semantic Review of the exact candidate while treating Candidate Validation as the authoritative command/evidence gate.
 
 A prompt omission cannot erase an accepted or technically inherent gate. All read-only explorer agents use the same pinned pair and report it back.
 
 Review findings use `blocker`, `must-fix`, `should-fix`, and `nice-to-have`. Any blocker, must-fix, or should-fix prevents merge. Inability to complete mandatory verification is `review blocked / verification incomplete`, not a code finding and not a pass.
 
-`review=passed` is orthogonal to evidence and merge: it may coexist with `evidence=pending` and `merge=not_merged` once semantic Review and mandatory Story-tree verification pass. A later integration or evidence failure must block or revise the affected status. Only successful PostMerge plus all independent gates may set `merge=merged` and a downstream gate to `satisfied`.
+`review=passed` is orthogonal to evidence and merge: it may coexist with `evidence=pending` and `merge=not_merged` once semantic Review and mandatory Candidate Validation pass. A later integration or evidence failure must block or revise the affected status. Only successful PostMerge plus all independent gates may set `merge=merged` and a downstream gate to `satisfied`.
 
-Before merge, Review MUST simulate post-merge truth and rerun exact-tip equality. Any new Story commit invalidates the Review.
+Before its final report, Review MUST simulate post-merge truth and confirm exact-tip equality from fresh role evidence and non-mutating inspection. Any new Story commit invalidates the Review. On pass it MUST stop, report `review=passed` and `merge=not_merged`, and recommend `fresh_health_gate_then_independent_integration`; it MUST NOT create/switch worktrees or branches, commit, merge, push, run integration validation, or perform PostMerge.
 
-An authorized merge commit is the machine-readable Review receipt. Its message contains these exact trailers:
+The separately authorized Integration role creates a machine-readable Review receipt from the passing Review report. Its merge-commit message contains these exact trailers:
 
 - `Story-Id: <id>`
 - `Story-Tip: <full SHA>`
@@ -299,31 +355,32 @@ An authorized merge commit is the machine-readable Review receipt. Its message c
 - `Workflow-Contract: <version>`
 - `Workflow-Validator: <accepted validator Git blob SHA>`
 
-The nine trailers are one contiguous final block, separated from a non-empty subject/body by a blank line, with no blank lines inside the block. Governance keys are case-insensitively unique. They bind the assertion to an exact base, Story, prior accepted contract/validator, scope authorization, and evidence outcome. They do not replace the reviewer's semantic report, but their absence or mismatch prevents merge/post-merge PASS.
+The nine trailers are one contiguous final block, separated from a non-empty subject/body by a blank line, with no blank lines inside the block. Governance keys are case-insensitively unique. They bind the assertion to an exact base, Story, prior accepted contract/validator, scope authorization, and evidence outcome. They do not replace the Reviewer's semantic report, but their absence or mismatch prevents merge/post-merge PASS.
 
 ## 12. Safe integration and merge transaction
 
-Review MUST NOT test a mutable branch name or merge directly into a dirty local `main` before integration succeeds.
+Only a separately authorized Integration role may execute this transaction. Before it starts, a fresh Health Gate MUST be `healthy`; the Integration role MUST receive a passing fresh Review for the exact `REVIEW_BASE_SHA`/`STORY_SHA`, `INTEGRATION_AUTHORITY=independent_integration_role`, and the pinned manifest/evidence identities. Reviewer and Integration MUST be different agents and conversations.
 
 1. Prefer an approved isolated clean integration worktree at `REVIEW_BASE_SHA`. A temporary branch in the primary worktree is allowed only when its tracked tree and index are completely clean; a branch alone is not isolation.
-2. Merge exact `STORY_SHA` with `--no-ff --no-commit`; do not merge the branch name. After Review authorization, create the merge commit with the required receipt trailers.
-3. On conflict, abort. Do not repair conflicts inside Review.
-4. Verify the integration commit has exactly two parents: parent 1 is `REVIEW_BASE_SHA`, parent 2 is `STORY_SHA`. Its tree MUST equal Git's clean merge result for that exact pair; manual conflict fixes or extra edits require a new Story tip and Review.
-5. Run all mandatory integration validation on that exact merge tree.
-6. Confirm the integration tree and index are clean and post-merge text remains true.
-7. Fetch again. If `origin/main` no longer equals `REVIEW_BASE_SHA`, or the remote Story ref no longer equals `STORY_SHA`, discard the approval for that integration base and repeat integration-sensitive Review.
-8. Push the exact merge commit to `refs/heads/main` with an ordinary non-force push.
-9. A rejected push MUST NOT trigger force, rebase, or reuse of the stale integration result.
-10. Only after remote acceptance may local `main` be fast-forwarded safely.
+2. Receive a fresh PROJECT_FACTS/PREFLIGHT report for the integration boundary, then rerun the accepted validator's integration preflight within Integration authority. Any moving base/tip, manifest mismatch, stale evidence, or non-empty protected state stops Integration and returns a structured gap report.
+3. Merge exact `STORY_SHA` with `--no-ff --no-commit`; do not merge the branch name. Create the merge commit with the required receipt trailers from the exact passing Review report.
+4. On conflict, abort. Integration MUST NOT repair conflicts; conflict resolution returns to the single Repair Writer, new Candidate Validation, and a different fresh Review.
+5. Verify the integration commit has exactly two parents: parent 1 is `REVIEW_BASE_SHA`, parent 2 is `STORY_SHA`. Its tree MUST equal Git's clean merge result for that exact pair; manual conflict fixes or extra edits require a new Story tip and Review.
+6. Run all mandatory integration validation on that exact merge tree.
+7. Confirm the integration tree and index are clean and post-merge text remains true.
+8. Fetch again. If `origin/main` no longer equals `REVIEW_BASE_SHA`, or the remote Story ref no longer equals `STORY_SHA`, discard the approval for that integration base and repeat integration-sensitive Review.
+9. Push the exact merge commit to `refs/heads/main` with an ordinary non-force push.
+10. A rejected push MUST NOT trigger force, rebase, or reuse of the stale integration result.
+11. Only after remote acceptance may local `main` be fast-forwarded safely. Integration then stops and reports the exact merge/push identities; it does not self-certify PostMerge.
 
-Post-merge checks require:
+An independent PostMerge role performs and reports:
 
 - `main == origin/main == MERGE_SHA` and divergence `0 0`;
 - exact first and second parents as above;
 - `STORY_SHA` is an ancestor of both local and remote main;
 - index is empty and protected user state is unchanged.
 
-Only then may Review report `reviewed / merged` or satisfy a downstream gate.
+Only a passing PostMerge report plus all evidence gates permits management to record `merge=merged` or satisfy a downstream gate. Reviewer and Integration cannot make that terminal claim.
 
 ## 13. Historical and sealed material
 
@@ -343,12 +400,12 @@ Legacy natural-language classifications SHOULD migrate through a separate scoped
 
 A generated copy-ready prompt uses exactly one outer four-backtick `text` fence. All required content is inside it. Inner Markdown MAY use shorter fences but MUST NOT contain an equal-or-longer fence that closes the outer block.
 
-The manager validates zero unresolved placeholders before sending. Prompt packaging is presentation; the canonical contract remains the authority.
+A PROJECT_FACTS/PREFLIGHT or prompt-validation role reports zero unresolved placeholders before sending; management checks that report against the control-plane authorization and requested transition. Prompt packaging is presentation; the canonical contract remains the authority.
 
 ## 15. Governance-change policy
 
 - Governance changes use a dedicated Story and exact governance allowlist. The contract, thin templates, and validator migrate in the same Story when their interfaces change.
-- They are reviewed under the prior accepted contract and validator and cannot self-approve. Review and PostMerge run a validator materialized from the pinned review base; the candidate validator is tested as changed code only. Bootstrap version 1.0 has no accepted validator, so its independent Review uses only the prior accepted `AGENTS.md` and role templates and MUST NOT report a candidate-script gate PASS.
+- They are reviewed under the prior accepted contract and validator and cannot self-approve. Candidate Validation, Integration, and PostMerge run a validator materialized from the pinned review base; the read-only Reviewer audits those reports and the candidate validator is tested as changed code only. Bootstrap version 1.0 has no accepted validator, so its independent Review uses only the prior accepted `AGENTS.md` and role templates and MUST NOT report a candidate-script gate PASS.
 - They MUST NOT change product scope, architecture, current feature status, or unlock a product Story unless separately authorized.
 - Stable normative rules live here; role templates stay thin.
 - Optional ignored skills are advisory methods only. Project-specific instructions from another project are ignored, and no local skill may change authority, scope, gate, evidence, or write permissions.
@@ -358,4 +415,4 @@ Every governance change MUST regression-check and report: moving Story tip, movi
 
 ## 16. Mechanical versus semantic checks
 
-`scripts/validate-story-gate.ps1` reports a **mechanical subset PASS** only. It first proves that its running file matches the validator blob at the pinned accepted-rules SHA. It fetches explicit remote refs; separates accepted-rules, historical Story base, and current-segment base; checks exact refs and linear ancestry, clean immutable trees, pinned full-Story/segment operations, required entries, per-commit touched-path unions and hard maxima, index, optional materialized-prompt placeholders, protected and ignored inventories, exact merge tree/topology, canonical case-insensitive-unique Review-receipt trailers, the fixed accepted contract/validator identities, and pre-push/post-merge state. It deliberately does not decide whether required prompt fields are semantically complete, architecture is sound, tests are meaningful, evidence is sufficient, or prose is merge-stable. Those remain explicit manager and independent Review responsibilities.
+`scripts/validate-story-gate.ps1` reports a **mechanical subset PASS** only. It first proves that its running file matches the validator blob at the pinned accepted-rules SHA. It fetches explicit remote refs; separates accepted-rules, historical Story base, and current-segment base; checks exact refs and linear ancestry, clean immutable trees, pinned full-Story/segment operations, required entries, per-commit touched-path unions and hard maxima, index, optional materialized-prompt placeholders, protected and ignored inventories, exact merge tree/topology, canonical case-insensitive-unique Review-receipt trailers, the fixed accepted contract/validator identities, and pre-push/post-merge state. It deliberately does not decide whether required prompt fields are semantically complete, architecture is sound, tests are meaningful, evidence is sufficient, or prose is merge-stable. Those remain responsibilities of the assigned fact/validation roles and fresh independent Review; management only decides control-plane transitions from their structured reports.
