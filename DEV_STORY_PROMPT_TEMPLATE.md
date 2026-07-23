@@ -10,6 +10,10 @@ Identity:
 - Accepted base full SHA: <full SHA>
 - Story ID and title: <ID — title>
 - Story branch: <branch>
+- Integration remote name: <exact remote name or none>
+- Integration-target branch: <exact branch name>
+- Integration-target local ref: <exact full ref, for example refs/heads/<branch>>
+- Integration-target remote-tracking ref: <exact full ref or none>
 - Candidate parent or prerequisite full SHAs: <list>
 - Write/commit/push authority: <exact authority>
 
@@ -25,7 +29,7 @@ Approved contract:
 
 Before writing:
 1. Read all applicable AGENTS.md files and the active Story/decision documents.
-2. Fetch and verify accepted base, synchronized main when required, prerequisite full-SHA ancestry, branch identity, index state, and exact pre-existing dirty/untracked state.
+2. Fetch the named integration remote when one exists and verify accepted base, synchronization between the exact integration-target refs when required, prerequisite full-SHA ancestry against the integration-target local ref, branch identity, index state, and exact pre-existing dirty/untracked state.
 3. Stop without editing if authority, prerequisites, scope, environment, or ownership is ambiguous in a way that could materially change the result.
 4. Do not adopt, stash, reset, delete, move, stage, or overwrite user-owned files unless their exact paths and adoption authority are part of this Story.
 

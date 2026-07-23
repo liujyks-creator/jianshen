@@ -10,6 +10,10 @@ Identity:
 - Accepted review-base full SHA: <full SHA>
 - Candidate immutable full SHA: <full SHA>
 - Story branch locator: <branch>
+- Integration remote name: <exact remote name or none>
+- Integration-target branch: <exact branch name>
+- Integration-target local ref: <exact full ref, for example refs/heads/<branch>>
+- Integration-target remote-tracking ref: <exact full ref or none>
 - Story ID and contract: <ID plus document/path>
 - Merge/push authority after PASS: <yes with exact authority / no>
 
@@ -46,11 +50,11 @@ Verdict and integration:
 - If required human acceptance is pending: report reviewed / pending human acceptance. Do not merge.
 - If validation or operational integration is blocked: report reviewed / pending merge with the exact blocker. Do not force, reset, or widen scope.
 - If there are no blocking findings, all prerequisites and evidence gates pass, and merge/push authority is yes: the same Reviewer performs the mechanical integration:
-  1. re-check synchronized main, candidate remote synchronization, protected state, and exact candidate SHA;
-  2. merge the reviewed candidate with no-ff without content changes;
+  1. fetch the named integration remote when one exists, then re-check synchronization between the exact integration-target refs, candidate remote synchronization, protected state, and exact candidate SHA;
+  2. merge the reviewed candidate into the integration-target branch with no-ff without content changes;
   3. if a conflict or any content change occurs, abort the integration and require a fresh candidate and fresh Review;
-  4. push main;
-  5. verify main/origin synchronization, candidate full-SHA ancestry, merge parents/tree, clean index, and protected paths.
+  4. push the integration-target local ref to the authorized integration remote and branch;
+  5. verify synchronization between the exact integration-target refs, candidate full-SHA ancestry on the integration-target local ref, merge parents/tree, clean index, and protected paths.
 - Only after those checks may the Reviewer report reviewed / merged or unlock a dependent Story.
 
 Return:
@@ -58,7 +62,7 @@ Return:
 - validation and evidence results with honest boundaries;
 - exact reviewed base/candidate SHAs;
 - integration result and merge SHA when authorized;
-- main/origin synchronization and candidate ancestry;
+- integration-target ref synchronization and candidate ancestry;
 - protected local-state result;
 - final Story state and whether the downstream gate is satisfied.
 ```
