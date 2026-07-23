@@ -12,6 +12,7 @@
 - `$supervised-story-delivery` 负责用户明确授权后的保守单 Story 或有限顺序自动交付。主管理对话只维护角色与门禁，项目检查、写入、验证、fresh Review、Repair、integration 和 post-merge verification 均由原生 Codex subagent 执行；普通进度不要求用户转述。
 - `huashu-design` 继续作为独立 UI / 视觉技能保留；主观视觉确认和实机 / APK / 可穿戴设备观察仍是用户门禁。
 - 根目录 Dev / Review / 主管理提示词模板定义通用角色输入输出，并兼作手工模式 fallback；它们不是自动模式的并列权威。自动模式由技能与原生协作工具执行，不要求 repository manifest、validator 或额外 canonical workflow 文档。
+- 2026-07-24：通用角色模板候选 `65dc86da4d9c9167470e50fd76d3c44271daae32` 已完成独立 Review，并由 merge commit `c8de1c5c333a214caa1902b794c34f6fcb494281` 合入；本次仅涉及工作流工具，不启动、实现或解锁任何产品 Story。
 - 旧治理候选分支 `codex/workflow-template-protocol-repair` 的远端 immutable tip 为 `e8ac6a32566122747f4ec5cdbb21c63d6554b6f4`，状态为 `changes requested / superseded by native Story automation / permanently prohibited from merge`。保留该分支用于失败历史，不继续 Repair、cherry-pick 或合入 `main`。
 
 ### 当前 E17 状态索引
