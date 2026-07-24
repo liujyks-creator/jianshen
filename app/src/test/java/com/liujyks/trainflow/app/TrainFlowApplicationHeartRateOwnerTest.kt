@@ -4,6 +4,8 @@ import android.app.Activity
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
+import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -19,6 +21,37 @@ import org.robolectric.annotation.LooperMode
 @Config(application = TrainFlowApplication::class, sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class TrainFlowApplicationHeartRateOwnerTest {
+    @Test
+    fun realConfigurationChangeCallbacksRestoreForegroundWithoutCleanupFact() {
+        val application =
+            ApplicationProvider.getApplicationContext<TrainFlowApplication>()
+        val controller = Robolectric.buildActivity(Activity::class.java)
+            .create()
+            .start()
+            .resume()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        controller.configurationChange()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(
+            ProcessVisibilityFact.ForegroundConfirmed,
+            application.processVisibilityTracker.currentFact
+        )
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun mainActivityWaitsForPersistedPreferencesBeforeMountingEligibilitySideEffects() {
+        val source = File(
+            "src/main/java/com/liujyks/trainflow/app/MainActivity.kt"
+        ).readText(Charsets.UTF_8)
+
+        assertTrue(source.contains("collectAsState(initial = null)"))
+        assertTrue(source.contains("?: return@setContent"))
+        assertFalse(source.contains("collectAsState(\n                initial = TrainFlowPreferences()"))
+    }
+
     @Test
     fun applicationCreatesOneOwnerAndActivityRecreationDoesNotReplaceIt() {
         val application =

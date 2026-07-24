@@ -12,7 +12,6 @@ import androidx.compose.ui.platform.LocalContext
 import com.liujyks.trainflow.core.data.WorkoutPlanRepository
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
-import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
 import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
 import com.liujyks.trainflow.ui.shell.official.TrainFlowApp
@@ -39,9 +38,8 @@ class MainActivity : ComponentActivity() {
             val workoutSessionRepository = remember(trainFlowDatabase) {
                 WorkoutSessionRepository(trainFlowDatabase)
             }
-            val preferences by preferencesDataSource.preferences.collectAsState(
-                initial = TrainFlowPreferences()
-            )
+            val loadedPreferences by preferencesDataSource.preferences.collectAsState(initial = null)
+            val preferences = loadedPreferences ?: return@setContent
             val reduceMotion = rememberTrainFlowReduceMotion()
             val workoutPlans by workoutPlanRepository.plans.collectAsState(
                 initial = emptyList()
