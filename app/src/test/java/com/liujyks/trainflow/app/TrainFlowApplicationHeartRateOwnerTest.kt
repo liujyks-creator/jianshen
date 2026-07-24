@@ -5,11 +5,15 @@ import android.app.Activity
 import android.bluetooth.BluetoothManager
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
 import com.liujyks.trainflow.core.model.HeartRateFact
+import com.liujyks.trainflow.ui.shell.official.OfficialShellDestination
+import com.liujyks.trainflow.ui.shell.official.heartRateScanExitAction
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,6 +28,72 @@ import org.robolectric.annotation.LooperMode
 @Config(application = TrainFlowApplication::class, sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class TrainFlowApplicationHeartRateOwnerTest {
+    @Test
+    fun initialAndRecreatedNonSettingsDestinationKeepsIdleOwnerNotConnected() {
+        val application =
+            ApplicationProvider.getApplicationContext<TrainFlowApplication>()
+        val controller = Robolectric.buildActivity(Activity::class.java)
+            .create()
+            .start()
+            .resume()
+        application.heartRateApplicationPolicy.onEligibilityChanged(true, true, true)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(
+            HeartRateFact.NOT_CONNECTED,
+            application.heartRateRuntimeOwner.heartRateState.value.fact
+        )
+
+        repeat(2) {
+            val exitAction = heartRateScanExitAction(
+                destination = OfficialShellDestination.TRAINING,
+                scanStateKind = application.heartRateRuntimeOwner.scanState.value.kind
+            )
+            assertNull(exitAction)
+            exitAction?.let(application.heartRateRuntimeOwner::submit)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(
+                HeartRateFact.NOT_CONNECTED,
+                application.heartRateRuntimeOwner.heartRateState.value.fact
+            )
+        }
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun leavingSettingsStopsTheActivePlatformScan() {
+        val application =
+            ApplicationProvider.getApplicationContext<TrainFlowApplication>()
+        shadowOf(application).grantPermissions(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        shadowOf(application.getSystemService(BluetoothManager::class.java).adapter).setEnabled(true)
+        val controller = Robolectric.buildActivity(Activity::class.java)
+            .create()
+            .start()
+            .resume()
+        application.heartRateApplicationPolicy.onEligibilityChanged(true, true, true)
+        application.heartRateRuntimeOwner.submit(HeartRateRuntimeAction.StartScan)
+        shadowOf(Looper.getMainLooper()).idle()
+        val scanner = application.getSystemService(BluetoothManager::class.java)
+            .adapter.bluetoothLeScanner
+        assertEquals(BleHeartRateScanStateKind.SCANNING, application.heartRateRuntimeOwner.scanState.value.kind)
+        assertEquals(1, shadowOf(scanner).activeScans.size)
+
+        val exitAction = heartRateScanExitAction(
+            destination = OfficialShellDestination.TRAINING,
+            scanStateKind = application.heartRateRuntimeOwner.scanState.value.kind
+        )
+        requireNotNull(exitAction)
+        application.heartRateRuntimeOwner.submit(exitAction)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(BleHeartRateScanStateKind.STOPPED, application.heartRateRuntimeOwner.scanState.value.kind)
+        assertTrue(shadowOf(scanner).activeScans.isEmpty())
+        controller.pause().stop().destroy()
+    }
+
     @Test
     fun realConfigurationChangeCallbacksRestoreForegroundWithoutCleanupFact() {
         val application =

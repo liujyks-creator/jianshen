@@ -300,9 +300,12 @@ internal fun TrainFlowApp(
         }
     }
 
-    LaunchedEffect(currentDestination) {
+    LaunchedEffect(currentDestination, heartRateScanState.kind) {
         if (currentDestination != OfficialShellDestination.SETTINGS) {
-            heartRateRuntimeOwner.submit(HeartRateRuntimeAction.StopScan)
+            heartRateScanExitAction(
+                destination = currentDestination,
+                scanStateKind = heartRateScanState.kind
+            )?.let(heartRateRuntimeOwner::submit)
             heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
         }
     }
@@ -707,6 +710,15 @@ internal fun heartRateRuntimeEligibilityAction(
     permissionsGranted = blePermissionStatus == HeartRateBlePermissionStatus.GRANTED,
     bluetoothAvailable = bluetoothAvailable
 )
+
+internal fun heartRateScanExitAction(
+    destination: OfficialShellDestination,
+    scanStateKind: BleHeartRateScanStateKind
+): HeartRateRuntimeAction? =
+    HeartRateRuntimeAction.StopScan.takeIf {
+        destination != OfficialShellDestination.SETTINGS &&
+            scanStateKind == BleHeartRateScanStateKind.SCANNING
+    }
 
 private fun OfficialShellState.heartRateCapsuleExclusionPolicy(): HeartRateCapsuleExclusionPolicy {
     return when {

@@ -1,8 +1,10 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HeartRateLiveProviderLifecycleTest {
@@ -50,6 +52,37 @@ class HeartRateLiveProviderLifecycleTest {
                 displayEnabled = true,
                 blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
                 bluetoothAvailable = true
+            )
+        )
+    }
+
+    @Test
+    fun initialAndRecreatedNonSettingsDestinationDoesNotStopIdleOwner() {
+        assertNull(
+            heartRateScanExitAction(
+                destination = OfficialShellDestination.TRAINING,
+                scanStateKind = BleHeartRateScanStateKind.IDLE
+            )
+        )
+    }
+
+    @Test
+    fun leavingSettingsStopsARealActiveScan() {
+        assertEquals(
+            HeartRateRuntimeAction.StopScan,
+            heartRateScanExitAction(
+                destination = OfficialShellDestination.TRAINING,
+                scanStateKind = BleHeartRateScanStateKind.SCANNING
+            )
+        )
+    }
+
+    @Test
+    fun leavingSettingsWithoutActiveScanDoesNotTouchActiveConnection() {
+        assertNull(
+            heartRateScanExitAction(
+                destination = OfficialShellDestination.TRAINING,
+                scanStateKind = BleHeartRateScanStateKind.STOPPED
             )
         )
     }
