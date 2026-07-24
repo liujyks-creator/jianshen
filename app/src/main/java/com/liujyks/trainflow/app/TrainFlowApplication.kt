@@ -35,6 +35,7 @@ internal class HeartRateApplicationPolicy(
     private var bluetoothAvailable = false
     private var trainingActive = false
     private var visibilityFact: ProcessVisibilityFact = ProcessVisibilityFact.Unknown
+    private var foregroundEligibilityRestorePending = false
 
     fun onEligibilityChanged(
         displayEnabled: Boolean,
@@ -44,13 +45,17 @@ internal class HeartRateApplicationPolicy(
         this.displayEnabled = displayEnabled
         this.permissionsGranted = permissionsGranted
         this.bluetoothAvailable = bluetoothAvailable
-        submitAction(
-            heartRateRuntimeEligibilityAction(
-                displayEnabled = displayEnabled,
-                permissionsGranted = permissionsGranted,
-                bluetoothAvailable = bluetoothAvailable
-            )
+        val action = heartRateRuntimeEligibilityAction(
+            displayEnabled = displayEnabled,
+            permissionsGranted = permissionsGranted,
+            bluetoothAvailable = bluetoothAvailable
         )
+        if (
+            action != HeartRateRuntimeAction.Enable ||
+            !foregroundEligibilityRestorePending
+        ) {
+            submitAction(action)
+        }
     }
 
     fun onTrainingActiveChanged(active: Boolean) {
@@ -63,7 +68,16 @@ internal class HeartRateApplicationPolicy(
             fact == ProcessVisibilityFact.BackgroundConfirmed ||
             fact == ProcessVisibilityFact.Unknown
         ) {
+            foregroundEligibilityRestorePending = true
             submitAction(HeartRateRuntimeAction.BackgroundCleanup)
+        } else if (
+            fact == ProcessVisibilityFact.ForegroundConfirmed &&
+            foregroundEligibilityRestorePending
+        ) {
+            foregroundEligibilityRestorePending = false
+            if (displayEnabled && permissionsGranted && bluetoothAvailable) {
+                submitAction(HeartRateRuntimeAction.Enable)
+            }
         }
     }
 
