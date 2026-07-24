@@ -1,9 +1,5 @@
 package com.liujyks.trainflow.ui.shell.official
 
-import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
-import com.liujyks.trainflow.core.health.BleHeartRateProviderState
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
-import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
 import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
 import com.liujyks.trainflow.core.health.HeartRateSourceHint
 import com.liujyks.trainflow.core.health.toHeartRateState
@@ -150,15 +146,17 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun malformedCompatibilityOutcomeFailsClosedWithoutCachedReadingOrErrorCopy() {
-        val mapped = BleHeartRateProviderState(
-            kind = BleHeartRateProviderStateKind.ERROR,
-            message = "raw parse failure",
-            selectedDevice = BleHeartRateDeviceSelection("id", "Band"),
+    fun nonLiveFactFailsClosedWithoutCachedReadingOrPlatformCopy() {
+        val mapped = HeartRateState(
+            kind = HeartRateStateKind.STALE_READING,
+            sourceKind = HeartRateSourceKind.DEVICE,
+            fact = HeartRateFact.DATA_INTERRUPTED,
             bpm = 88,
             measuredAt = "2026-07-19T13:16:04Z",
-            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
-        ).toHeartRateState()
+            sourceId = "id",
+            sourceLabel = "Band",
+            message = "raw parse failure"
+        )
         val state = capsule(mapped)
         val copy = buildString {
             append(state.collapsedLabel)
@@ -169,11 +167,10 @@ class HeartRateFloatingCapsuleStateTest {
         }
 
         assertEquals(HeartRateFact.DATA_INTERRUPTED, mapped.fact)
-        assertEquals(HeartRateFloatingCapsuleStatus.STALE, state.status)
-        assertNull(mapped.bpm)
-        assertNull(mapped.measuredAt)
+        assertEquals(HeartRateFloatingCapsuleStatus.ERROR, state.status)
+        assertFalse(mapped.isValidE17State())
+        assertEquals(88, mapped.bpm)
         assertNull(mapped.recordedAt)
-        assertNull(mapped.message)
         assertNull(mapped.technicalFailure)
         assertFalse(mapped.fact == HeartRateFact.LIVE)
         assertFalse(mapped.fact == HeartRateFact.LINK_DISCONNECTED)

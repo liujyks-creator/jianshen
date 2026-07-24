@@ -1,21 +1,40 @@
 package com.liujyks.trainflow.core.health
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AndroidBleHeartRateProviderScanFilterTest {
     @Test
-    fun providerScanUsesHeartRateServiceFilter() {
-        val source = File("src/main/java/com/liujyks/trainflow/core/health/AndroidBleHeartRateProvider.kt")
-            .readText()
+    fun legacyProviderAndScannerOwnershipEntrypointsAreRetired() {
+        assertFalse(
+            File("src/main/java/com/liujyks/trainflow/core/health/AndroidBleHeartRateProvider.kt")
+                .exists()
+        )
+        assertFalse(
+            File("src/main/java/com/liujyks/trainflow/core/health/HeartRateDeviceScanner.kt")
+                .exists()
+        )
+    }
 
-        assertTrue(source.contains("import android.bluetooth.le.ScanFilter"))
-        assertTrue(source.contains("import android.os.ParcelUuid"))
-        assertTrue(source.contains("setServiceUuid(ParcelUuid(HEART_RATE_SERVICE_UUID))"))
-        assertTrue(source.contains("startScan(heartRateServiceScanFilters(), settings, scanCallback)"))
-        assertTrue(source.contains("0000180d-0000-1000-8000-00805f9b34fb"))
-        assertFalse(source.contains("startScan(null, settings, scanCallback)"))
+    @Test
+    fun productionCompositionHasExactlyOneRuntimeOwnerCreation() {
+        val sources = File("src/main/java").walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .toList()
+        val creationPattern = Regex("""HeartRateRuntimeOwner\s*\(""")
+        val creationLines = sources.flatMap { source ->
+            source.readLines().mapIndexedNotNull { index, line ->
+                "$source:${index + 1}:$line".takeIf {
+                    creationPattern.containsMatchIn(line) &&
+                        !line.contains("class HeartRateRuntimeOwner")
+                }
+            }
+        }
+
+        assertEquals(1, creationLines.size)
+        assertTrue(creationLines.single().contains("TrainFlowApplication.kt"))
     }
 }

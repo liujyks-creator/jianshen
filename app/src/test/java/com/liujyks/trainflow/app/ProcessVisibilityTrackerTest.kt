@@ -88,6 +88,22 @@ class ProcessVisibilityTrackerTest {
     }
 
     @Test
+    fun queuedConfigurationStopAndReplacementStartPreserveCallbackOrder() {
+        val harness = Harness()
+        val oldActivity = activity()
+        val replacement = activity()
+        harness.start(oldActivity)
+
+        harness.tracker.onActivityStopped(oldActivity, changingConfigurations = true)
+        harness.tracker.onActivityStarted(replacement)
+        harness.idle()
+
+        assertEquals(ProcessVisibilityFact.ForegroundConfirmed, harness.tracker.currentFact)
+        assertTrue(ProcessVisibilityFact.BackgroundConfirmed !in harness.facts)
+        assertTrue(ProcessVisibilityFact.Unknown !in harness.facts.drop(1))
+    }
+
+    @Test
     fun missingConfigurationReplacementTimesOutToUnknown() {
         val harness = Harness(timeoutMillis = 100)
         val oldActivity = activity()

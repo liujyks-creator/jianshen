@@ -1,7 +1,6 @@
 package com.liujyks.trainflow.feature.settings
 
 import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
-import com.liujyks.trainflow.core.health.BleHeartRateProviderState
 import com.liujyks.trainflow.core.health.BleHeartRateScanState
 import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
@@ -418,35 +417,6 @@ internal fun heartRateDevicePickerUiState(
         scanWindowSeconds = scanWindowSeconds
     )
 }
-
-/** Stage-B compatibility bridge; removed with the legacy DTO surface in stage C. */
-internal fun heartRateDevicePickerUiState(
-    displayEnabled: Boolean,
-    blePermissionStatus: HeartRateBlePermissionStatus,
-    providerState: BleHeartRateProviderState,
-    scanState: BleHeartRateScanState = BleHeartRateScanState.idle(),
-    scannerCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
-    scanActive: Boolean = scanState.kind == BleHeartRateScanStateKind.SCANNING,
-    savedDeviceIdentifier: String? = null,
-    savedDeviceDisplayName: String? = null,
-    scanFinishedWithoutDevices: Boolean = false,
-    savedDeviceReconnectNotFound: Boolean = false,
-    scanPurpose: HeartRateDeviceScanPurpose = HeartRateDeviceScanPurpose.NONE,
-    scanWindowSeconds: Int = 12
-): HeartRateDevicePickerUiState = heartRateDevicePickerUiState(
-    displayEnabled = displayEnabled,
-    blePermissionStatus = blePermissionStatus,
-    runtimeState = providerState.toHeartRateState(),
-    scanState = scanState,
-    scannerCandidates = scannerCandidates,
-    scanActive = scanActive,
-    savedDeviceIdentifier = savedDeviceIdentifier,
-    savedDeviceDisplayName = savedDeviceDisplayName,
-    scanFinishedWithoutDevices = scanFinishedWithoutDevices,
-    savedDeviceReconnectNotFound = savedDeviceReconnectNotFound,
-    scanPurpose = scanPurpose,
-    scanWindowSeconds = scanWindowSeconds
-)
 
 private fun scanningState(
     heartRateCandidates: List<HeartRateDeviceCandidateUiState>,

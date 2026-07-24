@@ -1,12 +1,12 @@
 package com.liujyks.trainflow.feature.settings
 
 import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
-import com.liujyks.trainflow.core.health.BleHeartRateProviderState
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
 import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
-import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
 import com.liujyks.trainflow.core.health.BleHeartRateScanState
 import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
+import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
+import com.liujyks.trainflow.core.health.HeartRateSourceHint
+import com.liujyks.trainflow.core.health.toHeartRateState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -287,10 +287,7 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
-                message = "Bluetooth is disabled"
-            )
+            runtimeState = HeartRateRuntimeFact.BluetoothOff().toHeartRateState()
         )
 
         assertEquals(HeartRateDevicePickerStatus.BLUETOOTH_DISABLED, state.status)
@@ -348,16 +345,14 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.LIVE_BPM,
-                message = "live",
-                selectedDevice = BleHeartRateDeviceSelection(
+            runtimeState = HeartRateRuntimeFact.Live(
+                bpm = 105,
+                measuredAt = "2026-07-19T13:16:04Z",
+                source = HeartRateSourceHint(
                     identifier = "D8:F0:42:01:90:D7",
                     displayName = "HUAWEI Band HR-OD7"
-                ),
-                bpm = 105,
-                measuredAt = "2026-07-19T13:16:04Z"
-            ),
+                )
+            ).toHeartRateState(),
             scanState = BleHeartRateScanState(
                 kind = BleHeartRateScanStateKind.SCANNING,
                 message = "Scanning"
@@ -485,14 +480,12 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.DEVICE_SELECTED,
-                message = "selected",
-                selectedDevice = BleHeartRateDeviceSelection(
+            runtimeState = HeartRateRuntimeFact.NotConnected(
+                source = HeartRateSourceHint(
                     identifier = "D8:F0:42:01:90:D7",
                     displayName = "HUAWEI Band HR-OD7"
                 )
-            )
+            ).toHeartRateState()
         )
 
         assertEquals(HeartRateDevicePickerStatus.SELECTED, state.status)
@@ -555,12 +548,10 @@ class TrainingPreferencesUiStateTest {
         val state = heartRateDevicePickerUiState(
             displayEnabled = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerState = BleHeartRateProviderState(
-                kind = BleHeartRateProviderStateKind.LIVE_BPM,
-                message = "live",
+            runtimeState = HeartRateRuntimeFact.Live(
                 bpm = 105,
                 measuredAt = "2026-07-19T13:16:04Z"
-            ),
+            ).toHeartRateState(),
             savedDeviceIdentifier = "D8:F0:42:01:90:D7",
             savedDeviceDisplayName = "HUAWEI Band HR-OD7"
         )

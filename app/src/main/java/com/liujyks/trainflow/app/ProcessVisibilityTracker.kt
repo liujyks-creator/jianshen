@@ -93,7 +93,10 @@ internal class ProcessVisibilityTracker(
 
         val transition = activeTransition
         if (transition != null) {
-            if (observedTransitionGeneration != transition.generation) {
+            if (
+                observedTransitionGeneration != null &&
+                observedTransitionGeneration != transition.generation
+            ) {
                 failClosed()
                 return
             }
