@@ -1,63 +1,56 @@
 package com.liujyks.trainflow.ui.shell.official
 
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
+import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class HeartRateLiveProviderLifecycleTest {
     @Test
-    fun disabledDisplayStopsProviderInsteadOfConnecting() {
-        val action = heartRateLiveProviderLifecycleAction(
-            displayEnabled = false,
-            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerStateKind = BleHeartRateProviderStateKind.DEVICE_SELECTED
+    fun disabledDisplayDisablesApplicationOwner() {
+        assertEquals(
+            HeartRateRuntimeAction.Disable,
+            heartRateRuntimeEligibilityAction(
+                displayEnabled = false,
+                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+                bluetoothAvailable = true
+            )
         )
-
-        assertEquals(HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT, action)
     }
 
     @Test
-    fun missingPermissionStopsProviderInsteadOfConnecting() {
-        val action = heartRateLiveProviderLifecycleAction(
-            displayEnabled = true,
-            blePermissionStatus = HeartRateBlePermissionStatus.DENIED,
-            providerStateKind = BleHeartRateProviderStateKind.DEVICE_SELECTED
+    fun missingPermissionFailsClosedWithoutScanOrConnect() {
+        assertEquals(
+            HeartRateRuntimeAction.PermissionLost,
+            heartRateRuntimeEligibilityAction(
+                displayEnabled = true,
+                blePermissionStatus = HeartRateBlePermissionStatus.DENIED,
+                bluetoothAvailable = true
+            )
         )
-
-        assertEquals(HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT, action)
     }
 
     @Test
-    fun bluetoothDisabledStopsProviderInsteadOfConnecting() {
-        val action = heartRateLiveProviderLifecycleAction(
-            displayEnabled = true,
-            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerStateKind = BleHeartRateProviderStateKind.BLUETOOTH_DISABLED
+    fun bluetoothDisabledFailsClosedWithoutScanOrConnect() {
+        assertEquals(
+            HeartRateRuntimeAction.BluetoothOff,
+            heartRateRuntimeEligibilityAction(
+                displayEnabled = true,
+                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+                bluetoothAvailable = false
+            )
         )
-
-        assertEquals(HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT, action)
     }
 
     @Test
-    fun selectedDeviceConnectsOnlyAfterDisplayAndPermissionAreReady() {
-        val action = heartRateLiveProviderLifecycleAction(
-            displayEnabled = true,
-            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerStateKind = BleHeartRateProviderStateKind.DEVICE_SELECTED
+    fun eligibleForegroundOnlyEnablesAndNeverAutoConnectsSavedHint() {
+        assertEquals(
+            HeartRateRuntimeAction.Enable,
+            heartRateRuntimeEligibilityAction(
+                displayEnabled = true,
+                blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+                bluetoothAvailable = true
+            )
         )
-
-        assertEquals(HeartRateLiveProviderLifecycleAction.CONNECT_SELECTED_DEVICE, action)
-    }
-
-    @Test
-    fun noSourceDoesNotScanOrConnect() {
-        val action = heartRateLiveProviderLifecycleAction(
-            displayEnabled = true,
-            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            providerStateKind = BleHeartRateProviderStateKind.NO_SOURCE
-        )
-
-        assertEquals(HeartRateLiveProviderLifecycleAction.NONE, action)
     }
 }

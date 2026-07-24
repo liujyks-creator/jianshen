@@ -2,9 +2,12 @@ package com.liujyks.trainflow.feature.settings
 
 import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
 import com.liujyks.trainflow.core.health.BleHeartRateProviderState
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
 import com.liujyks.trainflow.core.health.BleHeartRateScanState
 import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
+import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
+import com.liujyks.trainflow.core.health.toHeartRateState
+import com.liujyks.trainflow.core.model.HeartRateFact
+import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 import com.liujyks.trainflow.core.model.PermissionPrivacySection
 import com.liujyks.trainflow.ui.theme.SkinRegistry
@@ -246,7 +249,7 @@ internal fun heartRateSettingsUiState(
     savedDeviceIdentifier: String? = null,
     savedDeviceDisplayName: String? = null,
     blePermissionStatus: HeartRateBlePermissionStatus = HeartRateBlePermissionStatus.NOT_REQUESTED,
-    providerState: BleHeartRateProviderState = BleHeartRateProviderState.noSource(),
+    runtimeState: HeartRateState = HeartRateRuntimeFact.Disabled.toHeartRateState(),
     scanState: BleHeartRateScanState = BleHeartRateScanState.idle(),
     scannerCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
     scanActive: Boolean = scanState.kind == BleHeartRateScanStateKind.SCANNING,
@@ -272,7 +275,7 @@ internal fun heartRateSettingsUiState(
         devicePickerState = heartRateDevicePickerUiState(
             displayEnabled = enabled,
             blePermissionStatus = resolvedPermissionStatus,
-            providerState = providerState,
+            runtimeState = runtimeState,
             scanState = scanState,
             scannerCandidates = scannerCandidates,
             scanActive = scanActive,
@@ -287,7 +290,7 @@ internal fun heartRateSettingsUiState(
 internal fun heartRateDevicePickerUiState(
     displayEnabled: Boolean,
     blePermissionStatus: HeartRateBlePermissionStatus,
-    providerState: BleHeartRateProviderState = BleHeartRateProviderState.noSource(),
+    runtimeState: HeartRateState = HeartRateRuntimeFact.Disabled.toHeartRateState(),
     scanState: BleHeartRateScanState = BleHeartRateScanState.idle(),
     scannerCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
     scanActive: Boolean = scanState.kind == BleHeartRateScanStateKind.SCANNING,
@@ -321,15 +324,14 @@ internal fun heartRateDevicePickerUiState(
         )
     }
 
-    when (providerState.kind) {
-        BleHeartRateProviderStateKind.PERMISSION_REQUIRED -> HeartRateDevicePickerUiState(
+    when (runtimeState.fact) {
+        HeartRateFact.PERMISSION_REQUIRED -> HeartRateDevicePickerUiState(
             status = HeartRateDevicePickerStatus.PERMISSION_REQUIRED,
             title = "设备来源：需要蓝牙权限",
             body = "系统权限状态已变化。请先重新授权蓝牙权限，TrainFlow 不会继续扫描。"
         )
 
-        BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
-        BleHeartRateProviderStateKind.UNAVAILABLE -> HeartRateDevicePickerUiState(
+        HeartRateFact.BLUETOOTH_OFF -> HeartRateDevicePickerUiState(
             status = HeartRateDevicePickerStatus.BLUETOOTH_DISABLED,
             title = "设备来源：蓝牙关闭",
             body = "蓝牙已关闭或当前设备不可用。开启蓝牙后再扫描心率设备。",
@@ -339,8 +341,8 @@ internal fun heartRateDevicePickerUiState(
         else -> null
     }?.let { unavailableState -> return unavailableState }
 
-    val selectedName = providerState.selectedDevice?.displayName ?: savedName
-    val selectedId = providerState.selectedDevice?.identifier ?: savedId
+    val selectedName = runtimeState.sourceLabel ?: savedName
+    val selectedId = runtimeState.sourceId ?: savedId
     val hasSelectedSource = selectedName != null || selectedId != null
     if (scanActive || scanState.kind == BleHeartRateScanStateKind.SCANNING) {
         return scanningState(
@@ -348,7 +350,7 @@ internal fun heartRateDevicePickerUiState(
             scanWindowSeconds = scanWindowSeconds,
             hasSelectedSource = hasSelectedSource,
             scanPurpose = scanPurpose,
-            providerState = providerState
+            runtimeState = runtimeState
         )
     }
 
@@ -375,7 +377,7 @@ internal fun heartRateDevicePickerUiState(
                 canStartScan = true,
                 devices = heartRateCandidates,
                 hrsCandidates = heartRateCandidates,
-                connectionStatusLabel = providerState.connectionStatusLabel(),
+                connectionStatusLabel = runtimeState.connectionStatusLabel(),
                 scanWindowCopy = "每次连接尝试约 ${scanWindowSeconds} 秒，到时自动停止。"
             )
 
@@ -387,7 +389,7 @@ internal fun heartRateDevicePickerUiState(
                 canStartScan = true,
                 devices = heartRateCandidates,
                 hrsCandidates = heartRateCandidates,
-                connectionStatusLabel = providerState.connectionStatusLabel(),
+                connectionStatusLabel = runtimeState.connectionStatusLabel(),
                 scanWindowCopy = "每次扫描窗口约 ${scanWindowSeconds} 秒。"
             )
 
@@ -403,38 +405,58 @@ internal fun heartRateDevicePickerUiState(
             else -> idleOrSelectedState(
                 identifier = selectedId,
                 displayName = selectedName,
-                providerState = providerState,
+                runtimeState = runtimeState,
                 scanWindowSeconds = scanWindowSeconds
             )
         }
     }
 
-    return when (providerState.kind) {
-        BleHeartRateProviderStateKind.DEVICE_SELECTED -> selectedState(
-            displayName = selectedName,
-            identifier = selectedId,
-            providerState = providerState,
-            scanWindowSeconds = scanWindowSeconds
-        )
-
-        else -> idleOrSelectedState(
-            identifier = selectedId,
-            displayName = selectedName,
-            providerState = providerState,
-            scanWindowSeconds = scanWindowSeconds
-        )
-    }
+    return idleOrSelectedState(
+        identifier = selectedId,
+        displayName = selectedName,
+        runtimeState = runtimeState,
+        scanWindowSeconds = scanWindowSeconds
+    )
 }
+
+/** Stage-B compatibility bridge; removed with the legacy DTO surface in stage C. */
+internal fun heartRateDevicePickerUiState(
+    displayEnabled: Boolean,
+    blePermissionStatus: HeartRateBlePermissionStatus,
+    providerState: BleHeartRateProviderState,
+    scanState: BleHeartRateScanState = BleHeartRateScanState.idle(),
+    scannerCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
+    scanActive: Boolean = scanState.kind == BleHeartRateScanStateKind.SCANNING,
+    savedDeviceIdentifier: String? = null,
+    savedDeviceDisplayName: String? = null,
+    scanFinishedWithoutDevices: Boolean = false,
+    savedDeviceReconnectNotFound: Boolean = false,
+    scanPurpose: HeartRateDeviceScanPurpose = HeartRateDeviceScanPurpose.NONE,
+    scanWindowSeconds: Int = 12
+): HeartRateDevicePickerUiState = heartRateDevicePickerUiState(
+    displayEnabled = displayEnabled,
+    blePermissionStatus = blePermissionStatus,
+    runtimeState = providerState.toHeartRateState(),
+    scanState = scanState,
+    scannerCandidates = scannerCandidates,
+    scanActive = scanActive,
+    savedDeviceIdentifier = savedDeviceIdentifier,
+    savedDeviceDisplayName = savedDeviceDisplayName,
+    scanFinishedWithoutDevices = scanFinishedWithoutDevices,
+    savedDeviceReconnectNotFound = savedDeviceReconnectNotFound,
+    scanPurpose = scanPurpose,
+    scanWindowSeconds = scanWindowSeconds
+)
 
 private fun scanningState(
     heartRateCandidates: List<HeartRateDeviceCandidateUiState>,
     scanWindowSeconds: Int,
     hasSelectedSource: Boolean,
     scanPurpose: HeartRateDeviceScanPurpose,
-    providerState: BleHeartRateProviderState
+    runtimeState: HeartRateState
 ): HeartRateDevicePickerUiState {
     val scanningSavedDevice = scanPurpose == HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE
-    val scanningOtherDevices = providerState.kind == BleHeartRateProviderStateKind.LIVE_BPM &&
+    val scanningOtherDevices = runtimeState.fact == HeartRateFact.LIVE &&
         scanPurpose == HeartRateDeviceScanPurpose.SCAN_OTHER_DEVICES
     return HeartRateDevicePickerUiState(
         status = HeartRateDevicePickerStatus.SCANNING,
@@ -452,7 +474,7 @@ private fun scanningState(
         },
         actionLabel = "停止扫描",
         canStopScan = true,
-        connectionStatusLabel = providerState.connectionStatusLabel(),
+        connectionStatusLabel = runtimeState.connectionStatusLabel(),
         devices = heartRateCandidates,
         hrsCandidates = heartRateCandidates,
         scanWindowCopy = "正在扫描，约 ${scanWindowSeconds} 秒后自动停止。"
@@ -462,11 +484,11 @@ private fun scanningState(
 private fun idleOrSelectedState(
     identifier: String?,
     displayName: String?,
-    providerState: BleHeartRateProviderState,
+    runtimeState: HeartRateState,
     scanWindowSeconds: Int
 ): HeartRateDevicePickerUiState {
     return if (displayName != null || identifier != null) {
-        selectedState(displayName, identifier, providerState, scanWindowSeconds)
+        selectedState(displayName, identifier, runtimeState, scanWindowSeconds)
     } else {
         HeartRateDevicePickerUiState(
             status = HeartRateDevicePickerStatus.IDLE_NO_SOURCE,
@@ -482,30 +504,30 @@ private fun idleOrSelectedState(
 private fun selectedState(
     displayName: String?,
     identifier: String?,
-    providerState: BleHeartRateProviderState,
+    runtimeState: HeartRateState,
     scanWindowSeconds: Int
 ): HeartRateDevicePickerUiState {
     val name = displayName ?: "已保存设备"
     val idCopy = identifier?.let { "（${maskDeviceIdentifier(it)}）" }.orEmpty()
     return HeartRateDevicePickerUiState(
         status = HeartRateDevicePickerStatus.SELECTED,
-        title = if (providerState.kind == BleHeartRateProviderStateKind.LIVE_BPM) {
+        title = if (runtimeState.fact == HeartRateFact.LIVE) {
             "设备来源：已连接设备"
         } else {
             "设备来源：已保存设备"
         },
-        body = if (providerState.kind == BleHeartRateProviderStateKind.LIVE_BPM) {
+        body = if (runtimeState.fact == HeartRateFact.LIVE) {
             "$name$idCopy 正在提供实时心率；扫描其他设备不会中断当前连接。"
         } else {
             "$name$idCopy 仅保存为你主动连接时的偏好，不代表设备在附近、已开启广播、正在连接或已经连接。"
         },
-        actionLabel = if (providerState.kind == BleHeartRateProviderStateKind.LIVE_BPM) {
+        actionLabel = if (runtimeState.fact == HeartRateFact.LIVE) {
             "扫描其他设备"
         } else {
             "连接已保存设备"
         },
         canStartScan = true,
-        connectionStatusLabel = providerState.connectionStatusLabel(),
+        connectionStatusLabel = runtimeState.connectionStatusLabel(),
         scanWindowCopy = "每次扫描窗口约 ${scanWindowSeconds} 秒。"
     )
 }
@@ -527,11 +549,13 @@ internal fun savedDeviceReconnectCandidateIdentifier(
     }?.identifier
 }
 
-private fun BleHeartRateProviderState.connectionStatusLabel(): String = when (kind) {
-    BleHeartRateProviderStateKind.CONNECTING -> "正在连接"
-    BleHeartRateProviderStateKind.CONNECTED_WAITING_FOR_DATA -> "等待数据"
-    BleHeartRateProviderStateKind.LIVE_BPM -> "已连接"
-    BleHeartRateProviderStateKind.ERROR -> "连接异常"
+private fun HeartRateState.connectionStatusLabel(): String = when (fact) {
+    HeartRateFact.CONNECTING -> "正在连接"
+    HeartRateFact.WAITING_FIRST_DATA -> "等待数据"
+    HeartRateFact.LIVE -> "已连接"
+    HeartRateFact.TECHNICAL_FAILURE,
+    HeartRateFact.LINK_DISCONNECTED,
+    HeartRateFact.DATA_INTERRUPTED -> "连接异常"
     else -> "未连接"
 }
 

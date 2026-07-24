@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
+            val trainFlowApplication = application as TrainFlowApplication
             val preferencesDataSource = remember(context) {
                 TrainFlowPreferencesDataSource(context.trainFlowPreferencesDataStore)
             }
@@ -55,6 +56,8 @@ class MainActivity : ComponentActivity() {
                 reduceMotion = reduceMotion
             ) {
                 TrainFlowApp(
+                    heartRateRuntimeOwner = trainFlowApplication.heartRateRuntimeOwner,
+                    heartRateApplicationPolicy = trainFlowApplication.heartRateApplicationPolicy,
                     workoutPlans = workoutPlans,
                     workoutSessions = workoutSessions,
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),

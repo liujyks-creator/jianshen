@@ -355,7 +355,8 @@ class TrainingPreferencesUiStateTest {
                     identifier = "D8:F0:42:01:90:D7",
                     displayName = "HUAWEI Band HR-OD7"
                 ),
-                bpm = 105
+                bpm = 105,
+                measuredAt = "2026-07-19T13:16:04Z"
             ),
             scanState = BleHeartRateScanState(
                 kind = BleHeartRateScanStateKind.SCANNING,
@@ -557,7 +558,8 @@ class TrainingPreferencesUiStateTest {
             providerState = BleHeartRateProviderState(
                 kind = BleHeartRateProviderStateKind.LIVE_BPM,
                 message = "live",
-                bpm = 105
+                bpm = 105,
+                measuredAt = "2026-07-19T13:16:04Z"
             ),
             savedDeviceIdentifier = "D8:F0:42:01:90:D7",
             savedDeviceDisplayName = "HUAWEI Band HR-OD7"
