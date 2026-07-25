@@ -19,6 +19,14 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
+## 2026-07-26 E17 当前架构覆盖
+
+保留 Application / 进程级唯一 `HeartRateRuntimeOwner`、main-looper serialization、generation / attempt / raw GATT identity、先失效引用的 cleanup、唯一 ID `7200` writer、合法 `connectedDevice` FGS 与 `START_NOT_STICKY`。自动恢复是 owner policy，不恢复 D-078、E16 controller / wrapper，不新增第二 owner、GATT model 或第三 notification interface。
+
+Eligibility 为 opt-in + saved exact + permission + Bluetooth + no persistent suppression + visible 或合法 active-training FGS。前台使用间隔 bounded scan windows 且长期 armed；非训练后台 cleanup、回前台重新计算；active training 普通 `ON_STOP` 不直接 cleanup，合法 FGS 下 retain / recover exact target。E17-7a 承担 policy / persisted suppression / parameters / tests，7b 承担 Application / settings / capsule，8 ordinary，9 FGS / training recovery / M1，10 evidence-only。
+
+参数与 presentation 计算边界、禁止 candidate 与 merge-stable truth 以新 Correct-course 为准；E17-5 / 6 已合并资产保留。
+
 **文档状态:** 首版架构草案  
 **范围:** Android MVP 生产工程与未来 iOS 共享边界  
 **不包含:** 具体 Android 工程脚手架、UI 视觉定稿、完整动作内容导入、真实设备接入实现

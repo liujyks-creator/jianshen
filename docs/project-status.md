@@ -1,6 +1,6 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-07-23
+**状态日期:** 2026-07-26
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
@@ -22,13 +22,17 @@
 | E17-4 | `reviewed / merged`；immutable SHA `1ea67561b4866aa76c41b854da74da85c208aa25`；merge commit `4b354f5116bbf7f7610e79845210d481c839fed6`；readiness `passed` |
 | E17-5 | `reviewed / merged`；immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`；merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；provisional foreground waiting/live = `3000 / 2500 ms` |
 | E17-6 | `reviewed / merged`；immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`；merge commit `503d3151d731565837ab76f44fbebc25bb982e0d` |
-| 本次 Planning Repair / E17-7 planning prerequisite | 按下方统一条件式真值自动判定 |
-| E17-7 | 按下方统一条件式真值保持`planned / prerequisite-gated`或自动解除planning prerequisite |
-| E17-8 / E17-9 / E17-10 | 依次`planned / prerequisite-gated`；详细合同唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md` |
+| 本次自动恢复 / 个人参数 Correct-course / E17-7a prerequisite | 按下方统一条件式真值自动判定 |
+| E17-7a | `Reconnect + Parameter Foundation`；条件未满足时`planned / prerequisite-gated` |
+| E17-7b | `Application / Settings / Capsule Wiring`；`planned / prerequisite-gated`，依赖 E17-7a reviewed / merged full SHA |
+| E17-8 / E17-9 / E17-10 | ordinary coordinator、FGS + training-background recovery、evidence-only acceptance；依次`planned / prerequisite-gated` |
+| 禁止候选 | `fda5f7cfd3c31af3399dfe231733ea00467a68e8`=`frozen / unmergeable / reference-only / permanently prohibited from merge` |
 
-**Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
+**Correct-course / E17-7a 统一条件式真值：** 若本 candidate immutable SHA 尚未通过独立 Review，或尚未完成 `--no-ff` merge / push，或该 SHA 尚不是同步后 `main` 与 `origin/main` ancestor，或 `main...origin/main` 不为 `0 0`，或本次十份文档不一致，则 Correct-course=`implemented / needs review`、E17-7a prerequisite=`not satisfied`、E17-7a=`planned / prerequisite-gated`，只允许独立 Review / Repair 本 candidate。全部条件满足后 Correct-course 自动为 `reviewed / merged`、E17-7a prerequisite 自动为 `satisfied`；无需 docs-sync 或递归 closeout，主管理从 Git 解析最终 full SHA。Git ancestry 是 merge 事实；branch name 只是 locator。
 
-E17-6的新`HeartRateRuntimeOwner`已完成独立Review，但production/debug实例化仍为0；当前App仍运行旧`AndroidBleHeartRateProvider` / `AndroidHeartRateDeviceScanner`路径。E17-7必须在同一Story内以三阶段提交完成准备、原子composition切换和退休/证据，最终只允许一个由`TrainFlowApplication`创建的production BLE owner；`ProcessVisibilityTracker`只发布visibility fact，cleanup与training/FGS eligibility属于Application policy。
+2026-07-26 用户确认：eligibility 为 opt-in + saved exact target + permission + Bluetooth + 无持久 manual suppression + visible 或合法 active-training FGS；前台 bounded scan windows 有间隔且资格成立时长期 armed；非训练后台 cleanup、回前台自动恢复；active / paused training 的普通 `ON_STOP` 不直接 cleanup，合法 FGS 下保持 / 恢复同一 owner 的 exact target。显式断开保留 opt-in、target 与个人参数并跨 process suppress，只有明确重新连接 / 选目标清除。年龄 `1..130`、个人最大心率 / alert `30..260`、effective max、未取整六区间与 strict alert 优先级均绑定 E17-7a / 7b AC；胶囊直接复用冻结状态 / 颜色。
+
+E17-6 新 owner 已独立 Review 但 production / debug 实例化仍为 0。新路线保留 E17-5 / 6：E17-7a 负责 owner policy、持久 suppression / parameters 与测试；E17-7b 负责唯一 Application activation、settings / capsule wiring、旧 runtime 原子退休和 AVD / Band gate；E17-8 保持 ordinary single-writer；E17-9 交付合法 FGS、训练后台 retain / recovery、ID `7200` 与 M1；E17-10 仍为 production 0 的 evidence-only acceptance。完整合同见 `docs/planning/e17-auto-reconnect-and-personal-parameters-correct-course.md`。
 
 E17-8必须用真实workout session ID + producer token + 单调`stateVersion`隔离同plan多次训练、旧Route迟到事件与detach/reattach；E17-9必须使用同一Application owner的debug-only observer完成五阶段measurement/final APK身份链，并以`ReleaseUnconfirmed`或等价态冻结失败handoff，不能复用独立GATT工具。E17-10保持evidence-only，production files/lines/methods均为0；production finding返回E17-6/7/8/9 scoped Repair，Repair合入同步main后重建新APK并重跑全部受影响gate，旧APK、截图与日志不得复用。
 
@@ -50,7 +54,7 @@ E17-1 当前真机证据来自 `PLU110`、Android 16 / SDK 36 与 HUAWEI Band 9�
 
 心率胶囊视觉与互动已由 E17 正式定为 `adopted / frozen / direct reuse`，不是 reference-only、revalidate、rewrite、provisional 或待重新设计。直接采用 `HeartRateFloatingCapsule.kt` 的视觉与互动、`HeartRateCapsuleGeometry.kt` 的 geometry / clamp / safe-zone / snap、collapsed / expanded、信息布局与层级、拖动与 movement threshold、左右吸附、viewport clamp、status bar / bottom nav / 训练固定区域避让、IME 收缩、展开 / 收起 / 移动 / 吸附动画、已批准 HTML 高保真方案和相关 motion；不再做胶囊视觉、交互、HTML、动画、颜色、尺寸、布局或 motion 变体，也不做 `huashu-design` 视觉重做。E17 新 provider/runtime 通过胶囊外部 presentation mapper 接入；不让胶囊迁就 BLE 架构，不传入 Android BLE 对象，不在胶囊内部实现 permission、scan、connect 或 reconnect。provider state、状态文案、优先级、state source、runtime wiring 和 `HeartRateFloatingCapsuleState.kt` 中的旧 runtime 语义不冻结；必要 DTO 兼容变化须另开 decision，不能借此修改视觉与互动。
 
-当前权威层级为：`AGENTS.md` > accepted superseding decisions D-079 / D-080 / D-081 > 当前 E17 权威文档（project-status、E17-2 产品合同、E17-3 最小架构、E17 correct-course、readiness、roadmap、architecture）> E16 retrospective / supersession 索引 > sealed E16 原始文档与代码（historical evidence only）；低层不得覆盖高层。浮动胶囊视觉与互动继续 `adopted / frozen / direct reuse`；runtime、provider state、mapper、文案、优先级和 wiring 不冻结。E17-2定义产品合同，E17-3定义最小技术架构，E17-4 readiness已`passed`；E17-5/6实现只覆盖各自已合并范围，不代表E17-7 wiring已完成。自动恢复是已接受价值的延后独立候选，不是D-081默认架构。详细后续计划只维护在`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
+当前权威层级为：`AGENTS.md` > accepted superseding decisions D-079 / D-080 / D-081 / D-082 > 当前 E17 权威文档（project-status、新 Correct-course、E17 correct-course、readiness、roadmap、architecture、PRD、UX）> E17-2 / E17-3 历史合同 > E16 retrospective / supersession 索引 > sealed E16 原始文档与代码。胶囊继续 `adopted / frozen / direct reuse`；E17-4/5/6 已合并事实保持，自动恢复与个人参数由 E17-7a / 7b 和 E17-9 交付。
 
 历史快照（已被上方 E17 correct-course 状态 supersede）：2026-07-12 E16-10b-1 Heart-rate freshness policy core 已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。`core.health` 的纯 Kotlin、不可变 `HeartRateFreshnessTimeline` 与 `HeartRateFreshnessPolicy` 当时锁定 10 / 15 / 30 秒 monotonic freshness 边界、稳定 reason codes、disconnect/offline 与 technical failure 事实分离、retry exhausted 事实保持和异常时间 fail-closed。production provider、controller、浮动胶囊、设置页与 BLE runtime 尚未消费该 policy，运行时行为保持 E16-9 基线；真实 timer、scheduler、watchdog、retry controller、callback race、old-target guard、lifecycle cancellation 与 reconnect 仍未实现。当时 E16-10b-2 被写为 unlocked / not started；该旧状态现已失效，当前处理以 E17-0 记录为准。
 

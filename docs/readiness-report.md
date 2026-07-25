@@ -23,6 +23,16 @@ stepsCompleted:
 
 # TrainFlow 实现准备检查报告
 
+## 2026-07-26 E17 Correct-course readiness delta
+
+E17-4/5/6 的 reviewed / merged 与 readiness passed 事实保持。新路线补齐 accepted docs 的 manual-only、deferred 无 Story、个人参数 orphan 与 active-training `ON_STOP` cleanup 冲突：E17-7a 负责 eligibility / reconnect policy、persistent suppression、age / max / alert、zone / presentation pure tests；E17-7b 负责唯一 Application / settings / capsule wiring 与 AVD / Band basic；E17-8 ordinary；E17-9 FGS + training-background retain / recovery + `7200` + M1；E17-10 evidence-only production 0。
+
+Readiness 硬要求：eligible 前台恢复使用有间隔 bounded windows 且长期 armed；非训练后台 cleanup / 回前台恢复；active training 普通 `ON_STOP` 不直接 cleanup，合法 FGS 下保持 / 恢复同一连接；manual disconnect 跨 process suppress 且保留 opt-in / target / parameters。参数边界为 age `1..130`、max / alert `30..260`、effective max precedence、未取整六区间和 strict alert 优先；冻结 capsule 直接复用。
+
+保留唯一 owner / serialization / identity / cleanup / `START_NOT_STICKY` 与 E17-5 / 6，不恢复 D-078 或 controller / wrapper。禁止 candidate `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 不是 prerequisite。
+
+本 candidate 未 Review / merge / ancestry / sync / 十文档一致前为 needs review / E17-7a gated；满足后自动 reviewed / merged / satisfied，无 docs-sync。下文旧七文档 / E17-7 / 自动恢复 defer 状态为历史快照。
+
 **结论:** 条件通过，可以进入 `Story E0.1: 创建 Android 生产工程`。  
 **限制:** 这不是完整 MVP 全量开工许可，只确认工程地基阶段可以启动。后续 E1 到 E9 仍需要按 Story 做局部检查、实现和验收。
 

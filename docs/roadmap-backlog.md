@@ -18,6 +18,15 @@ stepsCompleted:
 
 # TrainFlow 路线图与 MVP Backlog
 
+
+## 2026-07-26 E17 当前交付序列
+
+1. 当前 docs Correct-course：18 项 receipt 与十文档一致。
+2. E17-7a Reconnect + Parameter Foundation：owner policy、长期 armed eligibility、persistent suppression、age / max / alert data、zone / alert presentation 与 tests / architecture evidence。
+3. E17-7b Application / Settings / Capsule Wiring：唯一 owner activation、旧 runtime retirement、disconnect / reconnect / clear / opt-out、AVD / Band basic。
+4. E17-8 ordinary ID `7200` coordinator；E17-9 合法 FGS + active-training retain / recovery + handoff + M1；E17-10 evidence-only、production 0。
+
+每项均须前序 immutable full SHA 已 Review / merge / ancestry / sync。当前 candidate 在十文档一致前 needs review / 7a gated，满足后自动 satisfied，无 docs-sync。保留 E17-5 / 6；禁止 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` merge、整体 cherry-pick 或 prerequisite。下文旧 E17-7 单 Story / manual-only / deferred-without-target 状态均为历史快照。
 **文档状态:** 首版拆分草案  
 **用途:** 将 PRD、UX、数据契约和 Android 架构拆成可执行里程碑、Epic、Story 与验收顺序。  
 **范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；Planning Repair与E17-7 planning prerequisite按下方统一条件式真值自动判定。该扩展不纳入全天候健康监测、Health Connect 历史同步、医疗告警、通用设备兼容承诺、自动恢复实现，或记录 / 分析 / 导出实现；后续商业化、云同步和完整课程平台也仍不在本范围。

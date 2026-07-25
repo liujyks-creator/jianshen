@@ -8,6 +8,16 @@
 
 **性质：** docs-only readiness；production 代码、测试、Manifest、Gradle、资源、prototype 与 sealed E16 archive 均未修改
 
+## 2026-07-26 Correct-course delta
+
+本页既有 E17-4/5/6 reviewed / merged 事实继续有效；第 11 至 14 节的旧 E17-7 单 Story、排除自动恢复、active-training background cleanup 与七文档门禁由新 Correct-course supersede。当前 sequence 是 E17-7a reconnect + parameter foundation（owner policy / persistent intent / data / pure tests / architecture evidence）、E17-7b Application / settings / capsule wiring + AVD / Band basic、E17-8 ordinary coordinator、E17-9 FGS + training-background retain / recovery + ID `7200` + M1、E17-10 evidence-only 且 production files / lines / methods = 0。
+
+E17-7a AC 必须覆盖 eligibility 全矩阵、有间隔 bounded windows 且长期 armed、非训练后台 cleanup / visible return、manual suppression 跨 process、age `1..130`（`101` round-trip 无 clamp）、personal max / alert `30..260`、effective max precedence、未取整六区间和 strict alert 优先。E17-7b 必须证明唯一 Application owner、旧 runtime 原子退休、disconnect / reconnect / clear target / opt-out 文案与动作分离、冻结 capsule 直接复用。E17-9 必须证明普通 `ON_STOP` 不直接 cleanup、同一连接 retain、意外断连在合法 `connectedDevice` FGS 下恢复，以及 terminal / manual disconnect / opt-out / permission / Bluetooth / target / FGS legality 停止矩阵。
+
+不得恢复 D-078、E16 controller / wrapper、第二 owner 或第三 notification interface；保留 main serialization、identity、cleanup、`START_NOT_STICKY` 与 E17-5 / 6。禁止候选 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 不得 merge / 整体 cherry-pick / 作为 prerequisite。
+
+本 candidate 未通过独立 Review、`--no-ff` merge / push、full-SHA ancestry、`main...origin/main = 0 0` 与本次十文档一致前为 `implemented / needs review`，E17-7a gated；满足后自动 reviewed / merged / satisfied，无 docs-sync。
+
 ## 1. Readiness 结论
 
 **结论：passed。** D-080 产品合同与 D-081 最小架构之间未发现矛盾；production 代码迁移点、单 owner / 单 writer 收口、optional BLE seam、freshness 无循环门禁、Android 平台成本、六个风险隔离 Story、AVD / Band 9 evidence 层级及容量预算均已形成可执行计划。没有发现必须新增未经批准核心 ownership 层、修改 `docs/architecture.md` / decision log、重开 D-080 / D-081，或把 readiness 判为失败的待决产品选择。
