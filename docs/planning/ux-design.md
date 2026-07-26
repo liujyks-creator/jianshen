@@ -13,6 +13,14 @@ stepsCompleted:
 
 # TrainFlow UX 页面流与关键交互说明
 
+## 2026-07-26 心率交互当前覆盖
+
+设置页必须明确区分“断开设备”“重新连接”“清除已保存设备”“关闭心率”：断开保留 opt-in、saved exact target 与个人参数并跨 process suppress；只有重新连接或选择目标清除 suppression；clear target 与 opt-out 不互相冒充。Eligible 时前台自动恢复，非训练后台不持续 scan。active training 普通 `ON_STOP` 不直接 cleanup；background unexpected disconnect时保持FGS / ID`7200`writer，notification显示“正在重新连接”，只有停止资格或明确foreground不再需要FGS时才demote。
+
+年龄 optional `1..130`（`101` 不 clamp），个人最大心率 / alert 分别 `30..260`；personal max或age-derived max单独有效均可计算六区间，仅无 effective max 时为bpm-only。alert独立、strict exceed提示优先，不参与区间计算也不是第七区间；直接复用冻结胶囊状态 / 颜色 / geometry / motion，不新增视觉变体。
+
+本段 supersede 下文 manual-only / deferred-without-target 冲突；实现分属 E17-7a parameters / policy、7b settings / capsule、9 FGS training recovery，证据和 merge gate 见新 Correct-course。
+
 **文档状态:** 初稿  
 **日期:** 2026-05-21  
 **目标:** 为首版前端原型、后续设计系统和 Figma 设计提供页面流与交互骨架。
@@ -413,13 +421,18 @@ Timer Dial 动效必须来自 TrainFlow engine state，不允许视觉假进度�
 | 心率已关闭 | 胶囊隐藏；设置页显示功能已关闭 |
 | 需要权限 / 蓝牙关闭 | 使用冻结胶囊的非 live 表现，短文案说明当前阻塞事实 |
 | 未连接 / 已保存但未连接 | 显示 `未连接`；expanded 可显示 `已保存：设备名`，不暗示在线 |
-| 正在查找 / 未找到已保存设备 | 表达本次用户主动操作的结果，不覆盖已有 live 数据 |
+| 自动恢复等待下一 bounded window | 复用冻结胶囊的中性非 live 表现，显示 `等待重新连接` / `稍后自动重试`；不得写成用户主动扫描、手动停止或永久停止 |
+| 自动恢复正在查找 saved exact target | 复用冻结胶囊的中性非 live 表现，显示 `正在重新连接` / `正在查找已保存设备`；不得暗示用户刚刚发起扫描 |
+| 自动恢复单窗口未匹配但仍 armed | 显示 `暂未找到，稍后自动重试`；eligibility 持续成立时之后继续下一 bounded window，不得写成 `已停止自动恢复`、永久失败或 manual-only |
+| 用户主动扫描结果 | 用户主动操作期间显示 `正在扫描设备`，本次窗口未找到时显示 `本次未发现心率设备`；与自动恢复状态分开，且不覆盖已有 live 数据 |
 | 正在连接 / 等待数据 | 中性显示 `正在连接` 或 `已连接，等待心率` |
 | live bpm + 区间 | 显示 `热身 · 105 bpm`、`有氧 · 139 bpm` 等；区间基于有效用户参数 |
 | 数据已中断 / 连接已断开 / 连接未成功 | 不把上一次 bpm 伪装为当前读数，提供明确恢复入口 |
 | 超过设定上限 | 使用冻结的深红视觉提示；只表示超过用户设置阈值，不做医疗告警 |
 
-胶囊在用户开启心率后可于 TrainFlow 前台跨页面显示；未训练可以看 bpm、区间和连接状态但不记录。活跃训练允许短暂锁屏 / 后台维持当前连接；后台断连自动恢复是已接受价值但延后实现的独立候选，初始可交付基线仍为明确状态和用户手动恢复。
+上述自动恢复与用户主动扫描仅增加事实 mapper、文案和 semantics 区分，全部复用冻结胶囊现有 neutral presentation；不得新增颜色、布局、动画、互动或其他视觉变体。
+
+胶囊在用户开启心率后可于 TrainFlow 前台跨页面显示；未训练可以看 bpm、区间和连接状态但不记录。D-082 后，eligible 前台意外断连、out-of-range、App 首次 visible 或非训练后台返回 visible 自动恢复 saved exact target；active / paused training 进入锁屏 / 后台时普通 `ON_STOP` 不直接 cleanup，合法 `connectedDevice` FGS 下保持连接并在意外断连时恢复。显式“断开设备”持久 suppress 自动恢复，只有“重新连接”或选择目标解除；这套当前合同不再以 manual-only 作为初始交付基线。
 
 交互硬规则：
 

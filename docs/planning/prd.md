@@ -12,6 +12,14 @@ status: draft
 
 # TrainFlow 产品需求文档
 
+## 2026-07-26 心率当前需求覆盖
+
+当前心率合同窄 supersede 下文 manual-only / App start 不恢复 / no-reconnect 冲突：eligible（opt-in + saved exact + permission + Bluetooth + 无 suppression + visible 或合法 training FGS）时自动恢复；前台 bounded windows 有间隔且长期 armed，非训练后台 cleanup 并在回前台恢复。active training 普通 `ON_STOP` 不直接 cleanup；background unexpected disconnect 且eligible时，FGS与ID`7200`writer保持active、notification显示reconnecting，由同一Application owner以新generation / attempt恢复，只有停止资格或明确foreground不再需要FGS时才demote。断开设备保留 opt-in / target / parameters并跨process suppress，只有重新连接 / 选目标清除；清除目标与opt-out分离。
+
+年龄 optional `1..130`、个人最大心率 / alert 各 `30..260`；effective max 依次为合法 personal max、合法 age 推导的 `220-age`、none。personal max 单独有效即可计算六区间；age 单独有效时按 `220-age` 计算；仅当 personal max 无效且 age-derived max 也无效、即 effective max 为 none 时才是 bpm-only。`alertThreshold` 独立于 effective max 与区间，strict `bpm > alert` 视觉优先，相等不触发；它不是区间输入，也不是第七区间。区间使用未取整比率六段，冻结胶囊状态 / 颜色直接复用；age `101` 仍是 `1..130` 内合法值且不得 clamp。
+
+交付绑定为 E17-7a foundation、7b wiring、8 ordinary、9 FGS / training recovery、10 evidence-only；完整 AC / evidence 与 merge gate 见新 Correct-course。`fda5f7cfd3c31af3399dfe231733ea00467a68e8` 永久禁止 merge / 整体 cherry-pick / prerequisite。
+
 **文档状态:** PRD 初稿  
 **日期:** 2026-05-21  
 **上游输入:** [产品简报](./product-brief.md)
@@ -392,15 +400,15 @@ TrainFlow 是一款面向 Android 首发、未来计划适配 iOS 的训练计�
 
 #### FR-065 心率浮动胶囊显示
 
-心率功能默认关闭，canonical 入口为 `设置 -> 训练偏好 -> 心率与设备`。偏好开启后，浮动胶囊可在 TrainFlow 前台跨页面显示；未训练可以显示实时状态但不记录。App 启动、训练开始和开启开关本身不自动请求权限、扫描或连接；权限只在用户主动扫描或连接时请求。
+心率功能默认关闭，canonical 入口为 `设置 -> 训练偏好 -> 心率与设备`。偏好开启后，浮动胶囊可在 TrainFlow 前台跨页面显示；未训练可以显示实时状态但不记录。App 启动、训练开始和开启开关本身不得自动弹权限请求；权限只由用户主动准备权限、扫描、连接或重新连接动作请求。权限已经合法、存在 saved exact target、Bluetooth 开启、无 persistent manual suppression，且 App 首次 / 再次明确 visible 或 active training 可合法使用 FGS 时，系统按 D-082 自动恢复 exact target，不得按名称换设备或无限后台扫描。
 
 设置说明应引导用户在 Band 9 手动开启心率广播，并明确当前证据中开启广播会使 Huawei Health 暂时断开、关闭广播后可恢复。该说明只在设置与设备准备区域展示，不在每次连接前重复弹窗。
 
 #### FR-066 心率展示状态
 
-心率展示应使用用户能理解的事实语义，至少区分：心率已关闭、需要权限、蓝牙已关闭、未连接、已保存但未连接、正在查找、未找到已保存设备、正在连接、已连接等待心率、live bpm、数据已中断、连接已断开和连接未成功。
+心率展示应使用用户能理解的事实语义，至少区分：心率已关闭、需要权限、蓝牙已关闭、未连接、已保存但未连接、自动恢复等待窗口、正在查找、未找到已保存设备、正在连接、已连接等待心率、live bpm、数据已中断、连接已断开和连接未成功。其中自动恢复必须进一步区分“等待下一 bounded window”“正在查找 saved exact target”“单窗口未匹配但仍 armed、eligibility 成立时之后继续”，并与用户主动扫描的“正在扫描 / 本次未发现”结果分开；任何自动恢复状态都不得写成用户主动操作、手动停止或永久停止。设置页必须分别提供“断开设备”“重新连接”“清除已保存设备”“关闭心率”：断开保留 opt-in、saved target 与个人参数并跨 process suppress，只有重新连接或选择目标解除；clear target 与 opt-out 不能互相冒充。
 
-有有效用户参数时显示区间 + 数值，例如 `热身 · 105 bpm`、`有氧 · 139 bpm`；区间可表达低强度、热身、燃脂、有氧、无氧、极限和超过设定上限。年龄、最大心率或必要参数缺失时只显示 bpm / 连接状态，不推导或伪造区间。超过用户设置上限时只做已冻结胶囊支持的视觉提示，不做医疗级告警、声音、震动、强制暂停或训练中断。
+effective max 有效时显示六区间 + 数值，例如 `热身 · 105 bpm`、`有氧 · 139 bpm`；六区间固定为低强度、热身、燃脂、有氧、无氧、极限。合法 personal max 单独存在时，即使 age 缺失也按 personal max 计算六区间；personal max 缺失但合法 age-derived max 存在时，按 `220-age` 计算六区间；只有 `effectiveMax == none` 时才显示 bpm-only / 连接状态，不推导或伪造区间。`alertThreshold` 独立于 effective max 和六区间；严格 `bpm > alert` 时覆盖 presentation 并使用已冻结胶囊的超过上限视觉，相等不触发。超过上限不是区间输入或第七区间，也不触发医疗级告警、声音、震动、强制暂停或训练中断。
 
 #### FR-067 心率信息层级
 

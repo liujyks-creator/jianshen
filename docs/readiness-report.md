@@ -23,6 +23,16 @@ stepsCompleted:
 
 # TrainFlow 实现准备检查报告
 
+## 2026-07-26 E17 Correct-course readiness delta
+
+E17-4/5/6 的 reviewed / merged 与 readiness passed 事实保持。新路线补齐 accepted docs 的 manual-only、deferred 无 Story、个人参数 orphan 与 active-training `ON_STOP` cleanup 冲突：E17-7a 负责 eligibility / reconnect policy、persistent suppression、age / max / alert、zone / presentation pure tests；E17-7b 负责唯一 Application / settings / capsule wiring 与 AVD / Band basic；E17-8 ordinary；E17-9 FGS + training-background retain / recovery + `7200` + M1；E17-10 evidence-only production 0。
+
+Readiness 硬要求：eligible 前台恢复使用有间隔 bounded windows 且长期 armed；非训练后台 cleanup / 回前台恢复；active training 普通 `ON_STOP` 不直接 cleanup，合法 FGS 下保持 / 恢复同一连接；manual disconnect 跨 process suppress 且保留 opt-in / target / parameters。参数边界为 age `1..130`、max / alert `30..260`、effective max precedence、未取整六区间和 strict alert 优先；冻结 capsule 直接复用。
+
+保留唯一 owner / serialization / identity / cleanup / `START_NOT_STICKY` 与 E17-5 / 6，不恢复 D-078 或 controller / wrapper。禁止 candidate `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 不是 prerequisite。
+
+本 candidate 未 Review / merge / ancestry / sync / 十文档一致前为 needs review / E17-7a gated；满足后自动 reviewed / merged / satisfied，无 docs-sync。下文旧 Planning Repair、旧单一 E17-7 与自动恢复 defer 状态为历史快照。
+
 **结论:** 条件通过，可以进入 `Story E0.1: 创建 Android 生产工程`。  
 **限制:** 这不是完整 MVP 全量开工许可，只确认工程地基阶段可以启动。后续 E1 到 E9 仍需要按 Story 做局部检查、实现和验收。
 
@@ -77,7 +87,7 @@ stepsCompleted:
 | E1 动作库 | Partially ready after E1.1 | `O-001` 已由 `docs/planning/action-content-slice.md` 收敛；E1.2 可进入 fixture 导入，但仍不得提前实现完整动作库业务层或 UI 闭环。 |
 | E6 跟练雏形 | Not yet | 需要先收敛 `O-002` 跟练边界。 |
 | E7 通知、声音、震动 | Partially ready | D-027 / E7.2 ordinary notification基线与D-081 `connectedDevice` FGS窄例外已确认；E17-8必须以真实session ID + token + `stateVersion`收口ordinary writer，E17-9再完成shared-owner M1与ID`7200` handoff。 |
-| E17 真实心率能力 | Readiness passed / sequential Story gates | E17-4/5/6已reviewed/merged；E17-7 planning prerequisite按本页统一条件式真值自动判定。E17-7按14/1/7 envelope原子切换，E17-8闭合session/generation/detach合同，E17-9闭合shared-owner observer、五阶段APK链与`ReleaseUnconfirmed`，E17-10保持evidence-only。 |
+| E17 真实心率能力 | Readiness passed / sequential Story gates | E17-4/5/6已reviewed/merged；本Correct-course / E17-7a prerequisite按页首统一条件式真值判定。当前序列为E17-7a reconnect + parameters foundation、E17-7b Application/settings/capsule wiring、E17-8 ordinary coordinator、E17-9 FGS + active-training background retain/recovery + M1、E17-10 evidence-only。 |
 
 ## 2. 已检查文档
 
@@ -116,17 +126,17 @@ stepsCompleted:
 - 通知、声音、震动和偏好设置的基础能力。
 - 官方默认设计系统和可 fork 的 UI shell 边界。
 
-### E17 readiness已通过；Planning Repair / E17-7按条件式门禁判定
+### E17 readiness已通过；D-082 Correct-course / E17-7a按条件式门禁判定
 
 - D-080 已接受默认关闭、用户显式 opt-in 后读取标准 HRS 设备心率，并通过已冻结胶囊在 TrainFlow 前台跨页面显示 bpm、非医疗区间和用户上限视觉提示。
 - D-081 已接受唯一进程 owner、main-looper serialization、attempt / raw GATT identity、窄 permission TOCTOU、facts / presentation 分层、manual recovery，以及活跃训练 `connectedDevice` FGS / 单一训练通知方案；malformed payload 不立即形成公共 `TechnicalFailure`。
-- D-081 是 D-027 / E7.2 的窄例外和部分 supersession：ordinary training 不普遍启用 FGS；只有活跃训练已有合法当前心率连接时升级，连接结束而训练继续时降级 ordinary notification。
+- D-081 是 D-027 / E7.2 的窄例外和部分 supersession：ordinary training 不普遍启用 FGS。D-082 又窄 supersede “unexpected disconnect 立即降级”的历史含义：active / paused training 已在 background / lockscreen 且 eligibility 仍成立时，保持 FGS 与 ID `7200` 唯一 writer active、notification 显示 reconnecting，并由同一 Application owner 以新 generation / attempt bounded recovery；只有 eligibility 失败、显式停止类动作、training terminal，或明确 foreground 不再需要 FGS 时才降级 ordinary。
 - 现有 `ActiveWorkoutNotificationController` production instance 作为唯一 Application-scoped coordinator，Route 只提交状态；ID `7200` 在 ordinary / FGS 间单一 writer handoff。`POST_NOTIFICATIONS` 拒绝时 ordinary notification 可不发布，但 FGS 仍须构造并提交 notification。
-- 明确前台 terminal 可保留同一从未 cleanup 且仍 eligible 的 live attempt，转为非训练前台只显示不记录；后台、锁屏或可见性不确定 terminal 必须 cleanup。Route existence 不作为前台事实，两条路径均不自动 scan / connect / reconnect。
-- E17-7固定production 14、debug 1、可修改tests 7；`BleHeartRateProviderBoundary.kt`只保留owner实际消费的四个纯compatibility类型，debug Activity不创建第二owner。`ProcessVisibilityTracker`只发布fact，cleanup与training/FGS eligibility由Application policy决定。
+- 明确前台 terminal 可保留同一从未 cleanup 且仍 eligible 的 live attempt，转为非训练前台只显示不记录；后台、锁屏或可见性不确定 terminal 必须 cleanup。Route existence 不作为前台事实。cleanup 不清除正常 armed intent：后续新进程或同进程再次明确 visible 且 eligibility 成立时，以新 generation / attempt 自动恢复；显式断开的 persistent suppression 是例外。
+- E17-7a 先闭合 owner recovery policy、持久 suppression、个人参数和纯 presentation tests；E17-7b 再完成唯一 Application owner activation、settings / capsule wiring、旧 runtime 原子退休、AVD与Band basic gate。`BleHeartRateProviderBoundary.kt`只保留新owner实际消费的纯compatibility类型，debug Activity不创建第二owner。`ProcessVisibilityTracker`只发布fact，cleanup与training/FGS eligibility由Application policy决定。
 - E17-8 notification身份使用真实workout session ID + producer token + 单调`stateVersion`，Route dispose只进入bounded detach；E17-9使用同一Application owner的debug-only observer与五阶段APK身份链，release未确认时进入`ReleaseUnconfirmed`或等价稳定态。
-- E17-4/5/6已完成各自范围；production composition仍是旧provider/scanner，新owner尚未production/debug实例化。E17-7 planning prerequisite按本页统一条件式真值自动判定；条件未全部满足前不得开始E17-7。
-- 训练记录、复盘分析、覆盖缺口、用户导出和自动恢复仍是后续独立能力，不进入 E17-5 至 E17-10 production 序列。
+- E17-4/5/6已完成各自范围；production composition仍是旧provider/scanner，新owner尚未production/debug实例化。本Correct-course / E17-7a prerequisite按页首统一条件式真值自动判定；条件未全部满足前不得开始E17-7a。
+- 训练记录、复盘分析、覆盖缺口与用户导出仍是后续独立能力。自动恢复已由D-082纳入E17-7a、E17-7b与E17-9，不再是无目标的defer项。
 
 ### 当前未纳入或继续排除
 
@@ -172,7 +182,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 - `O-002` 跟练边界需要在 E6 前确认：是只做固定预设，还是允许兼容的计时训练计划切换到跟练视图。
 - `O-003` 语音倒计时需要在 E7 前确认：首版是否只做声音/震动/强化动画，还是加入语音读秒。
 - `O-006` / E16 历史快照：E16 曾验证 Band 9 可通过心率广播暴露标准 BLE HRS；E16-1 至 E16-10b-1 中已经合入 `main` 的 Story 继续保留各自 immutable merge fact。E16-10a 当时接受的有限前台 direct reconnect 与 10 / 15 / 30 秒 freshness policy 已 reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`）；E16-10b-1 纯 Kotlin policy core 也已 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。这些 `reviewed / merged` 仅是历史事实，不表示 E17 继承其产品或技术合同。
-- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17-0至E17-6已`reviewed / merged`；Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定。自动恢复为已接受价值的延后独立候选，不是本轮production序列。
+- 当前状态与门禁：E16 umbrella 已为 `closed by correct-course / superseded by E17`。E16-10b-2 保持 `changes requested`；失败分支 `codex/e16-10b-2-foreground-reconnect-controller` immutable tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。D-074 至 D-078 和 O-009 只保留为历史接受事实，不再是 E17 当前合同。E17-0至E17-6已`reviewed / merged`；D-082 Correct-course与E17-7a prerequisite按本页统一条件式真值自动判定。自动恢复当前由E17-7a / E17-7b / E17-9分层交付，不恢复旧E16路线。
 - `DESIGN.md` 已建立机器可读 token，但设计 lint 曾出现超时，后续如接入自动校验应单独处理。
 
 ## 7. 架构适配检查
@@ -182,7 +192,7 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 - `WorkoutPlan` 表达目标和结构，`WorkoutSession` 表达实际执行和结果，二者不能混写。
 - Room entity 不能泄漏到 feature UI。
 - 通知、音频、震动、心率和媒体属于平台适配边界，不应反向依赖 feature UI。
-- 历史 MVP 曾只保留抽象心率状态 / provider 边界，并撤下生产真实设备读取和 UI；D-080 已 supersede 其中的全面排除范围。E17-4/5/6已完成，但production仍运行旧provider/scanner；E17-7门禁与原子切换规则以当前E17索引和详细readiness计划为准。
+- 历史 MVP 曾只保留抽象心率状态 / provider 边界，并撤下生产真实设备读取和 UI；D-080 已 supersede 其中的全面排除范围，D-082 已 supersede manual-only / no-reconnect 冲突。E17-4/5/6已完成，但production仍运行旧provider/scanner；E17-7a foundation与E17-7b原子切换门禁以当前E17索引和详细readiness计划为准。
 - 当前心率接入继续消费抽象状态 / 平台边界，不把设备 SDK 模型泄漏到 UI；医疗判断、危险告警、声音 / 震动强制提醒、自动暂停或训练中断继续排除。
 
 ## 8. UI 与开源定制检查
@@ -202,6 +212,6 @@ E0.1 可以开始，但在创建 Android 工程前应确认以下参数：
 
 ## 10. 下一轮建议
 
-原 `MVP Alpha readiness 前检查` 及其可复制提示词已经失效，只保留在 Git 历史中，不得继续使用。E16 umbrella 已由 correct-course 关闭并被 E17 替代；旧 E16-1 / E16-2 只能作为 historical / reference 或 revalidation 输入，不能直接作为 E17 provider 地基合同。自动重连不得作为默认前置。
+原 `MVP Alpha readiness 前检查` 及其可复制提示词已经失效，只保留在 Git 历史中，不得继续使用。E16 umbrella 已由 correct-course 关闭并被 E17 替代；旧 E16-1 / E16-2 只能作为 historical / reference 或 revalidation 输入，不能直接作为 E17 provider 地基合同。D-082 自动恢复只能按当前 E17-7a / 7b / 9 合同交付，不得恢复 D-078 或失败 E16 controller / wrapper。
 
-E17-0至E17-6已`reviewed / merged`，E17-4 readiness=`passed`。Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定；条件未全部满足时只允许独立Planning Repair Review/Repair，条件全部满足后无需docs-sync或递归closeout。记录、分析、用户导出与自动恢复均需各自后续门禁。
+E17-0至E17-6已`reviewed / merged`，E17-4 readiness=`passed`。本Correct-course与E17-7a prerequisite按页首统一条件式真值自动判定；条件未全部满足时只允许独立Correct-course Review/Repair，条件全部满足后无需docs-sync或递归closeout。记录、分析与用户导出仍需各自后续门禁；自动恢复已绑定E17-7a / E17-7b / E17-9。

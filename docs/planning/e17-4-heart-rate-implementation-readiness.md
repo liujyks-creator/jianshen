@@ -8,13 +8,57 @@
 
 **性质：** docs-only readiness；production 代码、测试、Manifest、Gradle、资源、prototype 与 sealed E16 archive 均未修改
 
+## 2026-07-26 Correct-course delta
+
+本页既有 E17-4/5/6 reviewed / merged 事实继续有效；第 2 至 14 节的旧盘点、旧 E17-7 单 Story、排除自动恢复、active-training background cleanup、证据矩阵与七文档门禁整体标为 historical / non-operative，并由下方“当前可执行 readiness 替换”及新 Correct-course supersede。当前 sequence 是 E17-7a reconnect + parameter foundation（owner policy / persistent intent / data / pure tests / architecture evidence）、E17-7b Application / settings / capsule wiring + AVD / Band basic、E17-8 ordinary coordinator、E17-9 FGS + training-background retain / recovery + ID `7200` + M1、E17-10 evidence-only 且 production files / lines / methods = 0。
+
+E17-7a AC 必须覆盖 eligibility 全矩阵、有间隔 bounded windows 且长期 armed、非训练后台 cleanup / visible return、manual suppression 跨 process、age `1..130`（`101` round-trip 无 clamp）、personal max / alert `30..260`、effective max precedence、未取整六区间和 strict alert 优先。E17-7b 必须证明唯一 Application owner、旧 runtime 原子退休、disconnect / reconnect / clear target / opt-out 文案与动作分离、冻结 capsule 直接复用。E17-9 必须证明普通 `ON_STOP` 不直接 cleanup、同一连接 retain、意外断连在合法 `connectedDevice` FGS 下恢复，以及 terminal / manual disconnect / opt-out / permission / Bluetooth / target / FGS legality 停止矩阵。
+
+不得恢复 D-078、E16 controller / wrapper、第二 owner 或第三 notification interface；保留 main serialization、identity、cleanup、`START_NOT_STICKY` 与 E17-5 / 6。禁止候选 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 不得 merge / 整体 cherry-pick / 作为 prerequisite。
+
+本 candidate 未通过独立 Review、`--no-ff` merge / push、full-SHA ancestry、`main...origin/main = 0 0` 与本次十文档一致前为 `implemented / needs review`，E17-7a gated；满足后自动 reviewed / merged / satisfied，无 docs-sync。
+
 ## 1. Readiness 结论
 
-**结论：passed。** D-080 产品合同与 D-081 最小架构之间未发现矛盾；production 代码迁移点、单 owner / 单 writer 收口、optional BLE seam、freshness 无循环门禁、Android 平台成本、六个风险隔离 Story、AVD / Band 9 evidence 层级及容量预算均已形成可执行计划。没有发现必须新增未经批准核心 ownership 层、修改 `docs/architecture.md` / decision log、重开 D-080 / D-081，或把 readiness 判为失败的待决产品选择。
+**结论：passed。** E17-4 的 D-080 / D-081 基础 readiness 与 E17-5 / E17-6 merged facts保持；D-082 通过下方当前可执行替换把 reconnect eligibility、personal parameters、7a / 7b拆分、active-training FGS recovery和final-source双层证据加入现有单owner / 单writer安全边界。无需新增核心 ownership 层、重开 D-080 / D-081 或恢复 E16 controller / wrapper；后续只按当前 E17-7a -> 7b -> 8 -> 9 -> 10 顺序门禁推进。
 
-E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`、merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；E17-6 immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`、merge commit `503d3151d731565837ab76f44fbebc25bb982e0d`。禁止 E16 SHA `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor。Planning Repair与E17-7 planning prerequisite按第14节统一条件式真值自动判定。
+E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`、merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；E17-6 immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`、merge commit `503d3151d731565837ab76f44fbebc25bb982e0d`。禁止 E16 SHA `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor。本 Correct-course candidate 与 E17-7a prerequisite 按页首及新 Correct-course 第 9 节的 merge-stable truth 判定。
 
-## 2. 盘点基线与硬边界
+## 2026-07-26 当前可执行 readiness 替换
+
+本节与页首 Correct-course delta 是 D-082 后唯一可生成实现任务的 readiness 合同。其余第 2 至 14 节完整保留为 2026-07-18 E17-4 / 2026-07-22 Planning Repair 的**历史盘点快照（non-operative）**：其中 `manual-only`、`no reconnect`、自动恢复 defer、旧单一 E17-7、`14 / 1 / 7` envelope、pre-FGS training background cleanup、cleanup 后不恢复、Band gate 不自动恢复和旧 next-step / gate 均不得生成当前任务、不得覆盖本节，也不得作为 Review finding 要求恢复旧路线。历史文件路径与已合并事实仍可用于迁移盘点。
+
+### 当前 lifecycle / eligibility
+
+- 自动恢复 eligibility = opt-in + saved exact target + permission + Bluetooth + no persistent manual suppression + App 明确 visible，或 active / paused training 已能合法使用 `connectedDevice` FGS。名称、display name 和附近其他 HRS 不得替代 exact target。
+- App 启动 / recreation 后首次明确 visible、非训练后台返回 visible、前台意外断连或 out-of-range 时，唯一 owner 使用有间隔的 bounded scan windows；单窗口有限时，窗口间隔由 deterministic policy 控制，eligibility 持续成立时长期 armed，不因固定次数耗尽永久停止。
+- bounded-window delay、下一窗口 eligibility 复核与 recovery timing 必须留在唯一 `HeartRateRuntimeOwner` 的 concrete main-looper policy 内。禁止新增 standalone / generic retry scheduler、watchdog、backoff controller、actor、wrapper或相关 production abstraction；测试只可复用现有 deterministic main queue / time control，不得为了测试便利创建 production scheduler abstraction。
+- 非训练后台停止 scan / connect / GATT 并 cleanup，不持续后台扫描；它不清除正常 armed intent，返回 visible 后重新计算 eligibility 并自动恢复。
+- active / paused training 的 Activity / Route `ON_STOP` 本身不是 cleanup。连接未 cleanup、未丢失时，回前台必须仍是同一 Application owner、同一 attempt lineage 与 current bpm；后台意外断连且 eligibility 仍成立时，只允许同一 owner 在合法 FGS 下以新 generation / attempt 恢复 exact target，不能伪称 same attempt。恢复期间 FGS 与 ID `7200` 唯一 writer 保持 active，notification 准确显示 reconnecting；unexpected disconnect 本身不得触发 ordinary demotion。
+- 只有 eligibility 失败、显式断开、opt-out、清除 target、permission / Bluetooth loss、training terminal、FGS legality failure，或 App 已明确 foreground 且不再需要 FGS 时，才按 typed stop reason demote / stop FGS。显式断开持久化 suppression 并保留 opt-in、saved target 与个人参数；只有明确重新连接或选择目标解除。
+- 进程死亡不恢复旧 GATT / callback / generation / attempt，Service 保持 `START_NOT_STICKY`；新进程只可在新的明确 visible / 合法 active-training FGS eligibility 下由唯一 owner 以新 generation / attempt 恢复。
+
+### 当前 Story / acceptance / evidence 矩阵
+
+| Story | 唯一主要风险轴与允许范围 | 必须验收 | Evidence / merge gate |
+|---|---|---|---|
+| E17-7a Reconnect + Parameter Foundation | 在 E17-6 owner 上增加纯 eligibility / recovery reducer、有间隔 bounded-window policy、typed stop reasons、persistent suppression、age / personal max / alert DataStore 与纯 presentation 计算；不得接 Application UI、FGS、Service 或 Band claim | eligibility 全组合；长期 armed；disable / manual disconnect / permission / Bluetooth / target / background原因分离；suppression跨 process；age `1..130`且`101`不 clamp；max / alert `30..260`；personal max优先于`220-age`；仅effective max为none时bpm-only；alert独立且不是第七区间；未取整六区间与strict alert优先 | fake-clock owner / policy tests、DataStore round-trip、mapper boundary、full unit / build / lint / check；独立Review、merge/push、full-SHA ancestry与同步main |
+| E17-7b Application / Settings / Capsule Wiring | `TrainFlowApplication`唯一创建 owner；Activity / Compose / settings / saved-device / capsule接线；原子退休旧provider/scanner ownership；debug入口只能观察同一owner或成为无资源说明页 | production/debug只有一个可达 owner；disconnect / reconnect / clear target / opt-out四种动作与copy准确；permission只由明确用户动作请求；foreground自动恢复、非训练background cleanup、process recreation；mapper / copy / semantics明确区分自动恢复等待下一bounded window、自动恢复正在查找、单窗口未匹配但仍armed且之后eligible继续，以及用户主动扫描结果，任何自动状态不得冒充用户主动扫描、手动停止或永久停止；冻结capsule neutral presentation、视觉/互动/颜色/geometry不改 | static owner/reachability search、Application / visibility / settings / mapper semantics tests、final executable source 的 AVD lifecycle / scan-count / foreground-return与上述自动恢复三态、与用户主动扫描相区分的状态证据、Band 9 production basic GATT / notify；不得把AVD当RF证据 |
+| E17-8 Ordinary Notification Coordinator | Application-scoped ID `7200` ordinary single writer；真实 workout session ID、producer token、monotonic `stateVersion`、bounded detach / reattach；不含FGS或BLE policy扩张 | old session / old Route迟到拒绝；same-plan A→B；terminal幂等；process recreation无事实时清旧`7200`一次；Route只submit | pure coordinator / Android notification tests + AVD route/recreation；独立Review/merge/ancestry |
+| E17-9 Connected-device FGS + Training Background Recovery | concrete Service / Manifest、ID `7200` generation handoff、合法 active-training retain / recovery、shared-owner observer、M1与final freshness；Service不是GATT或训练业务owner | visible-start、immediate startForeground、`START_NOT_STICKY`、permission deny分支、release ack / `ReleaseUnconfirmed`；未断链返回前台同owner/same attempt/current bpm；后台断链且eligible时同owner/new generation-attempt恢复，FGS / ID `7200` writer持续active且notification显示reconnecting；只有停止矩阵或明确foreground no-longer-needs-FGS才demote | final executable source的AVD lifecycle/notification/handoff证据 + 同一final source的Band 9真实GATT/notify锁屏后台retain与recovery证据；两层不得互相冒充；measurement/final APK完整身份链、M1与final rebuild |
+| E17-10 Integrated Production Acceptance | evidence-only；production files / lines / methods = 0 | 已合并7a/7b/8/9端到端gate；production finding固定路由：owner / GATT / callback → E17-6，policy / data → E17-7a，Application / settings / capsule → E17-7b，ordinary notification → E17-8，FGS / handoff / final freshness → E17-9 | 新Repair独立Review/merge后重建新APK并重跑受影响gate；旧APK/截图/日志失效 |
+
+### 当前 presentation 与冻结边界
+
+`ageYears: Int?` 的 `1..130` 只是 sanity guard，不是连接 eligibility；`101` 是合法值。`personalMaxHeartRateBpm: Int?` 与 `alertThresholdBpm: Int?` 均为 `30..260`，alert 独立于 max。effective max 依次为 personal max、`220-age`、none。区间使用未取整比率 `<50`低强度、`[50,60)`热身、`[60,70)`燃脂、`[70,80)`有氧、`[80,90)`无氧、`>=90`极限；严格 `bpm > alert` 优先，相等不触发。无 effective max 仍显示 bpm，alert-only 可提示。上述 presentation 直接复用 D-079 冻结的 E16 capsule 状态 / 颜色 / 互动资产，不改 capsule 本体、geometry、layout、motion 或交互。
+
+### 当前停止条件与禁止候选
+
+若实现 bounded-window delay / recovery timing 需要 standalone 或 generic retry scheduler、watchdog、backoff controller、actor、wrapper、新 production interface，或为了测试便利要求新增 production scheduler abstraction，立即停止并返回主管理；不得以“长期 armed”恢复 E16 controller 路线。测试只能驱动现有 main queue / time control。
+
+任一 Story 需要第二 owner、generic BLE seam / wrapper、恢复 D-078 / E16 controller、Service持有GATT、后台无限scan、自动换target、第三notification interface、修改冻结capsule视觉，或不能在其明确范围内闭合时，停止并返回管理复核。旧 candidate `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 固定为 `frozen / unmergeable / reference-only / permanently prohibited from merge`，不是 prerequisite，不得 merge、整体 cherry-pick、rebase进新路线或替代E17-5/6资产。
+
+## Historical 2. 盘点基线与硬边界（2026-07-18 snapshot；non-operative）
 
 - 实际工程为单 `app` module，`minSdk 26`、`compileSdk 36`、`targetSdk 36`；AGP `9.2.0`、Kotlin / Compose compiler `2.3.21`、Compose BOM `2026.05.00`、DataStore `1.2.1`、Room `2.8.4`、Robolectric `4.16.1`、AndroidX Test Core `1.7.0`。
 - 当前 `TrainFlowApplication` 是 5 行空 Application；实际 database、repository、preferences、心率 scanner/provider 与通知 controller 均在 Activity / Compose / Route 层创建。D-081 要求把心率 owner 与通知 coordinator 移到 Application composition root，但不要求把全部 App 依赖同时重构。
@@ -24,7 +68,7 @@ E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA
 - E17 不写 Room、`WorkoutSession` 心率样本、记录、统计、分析、导出、自动恢复、reconnect scheduler 或医疗逻辑；胶囊视觉、互动、geometry、motion 与 adopted HTML 不改。
 - E16 sealed命名文档继续只留在仓库、不进入APK；冻结胶囊/geometry、parser、permission经验与既有DataStore字段是正式资产，不是待清垃圾。当前旧provider/scanner/mixed boundary仍production可达，E17-6新owner的production/debug实例化为0；失败E16-10b-2 controller/wrapper在`main`为0，D-078自动重连不恢复。E17-7合并后不得保留旧BLE runtime owner入口。
 
-## 3. 当前代码资产清单
+## Historical 3. 当前代码资产清单（snapshot；non-operative）
 
 除非表中写出完整路径，本节 production 路径均相对 `app/src/main/java/com/liujyks/trainflow/`，unit test 路径均相对 `app/src/test/java/com/liujyks/trainflow/`；Manifest 与 debug 工具使用表中明确的 `app/src/...` 路径。
 
@@ -96,7 +140,7 @@ E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA
 | `docs/testing/e17-1-band9-hrs-revalidation.md` | 当前设备/协议 feasibility `passed` | reference only | 两个新真机 gate 的前置可行性 | 不能替代新 owner / FGS 验收 |
 | `.local/smoke/e17-1-band9-hrs-revalidation/` | APK、截图、日志、设备输出 | read-only / never commit | 历史对照 | 存在不等于新 production evidence；后续各 Story 使用独立目录 |
 
-## 4. 当前差距结论
+## Historical 4. 当前差距结论（snapshot；non-operative）
 
 1. runtime ownership 当前不合格：provider/scanner 由 Compose 创建和关闭，Application 没有 owner。
 2. callback determinism 当前不合格：无 generation、attempt ID、raw GATT identity gate，且 `connectGatt()` 未使用 Handler overload。
@@ -107,7 +151,7 @@ E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA
 7. 当前设置与 saved-device UX 大部分可复用；cold start 已不自动 scan / connect，但连接状态仍由旧 provider DTO 驱动。
 8. 冻结胶囊本体和 geometry 不需要修改；只有外部 presentation mapper 与输入事实需要适配。
 
-## 5. 产品—架构—实现—证据追踪矩阵
+## Historical 5. 产品—架构—实现—证据追踪矩阵（snapshot；non-operative）
 
 | 产品事实（D-080） | 架构规则（D-081） | 当前代码影响 | Story | 自动化证据 | AVD / 真机 gate |
 |---|---|---|---|---|---|
@@ -134,7 +178,7 @@ E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA
 | 不写Room/session记录/分析/导出/自动恢复 | owner与data/engine隔离 | 当前无HR写库，继续保持 | 全序列 | boundary/source guards only | 记录页无HR数据；不能冒充行为覆盖 |
 | 胶囊视觉与互动不修改 | 外部mapper兼容冻结DTO | capsule/geometry adopt as-is | E17-5 / 7 only mapper | frozen geometry/gesture tests | AVD视觉回归，不重新评审 |
 
-## 6. 公共状态与内部事实矩阵
+## Historical 6. 公共状态与内部事实矩阵（snapshot；non-operative）
 
 | 场景 | Runtime fact（owner内部） | `HeartRateState` | 胶囊 presentation | bpm / measuredAt 清理 |
 |---|---|---|---|---|
@@ -155,7 +199,7 @@ Malformed payload 只是 `MalformedPayload(attemptId, receivedAtElapsed, optiona
 
 现有 `HeartRateFloatingCapsuleUiState` 足以承载上述 presentation；E17-5 只允许外部 mapper / 窄 presentation input 兼容，不修改冻结 UI DTO 的视觉字段语义，不把 `BluetoothDevice`、GATT、address或异常message放入胶囊。
 
-## 7. Optional BLE seam 最终规则
+## Historical 7. Optional BLE seam 最终规则（snapshot；non-operative）
 
 **结论：默认不新增 `AndroidBleOperations` seam。** 当前所需确定性可以由原生 Android BLE types + 一个只负责 attempt ID / raw GATT 首次绑定与 mismatch 拒绝的窄 callback harness 完成；具体 `startScan`、`stopScan`、`connectGatt`、`discoverServices`、`setCharacteristicNotification`、`writeDescriptor`、`disconnect`、`close` 继续是 owner 内的真实 production 调用。callback harness 不复制 GATT 模型、不接收 arbitrary business lambda、不做异常归类。
 
@@ -166,7 +210,7 @@ E17-6 明确禁止自行新增 `AndroidBleOperations`、完整 GATT wrapper、pa
 - attempt激活、provider mapping、state transition与legacy mutation全部在异常边界外。
 - callback holder先捕获attempt ID并允许raw GATT首次绑定；不得使用会被早到callback读取的未初始化 `lateinit connection`。
 
-## 8. Freshness 测量与无循环门禁
+## Historical 8. Freshness 测量与无循环门禁（snapshot；non-operative）
 
 E17 不继承 D-078 / E16 的 10 / 15 / 30 秒。顺序固定如下：
 
@@ -228,7 +272,7 @@ E17-9 是同一 Story 内不可拆分合入 `main` 的五阶段链：
 
 仅文档修改，或完全不改变executable tree的测试证据整理，可以不改变APK identity，但必须以Git tree/diff证明没有任何executable变化。不得用旧E17-1 APK替代E17-9 M1，不得用独立自持GATT工具证明shared Application owner/FGS，不得用相同文件名冒充相同APK，也不得猜测缺失的设备、版本或时间字段。measurement APK只能支撑与其身份绑定的M1；final threshold修改后必须重新build/install/hash/验证。E17-5 M0、旧AVD与旧E16截图均不能替代M1或final evidence；M1不足时E17-9不得merge。
 
-## 9. Android 平台与 Manifest 矩阵
+## Historical 9. Android 平台与 Manifest 矩阵（snapshot；non-operative）
 
 | 项目 | 当前事实 | E17 implementation规则 | Story / evidence |
 |---|---|---|---|
@@ -278,7 +322,7 @@ Android一手资料（核验日期2026-07-18）：
 
 未发现官方当前要求与D-081 `connectedDevice`选择冲突。
 
-## 10. Notification ID `7200` 单一 writer 验收矩阵
+## Historical 10. Notification ID `7200` 单一 writer 验收矩阵（snapshot；non-operative）
 
 Route只提交最新训练状态；唯一 Application-scoped `ActiveWorkoutNotificationController` production coordinator持有mode与latest state。业务身份使用真实 workout session ID，不使用 plan-derived key；coordinator另行签发 producer `submissionGeneration` / `routeToken`，notification state携带同一 session 内严格单调的`stateVersion`。Service不是第二业务owner，也不是GATT owner；Service只有在coordinator明确交接后对同一ID调用`startForeground`。
 
@@ -328,7 +372,7 @@ handoff 期间训练状态变化只更新 latest state / version，取得 writer
 
 E17-9 的 pure / Android / AVD 计划必须覆盖 normal `FGS -> ORDINARY`、`FGS -> NONE`、stale ack、duplicate ack、wrong generation、latest-state replay、handoff 中 target mode 改变、`stopForeground` failure injection、`ReleaseUnconfirmed`、Service destroyed before ack、background / unknown cleanup、repeated terminal，以及 no double notify / cancel。该协议不授权新增 notification 核心 interface。
 
-## 11. 风险隔离后的 implementation Story 序列
+## Historical 11. 风险隔离后的 implementation Story 序列（snapshot；non-operative）
 
 每个后续Story只有在前一个Story独立Review / merge / push完成、其immutable full SHA成为`main` ancestor、`main...origin/main = 0 0`且权威文档一致时才解锁。分支名不是解锁事实；不增加状态docs-sync或递归closeout。
 
@@ -419,7 +463,7 @@ E17-7仍是一个不可拆分合入`main`的原子Story，但同一分支内必�
 
 六个Story没有把owner、GATT、FGS与真机acceptance重新塞进同一变更：E17-5隔离事实/时间；E17-6隔离平台runtime；E17-7隔离composition/user wiring；E17-8先消除notification多writer；E17-9只做FGS/handoff并在同Story锁必要锁屏threshold；E17-10只做端到端证据。这比机械五段多一个ordinary coordinator收口，避免E16-10b-2把owner、callback、scheduler、FGS与验收同时扩张。
 
-## 12. 测试与证据计划
+## Historical 12. 测试与证据计划（snapshot；non-operative）
 
 ### 12.1 纯 Kotlin
 
@@ -468,7 +512,7 @@ E17-7仍是一个不可拆分合入`main`的原子Story，但同一分支内必�
 
 E17-1只作设备/协议feasibility参考，不能替代两个新gate。
 
-## 13. 文件、容量与依赖预算
+## Historical 13. 文件、容量与依赖预算（snapshot；non-operative）
 
 实际627行旧provider、339行presentation mapper、三个Route writer与新增Service表明D-081中的“production Kotlin 450–750行、20–30方法、APK <50KiB”作为**全序列**估算不可信。已完成Story使用实测事实，未完成Story只保留方向性预算：
 
@@ -485,7 +529,7 @@ E17-5实际总churn为production `862`、tests `1386`、debug `247` 行，不能
 
 不引入厂商SDK、BLE library、DI library、scheduler、通用framework或新第三方依赖。若`ServiceCompat`需要停止依赖transitive classpath，E17-9可把现有AndroidX Core作为直接first-party坐标声明；它不计第三方依赖，但必须记录版本和dependency delta。全序列最多一个runtime owner、**零默认BLE seam**、一个concrete Service，不新增notification core interface。
 
-## 14. Readiness 通过标准与稳定状态
+## Historical 14. Readiness 通过标准与稳定状态（snapshot；non-operative）
 
 | 标准 | 结论 |
 |---|---|

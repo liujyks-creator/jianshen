@@ -1,22 +1,32 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态判定：** E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`；Planning Repair与E17-7 planning prerequisite按下方统一条件式真值自动判定
+**状态判定：** E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`；D-082 Correct-course与E17-7a prerequisite按本页当前 supersession及新 Correct-course 的统一条件式真值判定
 **日期：** 2026-07-12；状态同步：2026-07-22
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
-## 1. E17 目标
+## 2026-07-26 当前 supersession
+
+当前完整合同为 `docs/planning/e17-auto-reconnect-and-personal-parameters-correct-course.md` 的 18 项 ledger；它 supersede 本文后续 manual-only、自动恢复无目标 Story、旧 E17-7 单 Story 与 active-training `ON_STOP` cleanup 冲突措辞，E17-2 / E17-3 正文保持历史记录。Eligibility 为 opt-in + saved exact + permission + Bluetooth + 无持久 suppression + visible 或合法 active-training FGS；前台 bounded windows 有间隔且长期 armed，非训练后台 cleanup / 回前台恢复，训练后台保持同一连接并在合法 FGS 下恢复。显式断开保留 opt-in / target / parameters 并跨 process suppress，仅明确 reconnect / select 清除。
+
+年龄可选 `1..130`（`101` 有效、不 clamp、非 eligibility），个人最大心率 / alert 各自可选 `30..260`；effective max 为 personal max、`220-age`、none。仅 effective max 为 none 时显示 bpm-only；personal max 单独有效或 age 单独有效均可计算六区间。alert 独立且 strict `bpm > alert` 优先，不是区间输入或第七区间；区间按未取整比率 `<50`、`[50,60)`、`[60,70)`、`[70,80)`、`[80,90)`、`>=90` 并复用冻结状态 / 颜色。
+
+新序列为 docs CC -> E17-7a foundation -> E17-7b wiring + AVD / Band -> E17-8 ordinary -> E17-9 FGS + training recovery + `7200` + M1 -> E17-10 evidence-only。保留 D-079、唯一 owner / serialization / identity / cleanup / `START_NOT_STICKY` 与 E17-5 / 6；不恢复 D-078、controller 或 wrapper。`fda5f7cfd3c31af3399dfe231733ea00467a68e8` frozen / unmergeable / reference-only / permanently prohibited from merge。candidate 未 Review / merge / ancestry / sync / 十文档一致前为 needs review / 7a gated，满足后自动 reviewed / merged / satisfied，无 docs-sync。
+
+从下方“Historical 1”到文末“Historical 8”的正文是 E17-0 至 E17-6 形成时的历史计划记录，整体为 **historical / non-operative snapshot**。其中 manual-only、自动恢复 defer、旧单一 E17-7、old `14 / 1 / 7` envelope、pre-FGS background cleanup、process death 后手动恢复及旧 gate / next-step 不得生成当前任务；历史 merged facts、D-079 冻结资产与 D-081 安全基础仍按 D-082 保留范围使用。
+
+## Historical 1. E17 目标（non-operative snapshot）
 
 E17 基于 E16 遗产，为小型本地优先训练 App 重新设计合适的心率子系统。从产品价值、Band 9 / 标准 HRS 可行性、权限、BLE runtime、状态模型、测试层级和真机验收重新对齐，不把旧 E16 实现视为默认正确。
 
 E17 将浮动胶囊视觉与互动作为 `adopted / frozen / direct reuse` 资产直接采用，优先稳定、可解释、用户可见、手动可恢复；自动重连不是默认前置。
 
-## 1.1 历史归档与权威层级
+## Historical 1.1 历史归档与权威层级（non-operative snapshot）
 
 E16 原始代码及 testing、planning、design 文档整体为 `sealed historical archive / reference only`。E17 不再为当前状态逐行修改这些材料；其中历史语境下的 current、next、dependency / depends on、unlocked、in progress 不属于当前指令，不参与 E17 当前状态逐行一致性检查，不能生成任务、解锁 Story 或覆盖 D-079。Review 不得仅因这些历史措辞保留而提出当前状态 finding；未经新的明确 correct-course decision，不得修改 sealed archive。sealed 不删除 Git 历史或分支，不否认历史测试与 Band 9 / HRS 证据，也不把旧实现变成 E17 合同或自动复用旧 production 架构。
 
 文档权威层级为：`AGENTS.md` > accepted superseding decisions D-079 / D-080 / D-081 > 当前 E17 权威文档（project-status、E17-2 产品合同、E17-3 最小架构、E17 correct-course、readiness、roadmap、architecture）> E16 retrospective / supersession 索引 > sealed E16 原始文档与代码（historical evidence only）。低层不得覆盖高层。
 
-## 2. 非目标
+## Historical 2. 非目标（non-operative snapshot）
 
 - correct-course 阶段不写 production 代码。
 - 不在 correct-course 规划 Story 中直接实现自动恢复。
@@ -27,7 +37,7 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 - 不为尚未确认的设备或厂商做过度抽象。
 - 不把旧 E16 Story / SHA 当作 E17 解锁前置。
 
-## 3. 重新规划阶段
+## Historical 3. 重新规划阶段（non-operative snapshot）
 
 ### E17-0：Retrospective / legacy audit / reset
 
@@ -95,7 +105,7 @@ E16 原始代码及 testing、planning、design 文档整体为 `sealed historic
 
 D-081已锁定最小技术架构，E17-4/5/6已完成各自范围。E17-7 planning prerequisite按上方统一条件式真值自动判定；自动重连、记录、分析和导出仍需各自后续决策与Story。E17-7至E17-10详细计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。
 
-## 4. 测试分层
+## Historical 4. 测试分层（non-operative snapshot）
 
 | 层级 | 负责验证 | 明确不能代表 |
 |---|---|---|
@@ -113,7 +123,7 @@ D-081已锁定最小技术架构，E17-4/5/6已完成各自范围。E17-7 planni
 - 文档只声明测试实际执行并断言过的行为。
 - 人工真机操作由用户执行，开发对话准备 APK、日志与清单。
 
-## 5. 设计和实现约束
+## Historical 5. 设计和实现约束（non-operative snapshot）
 
 - 默认优先直接使用原生 Android BLE 类型；Android 类型留在平台层。
 - 不为测试创建第二套完整 GATT 模型。
@@ -125,7 +135,7 @@ D-081已锁定最小技术架构，E17-4/5/6已完成各自范围。E17-7 planni
 - freshness 与自动重连不得默认绑在同一 Story。
 - Repair 不得为测试便利扩展 production 架构。
 
-## 6. Adopted / frozen / direct reuse 胶囊资产
+## Historical 6. Adopted / frozen / direct reuse 胶囊资产（non-operative snapshot）
 
 ### 直接采用的实现与视觉资产
 
@@ -156,7 +166,7 @@ E17 不重新进行胶囊视觉设计、交互设计、HTML 视觉方案、动�
 
 E17 新 provider/runtime 通过胶囊外部 presentation mapper 适配现有胶囊；不让胶囊迁就 BLE 架构，不把 Android BLE 对象传入胶囊，不在胶囊内部实现 permission、scan、connect 或 reconnect。冻结的是视觉与互动，不是旧 runtime 设计；`HeartRateFloatingCapsuleState.kt` 中混入的旧 runtime 语义不自动继承。如现有 presentation DTO 无法表达 E17 接受的必要状态，必须另开兼容性 decision，不能借此修改视觉与互动。
 
-## 7. E17 解锁规则
+## Historical 7. E17 解锁规则（non-operative snapshot）
 
 1. E17-0 与其 closeout 的既有独立 Review、merge / push、immutable SHA ancestry 与同步门禁已完成；对应 Git 事实保持不变。
 2. E17-1 已通过独立 Code Review，Review 无 blocker、must-fix 或 should-fix；immutable Story full SHA `b7a48b980b54e34763212699c64ce387866ec064` 已通过 merge commit `17a305725a4241810ea4dbd26a29414c2be2582b` 合入并成为 `main` ancestor，最终设备/协议结论为 `passed`，且 E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。
@@ -179,7 +189,7 @@ push、Review 文本、人工测试或分支存在都不等于已合入。E16 �
 
 E17-0至E17-6均为`reviewed / merged`。已完成Story的immutable SHA和merge commit作为稳定历史事实；未完成Story使用条件式门禁，不保留冲突的无条件状态。项目阶段由Git ancestry、`main...origin/main = 0 0`与`docs/project-status.md`当前E17状态索引共同判定；后续Story不再创建独立状态docs-sync，并在自身开发分支文档中采用合并后稳定的双条件表述。
 
-## 8. E17-0 验收
+## Historical 8. E17-0 验收（non-operative snapshot）
 
 - E16 历史 merge fact 被保留，umbrella 被 correct-course 关闭。
 - E16-10b-2 保持 `changes requested` 且永久禁止合并。
