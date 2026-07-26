@@ -38,11 +38,18 @@ Every role packet contains:
 
 Use fresh minimal context for each Writer, Validator, Reviewer, Repair, or replacement. Close every terminal role.
 
+Formal role relay:
+- Before dispatch, fully read the exact applicable global skills, the accepted AGENTS.md from the pinned base, the complete accepted role template, and only task-relevant Story/decision/testing/evidence documents. Record each path plus immutable blob/hash or full SHA and complete-read confirmation; require the dispatched role to report the same source identities and complete-read confirmations before action.
+- The formal Writer or Repair dispatch is the complete filled accepted `DEV_STORY_PROMPT_TEMPLATE.md` content in one outer block. The formal Reviewer or re-Reviewer dispatch is the complete filled accepted `CODE_REVIEW_PROMPT_TEMPLATE.md` content in one outer block.
+- Fill every template field from immutable accepted facts and verify that zero unresolved placeholder tokens remain. Never replace either formal packet with a freehand summary, abbreviated role packet, or several partial messages.
+- Load only applicable skills and relevant documents. Do not attach every available skill or an unrelated long-document bundle.
+- Automatic mode changes only who performs the copy/paste relay. It does not add a repository workflow platform, canonical contract, validator, manifest, receipt system, CI system, project-specific role catalog, or new repository dependency.
+
 Routing:
 - Use $bmad-method to select exactly one route: discovery, product, architecture, Story shaping, readiness, automatic delivery, Review, correct-course, or Quick Story.
 - Do not implement an unapproved idea. Product, architecture, privacy, cost, irreversible behavior, or scope expansion requires explicit user approval.
 - When an already approved Story or finite ordered Story sequence is explicitly authorized for automatic execution, hand it to $supervised-story-delivery and exit planning control for that delivery.
-- For subjective UI or visual work, use the project’s accepted visual skill and require the specified human visual gate.
+- `huashu-design` remains the dedicated UI/visual skill and is complementary to `$bmad-method` and `$supervised-story-delivery`; neither workflow skill may remove or replace it. For subjective UI or visual work, use the project’s accepted visual skill and require the specified human visual gate.
 
 Automatic-delivery discipline:
 - The management conversation communicates with the user and collaboration agents only. It does not inspect, edit, validate, stage, commit, merge, or push project files while the delivery skill is active.
@@ -58,13 +65,15 @@ Validator dispatch:
 - Return VALID, INVALID, NEEDS_USER, or BUDGET_EXHAUSTED with concrete facts; validation is not Review.
 
 Repair dispatch:
-- Give one fresh Writer the complete verified finding set, immutable base/candidate facts, authorized causal scope, matrix, evidence/protected state, permissions, budget, and terminal schema.
+- Give one fresh Writer the complete verified `REVIEW_COMPLETE` finding batch unchanged, together with immutable base/candidate facts, authorized causal scope, matrix, evidence/protected state, permissions, budget, and terminal schema.
 - Require a Dev/Repair proof object: root cause/reproducer, observed expected RED when applicable, causally complete fix, GREEN plus relevant regression/broad validation, exact SHA, and test-weakening disclosure.
 - If red-first is inapplicable, require a justified exception and independent oracle.
-- Return DONE, NEEDS_USER, BLOCKED, or BUDGET_EXHAUSTED; then run a new Validator and different fresh Reviewer.
+- Return DONE, NEEDS_USER, BLOCKED, or BUDGET_EXHAUSTED; then run a fresh Validator and a different fresh Reviewer. A Reviewer that issued the findings cannot perform the re-Review.
 
 Review and integration:
 - A fresh Reviewer is read-only until the verdict.
+- The Reviewer completes scope, acceptance, validation, evidence, Git, and protected-state review, waits for every explorer it started, and emits all actionable findings only once in exactly one complete terminal `REVIEW_COMPLETE` batch.
+- Treat progress, partial findings, duplicate output, missing required fields, and every Review output without `REVIEW_COMPLETE` as nonterminal. None may start Repair or integration; continue waiting for the single complete batch under the liveness rules.
 - Findings return to a Writer for the minimum causally complete Repair; “minimum” means all files required to make the contract true, not the fewest filenames.
 - Require separate SPEC, QUALITY, and EVIDENCE verdicts. Validation failure yields REVIEW_BLOCKED, or NEEDS_USER for a user-only gate; neither is PASS.
 - PASS requires all three verdicts to pass. Without integration authority return PASS / READY_TO_MERGE.

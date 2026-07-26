@@ -129,6 +129,12 @@ The skills are global Codex capabilities rather than repository dependencies, an
 
 Skills cannot override accepted project instructions, decisions, Story scope, validation gates, evidence requirements, or explicit user authority. If `$bmad-method` is unavailable, route from accepted repository documents. If `$supervised-story-delivery` is unavailable, stop automatic mode and offer the manual fallback instead of silently imitating it. If `huashu-design` is unavailable, preserve accepted visual decisions and request direction before creating a new subjective design.
 
+Automatic native-agent delivery only replaces the user's manual copy/paste step. A formal Writer or Repair dispatch MUST be the complete filled `DEV_STORY_PROMPT_TEMPLATE.md` content in one outer block, and a formal Reviewer or re-Reviewer dispatch MUST be the complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` content in one outer block. Fill every field from immutable accepted facts, verify that no placeholder remains unresolved, and do not substitute a freehand summary or abbreviated packet. This relay rule does not create a repository workflow platform, canonical contract, validator, manifest, receipt system, CI system, or project-specific role catalog.
+
+Every dispatched role MUST fully read the exact applicable global skills, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only the Story/decision/testing/evidence documents relevant to its task before acting. Its terminal report MUST identify every source by path plus immutable blob/hash or full SHA where available and explicitly confirm each complete read; do not preload unrelated skills or long document bundles.
+
+A Reviewer remains read-only through its complete scope, acceptance, validation, evidence, Git, and protected-state review, waits for every explorer it started, and emits findings only once in exactly one complete terminal `REVIEW_COMPLETE` batch. Progress, partial findings, duplicate output, a report with missing required fields, or any output without `REVIEW_COMPLETE` is nonterminal and MUST NOT start Repair or integration. Repair receives the complete verified finding batch unchanged, then a fresh Validator and a different fresh Reviewer perform validation and re-Review.
+
 ## Cross-Conversation Source Of Truth
 
 - Do not rely on a previous model's or conversation's implicit memory. Cross-model and cross-conversation handoffs must be reconstructed from the current `main` branch, accepted decision-log entries, Story documents, tests, evidence records, and Git history.
@@ -152,6 +158,7 @@ Repository text files are read and written as UTF-8.
 On Windows, set PowerShell console encoding before reading Chinese Markdown, Kotlin, Gradle, JSON, or other text files:
 
 ```powershell
+chcp 65001 > $null
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
