@@ -35,6 +35,18 @@ class TrainFlowPreferencesDataSource(
                 storedPreferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier],
             bleHeartRateDeviceDisplayName =
                 storedPreferences[TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName],
+            heartRateManualDisconnectSuppressed =
+                storedPreferences[TrainFlowPreferenceKeys.heartRateManualDisconnectSuppressed]
+                    ?: false,
+            ageYears = TrainFlowPreferences.validAgeYearsOrNull(
+                storedPreferences[TrainFlowPreferenceKeys.ageYears]
+            ),
+            personalMaxHeartRateBpm = TrainFlowPreferences.validHeartRateParameterBpmOrNull(
+                storedPreferences[TrainFlowPreferenceKeys.personalMaxHeartRateBpm]
+            ),
+            alertThresholdBpm = TrainFlowPreferences.validHeartRateParameterBpmOrNull(
+                storedPreferences[TrainFlowPreferenceKeys.alertThresholdBpm]
+            ),
             uiSkinId = TrainFlowPreferences.sanitizeUiSkinId(
                 storedPreferences[TrainFlowPreferenceKeys.uiSkinId]
                     ?: TrainFlowPreferences.DEFAULT_UI_SKIN_ID
@@ -122,6 +134,7 @@ class TrainFlowPreferencesDataSource(
         dataStore.edit { preferences ->
             preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier] = identifier
             preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName] = displayName
+            preferences[TrainFlowPreferenceKeys.heartRateManualDisconnectSuppressed] = false
         }
     }
 
@@ -129,6 +142,50 @@ class TrainFlowPreferencesDataSource(
         dataStore.edit { preferences ->
             preferences.remove(TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier)
             preferences.remove(TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName)
+        }
+    }
+
+    suspend fun setHeartRateManualDisconnectSuppressed() {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.heartRateManualDisconnectSuppressed] = true
+        }
+    }
+
+    suspend fun clearHeartRateManualDisconnectSuppression() {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.heartRateManualDisconnectSuppressed] = false
+        }
+    }
+
+    suspend fun setHeartRatePersonalization(
+        ageYears: Int?,
+        personalMaxHeartRateBpm: Int?,
+        alertThresholdBpm: Int?
+    ) {
+        dataStore.edit { preferences ->
+            preferences.putOrRemove(
+                TrainFlowPreferenceKeys.ageYears,
+                TrainFlowPreferences.validAgeYearsOrNull(ageYears)
+            )
+            preferences.putOrRemove(
+                TrainFlowPreferenceKeys.personalMaxHeartRateBpm,
+                TrainFlowPreferences.validHeartRateParameterBpmOrNull(personalMaxHeartRateBpm)
+            )
+            preferences.putOrRemove(
+                TrainFlowPreferenceKeys.alertThresholdBpm,
+                TrainFlowPreferences.validHeartRateParameterBpmOrNull(alertThresholdBpm)
+            )
+        }
+    }
+
+    private fun androidx.datastore.preferences.core.MutablePreferences.putOrRemove(
+        key: Preferences.Key<Int>,
+        value: Int?
+    ) {
+        if (value == null) {
+            remove(key)
+        } else {
+            this[key] = value
         }
     }
 }

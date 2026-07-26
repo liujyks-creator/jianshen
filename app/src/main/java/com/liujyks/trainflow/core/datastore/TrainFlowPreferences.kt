@@ -12,6 +12,10 @@ data class TrainFlowPreferences(
     val showDisconnectedHeartRatePlaceholder: Boolean = false,
     val bleHeartRateDeviceIdentifier: String? = null,
     val bleHeartRateDeviceDisplayName: String? = null,
+    val heartRateManualDisconnectSuppressed: Boolean = false,
+    val ageYears: Int? = null,
+    val personalMaxHeartRateBpm: Int? = null,
+    val alertThresholdBpm: Int? = null,
     val uiSkinId: String = DEFAULT_UI_SKIN_ID
 ) {
     companion object {
@@ -24,6 +28,10 @@ data class TrainFlowPreferences(
         const val DEFAULT_UI_SKIN_ID = UI_SKIN_OFFICIAL_FLOW
         const val MIN_COUNTDOWN_THRESHOLD_SEC = 1
         const val MAX_COUNTDOWN_THRESHOLD_SEC = 60
+        const val MIN_AGE_YEARS = 1
+        const val MAX_AGE_YEARS = 130
+        const val MIN_HEART_RATE_PARAMETER_BPM = 30
+        const val MAX_HEART_RATE_PARAMETER_BPM = 260
 
         fun sanitizeCountdownThresholdSec(value: Int): Int {
             return value.coerceIn(MIN_COUNTDOWN_THRESHOLD_SEC, MAX_COUNTDOWN_THRESHOLD_SEC)
@@ -45,5 +53,13 @@ data class TrainFlowPreferences(
                 else -> DEFAULT_UI_SKIN_ID
             }
         }
+
+        fun validAgeYearsOrNull(value: Int?): Int? =
+            value?.takeIf { it in MIN_AGE_YEARS..MAX_AGE_YEARS }
+
+        fun validHeartRateParameterBpmOrNull(value: Int?): Int? =
+            value?.takeIf {
+                it in MIN_HEART_RATE_PARAMETER_BPM..MAX_HEART_RATE_PARAMETER_BPM
+            }
     }
 }
