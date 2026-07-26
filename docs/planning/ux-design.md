@@ -15,9 +15,9 @@ stepsCompleted:
 
 ## 2026-07-26 心率交互当前覆盖
 
-设置页必须明确区分“断开设备”“重新连接”“清除已保存设备”“关闭心率”：断开保留 opt-in、saved exact target 与个人参数并跨 process suppress；只有重新连接或选择目标清除 suppression；clear target 与 opt-out 不互相冒充。Eligible 时前台自动恢复，非训练后台不持续 scan，active training 普通 `ON_STOP` 不直接 cleanup并在合法 FGS 下保持 / 恢复同一连接。
+设置页必须明确区分“断开设备”“重新连接”“清除已保存设备”“关闭心率”：断开保留 opt-in、saved exact target 与个人参数并跨 process suppress；只有重新连接或选择目标清除 suppression；clear target 与 opt-out 不互相冒充。Eligible 时前台自动恢复，非训练后台不持续 scan。active training 普通 `ON_STOP` 不直接 cleanup；background unexpected disconnect时保持FGS / ID`7200`writer，notification显示“正在重新连接”，只有停止资格或明确foreground不再需要FGS时才demote。
 
-年龄 optional `1..130`（`101` 不 clamp），个人最大心率 / alert 分别 `30..260`；无 effective max 为 bpm-only，alert-only 可提示。区间使用未取整比率，strict exceed 提示优先；直接复用冻结胶囊状态 / 颜色 / geometry / motion，不新增视觉变体。
+年龄 optional `1..130`（`101` 不 clamp），个人最大心率 / alert 分别 `30..260`；personal max或age-derived max单独有效均可计算六区间，仅无 effective max 时为bpm-only。alert独立、strict exceed提示优先，不参与区间计算也不是第七区间；直接复用冻结胶囊状态 / 颜色 / geometry / motion，不新增视觉变体。
 
 本段 supersede 下文 manual-only / deferred-without-target 冲突；实现分属 E17-7a parameters / policy、7b settings / capsule、9 FGS training recovery，证据和 merge gate 见新 Correct-course。
 

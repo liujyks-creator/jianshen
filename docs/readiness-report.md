@@ -130,7 +130,7 @@ Readiness 硬要求：eligible 前台恢复使用有间隔 bounded windows 且�
 
 - D-080 已接受默认关闭、用户显式 opt-in 后读取标准 HRS 设备心率，并通过已冻结胶囊在 TrainFlow 前台跨页面显示 bpm、非医疗区间和用户上限视觉提示。
 - D-081 已接受唯一进程 owner、main-looper serialization、attempt / raw GATT identity、窄 permission TOCTOU、facts / presentation 分层、manual recovery，以及活跃训练 `connectedDevice` FGS / 单一训练通知方案；malformed payload 不立即形成公共 `TechnicalFailure`。
-- D-081 是 D-027 / E7.2 的窄例外和部分 supersession：ordinary training 不普遍启用 FGS；只有活跃训练已有合法当前心率连接时升级，连接结束而训练继续时降级 ordinary notification。
+- D-081 是 D-027 / E7.2 的窄例外和部分 supersession：ordinary training 不普遍启用 FGS。D-082 又窄 supersede “unexpected disconnect 立即降级”的历史含义：active / paused training 已在 background / lockscreen 且 eligibility 仍成立时，保持 FGS 与 ID `7200` 唯一 writer active、notification 显示 reconnecting，并由同一 Application owner 以新 generation / attempt bounded recovery；只有 eligibility 失败、显式停止类动作、training terminal，或明确 foreground 不再需要 FGS 时才降级 ordinary。
 - 现有 `ActiveWorkoutNotificationController` production instance 作为唯一 Application-scoped coordinator，Route 只提交状态；ID `7200` 在 ordinary / FGS 间单一 writer handoff。`POST_NOTIFICATIONS` 拒绝时 ordinary notification 可不发布，但 FGS 仍须构造并提交 notification。
 - 明确前台 terminal 可保留同一从未 cleanup 且仍 eligible 的 live attempt，转为非训练前台只显示不记录；后台、锁屏或可见性不确定 terminal 必须 cleanup。Route existence 不作为前台事实。cleanup 不清除正常 armed intent：后续新进程或同进程再次明确 visible 且 eligibility 成立时，以新 generation / attempt 自动恢复；显式断开的 persistent suppression 是例外。
 - E17-7a 先闭合 owner recovery policy、持久 suppression、个人参数和纯 presentation tests；E17-7b 再完成唯一 Application owner activation、settings / capsule wiring、旧 runtime 原子退休、AVD与Band basic gate。`BleHeartRateProviderBoundary.kt`只保留新owner实际消费的纯compatibility类型，debug Activity不创建第二owner。`ProcessVisibilityTracker`只发布fact，cleanup与training/FGS eligibility由Application policy决定。

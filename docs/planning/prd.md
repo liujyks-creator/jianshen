@@ -14,9 +14,9 @@ status: draft
 
 ## 2026-07-26 心率当前需求覆盖
 
-当前心率合同窄 supersede 下文 manual-only / App start 不恢复 / no-reconnect 冲突：eligible（opt-in + saved exact + permission + Bluetooth + 无 suppression + visible 或合法 training FGS）时自动恢复；前台 bounded windows 有间隔且长期 armed，非训练后台 cleanup 并在回前台恢复，active training 普通 `ON_STOP` 不直接 cleanup且合法 FGS 下保持 / 恢复同一连接。断开设备保留 opt-in / target / parameters 并跨 process suppress，只有重新连接 / 选目标清除；清除目标与 opt-out 分离。
+当前心率合同窄 supersede 下文 manual-only / App start 不恢复 / no-reconnect 冲突：eligible（opt-in + saved exact + permission + Bluetooth + 无 suppression + visible 或合法 training FGS）时自动恢复；前台 bounded windows 有间隔且长期 armed，非训练后台 cleanup 并在回前台恢复。active training 普通 `ON_STOP` 不直接 cleanup；background unexpected disconnect 且eligible时，FGS与ID`7200`writer保持active、notification显示reconnecting，由同一Application owner以新generation / attempt恢复，只有停止资格或明确foreground不再需要FGS时才demote。断开设备保留 opt-in / target / parameters并跨process suppress，只有重新连接 / 选目标清除；清除目标与opt-out分离。
 
-年龄 optional `1..130`、个人最大心率 / alert 各 `30..260`；effective max 依次 personal max、`220-age`、none。无 max 仍显示 bpm；alert-only 可提示。区间使用未取整比率六段，strict `bpm > alert` 优先，冻结胶囊状态 / 颜色直接复用。
+年龄 optional `1..130`、个人最大心率 / alert 各 `30..260`；effective max 依次为合法 personal max、合法 age 推导的 `220-age`、none。personal max 单独有效即可计算六区间；age 单独有效时按 `220-age` 计算；仅当 personal max 无效且 age-derived max 也无效、即 effective max 为 none 时才是 bpm-only。`alertThreshold` 独立于 effective max 与区间，strict `bpm > alert` 视觉优先，相等不触发；它不是区间输入，也不是第七区间。区间使用未取整比率六段，冻结胶囊状态 / 颜色直接复用；age `101` 仍是 `1..130` 内合法值且不得 clamp。
 
 交付绑定为 E17-7a foundation、7b wiring、8 ordinary、9 FGS / training recovery、10 evidence-only；完整 AC / evidence 与 merge gate 见新 Correct-course。`fda5f7cfd3c31af3399dfe231733ea00467a68e8` 永久禁止 merge / 整体 cherry-pick / prerequisite。
 

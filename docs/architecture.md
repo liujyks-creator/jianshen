@@ -27,6 +27,8 @@ Eligibility 为 opt-in + saved exact + permission + Bluetooth + no persistent su
 
 bounded-window delay、eligibility recheck 与 recovery timing 都属于唯一 `HeartRateRuntimeOwner` 内的 concrete main-looper policy；不得新增 standalone / generic retry scheduler、watchdog、backoff controller、actor、wrapper或相关 production abstraction。测试复用现有 deterministic main queue / time control，不得为了测试便利反向增加 production scheduler abstraction。
 
+active / paused training 已在 background / lockscreen 且 eligibility 仍成立时，unexpected disconnect 不触发 FGS demotion：FGS 与 ID `7200` 唯一 writer 保持 active，notification 准确显示 reconnecting，由同一 Application owner 以新 generation / attempt执行 bounded recovery。只有 eligibility 失败、显式断开 / opt-out / target clear、training terminal、FGS legality failure，或 App 已明确 foreground 且不再需要 FGS 时才 demote / stop；Service 始终不是 GATT owner。
+
 参数与 presentation 计算边界、禁止 candidate 与 merge-stable truth 以新 Correct-course 为准；E17-5 / 6 已合并资产保留。
 
 **文档状态:** 首版架构草案  
@@ -137,7 +139,7 @@ feature:settings
 - 计划提醒通知。
 - 活跃训练通知。
 - 前台训练服务边界。
-- E7.2 / D-027 是普通训练的历史与当前基线：普通 active / paused 训练不启用 foreground service，只提供 ordinary ongoing active workout notification。D-081 是窄例外和部分 supersession：只有“活跃训练 + 已有合法当前心率连接”升级 `connectedDevice` FGS；心率结束而训练继续时降级回普通通知。Route dispose 不再拥有最终清理权，完整单一 writer 合同见第 8.1 节。
+- E7.2 / D-027 是普通训练的历史与当前基线：普通 active / paused 训练不启用 foreground service，只提供 ordinary ongoing active workout notification。D-081 是窄例外和部分 supersession；D-082 再窄 supersede “unexpected disconnect 立即降级”的含义：active / paused training 已在 background / lockscreen 且 eligibility 仍成立时，`connectedDevice` FGS 与 ID `7200` writer继续 active并进入 reconnecting，只有停止资格成立或明确 foreground 不再需要 FGS 时才降级。Route dispose 不再拥有最终清理权，完整单一 writer 合同见第 8.1 节。
 - 不包含训练状态机，只消费 `WorkoutEvent`、训练 UI state 或 engine state 摘要。
 
 ### 4.8 `core:media`
@@ -343,11 +345,11 @@ stateDiagram-v2
 
 - 计划提醒：通过通知调度实现，允许系统延迟。
 - 普通活跃训练：沿用 D-027 / E7.2 ordinary ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎；active / paused 本身不普遍变成 FGS，也不承诺普通训练后台精确计时。
-- D-081 窄例外：只有“活跃训练 + 已有合法当前心率连接”使用 `connectedDevice` FGS；心率停止 / 断连但训练继续时退回普通通知。它只 supersede D-027 中“任何首版训练情形都不使用 FGS”的绝对范围。
+- D-081 窄例外：只有 active / paused training 的合法心率连接或 D-082 bounded recovery 使用 `connectedDevice` FGS；background / lockscreen unexpected disconnect 且 eligibility 仍成立时不得退回 ordinary，FGS 与 ID `7200` writer保持 active、content显示 reconnecting，同一 Application owner以新 generation / attempt恢复。只有 eligibility 失败、显式断开 / opt-out / target clear、training terminal、FGS legality failure，或明确 foreground 不再需要 FGS 时才退回 ordinary。
 - 不新增第三个核心 notification interface。适配现有 `ActiveWorkoutNotificationController` contract，使其 production instance 成为 Application / 进程级唯一协调者；Route 只提交训练状态。固定 ID `7200` 概念上只有 `NONE`、`ORDINARY_WORKOUT_NOTIFICATION`、`HEART_RATE_FOREGROUND_SERVICE` 三种模式，任一时刻只有一个 writer，不产生第二条常驻通知。
 - FGS 升级：协调者保存最新状态并进入 handoff，从允许的可见前台调用 `startForegroundService()`；Service 在 `onStartCommand()` 路径立即调用 `ServiceCompat.startForeground(7200, notification, FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)`，不加人为延时。FGS content 必须准确说明后台心率连接，不能沿用普通通知“不是 foreground service”的文案。
 - `POST_NOTIFICATIONS` 拒绝时，ordinary notification 可以不发布；FGS 仍必须构造 notification 并传给 `startForeground()`，不得复用现有 `Ignored -> clear / no content` 分支。系统仍可能在 Task Manager / Active apps 展示 FGS。
-- FGS 降级：先有序停止 / demote FGS并交还 ID `7200` writer，再由协调者以同一 ID 恢复 ordinary notification；若通知权限拒绝则可不发布。E17-4 决定具体 `stopForeground()` flag，但必须证明 handoff 有序、幂等、无重复 cancel。
+- FGS 降级：仅在上述停止资格成立后，先有序停止 / demote FGS并交还 ID `7200` writer，再由协调者以同一 ID 恢复 ordinary notification；若通知权限拒绝则可不发布。background unexpected disconnect 的 bounded recovery 不进入此分支。具体 `stopForeground()` flag 必须证明 handoff 有序、幂等、无重复 cancel。
 - Route dispose 不能取消仍活跃训练的通知；terminal 时协调者停止 FGS并对 `7200` 最终移除一次。重复 terminal、Service stop、Route dispose 与 cleanup 必须幂等。
 - FGS 启动 / 提升失败不创建第二个 GATT owner；明确前台可保留前台连接并发布准确失败事实，随后无合法 FGS 而进入后台必须 cleanup。
 - 权限：清楚解释通知权限用途。
@@ -375,7 +377,7 @@ interface HeartRateProvider {
 - 用户可主动发起有限时 HRS scan、saved identifier 精确匹配或手动选择；用户已 opt-in、保存 exact target、permission / Bluetooth 合法、无 persistent manual suppression，且 App 明确 visible 或 active / paused training 已合法建立 `connectedDevice` FGS 时，自动恢复 eligibility 成立。前台意外断连、out-of-range、App 启动 / recreation 后首次 visible 或非训练后台返回 visible，使用有间隔的 bounded scan windows 恢复 exact target，并在 eligibility 持续成立时长期 armed；单轮失败或固定次数耗尽不得永久 disarm。名称、display name 和附近其他 HRS 设备不能替代 exact target，也不得自动换 target。
 - bounded-window delay、下一窗口 eligibility 复核与 recovery timing 只由唯一 owner 的 concrete main-looper policy 排队和取消；不引入 standalone / generic retry scheduler、watchdog、backoff controller或相关 production abstraction。测试只能使用现有确定性 main queue / time control。
 - 权限失败、Bluetooth off、opt-out、清除 target、显式断开、非训练后台和不合法的 active-training 后台先使相应 eligibility 失败，再失效 attempt 并幂等 stop / disconnect / close。非训练后台不持续 scan / connect；返回明确 visible 后重新计算 eligibility，成立才自动恢复。显式断开必须持久 suppression，同时保留 opt-in、saved target 与个人参数；只有明确重新连接或选择目标才能解除。训练 terminal 是否 cleanup 由下条进程可见性与 FGS 规则决定，不再无条件绑定。
-- 活跃训练已有合法当前连接且进入锁屏 / 临时后台时使用 `connectedDevice` foreground service；Service 经唯一通知协调者复用 ID `7200` 且不持有 GATT。普通 Activity / Route `ON_STOP` 不是 cleanup 信号。连接未 cleanup、未丢失时，回前台必须继续观察同一 Application owner、同一 attempt lineage 与 current bpm；若后台意外断连且 eligibility 仍成立，只允许同一 owner 在合法 FGS 下以新 generation / attempt 恢复 exact target，不能伪称 same attempt。训练完成 / 放弃且 App 明确仍在前台时，停止 / demote FGS并最终移除训练通知；仍合法且未 cleanup 的连接可转为非训练前台只显示不记录。terminal 在后台、锁屏或进程可见性不确定时停止 FGS并 cleanup；Route 存在不等于进程前台。
+- 活跃训练已有合法当前连接且进入锁屏 / 临时后台时使用 `connectedDevice` foreground service；Service 经唯一通知协调者复用 ID `7200` 且不持有 GATT。普通 Activity / Route `ON_STOP` 不是 cleanup 信号。连接未 cleanup、未丢失时，回前台必须继续观察同一 Application owner、同一 attempt lineage 与 current bpm；若后台意外断连且 eligibility 仍成立，FGS与唯一writer继续active、notification显示reconnecting，只允许同一 Application owner以新 generation / attempt恢复 exact target，不能伪称 same attempt，Service不得成为GATT owner。训练完成 / 放弃且 App 明确仍在前台时，停止 / demote FGS并最终移除训练通知；仍合法且未 cleanup 的连接可转为非训练前台只显示不记录。terminal 在后台、锁屏或进程可见性不确定时停止 FGS并cleanup；其他demotion只发生在eligibility失败、显式断开/opt-out/target clear、FGS legality failure或明确foreground不再需要FGS时；Route存在不等于进程前台。
 - Service 保持 `START_NOT_STICKY`。进程死亡关闭旧连接，绝不复活旧 callback、GATT、generation 或 attempt；如果持久偏好仍满足 opt-in + saved exact target + no suppression，下一次新进程明确 visible，或新的合法 active-training FGS eligibility 成立时，由唯一新 owner 以新 generation / attempt 自动恢复。它不是 sticky Service、后台无限 scan 或旧引用复活。
 - freshness 只使用 monotonic time 判断最近有效 bpm 是否仍 current，与 reconnect 完全解耦；具体阈值由首个 runtime implementation Story 在编码前依据 Band 9 notify 间隔、锁屏调度余量和边界测试确认，不继承 D-078。
 - 以下 E11 / E16 条目保留为 historical / reference，不能覆盖 D-080 / D-081，也不能解锁 production implementation。

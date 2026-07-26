@@ -8,7 +8,7 @@
 
 当前完整合同为 `docs/planning/e17-auto-reconnect-and-personal-parameters-correct-course.md` 的 18 项 ledger；它 supersede 本文后续 manual-only、自动恢复无目标 Story、旧 E17-7 单 Story 与 active-training `ON_STOP` cleanup 冲突措辞，E17-2 / E17-3 正文保持历史记录。Eligibility 为 opt-in + saved exact + permission + Bluetooth + 无持久 suppression + visible 或合法 active-training FGS；前台 bounded windows 有间隔且长期 armed，非训练后台 cleanup / 回前台恢复，训练后台保持同一连接并在合法 FGS 下恢复。显式断开保留 opt-in / target / parameters 并跨 process suppress，仅明确 reconnect / select 清除。
 
-年龄可选 `1..130`（`101` 有效、不 clamp、非 eligibility），个人最大心率 / alert 各自可选 `30..260`；effective max 为 personal max、`220-age`、none。无 max 显示 bpm，alert-only 可提示；区间按未取整比率 `<50`、`[50,60)`、`[60,70)`、`[70,80)`、`[80,90)`、`>=90`，strict `bpm > alert` 优先并复用冻结状态 / 颜色。
+年龄可选 `1..130`（`101` 有效、不 clamp、非 eligibility），个人最大心率 / alert 各自可选 `30..260`；effective max 为 personal max、`220-age`、none。仅 effective max 为 none 时显示 bpm-only；personal max 单独有效或 age 单独有效均可计算六区间。alert 独立且 strict `bpm > alert` 优先，不是区间输入或第七区间；区间按未取整比率 `<50`、`[50,60)`、`[60,70)`、`[70,80)`、`[80,90)`、`>=90` 并复用冻结状态 / 颜色。
 
 新序列为 docs CC -> E17-7a foundation -> E17-7b wiring + AVD / Band -> E17-8 ordinary -> E17-9 FGS + training recovery + `7200` + M1 -> E17-10 evidence-only。保留 D-079、唯一 owner / serialization / identity / cleanup / `START_NOT_STICKY` 与 E17-5 / 6；不恢复 D-078、controller 或 wrapper。`fda5f7cfd3c31af3399dfe231733ea00467a68e8` frozen / unmergeable / reference-only / permanently prohibited from merge。candidate 未 Review / merge / ancestry / sync / 十文档一致前为 needs review / 7a gated，满足后自动 reviewed / merged / satisfied，无 docs-sync。
 
