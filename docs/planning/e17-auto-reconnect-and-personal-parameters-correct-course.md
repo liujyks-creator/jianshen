@@ -41,11 +41,13 @@ Accepted base 的可证伪断点为：
 
 App 启动、process recreation 后首次进入 visible，或回到前台时，只要 eligibility 成立，就自动进入 saved exact target 恢复。意外断连、out-of-range 或暂时未发现目标后使用有间隔的 bounded scan windows；每个窗口有限时且窗口之间有间隔，policy 在 eligibility 仍成立时保持长期 armed。单轮失败、固定次数耗尽或 freshness timeout 都不得把用户永久留在“已停止自动恢复”；只有资格消失或用户停止才 disarm。
 
+bounded-window delay、下一窗口 eligibility 复核与 recovery timing 只能实现为唯一 `HeartRateRuntimeOwner` 内的 concrete main-looper policy，并继续复用该 owner 已有的串行 action / callback / time-control 路径。禁止新增 standalone 或 generic retry scheduler、watchdog、backoff controller，禁止为 reconnect timing 创建新的 production interface、actor、wrapper 或相关抽象。测试可以使用现有确定性 main queue / time control 驱动窗口与间隔，但不得为了 fake clock、closure 或断言便利反向新增 production scheduler abstraction。
+
 非训练进入 background 时必须停止当前 scan / connect / GATT 并 cleanup，不持续 scan。它不清除 opt-in、saved target、个人参数或正常的 armed intent；回到 visible 后重新计算 eligibility，成立则自动恢复。
 
 ### 3.3 活跃训练后台
 
-active / paused training 从前台进入 background 或 lockscreen 时必须优先保持同一 heart-rate connection；普通 Activity / Route `ON_STOP` 本身不是 cleanup 信号。若同一连接意外丢失且 eligibility 仍成立，唯一 owner 在合法 `connectedDevice` FGS 下自动恢复 exact target。回到前台继续观察同一 owner、同一合法 attempt lineage 和 bpm，不创建第二 owner。
+active / paused training 从前台进入 background 或 lockscreen 时必须优先保持同一 heart-rate connection；普通 Activity / Route `ON_STOP` 本身不是 cleanup 信号。连接从未 cleanup 且未丢失时，回到前台必须继续观察同一 Application owner、同一 attempt lineage 和 current bpm。若连接在后台意外丢失且 eligibility 仍成立，唯一 owner 只能在合法 `connectedDevice` FGS 下以新 generation / attempt 自动恢复 exact target；这种恢复不得伪称“同一 attempt”，但仍不得创建第二 owner。
 
 只有训练 terminal、显式断开、opt-out、permission loss、Bluetooth loss、用户清除 target，或 FGS 无法合法建立 / 维持等资格失败才停止训练后台恢复并 cleanup。FGS 失败时不得静默宣称后台保证；不得为了恢复启动第二 GATT owner、第二 Service owner或后台无限 scan。
 
@@ -95,9 +97,9 @@ active / paused training 从前台进入 background 或 lockscreen 时必须优�
 | HR-CC-001 | 用户 2026-07-26 | 自动恢复与个人参数成为 E17 当前方向；只窄 supersede manual-only / no-reconnect 冲突 | Current docs Correct-course：十份文档一致且唯一新 decision row | 独立 docs Review、three-dot scope、D-ID / cross-doc check |
 | HR-CC-002 | 用户 2026-07-26 + D-079 / D-081 | 保留唯一 owner、main serialization、identity、cleanup、FGS、`7200`、`START_NOT_STICKY` 与冻结胶囊 | E17-7a / 8 / 9：不得新增 controller、wrapper、第二 owner 或第三 notification interface | static ownership search、owner / coordinator tests、Review diff |
 | HR-CC-003 | 用户 2026-07-26 | eligibility 是 opt-in + saved exact + permission + Bluetooth + no suppression + visible 或合法 active-training FGS | E17-7a AC：纯 policy 全组合矩阵 | deterministic policy tests |
-| HR-CC-004 | 用户 2026-07-26 | visible unexpected disconnect / out-of-range 使用间隔 bounded windows 且长期 armed | E17-7a AC：单窗口有限、间隔可控、失败不永久耗尽 | fake-clock reducer tests；AVD lifecycle |
+| HR-CC-004 | 用户 2026-07-26 | visible unexpected disconnect / out-of-range 使用间隔 bounded windows 且长期 armed | E17-7a AC：单窗口有限、间隔可控、失败不永久耗尽；timing 只属于唯一 owner 内 concrete main-looper policy，不新增 scheduler / watchdog / backoff abstraction | 复用现有 deterministic main queue / time control 的 reducer tests；AVD lifecycle |
 | HR-CC-005 | 用户 2026-07-26 | 非训练 background cleanup、不持续 scan；回前台 eligible 自动恢复 | E17-7b AC：Home / return / process recreation | AVD scan-count、cleanup、return evidence |
-| HR-CC-006 | 用户 2026-07-26 | active training background / lockscreen 保持同一连接；意外断连在合法 FGS 下恢复 | E17-9 AC：普通 `ON_STOP` 不直接 cleanup；同 owner retain / recovery | final-source AVD + Band 9 lockscreen/background gate |
+| HR-CC-006 | 用户 2026-07-26 | active training background / lockscreen 保持同一连接；意外断连在合法 FGS 下恢复 | E17-9 AC：普通 `ON_STOP` 不直接 cleanup；未 cleanup 时回前台仍是同一 Application owner、同一 attempt lineage 与 current bpm；后台断连后只允许同一 owner 以新 generation / attempt 恢复，且不得伪称 same attempt | final executable source 的 AVD lifecycle / notification evidence证明可见性、FGS与单一 writer；同一 final source 的 Band 9真实 GATT / notify evidence分别证明未断链保留与断链后恢复；两层证据不得互相冒充 |
 | HR-CC-007 | 用户 2026-07-26 | 只有 terminal、manual disconnect、opt-out、permission / Bluetooth loss、target clear 或 FGS 非法才 cleanup | E17-7a / 9 AC：停止原因矩阵且幂等 | owner policy tests、Service tests、Band negative gates |
 | HR-CC-008 | 用户 2026-07-26 | explicit disconnect 保留 opt-in / target / parameters，并持久 suppress 到 explicit reconnect / select | E17-7a data AC + E17-7b settings AC | DataStore round-trip、process recreation、UI action tests |
 | HR-CC-009 | 用户 2026-07-26 | disconnect、clear target、opt-out 三种语义分离 | E17-7b AC：三个独立 control 与准确 copy | Compose semantics / mapper tests、AVD |

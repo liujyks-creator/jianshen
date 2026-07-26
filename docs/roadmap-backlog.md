@@ -29,7 +29,7 @@ stepsCompleted:
 每项均须前序 immutable full SHA 已 Review / merge / ancestry / sync。当前 candidate 在十文档一致前 needs review / 7a gated，满足后自动 satisfied，无 docs-sync。保留 E17-5 / 6；禁止 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` merge、整体 cherry-pick 或 prerequisite。下文旧 E17-7 单 Story / manual-only / deferred-without-target 状态均为历史快照。
 **文档状态:** 首版拆分草案  
 **用途:** 将 PRD、UX、数据契约和 Android 架构拆成可执行里程碑、Epic、Story 与验收顺序。  
-**范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；Planning Repair与E17-7 planning prerequisite按下方统一条件式真值自动判定。该扩展不纳入全天候健康监测、Health Connect 历史同步、医疗告警、通用设备兼容承诺、自动恢复实现，或记录 / 分析 / 导出实现；后续商业化、云同步和完整课程平台也仍不在本范围。
+**范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构，D-082 已接受 exact-target 自动恢复、persistent manual suppression 与个人参数。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；本Correct-course与E17-7a prerequisite按页首统一条件式真值判定。该扩展不纳入全天候健康监测、Health Connect 历史同步、医疗告警、通用设备兼容承诺，或记录 / 分析 / 导出实现；后续商业化、云同步和完整课程平台也仍不在本范围。
 
 ## 1. 需求库存
 
@@ -44,7 +44,7 @@ stepsCompleted:
 | `FR-040` 到 `FR-042` | 跟练雏形与内容扩展字段。 |
 | `FR-050` 到 `FR-054` | 动作库接口、字段、教学、能力标签、恢复与替代映射。 |
 | `FR-060` 到 `FR-062` | 训练控制命令与训练事件。 |
-| `FR-065` 到 `FR-068` | E17 心率产品合同：默认关闭；显式开启后前台跨页面显示 bpm / 非医疗区间 / 上限视觉；记录、复盘、用户导出与自动恢复分独立后续阶段。 |
+| `FR-065` 到 `FR-068` | E17 心率产品合同：默认关闭；显式开启后前台跨页面显示 bpm / 非医疗区间 / 上限视觉；D-082 exact-target自动恢复与显式断开suppression分E17-7a / 7b / 9交付；记录、复盘和用户导出另列后续阶段。 |
 | `FR-070` 到 `FR-081` | 训练总结、历史趋势、主观反馈、恢复建议。 |
 
 ### 1.2 非功能需求
@@ -2757,19 +2757,21 @@ E14.4-2 起，每批 UI polish 必须先走视觉方案 gate：先提交 docs-on
 1. **E17-0 Heart-rate correct-course / E16 retrospective and E17 reset**：将 E16 原始代码与文档封存为 sealed historical archive / reference only；胶囊视觉与互动作为 `adopted / frozen / direct reuse` 资产直接采用；审计失败分支并重置状态、decision、roadmap、readiness、architecture 和提示词流程。Immutable Story SHA `abce4b712139c373f534a6fabab423fe138fc29c` 已通过 merge commit `2eee72cc44c2c7733cb565ea665ebfae48610085` 合入，Story SHA 已是 `main` ancestor，E17-0 本体 Review 无 finding 并完成 merge / push。（Reviewed / merged）
 2. **E17-1 Band 9 与标准 HRS 重新复验**：最终状态为 `reviewed / merged`，设备/协议结论为 `passed`。Immutable Story SHA `b7a48b980b54e34763212699c64ce387866ec064` 已通过 merge commit `17a305725a4241810ea4dbd26a29414c2be2582b` 合入并成为 `main` ancestor；E17-1 合并完成时的基线已确认 `main...origin/main = 0 0`。Review 无 blocker、must-fix 或 should-fix；持续 notify 后顶部 Stop 不易访问，以及 debug 工具 `currentGatt` callback / UI 共享状态未显式串行化，均为 debug-only nice-to-have，不扩展为 production 重构任务。（Reviewed / merged; device/protocol passed）
    - 当前 `PLU110`、Android 16 / SDK 36、HUAWEI Band 9 与 APK SHA256 `60abda376470a667ec5c94d16a24e996b2e3e7033df2cc7b4dc6d4132e8dbbc7` 的证据覆盖：广播关闭扫描无标准 HRS source；四个广播开启周期发现 `0x180D`；GATT、notify 型 `0x2A37 properties=0x10`、`0x2902`、CCCD `01 00`、连续 notify 与真实 raw payload / parser bpm 一致；Huawei Health 在广播开启时断开、广播关闭后可恢复。四周期 label / address 相同只属于本次观察，不证明永久身份；两次 `status=19` 是链路不稳定事实；Band 固件与 Huawei Health 版本未确认；最终恢复缺少额外截图，但有周期间恢复截图和用户现场观察。该结论不证明 production provider 稳定、production 架构完成、lifecycle / reconnect 正确、自动重连可用、其他环境通用；AVD 不能证明真实 BLE / GATT。
-3. **E17-2 产品范围重新定义**：用户已确认完整产品合同，决策为 D-080，主文档为 `docs/planning/e17-2-heart-rate-product-scope.md`。心率默认关闭；用户显式开启后是重要训练能力，权限只在主动 scan / connect 时请求，saved device 用户点击后才有限时精确匹配，胶囊前台跨页面显示 bpm / 非医疗区间 / 上限视觉，未训练只显示不记录。训练记录 / 复盘 / 用户导出和自动恢复均确认价值但分独立后续 Story；两张划船机截图只作未来单次训练详情的信息层级与效果参考，后续须独立视觉审查。Immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 已是 `main` ancestor。（Reviewed / merged）
-4. **E17-3 最小技术架构**：用户已确认方案 A，决策为 D-081，主文档为 `docs/planning/e17-3-heart-rate-minimum-architecture.md`。采用一个 Application / 进程级 `HeartRateRuntimeOwner`，以 Android main looper、generation、attempt ID 与 raw GATT identity 串行并拒绝旧 callback；permission TOCTOU 窄处理，facts / presentation 分层，cleanup 幂等，freshness 与 reconnect 解耦。D-081 是 D-027 / E7.2 的窄 FGS 例外；ID `7200` 单一 writer，非训练后台停止，零新增第三方依赖，不实现记录、分析、导出或自动恢复。Immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor。（Reviewed / merged）
+3. **E17-2 产品范围重新定义**：用户已确认完整产品合同，决策为 D-080，主文档为 `docs/planning/e17-2-heart-rate-product-scope.md`。心率默认关闭；用户显式开启后是重要训练能力，权限只在主动 scan / connect 时请求，saved device 用户点击后才有限时精确匹配，胶囊前台跨页面显示 bpm / 非医疗区间 / 上限视觉，未训练只显示不记录。训练记录 / 复盘 / 用户导出均确认价值但分独立后续 Story；D-080 当时的 manual-only / 自动恢复 defer 仅是历史范围，冲突部分已由 D-082 窄 supersede。两张划船机截图只作未来单次训练详情的信息层级与效果参考，后续须独立视觉审查。Immutable Story SHA `b50778c90cf0232b08b857fda32ba6605fbef224` 已是 `main` ancestor。（Reviewed / merged）
+4. **E17-3 最小技术架构**：用户已确认方案 A，决策为 D-081，主文档为 `docs/planning/e17-3-heart-rate-minimum-architecture.md`。采用一个 Application / 进程级 `HeartRateRuntimeOwner`，以 Android main looper、generation、attempt ID 与 raw GATT identity 串行并拒绝旧 callback；permission TOCTOU 窄处理，facts / presentation 分层，cleanup 幂等，freshness 与 reconnect 解耦。D-081 是 D-027 / E7.2 的窄 FGS 例外；ID `7200` 单一 writer，非训练后台停止，零新增第三方依赖。其 no-reconnect / manual-only 冲突已由 D-082 窄 supersede；D-081 的 owner、identity、cleanup、FGS与notification安全继续有效。Immutable Story SHA `b09ed116558eb3537fc86985b9c39b96bbbca6ff` 已通过 merge commit `1e0a7a9cf0b118ca829a5843d066795b4420eb5f` 成为 `main` ancestor。（Reviewed / merged）
 5. **E17-4 Implementation readiness**：readiness=`passed`；immutable SHA `1ea67561b4866aa76c41b854da74da85c208aa25`，merge commit `4b354f5116bbf7f7610e79845210d481c839fed6`。详细后续计划唯一来源为`docs/planning/e17-4-heart-rate-implementation-readiness.md`。（Reviewed / merged）
 6. **E17-5 Facts / freshness / presentation core**：immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`，merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；provisional foreground waiting/live=`3000 / 2500 ms`。（Reviewed / merged）
 7. **E17-6 Deterministic Android BLE runtime owner**：immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`，merge commit `503d3151d731565837ab76f44fbebc25bb982e0d`。新owner已独立Review但production/debug实例化仍为0，旧provider/scanner/DTO继续production可达。（Reviewed / merged）
-8. **E17-7 Application / settings / capsule production wiring**：按production 14、debug 1、可修改tests 7 envelope，在同一Story以准备、原子composition切换、退休/证据三阶段提交；`BleHeartRateProviderBoundary.kt`只保留owner实际依赖的四个纯compatibility类型，debug Activity只观察同一Application owner。`ProcessVisibilityTracker`只发布visibility fact，Application policy决定cleanup与training/FGS eligibility。Planning prerequisite按下方统一条件式真值自动判定。（Planned / prerequisite-gated while prerequisite not satisfied）
-9. **E17-8 Ordinary notification coordinator**：notification业务身份使用真实workout session ID + producer token + 同session内单调`stateVersion`，plan ID不作实例唯一身份；Route dispose进入bounded detach，旧Route/旧session迟到事件不得覆盖新session，process recreation无active fact时只幂等清理旧`7200`一次。（Planned / prerequisite-gated）
-10. **E17-9 Connected-device FGS / ID `7200` handoff**：使用同一Application owner的debug-only observer完成五阶段measurement/final APK身份链；不得复用独立GATT工具。`handoffGeneration`与workout producer generation分离；release未确认进入`ReleaseUnconfirmed`或等价态，ordinary writer保持冻结，后台/Unknown cleanup且不宣称后台保证。（Planned / prerequisite-gated）
-11. **E17-10 Integrated AVD / Band 9 production acceptance**：evidence-only，不是implementation Story；production files/lines/methods均为0。只允许testing/evidence文档、`.local`设备证据，以及不改变production行为的test fixture/debug harness或断言修正。任何production finding返回E17-6/7/8/9独立Repair，合入同步main后重建APK并重跑全部受影响gate，旧APK/截图/日志不得复用；E17-1和sealed E16 evidence不能替代production acceptance。（Planned / prerequisite-gated）
+8. **E17 D-082 自动恢复 / 个人参数 Correct-course**：docs-only 对齐 eligibility、persistent suppression、active-training background retain/recovery、个人参数、冻结区间资产、Story / AC / evidence 与 merge-stable truth；禁止 candidate `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 永久不得合并且不是 prerequisite。（按下方条件式真值判定）
+9. **E17-7a Reconnect + Parameter Foundation**：扩展 E17-6 owner 的纯 policy / facts / tests，交付 eligibility、有间隔 bounded windows且长期 armed、typed stop reasons、persistent suppression、age `1..130`、personal max / alert `30..260`、effective max、未取整六区间与strict alert优先；不接Application UI、FGS或Band claim。（Planned / prerequisite-gated）
+10. **E17-7b Application / settings / capsule production wiring**：由`TrainFlowApplication`唯一创建owner，原子切换Activity / Compose / settings / saved-device / capsule并退休旧runtime；debug Activity只能观察同一owner或成为无资源说明页。必须区分disconnect / reconnect / clear target / opt-out，验证foreground自动恢复、非训练background cleanup、AVD lifecycle与Band 9 basic gate；不改冻结capsule视觉/geometry。（Planned / prerequisite-gated）
+11. **E17-8 Ordinary notification coordinator**：notification业务身份使用真实workout session ID + producer token + 同session内单调`stateVersion`，plan ID不作实例唯一身份；Route dispose进入bounded detach，旧Route/旧session迟到事件不得覆盖新session，process recreation无active fact时只幂等清理旧`7200`一次。（Planned / prerequisite-gated）
+12. **E17-9 Connected-device FGS / ID `7200` handoff / training-background recovery**：使用同一Application owner的debug-only observer完成五阶段measurement/final APK身份链；不得复用独立GATT工具。`handoffGeneration`与workout producer generation分离；release未确认进入`ReleaseUnconfirmed`或等价态。普通`ON_STOP`不cleanup合法训练连接；未断链回前台必须同owner/same attempt/current bpm，后台断链后只允许同owner/new generation-attempt恢复。最终source的AVD与Band 9证据职责分层。（Planned / prerequisite-gated）
+13. **E17-10 Integrated AVD / Band 9 production acceptance**：evidence-only，不是implementation Story；production files/lines/methods均为0。只允许testing/evidence文档、`.local`设备证据，以及不改变production行为的test fixture/debug harness或断言修正。任何production finding返回E17-6/7a/7b/8/9独立Repair，合入同步main后重建APK并重跑全部受影响gate，旧APK/截图/日志不得复用；E17-1和sealed E16 evidence不能替代production acceptance。（Planned / prerequisite-gated）
 
-**Planning Repair / E17-7 统一条件式真值：** 若本Planning Repair immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或七份权威文档不一致，则Planning Repair=`implemented / needs review`、E17-7 planning prerequisite=`not satisfied`、E17-7=`planned / prerequisite-gated`，只允许独立Review/Repair本Planning Repair，不得启动E17-7。全部条件满足后，Planning Repair自动为`reviewed / merged`、E17-7 planning prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终Repair SHA与merge事实后决定后续提示词。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
+**D-082 Correct-course / E17-7a 统一条件式真值：** 若本Correct-course immutable SHA尚未通过独立Review，或尚未完成`--no-ff` merge/push，或该SHA尚不是同步后的`main`与`origin/main` ancestor，或`main...origin/main`不为`0 0`，或本次十份文档不一致，则Correct-course=`implemented / needs review`、E17-7a prerequisite=`not satisfied`、E17-7a=`planned / prerequisite-gated`，只允许独立Review/Repair本Correct-course，不得启动E17-7a。全部条件满足后Correct-course自动为`reviewed / merged`、E17-7a prerequisite自动为`satisfied`；不需要额外docs-sync，不创建递归closeout，主管理从Git解析最终SHA与merge事实。Git ancestry是merge事实；branch name仅为locator，不是merge事实。
 
-前台及活跃训练后台自动恢复仍是独立后续能力。
+前台、非训练后台返回与活跃训练后台自动恢复已由D-082绑定E17-7a / E17-7b / E17-9，不再是无目标的未来候选。
 32. E11.3：放弃首版心率显示、录入和统计；撤下执行页心率卡片、手动输入、历史心率占位和 debug smoke 入口，仅保留未来模型边界。（Implemented）
 31. E12.1：真实记录与基础统计。（Implemented）
 32. E12.2a：非心率历史图表与聚合趋势。（Implemented）
@@ -2823,7 +2825,7 @@ E9.2 权限与隐私文案已合入 main。
 E9.3 MVP 验收清单已合入 main，记录用户测试前能力状态、问题分级、数字输入清空 Bug、编辑页开始按钮状态和 E10/E11/E12 后续方向。
 E9.4 User Test Fix Pack 1 已合入 main，修复计划编辑页数字输入临时清空、计时编辑页立即开始、力量编辑页开始训练，并把历史记录全部 / 按计划 / 按日期清理登记为后续能力。
 E10.1 已记录训练模式边界与执行页交互原则：计时训练回归纯间歇计时器，跟练/力量后续使用统一动作选择页，三类执行页遵守主操作即时可达原则，并把记录、健康数据边界、统计、声音和固定 cue 分流到 E10.4/E11/E12/E13。
-E11.1 与 E16 已合入 Story 继续保留历史 Git 事实；E16 umbrella 已由 correct-course 关闭并被 E17 supersede，E16 原始代码和文档为 sealed historical archive / reference only。E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，永久禁止合并；b3 / b4 旧路线终止，E16-11 / E16-12 不自动进入 E17。浮动胶囊视觉与互动为 `adopted / frozen / direct reuse`，runtime、provider state、mapper、文案、优先级和 wiring 不冻结。E17-0至E17-6已reviewed/merged；Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定。
+E11.1 与 E16 已合入 Story 继续保留历史 Git 事实；E16 umbrella 已由 correct-course 关闭并被 E17 supersede，E16 原始代码和文档为 sealed historical archive / reference only。E16-10b-2 failed tip `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor，永久禁止合并；b3 / b4 旧路线终止，E16-11 / E16-12 不自动进入 E17。浮动胶囊视觉与互动为 `adopted / frozen / direct reuse`，runtime、provider state、mapper、文案、优先级和 wiring 不冻结。E17-0至E17-6已reviewed/merged；D-082 Correct-course与E17-7a prerequisite按本页统一条件式真值自动判定。
 E10.2 已完成计时训练纯阶段编辑页和大圆盘执行页首版实现。
 E10.3 已完成力量 / 跟练执行页主操作可达性修复。
 E10.4 已完成训练记录闭环前置并合入 main，计时 / 力量 / 基础跟练 completed 与 abandoned 终态可写入本地 Room session records，记录页生产入口读取真实本地记录。
@@ -2839,7 +2841,7 @@ E14.6 已完成 real-device TimerDial feedback planning gate：E14.6-1 已修复
 下一轮建议按 E15 收口后的发布准备优先级进入：
 
 ```text
-E15 系列已收口并保留原历史事实。E16 系列现为 `closed by correct-course / superseded by E17`，原始代码和文档为 sealed historical archive / reference only；已合入 Story 的 merge fact 保留，但不自动成为 E17 acceptance。E16-10b-2 `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。胶囊视觉与互动为 `adopted / frozen / direct reuse`，runtime、provider state、mapper、文案、优先级和 wiring 不冻结。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；Planning Repair与E17-7 planning prerequisite按本页统一条件式真值自动判定，条件未全部满足时只允许独立Planning Repair Review/Repair。
+E15 系列已收口并保留原历史事实。E16 系列现为 `closed by correct-course / superseded by E17`，原始代码和文档为 sealed historical archive / reference only；已合入 Story 的 merge fact 保留，但不自动成为 E17 acceptance。E16-10b-2 `89d1e23f870185a2e279d35bb293883f64fe70ba` 永久禁止合并。胶囊视觉与互动为 `adopted / frozen / direct reuse`，runtime、provider state、mapper、文案、优先级和 wiring 不冻结。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；D-082 Correct-course与E17-7a prerequisite按本页统一条件式真值自动判定，条件未全部满足时只允许独立Correct-course Review/Repair。
 ```
 
 E10.15 Motion Timing Rules 回看重点：
@@ -2855,7 +2857,7 @@ E10.15 Motion Timing Rules 回看重点：
 
 以下事项不进入 E10.1/E10.2/E10.3 当前实现范围；只有进入上文明确拆出的后续 story 或更新决策日志后才能实施：
 
-- E10.1/E10.2/E10.3 当时未包含真实心率设备接入；D-080已将显式opt-in后的标准HRS与冻结胶囊显示纳入当前E17产品范围。E17-4/5/6已完成，E17-7 planning prerequisite按本页统一条件式真值自动判定；其他设备路线及记录、分析、导出和自动恢复仍需独立后续Story。
+- E10.1/E10.2/E10.3 当时未包含真实心率设备接入；D-080已将显式opt-in后的标准HRS与冻结胶囊显示纳入当前E17产品范围，D-082已把exact-target自动恢复、显式断开suppression与个人参数绑定到E17-7a / 7b / 9。E17-4/5/6已完成，本Correct-course / E17-7a prerequisite按本页统一条件式真值自动判定；其他设备路线及记录、分析、导出仍需独立后续Story。
 - Health Connect 历史数据读取，需进入 E11 或独立健康数据阶段。
 - 用户任意文本 TTS、语音读秒大范围能力和自动语音教练。
 - AI 实时动作纠错。

@@ -427,7 +427,7 @@ Timer Dial 动效必须来自 TrainFlow engine state，不允许视觉假进度�
 | 数据已中断 / 连接已断开 / 连接未成功 | 不把上一次 bpm 伪装为当前读数，提供明确恢复入口 |
 | 超过设定上限 | 使用冻结的深红视觉提示；只表示超过用户设置阈值，不做医疗告警 |
 
-胶囊在用户开启心率后可于 TrainFlow 前台跨页面显示；未训练可以看 bpm、区间和连接状态但不记录。活跃训练允许短暂锁屏 / 后台维持当前连接；后台断连自动恢复是已接受价值但延后实现的独立候选，初始可交付基线仍为明确状态和用户手动恢复。
+胶囊在用户开启心率后可于 TrainFlow 前台跨页面显示；未训练可以看 bpm、区间和连接状态但不记录。D-082 后，eligible 前台意外断连、out-of-range、App 首次 visible 或非训练后台返回 visible 自动恢复 saved exact target；active / paused training 进入锁屏 / 后台时普通 `ON_STOP` 不直接 cleanup，合法 `connectedDevice` FGS 下保持连接并在意外断连时恢复。显式“断开设备”持久 suppress 自动恢复，只有“重新连接”或选择目标解除；这套当前合同不再以 manual-only 作为初始交付基线。
 
 交互硬规则：
 
