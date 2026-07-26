@@ -386,6 +386,64 @@ class HeartRateRuntimeOwnerPlatformTest {
     }
 
     @Test
+    fun establishedUnexpectedDisconnectImmediatelyStartsExactTargetRecovery() {
+        val address = "AA:BB:CC:DD:EE:60"
+        val connected = connect(address)
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(address)))
+        idleMain()
+        assertEquals(HeartRateRecoveryFact.CONNECTED, owner.recoveryState.value.fact)
+        assertFalse(connected.shadowGatt.isClosed)
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+
+        val scanner = application.getSystemService(BluetoothManager::class.java)
+            .adapter.bluetoothLeScanner
+        assertTrue(connected.shadowGatt.isClosed)
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+        val recoveryCallback = shadowOf(scanner).scanCallbacks.single()
+        @Suppress("DEPRECATION")
+        recoveryCallback.onScanResult(
+            ScanSettings.CALLBACK_TYPE_ALL_MATCHES,
+            ScanResult(connected.device, null, -42, 2L)
+        )
+        idleMain()
+
+        assertEquals(2, Shadow.extract<ShadowBluetoothDevice>(connected.device).bluetoothGatts.size)
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        assertEquals(HeartRateRecoveryFact.CONNECTED, owner.recoveryState.value.fact)
+    }
+
+    @Test
+    fun nonDisconnectGattFailureKeepsRecoveryArmedUntilFixedGap() {
+        val address = "AA:BB:CC:DD:EE:61"
+        val connected = connect(address)
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(address)))
+        idleMain()
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_CONNECTED
+        )
+
+        val scanner = application.getSystemService(BluetoothManager::class.java)
+            .adapter.bluetoothLeScanner
+        assertEquals(HeartRateFact.TECHNICAL_FAILURE, owner.heartRateState.value.fact)
+        assertEquals(HeartRateRecoveryFact.ARMED_WAITING, owner.recoveryState.value.fact)
+        assertTrue(shadowOf(scanner).scanCallbacks.isEmpty())
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(9_999))
+        assertTrue(shadowOf(scanner).scanCallbacks.isEmpty())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+        assertEquals(1, shadowOf(scanner).scanCallbacks.size)
+    }
+
+    @Test
     fun status19ConnectedWhileWaitingIsConnectFailureAndLateCallbacksCannotRestoreAttempt() {
         val connected = connect("AA:BB:CC:DD:EE:41")
         val staleFreshness = privateRunnable("freshnessRunnable")
@@ -948,6 +1006,16 @@ class HeartRateRuntimeOwnerPlatformTest {
         idleMain()
         assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
     }
+
+    private fun eligibleRecovery(target: String) = HeartRateRecoveryInputs(
+        optIn = true,
+        savedTargetIdentifier = target,
+        permissionGranted = true,
+        bluetoothEnabled = true,
+        manualDisconnectSuppressed = false,
+        appVisible = true,
+        legalTrainingFgs = false
+    )
 
     private fun privateRunnable(fieldName: String): Runnable {
         val field = HeartRateRuntimeOwner::class.java.getDeclaredField(fieldName)

@@ -310,6 +310,204 @@ class HeartRateRuntimeOwnerTest {
         assertTrue(shadowScanner.scanCallbacks.isEmpty())
     }
 
+    @Test
+    fun eligibleRecoveryStartsImmediatelyThenRepeatsFiniteWindowsAcrossFixedGaps() {
+        val target = "AA:BB:CC:DD:EE:50"
+
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        idleMain()
+
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+        assertEquals(target, owner.recoveryState.value.exactTargetIdentifier)
+        val firstCallback = shadowScanner.scanCallbacks.single()
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(99))
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+        assertEquals(HeartRateRecoveryFact.WINDOW_NO_MATCH_ARMED, owner.recoveryState.value.fact)
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(9_999))
+        assertEquals(HeartRateRecoveryFact.WINDOW_NO_MATCH_ARMED, owner.recoveryState.value.fact)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+        val secondCallback = shadowScanner.scanCallbacks.single()
+        assertNotSame(firstCallback, secondCallback)
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10_000))
+        val thirdCallback = shadowScanner.scanCallbacks.single()
+        assertNotSame(secondCallback, thirdCallback)
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+    }
+
+    @Test
+    fun suppressionAndTargetChangeCancelStaleRecoveryClosuresByContextGeneration() {
+        val firstTarget = "AA:BB:CC:DD:EE:51"
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(firstTarget))
+        )
+        idleMain()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        val staleGap = privateRunnable("recoveryGapRunnable")
+
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(
+                eligibleRecovery(firstTarget).copy(manualDisconnectSuppressed = true)
+            )
+        )
+        idleMain()
+        assertEquals(HeartRateRecoveryFact.BLOCKED, owner.recoveryState.value.fact)
+        assertEquals(
+            HeartRateRecoveryBlockedReason.MANUAL_DISCONNECT_SUPPRESSED,
+            owner.recoveryState.value.blockedReason
+        )
+
+        android.os.Handler(Looper.getMainLooper()).post(staleGap)
+        idleMain()
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        val secondTarget = "AA:BB:CC:DD:EE:52"
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(secondTarget))
+        )
+        idleMain()
+        val currentCallback = shadowScanner.scanCallbacks.single()
+        android.os.Handler(Looper.getMainLooper()).post(staleGap)
+        idleMain()
+
+        assertEquals(secondTarget, owner.recoveryState.value.exactTargetIdentifier)
+        assertEquals(setOf(currentCallback), shadowScanner.scanCallbacks)
+    }
+
+    @Test
+    fun exactIdentifierAutoConnectsButSameNameWrongIdentifierDoesNot() {
+        val targetAddress = "AA:BB:CC:DD:EE:53"
+        val wrong = scanResult("AA:BB:CC:DD:EE:54", "Same name")
+        val target = scanResult(targetAddress, "Same name")
+        val targetDevice = requireNotNull(target.device)
+
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(targetAddress))
+        )
+        idleMain()
+        val callback = shadowScanner.scanCallbacks.single()
+        callback.onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES, wrong)
+        idleMain()
+        assertTrue(
+            Shadow.extract<ShadowBluetoothDevice>(requireNotNull(wrong.device))
+                .bluetoothGatts
+                .isEmpty()
+        )
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+
+        callback.onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES, target)
+        idleMain()
+
+        assertEquals(1, Shadow.extract<ShadowBluetoothDevice>(targetDevice).bluetoothGatts.size)
+        assertEquals(HeartRateRecoveryFact.CONNECTING, owner.recoveryState.value.fact)
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+    }
+
+    @Test
+    fun queuedEligibilityLossWinsAndManualScanDoesNotMasqueradeAsRecovery() {
+        val target = "AA:BB:CC:DD:EE:55"
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(
+                eligibleRecovery(target).copy(appVisible = false)
+            )
+        )
+        idleMain()
+
+        assertEquals(HeartRateRecoveryFact.BLOCKED, owner.recoveryState.value.fact)
+        assertEquals(
+            HeartRateRecoveryBlockedReason.NOT_VISIBLE_OR_TRAINING_FGS,
+            owner.recoveryState.value.blockedReason
+        )
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.Enable)
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        assertEquals(HeartRateFact.SCANNING, owner.heartRateState.value.fact)
+        assertEquals(HeartRateRecoveryFact.BLOCKED, owner.recoveryState.value.fact)
+    }
+
+    @Test
+    fun typedEligibilityLossesCancelRecoveryAndExplicitContextReturnRestartsIt() {
+        val target = "AA:BB:CC:DD:EE:56"
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        idleMain()
+
+        owner.submit(HeartRateRuntimeAction.PermissionLost)
+        idleMain()
+        assertEquals(
+            HeartRateRecoveryBlockedReason.PERMISSION_REQUIRED,
+            owner.recoveryState.value.blockedReason
+        )
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        idleMain()
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+        owner.submit(HeartRateRuntimeAction.BluetoothOff)
+        idleMain()
+        assertEquals(
+            HeartRateRecoveryBlockedReason.BLUETOOTH_OFF,
+            owner.recoveryState.value.blockedReason
+        )
+
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        idleMain()
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(
+                eligibleRecovery(target).copy(savedTargetIdentifier = null)
+            )
+        )
+        idleMain()
+        assertEquals(
+            HeartRateRecoveryBlockedReason.SAVED_TARGET_MISSING,
+            owner.recoveryState.value.blockedReason
+        )
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        idleMain()
+        owner.submit(HeartRateRuntimeAction.Disable)
+        idleMain()
+        assertEquals(
+            HeartRateRecoveryBlockedReason.OPTED_OUT,
+            owner.recoveryState.value.blockedReason
+        )
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+    }
+
+    @Test
+    fun explicitDisconnectSuppressesRecoveryUntilExplicitContextClear() {
+        val target = "AA:BB:CC:DD:EE:57"
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryContext(eligibleRecovery(target)))
+        idleMain()
+
+        owner.submit(HeartRateRuntimeAction.Disconnect)
+        idleMain()
+        assertEquals(HeartRateFact.INTENTIONAL_STOP, owner.heartRateState.value.fact)
+        assertEquals(
+            HeartRateRecoveryBlockedReason.MANUAL_DISCONNECT_SUPPRESSED,
+            owner.recoveryState.value.blockedReason
+        )
+        assertTrue(shadowScanner.scanCallbacks.isEmpty())
+
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(
+                eligibleRecovery(target).copy(manualDisconnectSuppressed = false)
+            )
+        )
+        idleMain()
+        assertEquals(HeartRateRecoveryFact.AUTO_SEARCHING, owner.recoveryState.value.fact)
+        assertEquals(1, shadowScanner.scanCallbacks.size)
+    }
+
     private fun scanResult(address: String, name: String): ScanResult {
         val device = ShadowBluetoothDevice.newInstance(address)
         Shadow.extract<ShadowBluetoothDevice>(device).setName(name)
@@ -326,6 +524,16 @@ class HeartRateRuntimeOwnerTest {
         idleMain()
         assertEquals(HeartRateFact.NOT_CONNECTED, owner.heartRateState.value.fact)
     }
+
+    private fun eligibleRecovery(target: String) = HeartRateRecoveryInputs(
+        optIn = true,
+        savedTargetIdentifier = target,
+        permissionGranted = true,
+        bluetoothEnabled = true,
+        manualDisconnectSuppressed = false,
+        appVisible = true,
+        legalTrainingFgs = false
+    )
 
     private fun privateRunnable(fieldName: String): Runnable {
         val field = HeartRateRuntimeOwner::class.java.getDeclaredField(fieldName)

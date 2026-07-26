@@ -217,6 +217,72 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         assertTrue(Shadow.extract<ShadowBluetoothGatt>(connected.gatt).isClosed)
     }
 
+    @Test
+    fun callbackFromAttemptBeforeRecoveryCannotMutateReplacementAttempt() {
+        val address = "AA:BB:CC:DD:EE:08"
+        val first = connectWaiting(address, "Recovery identity")
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryContext(
+                HeartRateRecoveryInputs(
+                    optIn = true,
+                    savedTargetIdentifier = address,
+                    permissionGranted = true,
+                    bluetoothEnabled = true,
+                    manualDisconnectSuppressed = false,
+                    appVisible = true,
+                    legalTrainingFgs = false
+                )
+            )
+        )
+        idleMain()
+        first.callback.onConnectionStateChange(
+            first.gatt,
+            19,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+        val scanner = application.getSystemService(BluetoothManager::class.java)
+            .adapter.bluetoothLeScanner
+        val callback = shadowOf(scanner).scanCallbacks.single()
+        val device = ShadowBluetoothDevice.newInstance(address)
+        Shadow.extract<ShadowBluetoothDevice>(device).setName("Recovery identity")
+        lateinit var second: ConnectedGatt
+        Shadow.extract<ShadowBluetoothDevice>(device).setGattConnectionInterceptor { gatt ->
+            val shadowGatt = Shadow.extract<ShadowBluetoothGatt>(gatt)
+            val characteristic = configureHrs(shadowGatt)
+            val gattCallback = shadowGatt.gattCallback
+            gattCallback.onConnectionStateChange(
+                gatt,
+                BluetoothGatt.GATT_SUCCESS,
+                BluetoothProfile.STATE_CONNECTED
+            )
+            second = ConnectedGatt(
+                gatt,
+                gattCallback,
+                characteristic,
+                requireNotNull(characteristic.getDescriptor(CCCD_UUID))
+            )
+        }
+        @Suppress("DEPRECATION")
+        callback.onScanResult(
+            ScanSettings.CALLBACK_TYPE_ALL_MATCHES,
+            ScanResult(device, null, -40, 2L)
+        )
+        idleMain()
+        val replacementState = owner.heartRateState.value
+
+        first.callback.onCharacteristicChanged(
+            first.gatt,
+            first.characteristic,
+            byteArrayOf(0x00, 120)
+        )
+        first.callback.onServicesDiscovered(first.gatt, BluetoothGatt.GATT_FAILURE)
+
+        assertEquals(replacementState, owner.heartRateState.value)
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, replacementState.fact)
+        assertFalse(Shadow.extract<ShadowBluetoothGatt>(second.gatt).isClosed)
+        assertTrue(Shadow.extract<ShadowBluetoothGatt>(first.gatt).isClosed)
+    }
+
     private fun connectWaiting(address: String, name: String): ConnectedGatt {
         return connectWaiting(scanDevice(address, name))
     }
