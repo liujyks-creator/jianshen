@@ -105,6 +105,55 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
+    fun age101IsValidAndPersonalMaximumTakesPrecedenceOverAgeEstimate() {
+        val ageOnly = capsule(liveState(84), age = 101)
+        val personalMaximum = capsule(
+            liveState(150),
+            age = 40,
+            personalMax = 200
+        )
+
+        assertEquals(HeartRateFloatingCapsuleStatus.ZONE_AEROBIC, ageOnly.status)
+        assertEquals("有氧 84 bpm", ageOnly.collapsedLabel)
+        assertEquals(HeartRateFloatingCapsuleStatus.ZONE_AEROBIC, personalMaximum.status)
+        assertEquals("有氧 150 bpm", personalMaximum.collapsedLabel)
+        assertTrue(personalMaximum.detailBody.contains("个人最大心率"))
+    }
+
+    @Test
+    fun zoneBoundariesUseExactUnroundedRatio() {
+        val expected = listOf(
+            99 to HeartRateFloatingCapsuleStatus.ZONE_LOW,
+            100 to HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
+            119 to HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
+            120 to HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN,
+            139 to HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN,
+            140 to HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
+            159 to HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
+            160 to HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
+            179 to HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
+            180 to HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
+            200 to HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
+            201 to HeartRateFloatingCapsuleStatus.ZONE_LIMIT
+        )
+
+        expected.forEach { (bpm, status) ->
+            assertEquals(status, capsule(liveState(bpm), personalMax = 200).status)
+        }
+    }
+
+    @Test
+    fun alertIsIndependentStrictAndWorksWithoutEffectiveMaximum() {
+        val equal = capsule(liveState(180), overLimit = 180)
+        val exceeded = capsule(liveState(181), overLimit = 180)
+        val invalidLow = capsule(liveState(100), overLimit = 29)
+
+        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, equal.status)
+        assertEquals(HeartRateFloatingCapsuleStatus.OVER_LIMIT, exceeded.status)
+        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, invalidLow.status)
+    }
+
+    @Test
     fun interruptedDisconnectFailureAndStopNeverDisplayOldBpmAsCurrent() {
         val interrupted = capsule(HeartRateRuntimeFact.DataInterrupted(source).toHeartRateState())
         val disconnected = capsule(HeartRateRuntimeFact.LinkDisconnected(source).toHeartRateState())
@@ -236,12 +285,14 @@ class HeartRateFloatingCapsuleStateTest {
     private fun capsule(
         state: HeartRateState,
         age: Int? = null,
+        personalMax: Int? = null,
         overLimit: Int? = null,
         forceCollapsed: Boolean = false
     ) = heartRateFloatingCapsuleUiState(
         settings = settings(),
         liveState = state,
         userAgeYears = age,
+        personalMaxHeartRateBpm = personalMax,
         overLimitThresholdBpm = overLimit,
         forceCollapsed = forceCollapsed
     )
