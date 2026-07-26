@@ -16,6 +16,8 @@ Then read the core context:
 2. `docs/planning/decision-log.md`
 3. The current story's testing, decision, or review document when one exists
 
+For Story planning, development, Repair, Review, evidence, merge, or governance work, also read `docs/process/story-workflow-contract.md`. During Review, read the accepted copy from the pinned review-base commit; a Story's proposed change to that contract cannot govern its own Review.
+
 Add only the documents relevant to the task type:
 
 - New product capability, product decision, PRD, or UX flow: `docs/planning/product-brief.md`, `docs/planning/prd.md`, and `docs/planning/ux-design.md`.
@@ -128,6 +130,9 @@ These roles are complementary. BMAD selects or corrects the route, supervised de
 The skills are global Codex capabilities rather than repository dependencies, and their directories MUST NOT be committed. A repository-local ignored `skills/bmad-method` copy, if present, is a legacy local aid rather than the active method. Root prompt templates define the generic management, Writer, and Fresh Reviewer role inputs/outputs and also provide a manual fallback; automatic delivery uses the skill plus native subagents and does not treat those templates as a second workflow authority.
 
 Skills cannot override accepted project instructions, decisions, Story scope, validation gates, evidence requirements, or explicit user authority. If `$bmad-method` is unavailable, route from accepted repository documents. If `$supervised-story-delivery` is unavailable, stop automatic mode and offer the manual fallback instead of silently imitating it. If `huashu-design` is unavailable, preserve accepted visual decisions and request direction before creating a new subjective design.
+
+Role leases may be 60/90 minutes or longer when the approved packet and tool timeouts justify them; large roles remain atomic and report at natural phase boundaries. At expiry the manager may renew once only with concrete immutable progress evidence, otherwise it enters recovery.
+All automated Story, Writer, Repair, Validator, Reviewer, and device roles use the repository contract's template binding, automatic role execution lease, durable ledger, and recovery rules. The same rules govern root-template automation; they do not govern ordinary question answering. Preserve approved atomic Story boundaries: recovery resumes from ledger, Git, and disk instead of rebuilding or decomposing the Story. The manager advances routine passing phases without asking whether to continue and closes or reports Process Flow issues according to the accepted contract.
 
 ## Cross-Conversation Source Of Truth
 
