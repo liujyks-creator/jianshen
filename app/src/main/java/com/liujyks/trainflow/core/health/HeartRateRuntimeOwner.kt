@@ -39,6 +39,9 @@ internal sealed class HeartRateRuntimeAction {
     data object StartScan : HeartRateRuntimeAction()
     data object StopScan : HeartRateRuntimeAction()
     data class Connect(val identifier: String) : HeartRateRuntimeAction()
+    data class UpdateRecoveryEligibility(
+        val input: HeartRateRecoveryEligibilityInput
+    ) : HeartRateRuntimeAction()
     data object Disconnect : HeartRateRuntimeAction()
     data object Stop : HeartRateRuntimeAction()
 }
@@ -55,6 +58,7 @@ internal class HeartRateRuntimeOwner(
     context: Context,
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
     private val scanWindowMillis: Long = DEFAULT_SCAN_WINDOW_MILLIS,
+    private val recoveryIntervalMillis: Long = DEFAULT_RECOVERY_INTERVAL_MILLIS,
     private val freshnessConfig: HeartRateFreshnessConfig = HeartRateFreshnessConfig()
 ) : HeartRateProvider, AutoCloseable {
     private val appContext = context.applicationContext
@@ -64,10 +68,14 @@ internal class HeartRateRuntimeOwner(
     )
     private val mutableScanState = MutableStateFlow(BleHeartRateScanState.idle())
     private val mutableCandidates = MutableStateFlow<List<BleHeartRateDeviceCandidate>>(emptyList())
+    private val mutableRecoveryState = MutableStateFlow(
+        HeartRateRecoveryState.disarmed(HeartRateRecoveryStopReason.OPTED_OUT)
+    )
 
     override val heartRateState: StateFlow<HeartRateState> = mutableHeartRateState
     val scanState: StateFlow<BleHeartRateScanState> = mutableScanState
     val candidates: StateFlow<List<BleHeartRateDeviceCandidate>> = mutableCandidates
+    val recoveryState: StateFlow<HeartRateRecoveryState> = mutableRecoveryState
 
     private val candidateDevices = linkedMapOf<String, BluetoothDevice>()
     private var scanGeneration = 0L
@@ -76,6 +84,16 @@ internal class HeartRateRuntimeOwner(
     private var activeAttempt: ActiveAttempt? = null
     private var scanTimeoutRunnable: Runnable? = null
     private var freshnessRunnable: Runnable? = null
+    private var recoveryRunnable: Runnable? = null
+    private var recoveryEligibilityInput = HeartRateRecoveryEligibilityInput(
+        optedIn = false,
+        savedTargetIdentifier = null,
+        permissionGranted = false,
+        bluetoothEnabled = false,
+        manuallySuppressed = false,
+        appVisible = false,
+        activeTrainingFgsEligible = false
+    )
     private var enabled = false
     private var operationEligible = false
     private var ownerClosed = false
@@ -104,7 +122,16 @@ internal class HeartRateRuntimeOwner(
             HeartRateRuntimeAction.StartScan -> startScanOnMain()
             HeartRateRuntimeAction.StopScan -> stopScanOnMain()
             is HeartRateRuntimeAction.Connect -> connectOnMain(action.identifier)
+            is HeartRateRuntimeAction.UpdateRecoveryEligibility ->
+                updateRecoveryEligibilityOnMain(action.input)
             HeartRateRuntimeAction.Disconnect -> {
+                recoveryEligibilityInput = recoveryEligibilityInput.copy(manuallySuppressed = true)
+                cancelRecovery()
+                publishRecovery(
+                    HeartRateRecoveryState.disarmed(
+                        HeartRateRecoveryStopReason.MANUAL_SUPPRESSION
+                    )
+                )
                 if (enabled) {
                     cleanup(HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source))
                 } else {
@@ -113,6 +140,10 @@ internal class HeartRateRuntimeOwner(
             }
             HeartRateRuntimeAction.Stop -> {
                 ownerClosed = true
+                cancelRecovery()
+                publishRecovery(
+                    HeartRateRecoveryState.disarmed(HeartRateRecoveryStopReason.OWNER_CLOSED)
+                )
                 cleanup(
                     if (enabled) {
                         HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source)
@@ -140,6 +171,11 @@ internal class HeartRateRuntimeOwner(
         }
         enabled = false
         operationEligible = false
+        recoveryEligibilityInput = recoveryEligibilityInput.copy(optedIn = false)
+        cancelRecovery()
+        publishRecovery(
+            HeartRateRecoveryState.disarmed(HeartRateRecoveryStopReason.OPTED_OUT)
+        )
         cleanup(
             requestedFact = HeartRateRuntimeFact.Disabled,
             permissionLossOverridesFact = false
@@ -153,6 +189,13 @@ internal class HeartRateRuntimeOwner(
             return
         }
         operationEligible = false
+        recoveryEligibilityInput = recoveryEligibilityInput.copy(permissionGranted = false)
+        cancelRecovery()
+        publishRecovery(
+            HeartRateRecoveryState.disarmed(
+                HeartRateRecoveryStopReason.PERMISSION_UNAVAILABLE
+            )
+        )
         cleanup(
             requestedFact = HeartRateRuntimeFact.PermissionRequired(currentSource()),
             permissionLossOverridesFact = false
@@ -166,6 +209,11 @@ internal class HeartRateRuntimeOwner(
             return
         }
         operationEligible = false
+        recoveryEligibilityInput = recoveryEligibilityInput.copy(bluetoothEnabled = false)
+        cancelRecovery()
+        publishRecovery(
+            HeartRateRecoveryState.disarmed(HeartRateRecoveryStopReason.BLUETOOTH_OFF)
+        )
         cleanup(
             requestedFact = HeartRateRuntimeFact.BluetoothOff(currentSource()),
             permissionLossOverridesFact = false
@@ -179,19 +227,35 @@ internal class HeartRateRuntimeOwner(
             return
         }
         operationEligible = false
+        recoveryEligibilityInput = recoveryEligibilityInput.copy(
+            appVisible = false,
+            activeTrainingFgsEligible = false
+        )
+        cancelRecovery()
+        publishRecovery(
+            HeartRateRecoveryState.disarmed(
+                HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS
+            )
+        )
         cleanup(
             requestedFact = HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source),
             permissionLossOverridesFact = false
         )
     }
 
-    private fun startScanOnMain() {
+    private fun startScanOnMain(
+        origin: ScanOrigin = ScanOrigin.MANUAL,
+        recoveryTargetIdentifier: String? = null
+    ) {
         checkMainThread()
         if (!enabled) {
             publish(HeartRateRuntimeFact.Disabled)
             return
         }
         if (!operationEligible) return
+        if (origin == ScanOrigin.MANUAL) {
+            cancelRecovery()
+        }
         if (!hasRequiredPermissions()) {
             cleanup(HeartRateRuntimeFact.PermissionRequired(currentSource()))
             return
@@ -228,7 +292,13 @@ internal class HeartRateRuntimeOwner(
         mutableCandidates.value = emptyList()
         val generation = nextScanGeneration()
         val callback = RuntimeScanCallback(generation)
-        activeScan = ActiveScan(generation, scanner, callback)
+        activeScan = ActiveScan(
+            generation = generation,
+            scanner = scanner,
+            callback = callback,
+            origin = origin,
+            recoveryTargetIdentifier = recoveryTargetIdentifier
+        )
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
@@ -249,6 +319,14 @@ internal class HeartRateRuntimeOwner(
         if (activeAttempt == null) {
             publish(HeartRateRuntimeFact.Scanning())
         }
+        if (origin == ScanOrigin.RECOVERY) {
+            publishRecovery(
+                HeartRateRecoveryState(
+                    phase = HeartRateRecoveryPhase.SEARCHING,
+                    targetIdentifier = recoveryTargetIdentifier
+                )
+            )
+        }
     }
 
     private fun stopScanOnMain() {
@@ -266,11 +344,185 @@ internal class HeartRateRuntimeOwner(
         if (activeAttempt == null) {
             publish(HeartRateRuntimeFact.IntentionalStop())
         }
+        scheduleRecovery(
+            delayMillis = recoveryIntervalMillis,
+            pendingPhase = HeartRateRecoveryPhase.WAITING_NEXT_WINDOW
+        )
+    }
+
+    private fun updateRecoveryEligibilityOnMain(
+        input: HeartRateRecoveryEligibilityInput
+    ) {
+        checkMainThread()
+        recoveryEligibilityInput = input.copy(
+            savedTargetIdentifier = input.savedTargetIdentifier?.trim()
+        )
+        val decision = evaluateHeartRateRecoveryEligibility(recoveryEligibilityInput)
+        if (!decision.eligible) {
+            applyIneligibleRecoveryDecision(requireNotNull(decision.stopReason))
+            return
+        }
+
+        enabled = true
+        operationEligible = true
+        val target = requireNotNull(decision.targetIdentifier)
+        val attempt = activeAttempt
+        if (attempt != null && attempt.targetIdentifier == target) {
+            cancelRecovery()
+            publishRecovery(
+                HeartRateRecoveryState(
+                    phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                    targetIdentifier = target
+                )
+            )
+            return
+        }
+        if (attempt != null && !detachAndCloseActiveAttempt()) return
+        scheduleRecovery(delayMillis = 0L)
+    }
+
+    private fun applyIneligibleRecoveryDecision(reason: HeartRateRecoveryStopReason) {
+        cancelRecovery()
+        publishRecovery(HeartRateRecoveryState.disarmed(reason))
+        when (reason) {
+            HeartRateRecoveryStopReason.OPTED_OUT -> {
+                enabled = false
+                operationEligible = false
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.Disabled,
+                    permissionLossOverridesFact = false
+                )
+            }
+            HeartRateRecoveryStopReason.MANUAL_SUPPRESSION -> {
+                enabled = true
+                operationEligible = false
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source),
+                    permissionLossOverridesFact = false
+                )
+            }
+            HeartRateRecoveryStopReason.NO_SAVED_TARGET -> {
+                enabled = true
+                operationEligible = true
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.NotConnected(),
+                    permissionLossOverridesFact = false
+                )
+            }
+            HeartRateRecoveryStopReason.PERMISSION_UNAVAILABLE -> {
+                enabled = true
+                operationEligible = false
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.PermissionRequired(currentSource()),
+                    permissionLossOverridesFact = false
+                )
+            }
+            HeartRateRecoveryStopReason.BLUETOOTH_OFF -> {
+                enabled = true
+                operationEligible = false
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.BluetoothOff(currentSource()),
+                    permissionLossOverridesFact = false
+                )
+            }
+            HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS -> {
+                enabled = true
+                operationEligible = false
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.IntentionalStop(activeAttempt?.source),
+                    permissionLossOverridesFact = false
+                )
+            }
+            HeartRateRecoveryStopReason.OWNER_CLOSED -> Unit
+        }
+    }
+
+    private fun scheduleRecovery(
+        delayMillis: Long,
+        pendingPhase: HeartRateRecoveryPhase = HeartRateRecoveryPhase.WAITING_NEXT_WINDOW
+    ) {
+        cancelRecovery()
+        if (ownerClosed) {
+            publishRecovery(
+                HeartRateRecoveryState.disarmed(HeartRateRecoveryStopReason.OWNER_CLOSED)
+            )
+            return
+        }
+        val decision = evaluateHeartRateRecoveryEligibility(recoveryEligibilityInput)
+        if (!decision.eligible) {
+            publishRecovery(
+                HeartRateRecoveryState.disarmed(requireNotNull(decision.stopReason))
+            )
+            return
+        }
+        val target = requireNotNull(decision.targetIdentifier)
+        val attempt = activeAttempt
+        if (attempt != null && attempt.targetIdentifier == target) {
+            publishRecovery(
+                HeartRateRecoveryState(
+                    phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                    targetIdentifier = target
+                )
+            )
+            return
+        }
+        if (activeScan != null) {
+            publishRecovery(
+                HeartRateRecoveryState(
+                    phase = pendingPhase,
+                    targetIdentifier = target
+                )
+            )
+            return
+        }
+        publishRecovery(
+            HeartRateRecoveryState(
+                phase = pendingPhase,
+                targetIdentifier = target
+            )
+        )
+        val runnable = Runnable {
+            recoveryRunnable = null
+            startRecoveryWindow()
+        }
+        recoveryRunnable = runnable
+        mainHandler.postDelayed(runnable, delayMillis)
+    }
+
+    private fun startRecoveryWindow() {
+        checkMainThread()
+        val decision = evaluateHeartRateRecoveryEligibility(recoveryEligibilityInput)
+        if (!decision.eligible) {
+            publishRecovery(
+                HeartRateRecoveryState.disarmed(requireNotNull(decision.stopReason))
+            )
+            return
+        }
+        val target = requireNotNull(decision.targetIdentifier)
+        val attempt = activeAttempt
+        if (attempt != null && attempt.targetIdentifier == target) {
+            publishRecovery(
+                HeartRateRecoveryState(
+                    phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                    targetIdentifier = target
+                )
+            )
+            return
+        }
+        if (activeScan != null) {
+            scheduleRecovery(recoveryIntervalMillis)
+            return
+        }
+        startScanOnMain(
+            origin = ScanOrigin.RECOVERY,
+            recoveryTargetIdentifier = target
+        )
     }
 
     private fun handleScanTimeout(generation: Long, callback: ScanCallback) {
         checkMainThread()
         if (!scanMatches(generation, callback)) return
+        val timedOutScan = activeScan ?: return
         if (!detachAndStopActiveScan()) return
         mutableScanState.value = BleHeartRateScanState(
             kind = BleHeartRateScanStateKind.STOPPED,
@@ -279,6 +531,14 @@ internal class HeartRateRuntimeOwner(
         if (activeAttempt == null) {
             publish(HeartRateRuntimeFact.NotConnected())
         }
+        scheduleRecovery(
+            delayMillis = recoveryIntervalMillis,
+            pendingPhase = if (timedOutScan.origin == ScanOrigin.RECOVERY) {
+                HeartRateRecoveryPhase.WINDOW_MISSED_ARMED
+            } else {
+                HeartRateRecoveryPhase.WAITING_NEXT_WINDOW
+            }
+        )
     }
 
     private fun handleScanResult(
@@ -312,6 +572,12 @@ internal class HeartRateRuntimeOwner(
         candidateDevices[identifier] = device
         mutableCandidates.value = mutableCandidates.value
             .filterNot { it.identifier == identifier } + candidate
+        val scan = activeScan
+        if (scan?.origin == ScanOrigin.RECOVERY &&
+            identifier == scan.recoveryTargetIdentifier
+        ) {
+            connectOnMain(identifier)
+        }
     }
 
     private fun handleScanFailure(
@@ -336,6 +602,10 @@ internal class HeartRateRuntimeOwner(
                 )
             )
         }
+        scheduleRecovery(
+            delayMillis = recoveryIntervalMillis,
+            pendingPhase = HeartRateRecoveryPhase.WINDOW_MISSED_ARMED
+        )
     }
 
     private fun connectOnMain(identifier: String) {
@@ -345,6 +615,11 @@ internal class HeartRateRuntimeOwner(
             return
         }
         if (!operationEligible) return
+        recoveryEligibilityInput = recoveryEligibilityInput.copy(
+            savedTargetIdentifier = identifier,
+            manuallySuppressed = false
+        )
+        cancelRecovery()
         val device = candidateDevices[identifier]
         val candidate = mutableCandidates.value.firstOrNull { it.identifier == identifier }
         if (device == null || candidate == null) {
@@ -393,6 +668,12 @@ internal class HeartRateRuntimeOwner(
         )
         attempt.callback = callback
         publish(HeartRateRuntimeFact.Connecting(source))
+        publishRecovery(
+            HeartRateRecoveryState(
+                phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                targetIdentifier = identifier
+            )
+        )
 
         val returnedGatt = try {
             device.connectGatt(
@@ -626,6 +907,12 @@ internal class HeartRateRuntimeOwner(
         attempt.phase = AttemptPhase.WAITING_FIRST_DATA
         attempt.timeline = HeartRateFreshnessTimeline().notifyEnabled(nowElapsed)
         publish(HeartRateRuntimeFact.WaitingFirstData(attempt.source))
+        publishRecovery(
+            HeartRateRecoveryState(
+                phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                targetIdentifier = attempt.targetIdentifier
+            )
+        )
         scheduleFreshness(attempt, freshnessConfig.firstSampleWaitingBoundaryMs)
     }
 
@@ -665,6 +952,12 @@ internal class HeartRateRuntimeOwner(
         )
         attempt.phase = AttemptPhase.LIVE
         publish(freshnessPolicy.evaluate(nowElapsed, attempt.timeline).toRuntimeFact(attempt.source))
+        publishRecovery(
+            HeartRateRecoveryState(
+                phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                targetIdentifier = attempt.targetIdentifier
+            )
+        )
         scheduleFreshness(attempt, freshnessConfig.liveFreshnessBoundaryMs)
     }
 
@@ -812,6 +1105,11 @@ internal class HeartRateRuntimeOwner(
         ) {
             operationEligible = false
         }
+        if (requestedFact is HeartRateRuntimeFact.PermissionRequired) {
+            recoveryEligibilityInput = recoveryEligibilityInput.copy(permissionGranted = false)
+        } else if (requestedFact is HeartRateRuntimeFact.BluetoothOff) {
+            recoveryEligibilityInput = recoveryEligibilityInput.copy(bluetoothEnabled = false)
+        }
         scanGeneration += 1L
         attemptSequence += 1L
 
@@ -824,6 +1122,7 @@ internal class HeartRateRuntimeOwner(
 
         cancelScanTimeout()
         cancelFreshness()
+        cancelRecovery()
 
         cleanupInProgress = true
         cleanupGatt = detachedAttempt?.gatt
@@ -858,6 +1157,19 @@ internal class HeartRateRuntimeOwner(
             requestedFact
         }
         publish(finalFact)
+        if (!ownerClosed) {
+            val decision = evaluateHeartRateRecoveryEligibility(recoveryEligibilityInput)
+            if (decision.eligible) {
+                scheduleRecovery(
+                    delayMillis = recoveryIntervalMillis,
+                    pendingPhase = HeartRateRecoveryPhase.WAITING_NEXT_WINDOW
+                )
+            } else {
+                publishRecovery(
+                    HeartRateRecoveryState.disarmed(requireNotNull(decision.stopReason))
+                )
+            }
+        }
     }
 
     private fun detachAndStopActiveScan(): Boolean {
@@ -912,6 +1224,11 @@ internal class HeartRateRuntimeOwner(
     private fun cancelFreshness() {
         freshnessRunnable?.let(mainHandler::removeCallbacks)
         freshnessRunnable = null
+    }
+
+    private fun cancelRecovery() {
+        recoveryRunnable?.let(mainHandler::removeCallbacks)
+        recoveryRunnable = null
     }
 
     private fun bluetoothAdapterOrPublishFailure(): android.bluetooth.BluetoothAdapter? {
@@ -986,6 +1303,13 @@ internal class HeartRateRuntimeOwner(
         val state = fact.toHeartRateState()
         if (mutableHeartRateState.value != state) {
             mutableHeartRateState.value = state
+        }
+    }
+
+    private fun publishRecovery(state: HeartRateRecoveryState) {
+        checkMainThread()
+        if (mutableRecoveryState.value != state) {
+            mutableRecoveryState.value = state
         }
     }
 
@@ -1169,8 +1493,15 @@ internal class HeartRateRuntimeOwner(
     private data class ActiveScan(
         val generation: Long,
         val scanner: BluetoothLeScanner,
-        val callback: ScanCallback
+        val callback: ScanCallback,
+        val origin: ScanOrigin,
+        val recoveryTargetIdentifier: String?
     )
+
+    private enum class ScanOrigin {
+        MANUAL,
+        RECOVERY
+    }
 
     private data class ActiveAttempt(
         val id: Long,
@@ -1213,6 +1544,7 @@ internal class HeartRateRuntimeOwner(
 
     private companion object {
         const val DEFAULT_SCAN_WINDOW_MILLIS = 12_000L
+        const val DEFAULT_RECOVERY_INTERVAL_MILLIS = 5_000L
         const val UNKNOWN_DEVICE_NAME = "(unknown BLE device)"
         val HEART_RATE_SERVICE_UUID: UUID =
             UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")

@@ -56,6 +56,7 @@ internal fun heartRateFloatingCapsuleUiState(
     settings: HeartRateSettingsUiState,
     liveState: HeartRateState? = null,
     userAgeYears: Int? = null,
+    personalMaxHeartRateBpm: Int? = null,
     overLimitThresholdBpm: Int? = null,
     forceCollapsed: Boolean = false
 ): HeartRateFloatingCapsuleUiState {
@@ -130,6 +131,7 @@ internal fun heartRateFloatingCapsuleUiState(
             bpm = requireNotNull(state.bpm),
             sourceLabel = deviceHint,
             userAgeYears = userAgeYears,
+            personalMaxHeartRateBpm = personalMaxHeartRateBpm,
             overLimitThresholdBpm = overLimitThresholdBpm,
             forceCollapsed = forceCollapsed
         )
@@ -230,6 +232,7 @@ private fun heartRateReadingCapsuleUiState(
     bpm: Int,
     sourceLabel: String?,
     userAgeYears: Int?,
+    personalMaxHeartRateBpm: Int?,
     overLimitThresholdBpm: Int?,
     forceCollapsed: Boolean
 ): HeartRateFloatingCapsuleUiState {
@@ -246,15 +249,20 @@ private fun heartRateReadingCapsuleUiState(
         )
     }
 
-    val zone = userAgeYears?.takeIf { age -> age in 10..100 }?.let { age ->
-        heartRateZoneForBpm(bpm = bpm, maxHeartRate = 220 - age)
+    val effectiveMax = personalMaxHeartRateBpm
+        ?.takeIf { it in 30..260 }
+        ?: userAgeYears
+            ?.takeIf { it in 1..130 }
+            ?.let { age -> 220 - age }
+    val zone = effectiveMax?.let { maxHeartRate ->
+        heartRateZoneForBpm(bpm = bpm, maxHeartRate = maxHeartRate)
     }
     if (zone == null) {
         return stateCapsule(
             status = HeartRateFloatingCapsuleStatus.BPM_ONLY,
             label = "心率 $bpm bpm",
             title = "实时心率",
-            body = "未设置年龄时只显示 bpm，不计算心率区间。",
+            body = "未设置有效年龄或个人最大心率时只显示 bpm，不计算心率区间。",
             deviceHint = sourceLabel,
             zoneLabel = "无",
             updateLabel = "实时",
@@ -266,7 +274,11 @@ private fun heartRateReadingCapsuleUiState(
         status = zone.status,
         label = "${zone.label} $bpm bpm",
         title = zone.label,
-        body = "区间基于用户年龄估算最大心率，仅作训练参考。",
+        body = if (personalMaxHeartRateBpm?.takeIf { it in 30..260 } != null) {
+            "区间基于用户设置的个人最大心率，仅作训练参考。"
+        } else {
+            "区间基于用户年龄估算最大心率，仅作训练参考。"
+        },
         deviceHint = sourceLabel,
         zoneLabel = zone.label,
         updateLabel = "实时",
@@ -283,13 +295,19 @@ private fun heartRateZoneForBpm(
     bpm: Int,
     maxHeartRate: Int
 ): HeartRateZoneResult {
-    val percent = bpm.toFloat() / maxHeartRate.coerceAtLeast(1).toFloat()
+    val scaledBpm = bpm.toLong() * 100L
+    val scaledMax = maxHeartRate.coerceAtLeast(1).toLong()
     return when {
-        percent < 0.50f -> HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_LOW, "低强度")
-        percent < 0.60f -> HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_WARMUP, "热身")
-        percent < 0.70f -> HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN, "燃脂")
-        percent < 0.80f -> HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_AEROBIC, "有氧")
-        percent < 0.90f -> HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC, "无氧")
+        scaledBpm < scaledMax * 50L ->
+            HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_LOW, "低强度")
+        scaledBpm < scaledMax * 60L ->
+            HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_WARMUP, "热身")
+        scaledBpm < scaledMax * 70L ->
+            HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN, "燃脂")
+        scaledBpm < scaledMax * 80L ->
+            HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_AEROBIC, "有氧")
+        scaledBpm < scaledMax * 90L ->
+            HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC, "无氧")
         else -> HeartRateZoneResult(HeartRateFloatingCapsuleStatus.ZONE_LIMIT, "极限")
     }
 }

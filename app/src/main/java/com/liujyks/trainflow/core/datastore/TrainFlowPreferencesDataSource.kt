@@ -3,6 +3,7 @@ package com.liujyks.trainflow.core.datastore
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -35,6 +36,17 @@ class TrainFlowPreferencesDataSource(
                 storedPreferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier],
             bleHeartRateDeviceDisplayName =
                 storedPreferences[TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName],
+            heartRateManualSuppressed =
+                storedPreferences[TrainFlowPreferenceKeys.heartRateManualSuppressed] ?: false,
+            heartRateAgeYears = TrainFlowPreferences.sanitizeHeartRateAgeYears(
+                storedPreferences[TrainFlowPreferenceKeys.heartRateAgeYears]
+            ),
+            heartRatePersonalMaxBpm = TrainFlowPreferences.sanitizePersonalHeartRateBpm(
+                storedPreferences[TrainFlowPreferenceKeys.heartRatePersonalMaxBpm]
+            ),
+            heartRateAlertThresholdBpm = TrainFlowPreferences.sanitizePersonalHeartRateBpm(
+                storedPreferences[TrainFlowPreferenceKeys.heartRateAlertThresholdBpm]
+            ),
             uiSkinId = TrainFlowPreferences.sanitizeUiSkinId(
                 storedPreferences[TrainFlowPreferenceKeys.uiSkinId]
                     ?: TrainFlowPreferences.DEFAULT_UI_SKIN_ID
@@ -122,6 +134,7 @@ class TrainFlowPreferencesDataSource(
         dataStore.edit { preferences ->
             preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier] = identifier
             preferences[TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName] = displayName
+            preferences[TrainFlowPreferenceKeys.heartRateManualSuppressed] = false
         }
     }
 
@@ -129,6 +142,44 @@ class TrainFlowPreferencesDataSource(
         dataStore.edit { preferences ->
             preferences.remove(TrainFlowPreferenceKeys.bleHeartRateDeviceIdentifier)
             preferences.remove(TrainFlowPreferenceKeys.bleHeartRateDeviceDisplayName)
+        }
+    }
+
+    suspend fun setHeartRateManualSuppressed(suppressed: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TrainFlowPreferenceKeys.heartRateManualSuppressed] = suppressed
+        }
+    }
+
+    suspend fun setHeartRatePersonalParameters(
+        ageYears: Int?,
+        personalMaxHeartRateBpm: Int?,
+        alertThresholdBpm: Int?
+    ) {
+        dataStore.edit { preferences ->
+            preferences.putOrRemove(
+                TrainFlowPreferenceKeys.heartRateAgeYears,
+                TrainFlowPreferences.sanitizeHeartRateAgeYears(ageYears)
+            )
+            preferences.putOrRemove(
+                TrainFlowPreferenceKeys.heartRatePersonalMaxBpm,
+                TrainFlowPreferences.sanitizePersonalHeartRateBpm(personalMaxHeartRateBpm)
+            )
+            preferences.putOrRemove(
+                TrainFlowPreferenceKeys.heartRateAlertThresholdBpm,
+                TrainFlowPreferences.sanitizePersonalHeartRateBpm(alertThresholdBpm)
+            )
+        }
+    }
+
+    private fun <T> MutablePreferences.putOrRemove(
+        key: Preferences.Key<T>,
+        value: T?
+    ) {
+        if (value == null) {
+            remove(key)
+        } else {
+            this[key] = value
         }
     }
 }

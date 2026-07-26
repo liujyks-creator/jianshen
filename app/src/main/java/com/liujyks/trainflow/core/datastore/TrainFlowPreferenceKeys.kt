@@ -19,5 +19,9 @@ object TrainFlowPreferenceKeys {
         booleanPreferencesKey("show_disconnected_heart_rate_placeholder")
     val bleHeartRateDeviceIdentifier = stringPreferencesKey("ble_heart_rate_device_identifier")
     val bleHeartRateDeviceDisplayName = stringPreferencesKey("ble_heart_rate_device_display_name")
+    val heartRateManualSuppressed = booleanPreferencesKey("heart_rate_manual_suppressed")
+    val heartRateAgeYears = intPreferencesKey("heart_rate_age_years")
+    val heartRatePersonalMaxBpm = intPreferencesKey("heart_rate_personal_max_bpm")
+    val heartRateAlertThresholdBpm = intPreferencesKey("heart_rate_alert_threshold_bpm")
     val uiSkinId = stringPreferencesKey("ui_skin_id")
 }
