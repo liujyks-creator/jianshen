@@ -406,7 +406,7 @@ TrainFlow 是一款面向 Android 首发、未来计划适配 iOS 的训练计�
 
 #### FR-066 心率展示状态
 
-心率展示应使用用户能理解的事实语义，至少区分：心率已关闭、需要权限、蓝牙已关闭、未连接、已保存但未连接、自动恢复等待窗口、正在查找、未找到已保存设备、正在连接、已连接等待心率、live bpm、数据已中断、连接已断开和连接未成功。设置页必须分别提供“断开设备”“重新连接”“清除已保存设备”“关闭心率”：断开保留 opt-in、saved target 与个人参数并跨 process suppress，只有重新连接或选择目标解除；clear target 与 opt-out 不能互相冒充。
+心率展示应使用用户能理解的事实语义，至少区分：心率已关闭、需要权限、蓝牙已关闭、未连接、已保存但未连接、自动恢复等待窗口、正在查找、未找到已保存设备、正在连接、已连接等待心率、live bpm、数据已中断、连接已断开和连接未成功。其中自动恢复必须进一步区分“等待下一 bounded window”“正在查找 saved exact target”“单窗口未匹配但仍 armed、eligibility 成立时之后继续”，并与用户主动扫描的“正在扫描 / 本次未发现”结果分开；任何自动恢复状态都不得写成用户主动操作、手动停止或永久停止。设置页必须分别提供“断开设备”“重新连接”“清除已保存设备”“关闭心率”：断开保留 opt-in、saved target 与个人参数并跨 process suppress，只有重新连接或选择目标解除；clear target 与 opt-out 不能互相冒充。
 
 effective max 有效时显示六区间 + 数值，例如 `热身 · 105 bpm`、`有氧 · 139 bpm`；六区间固定为低强度、热身、燃脂、有氧、无氧、极限。合法 personal max 单独存在时，即使 age 缺失也按 personal max 计算六区间；personal max 缺失但合法 age-derived max 存在时，按 `220-age` 计算六区间；只有 `effectiveMax == none` 时才显示 bpm-only / 连接状态，不推导或伪造区间。`alertThreshold` 独立于 effective max 和六区间；严格 `bpm > alert` 时覆盖 presentation 并使用已冻结胶囊的超过上限视觉，相等不触发。超过上限不是区间输入或第七区间，也不触发医疗级告警、声音、震动、强制暂停或训练中断。
 
