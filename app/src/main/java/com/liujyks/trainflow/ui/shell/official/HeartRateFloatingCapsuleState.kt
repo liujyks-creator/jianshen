@@ -236,7 +236,8 @@ private fun heartRateReadingCapsuleUiState(
     overLimitThresholdBpm: Int?,
     forceCollapsed: Boolean
 ): HeartRateFloatingCapsuleUiState {
-    if (overLimitThresholdBpm != null && bpm > overLimitThresholdBpm) {
+    val alertThreshold = overLimitThresholdBpm?.takeIf { it in 30..260 }
+    if (alertThreshold != null && bpm > alertThreshold) {
         return stateCapsule(
             status = HeartRateFloatingCapsuleStatus.OVER_LIMIT,
             label = "超过上限 $bpm bpm",

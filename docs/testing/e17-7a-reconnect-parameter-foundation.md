@@ -19,7 +19,7 @@
 - BLE permission 当前合法。
 - Bluetooth 当前开启。
 - 不存在持久 manual suppression。
-- App 明确 visible，或 active/paused training 已合法具备 `connectedDevice` FGS eligibility。
+- App 明确 visible，或 active/paused training 的 `connectedDevice` FGS 已经合法建立并处于 active；仅“理论上可启动”不得传 true。
 
 任一条件缺失时输出 typed stop reason，并在 owner main looper 上取消 pending recovery、scan、attempt 和 GATT。自动恢复只匹配 exact identifier；名称和其他 HRS candidate 不得替代目标。
 

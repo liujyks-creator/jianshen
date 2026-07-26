@@ -146,9 +146,11 @@ class HeartRateFloatingCapsuleStateTest {
     fun alertIsIndependentStrictAndWorksWithoutEffectiveMaximum() {
         val equal = capsule(liveState(180), overLimit = 180)
         val exceeded = capsule(liveState(181), overLimit = 180)
+        val invalidLow = capsule(liveState(100), overLimit = 29)
 
         assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, equal.status)
         assertEquals(HeartRateFloatingCapsuleStatus.OVER_LIMIT, exceeded.status)
+        assertEquals(HeartRateFloatingCapsuleStatus.BPM_ONLY, invalidLow.status)
     }
 
     @Test

@@ -351,7 +351,7 @@ class HeartRateRuntimeOwnerRecoveryTest {
         bluetoothEnabled = true,
         manuallySuppressed = false,
         appVisible = true,
-        activeTrainingFgsEligible = false
+        activeTrainingFgsActive = false
     )
 
     private fun scanResult(address: String, name: String): ScanResult {

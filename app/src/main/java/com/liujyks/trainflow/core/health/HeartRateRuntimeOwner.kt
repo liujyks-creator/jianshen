@@ -92,7 +92,7 @@ internal class HeartRateRuntimeOwner(
         bluetoothEnabled = false,
         manuallySuppressed = false,
         appVisible = false,
-        activeTrainingFgsEligible = false
+        activeTrainingFgsActive = false
     )
     private var enabled = false
     private var operationEligible = false
@@ -229,7 +229,7 @@ internal class HeartRateRuntimeOwner(
         operationEligible = false
         recoveryEligibilityInput = recoveryEligibilityInput.copy(
             appVisible = false,
-            activeTrainingFgsEligible = false
+            activeTrainingFgsActive = false
         )
         cancelRecovery()
         publishRecovery(

@@ -22,7 +22,7 @@ class HeartRateRecoveryPolicyTest {
                 HeartRateRecoveryStopReason.BLUETOOTH_OFF,
             baseline.copy(manuallySuppressed = true) to
                 HeartRateRecoveryStopReason.MANUAL_SUPPRESSION,
-            baseline.copy(appVisible = false, activeTrainingFgsEligible = false) to
+            baseline.copy(appVisible = false, activeTrainingFgsActive = false) to
                 HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS
         )
 
@@ -37,7 +37,7 @@ class HeartRateRecoveryPolicyTest {
     fun activeTrainingFgsEligibilityCanReplaceForegroundVisibilityOnly() {
         val input = eligibleInput().copy(
             appVisible = false,
-            activeTrainingFgsEligible = true
+            activeTrainingFgsActive = true
         )
 
         val decision = evaluateHeartRateRecoveryEligibility(input)
@@ -73,7 +73,7 @@ class HeartRateRecoveryPolicyTest {
                                         bluetoothEnabled = bluetooth,
                                         manuallySuppressed = suppressed,
                                         appVisible = visible,
-                                        activeTrainingFgsEligible = fgs
+                                        activeTrainingFgsActive = fgs
                                     )
                                     val expected = optedIn && hasTarget && permission &&
                                         bluetooth && !suppressed && (visible || fgs)
@@ -99,7 +99,7 @@ class HeartRateRecoveryPolicyTest {
         bluetoothEnabled = true,
         manuallySuppressed = false,
         appVisible = true,
-        activeTrainingFgsEligible = false
+        activeTrainingFgsActive = false
     )
 
     private companion object {

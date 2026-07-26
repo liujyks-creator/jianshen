@@ -7,7 +7,7 @@ internal data class HeartRateRecoveryEligibilityInput(
     val bluetoothEnabled: Boolean,
     val manuallySuppressed: Boolean,
     val appVisible: Boolean,
-    val activeTrainingFgsEligible: Boolean
+    val activeTrainingFgsActive: Boolean
 )
 
 internal enum class HeartRateRecoveryStopReason {
@@ -57,7 +57,7 @@ internal fun evaluateHeartRateRecoveryEligibility(
         target == null -> HeartRateRecoveryStopReason.NO_SAVED_TARGET
         !input.permissionGranted -> HeartRateRecoveryStopReason.PERMISSION_UNAVAILABLE
         !input.bluetoothEnabled -> HeartRateRecoveryStopReason.BLUETOOTH_OFF
-        !input.appVisible && !input.activeTrainingFgsEligible ->
+        !input.appVisible && !input.activeTrainingFgsActive ->
             HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS
         else -> null
     }
