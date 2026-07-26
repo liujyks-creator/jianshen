@@ -213,6 +213,71 @@ class HeartRateRuntimeOwnerRecoveryTest {
     }
 
     @Test
+    fun changingSavedTargetDuringRecoveryScanRejectsOldTargetAndRestartsForNewTarget() {
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        val oldCallback = shadowScanner.scanCallbacks.single()
+
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryEligibility(
+                eligibleInput().copy(savedTargetIdentifier = SECOND_TARGET)
+            )
+        )
+        idleMain()
+
+        assertEquals(1, shadowScanner.scanCallbacks.size)
+        val newCallback = shadowScanner.scanCallbacks.single()
+        assertFalse(oldCallback === newCallback)
+        assertEquals(SECOND_TARGET, owner.recoveryState.value.targetIdentifier)
+
+        val oldTarget = scanResult(TARGET, "Old target")
+        oldCallback.onScanResult(0, oldTarget)
+        idleMain()
+        assertTrue(
+            Shadow.extract<ShadowBluetoothDevice>(requireNotNull(oldTarget.device))
+                .bluetoothGatts.isEmpty()
+        )
+
+        val newTarget = scanResult(SECOND_TARGET, "New target")
+        newCallback.onScanResult(0, newTarget)
+        idleMain()
+        assertEquals(
+            1,
+            Shadow.extract<ShadowBluetoothDevice>(requireNotNull(newTarget.device))
+                .bluetoothGatts.size
+        )
+    }
+
+    @Test
+    fun repeatedEligibleContextKeepsCurrentRecoveryWindowAndExactTarget() {
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        val callback = shadowScanner.scanCallbacks.single()
+
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+
+        assertEquals(HeartRateRecoveryPhase.SEARCHING, owner.recoveryState.value.phase)
+        assertEquals(TARGET, owner.recoveryState.value.targetIdentifier)
+        assertEquals(1, shadowScanner.scanCallbacks.size)
+        assertTrue(callback === shadowScanner.scanCallbacks.single())
+    }
+
+    @Test
+    fun invalidManualTargetDoesNotReplaceArmedRecoveryTarget() {
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+
+        owner.submit(HeartRateRuntimeAction.Connect("AA:BB:CC:DD:EE:00"))
+        idleMain()
+
+        idleFor(SCAN_WINDOW_MS + RECOVERY_INTERVAL_MS)
+        assertEquals(TARGET, owner.recoveryState.value.targetIdentifier)
+        assertEquals(HeartRateRecoveryPhase.SEARCHING, owner.recoveryState.value.phase)
+        assertEquals(1, shadowScanner.scanCallbacks.size)
+    }
+
+    @Test
     fun unexpectedDisconnectAndScanFailureKeepRecoveryArmed() {
         owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
         idleMain()

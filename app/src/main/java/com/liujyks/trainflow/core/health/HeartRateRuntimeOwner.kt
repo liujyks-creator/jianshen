@@ -366,6 +366,20 @@ internal class HeartRateRuntimeOwner(
         enabled = true
         operationEligible = true
         val target = requireNotNull(decision.targetIdentifier)
+        val scan = activeScan
+        if (scan?.origin == ScanOrigin.RECOVERY) {
+            if (scan.recoveryTargetIdentifier == target) {
+                cancelRecovery()
+                publishRecovery(
+                    HeartRateRecoveryState(
+                        phase = HeartRateRecoveryPhase.SEARCHING,
+                        targetIdentifier = target
+                    )
+                )
+                return
+            }
+            if (!detachAndStopActiveScan()) return
+        }
         val attempt = activeAttempt
         if (attempt != null && attempt.targetIdentifier == target) {
             cancelRecovery()
@@ -615,11 +629,6 @@ internal class HeartRateRuntimeOwner(
             return
         }
         if (!operationEligible) return
-        recoveryEligibilityInput = recoveryEligibilityInput.copy(
-            savedTargetIdentifier = identifier,
-            manuallySuppressed = false
-        )
-        cancelRecovery()
         val device = candidateDevices[identifier]
         val candidate = mutableCandidates.value.firstOrNull { it.identifier == identifier }
         if (device == null || candidate == null) {
@@ -633,6 +642,11 @@ internal class HeartRateRuntimeOwner(
             }
             return
         }
+        recoveryEligibilityInput = recoveryEligibilityInput.copy(
+            savedTargetIdentifier = identifier,
+            manuallySuppressed = false
+        )
+        cancelRecovery()
         if (!hasRequiredPermissions()) {
             cleanup(HeartRateRuntimeFact.PermissionRequired(sourceForIdentifier(identifier)))
             return
