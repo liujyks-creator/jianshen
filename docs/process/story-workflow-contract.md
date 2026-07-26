@@ -13,7 +13,7 @@ The accepted root templates are mandatory role skeletons:
 
 | Role | Template |
 |---|---|
-| Manager | `MAIN_CONTROL_RESTART_PROMPT_TEMPLATE.md` |
+| Manager, Preflight, Validator, Device Prep | `MAIN_CONTROL_RESTART_PROMPT_TEMPLATE.md` |
 | Writer or Repair Writer | `DEV_STORY_PROMPT_TEMPLATE.md` |
 | Fresh Reviewer | `CODE_REVIEW_PROMPT_TEMPLATE.md` |
 
@@ -22,7 +22,7 @@ the role packet must be rendered from the complete accepted template and
 contain:
 
 ```text
-TEMPLATE_BOUND; template=<root template>; accepted template commit=<full SHA>; accepted template blob=<full blob SHA>; role=<role>; base=<full SHA>; candidate=<full SHA|unborn>
+TEMPLATE_BOUND; packet_version=2; template_path=<root template>; accepted template commit=<full SHA>; accepted template blob=<full blob SHA>; role=<MANAGER|PREFLIGHT|WRITER|REPAIR_WRITER|VALIDATOR|REVIEWER|DEVICE_PREP>; base=<full SHA>; candidate=<full SHA|unborn>
 ```
 
 The role echoes that exact line to the manager before acting. The manager
@@ -30,7 +30,7 @@ verifies the named template blob at the accepted commit. A missing field,
 mismatch, unverified echo, abbreviated SHA, or free-hand packet is a
 fail-closed `BLOCKED` result and cannot acquire an execution lease.
 
-Template binding is version identity, not authority. Every packet must still
+The packet also carries `verified_template_blob` equal to `template_blob`, a non-empty `role_lease_operation`, and a positive `role_lease_max_minutes`; these validation fields are not duplicated in the echo. Template binding is version identity, not authority. Every packet must still
 fill all template fields, including immutable requirements, scope,
 permissions, evidence, role budget/tool timeouts, and terminal schema.
 
@@ -51,20 +51,23 @@ The minimum schema is:
 ```json
 {
   "schema_version": 2,
-  "workflow_id": "stable identifier",
+  "workflow_id": "stable real-task identifier",
   "phase": "PREFLIGHT",
   "binding": {
+    "packet_version": 2,
     "mode": "TEMPLATE_BOUND",
-    "template": "DEV_STORY_PROMPT_TEMPLATE.md",
+    "template_path": "MAIN_CONTROL_RESTART_PROMPT_TEMPLATE.md",
     "template_commit": "40 hex",
     "template_blob": "40 hex",
-    "role": "WRITER",
+    "verified_template_blob": "same 40 hex",
+    "role": "PREFLIGHT",
     "base": "40 hex",
     "candidate": "unborn or 40 hex",
-    "echoed": true,
-    "verified": true
+    "role_lease_operation": "bounded operation",
+    "role_lease_max_minutes": 90,
+    "echo": "exact TEMPLATE_BOUND line"
   },
-  "base_sha": "40 hex",
+  "base_sha": "same 40 hex as binding.base",
   "candidate_sha": null,
   "role": "PREFLIGHT",
   "attempt": 1,
@@ -72,37 +75,28 @@ The minimum schema is:
   "audited_scope": [],
   "unaudited_scope": ["all"],
   "validation_attestations": [],
-  "liveness": {
-    "role_lease": {
-      "status": "ACTIVE",
-      "acquired_at": "RFC 3339",
-      "expires_at": "RFC 3339",
-      "basis": "accepted role budget/tool timeout",
-      "renewal_used": false
-    },
-    "operation_lease": null,
-    "external_wait": null,
-    "qualifying_window_count": 0,
-    "last_report_at": "RFC 3339"
+  "role_execution_lease": null,
+  "heartbeat": {
+    "deadline": null,
+    "miss_count": 0,
+    "nudges_sent": 0,
+    "last_action": "NONE",
+    "explicit_external_wait": false
   },
-  "process_flow": {
-    "events": [],
-    "issues": {}
-  },
+  "long_operation_lease": null,
+  "process_issues": {},
   "health": "HEALTHY",
   "human_gate": null,
-  "timestamps": {
-    "created_at": "RFC 3339",
-    "updated_at": "RFC 3339"
-  }
+  "timestamps": {"updated_at": "RFC 3339"}
 }
 ```
 
 Finding entries include stable ID, severity, violated contract, evidence,
 causal repair direction, verification state, status, closed candidate SHA,
-and remaining reason. Attestations include candidate SHA, exact command,
-environment/toolchain, artifact identity, result, timestamps, and evidence
-location.
+and remaining reason. Each validation attestation uses one five-part identity:
+candidate SHA, exact command, environment/toolchain, artifact identity, and
+attestation/result identity. It also records `evidence_status=PRESENT`,
+`inputs_rebuilt=false`, `disputed=false`, timestamps, and evidence location.
 
 Bootstrap and resume fail closed:
 
@@ -115,7 +109,7 @@ Bootstrap and resume fail closed:
    not replayed;
 5. continue only the recorded next legal transition.
 
-Missing, unreadable, inconsistent, or incomplete state is `BLOCKED`. Recovery
+Before any lease or transition, schema validation requires a known phase/role, complete timestamps, `ledger.role == binding.role`, `ledger.base_sha == binding.base`, and consistent candidate identity. Missing, unreadable, inconsistent, or incomplete state is `BLOCKED`. Recovery
 resumes the approved atomic Story from the ledger, Git, disk, and persisted
 evidence. It never reconstructs the Story from conversational memory,
 restarts completed work, or decomposes the Story to solve a timing problem.
@@ -166,10 +160,10 @@ attestation.
 Attestation reuse identity is exactly:
 
 ```text
-candidate SHA + command + environment/toolchain + artifact identity
+candidate SHA + command + environment/toolchain + artifact identity + attestation/result identity
 ```
 
-Reuse only a successful attestation whose four dimensions are byte-for-byte
+Reuse only a successful attestation whose five identity dimensions are byte-for-byte
 identical and whose evidence still exists. Invalidation occurs when any
 dimension changes, a command runs under a different environment, an artifact
 is rebuilt or replaced, an input affecting the artifact changes, evidence is
@@ -183,7 +177,7 @@ Review. The Reviewer completes every acceptance criterion and named risk axis
 still feasible, records exact `audited_scope` and `unaudited_scope`, and
 continues discovering independent findings.
 
-Reviewer terminal schema includes:
+A terminal first validates the complete ledger and is accepted only while the ledger phase is active `REVIEW` with a matching Reviewer binding. Reviewer terminal schema includes:
 
 ```text
 status: PASS | CHANGES_REQUESTED | REVIEW_BLOCKED | NEEDS_USER | BUDGET_EXHAUSTED
@@ -202,9 +196,9 @@ Process Flow Report: mandatory terminal section
 ```
 
 `PASS` requires all three verdicts PASS, all coverage markers true,
-`full_finding_set: true`, and no blocking findings. `CHANGES_REQUESTED`
-requires the same complete coverage/full-set markers and the complete
-verified open-finding set. An incomplete Review, `REVIEW_BLOCKED`,
+`full_finding_set: true`, empty `unaudited_scope`, and no blocking findings. `CHANGES_REQUESTED`
+requires at least one failing verdict, the same complete coverage/full-set markers, and the complete
+verified open blocking-finding set. PASS must have none. The status, three verdicts, and open findings must reconcile. An incomplete Review, `REVIEW_BLOCKED`,
 `NEEDS_USER`, or `BUDGET_EXHAUSTED` cannot trigger Repair or integration.
 
 ### Repair
@@ -249,8 +243,7 @@ LONG_OPERATION_LEASE operation=<exact command> max=<declared tool timeout>
 ```
 
 This sublease extends only that command and cannot exceed its declared tool
-timeout. Completion or expiry returns control to the remaining role lease or
-the qualifying-window sequence.
+timeout. Completion or expiry returns control to an active remaining role lease with counters reset; it enters the qualifying-window sequence only when the role lease is also missing/expired or an explicit external unchanged wait is active.
 
 The two-minute silence-window protocol starts only when:
 
@@ -274,14 +267,12 @@ The approved packet may bind a 60/90 minute or longer role lease when the role
 budget and tool timeouts justify it. A one-hour implementation or Review
 remains one atomic role and reports at natural phase boundaries; it is not
 forced into two-minute heartbeats or smaller tasks. At role-lease expiry, the
-manager may renew it once only when the role supplies concrete immutable
-progress evidence recorded in the ledger. Without that evidence, or after the
+manager may renew it once only when the role supplies concrete immutable progress evidence recorded as a full candidate, commit, or evidence SHA in the ledger. Without that evidence, or after the
 single renewal expires, the qualifying silence-window sequence begins.
 
 Record `HEARTBEAT_NO_REPORT_WITHOUT_LEASE` only when an active role is silent
 in a qualifying state without a valid lease. Its initial follow-up is
-`PENDING_REAL_TASK`. On a later real task, the same signature becomes
-`RECURRENCE_CONFIRMED`. Do not create a separate smoothness task.
+`PENDING_REAL_TASK`. Only a later distinct real `workflow_id` with the same signature becomes `RECURRENCE_CONFIRMED`; duplicate reports inside the same workflow stay `PENDING_REAL_TASK`. Do not create a separate smoothness task.
 
 ## Mandatory Process Flow Report
 
