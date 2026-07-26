@@ -99,11 +99,13 @@ Documentation：
 
 - Accepted base：`57075700fe6754de1d1cd6dbc062ad985aa34f5a`
 - Foundation commit：`2e11f3c7928a97b6c144caa7ed039cde57dd223d`（`Add heart-rate recovery and personal parameter foundation`）
-- Target-transition Repair / final executable source SHA：`f425945ea8cc63568528c5d76b45d6e814f924b3`
+- Target-transition Repair：`f425945ea8cc63568528c5d76b45d6e814f924b3`
 - Target-transition commit：`Protect exact recovery target transitions`
+- Final review-repair / executable source SHA：`86154679df8fe86cdbf88184baf382c7373df20b`
+- Final review-repair commit：`Tighten recovery and alert contracts`
 - Branch：`codex/e17-7a-reconnect-parameter-foundation-v2`
 - Debug APK bytes：`14780298`
-- Debug APK SHA256：`F42A5A0039FCFB363BC3B5DE6F73A3B3FEFE83AD8792121F801A5652F9AE75B0`
+- Debug APK SHA256：`F5DCB3AC00D27EBB34FAAC7251FE01C6542D7EF4FEFCDD2DEC83A68CDD64D1D9`
 - Variant/applicationId：`debug` / `com.liujyks.trainflow`
 
 APK 只证明 implementation source 的 build identity。由于新 owner 尚未 production/debug 接线，本 Story 不安装 APK、不运行 AVD/Band 9，也不宣称自动恢复已在用户 App 中可见。设备行为证据属于 E17-7b 和 E17-9。
@@ -116,14 +118,16 @@ APK 只证明 implementation source 的 build identity。由于新 owner 尚未 
 - owner/policy/DataStore/presentation expanded focused：`83 / 0 / 0 / 0`
 - `*HeartRate*`：21 suites，`146 / 0 / 0 / 0`
 - 全量 `:app:testDebugUnitTest`：78 suites，`768 / 0 / 0 / 0`
-- final source `:app:assembleDebug --rerun-tasks`：通过，5分2秒
+- final source `:app:assembleDebug --rerun-tasks`：通过，1分50秒
 - final source `:app:lintDebug -Dkotlin.incremental=false`：通过，0 errors、35 warnings、16 hints，5分56秒
-- final source `:app:check`：通过，27秒
+- final source `:app:check`：通过，2分56秒
 - `git diff --check` 与 staged diff check：通过
 
 命令外层的 60/120 秒等待窗口曾先返回，但同一 Gradle/Java 进程持续有 CPU 活动；没有重复启动任务。最终结果从 JUnit XML、Gradle daemon log、lint report 和 APK artifact读取。长耗时来自强制全量 Kotlin/Android lint，而不是重复验证、阶段回退或任务死循环。
 
-提交前 fresh diff self-review 发现 target-transition 竞态：进行中的 A recovery scan 在 saved target 改为 B 后仍可能连接 A；无效手动 identifier 也可能在 candidate 验证前污染后续 recovery target。三个新测试先分别失败，再由 `f425945...` 修复。该 executable 变化使前一 `2e11f3c...` APK 身份失效，因此最终 APK、lint 和 check 均从 `f425945...` 重新生成/验证。
+提交前 fresh diff self-review 发现 target-transition 竞态：进行中的 A recovery scan 在 saved target 改为 B 后仍可能连接 A；无效手动 identifier 也可能在 candidate 验证前污染后续 recovery target。三个新测试先分别失败，再由 `f425945...` 修复。该 executable 变化使前一 `2e11f3c...` APK 身份失效；随后 final review-repair 又使 `f425945...` APK失效。
+
+直接复审随后关闭两项边界：提醒阈值只有在 `30..260` 内才参与 strict alert；training background 输入改名为 `activeTrainingFgsActive`，明确只有已经合法建立且 active 的 FGS 才能替代前台可见性，“理论上可启动”不能授权后台 scan/connect。最终 executable、APK 与 check 已重新绑定 `8615467...`；前述 `f425945...` APK 因 executable tree 不同，不作为最终等价证据。
 
 ## 9. E17-7b 交接
 
