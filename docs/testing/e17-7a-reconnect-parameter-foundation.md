@@ -64,6 +64,9 @@ DataStore 新增：
 - bounded windows、间隔和长期 armed。
 - wrong candidate 不连接，exact target 自动连接。
 - saved target 改变时关闭旧 attempt，再恢复新 target。
+- recovery scan 期间 target 从 A 改为 B 时立即失效旧 callback，旧 A 不能连接，B 使用新 window。
+- 重复提交相同 eligible context 不重启 scan、不把 `SEARCHING` 错写为 waiting。
+- 无效手动 target 在 candidate 验证前不得替换 owner 内已 armed 的 exact target。
 - unexpected status 19 disconnect、scan failure 后继续 armed。
 - permission TOCTOU fail-closed，不形成恢复循环。
 - queued eligibility loss 在平台动作前取消恢复。
@@ -95,11 +98,12 @@ Documentation：
 ## 7. Git 与 executable identity
 
 - Accepted base：`57075700fe6754de1d1cd6dbc062ad985aa34f5a`
-- Implementation source SHA：`2e11f3c7928a97b6c144caa7ed039cde57dd223d`
-- Implementation commit：`Add heart-rate recovery and personal parameter foundation`
+- Foundation commit：`2e11f3c7928a97b6c144caa7ed039cde57dd223d`（`Add heart-rate recovery and personal parameter foundation`）
+- Target-transition Repair / final executable source SHA：`f425945ea8cc63568528c5d76b45d6e814f924b3`
+- Target-transition commit：`Protect exact recovery target transitions`
 - Branch：`codex/e17-7a-reconnect-parameter-foundation-v2`
 - Debug APK bytes：`14780298`
-- Debug APK SHA256：`F68660FA3E55477710FF8A5CF3C1D5D5380263FF3DB28BA20CFE78FDF764B57E`
+- Debug APK SHA256：`F42A5A0039FCFB363BC3B5DE6F73A3B3FEFE83AD8792121F801A5652F9AE75B0`
 - Variant/applicationId：`debug` / `com.liujyks.trainflow`
 
 APK 只证明 implementation source 的 build identity。由于新 owner 尚未 production/debug 接线，本 Story 不安装 APK、不运行 AVD/Band 9，也不宣称自动恢复已在用户 App 中可见。设备行为证据属于 E17-7b 和 E17-9。
@@ -108,16 +112,18 @@ APK 只证明 implementation source 的 build identity。由于新 owner 尚未 
 
 环境：Temurin JDK 17.0.19、Gradle 9.4.1、Kotlin 2.3.21。
 
-- recovery policy + owner focused：`13 / 0 / 0 / 0`
-- owner/policy/DataStore/presentation expanded focused：`80 / 0 / 0 / 0`
-- `*HeartRate*`：21 suites，`143 / 0 / 0 / 0`
-- 全量 `:app:testDebugUnitTest`：78 suites，`765 / 0 / 0 / 0`
-- `:app:assembleDebug --rerun-tasks`：通过，4分47秒
-- `:app:lintDebug -Dkotlin.incremental=false`：通过，0 errors、35 warnings、16 hints，7分41秒
-- `:app:check`：通过，46秒
+- recovery policy + owner focused：`16 / 0 / 0 / 0`
+- owner/policy/DataStore/presentation expanded focused：`83 / 0 / 0 / 0`
+- `*HeartRate*`：21 suites，`146 / 0 / 0 / 0`
+- 全量 `:app:testDebugUnitTest`：78 suites，`768 / 0 / 0 / 0`
+- final source `:app:assembleDebug --rerun-tasks`：通过，5分2秒
+- final source `:app:lintDebug -Dkotlin.incremental=false`：通过，0 errors、35 warnings、16 hints，5分56秒
+- final source `:app:check`：通过，27秒
 - `git diff --check` 与 staged diff check：通过
 
 命令外层的 60/120 秒等待窗口曾先返回，但同一 Gradle/Java 进程持续有 CPU 活动；没有重复启动任务。最终结果从 JUnit XML、Gradle daemon log、lint report 和 APK artifact读取。长耗时来自强制全量 Kotlin/Android lint，而不是重复验证、阶段回退或任务死循环。
+
+提交前 fresh diff self-review 发现 target-transition 竞态：进行中的 A recovery scan 在 saved target 改为 B 后仍可能连接 A；无效手动 identifier 也可能在 candidate 验证前污染后续 recovery target。三个新测试先分别失败，再由 `f425945...` 修复。该 executable 变化使前一 `2e11f3c...` APK 身份失效，因此最终 APK、lint 和 check 均从 `f425945...` 重新生成/验证。
 
 ## 9. E17-7b 交接
 
