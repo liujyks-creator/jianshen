@@ -97,6 +97,7 @@ git credential-manager github list
 本仓库文本文件统一按 UTF-8 读取和写入。Windows PowerShell 默认编码可能导致中文文档显示乱码或写入 BOM，因此每次新会话读取中文 Markdown、Kotlin、Gradle、JSON 或其他文本文件前，先设置：
 
 ```powershell
+chcp 65001 > $null
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
