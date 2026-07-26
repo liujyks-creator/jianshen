@@ -21,6 +21,10 @@ class TrainingPreferencesAppMapperTest {
             heartRateDisplayEnabled = true,
             bleHeartRateDeviceIdentifier = "D8:F0:42:01:90:D7",
             bleHeartRateDeviceDisplayName = "HUAWEI Band HR-OD7",
+            heartRateManualSuppressed = true,
+            heartRateAgeYears = 101,
+            heartRatePersonalMaxBpm = 188,
+            heartRateAlertThresholdBpm = 181,
             uiSkinId = "tile_flow"
         )
         val state = preferences.toTrainingPreferencesScreenState()
@@ -32,8 +36,12 @@ class TrainingPreferencesAppMapperTest {
         assertEquals("已开启", state.heartRateSettings.statusLabel)
         assertEquals("D8:F0:42:01:90:D7", state.heartRateSettings.savedDeviceIdentifier)
         assertEquals("HUAWEI Band HR-OD7", state.heartRateSettings.savedDeviceDisplayName)
+        assertEquals(true, state.heartRateSettings.manualSuppressed)
+        assertEquals(101, state.heartRateSettings.ageYears)
+        assertEquals(188, state.heartRateSettings.personalMaxHeartRateBpm)
+        assertEquals(181, state.heartRateSettings.alertThresholdBpm)
         assertEquals(
-            "已保存设备：HUAWEI Band HR-OD7。保存设备不代表它在附近、正在广播、正在连接或已连接。",
+            "已保存设备：HUAWEI Band HR-OD7。你已断开设备，当前不会自动恢复。",
             state.heartRateSettings.sourceSummary
         )
         assertEquals("tile_flow", state.selectedUiSkinId)

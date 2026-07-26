@@ -47,11 +47,9 @@ internal sealed class HeartRateRuntimeAction {
 }
 
 /**
- * E17-6 deterministic BLE runtime owner.
- *
- * This class intentionally has no production composition-root consumer yet. E17-7 performs the
- * atomic production switch. Until then, tests instantiate this owner directly while the legacy
- * provider remains the only production-reachable BLE owner.
+ * Deterministic BLE runtime owner introduced in E17-6 and activated as the single
+ * Application-scoped production owner in E17-7b. Activities, Compose, and debug tools may observe
+ * state or submit actions, but cannot own BLE resources.
  */
 @SuppressLint("MissingPermission")
 internal class HeartRateRuntimeOwner(

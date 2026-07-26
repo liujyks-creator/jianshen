@@ -25,10 +25,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.PermissionPrivacySection
@@ -61,7 +66,10 @@ internal fun SettingsRoute(
     onStartHeartRateDeviceScan: () -> Unit,
     onStopHeartRateDeviceScan: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit,
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit,
     onClearHeartRateDevicePreference: () -> Unit,
+    onHeartRatePersonalParametersChanged: (Int?, Int?, Int?) -> Unit,
     onUiSkinChanged: (String) -> Unit,
     heartRateFocusRequestKey: Int = 0,
     modifier: Modifier = Modifier
@@ -120,7 +128,10 @@ internal fun SettingsRoute(
                 onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
                 onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
                 onSelectHeartRateDevice = onSelectHeartRateDevice,
-                onClearHeartRateDevicePreference = onClearHeartRateDevicePreference
+                onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                onReconnectHeartRateDevice = onReconnectHeartRateDevice,
+                onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
+                onHeartRatePersonalParametersChanged = onHeartRatePersonalParametersChanged
             )
         }
 
@@ -250,7 +261,10 @@ private fun HeartRatePreferencesCard(
     onStartHeartRateDeviceScan: () -> Unit,
     onStopHeartRateDeviceScan: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit,
-    onClearHeartRateDevicePreference: () -> Unit
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit,
+    onClearHeartRateDevicePreference: () -> Unit,
+    onHeartRatePersonalParametersChanged: (Int?, Int?, Int?) -> Unit
 ) {
     SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.focus) {
         SectionTitle(text = uiState.sectionTitle)
@@ -265,10 +279,14 @@ private fun HeartRatePreferencesCard(
                 title = "连接状态：${uiState.devicePickerState.connectionStatusLabel}",
                 body = uiState.sourceSummary
             )
+            StatusBlock(
+                title = uiState.recoveryPresentation.title,
+                body = uiState.connectionIntentCopy
+            )
             uiState.savedDeviceDisplayName?.let { displayName ->
                 StatusBlock(
                     title = "已保存设备：$displayName",
-                    body = "保存设备仅供你主动连接，不代表设备在附近、已开启广播、正在连接或已经连接。"
+                    body = "已保存设备用于满足条件时自动恢复精确目标，也可手动重连；不代表设备在附近、已开启广播、正在连接或已经连接。"
                 )
             }
         }
@@ -298,6 +316,70 @@ private fun HeartRatePreferencesCard(
             onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
             onSelectHeartRateDevice = onSelectHeartRateDevice
         )
+        if (uiState.enabled && uiState.savedDeviceIdentifier != null) {
+            OutlinedButton(
+                enabled = uiState.canDisconnect,
+                onClick = onDisconnectHeartRateDevice,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = "断开心率设备")
+            }
+            Text(
+                text = uiState.disconnectActionCopy,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral700
+            )
+            Button(
+                enabled = uiState.canReconnect,
+                onClick = onReconnectHeartRateDevice,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = "重新连接")
+            }
+        }
+        if (uiState.enabled) {
+            OptionalHeartRateNumberField(
+                label = "年龄（1–130，可选）",
+                value = uiState.ageYears,
+                range = 1..130,
+                onValidValue = { age ->
+                    onHeartRatePersonalParametersChanged(
+                        age,
+                        uiState.personalMaxHeartRateBpm,
+                        uiState.alertThresholdBpm
+                    )
+                }
+            )
+            OptionalHeartRateNumberField(
+                label = "个人最大心率（30–260，可选）",
+                value = uiState.personalMaxHeartRateBpm,
+                range = 30..260,
+                onValidValue = { personalMax ->
+                    onHeartRatePersonalParametersChanged(
+                        uiState.ageYears,
+                        personalMax,
+                        uiState.alertThresholdBpm
+                    )
+                }
+            )
+            OptionalHeartRateNumberField(
+                label = "上限提醒（30–260，可选）",
+                value = uiState.alertThresholdBpm,
+                range = 30..260,
+                onValidValue = { alert ->
+                    onHeartRatePersonalParametersChanged(
+                        uiState.ageYears,
+                        uiState.personalMaxHeartRateBpm,
+                        alert
+                    )
+                }
+            )
+            Text(
+                text = "区间优先使用个人最大心率；未填写时才使用 220 − 年龄。区间为低强度、热身、燃脂、有氧、无氧、极限，仅作非医疗训练参考。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+        }
         StatusBlock(title = "显示用途", body = uiState.purposeCopy)
         StatusBlock(title = "记录边界", body = uiState.recordingBoundaryCopy)
         StatusBlock(title = "隐私说明", body = uiState.privacyCopy)
@@ -316,8 +398,60 @@ private fun HeartRatePreferencesCard(
             ) {
                 Text(text = "清除已保存设备")
             }
+            Text(
+                text = uiState.clearDeviceActionCopy,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral700
+            )
+        }
+        if (uiState.enabled) {
+            OutlinedButton(
+                onClick = { onHeartRateDisplayEnabledChanged(false) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = "关闭心率功能")
+            }
+            Text(
+                text = uiState.optOutActionCopy,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral700
+            )
         }
     }
+}
+
+@Composable
+private fun OptionalHeartRateNumberField(
+    label: String,
+    value: Int?,
+    range: IntRange,
+    onValidValue: (Int?) -> Unit
+) {
+    var text by remember(value) { mutableStateOf(value?.toString().orEmpty()) }
+    val parsed = text.toIntOrNull()
+    val invalid = text.isNotBlank() && parsed !in range
+    OutlinedTextField(
+        value = text,
+        onValueChange = { next ->
+            if (next.length <= 3 && next.all(Char::isDigit)) {
+                text = next
+                val nextValue = next.toIntOrNull()
+                if (next.isBlank() || nextValue in range) {
+                    onValidValue(nextValue)
+                }
+            }
+        },
+        label = { Text(label) },
+        supportingText = {
+            if (invalid) {
+                Text("请输入 ${range.first}–${range.last}，或留空。")
+            }
+        },
+        isError = invalid,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -589,7 +723,10 @@ private fun SettingsRoutePreview() {
             onStartHeartRateDeviceScan = {},
             onStopHeartRateDeviceScan = {},
             onSelectHeartRateDevice = {},
+            onDisconnectHeartRateDevice = {},
+            onReconnectHeartRateDevice = {},
             onClearHeartRateDevicePreference = {},
+            onHeartRatePersonalParametersChanged = { _, _, _ -> },
             onUiSkinChanged = {}
         )
     }

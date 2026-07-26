@@ -23,7 +23,11 @@ internal fun TrainFlowPreferences.toTrainingPreferencesScreenState(): TrainingPr
         heartRateSettings = heartRateSettingsUiState(
             enabled = heartRateDisplayEnabled,
             savedDeviceIdentifier = bleHeartRateDeviceIdentifier,
-            savedDeviceDisplayName = bleHeartRateDeviceDisplayName
+            savedDeviceDisplayName = bleHeartRateDeviceDisplayName,
+            manualSuppressed = heartRateManualSuppressed,
+            ageYears = heartRateAgeYears,
+            personalMaxHeartRateBpm = heartRatePersonalMaxBpm,
+            alertThresholdBpm = heartRateAlertThresholdBpm
         ),
         selectedUiSkinId = skin.id,
         uiSkinOptions = uiSkinPreferenceOptionsFromRegistry(skin.id)

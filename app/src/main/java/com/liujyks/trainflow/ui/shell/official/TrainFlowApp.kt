@@ -25,7 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -44,11 +43,18 @@ import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.health.BleHeartRatePermissionPlanner
 import com.liujyks.trainflow.core.health.BleHeartRatePermissionTrigger
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
+import com.liujyks.trainflow.core.health.BleHeartRateDeviceCandidate
+import com.liujyks.trainflow.core.health.BleHeartRateScanState
 import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
-import com.liujyks.trainflow.core.health.AndroidHeartRateDeviceScanner
+import com.liujyks.trainflow.core.health.HeartRateRecoveryState
+import com.liujyks.trainflow.core.health.HeartRateRecoveryPhase
+import com.liujyks.trainflow.core.health.HeartRateRecoveryStopReason
+import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
+import com.liujyks.trainflow.core.health.toHeartRateState
 import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.HeartRateState
+import com.liujyks.trainflow.core.model.HeartRateFact
 import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
 import com.liujyks.trainflow.core.notifications.resolvePlanReminderPermissionState
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
@@ -74,6 +80,7 @@ import com.liujyks.trainflow.feature.settings.StrengthSetTimerModePreference
 import com.liujyks.trainflow.feature.settings.TrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.settings.defaultTrainingPreferencesScreenState
 import com.liujyks.trainflow.feature.settings.heartRateDevicePickerUiState
+import com.liujyks.trainflow.feature.settings.heartRateSettingsUiState
 import com.liujyks.trainflow.feature.settings.prepareBlePermissionRationale
 import com.liujyks.trainflow.feature.settings.resolveHeartRateBlePermissionStatus
 import com.liujyks.trainflow.feature.settings.savedDeviceReconnectCandidateIdentifier
@@ -88,6 +95,13 @@ internal fun TrainFlowApp(
     workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
     workoutSessions: List<WorkoutSession> = emptyList(),
     trainingPreferencesState: TrainingPreferencesScreenState = defaultTrainingPreferencesScreenState(),
+    heartRateState: HeartRateState = HeartRateRuntimeFact.Disabled.toHeartRateState(),
+    heartRateScanState: BleHeartRateScanState = BleHeartRateScanState.idle(),
+    heartRateDeviceCandidates: List<BleHeartRateDeviceCandidate> = emptyList(),
+    heartRateRecoveryState: HeartRateRecoveryState = HeartRateRecoveryState.disarmed(
+        HeartRateRecoveryStopReason.OPTED_OUT
+    ),
+    appVisible: Boolean = false,
     planEditorDefaults: PlanEditorDefaults = PlanEditorDefaults(),
     onSaveWorkoutPlan: (WorkoutPlan) -> Unit = {},
     onDeleteWorkoutPlan: (String) -> Unit = {},
@@ -104,7 +118,13 @@ internal fun TrainFlowApp(
     onStrengthSetTimerModeChanged: (StrengthSetTimerModePreference) -> Unit = {},
     onHeartRateDisplayEnabledChanged: (Boolean) -> Unit = {},
     onSaveHeartRateDevicePreference: (String, String) -> Unit = { _, _ -> },
+    onStartHeartRateDeviceScan: () -> Unit = {},
+    onStopHeartRateDeviceScan: () -> Unit = {},
+    onDisconnectHeartRateDevice: () -> Unit = {},
+    onReconnectHeartRateDevice: () -> Unit = {},
     onClearHeartRateDevicePreference: () -> Unit = {},
+    onHeartRatePersonalParametersChanged: (Int?, Int?, Int?) -> Unit = { _, _, _ -> },
+    onHeartRateEnvironmentChanged: () -> Unit = {},
     onUiSkinChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -117,21 +137,17 @@ internal fun TrainFlowApp(
     var heartRatePermissionRefreshKey by rememberSaveable {
         mutableStateOf(0)
     }
-    val heartRateDeviceScanner = remember(context) {
-        AndroidHeartRateDeviceScanner(context.applicationContext)
+    var pendingHeartRatePermissionAction by rememberSaveable {
+        mutableStateOf(PendingHeartRatePermissionAction.NONE)
     }
-    val heartRateProviderState by heartRateDeviceScanner.providerState.collectAsState()
-    val heartRateScanState by heartRateDeviceScanner.scanState.collectAsState()
-    val heartRateLiveState = heartRateProviderState.toHeartRateState()
-    val heartRateDeviceCandidates by heartRateDeviceScanner.candidates.collectAsState()
     var heartRateScanFinishedWithoutDevices by rememberSaveable {
         mutableStateOf(false)
     }
     var heartRateScanPurpose by rememberSaveable {
         mutableStateOf(HeartRateDeviceScanPurpose.NONE)
     }
-    var savedDeviceReconnectNotFound by rememberSaveable {
-        mutableStateOf(false)
+    var lastCompletedHeartRateScanPurpose by rememberSaveable {
+        mutableStateOf(HeartRateDeviceScanPurpose.NONE)
     }
     var heartRateSettingsFocusRequestKey by rememberSaveable {
         mutableStateOf(0)
@@ -145,28 +161,32 @@ internal fun TrainFlowApp(
         allPermissionsGranted = allHeartRateBlePermissionsGranted,
         requestResult = heartRateBlePermissionStatus
     )
+    val preferenceHeartRateState = trainingPreferencesState.heartRateSettings
     val settingsState = trainingPreferencesState.copy(
-        heartRateSettings = trainingPreferencesState.heartRateSettings.copy(
+        heartRateSettings = heartRateSettingsUiState(
+            enabled = heartRateDisplayEnabled,
+            savedDeviceIdentifier = preferenceHeartRateState.savedDeviceIdentifier,
+            savedDeviceDisplayName = preferenceHeartRateState.savedDeviceDisplayName,
+            manualSuppressed = preferenceHeartRateState.manualSuppressed,
+            ageYears = preferenceHeartRateState.ageYears,
+            personalMaxHeartRateBpm = preferenceHeartRateState.personalMaxHeartRateBpm,
+            alertThresholdBpm = preferenceHeartRateState.alertThresholdBpm,
+            appVisible = appVisible,
             blePermissionStatus = resolvedHeartRateBlePermissionStatus,
-            devicePickerState = heartRateDevicePickerUiState(
-                displayEnabled = heartRateDisplayEnabled,
-                blePermissionStatus = resolvedHeartRateBlePermissionStatus,
-                providerState = heartRateProviderState,
-                scanState = heartRateScanState,
-                scannerCandidates = heartRateDeviceCandidates,
-                savedDeviceIdentifier = trainingPreferencesState.heartRateSettings.savedDeviceIdentifier,
-                savedDeviceDisplayName = trainingPreferencesState.heartRateSettings.savedDeviceDisplayName,
-                scanFinishedWithoutDevices = heartRateScanFinishedWithoutDevices,
-                savedDeviceReconnectNotFound = savedDeviceReconnectNotFound,
-                scanPurpose = heartRateScanPurpose
-            )
+            heartRateState = heartRateState,
+            recoveryState = heartRateRecoveryState,
+            scanState = heartRateScanState,
+            scannerCandidates = heartRateDeviceCandidates,
+            scanFinishedWithoutDevices = heartRateScanFinishedWithoutDevices,
+            scanPurpose = heartRateScanPurpose,
+            lastCompletedScanPurpose = lastCompletedHeartRateScanPurpose
         )
     )
     val heartRateBlePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         val requiredPermissions = BleHeartRatePermissionPlanner.requiredPermissions()
-        heartRateBlePermissionStatus = resolveHeartRateBlePermissionRequestResult(
+        val resolvedStatus = resolveHeartRateBlePermissionRequestResult(
             requiredPermissions = requiredPermissions,
             requestResult = result,
             allPermissionsCurrentlyGranted = context.arePermissionsGranted(requiredPermissions),
@@ -175,7 +195,17 @@ internal fun TrainFlowApp(
                 requestResult = result
             )
         )
+        heartRateBlePermissionStatus = resolvedStatus
         heartRatePermissionRefreshKey += 1
+        onHeartRateEnvironmentChanged()
+        if (shouldResumeHeartRatePermissionAction(
+                pendingAction = pendingHeartRatePermissionAction,
+                permissionStatus = resolvedStatus
+            )
+        ) {
+            onReconnectHeartRateDevice()
+        }
+        pendingHeartRatePermissionAction = PendingHeartRatePermissionAction.NONE
     }
     var currentDestination by rememberSaveable {
         mutableStateOf(OfficialShellDestination.TRAINING)
@@ -220,41 +250,14 @@ internal fun TrainFlowApp(
                 HeartRateBlePermissionStatus.NOT_REQUESTED
             else -> heartRateBlePermissionStatus
         }
+        pendingHeartRatePermissionAction = pendingHeartRatePermissionActionAfterDisplayChange(
+            displayEnabled = heartRateDisplayEnabled,
+            pendingAction = pendingHeartRatePermissionAction
+        )
     }
 
-    LaunchedEffect(currentDestination, heartRateDisplayEnabled, resolvedHeartRateBlePermissionStatus) {
-        if (
-            currentDestination == OfficialShellDestination.SETTINGS &&
-            heartRateDisplayEnabled &&
-            resolvedHeartRateBlePermissionStatus == HeartRateBlePermissionStatus.GRANTED
-        ) {
-            heartRateDeviceScanner.refreshAvailability()
-        } else if (!heartRateDisplayEnabled || resolvedHeartRateBlePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
-            heartRateDeviceScanner.stopScan()
-            heartRateScanFinishedWithoutDevices = false
-            heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
-            savedDeviceReconnectNotFound = false
-        }
-    }
-
-    LaunchedEffect(
-        heartRateDisplayEnabled,
-        resolvedHeartRateBlePermissionStatus,
-        heartRateProviderState.kind
-    ) {
-        when (
-            heartRateLiveProviderLifecycleAction(
-                displayEnabled = heartRateDisplayEnabled,
-                blePermissionStatus = resolvedHeartRateBlePermissionStatus,
-                providerStateKind = heartRateProviderState.kind
-            )
-        ) {
-            HeartRateLiveProviderLifecycleAction.CONNECT_SELECTED_DEVICE ->
-                heartRateDeviceScanner.connectSelectedDevice()
-            HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT ->
-                heartRateDeviceScanner.stopAndDisconnect()
-            HeartRateLiveProviderLifecycleAction.NONE -> Unit
-        }
+    LaunchedEffect(heartRateDisplayEnabled, allHeartRateBlePermissionsGranted) {
+        onHeartRateEnvironmentChanged()
     }
 
     LaunchedEffect(
@@ -264,7 +267,10 @@ internal fun TrainFlowApp(
         trainingPreferencesState.heartRateSettings.savedDeviceIdentifier
     ) {
         if (
-            heartRateScanPurpose == HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE &&
+            shouldConsumeManualSavedDeviceScanMatch(
+                scanPurpose = heartRateScanPurpose,
+                recoveryPhase = heartRateRecoveryState.phase
+            ) &&
             heartRateScanState.kind == BleHeartRateScanStateKind.SCANNING
         ) {
             val matchedIdentifier = savedDeviceReconnectCandidateIdentifier(
@@ -272,9 +278,14 @@ internal fun TrainFlowApp(
                 candidates = heartRateDeviceCandidates
             )
             if (matchedIdentifier != null) {
+                val matchedCandidate = heartRateDeviceCandidates.first { candidate ->
+                    candidate.identifier == matchedIdentifier
+                }
                 heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
-                savedDeviceReconnectNotFound = false
-                heartRateDeviceScanner.selectDevice(matchedIdentifier)
+                onSaveHeartRateDevicePreference(
+                    matchedIdentifier,
+                    matchedCandidate.displayName
+                )
                 return@LaunchedEffect
             }
         }
@@ -284,34 +295,68 @@ internal fun TrainFlowApp(
         when (heartRateScanState.kind) {
             BleHeartRateScanStateKind.SCANNING -> {
                 heartRateScanFinishedWithoutDevices = false
-            }
-
-            BleHeartRateScanStateKind.STOPPED -> {
-                heartRateScanFinishedWithoutDevices = heartRateCandidateCount == 0
-                if (heartRateScanPurpose == HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE) {
-                    savedDeviceReconnectNotFound = savedDeviceReconnectCandidateIdentifier(
-                        savedDeviceIdentifier = trainingPreferencesState.heartRateSettings.savedDeviceIdentifier,
-                        candidates = heartRateDeviceCandidates
-                    ) == null
-                    heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+                if (heartRateScanPurpose == HeartRateDeviceScanPurpose.NONE) {
+                    lastCompletedHeartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
                 }
             }
 
+            BleHeartRateScanStateKind.STOPPED -> {
+                if (heartRateScanPurpose != HeartRateDeviceScanPurpose.NONE) {
+                    lastCompletedHeartRateScanPurpose = heartRateScanPurpose
+                    heartRateScanFinishedWithoutDevices = heartRateCandidateCount == 0
+                }
+                heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+            }
+
             BleHeartRateScanStateKind.ERROR,
+            -> {
+                heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+            }
+
             BleHeartRateScanStateKind.IDLE -> Unit
         }
     }
 
+    LaunchedEffect(
+        heartRateDisplayEnabled,
+        appVisible,
+        heartRateState.fact
+    ) {
+        if (
+            shouldInvalidateHeartRateScanIntent(
+                displayEnabled = heartRateDisplayEnabled,
+                appVisible = appVisible,
+                fact = heartRateState.fact
+            )
+        ) {
+            heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+            heartRateScanFinishedWithoutDevices = false
+        }
+    }
+
     LaunchedEffect(currentDestination) {
-        if (currentDestination != OfficialShellDestination.SETTINGS) {
-            heartRateDeviceScanner.stopScan()
+        if (
+            currentDestination != OfficialShellDestination.SETTINGS &&
+            heartRateScanPurpose != HeartRateDeviceScanPurpose.NONE
+        ) {
+            onStopHeartRateDeviceScan()
             heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
         }
     }
 
-    DisposableEffect(heartRateDeviceScanner) {
-        onDispose {
-            heartRateDeviceScanner.close()
+    LaunchedEffect(
+        heartRateDisplayEnabled,
+        allHeartRateBlePermissionsGranted,
+        pendingHeartRatePermissionAction
+    ) {
+        if (
+            heartRateDisplayEnabled &&
+            allHeartRateBlePermissionsGranted &&
+            pendingHeartRatePermissionAction == PendingHeartRatePermissionAction.RECONNECT
+        ) {
+            pendingHeartRatePermissionAction = PendingHeartRatePermissionAction.NONE
+            onHeartRateEnvironmentChanged()
+            onReconnectHeartRateDevice()
         }
     }
 
@@ -438,8 +483,17 @@ internal fun TrainFlowApp(
                     onVibrationEnabledChanged = onVibrationEnabledChanged,
                     onEmphasisAnimationEnabledChanged = onEmphasisAnimationEnabledChanged,
                     onStrengthSetTimerModeChanged = onStrengthSetTimerModeChanged,
-                    onHeartRateDisplayEnabledChanged = onHeartRateDisplayEnabledChanged,
+                    onHeartRateDisplayEnabledChanged = { enabled ->
+                        if (!enabled) {
+                            pendingHeartRatePermissionAction =
+                                PendingHeartRatePermissionAction.NONE
+                            heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+                            heartRateScanFinishedWithoutDevices = false
+                        }
+                        onHeartRateDisplayEnabledChanged(enabled)
+                    },
                     onPrepareHeartRateBlePermission = {
+                        pendingHeartRatePermissionAction = PendingHeartRatePermissionAction.NONE
                         if (
                             settingsState.heartRateSettings.blePermissionStatus ==
                             HeartRateBlePermissionStatus.PERMANENTLY_DENIED
@@ -466,6 +520,16 @@ internal fun TrainFlowApp(
                             if (missingPermissions.isEmpty()) {
                                 heartRateBlePermissionStatus = HeartRateBlePermissionStatus.GRANTED
                                 heartRatePermissionRefreshKey += 1
+                                onHeartRateEnvironmentChanged()
+                                if (shouldResumeHeartRatePermissionAction(
+                                        pendingAction = pendingHeartRatePermissionAction,
+                                        permissionStatus = HeartRateBlePermissionStatus.GRANTED
+                                    )
+                                ) {
+                                    onReconnectHeartRateDevice()
+                                }
+                                pendingHeartRatePermissionAction =
+                                    PendingHeartRatePermissionAction.NONE
                             } else {
                                 heartRateBlePermissionLauncher.launch(missingPermissions.toTypedArray())
                             }
@@ -474,38 +538,69 @@ internal fun TrainFlowApp(
                     onStartHeartRateDeviceScan = {
                         if (settingsState.heartRateSettings.devicePickerState.canStartScan) {
                             heartRateScanFinishedWithoutDevices = false
-                            savedDeviceReconnectNotFound = false
+                            lastCompletedHeartRateScanPurpose =
+                                HeartRateDeviceScanPurpose.NONE
                             heartRateScanPurpose = when {
                                 trainingPreferencesState.heartRateSettings.savedDeviceIdentifier != null &&
-                                    heartRateProviderState.kind != BleHeartRateProviderStateKind.LIVE_BPM ->
+                                    heartRateState.fact != com.liujyks.trainflow.core.model.HeartRateFact.LIVE ->
                                     HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE
-                                heartRateProviderState.kind == BleHeartRateProviderStateKind.LIVE_BPM ->
+                                heartRateState.fact == com.liujyks.trainflow.core.model.HeartRateFact.LIVE ->
                                     HeartRateDeviceScanPurpose.SCAN_OTHER_DEVICES
                                 else -> HeartRateDeviceScanPurpose.SCAN_DEVICES
                             }
-                            heartRateDeviceScanner.startScan()
+                            onStartHeartRateDeviceScan()
                         }
                     },
                     onStopHeartRateDeviceScan = {
                         heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
-                        heartRateDeviceScanner.stopScan()
+                        onStopHeartRateDeviceScan()
                         heartRateScanFinishedWithoutDevices = false
-                        savedDeviceReconnectNotFound = false
                     },
                     onSelectHeartRateDevice = { identifier ->
-                        val selection = heartRateDeviceScanner.selectDevice(identifier)
-                        val fallback = heartRateDeviceCandidates.firstOrNull { candidate ->
+                        val selected = heartRateDeviceCandidates.firstOrNull { candidate ->
                             candidate.identifier == identifier
                         }
-                        val displayName = selection?.displayName ?: fallback?.displayName
-                        if (displayName != null) {
-                            onSaveHeartRateDevicePreference(identifier, displayName)
+                        if (selected != null) {
+                            onSaveHeartRateDevicePreference(identifier, selected.displayName)
                         }
                         heartRateScanFinishedWithoutDevices = false
-                        savedDeviceReconnectNotFound = false
                         heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
                     },
-                    onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
+                    onDisconnectHeartRateDevice = {
+                        pendingHeartRatePermissionAction =
+                            PendingHeartRatePermissionAction.NONE
+                        heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+                        heartRateScanFinishedWithoutDevices = false
+                        onDisconnectHeartRateDevice()
+                    },
+                    onReconnectHeartRateDevice = {
+                        when (settingsState.heartRateSettings.blePermissionStatus) {
+                            HeartRateBlePermissionStatus.GRANTED ->
+                                onReconnectHeartRateDevice()
+                            HeartRateBlePermissionStatus.PERMANENTLY_DENIED -> {
+                                pendingHeartRatePermissionAction =
+                                    PendingHeartRatePermissionAction.RECONNECT
+                                context.openTrainFlowAppSettings()
+                            }
+                            else -> {
+                                pendingHeartRatePermissionAction =
+                                    PendingHeartRatePermissionAction.RECONNECT
+                                heartRateBlePermissionStatus = settingsState
+                                    .heartRateSettings
+                                    .prepareBlePermissionRationale()
+                                    .blePermissionStatus
+                            }
+                        }
+                    },
+                    onClearHeartRateDevicePreference = {
+                        pendingHeartRatePermissionAction =
+                            PendingHeartRatePermissionAction.NONE
+                        heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
+                        heartRateScanFinishedWithoutDevices = false
+                        onClearHeartRateDevicePreference()
+                    },
+                    onHeartRatePersonalParametersChanged =
+                        onHeartRatePersonalParametersChanged,
                     onUiSkinChanged = onUiSkinChanged,
                     heartRateFocusRequestKey = heartRateSettingsFocusRequestKey,
                     modifier = Modifier.padding(innerPadding)
@@ -680,7 +775,12 @@ internal fun TrainFlowApp(
                 HeartRateFloatingCapsuleOverlay(
                     uiState = heartRateFloatingCapsuleUiState(
                         settings = settingsState.heartRateSettings,
-                        liveState = heartRateLiveState
+                        liveState = heartRateState,
+                        userAgeYears = settingsState.heartRateSettings.ageYears,
+                        personalMaxHeartRateBpm =
+                            settingsState.heartRateSettings.personalMaxHeartRateBpm,
+                        overLimitThresholdBpm =
+                            settingsState.heartRateSettings.alertThresholdBpm
                     ),
                     exclusionPolicy = shellState.heartRateCapsuleExclusionPolicy(),
                     onOpenHeartRateSettings = {
@@ -691,31 +791,6 @@ internal fun TrainFlowApp(
                 )
             }
         }
-    }
-}
-
-internal enum class HeartRateLiveProviderLifecycleAction {
-    NONE,
-    CONNECT_SELECTED_DEVICE,
-    STOP_AND_DISCONNECT
-}
-
-internal fun heartRateLiveProviderLifecycleAction(
-    displayEnabled: Boolean,
-    blePermissionStatus: HeartRateBlePermissionStatus,
-    providerStateKind: BleHeartRateProviderStateKind
-): HeartRateLiveProviderLifecycleAction {
-    if (!displayEnabled || blePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
-        return HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT
-    }
-    return when (providerStateKind) {
-        BleHeartRateProviderStateKind.DEVICE_SELECTED ->
-            HeartRateLiveProviderLifecycleAction.CONNECT_SELECTED_DEVICE
-        BleHeartRateProviderStateKind.PERMISSION_REQUIRED,
-        BleHeartRateProviderStateKind.BLUETOOTH_DISABLED,
-        BleHeartRateProviderStateKind.UNAVAILABLE ->
-            HeartRateLiveProviderLifecycleAction.STOP_AND_DISCONNECT
-        else -> HeartRateLiveProviderLifecycleAction.NONE
     }
 }
 
@@ -774,6 +849,51 @@ internal fun resolveHeartRateBlePermissionRequestResult(
         hasPermanentlyDeniedPermissions -> HeartRateBlePermissionStatus.PERMANENTLY_DENIED
         else -> HeartRateBlePermissionStatus.DENIED
     }
+}
+
+internal enum class PendingHeartRatePermissionAction {
+    NONE,
+    RECONNECT
+}
+
+internal fun shouldResumeHeartRatePermissionAction(
+    pendingAction: PendingHeartRatePermissionAction,
+    permissionStatus: HeartRateBlePermissionStatus
+): Boolean {
+    return pendingAction == PendingHeartRatePermissionAction.RECONNECT &&
+        permissionStatus == HeartRateBlePermissionStatus.GRANTED
+}
+
+internal fun pendingHeartRatePermissionActionAfterDisplayChange(
+    displayEnabled: Boolean,
+    pendingAction: PendingHeartRatePermissionAction
+): PendingHeartRatePermissionAction {
+    return if (displayEnabled) pendingAction else PendingHeartRatePermissionAction.NONE
+}
+
+internal fun shouldConsumeManualSavedDeviceScanMatch(
+    scanPurpose: HeartRateDeviceScanPurpose,
+    recoveryPhase: HeartRateRecoveryPhase
+): Boolean {
+    return scanPurpose == HeartRateDeviceScanPurpose.CONNECT_SAVED_DEVICE &&
+        recoveryPhase != HeartRateRecoveryPhase.SEARCHING
+}
+
+internal fun shouldInvalidateHeartRateScanIntent(
+    displayEnabled: Boolean,
+    appVisible: Boolean,
+    fact: HeartRateFact?
+): Boolean {
+    return !displayEnabled ||
+        !appVisible ||
+        fact in setOf(
+            HeartRateFact.DISABLED,
+            HeartRateFact.PERMISSION_REQUIRED,
+            HeartRateFact.BLUETOOTH_OFF,
+            HeartRateFact.LINK_DISCONNECTED,
+            HeartRateFact.TECHNICAL_FAILURE,
+            HeartRateFact.INTENTIONAL_STOP
+        )
 }
 
 private tailrec fun Context.findActivity(): Activity? {

@@ -1,9 +1,5 @@
 package com.liujyks.trainflow.ui.shell.official
 
-import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
-import com.liujyks.trainflow.core.health.BleHeartRateProviderState
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
-import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
 import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
 import com.liujyks.trainflow.core.health.HeartRateSourceHint
 import com.liujyks.trainflow.core.health.toHeartRateState
@@ -87,6 +83,8 @@ class HeartRateFloatingCapsuleStateTest {
         assertEquals(HeartRateFloatingCapsuleStatus.SAVED_DEVICE, state.status)
         assertEquals("未连接", state.collapsedLabel)
         assertFalse(allCopy.contains(rawIdentifier))
+        assertTrue(allCopy.contains("自动恢复"))
+        assertFalse(allCopy.contains("仅供主动连接"))
     }
 
     @Test
@@ -199,14 +197,9 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun malformedCompatibilityOutcomeFailsClosedWithoutCachedReadingOrErrorCopy() {
-        val mapped = BleHeartRateProviderState(
-            kind = BleHeartRateProviderStateKind.ERROR,
-            message = "raw parse failure",
-            selectedDevice = BleHeartRateDeviceSelection("id", "Band"),
-            bpm = 88,
-            measuredAt = "2026-07-19T13:16:04Z",
-            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+    fun interruptedOutcomeFailsClosedWithoutCachedReadingOrErrorCopy() {
+        val mapped = HeartRateRuntimeFact.DataInterrupted(
+            HeartRateSourceHint(identifier = "id", displayName = "Band")
         ).toHeartRateState()
         val state = capsule(mapped)
         val copy = buildString {

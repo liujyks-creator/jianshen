@@ -17,6 +17,27 @@ class HeartRateSettingsActionVisualBoundaryTest {
         assertFalse(source.contains("TextButton(onClick = onStopHeartRateDeviceScan)"))
         assertFalse(source.contains("TextButton(\n                enabled = uiState.canStartScan"))
         assertFalse(source.contains("TextButton(onClick = { onSelectHeartRateDevice(device.identifier) })"))
+        assertTrue(source.contains("断开心率设备"))
+        assertTrue(source.contains("重新连接"))
+        assertTrue(source.contains("清除已保存设备"))
+        assertTrue(source.contains("关闭心率功能"))
+        assertTrue(source.contains("个人最大心率"))
+        assertTrue(source.contains("年龄"))
+        assertTrue(source.contains("上限提醒"))
+    }
+
+    @Test
+    fun productionShellDoesNotConstructLegacyBleOwners() {
+        val shellSource = File(
+            "src/main/java/com/liujyks/trainflow/ui/shell/official/TrainFlowApp.kt"
+        ).readText()
+        val applicationSource = File(
+            "src/main/java/com/liujyks/trainflow/app/TrainFlowApplication.kt"
+        ).readText()
+
+        assertFalse(shellSource.contains("AndroidHeartRateDeviceScanner"))
+        assertFalse(shellSource.contains("AndroidBleHeartRateProvider"))
+        assertTrue(applicationSource.contains("HeartRateRuntimeOwner("))
     }
 
     @Test
