@@ -175,7 +175,14 @@ internal data class HeartRateSettingsUiState(
                     "更换设备"
                 )
             )
-            manualSuppressed -> savedTargetActions(primaryLabel = "重新连接")
+            manualSuppressed && savedDeviceIdentifier != null ->
+                savedTargetActions(primaryLabel = "重新连接")
+            manualSuppressed -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.CHANGE_DEVICE,
+                    "扫描并选择设备"
+                )
+            )
             heartRateState.fact in setOf(
                 HeartRateFact.CONNECTING,
                 HeartRateFact.WAITING_FIRST_DATA,
@@ -214,7 +221,7 @@ internal data class HeartRateSettingsUiState(
 
     val connectionIntentCopy: String
         get() = if (savedDeviceIdentifier == null) {
-            recoveryPresentation.body
+            "尚未保存心率设备。请扫描并选择设备后连接。"
         } else if (manualSuppressed) {
             "已手动断开：保留设备与个人参数，但重启、回前台、蓝牙或权限恢复都不会自动恢复。"
         } else {

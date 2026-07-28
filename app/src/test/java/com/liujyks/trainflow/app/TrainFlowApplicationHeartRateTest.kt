@@ -1,6 +1,10 @@
 package com.liujyks.trainflow.app
 
+import android.Manifest
+import android.bluetooth.BluetoothManager
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import com.liujyks.trainflow.core.health.HeartRateRecoveryPhase
 import com.liujyks.trainflow.core.model.HeartRateFact
@@ -17,8 +21,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.Shadows.shadowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -135,15 +141,36 @@ class TrainFlowApplicationHeartRateTest {
     }
 
     @Test
-    fun changeDeviceClearsManualSuppressionBeforeStartingManualScan() = runBlocking {
+    fun changeDeviceClearsSuppressionAndStartsFiniteManualDeviceSelectionScan() = runBlocking {
         val application =
             ApplicationProvider.getApplicationContext<TrainFlowApplication>()
+        shadowOf(application).grantPermissions(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
+        shadowOf(
+            application.getSystemService(BluetoothManager::class.java).adapter
+        ).setEnabled(true)
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(ProcessVisibilityFact.VISIBLE, application.processVisibility.value)
+        application.setHeartRateEnabled(true)
         application.preferencesDataSource.setHeartRateManualSuppressed(true)
 
         application.changeHeartRateDevice()
+        shadowOf(Looper.getMainLooper()).idle()
 
         assertFalse(
             application.preferencesDataSource.preferences.first().heartRateManualSuppressed
         )
+        assertEquals(
+            "fact=${application.heartRateRuntimeOwner.heartRateState.value.fact} " +
+                "recovery=${application.heartRateRuntimeOwner.recoveryState.value}",
+            BleHeartRateScanStateKind.SCANNING,
+            application.heartRateRuntimeOwner.scanState.value.kind
+        )
+        application.stopManualHeartRateScan()
+        shadowOf(Looper.getMainLooper()).idle()
+        activity.close()
     }
 }

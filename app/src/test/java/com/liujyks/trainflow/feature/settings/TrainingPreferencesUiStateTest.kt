@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.health.BleHeartRateScanState
 import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import com.liujyks.trainflow.core.health.HeartRateRecoveryPhase
 import com.liujyks.trainflow.core.health.HeartRateRecoveryState
+import com.liujyks.trainflow.core.health.HeartRateRecoveryStopReason
 import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
 import com.liujyks.trainflow.core.health.toHeartRateState
 import org.junit.Assert.assertEquals
@@ -131,7 +132,10 @@ class TrainingPreferencesUiStateTest {
             savedDeviceDisplayName = "HUAWEI Band HR-OD7",
             manualSuppressed = true,
             blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
-            appVisible = true
+            appVisible = true,
+            recoveryState = HeartRateRecoveryState.disarmed(
+                HeartRateRecoveryStopReason.MANUAL_SUPPRESSION
+            )
         )
 
         assertEquals("重新连接", state.primaryConnectionAction?.label)
@@ -263,6 +267,53 @@ class TrainingPreferencesUiStateTest {
         assertFalse(state.connectionIntentCopy.contains("保留设备"))
         assertFalse(state.canReconnect)
         assertFalse(state.canDisconnect)
+    }
+
+    @Test
+    fun clearedTargetWithPersistedSuppressionOffersExecutableDeviceSelectionInsteadOfReconnect() {
+        val state = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceIdentifier = null,
+            savedDeviceDisplayName = null,
+            manualSuppressed = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            appVisible = true
+        )
+
+        assertEquals(
+            listOf(HeartRateSettingsAction.CHANGE_DEVICE),
+            state.visibleConnectionActions.map { it.action }
+        )
+        assertEquals("扫描并选择设备", state.primaryConnectionAction?.label)
+        assertFalse(
+            state.visibleConnectionActions.any {
+                it.action == HeartRateSettingsAction.RECONNECT
+            }
+        )
+        assertEquals(null, state.secondaryConnectionAction)
+        assertEquals(
+            "尚未保存心率设备。请扫描并选择设备后连接。",
+            state.connectionIntentCopy
+        )
+    }
+
+    @Test
+    fun clearedTargetSelectionActionDispatchesToChangeDeviceFlow() {
+        val invoked = mutableListOf<String>()
+
+        dispatchHeartRateSettingsAction(
+            action = HeartRateSettingsAction.CHANGE_DEVICE,
+            onPrepareHeartRateBlePermission = { invoked += "permission" },
+            onRequestHeartRateBlePermission = { invoked += "request" },
+            onStartHeartRateDeviceScan = { invoked += "saved-scan" },
+            onChangeHeartRateDevice = { invoked += "change-device-scan" },
+            onStopHeartRateDeviceScan = { invoked += "stop" },
+            onOpenBluetoothSettings = { invoked += "bluetooth-settings" },
+            onDisconnectHeartRateDevice = { invoked += "disconnect" },
+            onReconnectHeartRateDevice = { invoked += "reconnect" }
+        )
+
+        assertEquals(listOf("change-device-scan"), invoked)
     }
 
     @Test

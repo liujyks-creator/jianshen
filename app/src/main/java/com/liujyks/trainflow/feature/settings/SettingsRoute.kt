@@ -454,7 +454,7 @@ private fun HeartRateConnectionActions(
     }
 }
 
-private fun dispatchHeartRateSettingsAction(
+internal fun dispatchHeartRateSettingsAction(
     action: HeartRateSettingsAction,
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,

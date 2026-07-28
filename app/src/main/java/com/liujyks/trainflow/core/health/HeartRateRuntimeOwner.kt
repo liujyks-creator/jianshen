@@ -416,6 +416,9 @@ internal class HeartRateRuntimeOwner(
             HeartRateRecoveryStopReason.NO_SAVED_TARGET -> {
                 enabled = true
                 operationEligible = true
+                if (activeScan?.origin == ScanOrigin.MANUAL) {
+                    return
+                }
                 cleanup(
                     requestedFact = HeartRateRuntimeFact.NotConnected(),
                     permissionLossOverridesFact = false
