@@ -119,6 +119,7 @@ internal fun TrainFlowApp(
     onHeartRateDisplayEnabledChanged: (Boolean) -> Unit = {},
     onSaveHeartRateDevicePreference: (String, String) -> Unit = { _, _ -> },
     onStartHeartRateDeviceScan: () -> Unit = {},
+    onChangeHeartRateDevice: () -> Unit = {},
     onStopHeartRateDeviceScan: () -> Unit = {},
     onDisconnectHeartRateDevice: () -> Unit = {},
     onReconnectHeartRateDevice: () -> Unit = {},
@@ -551,10 +552,20 @@ internal fun TrainFlowApp(
                             onStartHeartRateDeviceScan()
                         }
                     },
+                    onChangeHeartRateDevice = {
+                        heartRateScanFinishedWithoutDevices = false
+                        lastCompletedHeartRateScanPurpose =
+                            HeartRateDeviceScanPurpose.NONE
+                        heartRateScanPurpose = HeartRateDeviceScanPurpose.SCAN_DEVICES
+                        onChangeHeartRateDevice()
+                    },
                     onStopHeartRateDeviceScan = {
                         heartRateScanPurpose = HeartRateDeviceScanPurpose.NONE
                         onStopHeartRateDeviceScan()
                         heartRateScanFinishedWithoutDevices = false
+                    },
+                    onOpenBluetoothSettings = {
+                        context.openBluetoothSettings()
                     },
                     onSelectHeartRateDevice = { identifier ->
                         val selected = heartRateDeviceCandidates.firstOrNull { candidate ->
@@ -822,6 +833,12 @@ private fun Context.openTrainFlowAppSettings() {
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.fromParts("package", packageName, null)
     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    startActivity(intent)
+}
+
+private fun Context.openBluetoothSettings() {
+    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     startActivity(intent)
 }
 

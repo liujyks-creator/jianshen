@@ -37,7 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -57,8 +60,6 @@ import com.liujyks.trainflow.ui.theme.TrainFlowError
 import com.liujyks.trainflow.ui.theme.TrainFlowFocus
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral900
 import kotlin.math.roundToInt
 
 internal enum class HeartRateCapsuleExclusionPolicy {
@@ -234,7 +235,12 @@ private fun HeartRateFloatingCapsule(
     compactExpanded: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val tone = uiState.status.toneColor()
+    val tone = uiState.status.heartRateCapsuleAccentColor()
+    val background = heartRateCapsuleBackgroundColor(
+        status = uiState.status,
+        surface = MaterialTheme.colorScheme.surface
+    )
+    val foreground = heartRateCapsuleForegroundColor(background)
     val expandedMaxWidth = if (compactExpanded) 252.dp else 276.dp
     val expandedMaxHeight = if (compactExpanded) 190.dp else 214.dp
     Surface(
@@ -245,9 +251,18 @@ private fun HeartRateFloatingCapsule(
             .semantics {
                 contentDescription = "心率胶囊：${uiState.collapsedLabel}"
                 role = Role.Button
+            }
+            .drawWithContent {
+                drawContent()
+                if (uiState.status.usesZoneTint()) {
+                    drawRect(
+                        color = tone,
+                        size = Size(width = 4.dp.toPx(), height = size.height)
+                    )
+                }
             },
         shape = RoundedCornerShape(if (expanded) 20.dp else 999.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        color = background,
         border = BorderStroke(1.dp, tone.copy(alpha = 0.42f)),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp
@@ -273,7 +288,7 @@ private fun HeartRateFloatingCapsule(
                     text = uiState.collapsedLabel,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = TrainFlowNeutral900,
+                    color = foreground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -283,19 +298,20 @@ private fun HeartRateFloatingCapsule(
                     text = uiState.detailTitle,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = TrainFlowNeutral900,
+                    color = foreground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 HeartRateCapsuleInfoGrid(
                     tiles = uiState.infoTiles,
                     compact = compactExpanded,
-                    tone = tone
+                    tone = tone,
+                    foreground = foreground
                 )
                 Text(
                     text = uiState.detailBody,
                     style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral700,
+                    color = foreground.copy(alpha = 0.78f),
                     maxLines = if (compactExpanded) 1 else 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -308,7 +324,8 @@ private fun HeartRateFloatingCapsule(
 private fun HeartRateCapsuleInfoGrid(
     tiles: List<HeartRateFloatingCapsuleInfoTile>,
     compact: Boolean,
-    tone: Color
+    tone: Color,
+    foreground: Color
 ) {
     val displayTiles = if (tiles.size >= 4) {
         tiles.take(4)
@@ -326,6 +343,7 @@ private fun HeartRateCapsuleInfoGrid(
                         tile = tile,
                         compact = compact,
                         tone = tone,
+                        foreground = foreground,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -339,6 +357,7 @@ private fun HeartRateCapsuleInfoTile(
     tile: HeartRateFloatingCapsuleInfoTile,
     compact: Boolean,
     tone: Color,
+    foreground: Color,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -356,7 +375,7 @@ private fun HeartRateCapsuleInfoTile(
                 text = tile.label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = TrainFlowNeutral700,
+                color = foreground.copy(alpha = 0.72f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -364,7 +383,7 @@ private fun HeartRateCapsuleInfoTile(
                 text = tile.value,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
-                color = TrainFlowNeutral900,
+                color = foreground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -372,7 +391,9 @@ private fun HeartRateCapsuleInfoTile(
     }
 }
 
-private fun HeartRateFloatingCapsuleStatus.toneColor(): Color {
+internal const val HEART_RATE_CAPSULE_ZONE_TINT_ALPHA = 0.16f
+
+internal fun HeartRateFloatingCapsuleStatus.heartRateCapsuleAccentColor(): Color {
     return when (this) {
         HeartRateFloatingCapsuleStatus.PERMISSION_DENIED,
         HeartRateFloatingCapsuleStatus.BLUETOOTH_DISABLED,
@@ -394,6 +415,53 @@ private fun HeartRateFloatingCapsuleStatus.toneColor(): Color {
         HeartRateFloatingCapsuleStatus.HIDDEN -> TrainFlowNeutral200
     }
 }
+
+internal fun heartRateCapsuleBackgroundColor(
+    status: HeartRateFloatingCapsuleStatus,
+    surface: Color
+): Color {
+    if (!status.usesZoneTint()) return surface.copy(alpha = 0.96f)
+    val accent = status.heartRateCapsuleAccentColor()
+    val alpha = HEART_RATE_CAPSULE_ZONE_TINT_ALPHA
+    return Color(
+        red = accent.red * alpha + surface.red * (1f - alpha),
+        green = accent.green * alpha + surface.green * (1f - alpha),
+        blue = accent.blue * alpha + surface.blue * (1f - alpha),
+        alpha = 1f
+    )
+}
+
+internal fun heartRateCapsuleForegroundColor(background: Color): Color {
+    val dark = Color(0xFF15171A)
+    val light = Color(0xFFFFFFFF)
+    return if (
+        heartRateCapsuleContrastRatio(dark, background) >=
+        heartRateCapsuleContrastRatio(light, background)
+    ) {
+        dark
+    } else {
+        light
+    }
+}
+
+internal fun heartRateCapsuleContrastRatio(
+    foreground: Color,
+    background: Color
+): Double {
+    val lighter = maxOf(foreground.luminance(), background.luminance()).toDouble()
+    val darker = minOf(foreground.luminance(), background.luminance()).toDouble()
+    return (lighter + 0.05) / (darker + 0.05)
+}
+
+private fun HeartRateFloatingCapsuleStatus.usesZoneTint(): Boolean = this in setOf(
+    HeartRateFloatingCapsuleStatus.ZONE_LOW,
+    HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
+    HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN,
+    HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
+    HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
+    HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
+    HeartRateFloatingCapsuleStatus.OVER_LIMIT
+)
 
 private fun Modifier.offsetPx(
     x: Float,

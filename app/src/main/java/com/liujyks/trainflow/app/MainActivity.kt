@@ -149,6 +149,9 @@ class MainActivity : ComponentActivity() {
                     onStartHeartRateDeviceScan = {
                         trainFlowApplication.startManualHeartRateScan()
                     },
+                    onChangeHeartRateDevice = {
+                        scope.launch { trainFlowApplication.changeHeartRateDevice() }
+                    },
                     onStopHeartRateDeviceScan = {
                         trainFlowApplication.stopManualHeartRateScan()
                     },

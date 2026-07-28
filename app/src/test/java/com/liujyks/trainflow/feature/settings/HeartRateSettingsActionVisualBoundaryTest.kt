@@ -7,23 +7,31 @@ import org.junit.Test
 
 class HeartRateSettingsActionVisualBoundaryTest {
     @Test
-    fun heartRateDeviceActionsUseVisibleButtonsNotTextButtons() {
+    fun heartRateDeviceActionsUseSingleCompactActionAreaAndSystemBluetoothSettings() {
         val source = File("src/main/java/com/liujyks/trainflow/feature/settings/SettingsRoute.kt").readText()
+        val shellSource = File(
+            "src/main/java/com/liujyks/trainflow/ui/shell/official/TrainFlowApp.kt"
+        ).readText()
+        val stateSource = File(
+            "src/main/java/com/liujyks/trainflow/feature/settings/TrainingPreferencesUiState.kt"
+        ).readText()
 
         assertTrue(source.contains("import androidx.compose.material3.Button"))
         assertTrue(source.contains("import androidx.compose.material3.OutlinedButton"))
-        assertFalse(source.contains("TextButton(onClick = onRequestHeartRateBlePermission)"))
-        assertFalse(source.contains("TextButton(onClick = onPrepareHeartRateBlePermission)"))
-        assertFalse(source.contains("TextButton(onClick = onStopHeartRateDeviceScan)"))
-        assertFalse(source.contains("TextButton(\n                enabled = uiState.canStartScan"))
-        assertFalse(source.contains("TextButton(onClick = { onSelectHeartRateDevice(device.identifier) })"))
-        assertTrue(source.contains("断开心率设备"))
-        assertTrue(source.contains("重新连接"))
+        assertTrue(source.contains("title = \"启用心率功能\""))
+        assertTrue(source.contains("SectionTitle(text = \"心率功能\")"))
+        assertTrue(source.contains("SectionTitle(text = \"设备连接\")"))
+        assertTrue(source.contains("SectionTitle(text = \"心率区间与提醒\")"))
+        assertTrue(source.contains("SectionTitle(text = \"隐私与使用边界\")"))
+        assertTrue(stateSource.contains("\"重新连接\""))
+        assertTrue(stateSource.contains("\"更换设备\""))
         assertTrue(source.contains("清除已保存设备"))
-        assertTrue(source.contains("关闭心率功能"))
+        assertFalse(source.contains("Text(text = \"关闭心率功能\")"))
+        assertFalse(source.contains("Text(text = \"断开心率设备\")"))
         assertTrue(source.contains("个人最大心率"))
         assertTrue(source.contains("年龄"))
         assertTrue(source.contains("上限提醒"))
+        assertTrue(shellSource.contains("Settings.ACTION_BLUETOOTH_SETTINGS"))
     }
 
     @Test

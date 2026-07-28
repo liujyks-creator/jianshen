@@ -1144,6 +1144,8 @@ internal class HeartRateRuntimeOwner(
                 detachedScan.scanner.stopScan(detachedScan.callback)
             } catch (_: SecurityException) {
                 cleanupObservedPermissionLoss = true
+            } catch (error: IllegalStateException) {
+                if (requestedFact !is HeartRateRuntimeFact.BluetoothOff) throw error
             }
         }
         val detachedGatt = detachedAttempt?.gatt

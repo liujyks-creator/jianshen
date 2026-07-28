@@ -17,6 +17,8 @@
 
 ### 当前 E17 状态索引
 
+2026-07-29 E17-7b post-device UX Repair 已按 2026-07-28 用户决定进入 `implemented / needs review / physical phone + Band 9 gate pending`。本候选收口手动断开后的重复 / 惰性动作、四段紧凑设置 IA、蓝牙关闭跳转 Android 蓝牙设置、adapter-off `stopScan` 窄异常清理，以及明确区间时 16% 柔和区间底色 + 实心强调条 + 自适应高对比前景。胶囊 geometry / size / hierarchy / drag / snap / expand-collapse / motion / viewport / safe-area / IME 与 E17-9 FGS / 后台 ownership 均未改变。只有候选通过独立 Review、合入同步 `main` 且 fresh phone / Band 9 gate 通过后，状态才可提升为 `reviewed / merged`；旧 APK `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` 和旧人工结果均为 stale evidence。
+
 | 项目 | 合并后稳定事实 |
 |---|---|
 | E17-4 | `reviewed / merged`；immutable SHA `1ea67561b4866aa76c41b854da74da85c208aa25`；merge commit `4b354f5116bbf7f7610e79845210d481c839fed6`；readiness `passed` |

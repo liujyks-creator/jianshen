@@ -133,4 +133,17 @@ class TrainFlowApplicationHeartRateTest {
         assertTrue(preferences.heartRateManualSuppressed)
         application.preferencesDataSource.setHeartRateManualSuppressed(false)
     }
+
+    @Test
+    fun changeDeviceClearsManualSuppressionBeforeStartingManualScan() = runBlocking {
+        val application =
+            ApplicationProvider.getApplicationContext<TrainFlowApplication>()
+        application.preferencesDataSource.setHeartRateManualSuppressed(true)
+
+        application.changeHeartRateDevice()
+
+        assertFalse(
+            application.preferencesDataSource.preferences.first().heartRateManualSuppressed
+        )
+    }
 }

@@ -81,6 +81,13 @@ class TrainFlowApplication : Application() {
         heartRateRuntimeOwner.submit(HeartRateRuntimeAction.StartScan)
     }
 
+    internal suspend fun changeHeartRateDevice() {
+        preferencesDataSource.setHeartRateManualSuppressed(false)
+        latestPreferences = latestPreferences.copy(heartRateManualSuppressed = false)
+        applyHeartRateContext()
+        heartRateRuntimeOwner.submit(HeartRateRuntimeAction.StartScan)
+    }
+
     internal fun stopManualHeartRateScan() {
         heartRateRuntimeOwner.submit(HeartRateRuntimeAction.StopScan)
     }

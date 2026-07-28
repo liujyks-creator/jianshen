@@ -136,6 +136,82 @@ internal data class HeartRateSettingsUiState(
     val canReconnect: Boolean
         get() = enabled && savedDeviceIdentifier != null
 
+    val visibleConnectionActions: List<HeartRateSettingsActionUiState>
+        get() = when {
+            !enabled -> emptyList()
+            showBlePermissionRationale -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.REQUEST_PERMISSION,
+                    blePermissionActionLabel
+                )
+            )
+            blePermissionStatus == HeartRateBlePermissionStatus.PERMANENTLY_DENIED -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.OPEN_APP_SETTINGS,
+                    blePermissionActionLabel
+                )
+            )
+            blePermissionStatus != HeartRateBlePermissionStatus.GRANTED -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.PREPARE_PERMISSION,
+                    blePermissionActionLabel
+                )
+            )
+            heartRateState.fact == HeartRateFact.BLUETOOTH_OFF -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.OPEN_BLUETOOTH_SETTINGS,
+                    "打开蓝牙设置"
+                )
+            )
+            devicePickerState.scanActive && devicePickerState.canStopScan -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.STOP_SCAN,
+                    "停止扫描"
+                )
+            )
+            devicePickerState.scanActive -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.CHANGE_DEVICE,
+                    "更换设备"
+                )
+            )
+            manualSuppressed -> savedTargetActions(primaryLabel = "重新连接")
+            heartRateState.fact in setOf(
+                HeartRateFact.CONNECTING,
+                HeartRateFact.WAITING_FIRST_DATA,
+                HeartRateFact.LIVE
+            ) -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.DISCONNECT,
+                    "断开连接"
+                ),
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.CHANGE_DEVICE,
+                    "更换设备"
+                )
+            )
+            savedDeviceIdentifier != null &&
+                heartRateState.fact in setOf(
+                    HeartRateFact.DATA_INTERRUPTED,
+                    HeartRateFact.LINK_DISCONNECTED,
+                    HeartRateFact.TECHNICAL_FAILURE,
+                    HeartRateFact.INTENTIONAL_STOP
+                ) -> savedTargetActions(primaryLabel = "重新连接")
+            savedDeviceIdentifier != null -> savedTargetActions(primaryLabel = "连接已保存设备")
+            else -> listOf(
+                HeartRateSettingsActionUiState(
+                    HeartRateSettingsAction.SCAN_DEVICES,
+                    "扫描心率设备"
+                )
+            )
+        }
+
+    val primaryConnectionAction: HeartRateSettingsActionUiState?
+        get() = visibleConnectionActions.firstOrNull()
+
+    val secondaryConnectionAction: HeartRateSettingsActionUiState?
+        get() = visibleConnectionActions.getOrNull(1)
+
     val connectionIntentCopy: String
         get() = if (savedDeviceIdentifier == null) {
             recoveryPresentation.body
@@ -204,6 +280,35 @@ internal data class HeartRateSettingsUiState(
         "记录边界：无训练时只显示不记录；训练记录采样另拆后续任务。",
         "非医疗边界：心率区间仅训练参考，不诊断疾病，不替代医生建议，不自动中断训练。"
     )
+
+    private fun savedTargetActions(primaryLabel: String): List<HeartRateSettingsActionUiState> =
+        listOf(
+            HeartRateSettingsActionUiState(
+                HeartRateSettingsAction.RECONNECT,
+                primaryLabel
+            ),
+            HeartRateSettingsActionUiState(
+                HeartRateSettingsAction.CHANGE_DEVICE,
+                "更换设备"
+            )
+        )
+}
+
+internal data class HeartRateSettingsActionUiState(
+    val action: HeartRateSettingsAction,
+    val label: String
+)
+
+internal enum class HeartRateSettingsAction {
+    PREPARE_PERMISSION,
+    REQUEST_PERMISSION,
+    OPEN_APP_SETTINGS,
+    OPEN_BLUETOOTH_SETTINGS,
+    SCAN_DEVICES,
+    STOP_SCAN,
+    RECONNECT,
+    CHANGE_DEVICE,
+    DISCONNECT
 }
 
 internal enum class HeartRateBlePermissionStatus(

@@ -124,6 +124,131 @@ class TrainingPreferencesUiStateTest {
     }
 
     @Test
+    fun manuallyDisconnectedSavedDeviceOffersReconnectThenChangeDeviceOnly() {
+        val state = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceIdentifier = "D8:F0:42:01:90:D7",
+            savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+            manualSuppressed = true,
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            appVisible = true
+        )
+
+        assertEquals("重新连接", state.primaryConnectionAction?.label)
+        assertEquals("更换设备", state.secondaryConnectionAction?.label)
+        assertEquals(
+            listOf(
+                HeartRateSettingsAction.RECONNECT,
+                HeartRateSettingsAction.CHANGE_DEVICE
+            ),
+            state.visibleConnectionActions.map { it.action }
+        )
+        assertFalse(state.visibleConnectionActions.any { it.label == "连接已保存设备" })
+    }
+
+    @Test
+    fun bluetoothOffOffersSystemBluetoothSettingsInsteadOfFakeScan() {
+        val state = heartRateSettingsUiState(
+            enabled = true,
+            savedDeviceIdentifier = "D8:F0:42:01:90:D7",
+            savedDeviceDisplayName = "HUAWEI Band HR-OD7",
+            blePermissionStatus = HeartRateBlePermissionStatus.GRANTED,
+            heartRateState = HeartRateRuntimeFact.BluetoothOff().toHeartRateState()
+        )
+
+        assertEquals(
+            HeartRateSettingsAction.OPEN_BLUETOOTH_SETTINGS,
+            state.primaryConnectionAction?.action
+        )
+        assertEquals("打开蓝牙设置", state.primaryConnectionAction?.label)
+        assertEquals(1, state.visibleConnectionActions.size)
+        assertFalse(state.devicePickerState.canStartScan)
+    }
+
+    @Test
+    fun connectionStatesExposeOnePrimaryAndAtMostOneSecondaryAction() {
+        val granted = HeartRateBlePermissionStatus.GRANTED
+        val saved = mapOf(
+            "savedDeviceIdentifier" to "D8:F0:42:01:90:D7",
+            "savedDeviceDisplayName" to "Band"
+        )
+        val states = listOf(
+            "disabled" to heartRateSettingsUiState(enabled = false),
+            "enabled-no-device" to heartRateSettingsUiState(
+                enabled = true,
+                blePermissionStatus = granted
+            ),
+            "saved-not-connected" to heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceIdentifier = saved.getValue("savedDeviceIdentifier"),
+                savedDeviceDisplayName = saved.getValue("savedDeviceDisplayName"),
+                blePermissionStatus = granted
+            ),
+            "scanning" to heartRateSettingsUiState(
+                enabled = true,
+                blePermissionStatus = granted,
+                scanState = BleHeartRateScanState(
+                    BleHeartRateScanStateKind.SCANNING,
+                    "manual"
+                ),
+                scanPurpose = HeartRateDeviceScanPurpose.SCAN_DEVICES
+            ),
+            "connecting" to heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceIdentifier = saved.getValue("savedDeviceIdentifier"),
+                savedDeviceDisplayName = saved.getValue("savedDeviceDisplayName"),
+                blePermissionStatus = granted,
+                heartRateState = HeartRateRuntimeFact.Connecting().toHeartRateState()
+            ),
+            "live" to heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceIdentifier = saved.getValue("savedDeviceIdentifier"),
+                savedDeviceDisplayName = saved.getValue("savedDeviceDisplayName"),
+                blePermissionStatus = granted,
+                heartRateState = HeartRateRuntimeFact.Live(
+                    bpm = 120,
+                    measuredAt = "2026-07-29T00:00:00Z"
+                ).toHeartRateState()
+            ),
+            "manually-disconnected" to heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceIdentifier = saved.getValue("savedDeviceIdentifier"),
+                savedDeviceDisplayName = saved.getValue("savedDeviceDisplayName"),
+                manualSuppressed = true,
+                blePermissionStatus = granted
+            ),
+            "unexpectedly-disconnected" to heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceIdentifier = saved.getValue("savedDeviceIdentifier"),
+                savedDeviceDisplayName = saved.getValue("savedDeviceDisplayName"),
+                blePermissionStatus = granted,
+                heartRateState = HeartRateRuntimeFact.LinkDisconnected().toHeartRateState()
+            ),
+            "bluetooth-off" to heartRateSettingsUiState(
+                enabled = true,
+                savedDeviceIdentifier = saved.getValue("savedDeviceIdentifier"),
+                savedDeviceDisplayName = saved.getValue("savedDeviceDisplayName"),
+                blePermissionStatus = granted,
+                heartRateState = HeartRateRuntimeFact.BluetoothOff().toHeartRateState()
+            ),
+            "permission-missing" to heartRateSettingsUiState(
+                enabled = true,
+                blePermissionStatus = HeartRateBlePermissionStatus.NOT_REQUESTED
+            )
+        )
+
+        states.forEach { (name, state) ->
+            if (name == "disabled") {
+                assertTrue(state.visibleConnectionActions.isEmpty())
+            } else {
+                assertEquals(name, 1, state.visibleConnectionActions.count { it == state.primaryConnectionAction })
+                assertTrue(name, state.visibleConnectionActions.size <= 2)
+                assertTrue(name, state.visibleConnectionActions.all { it.label.isNotBlank() })
+            }
+        }
+    }
+
+    @Test
     fun clearedTargetTakesPresentationPriorityOverPersistedSuppression() {
         val state = heartRateSettingsUiState(
             enabled = true,

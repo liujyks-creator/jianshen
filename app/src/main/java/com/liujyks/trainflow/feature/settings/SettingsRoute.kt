@@ -64,7 +64,9 @@ internal fun SettingsRoute(
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,
     onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
     onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit,
     onDisconnectHeartRateDevice: () -> Unit,
     onReconnectHeartRateDevice: () -> Unit,
@@ -126,7 +128,9 @@ internal fun SettingsRoute(
                 onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
                 onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
                 onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                onChangeHeartRateDevice = onChangeHeartRateDevice,
                 onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                onOpenBluetoothSettings = onOpenBluetoothSettings,
                 onSelectHeartRateDevice = onSelectHeartRateDevice,
                 onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
                 onReconnectHeartRateDevice = onReconnectHeartRateDevice,
@@ -259,7 +263,9 @@ private fun HeartRatePreferencesCard(
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,
     onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
     onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit,
     onDisconnectHeartRateDevice: () -> Unit,
     onReconnectHeartRateDevice: () -> Unit,
@@ -267,76 +273,61 @@ private fun HeartRatePreferencesCard(
     onHeartRatePersonalParametersChanged: (Int?, Int?, Int?) -> Unit
 ) {
     SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.focus) {
-        SectionTitle(text = uiState.sectionTitle)
+        SectionTitle(text = "心率功能")
         ToggleRow(
-            title = "心率显示",
+            title = "启用心率功能",
             checked = uiState.enabled,
             onCheckedChange = onHeartRateDisplayEnabledChanged
         )
-        StatusBlock(title = "心率显示：${uiState.statusLabel}", body = uiState.statusSummary)
+        Text(
+            text = if (uiState.enabled) {
+                "已启用；满足条件时在 TrainFlow 前台自动恢复已保存设备。"
+            } else {
+                "默认关闭；关闭时不显示、不扫描、不连接、不记录。"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+
+        SectionTitle(text = "设备连接")
         if (uiState.enabled) {
             StatusBlock(
                 title = "连接状态：${uiState.devicePickerState.connectionStatusLabel}",
                 body = uiState.sourceSummary
             )
-            StatusBlock(
-                title = uiState.recoveryPresentation.title,
-                body = uiState.connectionIntentCopy
-            )
-            uiState.savedDeviceDisplayName?.let { displayName ->
-                StatusBlock(
-                    title = "已保存设备：$displayName",
-                    body = "已保存设备用于满足条件时自动恢复精确目标，也可手动重连；不代表设备在附近、已开启广播、正在连接或已经连接。"
-                )
-            }
-        }
-        StatusBlock(title = uiState.blePermissionStatusTitle, body = uiState.blePermissionStatusCopy)
-        if (uiState.showBlePermissionRationale) {
-            StatusBlock(
-                title = uiState.blePermissionRationaleTitle,
-                body = uiState.blePermissionRationaleBullets.joinToString("\n")
-            )
-            Button(
-                onClick = onRequestHeartRateBlePermission,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.blePermissionActionLabel)
-            }
-        } else if (uiState.enabled && uiState.canPrepareBlePermission) {
-            Button(
-                onClick = onPrepareHeartRateBlePermission,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.blePermissionActionLabel)
-            }
-        }
-        HeartRateDevicePickerBlock(
-            uiState = uiState.devicePickerState,
-            onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
-            onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
-            onSelectHeartRateDevice = onSelectHeartRateDevice
-        )
-        if (uiState.enabled && uiState.savedDeviceIdentifier != null) {
-            OutlinedButton(
-                enabled = uiState.canDisconnect,
-                onClick = onDisconnectHeartRateDevice,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = "断开心率设备")
-            }
             Text(
-                text = uiState.disconnectActionCopy,
-                style = MaterialTheme.typography.bodySmall,
+                text = uiState.connectionIntentCopy,
+                style = MaterialTheme.typography.bodyMedium,
                 color = TrainFlowNeutral700
             )
-            Button(
-                enabled = uiState.canReconnect,
-                onClick = onReconnectHeartRateDevice,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = "重新连接")
+            if (uiState.blePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
+                StatusBlock(
+                    title = uiState.blePermissionStatusTitle,
+                    body = if (uiState.showBlePermissionRationale) {
+                        uiState.blePermissionRationaleBullets.joinToString("\n")
+                    } else {
+                        uiState.blePermissionStatusCopy
+                    }
+                )
             }
+            HeartRateDevicePickerBlock(
+                uiState = uiState.devicePickerState,
+                onSelectHeartRateDevice = onSelectHeartRateDevice
+            )
+            HeartRateConnectionActions(
+                uiState = uiState,
+                onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                onChangeHeartRateDevice = onChangeHeartRateDevice,
+                onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                onOpenBluetoothSettings = onOpenBluetoothSettings,
+                onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                onReconnectHeartRateDevice = onReconnectHeartRateDevice
+            )
         }
+
+        SectionTitle(text = "心率区间与提醒")
         if (uiState.enabled) {
             OptionalHeartRateNumberField(
                 label = "年龄（1–130，可选）",
@@ -375,19 +366,21 @@ private fun HeartRatePreferencesCard(
                 }
             )
             Text(
-                text = "区间优先使用个人最大心率；未填写时才使用 220 − 年龄。区间为低强度、热身、燃脂、有氧、无氧、极限，仅作非医疗训练参考。",
+                text = "优先使用个人最大心率，未填写时使用 220 − 年龄；区间与上限提醒仅作训练参考。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+        } else {
+            Text(
+                text = "启用后可填写年龄、个人最大心率和上限提醒。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TrainFlowNeutral700
             )
         }
-        StatusBlock(title = "显示用途", body = uiState.purposeCopy)
-        StatusBlock(title = "记录边界", body = uiState.recordingBoundaryCopy)
-        StatusBlock(title = "隐私说明", body = uiState.privacyCopy)
-        StatusBlock(title = "非医疗说明", body = uiState.nonMedicalCopy)
-        StatusBlock(title = "权限说明", body = uiState.permissionCopy)
-        StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
+
+        SectionTitle(text = "隐私与使用边界")
         Text(
-            text = uiState.enabledBoundaryCopy,
+            text = "心率仅在 TrainFlow App 内显示；无训练时不写入训练记录。蓝牙权限只在你的连接操作后请求。心率与区间不用于医疗诊断，也不会自动中断训练。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -404,19 +397,84 @@ private fun HeartRatePreferencesCard(
                 color = TrainFlowNeutral700
             )
         }
-        if (uiState.enabled) {
-            OutlinedButton(
-                onClick = { onHeartRateDisplayEnabledChanged(false) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = "关闭心率功能")
-            }
-            Text(
-                text = uiState.optOutActionCopy,
-                style = MaterialTheme.typography.bodySmall,
-                color = TrainFlowNeutral700
-            )
+    }
+}
+
+@Composable
+private fun HeartRateConnectionActions(
+    uiState: HeartRateSettingsUiState,
+    onPrepareHeartRateBlePermission: () -> Unit,
+    onRequestHeartRateBlePermission: () -> Unit,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit
+) {
+    uiState.primaryConnectionAction?.let { action ->
+        Button(
+            onClick = {
+                dispatchHeartRateSettingsAction(
+                    action = action.action,
+                    onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                    onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                    onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                    onChangeHeartRateDevice = onChangeHeartRateDevice,
+                    onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                    onOpenBluetoothSettings = onOpenBluetoothSettings,
+                    onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                    onReconnectHeartRateDevice = onReconnectHeartRateDevice
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = action.label)
         }
+    }
+    uiState.secondaryConnectionAction?.let { action ->
+        OutlinedButton(
+            onClick = {
+                dispatchHeartRateSettingsAction(
+                    action = action.action,
+                    onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                    onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                    onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                    onChangeHeartRateDevice = onChangeHeartRateDevice,
+                    onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                    onOpenBluetoothSettings = onOpenBluetoothSettings,
+                    onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                    onReconnectHeartRateDevice = onReconnectHeartRateDevice
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = action.label)
+        }
+    }
+}
+
+private fun dispatchHeartRateSettingsAction(
+    action: HeartRateSettingsAction,
+    onPrepareHeartRateBlePermission: () -> Unit,
+    onRequestHeartRateBlePermission: () -> Unit,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit
+) {
+    when (action) {
+        HeartRateSettingsAction.PREPARE_PERMISSION,
+        HeartRateSettingsAction.OPEN_APP_SETTINGS -> onPrepareHeartRateBlePermission()
+        HeartRateSettingsAction.REQUEST_PERMISSION -> onRequestHeartRateBlePermission()
+        HeartRateSettingsAction.OPEN_BLUETOOTH_SETTINGS -> onOpenBluetoothSettings()
+        HeartRateSettingsAction.SCAN_DEVICES -> onStartHeartRateDeviceScan()
+        HeartRateSettingsAction.STOP_SCAN -> onStopHeartRateDeviceScan()
+        HeartRateSettingsAction.RECONNECT -> onReconnectHeartRateDevice()
+        HeartRateSettingsAction.CHANGE_DEVICE -> onChangeHeartRateDevice()
+        HeartRateSettingsAction.DISCONNECT -> onDisconnectHeartRateDevice()
     }
 }
 
@@ -457,8 +515,6 @@ private fun OptionalHeartRateNumberField(
 @Composable
 private fun HeartRateDevicePickerBlock(
     uiState: HeartRateDevicePickerUiState,
-    onStartHeartRateDeviceScan: () -> Unit,
-    onStopHeartRateDeviceScan: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit
 ) {
     StatusBlock(title = uiState.title, body = uiState.body)
@@ -467,26 +523,6 @@ private fun HeartRateDevicePickerBlock(
         style = MaterialTheme.typography.bodyMedium,
         color = TrainFlowNeutral700
     )
-    when {
-        uiState.canStopScan -> {
-            OutlinedButton(
-                onClick = onStopHeartRateDeviceScan,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.actionLabel ?: "停止扫描")
-            }
-        }
-
-        uiState.actionLabel != null -> {
-            Button(
-                enabled = uiState.canStartScan,
-                onClick = onStartHeartRateDeviceScan,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.actionLabel)
-            }
-        }
-    }
     if (uiState.showDeviceList) {
         uiState.devices.forEach { device ->
             HeartRateDeviceCandidateRow(
@@ -721,7 +757,9 @@ private fun SettingsRoutePreview() {
             onPrepareHeartRateBlePermission = {},
             onRequestHeartRateBlePermission = {},
             onStartHeartRateDeviceScan = {},
+            onChangeHeartRateDevice = {},
             onStopHeartRateDeviceScan = {},
+            onOpenBluetoothSettings = {},
             onSelectHeartRateDevice = {},
             onDisconnectHeartRateDevice = {},
             onReconnectHeartRateDevice = {},

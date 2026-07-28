@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.ui.shell.official
 
+import androidx.compose.ui.graphics.Color
 import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
 import com.liujyks.trainflow.core.health.HeartRateSourceHint
 import com.liujyks.trainflow.core.health.toHeartRateState
@@ -260,6 +261,34 @@ class HeartRateFloatingCapsuleStateTest {
             state.infoTiles.map { it.label }
         )
         assertEquals("实时", state.tile("更新"))
+    }
+
+    @Test
+    fun approvedZoneTintStaysSoftAndForegroundMeetsHighContrast() {
+        assertTrue(HEART_RATE_CAPSULE_ZONE_TINT_ALPHA in 0.12f..0.18f)
+        val zoneStatuses = listOf(
+            HeartRateFloatingCapsuleStatus.ZONE_LOW,
+            HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
+            HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN,
+            HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
+            HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
+            HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
+            HeartRateFloatingCapsuleStatus.OVER_LIMIT
+        )
+        val themeSurfaces = listOf(Color(0xFFF9FAFB), Color(0xFF17181A))
+
+        zoneStatuses.forEach { status ->
+            themeSurfaces.forEach { surface ->
+                val background = heartRateCapsuleBackgroundColor(status, surface)
+                val foreground = heartRateCapsuleForegroundColor(background)
+
+                assertTrue(
+                    "$status on $surface",
+                    heartRateCapsuleContrastRatio(foreground, background) >= 7.0
+                )
+                assertFalse(background == status.heartRateCapsuleAccentColor())
+            }
+        }
     }
 
     private fun liveState(bpm: Int) = HeartRateRuntimeFact.Live(

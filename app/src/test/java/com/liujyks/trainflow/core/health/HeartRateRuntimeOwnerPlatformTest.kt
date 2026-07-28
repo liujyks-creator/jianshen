@@ -717,6 +717,29 @@ class HeartRateRuntimeOwnerPlatformTest {
     }
 
     @Test
+    fun adapterOffCleanupToleratesPlatformStopScanIllegalState() {
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        E17ScannerShadow.throwStopIllegalState = true
+
+        owner.submit(HeartRateRuntimeAction.BluetoothOff)
+        idleMain()
+
+        assertEquals(HeartRateFact.BLUETOOTH_OFF, owner.heartRateState.value.fact)
+    }
+
+    @Test
+    fun unknownStopScanIllegalStateRemainsObservableOutsideAdapterOffCleanup() {
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        E17ScannerShadow.throwStopIllegalState = true
+
+        owner.submit(HeartRateRuntimeAction.Stop)
+
+        assertThrows(IllegalStateException::class.java) { idleMain() }
+    }
+
+    @Test
     fun connectPermissionToctouUsesRealConnectGattCallAndDoesNotAutoRetry() {
         val snapshotContext = PermissionSnapshotContext(application)
         owner = HeartRateRuntimeOwner(snapshotContext)
@@ -1095,16 +1118,19 @@ class E17ScannerShadow : ShadowBluetoothLeScanner() {
     @Implementation
     override fun stopScan(callback: ScanCallback) {
         if (throwStopSecurity) throw SecurityException("test scan stop revocation")
+        if (throwStopIllegalState) throw IllegalStateException("test unknown scanner state")
         super.stopScan(callback)
     }
 
     companion object {
         var throwStartSecurity: Boolean = false
         var throwStopSecurity: Boolean = false
+        var throwStopIllegalState: Boolean = false
 
         fun resetFailures() {
             throwStartSecurity = false
             throwStopSecurity = false
+            throwStopIllegalState = false
         }
     }
 }
