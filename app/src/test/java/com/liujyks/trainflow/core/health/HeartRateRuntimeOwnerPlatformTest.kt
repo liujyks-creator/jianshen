@@ -729,6 +729,39 @@ class HeartRateRuntimeOwnerPlatformTest {
     }
 
     @Test
+    fun scanTimeoutAfterAdapterTurnsOffToleratesPlatformStopScanIllegalState() {
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val timeout = privateRunnable("scanTimeoutRunnable")
+        val adapter = application.getSystemService(BluetoothManager::class.java).adapter
+        val callback = shadowOf(adapter.bluetoothLeScanner).scanCallbacks.single()
+        shadowOf(adapter).setEnabled(false)
+        E17ScannerShadow.throwStopIllegalState = true
+
+        android.os.Handler(Looper.getMainLooper()).post(timeout)
+        idleMain()
+
+        val terminal = owner.heartRateState.value
+        callback.onScanFailed(ScanCallback.SCAN_FAILED_INTERNAL_ERROR)
+        idleMain()
+
+        assertEquals(HeartRateFact.BLUETOOTH_OFF, terminal.fact)
+        assertEquals(terminal, owner.heartRateState.value)
+    }
+
+    @Test
+    fun scanTimeoutWhileAdapterRemainsOnDoesNotHideUnknownStopScanIllegalState() {
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val timeout = privateRunnable("scanTimeoutRunnable")
+        E17ScannerShadow.throwStopIllegalState = true
+
+        android.os.Handler(Looper.getMainLooper()).post(timeout)
+
+        assertThrows(IllegalStateException::class.java) { idleMain() }
+    }
+
+    @Test
     fun unknownStopScanIllegalStateRemainsObservableOutsideAdapterOffCleanup() {
         owner.submit(HeartRateRuntimeAction.StartScan)
         idleMain()

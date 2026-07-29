@@ -1200,6 +1200,13 @@ internal class HeartRateRuntimeOwner(
             } catch (_: SecurityException) {
                 cleanup(HeartRateRuntimeFact.PermissionRequired(currentSource()))
                 return false
+            } catch (error: IllegalStateException) {
+                if (!isBluetoothAdapterUnavailableOrDisabled()) throw error
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.BluetoothOff(currentSource()),
+                    permissionLossOverridesFact = false
+                )
+                return false
             }
         }
         return true
@@ -1260,6 +1267,15 @@ internal class HeartRateRuntimeOwner(
             )
         }
         return adapter
+    }
+
+    private fun isBluetoothAdapterUnavailableOrDisabled(): Boolean {
+        val adapter = appContext.getSystemService(BluetoothManager::class.java)?.adapter ?: return true
+        return try {
+            !adapter.isEnabled
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     private fun hasRequiredPermissions(): Boolean {

@@ -33,6 +33,14 @@ Automated evidence is valid only for the exact final candidate and executable-eq
 - Fresh automated and AVD evidence belongs under ignored `.local/smoke/e17-7b-repair-final/`; it is not physical BLE / GATT evidence.
 - Final phone + HUAWEI Band 9 evidence is pending and must cover compact actions/settings, manual disconnect/reconnect/change-device, foreground/app-return/proximity recovery, live zone readability, opt-out, and Bluetooth off/on without crash.
 
+## Bluetooth-off timeout Review Repair
+
+The complete Review found one production crash race: an active finite scan could reach its timeout after the Bluetooth adapter had already turned off. Android may then throw `IllegalStateException` from `BluetoothLeScanner.stopScan()`. The explicit `BluetoothOff` cleanup path was already narrow, but the timeout path did not classify the adapter state before propagating the exception.
+
+The Repair keeps the existing generation invalidation and cleanup order. `detachAndStopActiveScan()` now tolerates that `IllegalStateException` only when the current adapter is provably disabled or unavailable, publishes the typed Bluetooth-off fact, and rejects the detached scan's late callback. When the adapter remains enabled, the same exception is still observable. The implementation does not inspect exception messages, catch general runtime exceptions, add a BLE wrapper/seam, or add reconnect / E17-9 behavior.
+
+The regression proof first failed on the pre-Repair candidate for `active scan -> adapter off -> timeout -> stopScan IllegalStateException`; after the Repair both that path and the adapter-on negative control pass. The final delivery APK must be built once from the committed immutable Repair tip and copied to a new ignored delivery directory. All earlier candidate APK identities are superseded and cannot be used for the phone / Band 9 gate.
+
 ## Shortest final human gate
 
 1. Install the final debug APK recorded in the ignored evidence manifest.
