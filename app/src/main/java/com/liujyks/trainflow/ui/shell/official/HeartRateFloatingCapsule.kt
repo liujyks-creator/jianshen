@@ -51,7 +51,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -248,7 +247,7 @@ private fun HeartRateFloatingCapsule(
     val zonePresentation = uiState.status.usesZoneTint()
     Surface(
         modifier = modifier
-            .widthIn(min = 116.dp, max = if (expanded) expandedMaxWidth else 220.dp)
+            .widthIn(min = 116.dp, max = if (expanded) expandedMaxWidth else 180.dp)
             .then(if (expanded) Modifier.heightIn(max = expandedMaxHeight) else Modifier)
             .animateContentSize(animationSpec = tween(durationMillis = 220))
             .then(
@@ -307,16 +306,25 @@ private fun HeartRateFloatingCapsule(
                     )
                 }
             } else {
-                Text(
-                    text = uiState.collapsedLabel,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = foreground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(tone)
+                    )
+                    Text(
+                        text = uiState.collapsedLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = foreground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             if (expanded) {
                 Text(

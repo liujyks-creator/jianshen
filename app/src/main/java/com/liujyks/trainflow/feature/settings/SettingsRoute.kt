@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -19,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -27,6 +31,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
@@ -49,9 +56,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.liujyks.trainflow.R
 import com.liujyks.trainflow.core.model.PermissionPrivacySection
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
@@ -352,6 +362,7 @@ private fun HeartRatePreferencesCard(
                     OptionalHeartRateNumberRow(
                         label = "年龄",
                         rangeDescription = "1–130 · 可选",
+                        iconRes = R.drawable.ic_person_outline_24,
                         value = uiState.ageYears,
                         range = 1..130,
                         onValidValue = { age ->
@@ -362,10 +373,11 @@ private fun HeartRatePreferencesCard(
                             )
                         }
                     )
-                    HorizontalDivider(color = TrainFlowNeutral100)
+                    HorizontalDivider(thickness = 1.dp, color = TrainFlowNeutral100)
                     OptionalHeartRateNumberRow(
                         label = "个人最大心率",
                         rangeDescription = "bpm · 30–260 · 可选",
+                        iconRes = R.drawable.ic_monitor_heart_24,
                         value = uiState.personalMaxHeartRateBpm,
                         range = 30..260,
                         onValidValue = { personalMax ->
@@ -376,10 +388,11 @@ private fun HeartRatePreferencesCard(
                             )
                         }
                     )
-                    HorizontalDivider(color = TrainFlowNeutral100)
+                    HorizontalDivider(thickness = 1.dp, color = TrainFlowNeutral100)
                     OptionalHeartRateNumberRow(
                         label = "上限提醒",
                         rangeDescription = "bpm · 30–260 · 可选",
+                        iconRes = R.drawable.ic_notifications_none_24,
                         value = uiState.alertThresholdBpm,
                         range = 30..260,
                         onValidValue = { alert ->
@@ -509,6 +522,7 @@ internal fun dispatchHeartRateSettingsAction(
 private fun OptionalHeartRateNumberRow(
     label: String,
     rangeDescription: String,
+    iconRes: Int,
     value: Int?,
     range: IntRange,
     onValidValue: (Int?) -> Unit
@@ -536,10 +550,17 @@ private fun OptionalHeartRateNumberRow(
                 contentDescription = "$label，当前值 $currentValue，允许范围 $rangeDescription"
                 stateDescription = validationDescription
             }
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .heightIn(min = 64.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -551,40 +572,61 @@ private fun OptionalHeartRateNumberRow(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = rangeDescription,
-                style = MaterialTheme.typography.bodySmall,
+                text = if (invalid) {
+                    "请输入 ${range.first}–${range.last}，或留空。"
+                } else {
+                    rangeDescription
+                },
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
                 color = if (invalid) MaterialTheme.colorScheme.error else TrainFlowNeutral700
             )
-            if (invalid) {
-                Text("请输入 ${range.first}–${range.last}，或留空。")
-            }
         }
-        OutlinedTextField(
-            value = text,
-            onValueChange = { next ->
-                if (next.length <= 3 && next.all(Char::isDigit)) {
-                    text = next
-                    val nextValue = next.toIntOrNull()
-                    if (next.isBlank() || nextValue in range) {
-                        onValidValue(nextValue)
+        Surface(
+            modifier = Modifier.size(width = 60.dp, height = 40.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (invalid) MaterialTheme.colorScheme.error else TrainFlowNeutral200
+            )
+        ) {
+            BasicTextField(
+                value = text,
+                onValueChange = { next ->
+                    if (next.length <= 3 && next.all(Char::isDigit)) {
+                        text = next
+                        val nextValue = next.toIntOrNull()
+                        if (next.isBlank() || nextValue in range) {
+                            onValidValue(nextValue)
+                        }
                     }
-                }
-            },
-            isError = invalid,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    focusManager.clearFocus()
-                    keyboardController?.hide()
-                }
-            ),
-            modifier = Modifier
-                .width(88.dp)
-                .focusRequester(focusRequester)
+                },
+                modifier = Modifier.padding(8.dp)
+                    .focusRequester(focusRequester),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                )
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            painter = painterResource(R.drawable.ic_chevron_right_24),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

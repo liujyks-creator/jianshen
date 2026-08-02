@@ -51,6 +51,33 @@ class HeartRateSettingsActionVisualBoundaryTest {
         )
         assertTrue(source.contains("stateDescription = validationDescription"))
         assertFalse(source.contains("private fun OptionalHeartRateNumberField("))
+        assertTrue(source.contains("iconRes = R.drawable.ic_person_outline_24"))
+        assertTrue(source.contains("iconRes = R.drawable.ic_monitor_heart_24"))
+        assertTrue(source.contains("iconRes = R.drawable.ic_notifications_none_24"))
+        assertTrue(source.contains("painterResource(R.drawable.ic_chevron_right_24)"))
+        assertTrue(source.contains(".heightIn(min = 64.dp)"))
+        assertTrue(source.contains(".padding(horizontal = 12.dp, vertical = 6.dp)"))
+        assertTrue(source.contains("Spacer(modifier = Modifier.width(16.dp))"))
+        assertTrue(source.contains(".size(20.dp)"))
+        assertTrue(source.contains("fontSize = 12.sp"))
+        assertTrue(source.contains("lineHeight = 16.sp"))
+        assertTrue(source.contains(".size(width = 60.dp, height = 40.dp)"))
+        assertTrue(source.contains("shape = RoundedCornerShape(10.dp)"))
+        assertTrue(source.contains("modifier = Modifier.padding(8.dp)"))
+        assertTrue(source.contains("Spacer(modifier = Modifier.width(8.dp))"))
+        assertTrue(source.contains("HorizontalDivider(thickness = 1.dp, color = TrainFlowNeutral100)"))
+
+        listOf(
+            "ic_person_outline_24.xml",
+            "ic_monitor_heart_24.xml",
+            "ic_notifications_none_24.xml",
+            "ic_chevron_right_24.xml"
+        ).forEach { name ->
+            assertTrue(
+                "Missing narrowly vendored official Material vector: $name",
+                File("src/main/res/drawable/$name").isFile
+            )
+        }
     }
 
     @Test
@@ -85,8 +112,29 @@ class HeartRateSettingsActionVisualBoundaryTest {
             "src/main/java/com/liujyks/trainflow/ui/shell/official/HeartRateFloatingCapsule.kt"
         ).readText()
 
-        assertTrue(source.contains("textAlign = TextAlign.Center"))
-        assertTrue(source.contains("modifier = Modifier.fillMaxWidth()"))
+        assertTrue(source.contains(".widthIn(min = 116.dp, max = if (expanded) expandedMaxWidth else 180.dp)"))
+        assertFalse(source.contains("textAlign = TextAlign.Center"))
+        assertFalse(source.contains("import androidx.compose.ui.text.style.TextAlign"))
+        assertFalse(
+            source.contains(
+                """else {
+                Text(
+                    text = uiState.collapsedLabel,
+                    modifier = Modifier.fillMaxWidth(),"""
+            )
+        )
+        assertTrue(
+            "Expanded and collapsed branches must each render the 8dp tone dot",
+            """\.size\(8\.dp\)""".toRegex().findAll(source).count() == 2
+        )
+        assertTrue(
+            "Expanded and collapsed branches must each use an exact 8dp dot-to-label gap",
+            """horizontalArrangement = Arrangement\.spacedBy\(8\.dp\)""".toRegex()
+                .findAll(source)
+                .count() >= 3
+        )
+        assertTrue(source.contains("maxLines = 1"))
+        assertTrue(source.contains("overflow = TextOverflow.Ellipsis"))
         assertTrue(source.contains("Brush.horizontalGradient"))
         assertTrue(source.contains("heartRateCapsuleGradientStops("))
         assertFalse(source.contains("size = Size(width = 4.dp.toPx(), height = size.height)"))
