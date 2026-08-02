@@ -35,6 +35,25 @@ class HeartRateSettingsActionVisualBoundaryTest {
     }
 
     @Test
+    fun heartRatePersonalParametersUseCompactAccessibleSettingRows() {
+        val source = File("src/main/java/com/liujyks/trainflow/feature/settings/SettingsRoute.kt").readText()
+
+        assertTrue(source.contains("OptionalHeartRateNumberRow("))
+        assertTrue(source.contains("label = \"年龄\""))
+        assertTrue(source.contains("label = \"个人最大心率\""))
+        assertTrue(source.contains("label = \"上限提醒\""))
+        assertTrue(source.contains("rangeDescription = \"1–130 · 可选\""))
+        assertTrue(source.contains("rangeDescription = \"bpm · 30–260 · 可选\""))
+        assertTrue(
+            source.contains(
+                "contentDescription = \"${'$'}label，当前值 ${'$'}currentValue，允许范围 ${'$'}rangeDescription\""
+            )
+        )
+        assertTrue(source.contains("stateDescription = validationDescription"))
+        assertFalse(source.contains("private fun OptionalHeartRateNumberField("))
+    }
+
+    @Test
     fun productionShellDoesNotConstructLegacyBleOwners() {
         val shellSource = File(
             "src/main/java/com/liujyks/trainflow/ui/shell/official/TrainFlowApp.kt"
@@ -58,6 +77,19 @@ class HeartRateSettingsActionVisualBoundaryTest {
         assertFalse(source.contains(".clickable(onClick = onToggleExpanded)"))
         assertTrue(source.contains("awaitFirstDown(requireUnconsumed = false)"))
         assertTrue(source.contains("onTap = { expanded = !expanded }"))
+    }
+
+    @Test
+    fun collapsedCapsuleCentersAndEllipsizesCopyWithoutLeadingRail() {
+        val source = File(
+            "src/main/java/com/liujyks/trainflow/ui/shell/official/HeartRateFloatingCapsule.kt"
+        ).readText()
+
+        assertTrue(source.contains("textAlign = TextAlign.Center"))
+        assertTrue(source.contains("modifier = Modifier.fillMaxWidth()"))
+        assertTrue(source.contains("Brush.horizontalGradient"))
+        assertTrue(source.contains("heartRateCapsuleGradientStops("))
+        assertFalse(source.contains("size = Size(width = 4.dp.toPx(), height = size.height)"))
     }
 
     @Test

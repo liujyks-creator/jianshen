@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.settings
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -23,15 +26,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.tooling.preview.Preview
@@ -329,42 +342,56 @@ private fun HeartRatePreferencesCard(
 
         SectionTitle(text = "心率区间与提醒")
         if (uiState.enabled) {
-            OptionalHeartRateNumberField(
-                label = "年龄（1–130，可选）",
-                value = uiState.ageYears,
-                range = 1..130,
-                onValidValue = { age ->
-                    onHeartRatePersonalParametersChanged(
-                        age,
-                        uiState.personalMaxHeartRateBpm,
-                        uiState.alertThresholdBpm
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, TrainFlowNeutral100)
+            ) {
+                Column {
+                    OptionalHeartRateNumberRow(
+                        label = "年龄",
+                        rangeDescription = "1–130 · 可选",
+                        value = uiState.ageYears,
+                        range = 1..130,
+                        onValidValue = { age ->
+                            onHeartRatePersonalParametersChanged(
+                                age,
+                                uiState.personalMaxHeartRateBpm,
+                                uiState.alertThresholdBpm
+                            )
+                        }
+                    )
+                    HorizontalDivider(color = TrainFlowNeutral100)
+                    OptionalHeartRateNumberRow(
+                        label = "个人最大心率",
+                        rangeDescription = "bpm · 30–260 · 可选",
+                        value = uiState.personalMaxHeartRateBpm,
+                        range = 30..260,
+                        onValidValue = { personalMax ->
+                            onHeartRatePersonalParametersChanged(
+                                uiState.ageYears,
+                                personalMax,
+                                uiState.alertThresholdBpm
+                            )
+                        }
+                    )
+                    HorizontalDivider(color = TrainFlowNeutral100)
+                    OptionalHeartRateNumberRow(
+                        label = "上限提醒",
+                        rangeDescription = "bpm · 30–260 · 可选",
+                        value = uiState.alertThresholdBpm,
+                        range = 30..260,
+                        onValidValue = { alert ->
+                            onHeartRatePersonalParametersChanged(
+                                uiState.ageYears,
+                                uiState.personalMaxHeartRateBpm,
+                                alert
+                            )
+                        }
                     )
                 }
-            )
-            OptionalHeartRateNumberField(
-                label = "个人最大心率（30–260，可选）",
-                value = uiState.personalMaxHeartRateBpm,
-                range = 30..260,
-                onValidValue = { personalMax ->
-                    onHeartRatePersonalParametersChanged(
-                        uiState.ageYears,
-                        personalMax,
-                        uiState.alertThresholdBpm
-                    )
-                }
-            )
-            OptionalHeartRateNumberField(
-                label = "上限提醒（30–260，可选）",
-                value = uiState.alertThresholdBpm,
-                range = 30..260,
-                onValidValue = { alert ->
-                    onHeartRatePersonalParametersChanged(
-                        uiState.ageYears,
-                        uiState.personalMaxHeartRateBpm,
-                        alert
-                    )
-                }
-            )
+            }
             Text(
                 text = "优先使用个人最大心率，未填写时使用 220 − 年龄；区间与上限提醒仅作训练参考。",
                 style = MaterialTheme.typography.bodyMedium,
@@ -479,8 +506,9 @@ internal fun dispatchHeartRateSettingsAction(
 }
 
 @Composable
-private fun OptionalHeartRateNumberField(
+private fun OptionalHeartRateNumberRow(
     label: String,
+    rangeDescription: String,
     value: Int?,
     range: IntRange,
     onValidValue: (Int?) -> Unit
@@ -488,28 +516,77 @@ private fun OptionalHeartRateNumberField(
     var text by remember(value) { mutableStateOf(value?.toString().orEmpty()) }
     val parsed = text.toIntOrNull()
     val invalid = text.isNotBlank() && parsed !in range
-    OutlinedTextField(
-        value = text,
-        onValueChange = { next ->
-            if (next.length <= 3 && next.all(Char::isDigit)) {
-                text = next
-                val nextValue = next.toIntOrNull()
-                if (next.isBlank() || nextValue in range) {
-                    onValidValue(nextValue)
-                }
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val currentValue = text.ifBlank { "未填写" }
+    val validationDescription = if (invalid) {
+        "输入无效，请输入 ${range.first}–${range.last}，或留空"
+    } else {
+        "有效，可编辑"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                focusRequester.requestFocus()
+                keyboardController?.show()
             }
-        },
-        label = { Text(label) },
-        supportingText = {
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$label，当前值 $currentValue，允许范围 $rangeDescription"
+                stateDescription = validationDescription
+            }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = rangeDescription,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (invalid) MaterialTheme.colorScheme.error else TrainFlowNeutral700
+            )
             if (invalid) {
                 Text("请输入 ${range.first}–${range.last}，或留空。")
             }
-        },
-        isError = invalid,
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth()
-    )
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { next ->
+                if (next.length <= 3 && next.all(Char::isDigit)) {
+                    text = next
+                    val nextValue = next.toIntOrNull()
+                    if (next.isBlank() || nextValue in range) {
+                        onValidValue(nextValue)
+                    }
+                }
+            },
+            isError = invalid,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }
+            ),
+            modifier = Modifier
+                .width(88.dp)
+                .focusRequester(focusRequester)
+        )
+    }
 }
 
 @Composable

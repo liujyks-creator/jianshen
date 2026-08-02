@@ -14,7 +14,8 @@ The 2026-07-28 post-device decision requires:
 - manual-disconnected + saved target shows primary `重新连接`, secondary `更换设备`, and never `连接已保存设备`;
 - Bluetooth-off opens Android Bluetooth settings;
 - adapter-off cleanup tolerates only the causal `stopScan` `IllegalStateException`; unrelated `IllegalStateException` remains observable;
-- zone capsules use the accepted palette as a soft 12–18% tint, a solid accent rail, explicit zone text, and adaptive high-contrast foreground;
+- the user-selected option 3 `Soft Zone Halo` replaces the obsolete solid rail: zone capsules use the accepted palette as a soft 12–18% component-local halo / gradient plus subtly tinted surface, explicit zone text, and adaptive high-contrast foreground;
+- the three personal parameters use compact settings-style rows; collapsed short copy is visually centered and deliberately long copy remains one safely ellipsized line;
 - zero geometry, drag/snap, expand/collapse, motion, viewport, safe-area, or IME change;
 - no E17-9 active-training FGS or background-ownership work.
 
@@ -30,7 +31,7 @@ Automated evidence is valid only for the exact final candidate and executable-eq
 ## Evidence separation
 
 - The protected `.local/audit/e17-7b-post-human-ux/` capture and APK SHA256 `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` are stale pre-repair evidence. They explain the repair but cannot accept it.
-- Fresh automated and AVD evidence belongs under ignored `.local/smoke/e17-7b-repair-final/`; it is not physical BLE / GATT evidence.
+- Fresh automated and AVD evidence for the selected visual repair belongs under ignored `.local/smoke/e17-7b-selected-visual-repair/<final-candidate-full-sha>/`; it is not physical BLE / GATT evidence.
 - Final phone + HUAWEI Band 9 evidence is pending and must cover compact actions/settings, manual disconnect/reconnect/change-device, foreground/app-return/proximity recovery, live zone readability, opt-out, and Bluetooth off/on without crash.
 
 ## Bluetooth-off timeout Review Repair

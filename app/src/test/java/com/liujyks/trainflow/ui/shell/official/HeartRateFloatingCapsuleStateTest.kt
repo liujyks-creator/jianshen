@@ -266,6 +266,7 @@ class HeartRateFloatingCapsuleStateTest {
     @Test
     fun approvedZoneTintStaysSoftAndForegroundMeetsHighContrast() {
         assertTrue(HEART_RATE_CAPSULE_ZONE_TINT_ALPHA in 0.12f..0.18f)
+        assertTrue(HEART_RATE_CAPSULE_ZONE_HALO_ALPHA in 0.12f..0.18f)
         val zoneStatuses = listOf(
             HeartRateFloatingCapsuleStatus.ZONE_LOW,
             HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
@@ -281,12 +282,22 @@ class HeartRateFloatingCapsuleStateTest {
             themeSurfaces.forEach { surface ->
                 val background = heartRateCapsuleBackgroundColor(status, surface)
                 val foreground = heartRateCapsuleForegroundColor(background)
+                val gradientStops = heartRateCapsuleGradientStops(status, surface)
 
                 assertTrue(
                     "$status on $surface",
                     heartRateCapsuleContrastRatio(foreground, background) >= 7.0
                 )
                 assertFalse(background == status.heartRateCapsuleAccentColor())
+                assertEquals(3, gradientStops.size)
+                assertEquals(background, gradientStops[1])
+                assertFalse(gradientStops.first() == background)
+                gradientStops.forEach { stop ->
+                    assertTrue(
+                        "$status gradient stop $stop on $surface",
+                        heartRateCapsuleContrastRatio(foreground, stop) >= 7.0
+                    )
+                }
             }
         }
     }
