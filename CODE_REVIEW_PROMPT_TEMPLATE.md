@@ -25,16 +25,19 @@ Identity:
 Review inputs:
 - Acceptance criteria: <list>
 - Acceptance-to-validation matrix: <criterion -> command/inspection/evidence>
+- Validation profile: <tiny local UI | ordinary local logic | cross-module integration | high-risk concurrency/persistence/migration/security/platform lifecycle, plus exact proportional checks>
 - Allowed three-dot scope: <closed paths or rule>
 - Required validation: <commands/behaviors>
 - Required evidence and identity: <list>
 - Validator attestation: <VALID report and raw evidence locations>
-- Human prerequisites: <none or exact gate>
+- Acceptance attestation: <identity-bound human or explicitly authorized automated acceptance report; all required criteria satisfied>
+- Human prerequisites: <none or exact already-satisfied gate and identity; unresolved human gates block Review>
 - Protected dirty/untracked paths: <list>
 - Risk axes requiring special attention: <list>
 
 Independence:
 1. Fully read the exact applicable global skills, the accepted AGENTS.md and governance from the pinned review base, this complete accepted role template, and only the candidate Story/decision/testing/evidence documents relevant to the Review. Record every path plus immutable blob/hash or full SHA where available and explicitly confirm every complete read in the terminal report; do not load unrelated skills or document bundles.
+   Repeat the complete reads for a new Agent, task recovery, explicit context-compaction/summary signal, role or phase change, accepted-base change, skill/template change, or inability to prove the accepted base, candidate, completed gate, or next transition. Resolve repository sources with `git show <accepted-review-base>:<path>` or a worktree proven at that base; record absence and never substitute a same-named file from another checkout/branch/dirty overlay. Ordinary progress messages do not require another full read while continuity remains provable. After compaction, reconstruct from Git and accepted Story/evidence facts and resume at the first incomplete gate; do not replay completed roles or create a persistent ledger/platform.
 2. Fetch and bind the Review to the exact base and candidate full SHAs. A branch name is only a locator.
 3. Reconstruct facts from Git, code, tests, and evidence. Do not accept the Writer’s summary, claimed scope, or reasoning without independent verification.
 4. Remain read-only until a PASS verdict. Do not edit, stage, commit, rebase, merge, push, or “help fix” the candidate while evaluating it.
@@ -43,7 +46,8 @@ Independence:
 Review:
 - Inspect the exact base...candidate three-dot delta and all directly affected behavior.
 - Verify contract correctness, regressions, boundary cases, ownership/lifecycle, error classification, state transitions, security/privacy, persistence, UI/accessibility when applicable, and evidence accuracy.
-- Run or recheck risk-critical focused and broad validation in proportion to risk. Do not expand into unrelated scope. Distinguish tests that execute production behavior from helpers, string searches, no-op closures, fakes, emulators, devices, and human evidence.
+- Confirm Candidate Validation is VALID and every required human or explicitly authorized automated acceptance criterion is satisfied before Review. Do not use Review to collect missing pre-Review acceptance; return `NEEDS_USER` or `REVIEW_BLOCKED` honestly.
+- Run or recheck risk-critical focused and broad validation in proportion to the stated profile. Do not expand into unrelated scope or automatically run every repository suite. A tiny local UI change normally uses focused UI/static/compile evidence plus the accepted screenshot/human result; concurrency, persistence, migration, security, shared ownership, or platform lifecycle may justify broader targeted checks. Distinguish tests that execute production behavior from helpers, string searches, no-op closures, fakes, emulators, devices, and human evidence.
 - Check exact artifact/source identity. Executable-affecting changes invalidate older binary/device evidence unless tree equivalence is proven.
 - Check pre-existing dirty/untracked protection, staged scope, branch synchronization, and prerequisite ancestry.
 
@@ -53,6 +57,7 @@ Findings:
 - Do not define “minimum” as fewest changed files. Include every directly necessary code, test, document, or configuration adjustment.
 - If a repair requires a new product decision, architecture/ownership change, scope expansion, or unavailable human evidence, report the gate instead of prescribing an unauthorized implementation.
 - Finish the complete scope, acceptance, validation, evidence, Git, and protected-state review and wait for every explorer you started before finalizing. Accumulate all actionable findings and emit them only once in one atomic terminal finding batch; do not send partial or duplicate finding batches.
+- When this is a post-Repair re-Review, repeat the complete Review defined above. Do not limit inspection to previous findings, and do not act if you authored the previous finding batch; a different fresh Reviewer is required.
 
 Verdict and integration:
 - Return three separate verdicts: `SPEC: PASS|FAIL`, `QUALITY: PASS|FAIL`, and `EVIDENCE: PASS|FAIL|BLOCKED`.
