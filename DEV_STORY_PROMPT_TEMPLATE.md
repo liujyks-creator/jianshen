@@ -26,6 +26,7 @@ Approved contract:
 - Objective: <one outcome>
 - Acceptance criteria: <testable list>
 - Acceptance-to-validation matrix: <criterion -> command/inspection/evidence>
+- Validation profile: <tiny local UI | ordinary local logic | cross-module integration | high-risk concurrency/persistence/migration/security/platform lifecycle, plus exact proportional checks>
 - Allowed paths or capability envelope: <closed list or rule>
 - Non-goals and prohibited expansion: <list>
 - Required validation: <commands/behaviors>
@@ -35,6 +36,7 @@ Approved contract:
 
 Before writing:
 1. Fully read the exact applicable global skills, all applicable accepted AGENTS.md files from the pinned base, this complete accepted role template, and only the active Story/decision/testing/evidence documents relevant to the task. Record every path plus immutable blob/hash or full SHA where available and explicitly confirm every complete read in the terminal report; do not load unrelated skills or document bundles.
+   Repeat the complete reads for a new Agent, task recovery, explicit context-compaction/summary signal, role or phase change, accepted-base change, skill/template change, or inability to prove the accepted base, candidate, completed gate, or next transition. Resolve repository sources with `git show <accepted-base>:<path>` or a worktree proven at that base; record absence and never substitute a same-named file from another checkout/branch/dirty overlay. Ordinary progress messages do not require another full read while continuity remains provable. After compaction, reconstruct from Git and accepted Story/evidence facts and resume at the first incomplete gate; do not replay completed work or create a persistent ledger/platform.
 2. Fetch the named integration remote when one exists and verify accepted base, synchronization between the exact integration-target refs when required, prerequisite full-SHA ancestry against the integration-target local ref, branch identity, index state, and exact pre-existing dirty/untracked state.
 3. Run fresh applicable baseline validation before editing. If that is impossible or known failures exist, bind the explicitly accepted pre-existing-failure list to each command, observed result, scope, and authority; an unlisted failure blocks writing.
 4. Stop without editing if authority, prerequisites, scope, environment, baseline, or ownership is ambiguous in a way that could materially change the result.
@@ -57,12 +59,14 @@ Implementation:
 - Keep evidence levels distinct: pure logic, injected/platform integration, emulator/simulator, real device, and human observation do not substitute for one another.
 
 Validation and delivery:
-1. Run the focused tests first, then the required broader validation.
+1. Run the focused checks first, then only the affected regression and broader validation required by the stated validation profile and risk. Fresh verification does not mean every repository suite: a tiny local UI change normally uses focused UI/static/compile evidence plus the named screenshot/human gate; concurrency, persistence, migration, security, shared ownership, or platform lifecycle may require broader targeted checks.
 2. Verify formatting/diff checks, exact three-dot scope, index contents, protected paths, and artifact identity.
 3. If executable inputs changed, rebuild artifacts and invalidate stale screenshots/logs/device evidence unless exact executable-tree equivalence is proven.
 4. Stage exact authorized paths only.
 5. Commit and push only when authorized. Do not merge the Story.
 6. Never claim a command, test, device flow, or evidence gate ran unless it actually ran and its result was inspected.
+7. If a verifiable candidate exists, return `DONE` with next gate `CANDIDATE_VALIDATION`, even when later device or subjective visual acceptance is required. Do not send a produced candidate directly to the user or Reviewer.
+8. Return `NEEDS_USER` before Candidate Validation only when no candidate exists and a user product, authority, or external action is required before one can exist.
 
 Return:
 - exactly one terminal `WRITER_COMPLETE` report; progress, partial, duplicate, missing-field, and non-`WRITER_COMPLETE` output is nonterminal;
@@ -76,4 +80,5 @@ Return:
 - commit full SHA and remote synchronization;
 - protected dirty/untracked state;
 - Story state: implemented / needs review, changes requested, or blocked by an explicit gate.
+- next gate: `CANDIDATE_VALIDATION` for every produced candidate; human or automated acceptance occurs only after that gate and before fresh Review.
 ```

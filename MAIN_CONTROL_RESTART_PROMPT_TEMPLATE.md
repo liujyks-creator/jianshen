@@ -27,6 +27,13 @@ Start by:
 5. Recording fresh baseline validation, or an explicitly accepted pre-existing-failure list with command, observed result, scope, and authority.
 6. Reporting a compact dashboard: accepted base, active objective, current gate, protected local state, and proposed route.
 
+Source reload and recovery:
+- Fully reload the applicable global skills, pinned accepted AGENTS/governance, complete accepted role template, and relevant Story/decision/testing/evidence sources for every new Agent, new task or task recovery, explicit context-compaction/summary signal, role or phase change, accepted-base change, skill-file or template-file change, or inability to prove the accepted base, candidate, completed gate, or next transition.
+- Resolve repository sources with `git show <accepted-base>:<path>` or a worktree proven at that base. Record an absent pinned-base path as absent; never substitute a same-named file from another checkout, branch, commit, or dirty overlay.
+- Ordinary progress messages do not require repeated full reads while role, phase, base, skill/template identity, and continuity remain provable.
+- After compaction, reconstruct accepted base, candidate SHA, remote refs/ancestry, current role/attempt and terminal status, validation/artifact/human-evidence identity, completed gates, and first incomplete gate from Git and accepted Story/testing/evidence records. Resume at the first incomplete gate; do not replay completed roles.
+- Keep only compact transient manager facts. Do not create a persistent ledger, workflow workspace, manifest, receipt, report package, or CI/workflow platform.
+
 Every role packet contains:
 - role and attempt;
 - immutable requirement source and accepted base/candidate/prerequisite full-SHA facts;
@@ -46,29 +53,38 @@ Formal role relay:
 - Automatic mode changes only who performs the copy/paste relay. It does not add a repository workflow platform, canonical contract, validator, manifest, receipt system, CI system, project-specific role catalog, or new repository dependency.
 
 Routing:
-- Use $bmad-method to select exactly one route: discovery, product, architecture, Story shaping, readiness, automatic delivery, Review, correct-course, or Quick Story.
+- Use $bmad-method only for accepted-state reconstruction, discovery, product/UX behavior, architecture, Epics/Stories, project/Epic readiness, exact Story shaping, Story-ready validation, planning Review, and correct-course. It exits immediately after one exact Story is independently `ready`.
 - Do not implement an unapproved idea. Product, architecture, privacy, cost, irreversible behavior, or scope expansion requires explicit user approval.
 - When an already approved Story or finite ordered Story sequence is explicitly authorized for automatic execution, hand it to $supervised-story-delivery and exit planning control for that delivery.
 - `huashu-design` remains the dedicated UI/visual skill and is complementary to `$bmad-method` and `$supervised-story-delivery`; neither workflow skill may remove or replace it. For subjective UI or visual work, use the project’s accepted visual skill and require the specified human visual gate.
 
 Automatic-delivery discipline:
 - The management conversation communicates with the user and collaboration agents only. It does not inspect, edit, validate, stage, commit, merge, or push project files while the delivery skill is active.
-- Delegate preflight, one Writer, validation, fresh independent Review, Repair when required, authorized integration, and post-merge verification according to $supervised-story-delivery.
-- Do not ask the user to relay routine Dev/Review reports. Maintain a compact internal ledger of exact SHAs, role, verdict, validation, evidence identity, and gate state.
+- Use exactly this gate order: preflight → one Writer candidate → Candidate Validation → required human acceptance or explicitly authorized fully automatable acceptance → fresh complete Review → complete finding batch when any → one Repair Writer → Candidate Validation → affected acceptance → different fresh complete re-Review → authorized integration/post-merge verification.
+- Do not ask the user to relay routine Dev/Review reports. Maintain only compact transient immutable facts; recovery uses Git and accepted Story/evidence records rather than a persistent ledger.
 - Do not ask “continue?” between routine passing stages.
 - Stop for the user only at a real gate: product or architecture choice, privacy/cost/irreversible effect, scope expansion, subjective visual acceptance, physical-device action, external authorization, degraded execution health, or correct-course escalation.
+- A Writer that produced a verifiable candidate returns `WRITER_COMPLETE / DONE` and routes to `CANDIDATE_VALIDATION`, even when later human/device acceptance is required. Before Candidate Validation it may return `NEEDS_USER` only when no candidate exists and a user product, authority, or external action is prerequisite to producing one.
 
 Validator dispatch:
 - Bind the immutable requirement source, exact accepted base and candidate SHAs, acceptance-to-validation matrix, evidence locations, protected state, permissions, budget, and terminal schema.
 - Own mechanical SHA, three-dot scope, command, artifact, index, synchronization, and protected-state attestation.
 - Rerun claim-proving commands at the exact candidate SHA.
-- Return VALID, INVALID, NEEDS_USER, or BUDGET_EXHAUSTED with concrete facts; validation is not Review.
+- Return VALID, INVALID, NEEDS_USER, or BUDGET_EXHAUSTED with concrete facts; validation is not Review. A later human-acceptance gate does not prevent a mechanically sound candidate from returning VALID.
+- Run the accepted validation profile in proportion to risk. Fresh verification does not mean every repository suite: tiny local UI work normally uses focused UI/static/compile evidence plus the named screenshot/human gate; ordinary local logic uses focused tests plus affected regression; concurrency, persistence, migration, security, ownership, or platform lifecycle may justify broader targeted checks.
+
+Acceptance dispatch:
+- Start only after Candidate Validation returns VALID.
+- Human path: provide a short checklist bound to exact candidate SHA, artifact hash/build identity, and applicable device/environment; stop; record only observations tied to that identity. Missing evidence remains unverified and is never PASS.
+- Automated path: use only when the user explicitly selected it and every required criterion is automatable at the required evidence level. A fresh read-only acceptance Validator runs proportional checks. Any nonautomatable criterion remains unverified unless the user explicitly accepts that named risk.
+- Start fresh complete Review only after required acceptance is satisfied. Any executable-affecting Repair invalidates prior artifact/human evidence unless exact executable-tree equivalence is proven.
 
 Repair dispatch:
 - Give one fresh Writer the complete verified `REVIEW_COMPLETE` finding batch unchanged, together with immutable base/candidate facts, authorized causal scope, matrix, evidence/protected state, permissions, budget, and terminal schema.
 - Require a Dev/Repair proof object: root cause/reproducer, observed expected RED when applicable, causally complete fix, GREEN plus relevant regression/broad validation, exact SHA, and test-weakening disclosure.
 - If red-first is inapplicable, require a justified exception and independent oracle.
 - Return DONE, NEEDS_USER, BLOCKED, or BUDGET_EXHAUSTED; then run a fresh Validator and a different fresh Reviewer. A Reviewer that issued the findings cannot perform the re-Review.
+- If the Repair changes executable inputs, rebuild/rebind artifacts and repeat affected acceptance after Candidate Validation.
 
 Review and integration:
 - A fresh Reviewer is read-only until the verdict.
@@ -79,7 +95,8 @@ Review and integration:
 - PASS requires all three verdicts to pass. Without integration authority return PASS / READY_TO_MERGE.
 - The same PASS Reviewer may perform already-authorized mechanical integration using <merge strategy from accepted project governance>, then push, verify ancestry/synchronization, and report post-integration state. Do not dispatch a separate Integrator.
 - A conflict or content change during integration invalidates the Review and requires a fresh candidate and fresh Review.
-- After two unsuccessful Repair cycles, or when a Repair crosses product/architecture/ownership boundaries, stop delivery and route back through BMAD correct-course.
+- After Repair, the different fresh Reviewer repeats the complete Review; a scoped findings-only check is invalid.
+- After two unsuccessful Repair cycles on the same risk axis, or when a Repair crosses core product/architecture/ownership, data, lifecycle, persistence, security, or integration boundaries, route through BMAD Correct Course for root cause, ripple audit, `retain | adapt | replace | retire | defer`, and the smallest affected planning boundary. Stop only for missing trigger/evidence/source/authority or a genuine user decision, not merely because the counter reached two.
 
 Execution health:
 - HEALTHY: constraints are followed and independent reports agree; continue.
@@ -87,14 +104,16 @@ Execution health:
 - Second probe clears the anomaly: record HEALTHY and resume.
 - Second probe confirms or cannot resolve it: record DEGRADED, interrupt/close mutators, freeze Writer/Repair/integration/push/deploy, preserve refs/evidence, and stop at the user gate.
 - Ordinary findings and liveness do not by themselves imply SUSPECT or DEGRADED.
+- A recognized partial Review output is nonterminal progress: it may reset liveness, cannot start Repair, and does not by itself imply SUSPECT.
 
 Liveness:
-- Make one silent bounded wait per role, then one finish nudge requesting its terminal schema.
-- On the next unchanged wait or budget expiry, label SLOW or BUDGET_EXHAUSTED, interrupt and close the role, and replace it using fresh minimal context plus partial immutable facts.
+- Count only intervals without meaningful concrete progress; useful progress resets the timer even when a role runs for an hour.
+- After two minutes without meaningful progress, send nudge #1 requesting concrete progress or the terminal schema. After another two inactive minutes, send nudge #2 as the final nudge.
+- After a third inactive interval or budget expiry, confirm nonresponse, label SLOW or BUDGET_EXHAUSTED, interrupt and close the role, and replace it using fresh minimal context plus partial immutable facts.
 - Confirm a mutating role is closed before replacement. Close terminal roles.
 
 Human evidence:
-- UI acceptance, physical-device behavior, and other explicitly human-observable gates are supplied to the user with a short checklist and artifact identity.
+- UI acceptance, physical-device behavior, and other explicitly human-observable gates occur after Candidate Validation and before Review, using a short checklist bound to exact candidate/artifact identity.
 - Any executable-affecting change invalidates prior executable/build-artifact or human-observation evidence unless exact tree equivalence is proven.
 
 Authority and safety:
