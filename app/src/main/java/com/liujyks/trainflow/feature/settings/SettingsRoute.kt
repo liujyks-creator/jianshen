@@ -2,13 +2,18 @@ package com.liujyks.trainflow.feature.settings
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +21,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -23,17 +30,38 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.liujyks.trainflow.R
 import com.liujyks.trainflow.core.model.PermissionPrivacySection
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral700
 import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
@@ -59,9 +87,14 @@ internal fun SettingsRoute(
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,
     onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
     onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit,
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit,
     onClearHeartRateDevicePreference: () -> Unit,
+    onHeartRatePersonalParametersChanged: (Int?, Int?, Int?) -> Unit,
     onUiSkinChanged: (String) -> Unit,
     heartRateFocusRequestKey: Int = 0,
     modifier: Modifier = Modifier
@@ -118,9 +151,14 @@ internal fun SettingsRoute(
                 onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
                 onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
                 onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                onChangeHeartRateDevice = onChangeHeartRateDevice,
                 onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                onOpenBluetoothSettings = onOpenBluetoothSettings,
                 onSelectHeartRateDevice = onSelectHeartRateDevice,
-                onClearHeartRateDevicePreference = onClearHeartRateDevicePreference
+                onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                onReconnectHeartRateDevice = onReconnectHeartRateDevice,
+                onClearHeartRateDevicePreference = onClearHeartRateDevicePreference,
+                onHeartRatePersonalParametersChanged = onHeartRatePersonalParametersChanged
             )
         }
 
@@ -248,64 +286,141 @@ private fun HeartRatePreferencesCard(
     onPrepareHeartRateBlePermission: () -> Unit,
     onRequestHeartRateBlePermission: () -> Unit,
     onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
     onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit,
-    onClearHeartRateDevicePreference: () -> Unit
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit,
+    onClearHeartRateDevicePreference: () -> Unit,
+    onHeartRatePersonalParametersChanged: (Int?, Int?, Int?) -> Unit
 ) {
     SettingsCard(tileAccent = LocalTrainFlowSkin.current.tokens.focus) {
-        SectionTitle(text = uiState.sectionTitle)
+        SectionTitle(text = "心率功能")
         ToggleRow(
-            title = "心率显示",
+            title = "启用心率功能",
             checked = uiState.enabled,
             onCheckedChange = onHeartRateDisplayEnabledChanged
         )
-        StatusBlock(title = "心率显示：${uiState.statusLabel}", body = uiState.statusSummary)
+        Text(
+            text = if (uiState.enabled) {
+                "已启用；满足条件时在 TrainFlow 前台自动恢复已保存设备。"
+            } else {
+                "默认关闭；关闭时不显示、不扫描、不连接、不记录。"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = TrainFlowNeutral700
+        )
+
+        SectionTitle(text = "设备连接")
         if (uiState.enabled) {
             StatusBlock(
                 title = "连接状态：${uiState.devicePickerState.connectionStatusLabel}",
                 body = uiState.sourceSummary
             )
-            uiState.savedDeviceDisplayName?.let { displayName ->
+            Text(
+                text = uiState.connectionIntentCopy,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+            if (uiState.blePermissionStatus != HeartRateBlePermissionStatus.GRANTED) {
                 StatusBlock(
-                    title = "已保存设备：$displayName",
-                    body = "保存设备仅供你主动连接，不代表设备在附近、已开启广播、正在连接或已经连接。"
+                    title = uiState.blePermissionStatusTitle,
+                    body = if (uiState.showBlePermissionRationale) {
+                        uiState.blePermissionRationaleBullets.joinToString("\n")
+                    } else {
+                        uiState.blePermissionStatusCopy
+                    }
                 )
             }
-        }
-        StatusBlock(title = uiState.blePermissionStatusTitle, body = uiState.blePermissionStatusCopy)
-        if (uiState.showBlePermissionRationale) {
-            StatusBlock(
-                title = uiState.blePermissionRationaleTitle,
-                body = uiState.blePermissionRationaleBullets.joinToString("\n")
+            HeartRateDevicePickerBlock(
+                uiState = uiState.devicePickerState,
+                onSelectHeartRateDevice = onSelectHeartRateDevice
             )
-            Button(
-                onClick = onRequestHeartRateBlePermission,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.blePermissionActionLabel)
-            }
-        } else if (uiState.enabled && uiState.canPrepareBlePermission) {
-            Button(
-                onClick = onPrepareHeartRateBlePermission,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.blePermissionActionLabel)
-            }
+            HeartRateConnectionActions(
+                uiState = uiState,
+                onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                onChangeHeartRateDevice = onChangeHeartRateDevice,
+                onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                onOpenBluetoothSettings = onOpenBluetoothSettings,
+                onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                onReconnectHeartRateDevice = onReconnectHeartRateDevice
+            )
         }
-        HeartRateDevicePickerBlock(
-            uiState = uiState.devicePickerState,
-            onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
-            onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
-            onSelectHeartRateDevice = onSelectHeartRateDevice
-        )
-        StatusBlock(title = "显示用途", body = uiState.purposeCopy)
-        StatusBlock(title = "记录边界", body = uiState.recordingBoundaryCopy)
-        StatusBlock(title = "隐私说明", body = uiState.privacyCopy)
-        StatusBlock(title = "非医疗说明", body = uiState.nonMedicalCopy)
-        StatusBlock(title = "权限说明", body = uiState.permissionCopy)
-        StatusBlock(title = "悬浮边界", body = uiState.overlayCopy)
+
+        SectionTitle(text = "心率区间与提醒")
+        if (uiState.enabled) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, TrainFlowNeutral100)
+            ) {
+                Column {
+                    OptionalHeartRateNumberRow(
+                        label = "年龄",
+                        rangeDescription = "1–130 · 可选",
+                        iconRes = R.drawable.ic_person_outline_24,
+                        value = uiState.ageYears,
+                        range = 1..130,
+                        onValidValue = { age ->
+                            onHeartRatePersonalParametersChanged(
+                                age,
+                                uiState.personalMaxHeartRateBpm,
+                                uiState.alertThresholdBpm
+                            )
+                        }
+                    )
+                    HorizontalDivider(thickness = 1.dp, color = TrainFlowNeutral100)
+                    OptionalHeartRateNumberRow(
+                        label = "个人最大心率",
+                        rangeDescription = "bpm · 30–260 · 可选",
+                        iconRes = R.drawable.ic_monitor_heart_24,
+                        value = uiState.personalMaxHeartRateBpm,
+                        range = 30..260,
+                        onValidValue = { personalMax ->
+                            onHeartRatePersonalParametersChanged(
+                                uiState.ageYears,
+                                personalMax,
+                                uiState.alertThresholdBpm
+                            )
+                        }
+                    )
+                    HorizontalDivider(thickness = 1.dp, color = TrainFlowNeutral100)
+                    OptionalHeartRateNumberRow(
+                        label = "上限提醒",
+                        rangeDescription = "bpm · 30–260 · 可选",
+                        iconRes = R.drawable.ic_notifications_none_24,
+                        value = uiState.alertThresholdBpm,
+                        range = 30..260,
+                        onValidValue = { alert ->
+                            onHeartRatePersonalParametersChanged(
+                                uiState.ageYears,
+                                uiState.personalMaxHeartRateBpm,
+                                alert
+                            )
+                        }
+                    )
+                }
+            }
+            Text(
+                text = "优先使用个人最大心率，未填写时使用 220 − 年龄；区间与上限提醒仅作训练参考。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+        } else {
+            Text(
+                text = "启用后可填写年龄、个人最大心率和上限提醒。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TrainFlowNeutral700
+            )
+        }
+
+        SectionTitle(text = "隐私与使用边界")
         Text(
-            text = uiState.enabledBoundaryCopy,
+            text = "心率仅在 TrainFlow App 内显示；无训练时不写入训练记录。蓝牙权限只在你的连接操作后请求。心率与区间不用于医疗诊断，也不会自动中断训练。",
             style = MaterialTheme.typography.bodyMedium,
             color = TrainFlowNeutral700
         )
@@ -316,15 +431,209 @@ private fun HeartRatePreferencesCard(
             ) {
                 Text(text = "清除已保存设备")
             }
+            Text(
+                text = uiState.clearDeviceActionCopy,
+                style = MaterialTheme.typography.bodySmall,
+                color = TrainFlowNeutral700
+            )
         }
+    }
+}
+
+@Composable
+private fun HeartRateConnectionActions(
+    uiState: HeartRateSettingsUiState,
+    onPrepareHeartRateBlePermission: () -> Unit,
+    onRequestHeartRateBlePermission: () -> Unit,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit
+) {
+    uiState.primaryConnectionAction?.let { action ->
+        Button(
+            onClick = {
+                dispatchHeartRateSettingsAction(
+                    action = action.action,
+                    onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                    onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                    onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                    onChangeHeartRateDevice = onChangeHeartRateDevice,
+                    onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                    onOpenBluetoothSettings = onOpenBluetoothSettings,
+                    onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                    onReconnectHeartRateDevice = onReconnectHeartRateDevice
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = action.label)
+        }
+    }
+    uiState.secondaryConnectionAction?.let { action ->
+        OutlinedButton(
+            onClick = {
+                dispatchHeartRateSettingsAction(
+                    action = action.action,
+                    onPrepareHeartRateBlePermission = onPrepareHeartRateBlePermission,
+                    onRequestHeartRateBlePermission = onRequestHeartRateBlePermission,
+                    onStartHeartRateDeviceScan = onStartHeartRateDeviceScan,
+                    onChangeHeartRateDevice = onChangeHeartRateDevice,
+                    onStopHeartRateDeviceScan = onStopHeartRateDeviceScan,
+                    onOpenBluetoothSettings = onOpenBluetoothSettings,
+                    onDisconnectHeartRateDevice = onDisconnectHeartRateDevice,
+                    onReconnectHeartRateDevice = onReconnectHeartRateDevice
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = action.label)
+        }
+    }
+}
+
+internal fun dispatchHeartRateSettingsAction(
+    action: HeartRateSettingsAction,
+    onPrepareHeartRateBlePermission: () -> Unit,
+    onRequestHeartRateBlePermission: () -> Unit,
+    onStartHeartRateDeviceScan: () -> Unit,
+    onChangeHeartRateDevice: () -> Unit,
+    onStopHeartRateDeviceScan: () -> Unit,
+    onOpenBluetoothSettings: () -> Unit,
+    onDisconnectHeartRateDevice: () -> Unit,
+    onReconnectHeartRateDevice: () -> Unit
+) {
+    when (action) {
+        HeartRateSettingsAction.PREPARE_PERMISSION,
+        HeartRateSettingsAction.OPEN_APP_SETTINGS -> onPrepareHeartRateBlePermission()
+        HeartRateSettingsAction.REQUEST_PERMISSION -> onRequestHeartRateBlePermission()
+        HeartRateSettingsAction.OPEN_BLUETOOTH_SETTINGS -> onOpenBluetoothSettings()
+        HeartRateSettingsAction.SCAN_DEVICES -> onStartHeartRateDeviceScan()
+        HeartRateSettingsAction.STOP_SCAN -> onStopHeartRateDeviceScan()
+        HeartRateSettingsAction.RECONNECT -> onReconnectHeartRateDevice()
+        HeartRateSettingsAction.CHANGE_DEVICE -> onChangeHeartRateDevice()
+        HeartRateSettingsAction.DISCONNECT -> onDisconnectHeartRateDevice()
+    }
+}
+
+@Composable
+private fun OptionalHeartRateNumberRow(
+    label: String,
+    rangeDescription: String,
+    iconRes: Int,
+    value: Int?,
+    range: IntRange,
+    onValidValue: (Int?) -> Unit
+) {
+    var text by remember(value) { mutableStateOf(value?.toString().orEmpty()) }
+    val parsed = text.toIntOrNull()
+    val invalid = text.isNotBlank() && parsed !in range
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val currentValue = text.ifBlank { "未填写" }
+    val validationDescription = if (invalid) {
+        "输入无效，请输入 ${range.first}–${range.last}，或留空"
+    } else {
+        "有效，可编辑"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            }
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$label，当前值 $currentValue，允许范围 $rangeDescription"
+                stateDescription = validationDescription
+            }
+            .heightIn(min = 64.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (invalid) {
+                    "请输入 ${range.first}–${range.last}，或留空。"
+                } else {
+                    rangeDescription
+                },
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                color = if (invalid) MaterialTheme.colorScheme.error else TrainFlowNeutral700
+            )
+        }
+        Surface(
+            modifier = Modifier.size(width = 60.dp, height = 40.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (invalid) MaterialTheme.colorScheme.error else TrainFlowNeutral200
+            )
+        ) {
+            BasicTextField(
+                value = text,
+                onValueChange = { next ->
+                    if (next.length <= 3 && next.all(Char::isDigit)) {
+                        text = next
+                        val nextValue = next.toIntOrNull()
+                        if (next.isBlank() || nextValue in range) {
+                            onValidValue(nextValue)
+                        }
+                    }
+                },
+                modifier = Modifier.padding(8.dp)
+                    .focusRequester(focusRequester),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                )
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            painter = painterResource(R.drawable.ic_chevron_right_24),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
 private fun HeartRateDevicePickerBlock(
     uiState: HeartRateDevicePickerUiState,
-    onStartHeartRateDeviceScan: () -> Unit,
-    onStopHeartRateDeviceScan: () -> Unit,
     onSelectHeartRateDevice: (String) -> Unit
 ) {
     StatusBlock(title = uiState.title, body = uiState.body)
@@ -333,26 +642,6 @@ private fun HeartRateDevicePickerBlock(
         style = MaterialTheme.typography.bodyMedium,
         color = TrainFlowNeutral700
     )
-    when {
-        uiState.canStopScan -> {
-            OutlinedButton(
-                onClick = onStopHeartRateDeviceScan,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.actionLabel ?: "停止扫描")
-            }
-        }
-
-        uiState.actionLabel != null -> {
-            Button(
-                enabled = uiState.canStartScan,
-                onClick = onStartHeartRateDeviceScan,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = uiState.actionLabel)
-            }
-        }
-    }
     if (uiState.showDeviceList) {
         uiState.devices.forEach { device ->
             HeartRateDeviceCandidateRow(
@@ -587,9 +876,14 @@ private fun SettingsRoutePreview() {
             onPrepareHeartRateBlePermission = {},
             onRequestHeartRateBlePermission = {},
             onStartHeartRateDeviceScan = {},
+            onChangeHeartRateDevice = {},
             onStopHeartRateDeviceScan = {},
+            onOpenBluetoothSettings = {},
             onSelectHeartRateDevice = {},
+            onDisconnectHeartRateDevice = {},
+            onReconnectHeartRateDevice = {},
             onClearHeartRateDevicePreference = {},
+            onHeartRatePersonalParametersChanged = { _, _, _ -> },
             onUiSkinChanged = {}
         )
     }

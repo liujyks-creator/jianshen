@@ -88,6 +88,26 @@ internal fun snapHeartRateCapsuleToSafeEdge(
     } else {
         HeartRateCapsuleSnapEdge.RIGHT
     }
+    return placeHeartRateCapsuleAtSafeEdge(
+        desiredPoint = releasePoint,
+        edge = edge,
+        capsuleSize = capsuleSize,
+        viewport = viewport,
+        safeInsets = safeInsets,
+        exclusionZones = exclusionZones,
+        edgeMargin = edgeMargin
+    )
+}
+
+internal fun placeHeartRateCapsuleAtSafeEdge(
+    desiredPoint: HeartRateCapsulePoint,
+    edge: HeartRateCapsuleSnapEdge,
+    capsuleSize: HeartRateCapsuleSize,
+    viewport: HeartRateCapsuleViewport,
+    safeInsets: HeartRateCapsuleSafeInsets,
+    exclusionZones: List<HeartRateCapsuleExclusionZone>,
+    edgeMargin: Float
+): HeartRateCapsulePlacement {
     val targetX = when (edge) {
         HeartRateCapsuleSnapEdge.LEFT -> safeInsets.left + edgeMargin
         HeartRateCapsuleSnapEdge.RIGHT -> viewport.width - safeInsets.right - edgeMargin - capsuleSize.width
@@ -98,7 +118,7 @@ internal fun snapHeartRateCapsuleToSafeEdge(
     val minY = safeInsets.top + edgeMargin
     val maxY = (viewport.height - safeInsets.bottom - edgeMargin - capsuleSize.height).coerceAtLeast(minY)
     val targetY = nearestSafeY(
-        desiredY = releasePoint.y.coerceIn(minY, maxY),
+        desiredY = desiredPoint.y.coerceIn(minY, maxY),
         x = targetX,
         minY = minY,
         maxY = maxY,

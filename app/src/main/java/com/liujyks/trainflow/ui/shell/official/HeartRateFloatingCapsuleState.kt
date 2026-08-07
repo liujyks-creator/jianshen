@@ -186,7 +186,7 @@ private fun notConnectedCapsule(
         status = HeartRateFloatingCapsuleStatus.SAVED_DEVICE,
         label = "未连接",
         title = "尚未连接心率设备",
-        body = "已保存设备仅供主动连接，不代表设备在附近、正在连接或已经连接。",
+        body = "已保存设备用于满足条件时自动恢复精确目标，也可手动重连；不代表设备在附近、正在连接或已经连接。",
         deviceHint = deviceHint ?: "已保存设备",
         updateLabel = "未连接",
         forceCollapsed = forceCollapsed

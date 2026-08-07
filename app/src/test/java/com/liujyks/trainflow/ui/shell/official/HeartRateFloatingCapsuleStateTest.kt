@@ -1,9 +1,6 @@
 package com.liujyks.trainflow.ui.shell.official
 
-import com.liujyks.trainflow.core.health.BleHeartRateDeviceSelection
-import com.liujyks.trainflow.core.health.BleHeartRateProviderState
-import com.liujyks.trainflow.core.health.BleHeartRateProviderStateKind
-import com.liujyks.trainflow.core.health.BleHeartRateRecoverableReason
+import androidx.compose.ui.graphics.Color
 import com.liujyks.trainflow.core.health.HeartRateRuntimeFact
 import com.liujyks.trainflow.core.health.HeartRateSourceHint
 import com.liujyks.trainflow.core.health.toHeartRateState
@@ -87,6 +84,8 @@ class HeartRateFloatingCapsuleStateTest {
         assertEquals(HeartRateFloatingCapsuleStatus.SAVED_DEVICE, state.status)
         assertEquals("未连接", state.collapsedLabel)
         assertFalse(allCopy.contains(rawIdentifier))
+        assertTrue(allCopy.contains("自动恢复"))
+        assertFalse(allCopy.contains("仅供主动连接"))
     }
 
     @Test
@@ -199,14 +198,9 @@ class HeartRateFloatingCapsuleStateTest {
     }
 
     @Test
-    fun malformedCompatibilityOutcomeFailsClosedWithoutCachedReadingOrErrorCopy() {
-        val mapped = BleHeartRateProviderState(
-            kind = BleHeartRateProviderStateKind.ERROR,
-            message = "raw parse failure",
-            selectedDevice = BleHeartRateDeviceSelection("id", "Band"),
-            bpm = 88,
-            measuredAt = "2026-07-19T13:16:04Z",
-            recoverableReason = BleHeartRateRecoverableReason.PARSE_FAILED
+    fun interruptedOutcomeFailsClosedWithoutCachedReadingOrErrorCopy() {
+        val mapped = HeartRateRuntimeFact.DataInterrupted(
+            HeartRateSourceHint(identifier = "id", displayName = "Band")
         ).toHeartRateState()
         val state = capsule(mapped)
         val copy = buildString {
@@ -267,6 +261,45 @@ class HeartRateFloatingCapsuleStateTest {
             state.infoTiles.map { it.label }
         )
         assertEquals("实时", state.tile("更新"))
+    }
+
+    @Test
+    fun approvedZoneTintStaysSoftAndForegroundMeetsHighContrast() {
+        assertTrue(HEART_RATE_CAPSULE_ZONE_TINT_ALPHA in 0.12f..0.18f)
+        assertTrue(HEART_RATE_CAPSULE_ZONE_HALO_ALPHA in 0.12f..0.18f)
+        val zoneStatuses = listOf(
+            HeartRateFloatingCapsuleStatus.ZONE_LOW,
+            HeartRateFloatingCapsuleStatus.ZONE_WARMUP,
+            HeartRateFloatingCapsuleStatus.ZONE_FAT_BURN,
+            HeartRateFloatingCapsuleStatus.ZONE_AEROBIC,
+            HeartRateFloatingCapsuleStatus.ZONE_ANAEROBIC,
+            HeartRateFloatingCapsuleStatus.ZONE_LIMIT,
+            HeartRateFloatingCapsuleStatus.OVER_LIMIT
+        )
+        val themeSurfaces = listOf(Color(0xFFF9FAFB), Color(0xFF17181A))
+
+        zoneStatuses.forEach { status ->
+            themeSurfaces.forEach { surface ->
+                val background = heartRateCapsuleBackgroundColor(status, surface)
+                val foreground = heartRateCapsuleForegroundColor(background)
+                val gradientStops = heartRateCapsuleGradientStops(status, surface)
+
+                assertTrue(
+                    "$status on $surface",
+                    heartRateCapsuleContrastRatio(foreground, background) >= 7.0
+                )
+                assertFalse(background == status.heartRateCapsuleAccentColor())
+                assertEquals(3, gradientStops.size)
+                assertEquals(background, gradientStops[1])
+                assertFalse(gradientStops.first() == background)
+                gradientStops.forEach { stop ->
+                    assertTrue(
+                        "$status gradient stop $stop on $surface",
+                        heartRateCapsuleContrastRatio(foreground, stop) >= 7.0
+                    )
+                }
+            }
+        }
     }
 
     private fun liveState(bpm: Int) = HeartRateRuntimeFact.Live(

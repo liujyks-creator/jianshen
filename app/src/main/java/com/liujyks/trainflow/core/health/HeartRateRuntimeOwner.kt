@@ -47,11 +47,9 @@ internal sealed class HeartRateRuntimeAction {
 }
 
 /**
- * E17-6 deterministic BLE runtime owner.
- *
- * This class intentionally has no production composition-root consumer yet. E17-7 performs the
- * atomic production switch. Until then, tests instantiate this owner directly while the legacy
- * provider remains the only production-reachable BLE owner.
+ * Deterministic BLE runtime owner introduced in E17-6 and activated as the single
+ * Application-scoped production owner in E17-7b. Activities, Compose, and debug tools may observe
+ * state or submit actions, but cannot own BLE resources.
  */
 @SuppressLint("MissingPermission")
 internal class HeartRateRuntimeOwner(
@@ -418,6 +416,9 @@ internal class HeartRateRuntimeOwner(
             HeartRateRecoveryStopReason.NO_SAVED_TARGET -> {
                 enabled = true
                 operationEligible = true
+                if (activeScan?.origin == ScanOrigin.MANUAL) {
+                    return
+                }
                 cleanup(
                     requestedFact = HeartRateRuntimeFact.NotConnected(),
                     permissionLossOverridesFact = false
@@ -1146,6 +1147,8 @@ internal class HeartRateRuntimeOwner(
                 detachedScan.scanner.stopScan(detachedScan.callback)
             } catch (_: SecurityException) {
                 cleanupObservedPermissionLoss = true
+            } catch (error: IllegalStateException) {
+                if (requestedFact !is HeartRateRuntimeFact.BluetoothOff) throw error
             }
         }
         val detachedGatt = detachedAttempt?.gatt
@@ -1196,6 +1199,13 @@ internal class HeartRateRuntimeOwner(
                 detached.scanner.stopScan(detached.callback)
             } catch (_: SecurityException) {
                 cleanup(HeartRateRuntimeFact.PermissionRequired(currentSource()))
+                return false
+            } catch (error: IllegalStateException) {
+                if (!isBluetoothAdapterUnavailableOrDisabled()) throw error
+                cleanup(
+                    requestedFact = HeartRateRuntimeFact.BluetoothOff(currentSource()),
+                    permissionLossOverridesFact = false
+                )
                 return false
             }
         }
@@ -1257,6 +1267,15 @@ internal class HeartRateRuntimeOwner(
             )
         }
         return adapter
+    }
+
+    private fun isBluetoothAdapterUnavailableOrDisabled(): Boolean {
+        val adapter = appContext.getSystemService(BluetoothManager::class.java)?.adapter ?: return true
+        return try {
+            !adapter.isEnabled
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     private fun hasRequiredPermissions(): Boolean {

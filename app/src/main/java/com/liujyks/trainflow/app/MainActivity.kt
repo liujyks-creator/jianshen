@@ -14,7 +14,6 @@ import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
-import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
 import com.liujyks.trainflow.ui.shell.official.TrainFlowApp
 import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.theme.rememberTrainFlowReduceMotion
@@ -26,9 +25,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
-            val preferencesDataSource = remember(context) {
-                TrainFlowPreferencesDataSource(context.trainFlowPreferencesDataStore)
-            }
+            val trainFlowApplication = application as TrainFlowApplication
+            val preferencesDataSource: TrainFlowPreferencesDataSource =
+                trainFlowApplication.preferencesDataSource
             val trainFlowDatabase = remember(context) {
                 TrainFlowDatabase.create(context.applicationContext)
             }
@@ -41,6 +40,16 @@ class MainActivity : ComponentActivity() {
             val preferences by preferencesDataSource.preferences.collectAsState(
                 initial = TrainFlowPreferences()
             )
+            val heartRateState by
+                trainFlowApplication.heartRateRuntimeOwner.heartRateState.collectAsState()
+            val heartRateScanState by
+                trainFlowApplication.heartRateRuntimeOwner.scanState.collectAsState()
+            val heartRateCandidates by
+                trainFlowApplication.heartRateRuntimeOwner.candidates.collectAsState()
+            val heartRateRecoveryState by
+                trainFlowApplication.heartRateRuntimeOwner.recoveryState.collectAsState()
+            val processVisibility by
+                trainFlowApplication.processVisibility.collectAsState()
             val reduceMotion = rememberTrainFlowReduceMotion()
             val workoutPlans by workoutPlanRepository.plans.collectAsState(
                 initial = emptyList()
@@ -58,6 +67,11 @@ class MainActivity : ComponentActivity() {
                     workoutPlans = workoutPlans,
                     workoutSessions = workoutSessions,
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),
+                    heartRateState = heartRateState,
+                    heartRateScanState = heartRateScanState,
+                    heartRateDeviceCandidates = heartRateCandidates,
+                    heartRateRecoveryState = heartRateRecoveryState,
+                    appVisible = processVisibility == ProcessVisibilityFact.VISIBLE,
                     planEditorDefaults = preferences.toPlanEditorDefaults(),
                     onSaveWorkoutPlan = { plan ->
                         scope.launch {
@@ -124,21 +138,45 @@ class MainActivity : ComponentActivity() {
                     },
                     onHeartRateDisplayEnabledChanged = { enabled ->
                         scope.launch {
-                            preferencesDataSource.setHeartRateDisplayEnabled(enabled)
+                            trainFlowApplication.setHeartRateEnabled(enabled)
                         }
                     },
                     onSaveHeartRateDevicePreference = { identifier, displayName ->
                         scope.launch {
-                            preferencesDataSource.setBleHeartRateDevicePreference(
-                                identifier = identifier,
-                                displayName = displayName
-                            )
+                            trainFlowApplication.selectHeartRateDevice(identifier, displayName)
                         }
+                    },
+                    onStartHeartRateDeviceScan = {
+                        trainFlowApplication.startManualHeartRateScan()
+                    },
+                    onChangeHeartRateDevice = {
+                        scope.launch { trainFlowApplication.changeHeartRateDevice() }
+                    },
+                    onStopHeartRateDeviceScan = {
+                        trainFlowApplication.stopManualHeartRateScan()
+                    },
+                    onDisconnectHeartRateDevice = {
+                        scope.launch { trainFlowApplication.disconnectHeartRateDevice() }
+                    },
+                    onReconnectHeartRateDevice = {
+                        scope.launch { trainFlowApplication.reconnectHeartRateDevice() }
                     },
                     onClearHeartRateDevicePreference = {
                         scope.launch {
-                            preferencesDataSource.clearBleHeartRateDevicePreference()
+                            trainFlowApplication.clearHeartRateDevice()
                         }
+                    },
+                    onHeartRatePersonalParametersChanged = { age, personalMax, alert ->
+                        scope.launch {
+                            trainFlowApplication.setHeartRatePersonalParameters(
+                                ageYears = age,
+                                personalMaxHeartRateBpm = personalMax,
+                                alertThresholdBpm = alert
+                            )
+                        }
+                    },
+                    onHeartRateEnvironmentChanged = {
+                        trainFlowApplication.refreshHeartRateEnvironment()
                     },
                     onUiSkinChanged = { skinId ->
                         scope.launch {
