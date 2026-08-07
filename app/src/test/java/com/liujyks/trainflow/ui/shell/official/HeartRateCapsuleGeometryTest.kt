@@ -41,6 +41,44 @@ class HeartRateCapsuleGeometryTest {
     }
 
     @Test
+    fun rightEdgeSurvivesCollapsedAndExpandedResize() {
+        val collapsed = placeAtStoredEdge(
+            desiredPoint = HeartRateCapsulePoint(x = 70f, y = 120f),
+            edge = HeartRateCapsuleSnapEdge.RIGHT,
+            size = HeartRateCapsuleSize(width = 116f, height = 44f)
+        )
+        val expanded = placeAtStoredEdge(
+            desiredPoint = HeartRateCapsulePoint(x = 230f, y = 120f),
+            edge = HeartRateCapsuleSnapEdge.RIGHT,
+            size = HeartRateCapsuleSize(width = 276f, height = 214f)
+        )
+
+        assertEquals(HeartRateCapsuleSnapEdge.RIGHT, collapsed.edge)
+        assertEquals(230f, collapsed.point.x, 0.01f)
+        assertEquals(HeartRateCapsuleSnapEdge.RIGHT, expanded.edge)
+        assertEquals(70f, expanded.point.x, 0.01f)
+    }
+
+    @Test
+    fun leftEdgeSurvivesCollapsedAndExpandedResize() {
+        val collapsed = placeAtStoredEdge(
+            desiredPoint = HeartRateCapsulePoint(x = 14f, y = 120f),
+            edge = HeartRateCapsuleSnapEdge.LEFT,
+            size = HeartRateCapsuleSize(width = 116f, height = 44f)
+        )
+        val expanded = placeAtStoredEdge(
+            desiredPoint = HeartRateCapsulePoint(x = 14f, y = 120f),
+            edge = HeartRateCapsuleSnapEdge.LEFT,
+            size = HeartRateCapsuleSize(width = 276f, height = 214f)
+        )
+
+        assertEquals(HeartRateCapsuleSnapEdge.LEFT, collapsed.edge)
+        assertEquals(14f, collapsed.point.x, 0.01f)
+        assertEquals(HeartRateCapsuleSnapEdge.LEFT, expanded.edge)
+        assertEquals(14f, expanded.point.x, 0.01f)
+    }
+
+    @Test
     fun releaseOverBottomButtonSnapsAwayFromBottomZone() {
         val bottomZone = HeartRateCapsuleExclusionZone(
             left = 0f,
@@ -161,4 +199,18 @@ class HeartRateCapsuleGeometryTest {
 
         assertFalse(canPlace)
     }
+
+    private fun placeAtStoredEdge(
+        desiredPoint: HeartRateCapsulePoint,
+        edge: HeartRateCapsuleSnapEdge,
+        size: HeartRateCapsuleSize
+    ) = placeHeartRateCapsuleAtSafeEdge(
+        desiredPoint = desiredPoint,
+        edge = edge,
+        capsuleSize = size,
+        viewport = viewport,
+        safeInsets = safeInsets,
+        exclusionZones = emptyList(),
+        edgeMargin = 14f
+    )
 }

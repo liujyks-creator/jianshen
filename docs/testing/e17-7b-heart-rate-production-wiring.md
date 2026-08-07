@@ -52,3 +52,11 @@ The regression proof first failed on the pre-Repair candidate for `active scan -
 5. Exercise foreground return and proximity-loss recovery. Record device / Band firmware / Huawei Health context, screenshots, and logcat.
 
 Until those steps pass on the final APK, merge remains blocked.
+
+## Capsule snap-edge resize Repair
+
+The 2026-08-07 acceptance observation found that a capsule snapped to the right could move to the left when its collapsed / expanded size changed. The resize effect reused the drag-release snap function, which inferred LEFT or RIGHT from the current top-left coordinate and the newly measured width. During a resize, that coordinate belongs to the previous size, so it is not a valid nearest-edge release point; in particular, an expanded right-edge x-coordinate can be reclassified as LEFT after collapse.
+
+The Repair keeps the stored `HeartRateCapsuleSnapEdge` as the source of truth for size, viewport, label, expansion, and exclusion-policy repositioning. A narrow geometry helper places the new size at that explicit edge while reusing the existing safe-inset, vertical clamp, and exclusion-zone logic. Pointer drag release still calls the original nearest-edge inference and updates the stored edge.
+
+The focused regression first failed against the pre-Repair behavior for expanded-right top-left `x=70` resized to a 116 px collapsed capsule in a 360 px viewport: nearest-edge inference returned LEFT. The final geometry coverage verifies RIGHT across collapsed / expanded sizes, LEFT across both sizes, and the existing left / right drag-release nearest-edge cases. No capsule dimensions, content, colors, motion, movement threshold, compact fallback, safe-area policy, or BLE / runtime / settings behavior changed.

@@ -158,6 +158,18 @@ internal fun HeartRateFloatingCapsuleOverlay(
             )
         }
 
+        fun placeAtStoredEdge(point: HeartRateCapsulePoint): HeartRateCapsulePlacement {
+            return placeHeartRateCapsuleAtSafeEdge(
+                desiredPoint = point,
+                edge = snapEdge,
+                capsuleSize = capsuleSize,
+                viewport = viewport,
+                safeInsets = safeInsets,
+                exclusionZones = exclusionZones,
+                edgeMargin = edgeMargin
+            )
+        }
+
         LaunchedEffect(
             viewport,
             capsuleSize,
@@ -178,7 +190,7 @@ internal fun HeartRateFloatingCapsuleOverlay(
                 } else {
                     HeartRateCapsulePoint(capsuleX, capsuleY)
                 }
-                val placement = snapFrom(currentPoint)
+                val placement = placeAtStoredEdge(currentPoint)
                 capsuleX = placement.point.x
                 capsuleY = placement.point.y
                 snapEdge = placement.edge
