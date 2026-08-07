@@ -1,6 +1,6 @@
 # TrainFlow 项目状态
 
-**状态日期:** 2026-07-26
+**状态日期:** 2026-08-07
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
 
@@ -17,7 +17,11 @@
 
 ### 当前 E17 状态索引
 
-2026-07-29 E17-7b post-device UX Repair 已按 2026-07-28 用户决定进入 `implemented / needs review / physical phone + Band 9 gate pending`。本候选收口手动断开后的重复 / 惰性动作、四段紧凑设置 IA、蓝牙关闭跳转 Android 蓝牙设置、adapter-off `stopScan` 窄异常清理，以及明确区间时采用 `Soft Zone Halo`：约 16% 区间色局部柔和 halo / gradient、细微同色 surface tint、明确区间文字与自适应高对比前景，不使用实心 rail / 强调条。胶囊 geometry / size / hierarchy / drag / snap / expand-collapse / motion / viewport / safe-area / IME 与 E17-9 FGS / 后台 ownership 均未改变。只有候选通过 fresh 独立 Review、合入并 push 到同步 `main` 且 fresh phone / Band 9 gate 通过后，状态才可提升为 `reviewed / merged`；pre-repair APK `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` 与旧 physical / manual / human results 为 stale evidence，不能满足当前 phone / Band gate；APK `C0B6F495A5C9C1E417468A9571EA60BA1236362B65D7899C7DBB95B0216785D3` 及其 310-entry automated / AVD evidence set 经 ignored identity bridge 绑定已独立证明的 executable-tree equivalence，对本 docs-only executable-equivalent candidate 仍有效，但不满足或替代仍 pending 的 physical Android phone + HUAWEI Band 9 human gate。
+2026-08-07 E17-7b 保持 `implemented / needs review`。2026-07-28 post-device UX Repair 已收口手动断开后的重复 / 惰性动作、四段紧凑设置 IA、蓝牙关闭跳转 Android 蓝牙设置、adapter-off `stopScan` 窄异常清理，以及明确区间时采用 `Soft Zone Halo`：约 16% 区间色局部柔和 halo / gradient、细微同色 surface tint、明确区间文字与自适应高对比前景，不使用实心 rail / 强调条。2026-08-07 后续用户验收又只授权一项更窄 geometry Repair：size、viewport 或 exclusion policy 触发重新布局时保留已存储的 `HeartRateCapsuleSnapEdge`，继续贴在原 LEFT / RIGHT 安全边；pointer drag release 仍按 release point 做 nearest-edge inference 并更新存储边。capsule dimensions、vertical clamp、safe-area / exclusion policy、movement threshold、拖动手势、expand / collapse、motion、visual / content / state、IME、其他 geometry 与 E17-9 FGS / 后台 ownership 均未改变。
+
+验收采用精确两层证据。旧 phone-tested executable source `12e33626b2af78708c14a7083d7a825db8e9cecf`、APK SHA256 `C0B6F495A5C9C1E417468A9571EA60BA1236362B65D7899C7DBB95B0216785D3` 上用户已通过的 BLE / runtime / recovery / settings / DataStore / parameters / zone criteria，由与新 executable source `2b243e60640e51878442836c5e82b940738ff84c` 的精确 relevant-source equivalence 保留；新 source 的 14,783,384-byte APK SHA256 `FFF73C0F79018F9871F75C512BD84817B82D94D010262EA2A42A1ACC4C46D955` 的 fresh API 36 AVD acceptance 只证明 RIGHT / LEFT resize anchoring、drag-back 与无 crash / ANR。该层不产生新的 phone / HUAWEI Band 9 / RF / GATT / CCCD / notify claim，也不把 AVD 当作物理 BLE 证据。pre-repair UX APK `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` 继续只是 stale finding source。
+
+Merge-stable truth：最终候选是包含本状态文本的 commit，其 executable tree 必须与 `2b243e60640e51878442836c5e82b940738ff84c` 相同。只有最终候选通过 fresh 独立 Review、`--no-ff` merge / push、候选 full SHA 成为同步 `main` / `origin/main` ancestor、`main...origin/main = 0 0` 且本索引与 Story 文档一致后，E17-7b 才自动提升为 `reviewed / merged`，E17-8 prerequisite 才自动为 `satisfied`；不另建 docs-sync / recursive closeout，也不预写未来 merge SHA。
 
 | 项目 | 合并后稳定事实 |
 |---|---|
@@ -26,11 +30,11 @@
 | E17-6 | `reviewed / merged`；immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`；merge commit `503d3151d731565837ab76f44fbebc25bb982e0d` |
 | 本次自动恢复 / 个人参数 Correct-course / E17-7a prerequisite | E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` / `origin/main` ancestor；prerequisite=`satisfied` |
 | E17-7a | `Reconnect + Parameter Foundation`；同步 `main` / `origin/main` ancestry 已证明 prerequisite=`satisfied` |
-| E17-7b | `Application / Settings / Capsule Wiring`；`implemented / needs review / physical phone + Band 9 gate pending`；尚未 reviewed / merged，不解锁 E17-8 |
+| E17-7b | `Application / Settings / Capsule Wiring`；`implemented / needs review`；最终候选尚未 reviewed / merged，E17-8 prerequisite 仍为 `planned / prerequisite-gated` |
 | E17-8 / E17-9 / E17-10 | ordinary coordinator、FGS + training-background recovery、evidence-only acceptance；依次`planned / prerequisite-gated` |
 | 禁止候选 | `fda5f7cfd3c31af3399dfe231733ea00467a68e8`=`frozen / unmergeable / reference-only / permanently prohibited from merge` |
 
-**Correct-course / E17-7a 当前真值：** E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` 与 `origin/main` 的 ancestor，E17-7a prerequisite=`satisfied`。E17-7b candidate 仍为 `implemented / needs review / physical phone + Band 9 gate pending`，尚未 reviewed / merged；只有通过 fresh 独立 Review、merge / push 到同步 `main` 且 physical phone + Band 9 gate 通过后，才可提升为 `reviewed / merged`。此前 E17-8 保持 `planned / prerequisite-gated`，不得视为已解锁。Git ancestry 是 merge 事实；branch name 只是 locator。
+**Correct-course / E17-7a 当前真值：** E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` 与 `origin/main` 的 ancestor，E17-7a prerequisite=`satisfied`。E17-7b 最终候选仍为 `implemented / needs review`，尚未 reviewed / merged；只有 fresh 独立 Review、`--no-ff` merge / push、最终候选 full SHA ancestry、同步 `main` / `origin/main` 与状态一致全部成立后，才自动提升为 `reviewed / merged`，同时 E17-8 prerequisite 自动为 `satisfied`。此前 E17-8 保持 `planned / prerequisite-gated`，不得视为已解锁。Git ancestry 是 merge 事实；branch name 只是 locator。
 
 2026-07-26 用户确认：eligibility 为 opt-in + saved exact target + permission + Bluetooth + 无持久 manual suppression + visible 或合法 active-training FGS；前台 bounded scan windows 有间隔且资格成立时长期 armed；非训练后台 cleanup、回前台自动恢复；active / paused training 的普通 `ON_STOP` 不直接 cleanup，合法 FGS 下保持 / 恢复同一 owner 的 exact target。未 cleanup 且未断链时回前台必须仍是同一 Application owner、同一 attempt lineage 与 current bpm；后台 unexpected disconnect 且eligible时FGS与ID`7200`唯一writer保持active、notification显示reconnecting，由同一Application owner使用新generation / attempt恢复，不能伪称same attempt。只有停止资格或明确foreground不再需要FGS时才demote。显式断开保留 opt-in、target 与个人参数并跨 process suppress，只有明确重新连接 / 选目标清除。年龄 `1..130`、个人最大心率 / alert `30..260`、effective max、未取整六区间与 strict alert 优先级均绑定 E17-7a / 7b AC；胶囊直接复用冻结状态 / 颜色。
 
@@ -320,7 +324,7 @@ E14.4-2 Plan edit / detail low-coupling implementation 已完成并完成 review
 2. 跟练后续不再通过“计时计划切换为跟练视图”解决完整编排，而是通过统一动作选择页选择动作，再形成热身、动作、休息、轮次、放松结构；完整跟练编排仍待 E10 后续实现。
 3. 固定阶段词 cue 可在后续保留，但用户任意文本 TTS、语音读秒大范围能力和自动语音教练不属于第一版。
 4. Android 工程脚手架 E0.1 已采用 `minSdk 26`、`compileSdk/targetSdk 36`、包名 `com.liujyks.trainflow`、Kotlin DSL、单 `app` module 起步。
-5. E17 心率产品合同已由 D-080 收敛，最小技术架构已由 D-081 与 `docs/planning/e17-3-heart-rate-minimum-architecture.md` 收敛，D-082 又锁定 exact-target 自动恢复、显式断开 suppression 与个人参数；E17-4 readiness已`passed`，E17-4/5/6均已reviewed/merged。E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` / `origin/main` ancestor，prerequisite=`satisfied`；E17-7b 仍为 `implemented / needs review / physical phone + Band 9 gate pending`。自动恢复由E17-7a / 7b / 9交付；训练中记录、单次复盘、跨训练趋势和用户数据导出仍需各自后续产品 / 数据 / 隐私 / 验收 Story。Apple Watch / HealthKit 保留为未来 iOS 路线；Health Connect 更适合未来独立历史摘要 / 趋势，不作为当前 Band 9 实时来源。胶囊视觉与互动已冻结直接复用；未来需要独立视觉审查的是训练后心率复盘，而不是重新设计胶囊。
+5. E17 心率产品合同已由 D-080 收敛，最小技术架构已由 D-081 与 `docs/planning/e17-3-heart-rate-minimum-architecture.md` 收敛，D-082 又锁定 exact-target 自动恢复、显式断开 suppression 与个人参数；E17-4 readiness已`passed`，E17-4/5/6均已reviewed/merged。E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` / `origin/main` ancestor，prerequisite=`satisfied`；E17-7b 仍为 `implemented / needs review`，其两层证据与 merge-stable truth 以本文件“当前 E17 状态索引”为准。自动恢复由E17-7a / 7b / 9交付；训练中记录、单次复盘、跨训练趋势和用户数据导出仍需各自后续产品 / 数据 / 隐私 / 验收 Story。Apple Watch / HealthKit 保留为未来 iOS 路线；Health Connect 更适合未来独立历史摘要 / 趋势，不作为当前 Band 9 实时来源。胶囊除 D-083 明确的 collapsed visual 与 resize snap-edge 窄 supersession 外继续冻结直接复用；未来需要独立视觉审查的是训练后心率复盘，而不是重新设计胶囊。
 6. 各 story 的详细开发说明、测试清单和验收记录。
 7. 官方默认 UI 是否首版同时提供暗色主题，还是先提供浅色工作区 + 深色训练执行页。
 8. `docs/planning/data-contracts.md` 与 `prototype/src/data/contracts.ts` 的 `WorkoutCommand` 细节需要后续对齐；E0.3 已以文档和决策日志为准，保留文档中的 `update_actual_weight`、`update_actual_reps` 和更细的力量组完成/确认输入结构。
@@ -340,7 +344,7 @@ E14.4-2 Plan edit / detail low-coupling implementation 已完成并完成 review
 2. E10.13 Ready Start Gate 已完成；计时训练从编辑页或计划详情开始后先进入极简 ready gate，点击中心圆才真正 `StartSession`。
 3. E10.12 Timer Dial Compose landing 已把 E10.11 `TrainFlow Official Fusion` 方向落到 Android 生产 Timer Dial：执行页减字、总剩余时间放大居中、圆盘放大、线条变细、宽底层圆环、同源动态浅点和阶段色中心圆；继续保留 continuous progress、pause freeze、terminal freeze、rest extension monotonic progress。
 4. E10.16 Motion Landing 已完成；后续若继续训练执行页 polish，仍只消费既有 motion token，不改变训练语义、真实记录或倒计时口径。
-5. E17-4、E17-5、E17-6已`reviewed / merged`；E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` / `origin/main` ancestor，prerequisite=`satisfied`。E17-7b candidate 已在 production 中恰好实例化一个 Application-scoped owner，debug 没有第二个 owner 且 debug activities 不占用心率资源；当前仍为 `implemented / needs review / physical phone + Band 9 gate pending`，下一步是 fresh 独立 Review、merge / push 到同步 `main` 与 physical gate，完成前不解锁 E17-8。
+5. E17-4、E17-5、E17-6已`reviewed / merged`；E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 已是同步 `main` / `origin/main` ancestor，prerequisite=`satisfied`。E17-7b candidate 已在 production 中恰好实例化一个 Application-scoped owner，debug 没有第二个 owner且 debug activities 不占用心率资源；当前仍为 `implemented / needs review`。下一步是 final docs-only candidate 的 Candidate Validation、fresh 独立 Review，以及获 PASS 后的 `--no-ff` merge / push 与 post-merge ancestry / sync / status consistency verification；全部完成前 E17-8 保持 prerequisite-gated，完成后自动为 `satisfied`。
 6. E12 Stats / Records 已具备真实基础统计、非心率聚合图表、历史清理、计时同类阶段 / 额外休息趋势和力量同类 set 趋势。心率单次复盘的平均 / 最高心率、时间曲线、区间时长 / 占比和覆盖缺口已由 E17-2 接受为后续方向；记录数据成立后再做独立视觉审查和用户确认。跨训练趋势、训练压力、恢复时间与用户数据导出继续分独立后续 Story。
 7. E13.1 Sound Cue System 已实现短提示音播放与音频共存；E13 audit / QA gate 已确认现有实现、两个生产 raw 资源、根目录和 `.local/audio/` 禁区边界、测试覆盖和真机 QA 计划。下一步优先补手机扬声器 / 蓝牙耳机音频共存 smoke；若真机发现外部音乐 / 视频被暂停、降低、duck 或提示音不可闻，再拆 platform audio adaptation story。E13.2 固定女声 cue / 阶段名朗读仍是后续增强，不做用户任意 TTS 或自动语音教练。
 8. E14.2 Timer Dial real-device proportion restore 已实现；E14.4-1 继续保留底部 `确认+15s` 稳定态并补计时状态矩阵语义回归。E14.3 已完成 UI quality audit and polish sequencing，审计文档记录了各功能 UI 问题清单、截图矩阵、影响等级和用户测试前优先项。

@@ -2,7 +2,7 @@
 
 ## Merge-stable status
 
-This document records the E17-7b candidate contract and evidence boundaries. The candidate remains `implemented / needs review`; it is not a merge or phone / HUAWEI Band 9 pass. The final candidate is the commit containing this document. Git ancestry and synchronized `main` remain the merge truth.
+This document records the E17-7b candidate contract and evidence boundaries. The final candidate is the commit containing this document, and its executable tree must equal executable source `2b243e60640e51878442836c5e82b940738ff84c`. The candidate remains `implemented / needs review` until a fresh independent Review passes, a `--no-ff` merge is pushed, the final candidate full SHA is an ancestor of synchronized `main` / `origin/main`, `main...origin/main = 0 0`, and the current status documents agree. When all conditions hold, E17-7b automatically becomes `reviewed / merged` and E17-8 prerequisite automatically becomes `satisfied`; there is no separate docs-sync / recursive closeout and no future merge SHA is predeclared.
 
 ## Accepted repair
 
@@ -17,7 +17,7 @@ The 2026-07-28 post-device decision requires:
 - the user-selected option 3 `Soft Zone Halo` replaces the obsolete solid rail: zone capsules use the accepted palette as a soft 12–18% component-local halo / gradient plus subtly tinted surface, explicit zone text, and adaptive high-contrast foreground;
 - the three personal parameters share one 10dp outer frame and use 64dp-minimum rows with 12dp/6dp padding, exact 20dp official Material person / monitor-heart / notifications-none icons, a 16dp icon-to-label-column gap, 12sp/16sp subtitles, 60dp × 40dp value boxes with 10dp corners and 8dp internal padding, 8dp to an official 20dp auto-mirrored chevron-right, and explicit 1dp dividers; the four vectors are narrowly vendored from `google/material-design-icons` under Apache-2.0 with official viewport/path data preserved and no broad icon dependency;
 - D-079 / D-082 are superseded only for collapsed content geometry: the capsule uses an intrinsic centered Row inside `widthIn(min = 116.dp, max = 180.dp)`, keeps 13dp/9dp padding, restores the existing status/zone tone as an 8dp dot with an exact 8dp label gap for every neutral and zone state, and keeps one safely ellipsized line without collapsed `fillMaxWidth`;
-- expanded leading dot/label, regular 276dp × max 214dp and compact 252dp × max 190dp envelopes, expanded padding, four-tile information layout, geometry algorithm, drag/snap, expand/collapse, motion, viewport, safe-area, and IME behavior remain frozen and unchanged;
+- the 2026-08-07 later user acceptance narrowly supersedes the prior zero-change wording: size, viewport, label, expansion, or exclusion-policy repositioning preserves the stored `HeartRateCapsuleSnapEdge`, while pointer drag release still performs nearest-edge inference and updates the stored edge; regular 276dp × max 214dp and compact 252dp × max 190dp envelopes, expanded leading dot/label and padding, four-tile information layout, capsule dimensions, vertical clamp, safe-area / exclusion policy, movement threshold, drag gesture, expand/collapse, motion, visual/content/state, IME, and all other geometry remain frozen and unchanged;
 - no E17-9 active-training FGS or background-ownership work.
 
 ## Automated evidence
@@ -26,14 +26,15 @@ Automated evidence is valid only for the exact final candidate and executable-eq
 
 - focused RuntimeOwner platform, settings action/state, application mapper/lifecycle, and capsule tests;
 - all `*HeartRate*` unit tests, full debug unit suite, `assembleDebug --rerun-tasks`, `lintDebug` with Kotlin incremental disabled, and `app:check`;
-- exact three-dot scope, protected-path, index, geometry-zero-delta, and APK identity checks;
+- exact three-dot scope, protected-path, index, frozen-boundary delta, executable-tree-equivalence, and APK identity checks;
 - fresh API 36 AVD install, settings screenshots / UI trees, Bluetooth-settings handoff, and fatal / crash / ANR scan.
 
 ## Evidence separation
 
-- The protected `.local/audit/e17-7b-post-human-ux/` capture and APK SHA256 `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` are stale pre-repair evidence. They explain the repair but cannot accept it.
-- Fresh automated and AVD evidence for the selected visual fidelity repair belongs under ignored `.local/smoke/e17-7b-selected-visual-fidelity-repair/<final-candidate-full-sha>/`; it is not physical BLE / GATT evidence.
-- Final phone + HUAWEI Band 9 evidence is pending and must cover compact actions/settings, manual disconnect/reconnect/change-device, foreground/app-return/proximity recovery, live zone readability, opt-out, and Bluetooth off/on without crash.
+- The protected `.local/audit/e17-7b-post-human-ux/` capture and APK SHA256 `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` remain stale pre-repair finding evidence and do not accept the final candidate.
+- User-passed physical evidence is bound to old phone-tested executable source `12e33626b2af78708c14a7083d7a825db8e9cecf`, APK SHA256 `C0B6F495A5C9C1E417468A9571EA60BA1236362B65D7899C7DBB95B0216785D3`. Exact relevant-source equivalence from that source to `2b243e60640e51878442836c5e82b940738ff84c` preserves the accepted BLE / runtime / recovery / settings / DataStore / parameter / zone observations; the only intervening executable changes are the capsule snap-edge Repair, which does not change those criteria.
+- Fresh API 36 AVD acceptance is bound to executable source `2b243e60640e51878442836c5e82b940738ff84c`, 14,783,384-byte APK SHA256 `FFF73C0F79018F9871F75C512BD84817B82D94D010262EA2A42A1ACC4C46D955`. It proves RIGHT resize anchoring, LEFT resize anchoring, pointer drag-back nearest-edge behavior, and no observed crash / ANR for that sequence.
+- The AVD layer is emulator geometry / interaction evidence only. It creates no new phone, HUAWEI Band 9, RF, GATT, CCCD, notify, reconnect, or physical BLE claim and does not substitute for the preserved source-bound physical observations above.
 
 ## Bluetooth-off timeout Review Repair
 
@@ -41,17 +42,7 @@ The complete Review found one production crash race: an active finite scan could
 
 The Repair keeps the existing generation invalidation and cleanup order. `detachAndStopActiveScan()` now tolerates that `IllegalStateException` only when the current adapter is provably disabled or unavailable, publishes the typed Bluetooth-off fact, and rejects the detached scan's late callback. When the adapter remains enabled, the same exception is still observable. The implementation does not inspect exception messages, catch general runtime exceptions, add a BLE wrapper/seam, or add reconnect / E17-9 behavior.
 
-The regression proof first failed on the pre-Repair candidate for `active scan -> adapter off -> timeout -> stopScan IllegalStateException`; after the Repair both that path and the adapter-on negative control pass. The final delivery APK must be built once from the committed immutable Repair tip and copied to a new ignored delivery directory. All earlier candidate APK identities are superseded and cannot be used for the phone / Band 9 gate.
-
-## Shortest final human gate
-
-1. Install the final debug APK recorded in the ignored evidence manifest.
-2. Enable heart rate, grant Bluetooth permission, select Band 9, and confirm live bpm plus readable zone capsule.
-3. Verify manual disconnect shows only `重新连接` + `更换设备`; exercise reconnect, rescan/change-device, opt-out, and saved-device clearing.
-4. Toggle Bluetooth off/on during a scan and during a connection; verify Android Bluetooth settings opens and TrainFlow has no crash / ANR.
-5. Exercise foreground return and proximity-loss recovery. Record device / Band firmware / Huawei Health context, screenshots, and logcat.
-
-Until those steps pass on the final APK, merge remains blocked.
+The regression proof first failed on the pre-Repair candidate for `active scan -> adapter off -> timeout -> stopScan IllegalStateException`; after the Repair both that path and the adapter-on negative control pass. Old phone-tested source `12e33626b2af78708c14a7083d7a825db8e9cecf` already contains this timeout Repair and the accepted visual-fidelity implementation. The relevant BLE / runtime / recovery / settings / DataStore / parameter / zone source remains equivalent in executable source `2b243e60640e51878442836c5e82b940738ff84c`; only the separately bounded capsule snap-edge Repair requires the fresh AVD acceptance recorded above.
 
 ## Capsule snap-edge resize Repair
 
