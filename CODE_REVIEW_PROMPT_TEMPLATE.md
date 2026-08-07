@@ -83,4 +83,8 @@ Return exactly one complete REVIEW_COMPLETE report containing:
 - protected local-state result;
 - final Story state and downstream gate status;
 - next responsibility: return this complete report to the primary management conversation. Do not dispatch Repair or another Review yourself.
+
+Recommended Codex runtime:
+- Model: gpt-5.6-sol
+- Reasoning effort: high
 ```

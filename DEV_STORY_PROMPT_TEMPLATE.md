@@ -70,4 +70,8 @@ Return exactly one complete WRITER_COMPLETE report containing:
 - protected dirty/untracked and staged-state result;
 - Story state: implemented / pending human acceptance, implemented / needs review, changes requested, or blocked;
 - next responsibility: return this complete report to the primary management conversation. Do not dispatch Review yourself.
+
+Recommended Codex runtime:
+- Model: gpt-5.6-sol
+- Reasoning effort: high
 ```

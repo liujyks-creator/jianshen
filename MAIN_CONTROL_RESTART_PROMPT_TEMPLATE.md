@@ -75,4 +75,8 @@ Output:
 - Lead with the current truth and exactly one next manual role or user gate.
 - When the next role is Dev/Repair/Review, output exactly one complete copy-ready prompt block.
 - Do not repeat the entire project history or completed reports.
+
+Recommended Codex runtime:
+- Model: gpt-5.6-sol
+- Reasoning effort: high
 ```

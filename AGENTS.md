@@ -136,6 +136,16 @@ Formal role contracts are exclusive:
 - Reviewer and re-Reviewer: one complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
 - Do not create a freehand Role Packet, abbreviated substitute, split dispatch, Candidate Validator role, health probe, liveness monitor, workflow ledger, manifest, receipt system, or repository CI/orchestration platform.
 
+Every complete copy-ready primary-management, Dev/Repair, and Review/re-Review prompt MUST end with this user-facing runtime recommendation unless the user explicitly changes it:
+
+```text
+Recommended Codex runtime:
+- Model: gpt-5.6-sol
+- Reasoning effort: high
+```
+
+This footer is a reminder for the user to select the runtime manually before starting the new conversation. It does not authorize an agent to change its own model or reasoning level.
+
 Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only task-relevant Story/decision/testing/evidence sources. It reports source identities and complete reads in its terminal report. It MUST NOT create subagents unless the complete filled role prompt explicitly authorizes them.
 
 Automatic context compaction inside the same conversation is not a cold restart and does not by itself require full rereads. After compaction, use the system summary as a locator, verify the compact continuity tuple—accepted base, candidate SHA, current role/attempt, terminal status, evidence identity, completed gates, and first incomplete gate—and continue from that gate. Reread only a source whose identity changed or whose critical fact cannot be proven. Do not replay completed work or roles.
