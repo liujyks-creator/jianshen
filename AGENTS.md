@@ -136,15 +136,16 @@ Formal role contracts are exclusive:
 - Reviewer and re-Reviewer: one complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
 - Do not create a freehand Role Packet, abbreviated substitute, split dispatch, Candidate Validator role, health probe, liveness monitor, workflow ledger, manifest, receipt system, or repository CI/orchestration platform.
 
-Every complete copy-ready primary-management, Dev/Repair, and Review/re-Review prompt MUST end with this user-facing runtime recommendation unless the user explicitly changes it:
+Every complete copy-ready primary-management, Dev/Repair, and Review/re-Review prompt MUST end with a user-facing runtime recommendation selected by the primary management conversation for that specific role and task:
 
 ```text
 Recommended Codex runtime:
-- Model: gpt-5.6-sol
-- Reasoning effort: high
+- Model: <management-selected model>
+- Reasoning effort: <management-selected level>
+- Rationale: <one concise task-specific sentence>
 ```
 
-This footer is a reminder for the user to select the runtime manually before starting the new conversation. It does not authorize an agent to change its own model or reasoning level.
+The selection MUST consider task complexity, correctness risk, expected context load, tool use, and cost; it MUST NOT be a permanently fixed model or reasoning level. The footer is a reminder for the user to select the recommended runtime manually before starting the new conversation. It does not authorize an agent to change its own model or reasoning level. The complete relayed prompt must contain concrete values and zero unresolved placeholders.
 
 Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only task-relevant Story/decision/testing/evidence sources. It reports source identities and complete reads in its terminal report. It MUST NOT create subagents unless the complete filled role prompt explicitly authorizes them.
 

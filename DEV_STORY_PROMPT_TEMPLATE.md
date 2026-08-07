@@ -72,6 +72,7 @@ Return exactly one complete WRITER_COMPLETE report containing:
 - next responsibility: return this complete report to the primary management conversation. Do not dispatch Review yourself.
 
 Recommended Codex runtime:
-- Model: gpt-5.6-sol
-- Reasoning effort: high
+- Model: <management-selected model for this Writer/Repair task>
+- Reasoning effort: <management-selected reasoning level>
+- Rationale: <one concise task-specific sentence>
 ```

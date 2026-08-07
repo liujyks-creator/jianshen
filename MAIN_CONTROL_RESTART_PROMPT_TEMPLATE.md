@@ -77,6 +77,7 @@ Output:
 - Do not repeat the entire project history or completed reports.
 
 Recommended Codex runtime:
-- Model: gpt-5.6-sol
-- Reasoning effort: high
+- Model: <management-selected model for this management task>
+- Reasoning effort: <management-selected reasoning level>
+- Rationale: <one concise task-specific sentence>
 ```

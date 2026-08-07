@@ -85,6 +85,7 @@ Return exactly one complete REVIEW_COMPLETE report containing:
 - next responsibility: return this complete report to the primary management conversation. Do not dispatch Repair or another Review yourself.
 
 Recommended Codex runtime:
-- Model: gpt-5.6-sol
-- Reasoning effort: high
+- Model: <management-selected model for this Review/re-Review task>
+- Reasoning effort: <management-selected reasoning level>
+- Rationale: <one concise task-specific sentence>
 ```
