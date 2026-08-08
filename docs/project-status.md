@@ -6,14 +6,14 @@
 
 ## 当前状态
 
-### 工作流自动化基线
+### 工作流手动交付基线
 
-- `$bmad-method` 只负责识别任务所处阶段、判断规划与 readiness、选择 Story / Review / correct-course 路线；进入已批准 Story 的交付后退出控制，不作为贯穿 Dev / Review 的第二套流程。
-- `$supervised-story-delivery` 负责用户明确授权后的保守单 Story 或有限顺序自动交付。主管理对话只维护角色与门禁，项目检查、写入、验证、fresh Review、Repair、integration 和 post-merge verification 均由原生 Codex subagent 执行；普通进度不要求用户转述。
+- 当前模式固定为 `MANUAL_RELAY`：主管理对话从 accepted Git 与项目文档重建真值、选择一个下一门禁并完整填写根模板；用户把该提示词复制到新的 Writer / Repair / Reviewer 对话，再把唯一终态报告复制回主管理对话。
+- `$bmad-method` 只负责规划、readiness、Story shaping、planning Review 与 Correct Course；到达一个 exact ready Story 后退出，不接管 Dev / Review 交付。
+- `$supervised-story-delivery` 只可作为用户手动创建的 Writer / Repair / Reviewer / re-Reviewer 对话中的执行与验证参考，不能替代根模板、自动派发角色或接管交付。各角色均不得创建子代理或自行派发下一角色。
 - `huashu-design` 继续作为独立 UI / 视觉技能保留；主观视觉确认和实机 / APK / 可穿戴设备观察仍是用户门禁。
-- 根目录 Dev / Review / 主管理提示词模板定义通用角色输入输出，并兼作手工模式 fallback；它们不是自动模式的并列权威。自动模式由技能与原生协作工具执行，不要求 repository manifest、validator 或额外 canonical workflow 文档。
-- 2026-07-24：通用角色模板候选 `65dc86da4d9c9167470e50fd76d3c44271daae32` 已完成独立 Review，并由 merge commit `c8de1c5c333a214caa1902b794c34f6fcb494281` 合入；本次仅涉及工作流工具，不启动、实现或解锁任何产品 Story。
-- 旧治理候选分支 `codex/workflow-template-protocol-repair` 的远端 immutable tip 为 `e8ac6a32566122747f4ec5cdbb21c63d6554b6f4`，状态为 `changes requested / superseded by native Story automation / permanently prohibited from merge`。保留该分支用于失败历史，不继续 Repair、cherry-pick 或合入 `main`。
+- 根目录主管理、Dev 与 Review 模板是唯一正式手动角色合同。Writer 永不 merge；Reviewer 必须完整审查当前授权节点并一次性返回 findings，不能发现首个问题就停止，也不能扩大为全仓库或全部历史审计。Review PASS 后由同一 Reviewer 机械执行 `--no-ff` merge、push 与 ancestry / sync / protected-state 复验；非 PASS 时保持只读，由主管理决定一次完整 Repair 或 Correct Course。
+- Android UI / APK / smoke 优先复用 `docs/setup.md` 或任务提示词指定的现有 SDK、system image、AVD 与设备环境；未经用户明确授权，不重新下载镜像、创建 / 克隆 / wipe AVD 或替换既有测试环境。证据写入 ignored `.local/` 路径，用户 APK、音频、`deliverables/`、`人工/` 与既有 dirty/untracked 内容继续受保护。
 
 ### 当前 E17 状态索引
 
