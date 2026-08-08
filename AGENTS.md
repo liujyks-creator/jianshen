@@ -115,35 +115,66 @@ Later Figma work should use the current UX documents and prototype as inputs, no
 
 When changing UI, theme, layout, or components, read `DESIGN.md` first. When changing open-source customization boundaries, read `docs/ui-extension-guide.md` and preserve the core training engine, command, event, and data-contract semantics.
 
-## Workflow And Design Skills
+## Workflow, Design Skills, And Manual Role Relay
 
-This project may use three complementary Codex skills when they are available:
+This repository uses a manual role relay:
 
-- `$bmad-method` for accepted-state reconstruction, product or architecture planning, Story decomposition, project/Epic readiness, exact Story shaping, Story-ready validation, planning Review, and correct-course. It exits immediately after one exact Story is independently `ready`; it does not govern an approved Story's Dev/Review loop.
-- `$supervised-story-delivery` when the user explicitly authorizes automatic delivery of an already approved Story or finite ordered Story sequence. The primary conversation remains the manager while native subagents perform project inspection, writing, validation, fresh Review, Repair, integration, and post-merge verification.
-- `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design-variant, motion, and visual-review work.
+- The primary management conversation reconstructs accepted facts, chooses the next gate, fills the applicable root prompt template, and evaluates returned terminal reports.
+- The user copies that complete prompt into a new independent Dev, Repair, or Review conversation and copies the complete terminal report back to the primary management conversation.
+- The primary management conversation MUST NOT call native collaboration agents, automatically dispatch roles, or run an automatic Story-delivery state machine for this repository.
 
-These roles are complementary. BMAD selects or corrects the route, supervised delivery executes an authorized route, and `huashu-design` preserves visual discipline. `huashu-design` MUST NOT be removed or replaced by either workflow skill.
+The project may use two complementary skills when available:
 
-The skills are global Codex capabilities rather than repository dependencies, and their directories MUST NOT be committed. A repository-local ignored `skills/bmad-method` copy, if present, is a legacy local aid rather than the active method. Root prompt templates define the generic management, Writer, and Fresh Reviewer role inputs/outputs and also provide a manual fallback; automatic delivery uses the skill plus native subagents and does not treat those templates as a second workflow authority.
+- `$bmad-method` for accepted-state reconstruction, product or architecture planning, Story decomposition, readiness, planning Review, and correct-course. At one exact ready Story it returns control to the primary management conversation, which prepares the manual Dev prompt.
+- `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design variants, motion, and visual Review. It MUST NOT be removed or replaced by a workflow skill.
 
-Skills cannot override accepted project instructions, decisions, Story scope, validation gates, evidence requirements, or explicit user authority. If `$bmad-method` is unavailable, route from accepted repository documents. If `$supervised-story-delivery` is unavailable, stop automatic mode and offer the manual fallback instead of silently imitating it. If `huashu-design` is unavailable, preserve accepted visual decisions and request direction before creating a new subjective design.
+`$supervised-story-delivery` is not used by this repository. Its presence as a global Codex skill is not authority to start automatic delivery. Skills are advisory and cannot override accepted project instructions, decisions, Story scope, validation gates, evidence requirements, or user authority. Global skill directories MUST NOT be committed.
 
-Automatic native-agent delivery only replaces the user's manual copy/paste step. A formal Writer or Repair dispatch MUST be the complete filled `DEV_STORY_PROMPT_TEMPLATE.md` content in one outer block, and a formal Reviewer or re-Reviewer dispatch MUST be the complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` content in one outer block. Fill every field from immutable accepted facts, verify that no placeholder remains unresolved, and do not substitute a freehand summary or abbreviated packet. This relay rule does not create a repository workflow platform, canonical contract, validator, manifest, receipt system, CI system, or project-specific role catalog.
+Formal role contracts are exclusive:
 
-Every dispatched role MUST fully read the exact applicable global skills, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only the Story/decision/testing/evidence documents relevant to its task before acting. Its terminal report MUST identify every source by path plus immutable blob/hash or full SHA where available and explicitly confirm each complete read; do not preload unrelated skills or long document bundles.
+- Writer and Repair: one complete filled `DEV_STORY_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
+- Reviewer and re-Reviewer: one complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
+- Do not create a freehand Role Packet, abbreviated substitute, split dispatch, Candidate Validator role, health probe, liveness monitor, workflow ledger, manifest, receipt system, or repository CI/orchestration platform.
 
-Repeat those complete reads for every new Agent, new task or task recovery, explicit context-compaction/summary signal, role or phase change, accepted-base change, skill-file or template-file change, or inability to prove the accepted base, candidate, completed gate, or next transition. Resolve repository sources with `git show <accepted-base>:<path>` or a worktree proven at that base; if a path is absent, record it as absent and never substitute a same-named file from another checkout, branch, commit, or dirty overlay. Ordinary progress messages do not require repeated full reads while those facts remain provable. After compaction, reconstruct the accepted base, candidate SHA, remote refs and ancestry, current role/attempt and terminal status, validation/evidence identity, completed gates, and first incomplete gate from Git, accepted Story/testing/evidence documents, and terminal reports; do not replay completed roles. Do not create a persistent ledger, workflow workspace, manifest, receipt system, or report-package platform for this recovery.
+All user-facing manual-relay artifacts MUST use Simplified Chinese. This includes primary-management delivery, complete copy-ready prompts, role dispatches, Writer/Repair terminal reports, Reviewer/re-Reviewer findings and terminal reports, human-test instructions, and next-step handoffs. Preserve exact technical identities—SHA values, refs, paths, commands, code symbols, filenames, tool names, and fixed machine-readable status tokens—in their original form when translation could make them ambiguous. The accepted root prompt templates themselves MUST be written in Simplified Chinese. A role may read English source material, but its user-facing delivery remains Chinese unless the user explicitly requests another language for that artifact.
 
-Automatic Story delivery has one acceptance order: Writer candidate → Candidate Validation → required human acceptance or explicitly authorized fully automatable acceptance → fresh complete Review. A Writer that produced a verifiable candidate returns `WRITER_COMPLETE / DONE` with next gate `CANDIDATE_VALIDATION`, even when later device or visual acceptance is required. `NEEDS_USER` before Candidate Validation is allowed only when no candidate exists and a user product, authority, or external action is required before one can exist. Candidate Validation binds exact SHA, scope, commands, artifact identity, and protected state before any candidate is sent to the user or Reviewer; missing human evidence is never PASS.
+Every complete copy-ready primary-management, Dev/Repair, and Review/re-Review prompt MUST end with a user-facing runtime recommendation selected by the primary management conversation for that specific role and task:
 
-Fresh verification means independent evidence against the exact identity, not an automatic full-repository suite. Follow the Story/template validation profile in proportion to risk: a tiny local UI change normally uses focused UI/static/compile evidence plus the required screenshot or human candidate check; ordinary local logic uses focused tests plus affected regression; concurrency, persistence, migration, security, shared ownership, and platform lifecycle may require broader targeted validation. Writer, Candidate Validator, acceptance Validator, Reviewer, and integration each run only the evidence required for that layer.
+```text
+Recommended Codex runtime:
+- Model: <management-selected model>
+- Reasoning effort: <management-selected level>
+- Rationale: <one concise task-specific sentence>
+```
 
-A Reviewer remains read-only through its complete scope, acceptance, validation, evidence, Git, and protected-state review, waits for every explorer it started, and emits findings only once in exactly one complete terminal `REVIEW_COMPLETE` batch. Progress, partial findings, duplicate output, a report with missing required fields, or any output without `REVIEW_COMPLETE` is nonterminal and MUST NOT start Repair or integration. Repair receives the complete verified finding batch unchanged, then a fresh Validator and a different fresh Reviewer perform validation and re-Review.
+The selection MUST consider task complexity, correctness risk, expected context load, tool use, and cost; it MUST NOT be a permanently fixed model or reasoning level. The footer is a reminder for the user to select the recommended runtime manually before starting the new conversation. It does not authorize an agent to change its own model or reasoning level. The complete relayed prompt must contain concrete values and zero unresolved placeholders.
 
-The different fresh re-Reviewer MUST repeat the complete Review rather than perform a scoped findings-only check. Two unsuccessful Repair cycles on the same risk axis, or a Repair that crosses core product, architecture, ownership, data, lifecycle, persistence, security, or integration boundaries, MUST route to BMAD Correct Course for root cause, ripple audit, `retain | adapt | replace | retire | defer` classification, and the smallest affected planning boundary.
+Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only task-relevant Story/decision/testing/evidence sources. It reports source identities and complete reads in its terminal report. It MUST NOT create subagents unless the complete filled role prompt explicitly authorizes them.
 
-Liveness counts only intervals without meaningful concrete progress. After two minutes without progress, send nudge #1; after another two inactive minutes, send nudge #2 as the final nudge; after a third inactive interval, confirm nonresponse, interrupt/close, and replace from immutable facts. Meaningful progress resets the timer, even for an hour-long role. Partial Review output is nonterminal progress and never starts Repair. Confirm a mutating role is closed before another Writer starts.
+Automatic context compaction inside the same conversation is not a cold restart and does not by itself require full rereads. After compaction, use the system summary as a locator, verify the compact continuity tuple—accepted base, candidate SHA, current role/attempt, terminal status, evidence identity, completed gates, and first incomplete gate—and continue from that gate. Reread only a source whose identity changed or whose critical fact cannot be proven. Do not replay completed work or roles.
+
+A genuinely new management or role conversation performs its template's cold-start reads once. A role or phase change is handled by a new manually created conversation and its applicable complete template, not by reloading every source in the existing conversation.
+
+Manual delivery order is:
+
+```text
+primary management prepares Dev/Repair prompt
+→ user relays it to a fresh Writer conversation
+→ Writer validates, commits and pushes the Story branch but never merges
+→ user relays WRITER_COMPLETE to primary management
+→ required identity-bound human/device acceptance, when applicable
+→ primary management prepares Review prompt
+→ user relays it to a fresh independent Reviewer conversation
+→ Reviewer completes one full Review
+   ├─ PASS with explicit authority: same Reviewer performs mechanical --no-ff merge and push
+   ├─ PASS without authority: READY_TO_MERGE
+   └─ not PASS: no edits or integration; return one complete findings/report batch
+→ user relays REVIEW_COMPLETE to primary management
+```
+
+The primary management conversation, not the Reviewer, decides the next Repair or Correct Course after a non-PASS report. A Repair uses a new Writer conversation with the complete finding batch; re-Review uses a different fresh Reviewer and repeats the full Review.
+
+Fresh verification means independent evidence against the exact candidate identity, not an automatic full-repository suite. Use only the validation required by the Story's risk profile. UI/physical-device evidence and other human gates remain identity-bound and cannot be replaced by fakes, AVDs, or source inspection.
 
 ## Cross-Conversation Source Of Truth
 
