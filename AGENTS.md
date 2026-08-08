@@ -136,6 +136,8 @@ Formal role contracts are exclusive:
 - Reviewer and re-Reviewer: one complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
 - Do not create a freehand Role Packet, abbreviated substitute, split dispatch, Candidate Validator role, health probe, liveness monitor, workflow ledger, manifest, receipt system, or repository CI/orchestration platform.
 
+All user-facing manual-relay artifacts MUST use Simplified Chinese. This includes primary-management delivery, complete copy-ready prompts, role dispatches, Writer/Repair terminal reports, Reviewer/re-Reviewer findings and terminal reports, human-test instructions, and next-step handoffs. Preserve exact technical identities—SHA values, refs, paths, commands, code symbols, filenames, tool names, and fixed machine-readable status tokens—in their original form when translation could make them ambiguous. The accepted root prompt templates themselves MUST be written in Simplified Chinese. A role may read English source material, but its user-facing delivery remains Chinese unless the user explicitly requests another language for that artifact.
+
 Every complete copy-ready primary-management, Dev/Repair, and Review/re-Review prompt MUST end with a user-facing runtime recommendation selected by the primary management conversation for that specific role and task:
 
 ```text
