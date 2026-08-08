@@ -123,18 +123,19 @@ This repository uses a manual role relay:
 - The user copies that complete prompt into a new independent Dev, Repair, or Review conversation and copies the complete terminal report back to the primary management conversation.
 - The primary management conversation MUST NOT call native collaboration agents, automatically dispatch roles, or run an automatic Story-delivery state machine for this repository.
 
-The project may use two complementary skills when available:
+The project may use three complementary skills when available:
 
 - `$bmad-method` for accepted-state reconstruction, product or architecture planning, Story decomposition, readiness, planning Review, and correct-course. At one exact ready Story it returns control to the primary management conversation, which prepares the manual Dev prompt.
+- `$supervised-story-delivery` as an advisory execution and verification method inside a user-created manual Writer, Repair, Reviewer, or re-Reviewer conversation when the complete filled root prompt names it. It does not dispatch roles, replace either root role template, or authorize automatic delivery.
 - `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design variants, motion, and visual Review. It MUST NOT be removed or replaced by a workflow skill.
 
-`$supervised-story-delivery` is not used by this repository. Its presence as a global Codex skill is not authority to start automatic delivery. Skills are advisory and cannot override accepted project instructions, decisions, Story scope, validation gates, evidence requirements, or user authority. Global skill directories MUST NOT be committed.
+Skills are advisory and cannot override accepted project instructions, the complete filled root role template, decisions, Story scope, validation gates, evidence requirements, or user authority. Global skill directories MUST NOT be committed.
 
 Formal role contracts are exclusive:
 
 - Writer and Repair: one complete filled `DEV_STORY_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
 - Reviewer and re-Reviewer: one complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
-- Do not create a freehand Role Packet, abbreviated substitute, split dispatch, Candidate Validator role, health probe, liveness monitor, workflow ledger, manifest, receipt system, or repository CI/orchestration platform.
+- Do not create a freehand Role Packet, abbreviated substitute, split dispatch, additional delivery role, or repository CI/orchestration platform.
 
 All user-facing manual-relay artifacts MUST use Simplified Chinese. This includes primary-management delivery, complete copy-ready prompts, role dispatches, Writer/Repair terminal reports, Reviewer/re-Reviewer findings and terminal reports, human-test instructions, and next-step handoffs. Preserve exact technical identities—SHA values, refs, paths, commands, code symbols, filenames, tool names, and fixed machine-readable status tokens—in their original form when translation could make them ambiguous. The accepted root prompt templates themselves MUST be written in Simplified Chinese. A role may read English source material, but its user-facing delivery remains Chinese unless the user explicitly requests another language for that artifact.
 
@@ -149,7 +150,7 @@ Recommended Codex runtime:
 
 The selection MUST consider task complexity, correctness risk, expected context load, tool use, and cost; it MUST NOT be a permanently fixed model or reasoning level. The footer is a reminder for the user to select the recommended runtime manually before starting the new conversation. It does not authorize an agent to change its own model or reasoning level. The complete relayed prompt must contain concrete values and zero unresolved placeholders.
 
-Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only task-relevant Story/decision/testing/evidence sources. It reports source identities and complete reads in its terminal report. It MUST NOT create subagents unless the complete filled role prompt explicitly authorizes them.
+Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only task-relevant Story/decision/testing/evidence sources. It reports source identities and complete reads in its terminal report. Writer, Repair, Reviewer, and re-Reviewer conversations MUST NOT create subagents; if genuinely independent work is needed, the primary management conversation prepares a separate manual role prompt for the user to relay.
 
 Automatic context compaction inside the same conversation is not a cold restart and does not by itself require full rereads. After compaction, use the system summary as a locator, verify the compact continuity tuple—accepted base, candidate SHA, current role/attempt, terminal status, evidence identity, completed gates, and first incomplete gate—and continue from that gate. Reread only a source whose identity changed or whose critical fact cannot be proven. Do not replay completed work or roles.
 
@@ -165,16 +166,21 @@ primary management prepares Dev/Repair prompt
 → required identity-bound human/device acceptance, when applicable
 → primary management prepares Review prompt
 → user relays it to a fresh independent Reviewer conversation
-→ Reviewer completes one full Review
-   ├─ PASS with explicit authority: same Reviewer performs mechanical --no-ff merge and push
-   ├─ PASS without authority: READY_TO_MERGE
+→ Reviewer completes one full current-node Review
+   ├─ PASS: same Reviewer performs mechanical --no-ff merge and push
    └─ not PASS: no edits or integration; return one complete findings/report batch
 → user relays REVIEW_COMPLETE to primary management
 ```
 
-The primary management conversation, not the Reviewer, decides the next Repair or Correct Course after a non-PASS report. A Repair uses a new Writer conversation with the complete finding batch; re-Review uses a different fresh Reviewer and repeats the full Review.
+The primary management conversation, not the Reviewer, decides the next Repair or Correct Course after a non-PASS report. A Repair uses a new Writer conversation with the complete finding batch; re-Review uses a different fresh Reviewer and repeats the full current-node Review.
+
+“Full Review” means complete coverage of the currently authorized node: its exact base/candidate delta, accepted contract, acceptance criteria, directly affected behavior, required evidence, Git gates, and protected state. It does not authorize re-auditing the whole repository, all historical Stories, upstream skills/plugins, or unrelated modules. Finding one issue blocks integration but does not end the remaining current-node Review; the Reviewer completes all remaining applicable axes and returns one atomic findings batch unless an objective authority, safety, or evidence blocker makes the remainder impossible.
+
+Repair is minimum but causally complete, not the fewest changed files. The Writer must address the complete approved finding batch in one Repair attempt. If the same Story has two consecutive complete Reviews with must-fix findings and another Repair would change core ownership, architecture, data responsibility, or multiple module boundaries, stop the local patch loop and return to a scoped Correct Course instead of continuing incremental Repair.
 
 Fresh verification means independent evidence against the exact candidate identity, not an automatic full-repository suite. Use only the validation required by the Story's risk profile. UI/physical-device evidence and other human gates remain identity-bound and cannot be replaced by fakes, AVDs, or source inspection.
+
+For Android UI, APK, screenshot, or smoke work, reuse the existing JDK, Android SDK, system image, AVD, and device configuration named by `docs/setup.md` or the filled Story prompt. Do not install or upgrade SDK components, download another system image, create/clone/wipe an AVD, or replace the configured emulator merely to obtain a fresh run unless the user explicitly authorizes that environment change. Store generated screenshots, UI trees, logs, and device evidence only in ignored `.local/` evidence paths, and never stage or commit them unless the Story explicitly adopts named files.
 
 ## Cross-Conversation Source Of Truth
 
@@ -187,6 +193,7 @@ Fresh verification means independent evidence against the exact candidate identi
 ## Working Habits
 
 - Read the current repo state before changing files.
+- On Windows, prefer the already installed PowerShell 7 (`pwsh`) for UTF-8, hashing, and validation when available. Do not install or upgrade PowerShell as a routine task step.
 - Keep edits scoped to the requested task and current product boundary.
 - Add or update documentation when a product decision changes.
 - Prefer explicit branches for feature work, using `codex/<task-name>` when a branch is needed.
