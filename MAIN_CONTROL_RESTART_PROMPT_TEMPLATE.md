@@ -33,26 +33,10 @@
 - 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、缺失证据、可选解释和实际权衡。只有 load-bearing provenance 会改变权限、身份、行为、范围、ownership、验收或因果归属时，才停止对应归因或有状态动作，并返回明确的用户信息门禁；不得选择最方便的解释、编造缺失报告，或把 `UNKNOWN` 当作授权、违规、PASS、失败或候选废弃证据。非 load-bearing 未知可保留并继续不受影响的动作。
 - 代表门禁：相邻 `WRITER_COMPLETE` 与 Repair `WRITER_COMPLETE` 缺少来源任务身份时，结果是 `UNKNOWN`，不能推断同一对话发生角色切换；共享 branch/candidate 但 role/attempt/prompt identity 不同也不能认定同源。缺少原始 Review 报告而 Repair 合同声称已批准 finding 时，只能把“当前收到该 Repair 合同”记为 `FACT`，上游审批仍为 `UNKNOWN`，除非 provenance tuple 由 load-bearing source 补齐。
 
-统一 canonical authority matrix（Dev/Repair/Review/re-Review 均逐行完整填写，名称和顺序不得改变）：
-1. `read` — phase：<逐适用 phase>；exact action：<逐 phase 准确动作>；exact object/ref/path/workspace：<逐 phase 准确对象、ref、路径和 workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
-2. `write/stage` — phase：<逐适用 phase>；exact action：write=<逐 phase 动作或无>；stage=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定准确对象、路径和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
-3. `branch/worktree create/reuse` — phase：<逐适用 phase>；exact action：branch create=<逐 phase 动作或无>；branch reuse=<逐 phase 动作或无>；branch switch=<逐 phase 动作或无>；worktree create=<逐 phase 动作或无>；worktree reuse=<逐 phase 动作或无>；worktree switch=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定 ref、绝对路径和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
-4. `test/build` — phase：<逐适用 phase，candidate validation 与 merged-result validation 分开>；exact action：test=<逐 phase 动作或无>；build=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定准确对象、命令和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
-5. `artifact/evidence` — phase：<逐适用 phase，candidate 与 merged result 分开>；exact action：artifact generation=<逐 phase 动作或无>；evidence capture=<逐 phase 动作或无>；evidence adoption/commit=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定 identity、路径和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
-6. `commit` — phase：<逐适用 phase>；exact action：<逐 phase 准确 commit 动作或无>；exact object/ref/path/workspace：<逐 phase 准确 tree/ref/workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
-7. `push Story branch` — phase：<逐适用 phase>；exact action：<逐 phase 准确非 force push 动作或无>；exact object/ref/path/workspace：<逐 phase remote、Story ref 和 workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
-8. `merge` — phase：<逐适用 phase>；exact action：<逐 phase 准确 strategy、immutable candidate 或无>；exact object/ref/path/workspace：<逐 phase integration ref 和 workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
-9. `push integration target` — phase：<逐适用 phase>；exact action：<逐 phase 准确非 force push 动作或无>；exact object/ref/path/workspace：<逐 phase remote、integration ref 和 workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
-10. `deploy` — phase：<逐适用 phase>；exact action：<逐 phase 准确动作或无>；exact object/ref/path/workspace：<逐 phase 准确环境、对象和 workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
-11. `external/device/account` — phase：<逐适用 phase>；exact action：external=<逐 phase 动作或无>；device=<逐 phase 动作或无>；account=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定系统、设备、账号和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
-12. `destructive/cleanup` — phase：<逐适用 phase>；exact action：destructive=<逐 phase 动作或无>；cleanup=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定准确目标和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
-
-权限解释规则：
-- 相邻权限不得互相推导；复合行必须逐子动作声明准确 phase、action、object/ref/path/workspace、state 与 authority source。`pending user` 和 `none` 都不是 `allowed`，不得用“有完整权限”等泛化句替代逐项授权。
-- `write` 不推导 `stage`；branch/worktree 的 create、reuse、switch 分别声明；create/reuse 不推导 cleanup；`test` 与 `build` 分别声明。
-- artifact generation、evidence capture、evidence adoption/commit 分别声明；test/build 不推导 artifact/evidence；external/device/account 不从 test/build 推导。
-- `commit` 不推导 `push Story branch`；`merge` 不推导 integration write/stage/commit；`push integration target` 不推导 merge 或 commit。
-- candidate validation 权限不推导 merged-result validation 权限；两者的 test、build、artifact、evidence 按 phase、准确对象和 workspace 分别声明。
+统一 canonical authority matrix（十二类全部填写；名称不得改动）：
+- 紧凑字段语法：`<权限类> | phase=<准确阶段> | action=<准确动作/子动作> | object/ref/path/workspace=<准确对象与 workspace> | state=<allowed | none | pending user> | source=<准确权限来源> | rationale=<适用或不适用理由>`。复合类按子动作分项；同类跨 phase 也分项。
+- 十二类：`read`；`write/stage`；`branch/worktree create/reuse`（branch/worktree 的 create、reuse、switch 分开）；`test/build`；`artifact/evidence`（generation、capture、adoption/commit 分开）；`commit`；`push Story branch`；`merge`；`push integration target`；`deploy`；`external/device/account`；`destructive/cleanup`。
+- 各类及子动作权限彼此独立，不得推导；`none`/`pending user` 不是 `allowed`。Candidate 与 merged-result 的 validation/artifact/evidence 必须按 phase 分开；create/reuse/switch 不推导 cleanup，merge 不推导 integration write/stage/commit，push 不推导 merge 或 commit。
 
 冷启动恢复：
 1. 完整读取所有适用 `AGENTS.md`、当前状态索引、accepted decision log、当前事项合同，以及仅与本事项直接相关的来源。不要默认读取全部历史规划。
@@ -78,12 +62,9 @@
 - 必须先完成 Repair provenance join，并把上述问题、成功标准、范围/non-goals、真实边界、应信任内部保证及禁止项逐项写入完整 Repair 合同；不得从相邻报告补出 Review 来源、finding 或 Repair 授权。
 
 生成正式 Review/re-Review 合同前：
-0. 先完成 Reviewer/re-Reviewer 任务与全部输入的 provenance join，并把当前问题、成功标准、范围/non-goals、真实边界、应信任内部保证、禁止的推测性功能/fallback/wrapper/一次性抽象，以及反过度工程检查轴完整写入 Review 合同；Initial Reviewer 与 re-Reviewer 均不得从相邻 Writer/Repair/诊断报告推导身份或权限。
-1. 先形成 phase-scoped `required-action set`，逐项列出本次从 Review entry 到终态实际必需的：accepted source/candidate/evidence read；candidate-validation workspace create/reuse/switch；candidate test/build/artifact/evidence；integration workspace create/reuse/switch；integration write/stage/commit/merge；merged-result test/build/artifact/evidence；push integration target；final fetch/ref/ancestry/tree/index/protected-state post-check；external/device/account；cleanup。
-2. 每个动作绑定准确 phase、action、object/ref/path/workspace；不适用动作写 `none + accepted rationale`，不得凭空要求权限。Cleanup 不在 required set 时可以为 none，且不阻止 Review。
-3. 将 required-action set 与 canonical authority matrix 逐动作 join。每个必需动作必须在准确 phase、object 与 workspace 为 `allowed`；任一必需动作是 `none`、`pending user`、缺失、冲突或含糊时，不生成正式 Review 提示词，只返回用户授权门禁。
-4. 机械 `--no-ff` merge 必须分别拥有 integration `write`、`stage`、`commit`、`merge` 权限。Candidate-validation 与 integration workspace 的 create、reuse、switch 继续逐 workspace、逐子动作独立声明，只有 phase-scoped required-action set 中实际标为 required 的子动作才必须在准确 phase、ref、path 与 workspace 为 `allowed`：workspace 不存在时按实际准备步骤要求 create 和/或 switch；已存在但不在准确 ref 时按实际准备步骤要求 reuse 和 switch；已存在且已位于准确 ref 时只要求 reuse，switch 应记录为 `none + 已在准确 ref，无需切换`，且不阻断正式 Review 派发。其他不适用 create/reuse/switch 子动作同样可用 `none + accepted rationale`。所需 merged-result validation 与 artifact/evidence 必须有 integration-phase 权限；`push integration target` 独立授权；post-check 动作必须可执行。
-5. 正式 Review 提示词完整传入：required-action set、canonical authority matrix、candidate-validation workspace、integration workspace、candidate validation profile、merged-result validation profile、integration sequence，以及 exact Story/READY、reviewed base/candidate、Initial/Repair lineage 和 protected state。
+1. 完成 provenance join；传入 exact Story/READY、reviewed base/candidate、Initial/Repair lineage、问题与成功标准、scope/non-goals、真实边界、应信任内部保证、反过度工程检查轴和 protected state。
+2. 用 Review 模板的一张 required-action/authority matrix 同时绑定各动作的 phase、action、object/ref/path/workspace、required/state/source/rationale，覆盖 candidate validation、两类 workspace、integration、push 前 merged-result validation 与 post-check；不适用项为 `none + accepted rationale`。
+3. 每个 required 动作必须在准确 phase/object/workspace 为 `allowed`，否则只返回授权门禁。机械 `--no-ff` merge 的 integration write、stage、commit、merge 独立授权；workspace create/reuse/switch、merged-result validation、push integration target 和 post-check 也独立授权。
 
 收到 Writer/Repair 报告后：
 - 先完成报告 provenance join，再核验 accepted base、branch/candidate、准确 three-dot scope、完整 finding batch（Repair 时）、验证、artifact/evidence、index、同步和受保护状态。Writer 永不 merge、push integration target 或派发 Reviewer。
@@ -98,7 +79,7 @@
 - PASS 时核验同一 Reviewer 的 required-action set 与 authority matrix 已逐项 join 为 `allowed`，且已按 accepted sequence 对 exact candidate 机械集成，在 push 前验证 merged result，并证明 merge parents/tree、candidate ancestry、refs 同步、clean index 与 protected state。
 
 环境、证据与资产：
-- Windows 上已有 `pwsh` 时优先使用 `pwsh -NoProfile` 并显式 UTF-8；不得为普通任务安装或升级 PowerShell。
+- Windows 上已有 PowerShell 7（`pwsh`）时优先使用 `pwsh -NoProfile` 并显式 UTF-8；不得为普通任务安装或升级 PowerShell。
 - 验证与当前风险成比例；1px/局部 UI 与 shared-owner/lifecycle 使用不同范围，fresh 不等于全仓库测试。
 - Android UI/APK/smoke 复用合同指定的既有 JDK、SDK、system image、AVD 与设备。未经明确授权，不下载/升级 SDK 或镜像，不创建、克隆、wipe 或替换 AVD。
 - executable 改变会使旧 artifact/evidence 失效，除非 Git 证明准确 executable-tree equivalence。AVD 不代替真实设备/RF/GATT/可穿戴证据；主观 UI 与实机结果由用户验收。
