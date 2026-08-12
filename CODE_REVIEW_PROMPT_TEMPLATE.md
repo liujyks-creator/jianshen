@@ -83,7 +83,7 @@ Reviewer entry authority preflight（任何实质 Review 前执行）：
 4. 相邻权限不得互推；`pending user`/`none` 不是 allowed，不得以“有完整权限”替代逐项授权。
 5. `write` 不推导 `stage`；branch/worktree create、reuse、switch 分别声明；create/reuse 不推导 cleanup；test 与 build 分别声明；artifact generation、evidence capture、evidence adoption/commit 分别声明。
 6. merge 不推导 integration write/stage/commit；push 不推导 merge、commit 或 workspace 权限。Candidate test/build/artifact/evidence 不推导 merged-result 对应权限；external/device/account 不从 test/build 推导。
-7. 若本合同要求 PASS 后机械 merge/push，则 integration write、stage、commit、merge、push integration target、workspace create/reuse/switch、merged-result validation 与 post-check 的每个必需动作均须 allowed；否则本 Review 不应被正式派发并在此阻断。
+7. 若本合同要求 PASS 后机械 merge/push，则 integration write、stage、commit、merge、push integration target、merged-result validation 与 post-check 的每个必需动作，以及 candidate-validation 与 integration workspace 的 create、reuse、switch 中仅在 phase-scoped required-action set 内实际标为 required 的子动作，均须在准确 phase、ref、path 与 workspace 为 allowed；否则本 Review 不应被正式派发并在此阻断。Workspace 不存在时按实际准备步骤要求 create 和/或 switch；已存在但不在准确 ref 时按实际准备步骤要求 reuse 和 switch；已存在且已位于准确 ref 时只要求 reuse，switch 应记录为 `none + 已在准确 ref，无需切换`，不阻断 entry preflight 或 PASS eligibility；其他不适用 create/reuse/switch 子动作同样可为 `none + accepted rationale`。
 
 冷启动与独立性：
 - 完整读取一次适用技能、pinned review base 中 accepted `AGENTS.md`、本完整 accepted 模板，以及仅与当前 candidate 直接相关的 Story/decision/testing/evidence 来源；记录 immutable identity。
