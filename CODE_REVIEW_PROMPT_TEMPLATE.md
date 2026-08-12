@@ -38,6 +38,13 @@ Role attempt：<正整数>
 - Forbidden commit/path/ancestry：<准确列表或无 + accepted rationale>
 - Protected state：<准确 dirty/untracked inventory、index 与保护动作>
 
+本对话身份、provenance 与证据分类：
+- 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。你只接受本对话第一条任务中真实收到的一份完整 Initial Reviewer 或 re-Reviewer 合同，并只对本对话合同和实际动作负责；不得把另一个对话的 Writer、Repair、Reviewer 或诊断报告当成本对话行为。
+- 消息或报告相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权或先后因果证据。本 Reviewer 对话后来收到 Repair 合同时不得切换角色；立即停止对应动作并要求用户新建独立 Repair 对话。
+- 实质 Review 前核验当前完整合同及所有跨对话输入的 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。共享 branch/candidate 不能替代 role/attempt/prompt/report identity。
+- `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限或 finding；`UNKNOWN` 是当前证据无法判定。未标记、未验证的 assumption 不得进入权限、身份、归因、行为、范围、ownership、验收、因果、finding 或 verdict。
+- 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、证据缺口、可选解释和实际权衡。只有会改变权限、身份、行为、范围、ownership、验收、因果归属或 claim-proving evidence 的 load-bearing provenance 不足时，才停止相应归因或有状态动作并返回准确门禁；不得选择最方便解释，或把 `UNKNOWN` 当作授权、违规、PASS、失败或 candidate 废弃证据。
+
 Workspace bindings：
 - Candidate-validation workspace：path=<绝对路径>；当前状态=<不存在 | 存在且身份已核验>；branch/ref=<准确值>；create=<allowed | none | pending user>；reuse=<allowed | none | pending user>；switch=<allowed | none | pending user>；authority source=<逐项准确来源>。
 - Integration workspace：path=<绝对路径>；当前状态=<不存在 | 存在且身份已核验>；branch/ref=<准确 integration ref>；create=<allowed | none | pending user>；reuse=<allowed | none | pending user>；switch=<allowed | none | pending user>；authority source=<逐项准确来源>。
@@ -100,6 +107,14 @@ Reviewer entry authority preflight（任何实质 Review 前执行）：
 - 发现首个 finding 只会阻止 PASS/集成，不会结束剩余 Review；继续所有剩余可执行轴并一次返回完整 findings batch。只有客观 authority、安全、来源或 claim-proving evidence blocker 才可停止。
 - re-Reviewer 逐项核对历史 findings/dispositions，但仍从 base 到 Repair candidate 重做整个当前节点，不只复查旧 finding，也不扩大到节点外。
 - 验证与风险成比例：1px/局部 UI 不自动扩大为全仓；shared-owner/lifecycle 不得仅靠 focused happy path。AVD/fake/source inspection 不冒充真实设备或外部 evidence。
+- 检查 Writer/Repair 是否把未证明事实当作 `FACT`，是否隐藏 `UNKNOWN`、困惑、取舍或 evidence gap，是否根据跨对话报告相邻关系推断角色、来源、授权或因果，以及 load-bearing provenance 是否齐全。
+- 检查是否在修改前定义了明确成功标准和验证信号，并由 exact candidate evidence 逐项证明；未满足预先成功标准却 commit、push 或报告完成时形成 finding。
+- 检查是否只解决当前 Story 要求：不得有推测性功能、未来选项、兼容层、通用平台、顺手重构、非必要修改或清理；cleanup 仅能覆盖本任务自己创建且明确获准清理的内容。
+- 检查已由类型系统、accepted contract、直接测试或框架正式保证证明的内部不变量上是否重复增加 guard、包装或校验；检查校验是否仅存在于用户输入、外部 API、网络等真实系统边界，或 exact Story 明确指定的外部边界。Story 明确要求的状态检查不应被误报。
+- 检查是否为合同和证据已排除的不可能场景增加 fallback、空值检查、错误处理、额外验证、兼容层或默认值；检查是否存在 broad catch、吞错、silent fallback、silent default、忽略失败、把失败伪装成成功或“失败后继续”。
+- 检查是否为单一调用或一次性操作创建 helper、utility、wrapper、manager、registry、adapter、工具类、抽象层、通用平台或扩展点；只有当前 Story 的重复事实和 accepted architecture 明确要求时才不构成问题。
+- 检查真实前置、invariant、合同状态或环境错误是否应 fail-fast 却被防御性分支掩盖；原始失败信号和真实根因必须保留。
+- 不得为理论上可能、但当前合同与证据表明不可能的场景制造 speculative finding，不得把个人防御性偏好升级为 must-fix，也不得把额外 wrapper、fallback 或抽象当作默认 Repair 建议。仅凭“更安全”建议 broad catch 时必须拒绝，除非真实系统边界与 accepted failure contract 共同证明需要。发现 speculative abstraction 等任一问题后仍继续当前节点全部其余适用轴，最后返回一个完整 findings batch。
 
 Findings 与 verdict：
 - Findings 只返回一个完整原子批次，按 blocker、must-fix、should-fix、nice-to-have 排序。每项给出文件/紧凑行号、违反合同、复现场景/影响、证据及最小但因果完整 Repair 方向。

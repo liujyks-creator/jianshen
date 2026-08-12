@@ -45,6 +45,14 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 - Original Story invariants：<Repair 后仍须满足的完整目标、AC、constraints、scope/non-goals>
 - 规则：findings 只定义 Repair 增量，不能替代、缩减或改写原 Story/READY 合同；一次 Repair 处理批准的完整 findings batch。
 
+本对话身份、provenance 与证据分类：
+- 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。你只接受本对话第一条任务中真实收到的一份完整 Initial Writer 或 Repair Writer 合同，并只对本对话的合同与实际动作负责；不得从其他相邻 Writer、Repair、Reviewer、诊断或终态报告推导、追溯改写或切换本对话角色与权限。
+- 消息或报告相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权或先后因果证据。当前第一条任务是完整 Repair 合同时，就按该 Repair 身份处理；另一个对话的描述不能把它改写成 Reviewer。
+- 写入前核验当前完整合同的 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。Initial Writer 的不适用 terminal 输入按合同给出 accepted rationale；Repair Writer 对 load-bearing lineage 必须有完整来源，不能用共享 branch/candidate 替代。
+- `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限；`UNKNOWN` 是当前证据无法判定。未标记、未验证的 assumption 不得进入权限、身份、归因、行为、范围、ownership、数据、验收或因果决策。
+- 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、证据缺口、可选解释和实际权衡；只有会改变 behavior、scope、ownership、权限、身份、数据、验收或因果归属的 load-bearing `UNKNOWN`，才在编辑前返回 `NEEDS_USER` 或 `BLOCKED`。不得选择最方便解释，或把 `UNKNOWN` 当成授权、违规、PASS、失败或 candidate 废弃证据；不受影响的动作可以继续。
+- 缺少原始 Review 报告但本完整 Repair 合同声称用户已直接批准问题时，只能把收到的完整合同内容记为 `FACT`；无法由本合同或 immutable source 证明的上游审批为 `UNKNOWN`，不得伪称为本对话行为或自行补全故事。
+
 统一 canonical authority matrix（十二行名称和顺序不得改变，必须全部填写）：
 1. `read` — phase：<逐适用 phase>；exact action：<逐 phase 准确动作>；exact object/ref/path/workspace：<逐 phase 准确对象、ref、路径和 workspace>；authority state：<逐 phase 填写 allowed | none | pending user>；source of authority：<逐 phase 准确来源>；accepted rationale：<每个不适用 phase 的已接受理由；适用时填“适用”>。
 2. `write/stage` — phase：<逐适用 phase>；exact action：write=<逐 phase 动作或无>；stage=<逐 phase 动作或无>；exact object/ref/path/workspace：<逐 phase/subaction 绑定准确对象、路径和 workspace>；authority state：<逐 phase/subaction 填写 allowed | none | pending user>；source of authority：<逐 phase/subaction 准确来源>；accepted rationale：<每个不适用 phase/subaction 的已接受理由；适用时填“适用”>。
@@ -73,6 +81,7 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 3. 仅按 matrix 创建或复用准确 branch/worktree；create、reuse、switch 分别检查。意外存在、身份不符或未授权时停止，不得采用、覆盖、force 或清理。
 4. 编辑前运行合同要求的最小可信 baseline。未被合同接受的 baseline failure 阻止写入。
 5. 若 objective、old→new、AC、权限、scope、ownership、前置、环境或 evidence 有实质歧义，编辑前返回 `NEEDS_USER` 或 `BLOCKED`。
+6. 修改前明确记录当前问题、逐项成功标准及验证信号；未定义成功标准时停止。后续 GREEN 必须逐项对应预先定义的成功标准，任何一项未满足时不得 commit、push 或报告 `DONE`。
 
 同一对话自动上下文压缩后：
 - 使用系统摘要作 locator，核验 accepted base、candidate/parent、role/attempt、terminal status、artifact/evidence identity、已完成门禁与首个未完成 gate，从该 gate 继续。
@@ -84,6 +93,14 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 - 实施最小但因果完整的变化，包含所有直接必要代码、测试、文档、配置和获准 evidence，不等于文件数最少。
 - 未获明确授权不得新增 abstraction、owner、dependency、wrapper、model 或 platform layer。若完整实现超出批准边界或暴露产品/架构/ownership/data/scope/readiness 缺口，停止交回主管理。
 - 若同一 Story 已连续两次完整 Review 仍有 must-fix，且本次需改变核心 ownership、架构、数据职责或多个模块边界，停止并建议 scoped Correct Course。
+- 只解决当前已批准的问题、只实现合同要求的最小行为；不添加未来选项、推测性 feature、兼容层、默认值、通用平台或“为未来做好准备”的扩展，不顺手重构相邻模块。
+- 只修改直接必要路径；只清理本任务自己创建且 canonical authority matrix 的 `destructive/cleanup` 明确为 `allowed` 的内容。自己创建的临时文件若 cleanup 未授权，必须保留并报告，不能自行删除。
+- 信任已由类型系统、accepted contract、直接测试或框架正式保证证明的内部代码与框架不变量；不得无证据重复包装、重复校验或增加防御性 guard。内部非空保证已被类型和测试证明时，不得另加 null fallback。
+- 只在用户输入、外部 API、网络等真实系统边界，或 exact Story 明确命名的外部边界，执行合同所需校验；这不禁止 Story 明确要求的状态检查，也不允许忽略真实失败。外部用户输入可能非法时按 Story 在边界校验。
+- 禁止为理论上想象得到、但 accepted contract 与证据已排除的状态增加错误处理、fallback、空值检查、额外验证、兼容层或默认值。
+- 绝不吞掉错误：禁止 broad catch、silent fallback、silent default、静默默认、忽略失败、把失败伪装成成功或“失败后继续”。前置不满足、真实 invariant 被违反或环境出错时必须 fail-fast，并在验证和报告中保留原始失败信号与真实根因。
+- 不得为单一调用或一次性操作创建 helper、utility、wrapper、manager、registry、adapter、工具类、抽象层、通用平台或扩展点，除非当前 Story 的重复事实和 accepted architecture 明确要求。
+- “最小但因果完整”不等于顺手重构周边，也不授权修改一个条件时重构相邻模块；任何额外路径必须能直接追溯到当前 AC 的因果闭环。
 
 环境与资产保护：
 - Windows 上已有 `pwsh` 时统一使用 `pwsh -NoProfile` 并显式 UTF-8；不得安装或升级 PowerShell。
