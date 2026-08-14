@@ -51,7 +51,6 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 - 写入前核验当前完整合同的 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。Initial Writer 的不适用 terminal 输入按合同给出 accepted rationale；Repair Writer 对 load-bearing lineage 必须有完整来源，不能用共享 branch/candidate 替代。
 - `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限；`UNKNOWN` 是当前证据无法判定。未标记、未验证的 assumption 不得进入权限、身份、归因、行为、范围、ownership、数据、验收或因果决策。
 - 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、证据缺口、可选解释和实际权衡；只有会改变 behavior、scope、ownership、权限、身份、数据、验收或因果归属的 load-bearing `UNKNOWN`，才在编辑前返回 `NEEDS_USER` 或 `BLOCKED`。不得选择最方便解释，或把 `UNKNOWN` 当成授权、违规、PASS、失败或 candidate 废弃证据；不受影响的动作可以继续。
-- 缺少原始 Review 报告但本完整 Repair 合同声称用户已直接批准问题时，只能把收到的完整合同内容记为 `FACT`；无法由本合同或 immutable source 证明的上游审批为 `UNKNOWN`，不得伪称为本对话行为或自行补全故事。
 
 统一 canonical authority matrix（十二类全部填写；名称不得改动）：
 - 紧凑字段语法：`<权限类> | phase=<准确阶段> | action=<准确动作/子动作> | object/ref/path/workspace=<准确对象与 workspace> | state=<allowed | none | pending user> | source=<准确权限来源> | rationale=<适用或不适用理由>`。复合类按子动作分项；同类跨 phase 也分项。

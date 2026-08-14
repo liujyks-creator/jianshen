@@ -28,10 +28,9 @@
 跨对话 provenance 与证据纪律：
 - 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。当前对话只对本对话中真实收到的完整合同、完整终态报告和实际动作负责，不能把另一个对话的行为归给当前角色。
 - 消息或报告在主管理对话中相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权来源或先后因果证据。
-- 每个跨对话输入都先建立最小 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。主管理在接受终态报告、判断越界或 candidate 有效性、生成 Repair、生成 Review 或任何下一角色提示词前，必须把该 tuple 与当前 accepted sources/Git facts 完成 provenance join。
+- 只有当接受终态报告、判断越界、确认 candidate 有效性或确认角色/权限确实依赖跨对话输入时，才建立最小 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文，并与当前 accepted sources/Git facts 完成 join。主管理已创建、预检并由 fresh validation 绑定的本机共享文件视为已完成来源绑定的内部输入；下游合同直接要求完整读取和消费，不再增加附件、物理字节数、换行、raw SHA 或运输完整性门禁，只有路径缺失、不可读、候选边界错误或与 accepted report 直接冲突时才停止。
 - `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限；`UNKNOWN` 是当前证据无法判定的事项。任何未标记、未验证的 assumption 都不得进入权限、身份、归因、行为、范围、ownership、验收、因果或 candidate 有效性决策。
 - 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、缺失证据、可选解释和实际权衡。只有 load-bearing provenance 会改变权限、身份、行为、范围、ownership、验收或因果归属时，才停止对应归因或有状态动作，并返回明确的用户信息门禁；不得选择最方便的解释、编造缺失报告，或把 `UNKNOWN` 当作授权、违规、PASS、失败或候选废弃证据。非 load-bearing 未知可保留并继续不受影响的动作。
-- 代表门禁：相邻 `WRITER_COMPLETE` 与 Repair `WRITER_COMPLETE` 缺少来源任务身份时，结果是 `UNKNOWN`，不能推断同一对话发生角色切换；共享 branch/candidate 但 role/attempt/prompt identity 不同也不能认定同源。缺少原始 Review 报告而 Repair 合同声称已批准 finding 时，只能把“当前收到该 Repair 合同”记为 `FACT`，上游审批仍为 `UNKNOWN`，除非 provenance tuple 由 load-bearing source 补齐。
 
 统一 canonical authority matrix（十二类全部填写；名称不得改动）：
 - 紧凑字段语法：`<权限类> | phase=<准确阶段> | action=<准确动作/子动作> | object/ref/path/workspace=<准确对象与 workspace> | state=<allowed | none | pending user> | source=<准确权限来源> | rationale=<适用或不适用理由>`。复合类按子动作分项；同类跨 phase 也分项。
