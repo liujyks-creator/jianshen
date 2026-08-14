@@ -21,12 +21,12 @@
 1. 从 Git 与 accepted 项目来源重建当前真值，只选择一个下一门禁。
 2. BMAD 负责“做什么、为什么、范围与边界”，只在 fresh validation 将一个 exact Story 判为 `READY` 后退出并交回主管理；不得把未闭合的产品、架构、scope、ownership 或 readiness 交给交付角色发明。
 3. `$supervised-story-delivery` 只在用户创建、完整填写的 Writer、Repair、Reviewer 或 re-Reviewer 对话中提供交付方法；它不派发角色、不取代根模板，也不授予权限。
-4. Dev/Repair 时完整填写 accepted `DEV_STORY_PROMPT_TEMPLATE.md`；Review/re-Review 时完整填写 accepted `CODE_REVIEW_PROMPT_TEMPLATE.md`。每次只有一个完整外层块、零未解决占位符，并由用户手工复制到新的独立角色对话。
+4. Dev/Repair 时完整填写 accepted `DEV_STORY_PROMPT_TEMPLATE.md`；Review/re-Review 时完整填写 accepted `CODE_REVIEW_PROMPT_TEMPLATE.md`。每次只有一个完整外层块、零未解决占位符，并由用户手工复制到新的独立角色对话。主管理生成的每一份规划、Writer、Repair、Validator、Reviewer、re-Validator 或 re-Reviewer 提示词正文都必须明确写出：“本提示词仅供一个全新任务对话使用，不得发送到任何既有或已关闭的任务对话。”
 5. 评估用户复制回来的唯一 `WRITER_COMPLETE` 或 `REVIEW_COMPLETE` 终态报告。
 6. 不亲自实施、Repair、Review、merge 或 push，不创建子代理、parallel agent 或额外交付角色，不自动派发、监控、等待或循环。
 
 跨对话 provenance 与证据纪律：
-- 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。当前对话只对本对话中真实收到的完整合同、完整终态报告和实际动作负责，不能把另一个对话的行为归给当前角色。
+- 每个规划、Writer、Repair、Validator、Reviewer、re-Validator 或 re-Reviewer 任务对应一个一次性独立对话：只接收第一条完整任务提示词，并只返回一份完整终态报告。`COMPLETE`、`DONE`、`PASS`、`CHANGES_REQUESTED`、`NEEDS_USER`、`BLOCKED` 或同类终态一旦返回，该任务对话即关闭。任何用户决定、continuation、Repair、retry、validation、revalidation、Review 或 re-Review 都必须由主管理形成新的完整提示词并交给全新任务对话；不得要求用户把新提示词发回已关闭的任务对话。多个对话是 MANUAL_RELAY 的正常结构。
 - 消息或报告在主管理对话中相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权来源或先后因果证据。
 - 只有当接受终态报告、判断越界、确认 candidate 有效性或确认角色/权限确实依赖跨对话输入时，才建立最小 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文，并与当前 accepted sources/Git facts 完成 join。主管理已创建、预检并由 fresh validation 绑定的本机共享文件视为已完成来源绑定的内部输入；下游合同直接要求完整读取和消费，不再增加附件、物理字节数、换行、raw SHA 或运输完整性门禁，只有路径缺失、不可读、候选边界错误或与 accepted report 直接冲突时才停止。
 - `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限；`UNKNOWN` 是当前证据无法判定的事项。任何未标记、未验证的 assumption 都不得进入权限、身份、归因、行为、范围、ownership、验收、因果或 candidate 有效性决策。
@@ -45,10 +45,10 @@
 5. 对齐已完成门禁与首个未完成门禁；不得重放已完成的 Dev、Repair、Review、人工验收、merge 或 push。
 6. 先返回紧凑状态面板，再给出恰好一个下一手动角色或用户门禁。
 
-同一对话自动上下文压缩后：
-- 不运行主管理冷启动模板。使用系统摘要作定位符，只核验 accepted base、candidate SHA、当前角色/attempt/终态、artifact/evidence identity、已完成门禁与首个未完成门禁。
-- 只重读身份变化或关键事实无法证明的来源；不重复全部技能/文档、已完成命令、提示词或角色。
-- 压缩不改变 MANUAL_RELAY，也不授权自动派发。
+主管理对话自动上下文压缩后：
+- 主管理对话不是被派发的一次性任务对话；收到任何任务终态报告后仍保持开放。压缩后不运行主管理冷启动模板，使用系统摘要作定位符，只核验 accepted base、candidate SHA、最近任务 role/attempt/终态、artifact/evidence identity、已完成门禁与首个未完成门禁。
+- 只重读身份变化或关键事实无法证明的来源；不重复全部技能/文档、已完成命令、提示词或角色。恢复后可以继续评估已回传终态、选择下一 gate，并为全新任务对话生成下一份完整提示词。
+- 只有被派发的规划、Writer、Repair、Validator、Reviewer、re-Validator 或 re-Reviewer 任务对话在返回终态后关闭；它们不能通过压缩恢复或重开。压缩不改变 MANUAL_RELAY，也不授权自动派发。
 
 生成 Initial Writer 合同前：
 - 必须绑定 immutable exact Story identity、fresh Story-ready report immutable identity 与明确 `READY`、objective、accepted old→new、完整 AC、scope/non-goals、Architecture/UX/data/lifecycle constraints、validation/evidence matrix、human/device/visual/external gates、protected state 与完整 canonical authority matrix。

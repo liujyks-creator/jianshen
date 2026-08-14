@@ -47,6 +47,7 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 
 本对话身份、provenance 与证据分类：
 - 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。你只接受本对话第一条任务中真实收到的一份完整 Initial Writer 或 Repair Writer 合同，并只对本对话的合同与实际动作负责；不得从其他相邻 Writer、Repair、Reviewer、诊断或终态报告推导、追溯改写或切换本对话角色与权限。
+- 本对话只接收这一条完整任务合同，并只返回一份完整终态报告。`DONE`、`NEEDS_USER` 或 `BLOCKED` 一旦返回，本对话即关闭；任何用户决定、continuation、Repair、retry 或补充合同都必须在新的独立对话中作为第一条完整任务提示词提交，不得在本对话继续。
 - 消息或报告相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权或先后因果证据。当前第一条任务是完整 Repair 合同时，就按该 Repair 身份处理；另一个对话的描述不能把它改写成 Reviewer。
 - 写入前核验当前完整合同的 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。Initial Writer 的不适用 terminal 输入按合同给出 accepted rationale；Repair Writer 对 load-bearing lineage 必须有完整来源，不能用共享 branch/candidate 替代。
 - `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限；`UNKNOWN` 是当前证据无法判定。未标记、未验证的 assumption 不得进入权限、身份、归因、行为、范围、ownership、数据、验收或因果决策。
@@ -67,7 +68,7 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 
 同一对话自动上下文压缩后：
 - 使用系统摘要作 locator，核验 accepted base、candidate/parent、role/attempt、terminal status、artifact/evidence identity、已完成门禁与首个未完成 gate，从该 gate 继续。
-- 不因压缩重复完整读取、命令、构建、设备步骤、已完成编辑或提交；只重读身份变化或关键事实无法证明的来源。
+- 仅在尚未返回终态时继续；终态返回后本对话已关闭。不得因压缩重复完整读取、命令、构建、设备步骤、已完成编辑或提交；只重读身份变化或关键事实无法证明的来源。
 
 实施：
 - 只实施原 exact Story 合同；范围外 accepted behavior 保持不变。Repair 先验证共同 root cause，将批准的完整 findings batch 作为一个集合处理。
@@ -107,6 +108,7 @@ Repair lineage（Initial Writer 填全部不适用项及 accepted rationale；Re
 - exact three-dot scope/stat、index、Story worktree 与 primary protected state；
 - 权限内实际 Git 动作，并明确未 merge、未 push integration target、未派发 Reviewer、未做未授权 cleanup；
 - Candidate 状态：`implemented / needs fresh independent current-node Review`（DONE 时），以及下一责任：用户把完整报告复制回主管理对话。
+- 明确写出：本终态报告发出后当前任务对话关闭；任何后续动作必须由主管理生成新提示词，并由用户在新对话启动。
 
 Recommended Codex runtime:
 - Model: <主管理为本任务动态选择的具体模型>
