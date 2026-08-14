@@ -169,7 +169,7 @@ AI 看到 `bodyM` 不知道是不是正文默认. markdown 告诉它: "bodyM 是
 ```markdown
 ## Typography
 
-字体: `Inter, system-ui, sans-serif`. Inter 是主字体, 未加载时回退 system.  
+字体: `Inter, system-ui, sans-serif`. Inter 是主字体, 未加载时回退 system.
 基数: 16px = bodyM default. 向上 1.5 比例, 向下 0.875 比例.
 
 ### 级别用途
@@ -199,7 +199,7 @@ AI 看到 `bodyM` 不知道是不是正文默认. markdown 告诉它: "bodyM 是
 ## Layout
 
 ### 间距哲学
-基数 [4 / 8], scale [xs → xl].  
+基数 [4 / 8], scale [xs → xl].
 [1-2 句说明紧凑还是宽松]
 
 ### 网格
@@ -217,7 +217,7 @@ AI 看到 `bodyM` 不知道是不是正文默认. markdown 告诉它: "bodyM 是
 ## Layout
 
 ### 间距哲学
-基数 4 (Tailwind 风), scale xs(4) / sm(8) / md(16) / lg(24) / xl(32) / 2xl(48) / 3xl(64).  
+基数 4 (Tailwind 风), scale xs(4) / sm(8) / md(16) / lg(24) / xl(32) / 2xl(48) / 3xl(64).
 整体**偏紧凑** (短剧创作者常在小屏幕, 不浪费像素).
 
 ### 网格
@@ -348,8 +348,8 @@ AI 看到 `bodyM` 不知道是不是正文默认. markdown 告诉它: "bodyM 是
 ## Components
 
 ### Button
-**变体**: `primary` / `secondary` / `ghost` / `danger`  
-**状态**: default / hover (accent 色加深 10%) / active (加深 20%) / focus (accent 色 2px outline) / disabled (opacity 0.5 + cursor not-allowed)  
+**变体**: `primary` / `secondary` / `ghost` / `danger`
+**状态**: default / hover (accent 色加深 10%) / active (加深 20%) / focus (accent 色 2px outline) / disabled (opacity 0.5 + cursor not-allowed)
 **尺寸**: sm (28px 高) / md (36px, default) / lg (44px)
 
 **用法**:
@@ -363,23 +363,23 @@ AI 看到 `bodyM` 不知道是不是正文默认. markdown 告诉它: "bodyM 是
 - 纯文本操作 (用 text link)
 
 ### Input / Textarea
-**状态**: default (neutral500 边框) / hover (边框加深) / focus (accent 2px 边框 + 发光) / error (error 色边框 + 下方红字) / disabled  
+**状态**: default (neutral500 边框) / hover (边框加深) / focus (accent 2px 边框 + 发光) / error (error 色边框 + 下方红字) / disabled
 **placeholder**: 用 neutral500, 不用占位文字欺骗交互
 
 ### Card
-**嵌套深度最多 2 级**. Card 里放 Card 第三层视觉就乱.  
+**嵌套深度最多 2 级**. Card 里放 Card 第三层视觉就乱.
 **阴影**: 暗色体系下**不用**, 靠 `{colors.secondary}` 色调提亮表达层级.
 
 ### Modal / Dialog
-**最大宽度 600px** (超大阅读疲劳).  
-**出现**: fade + slight scale, 200ms cubic-bezier(0.2, 0, 0, 1)  
+**最大宽度 600px** (超大阅读疲劳).
+**出现**: fade + slight scale, 200ms cubic-bezier(0.2, 0, 0, 1)
 **背景遮罩**: rgba(0,0,0,0.6) 确保 focus 在 modal
 
 ### Nav / Sidebar
 **活动项**: accent 色左侧 3px 竖条 + 图标 accent, 不整块背景反白 (太重)
 
 ### Tab / Pill
-**Tab**: 底部 2px accent 下划线标活动  
+**Tab**: 底部 2px accent 下划线标活动
 **Pill**: 用于筛选器, 活动态 accent 背景 + neutral900 文字
 ```
 

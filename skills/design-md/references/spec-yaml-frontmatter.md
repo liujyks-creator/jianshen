@@ -49,7 +49,7 @@ colors:
   primary: "#1A1C1E"
   secondary: "#6C7278"
   accent: "#B8422E"
-  
+
   # 中性 scale (4-6 档)
   neutral50:  "#F7F5F2"
   neutral100: "#E5E1DC"
@@ -57,13 +57,13 @@ colors:
   neutral500: "#6C6457"
   neutral700: "#3D362B"
   neutral900: "#1A1611"
-  
+
   # 语义色
   success: "#2E7D32"
   warning: "#F57C00"
   error:   "#C62828"
   info:    "#0288D1"
-  
+
   # 组件特定 (可选)
   buttonBg:      "#1A73E8"
   buttonBgHover: "#1557B0"
@@ -129,22 +129,22 @@ typography:
   # 大标题/展示 (可选, 只有落地页等用)
   displayL: { fontSize: "72px", fontWeight: 800, lineHeight: 1.1 }
   displayM: { fontSize: "56px", fontWeight: 700, lineHeight: 1.15 }
-  
+
   # 标题 (必备 4 级)
   headingXl: { fontSize: "40px", fontWeight: 700, lineHeight: 1.2 }
   headingL:  { fontSize: "32px", fontWeight: 700, lineHeight: 1.25 }
   headingM:  { fontSize: "24px", fontWeight: 600, lineHeight: 1.3 }
   headingS:  { fontSize: "20px", fontWeight: 600, lineHeight: 1.4 }
-  
+
   # 正文 (必备 3 级)
   bodyL: { fontSize: "18px", fontWeight: 400, lineHeight: 1.6 }
   bodyM: { fontSize: "16px", fontWeight: 400, lineHeight: 1.5 }
   bodyS: { fontSize: "14px", fontWeight: 400, lineHeight: 1.5 }
-  
+
   # 辅助
   captionM: { fontSize: "12px", fontWeight: 400, lineHeight: 1.4 }
   labelM:   { fontSize: "14px", fontWeight: 500, lineHeight: 1.4 }
-  
+
   # 等宽 (代码 · 数字表格)
   codeM: { fontFamily: "Menlo, Consolas, monospace", fontSize: "14px", fontWeight: 400, lineHeight: 1.6 }
 ```
@@ -335,7 +335,7 @@ colors:
   primary: "#120b19"       # 深紫近黑 · 主背景
   secondary: "#1f1529"     # 深紫 · 次级面板
   accent: "#c084fc"        # 霓虹紫 · CTA / highlight
-  
+
   # 中性
   neutral50:  "#f4edf8"
   neutral100: "#e2d5eb"
@@ -343,7 +343,7 @@ colors:
   neutral500: "#6e5a80"
   neutral700: "#3d2f4d"
   neutral900: "#0a0612"
-  
+
   # 语义
   success: "#22c55e"
   warning: "#f59e0b"
@@ -389,7 +389,7 @@ components:
     borderRadius: "{rounded.md}"
     fontSize: "{typography.bodyM.fontSize}"
     fontWeight: 600
-  
+
   input:
     backgroundColor: "{colors.secondary}"
     borderColor: "{colors.neutral500}"
@@ -399,7 +399,7 @@ components:
     color: "{colors.neutral50}"
     placeholderColor: "{colors.neutral500}"
     focusBorderColor: "{colors.accent}"
-  
+
   card:
     backgroundColor: "{colors.secondary}"
     borderRadius: "{rounded.lg}"

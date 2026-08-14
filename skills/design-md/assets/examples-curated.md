@@ -70,7 +70,7 @@ components:
     borderRadius: "{rounded.md}"
     fontSize: "{typography.bodyS.fontSize}"
     fontWeight: 500
-  
+
   input:
     backgroundColor: "{colors.secondary}"
     borderColor: "{colors.neutral700}"
@@ -79,7 +79,7 @@ components:
     paddingY: "{spacing.2}"
     color: "{colors.neutral50}"
     focusBorderColor: "{colors.accent}"
-  
+
   card:
     backgroundColor: "{colors.secondary}"
     borderRadius: "{rounded.lg}"
@@ -117,9 +117,9 @@ Inter + JetBrains Mono. body 16px, 行高 1.5.
 primary (accent 底) / secondary (边框) / ghost (无底无框).
 
 ## Do's and Don'ts
-✅ 所有颜色走 token.  
-✅ 按钮每页 ≤ 1 个主 CTA.  
-❌ 不装饰性 emoji.  
+✅ 所有颜色走 token.
+✅ 按钮每页 ≤ 1 个主 CTA.
+❌ 不装饰性 emoji.
 ❌ 不 drop shadow (暗色下不可见).
 ```
 
@@ -185,7 +185,7 @@ components:
     paddingX: "{spacing.4}"
     paddingY: "{spacing.2}"
     borderRadius: "{rounded.md}"
-  
+
   card:
     backgroundColor: "{colors.neutral50}"
     borderRadius: "{rounded.lg}"
@@ -206,9 +206,9 @@ components:
 - **Neutral (石灰 `#F7F5F2`):** 辅助
 
 ## Do's and Don'ts
-✅ 衬线字体用在标题.  
-✅ 行高宽松 (1.6+).  
-❌ 不用强饱和色 (破坏纸感).  
+✅ 衬线字体用在标题.
+✅ 行高宽松 (1.6+).
+❌ 不用强饱和色 (破坏纸感).
 ❌ 不做暗色版 (这是纸的审美).
 ```
 
@@ -281,9 +281,9 @@ components:
 设计情感: 简 · 准 · 不抢眼.
 
 ## Do's and Don'ts
-✅ 每页 1 个主色 CTA.  
-✅ 信息密度优先.  
-❌ 不用复杂装饰.  
+✅ 每页 1 个主色 CTA.
+✅ 信息密度优先.
+❌ 不用复杂装饰.
 ❌ 不加动画做"有趣".
 ```
 

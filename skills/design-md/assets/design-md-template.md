@@ -15,7 +15,7 @@ colors:
   primary: "#000000"      # TODO 替换 · 主背景 / 核心文本
   secondary: "#000000"    # TODO · 次级面板
   accent: "#000000"       # TODO · CTA / 强调
-  
+
   # ==== 中性 scale (推荐 5-6 档) ====
   neutral50:  "#f5f5f5"   # TODO · 最亮 · 主正文
   neutral100: "#e5e5e5"   # TODO
@@ -23,7 +23,7 @@ colors:
   neutral500: "#737373"   # TODO · 次要正文
   neutral700: "#404040"   # TODO
   neutral900: "#171717"   # TODO · 最暗 / 深面板
-  
+
   # ==== 语义色 (4 个) ====
   success: "#22c55e"      # 可用默认
   warning: "#f59e0b"
@@ -52,7 +52,7 @@ typography:
     fontSize: "20px"
     fontWeight: 600
     lineHeight: 1.4
-  
+
   # ==== 正文 3 级 (必需) ====
   bodyL:
     fontFamily: "Inter, system-ui, sans-serif"
@@ -69,7 +69,7 @@ typography:
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
-  
+
   # ==== 辅助 (推荐) ====
   captionM:
     fontFamily: "Inter, system-ui, sans-serif"
@@ -81,7 +81,7 @@ typography:
     fontSize: "14px"
     fontWeight: 500
     lineHeight: 1.4
-  
+
   # ==== 等宽 (可选) ====
   codeM:
     fontFamily: "Menlo, Consolas, monospace"
@@ -117,7 +117,7 @@ rounded:
 
 components:
   # V1 最小 6 组件
-  
+
   button:
     backgroundColor: "{colors.accent}"
     color: "{colors.neutral50}"
@@ -126,7 +126,7 @@ components:
     borderRadius: "{rounded.md}"
     fontSize: "{typography.bodyM.fontSize}"
     fontWeight: 600
-  
+
   input:
     backgroundColor: "{colors.secondary}"
     borderColor: "{colors.neutral500}"
@@ -137,26 +137,26 @@ components:
     color: "{colors.neutral50}"
     placeholderColor: "{colors.neutral300}"
     focusBorderColor: "{colors.accent}"
-  
+
   card:
     backgroundColor: "{colors.secondary}"
     borderRadius: "{rounded.lg}"
     padding: "{spacing.6}"
     # shadow: TODO (暗色主题无需, 浅色体系加)
-  
+
   modal:
     backgroundColor: "{colors.secondary}"
     borderRadius: "{rounded.xl}"
     padding: "{spacing.8}"
     maxWidth: "600px"
     overlayColor: "rgba(0, 0, 0, 0.6)"
-  
+
   nav:
     backgroundColor: "{colors.primary}"
     itemHoverColor: "{colors.accent}"
     activeBorderColor: "{colors.accent}"
     activeBorderWidth: "3px"
-  
+
   tab:
     underlineActiveColor: "{colors.accent}"
     underlineWidth: "2px"
@@ -205,7 +205,7 @@ components:
 
 ## Typography
 
-字体: <字体栈说明>  
+字体: <字体栈说明>
 基数: 16px = bodyM default. <说明 scale 比例>
 
 ### 级别用途
@@ -226,7 +226,7 @@ components:
 ## Layout
 
 ### 间距哲学
-基数 4 (Tailwind 风), scale xs(4)→2xl(96).  
+基数 4 (Tailwind 风), scale xs(4)→2xl(96).
 <整体偏紧凑 / 宽松?>
 
 ### 网格
@@ -262,8 +262,8 @@ components:
 ## Components
 
 ### Button
-**变体**: primary / secondary / ghost / danger  
-**状态**: default / hover / active / focus / disabled  
+**变体**: primary / secondary / ghost / danger
+**状态**: default / hover / active / focus / disabled
 **尺寸**: sm (28px) / md (36px default) / lg (44px)
 
 **用法**:
@@ -275,16 +275,16 @@ components:
 **不要**用 button 做: 页面跳转 (用 link), 纯文本操作 (用 text link)
 
 ### Input / Textarea
-**状态**: default / hover (边框加深) / focus (accent 2px 边框) / error (error 色边框) / disabled  
+**状态**: default / hover (边框加深) / focus (accent 2px 边框) / error (error 色边框) / disabled
 **placeholder**: 用 neutral300, 不欺骗交互
 
 ### Card
-**嵌套深度最多 2 级**.  
+**嵌套深度最多 2 级**.
 **阴影**: <暗色不用 / 浅色用 `{shadow.xxx}`>
 
 ### Modal / Dialog
-**最大宽度 600px**.  
-**动画**: fade + slight scale, 200ms ease-out.  
+**最大宽度 600px**.
+**动画**: fade + slight scale, 200ms ease-out.
 **遮罩**: rgba(0,0,0,0.6)
 
 ### Nav / Sidebar

@@ -24,14 +24,14 @@ components:
     borderRadius: "{rounded.md}"   # 8px
     fontSize: "{typography.bodyM.fontSize}"
     fontWeight: 600
-    
+
     # 状态
     hoverBackgroundColor: "#b366f5"          # accent 加深 10%
     activeBackgroundColor: "#a44ce8"         # accent 加深 20%
     focusBorderColor: "{colors.accent}"
     focusBorderWidth: "2px"
     disabledOpacity: 0.5
-    
+
     # 尺寸变体
     smPaddingX: "{spacing.3}"
     smPaddingY: "{spacing.1}"
@@ -50,9 +50,9 @@ components:
 **状态**: default / hover / active / focus / disabled
 **尺寸**: sm (28px 高) / md (36px 默认) / lg (44px)
 
-**primary** — 主 CTA, 每页最多一个.  
-**secondary** — 次要操作, neutral 边框 + 透明底.  
-**ghost** — 工具栏 / 列表项, 无边框无底, 只 accent 文字.  
+**primary** — 主 CTA, 每页最多一个.
+**secondary** — 次要操作, neutral 边框 + 透明底.
+**ghost** — 工具栏 / 列表项, 无边框无底, 只 accent 文字.
 **danger** — 破坏性操作 (删除 / 清空), error 色背景.
 
 **不要**用 button 做: 页面跳转 (用 link), 纯文本操作 (用 text link).
@@ -89,7 +89,7 @@ components:
     paddingY: "{spacing.2}"
     color: "{colors.neutral50}"
     placeholderColor: "{colors.neutral300}"
-    
+
     # 状态
     hoverBorderColor: "{colors.neutral300}"
     focusBorderColor: "{colors.accent}"
@@ -138,11 +138,11 @@ components:
     borderRadius: "{rounded.lg}"
     padding: "{spacing.6}"        # 24px
     # 暗色体系无阴影, 靠背景色调差
-    
+
     # 可选: 边框变体
     borderColor: "{colors.neutral700}"
     borderWidth: "1px"
-    
+
     # Hover (如卡片可点)
     hoverBackgroundColor: "#251835"   # 色调再提亮一点
     hoverBorderColor: "{colors.neutral500}"
@@ -178,11 +178,11 @@ components:
     padding: "{spacing.8}"          # 32px
     maxWidth: "600px"
     overlayColor: "rgba(0, 0, 0, 0.6)"
-    
+
     # 动画
     animationDuration: "200ms"
     animationEasing: "cubic-bezier(0.2, 0, 0, 1)"
-    
+
     # Header / Footer
     headerFontSize: "{typography.headingM.fontSize}"
     headerFontWeight: "{typography.headingM.fontWeight}"
@@ -234,12 +234,12 @@ components:
     activeBorderColor: "{colors.accent}"
     activeBorderWidth: "3px"
     activeBorderPosition: "left"              # left | bottom | right
-    
+
     # Icon-only nav
     iconOnlyWidth: "60px"
     iconSize: "24px"
     iconPaddingY: "{spacing.3}"
-    
+
     # Full nav (含文字)
     fullWidth: "240px"
     itemPaddingX: "{spacing.4}"
@@ -288,7 +288,7 @@ components:
     fontSize: "{typography.bodyM.fontSize}"
     fontWeight: 500
     activeFontWeight: 600
-    
+
     # Pill (填充背景型)
     pillInactiveBackgroundColor: "transparent"
     pillInactiveColor: "{colors.neutral300}"
@@ -348,7 +348,7 @@ components:
 components:
   # 核心: 短词命名 (button / input / card / modal / nav / tab)
   button: { ... }
-  
+
   # 变体: 用属性名前缀
   # 不推荐单独命名 buttonPrimary / buttonSecondary / buttonGhost
   # 推荐在同一 button 下用属性:
@@ -359,7 +359,7 @@ components:
     secondaryBorderColor: "{colors.neutral500}"
     ghostColor: "{colors.accent}"
     dangerBackgroundColor: "{colors.error}"
-  
+
   # 状态: 状态名前缀 (hover/active/focus/disabled)
   #   hoverBackgroundColor / activeBackgroundColor / focusBorderColor
 ```

@@ -173,7 +173,7 @@ writeFileSync('src/styles/tokens.css', css);
   --color-warning: #f59e0b;
   --color-error: #ef4444;
   --color-info: #0ea5e9;
-  
+
   /* Spacing */
   --space-0: 0;
   --space-1: 4px;
@@ -182,13 +182,13 @@ writeFileSync('src/styles/tokens.css', css);
   --space-4: 16px;
   --space-6: 24px;
   --space-8: 32px;
-  
+
   /* Rounded */
   --radius-none: 0;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  
+
   /* Typography */
   --font-body-m-size: 16px;
   --font-body-m-weight: 400;
@@ -371,14 +371,14 @@ themes:
 
 ## 8. 常见问题
 
-**Q: tailwind.config.ts 导出后我手改了, 再 sync 会覆盖吗?**  
+**Q: tailwind.config.ts 导出后我手改了, 再 sync 会覆盖吗?**
 A: 会. 规则: `tailwind.config.ts` 是 derived artifact, 不要手改. 改 DESIGN.md.
 
-**Q: Tailwind v4 的 `@theme` 语法支持吗?**  
+**Q: Tailwind v4 的 `@theme` 语法支持吗?**
 A: spec 目前输出 v3. v4 用户用 CSS custom props 方案更稳, 或等 spec 更新.
 
-**Q: 字体文件 (web font) 怎么管?**  
+**Q: 字体文件 (web font) 怎么管?**
 A: DESIGN.md 不管字体加载, 只定义 fontFamily 栈. 字体加载走 `@font-face` 或 Google Fonts link, 放全局 CSS.
 
-**Q: 暗黑模式用户偏好怎么检测?**  
+**Q: 暗黑模式用户偏好怎么检测?**
 A: `@media (prefers-color-scheme: dark)` + JS 读 `matchMedia`. DESIGN.md 管 token, 切换逻辑在应用层.
