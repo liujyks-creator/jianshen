@@ -28,7 +28,7 @@
 跨对话 provenance 与证据纪律：
 - 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。当前对话只对本对话中真实收到的完整合同、完整终态报告和实际动作负责，不能把另一个对话的行为归给当前角色。
 - 消息或报告在主管理对话中相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权来源或先后因果证据。
-- 每个跨对话输入都先建立最小 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。主管理在接受终态报告、判断越界或 candidate 有效性、生成 Repair、生成 Review 或任何下一角色提示词前，必须把该 tuple 与当前 accepted sources/Git facts 完成 provenance join。
+- 只有当接受终态报告、判断越界、确认 candidate 有效性或确认角色/权限确实依赖跨对话输入时，才建立最小 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文，并与当前 accepted sources/Git facts 完成 join。主管理已创建、预检并由 fresh validation 绑定的本机共享文件视为已完成来源绑定的内部输入；下游合同直接要求完整读取和消费，不再增加附件、物理字节数、换行、raw SHA 或运输完整性门禁，只有路径缺失、不可读、候选边界错误或与 accepted report 直接冲突时才停止。
 - `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从已证明 `FACT` 得出的显式、可核验推导，必须标记且不得充当权限；`UNKNOWN` 是当前证据无法判定的事项。任何未标记、未验证的 assumption 都不得进入权限、身份、归因、行为、范围、ownership、验收、因果或 candidate 有效性决策。
 - 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、缺失证据、可选解释和实际权衡。只有 load-bearing provenance 会改变权限、身份、行为、范围、ownership、验收或因果归属时，才停止对应归因或有状态动作，并返回明确的用户信息门禁；不得选择最方便的解释、编造缺失报告，或把 `UNKNOWN` 当作授权、违规、PASS、失败或候选废弃证据。非 load-bearing 未知可保留并继续不受影响的动作。
 - 代表门禁：相邻 `WRITER_COMPLETE` 与 Repair `WRITER_COMPLETE` 缺少来源任务身份时，结果是 `UNKNOWN`，不能推断同一对话发生角色切换；共享 branch/candidate 但 role/attempt/prompt identity 不同也不能认定同源。缺少原始 Review 报告而 Repair 合同声称已批准 finding 时，只能把“当前收到该 Repair 合同”记为 `FACT`，上游审批仍为 `UNKNOWN`，除非 provenance tuple 由 load-bearing source 补齐。
@@ -89,7 +89,6 @@
 - 只解决当前已批准问题，不为“以后可能有用”扩展 schema、平台、状态机、角色、文件、验证范围、兼容层、默认值、扩展点或推测性功能；只允许修改直接必要路径，只允许清理本任务自己产生且 `destructive/cleanup` 明确为 `allowed` 的内容。
 - 角色在修改前必须定义成功标准和验证信号，验证逐项满足前不得宣称完成。主管理不得把“最小但因果完整”解释为顺手重构周边或为未来做准备。
 - 信任已由类型系统、accepted contract、直接测试或框架正式保证证明的内部代码/框架不变量；不得无证据重复包装或重复校验。只在用户输入、外部 API、网络等真实系统边界，或 exact Story 明确命名的外部边界，加入合同要求的必要校验；这不禁止 Story 明确要求的状态检查，也不允许忽略真实失败。
-- 主管理生成下游合同时，已由自己创建、预检并由 fresh validation 绑定的本机共享文件视为内部来源；不得在下游合同中重新增加附件、物理字节数、换行、raw SHA 或运输完整性门禁，只有路径缺失、不可读、候选边界错误或与已接受报告直接冲突时才停止。
 - 禁止为合同和证据已排除的理论场景增加错误处理、回退、空值检查、验证、兼容层或默认值；禁止 broad catch、吞错、silent fallback、silent default、忽略失败或把失败伪装成成功。前置或 invariant 失败时应 fail-fast，暴露真实根因和原始失败信号。
 - 禁止为单一调用或一次性操作创建 helper、utility、wrapper、manager、registry、adapter、工具类、抽象层、通用平台或扩展点，除非当前 Story 的重复事实与 accepted architecture 明确要求。
 - Review 合同必须要求 Reviewer 检查上述每一项，同时禁止 Reviewer 为合同上不可能的理论场景制造 finding、把个人防御性偏好升级为 must-fix，或默认建议额外 wrapper、fallback 或抽象。发现一个问题仍须完成当前节点其余适用轴并返回一个完整 findings batch；不得借此扩张到全仓、历史 Story 或上游插件。
