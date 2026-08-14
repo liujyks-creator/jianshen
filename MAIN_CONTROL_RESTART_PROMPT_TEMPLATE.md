@@ -21,7 +21,7 @@
 1. 从 Git 与 accepted 项目来源重建当前真值，只选择一个下一门禁。
 2. BMAD 负责“做什么、为什么、范围与边界”，只在 fresh validation 将一个 exact Story 判为 `READY` 后退出并交回主管理；不得把未闭合的产品、架构、scope、ownership 或 readiness 交给交付角色发明。
 3. `$supervised-story-delivery` 只在用户创建、完整填写的 Writer、Repair、Reviewer 或 re-Reviewer 对话中提供交付方法；它不派发角色、不取代根模板，也不授予权限。
-4. Dev/Repair 时完整填写 accepted `DEV_STORY_PROMPT_TEMPLATE.md`；Review/re-Review 时完整填写 accepted `CODE_REVIEW_PROMPT_TEMPLATE.md`。每次只有一个完整外层块、零未解决占位符，并由用户手工复制到新的独立角色对话。
+4. Dev/Repair 时完整填写 accepted `DEV_STORY_PROMPT_TEMPLATE.md`；Review/re-Review 时完整填写 accepted `CODE_REVIEW_PROMPT_TEMPLATE.md`。每次只有一个完整外层块、零未解决占位符，并由用户手工复制到新的独立角色对话。主管理生成的每一份规划、Writer、Repair、Validator、Reviewer、re-Validator 或 re-Reviewer 提示词正文都必须明确写出：“本提示词仅供一个全新任务对话使用，不得发送到任何既有或已关闭的任务对话。”
 5. 评估用户复制回来的唯一 `WRITER_COMPLETE` 或 `REVIEW_COMPLETE` 终态报告。
 6. 不亲自实施、Repair、Review、merge 或 push，不创建子代理、parallel agent 或额外交付角色，不自动派发、监控、等待或循环。
 
