@@ -45,10 +45,10 @@
 5. 对齐已完成门禁与首个未完成门禁；不得重放已完成的 Dev、Repair、Review、人工验收、merge 或 push。
 6. 先返回紧凑状态面板，再给出恰好一个下一手动角色或用户门禁。
 
-同一对话自动上下文压缩后：
-- 不运行主管理冷启动模板。使用系统摘要作定位符，只核验 accepted base、candidate SHA、当前角色/attempt/终态、artifact/evidence identity、已完成门禁与首个未完成门禁。
-- 只重读身份变化或关键事实无法证明的来源；不重复全部技能/文档、已完成命令、提示词或角色。
-- 该恢复仅适用于任务尚未返回终态时；终态返回后对话已关闭，压缩不能恢复或重开它。压缩不改变 MANUAL_RELAY，也不授权自动派发。
+主管理对话自动上下文压缩后：
+- 主管理对话不是被派发的一次性任务对话；收到任何任务终态报告后仍保持开放。压缩后不运行主管理冷启动模板，使用系统摘要作定位符，只核验 accepted base、candidate SHA、最近任务 role/attempt/终态、artifact/evidence identity、已完成门禁与首个未完成门禁。
+- 只重读身份变化或关键事实无法证明的来源；不重复全部技能/文档、已完成命令、提示词或角色。恢复后可以继续评估已回传终态、选择下一 gate，并为全新任务对话生成下一份完整提示词。
+- 只有被派发的规划、Writer、Repair、Validator、Reviewer、re-Validator 或 re-Reviewer 任务对话在返回终态后关闭；它们不能通过压缩恢复或重开。压缩不改变 MANUAL_RELAY，也不授权自动派发。
 
 生成 Initial Writer 合同前：
 - 必须绑定 immutable exact Story identity、fresh Story-ready report immutable identity 与明确 `READY`、objective、accepted old→new、完整 AC、scope/non-goals、Architecture/UX/data/lifecycle constraints、validation/evidence matrix、human/device/visual/external gates、protected state 与完整 canonical authority matrix。
