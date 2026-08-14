@@ -238,17 +238,17 @@ git commit -m "<short summary>"
 git push -u origin HEAD
 ```
 
-## 12. 本地技能与 Codex QA 技能
+## 12. Codex workflow、UI 与 QA 技能
 
-当前项目可选使用一个本地方法论技能：
+当前项目的技能来源随仓库保存在 `skills/`：
 
-1. `skills/bmad-method`
+1. `skills/bmad-method/SKILL.md`：产品/能力规划、架构决策、PRD/backlog/Story 拆分、readiness、planning Review 和 Correct Course。
+2. `skills/superpowers/test-driven-development/SKILL.md`：行为变更与 bug fix 的 TDD。
+3. `skills/superpowers/systematic-debugging/SKILL.md`：出现失败或异常后的根因调试。
+4. `skills/superpowers/verification-before-completion/SKILL.md`：Writer 声明完成或 commit 前验证。
+5. `skills/design-md/SKILL.md`：仅用于 `DESIGN.md`、设计系统、theme token 和 component contract。
 
-它是当前电脑的本地工作副本，不是仓库依赖，也不应提交到 GitHub。根目录 `.gitignore` 已忽略 `skills/`。
-
-如果当前电脑存在 `skills/bmad-method/SKILL.md`，可在产品规划、架构规划、PRD/backlog 拆分和 review 前先读取并遵循。若不存在，继续以仓库文档为准，并把新的长期决策写回 `docs/planning/decision-log.md`。
-
-当前 Codex 环境还可能提供 `huashu-design` 和 Android emulator QA skill。涉及 UI、设计系统、主题、token、界面规则、高保真原型、视觉方案、视觉评审或设计变体时，应读取 `huashu-design`，并继续以 `DESIGN.md` 和项目文档作为 TrainFlow 设计真源；涉及 Android UI、APK、截图反馈、交互 smoke 或虚拟设备验证时，应读取 Android emulator QA skill，并使用下方固定 `.local` 虚拟测试环境路径。
+项目采用手工角色接力，不加载自动编排、subagent、worktree、branch-finishing 或 Review-dispatch 方法。Review 直接遵守 `CODE_REVIEW_PROMPT_TEMPLATE.md`。技能不可覆盖 `AGENTS.md`、accepted decisions、Story scope、validation、evidence 或用户权限。Android UI、APK、截图反馈、交互 smoke 和虚拟设备验证直接使用下方既有 `.local` 环境与合同指定命令。
 
 ## 13. Android 虚拟测试环境
 

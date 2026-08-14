@@ -13,7 +13,7 @@
 - 集成远端名称及 URL：<准确值或无>
 - 集成目标分支、本地 ref、远端跟踪 ref：<准确值>
 - Story ID 与合同：<ID 加 immutable 文档/ref>
-- 适用技能：<huashu-design、其他 accepted 技能的准确列表，或无；普通 Review 不要求额外 workflow 技能>
+- Review 方法：不加载 BMAD、Superpowers 实现/编排/Review 技能或全局同名副本，直接按本模板审查原始 candidate、合同与证据。只有 `DESIGN.md`、design-system、theme-token 或 component-contract 专项在本合同明确要求时读取 `skills/design-md/SKILL.md` 作为领域参考。
 - Accepted merge strategy：`--no-ff`，除非 accepted requirement 明确指定另一策略
 - PASS 后权限：同一 Reviewer 必须机械 merge、push 并完成 post-merge 核验
 - 终态 schema：<PASS | CHANGES_REQUESTED | REVIEW_BLOCKED | NEEDS_USER 及必填字段>

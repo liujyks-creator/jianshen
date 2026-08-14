@@ -13,7 +13,7 @@
 - 集成远端名称及目标分支：<准确值或无>
 - Candidate parent / prerequisite full SHAs：<准确列表>
 - Immutable requirement source：<文档/ref>
-- 适用技能：<huashu-design、其他 accepted 技能的准确列表，或无；普通交付不要求额外 workflow 技能>
+- 项目本地技能：行为变更或 bug fix 读取 `skills/superpowers/test-driven-development/SKILL.md`；出现失败或异常时再读取 `skills/superpowers/systematic-debugging/SKILL.md`；声明完成或 commit 前读取 `skills/superpowers/verification-before-completion/SKILL.md`；仅 `DESIGN.md`、design-system、theme-token 或 component-contract 工作按需读取 `skills/design-md/SKILL.md`。不加载 BMAD、Superpowers 编排/Review 技能或全局同名副本。
 - Write/commit/push 权限：<准确权限>
 - Merge 权限：无；Writer 永远不得 merge 或 push 集成目标分支
 - 终态 schema：<DONE | NEEDS_USER | BLOCKED 及必填字段>

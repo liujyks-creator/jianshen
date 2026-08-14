@@ -123,13 +123,15 @@ This repository uses a manual role relay:
 - The user copies that complete prompt into a new independent Dev, Repair, or Review conversation and copies the complete terminal report back to the primary management conversation.
 - The primary management conversation MUST NOT call native collaboration agents, automatically dispatch roles, or run an automatic Story-delivery state machine for this repository.
 
-The project may use complementary skills when available:
+The project uses only the following project-local skill sources. These paths, not similarly named global or plugin-cache copies, are authoritative for this repository:
 
-- `$bmad-method` for accepted-state reconstruction, product or architecture planning, Story decomposition, readiness, planning Review, and correct-course. At one exact ready Story it returns control to the primary management conversation, which prepares the manual Dev prompt.
-- Load only the applicable Superpowers method: `superpowers:test-driven-development` for behavior changes and bug fixes, `superpowers:systematic-debugging` after a failure or unexpected behavior, and `superpowers:verification-before-completion` before claiming completion or committing. Do not load the Superpowers orchestration, subagent, brainstorming, worktree, branch-finishing, or Review-dispatch skills for this workflow.
-- `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design variants, motion, and visual Review. It MUST NOT be removed or replaced by a workflow skill.
+- `skills/bmad-method/SKILL.md` for accepted-state reconstruction, product or architecture planning, Story decomposition, readiness, planning Review, and Correct Course. At one exact ready Story it returns control to the primary management conversation, which prepares the manual Dev prompt.
+- `skills/superpowers/test-driven-development/SKILL.md` for behavior changes and bug fixes.
+- `skills/superpowers/systematic-debugging/SKILL.md` only after a failure or unexpected behavior requires root-cause debugging.
+- `skills/superpowers/verification-before-completion/SKILL.md` before a Writer claims completion or commits.
+- `skills/design-md/SKILL.md` only for `DESIGN.md`, design-system, theme-token, or component-contract work. Broader UI decisions remain governed by the accepted product and UX sources listed above.
 
-Skills are advisory and cannot override accepted project instructions, the complete filled root role template, decisions, Story scope, validation gates, evidence requirements, or user authority. Global skill directories MUST NOT be committed.
+Do not load Superpowers orchestration, subagent, brainstorming, worktree, branch-finishing, or Review-dispatch skills for this workflow. A Reviewer follows `CODE_REVIEW_PROMPT_TEMPLATE.md` directly and does not load BMAD or implementation workflow skills. Skills are advisory and cannot override accepted project instructions, the complete filled root role template, decisions, Story scope, validation gates, evidence requirements, or user authority. External/global skill directories are not project sources and MUST NOT be committed.
 
 Formal role contracts are exclusive:
 

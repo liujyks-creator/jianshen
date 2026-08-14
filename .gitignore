@@ -1,5 +1,3 @@
-skills/
-
 # Gradle / Android local state
 .gradle/
 .local/

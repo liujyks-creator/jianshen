@@ -201,26 +201,23 @@ git push -u origin HEAD
 
 ## 10. 本项目相关技能
 
-本项目可选使用一个本地方法论技能：
+本项目所需技能已经随仓库保存在 `skills/`，新电脑 clone 项目后直接使用，不安装全局副本：
 
-1. `skills/bmad-method`
+1. `skills/bmad-method/SKILL.md`：产品/能力规划、架构决策、PRD/backlog/Story 拆分、readiness、planning Review 和 Correct Course。
+2. `skills/superpowers/test-driven-development/SKILL.md`：行为变更与 bug fix 的 TDD。
+3. `skills/superpowers/systematic-debugging/SKILL.md`：出现失败或异常后的根因调试。
+4. `skills/superpowers/verification-before-completion/SKILL.md`：Writer 声明完成或 commit 前验证。
+5. `skills/design-md/SKILL.md`：仅用于 `DESIGN.md`、设计系统、theme token 和 component contract。
 
-它是当前电脑上的本地工作副本，用来辅助产品方法论、PRD/backlog/story/review 流程，不属于仓库交付内容。根目录 `.gitignore` 会忽略 `skills/`，不要把该技能目录提交到 GitHub。
-
-新电脑继续使用它时，任选一种方式：
-
-1. 把技能复制到新电脑的项目目录 `skills/bmad-method`。
-2. 把该技能放进你自己的私有 skills 仓库，再在新电脑安装或同步到项目目录。
-3. 如果某个技能中的方法论确实需要长期沉淀进项目，只整理必要结论到 `docs/`，不要直接提交完整技能目录。
-
-UI、设计系统、主题、token、界面规则、高保真原型、视觉方案、视觉评审或设计变体类任务默认使用 Codex 环境中的 `huashu-design` skill（如可用），并继续以 `DESIGN.md` 和项目文档作为 TrainFlow 设计真源。
+项目采用手工角色接力，不安装全局 workflow 副本，也不加载 Superpowers 编排/Review 技能。UI 真值来自 `DESIGN.md`、accepted UX/decision 文档和必要时的项目本地 `design-md`。
 
 对新 Codex 会话可以这样说明：
 
 ```text
-产品规划、架构规划、PRD/backlog/story/review 阶段，如本项目目录下已存在 skills/bmad-method，请先读取其 SKILL.md 再继续。
-UI、设计系统、主题、token、高保真原型、视觉方案或视觉评审阶段，如 huashu-design skill 可用，请先读取并遵循；同时读取 DESIGN.md 和相关项目文档。
-如果技能不存在，先基于仓库 docs/planning、DESIGN.md 和相关文档继续，不要阻塞开发。
+产品规划、架构规划、PRD/backlog/Story/readiness/Correct Course 读取 skills/bmad-method/SKILL.md。
+Dev/Repair 按需读取 skills/superpowers/test-driven-development/SKILL.md、skills/superpowers/systematic-debugging/SKILL.md，并在完成前读取 skills/superpowers/verification-before-completion/SKILL.md。
+Review 不加载 BMAD 或实现型 workflow skill，直接使用 CODE_REVIEW_PROMPT_TEMPLATE.md。
+DESIGN.md、设计系统、theme token 或 component contract 工作按需读取 skills/design-md/SKILL.md，并以 DESIGN.md 和 accepted 项目文档为真值。
 ```
 
 ## 11. 当前项目接力原则
