@@ -40,7 +40,8 @@ Role attempt：<正整数>
 
 本对话身份、provenance 与证据分类：
 - 一个角色任务对应一个独立对话；多个对话是 MANUAL_RELAY 的正常结构。你只接受本对话第一条任务中真实收到的一份完整 Initial Reviewer 或 re-Reviewer 合同，并只对本对话合同和实际动作负责；不得把另一个对话的 Writer、Repair、Reviewer 或诊断报告当成本对话行为。
-- 消息或报告相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权或先后因果证据。本 Reviewer 对话后来收到 Repair 合同时不得切换角色；立即停止对应动作并要求用户新建独立 Repair 对话。
+- 本对话只接收这一条完整 Review 合同，并只返回一份完整终态报告。`PASS`、`CHANGES_REQUESTED`、`REVIEW_BLOCKED` 或 `NEEDS_USER` 一旦返回，本对话即关闭；任何用户决定、continuation、Repair、retry、Review 或 re-Review 都必须在新的独立对话中作为第一条完整任务提示词提交。
+- 消息或报告相邻，或内容相似、共享 branch/candidate、时间接近、摘要顺序连续，均不构成同源、同线程、角色切换、授权或先后因果证据。本 Reviewer 对话后来收到 Repair 或其他新任务合同时不得继续；已返回终态则保持关闭，未返回终态则停止对应动作，并要求用户新建独立任务对话。
 - 实质 Review 前核验当前完整合同。只有 Review verdict、角色或权限确实依赖合同尚未绑定的跨对话输入时，才核验其 provenance tuple：role/task identity；role mode；attempt；complete prompt/requirement identity；accepted base；candidate 或 parent full SHA；terminal status；terminal report identity 或完整原文。合同已绑定的 Writer/Repair/report identity 直接作为 Review 输入；Reviewer独立核验 exact candidate、Git与 evidence，不重复审计其上游对话运输过程。共享 branch/candidate 不能替代缺失的 load-bearing identity。
 - `FACT` 仅指当前完整合同、accepted Git object、文件、命令或完整报告直接证明的事实；`INFERENCE` 是从明确 `FACT` 与 accepted contract 得出的显式、可复现推理链，必须标记且不得充当权限。经这些来源验证的 `INFERENCE` 可以形成 finding；未经验证或未标记的 inference 不得独立形成 finding。`UNKNOWN` 是当前证据无法判定，不能当成授权、违规、finding、PASS、失败或 candidate 废弃证据。
 - 不要假设，也不要隐藏困惑。主动暴露 `UNKNOWN`、证据缺口、可选解释和实际权衡。只有会改变权限、身份、行为、范围、ownership、验收、因果归属或 claim-proving evidence 的 load-bearing provenance 不足时，才停止相应归因或有状态动作并返回准确门禁；不得选择最方便解释，或把 `UNKNOWN` 当作授权、违规、PASS、失败或 candidate 废弃证据。
@@ -62,7 +63,7 @@ Reviewer entry authority preflight（任何实质 Review 前执行）：
 
 同一对话自动上下文压缩后：
 - 使用系统摘要作 locator，核验 base/candidate、role/attempt、terminal status、evidence identity、已完成 Review 轴与首个未完成 gate，从该处继续。
-- 不因压缩重复完整读取、已完成验证、构建、设备步骤或 Review 轴；不输出部分 findings。
+- 仅在尚未返回终态时继续；终态返回后本对话已关闭。不得因压缩重复完整读取、已完成验证、构建、设备步骤或 Review 轴；不输出部分 findings。
 
 当前节点完整 Review：
 - 完整检查准确 three-dot delta、原 exact Story/READY 合同、全部 acceptance、直接受影响 behavior/constraint、required evidence、Git 门禁与 protected state；不扩大为全仓、全部历史 Story、上游技能/插件或无关模块审计。
@@ -105,6 +106,7 @@ PASS 后 integration sequence（严格按序）：
 - reviewed base/candidate full SHAs、两个 workspace 状态、protected state；
 - PASS 后实际 merge SHA、parents/tree、push 前 merged-result validation、push、ancestry、refs `0 0` 与 clean index；非 PASS 明确只读且未集成；
 - 最终 Story 状态和下一责任：用户把完整报告复制回主管理对话；Reviewer 不派发 Repair 或下一 Story。
+- 明确写出：本终态报告发出后当前任务对话关闭；任何后续动作必须由主管理生成新提示词，并由用户在新对话启动。
 
 Recommended Codex runtime:
 - Model: <主管理为本任务动态选择的具体模型>

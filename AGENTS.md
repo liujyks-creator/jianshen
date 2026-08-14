@@ -123,6 +123,8 @@ This repository uses a manual role relay:
 - The user copies that complete prompt into a new independent Dev, Repair, or Review conversation and copies the complete terminal report back to the primary management conversation.
 - The primary management conversation MUST NOT call native collaboration agents, automatically dispatch roles, or run an automatic Story-delivery state machine for this repository.
 
+Every planning, Writer, Repair, Validator, Reviewer, re-Validator, or re-Reviewer task conversation is a one-shot execution unit: it accepts exactly one complete initial task prompt and returns exactly one complete terminal report. Once it returns `COMPLETE`, `DONE`, `PASS`, `CHANGES_REQUESTED`, `NEEDS_USER`, `BLOCKED`, or an equivalent terminal status, that task conversation is closed. Any user decision, continuation, Repair, retry, validation, revalidation, Review, or re-Review must be carried by a new complete prompt in a new task conversation; never send a new prompt back to a closed task conversation. Automatic context compaction before the terminal report is internal continuation, not a second user prompt or a new conversation.
+
 The project may use three complementary skills when available:
 
 - `$bmad-method` for accepted-state reconstruction, product or architecture planning, Story decomposition, readiness, planning Review, and correct-course. At one exact ready Story it returns control to the primary management conversation, which prepares the manual Dev prompt.
