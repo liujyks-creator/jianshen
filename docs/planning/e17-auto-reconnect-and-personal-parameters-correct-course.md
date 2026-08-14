@@ -1,9 +1,19 @@
 # E17 自动恢复与个人参数 Correct-course
 
-**状态判定：** 本 docs-only Correct-course candidate 在独立 Review、`--no-ff` merge / push、candidate full SHA 成为同步后 `main` 与 `origin/main` ancestor、`main...origin/main = 0 0` 且本次十份文档一致前为 `implemented / needs review`，E17-7a 为 `planned / prerequisite-gated`；全部条件满足后自动为 `reviewed / merged`，E17-7a prerequisite 自动为 `satisfied`
+**状态判定：** D-082 Correct-course与E17-7a/7b已形成accepted/merged事实；E17-7b candidate `cec16f697a036409693943289d471955ef7a47bc` 由merge `e3f2de2106342e06f75c3dce7eaef562ad2a6356`合入。Validated lifecycle Correct Course V2取代ordinary-only E17-8；原子E17-8仍为`NOT READY / needs fresh Exact Story shaping/readiness`
 **日期：** 2026-07-26
 **性质：** 用户产品行为确认、架构边界校正、Story 重新拆分与 requirement receipt；docs-only
 **Accepted base：** `24ba90ebc3fe7b4377b9fbf9c2579b6cd596167f`
+
+## 2026-08-15 current operative supersession
+
+本文件的eligibility、persistent suppression、个人参数、heart-rate owner与7a/7b evidence合同继续有效。E17-7b已`reviewed / merged`；其candidate SHA与merge SHA分别记录candidate identity和integration truth。Validated E17-8 lifecycle Correct Course V2只接受上游planning correction，不等于implementation `READY`；本docs-only sync不实现E17-8。
+
+一个原子Corrected E17-8必须在同一candidate同时交付：Activity-retained active-workout runtime唯一owner；Timed/Strength/Follow-along三Route仅attach/detach；真实session identity/current producer authority；`PRE_START / STARTED_NON_TERMINAL / TERMINAL / INVALIDATED`；terminal transition exactly-once；persistence attempt at-most-once且successful record为0或1；Application ordinary ID `7200`唯一projection coordinator；configuration continuity；process-death non-recovery/fail-closed cleanup；same-plan A→B stale isolation。Application coordinator不持workout engine、不是session registry；既有Application heart-rate/GATT owner保持独立唯一，E17-9 Service不持engine/GATT。
+
+Timed READY且`startedAt = null`永久销毁时不产生`ABANDONED`或persistence attempt；STARTED_NON_TERMINAL永久销毁固定既有`ABANDONED` exactly-once并至多attempt一次。Persistence failure不retry、upsert、queue、补写、不产生duplicate record、不新增schema/migration、不rollback或revive，identity invalidation与`7200` clear-once继续。Route dispose无terminal、permanent-destruction或cleanup权限；configuration detach不清有效通知。Process death不恢复active workout、不猜测或合成terminal/record；same-plan A的迟到command/callback/terminal/projection不得影响B。
+
+不得存在可分别实施、Review或merge的E17-8a/E17-8b，也不得有临时owner、compatibility bridge、transient registry或未来Story补救。Workout-producer generation与E17-9 `handoffGeneration`在名称、状态、目的和验证上分离。Current sequence为：本docs sync reviewed/merged -> fresh atomic E17-8 Exact Story shaping/readiness -> future exact accepted merge -> E17-9 -> E17-10；E17-10继续evidence-only、`production changes = 0`。
 
 ## 1. Correct-course 结论
 
@@ -95,11 +105,11 @@ active / paused training 从前台进入 background 或 lockscreen 时必须优�
 | Requirement | Source | Accepted decision / boundary | Story / acceptance criterion | Required evidence |
 |---|---|---|---|---|
 | HR-CC-001 | 用户 2026-07-26 | 自动恢复与个人参数成为 E17 当前方向；只窄 supersede manual-only / no-reconnect 冲突 | Current docs Correct-course：十份文档一致且唯一新 decision row | 独立 docs Review、three-dot scope、D-ID / cross-doc check |
-| HR-CC-002 | 用户 2026-07-26 + D-079 / D-081 | 保留唯一 owner、main serialization、identity、cleanup、FGS、`7200`、`START_NOT_STICKY` 与冻结胶囊 | E17-7a / 8 / 9：不得新增 controller、wrapper、第二 owner 或第三 notification interface | static ownership search、owner / coordinator tests、Review diff |
+| HR-CC-002 | 用户 2026-07-26 + D-079 / D-081 + D-084 | 保留唯一heart-rate/GATT owner、main serialization、identity、cleanup、FGS、`7200`、`START_NOT_STICKY`与冻结胶囊；另由原子E17-8建立唯一workout runtime owner与唯一ordinary projection owner | E17-7a/7b已完成；原子E17-8与E17-9不得新增controller、wrapper、第二owner、registry或第三notification interface | static ownership search、retained/runtime/coordinator tests、Review diff |
 | HR-CC-003 | 用户 2026-07-26 | eligibility 是 opt-in + saved exact + permission + Bluetooth + no suppression + visible 或合法 active-training FGS | E17-7a AC：纯 policy 全组合矩阵 | deterministic policy tests |
 | HR-CC-004 | 用户 2026-07-26 | visible unexpected disconnect / out-of-range 使用间隔 bounded windows 且长期 armed | E17-7a AC：单窗口有限、间隔可控、失败不永久耗尽；timing 只属于唯一 owner 内 concrete main-looper policy，不新增 scheduler / watchdog / backoff abstraction | 复用现有 deterministic reducer、main queue / time control 的纯测试；不包含 AVD 或 Android lifecycle claim |
 | HR-CC-005 | 用户 2026-07-26 | 非训练 background cleanup、不持续 scan；回前台 eligible 自动恢复 | E17-7b AC：Home / return / process recreation；mapper / copy / semantics区分自动恢复等待下一bounded window、自动恢复正在查找、单窗口未匹配但仍armed且之后eligible继续，以及用户主动扫描结果；自动状态不得冒充用户主动扫描、手动停止或永久停止 | E17-7b final executable source 的 AVD lifecycle / scan-count / cleanup / foreground-return状态证据，覆盖上述自动恢复三态并证明其与用户主动扫描相区分 |
-| HR-CC-006 | 用户 2026-07-26 | active training background / lockscreen 保持同一连接；意外断连在合法 FGS 下恢复 | E17-9 AC：普通 `ON_STOP` 不直接 cleanup；未 cleanup 时回前台仍是同一 Application owner、同一 attempt lineage 与 current bpm；后台断连且eligible时FGS / ID `7200` writer保持active、notification显示reconnecting，只允许同一Application owner以新 generation / attempt恢复且不得伪称same attempt | final executable source 的 AVD lifecycle / notification evidence证明可见性、FGS、reconnecting content与单一 writer；同一 final source 的 Band 9真实 GATT / notify evidence分别证明未断链保留与断链后恢复；两层证据不得互相冒充 |
+| HR-CC-006 | 用户 2026-07-26 + D-084 | active training background / lockscreen保持同一heart-rate连接；意外断连在合法FGS下恢复；workout runtime ownership不转移给Service | E17-9 AC：前置为原子E17-8 exact accepted merge；普通`ON_STOP`不直接cleanup；Service不持workout engine/GATT；`handoffGeneration`不复用workout-producer generation | final executable source的AVD lifecycle/notification与Band 9真实GATT/notify分层证据；另证明owner/generation边界 |
 | HR-CC-007 | 用户 2026-07-26 | 只有 eligibility失败、terminal、manual disconnect、opt-out、permission / Bluetooth loss、target clear、FGS非法，或明确foreground不再需要FGS时才demote / stop | E17-7a / 9 AC：停止原因矩阵且幂等；unexpected disconnect本身不demote | owner policy tests、Service tests、Band negative gates |
 | HR-CC-008 | 用户 2026-07-26 | explicit disconnect 保留 opt-in / target / parameters，并持久 suppress 到 explicit reconnect / select | E17-7a data AC + E17-7b settings AC | DataStore round-trip、process recreation、UI action tests |
 | HR-CC-009 | 用户 2026-07-26 | disconnect、clear target、opt-out 三种语义分离 | E17-7b AC：三个独立 control 与准确 copy | Compose semantics / mapper tests、AVD |
@@ -110,21 +120,20 @@ active / paused training 从前台进入 background 或 lockscreen 时必须优�
 | HR-CC-014 | 用户 2026-07-26 | 未取整比率使用六段 `[50,60,70,80,90]` 边界 | E17-7a presentation AC | exact-below / exact / exact-above ratio tests |
 | HR-CC-015 | 用户 2026-07-26 + D-079 | strict `bpm > alert` 优先，直接复用冻结状态 / 颜色，不改胶囊 | E17-7a mapper + E17-7b wiring AC | equality / exceed tests、capsule geometry / visual boundary regression |
 | HR-CC-016 | 用户 2026-07-26 | `fda5f7cfd3c31af3399dfe231733ea00467a68e8` frozen / unmergeable / reference-only / permanently prohibited from merge；E17-5 / 6 保留 | Current docs + all downstream preflight | ancestry / scope check；禁止整段 cherry-pick |
-| HR-CC-017 | 用户 2026-07-26 | 新序列为 docs CC -> 7a -> 7b -> 8 -> 9 -> 10；每项 receipt 不得 orphan | readiness / roadmap Story contracts | prerequisite full-SHA ancestry、AC-to-evidence matrix |
-| HR-CC-018 | 用户独立硬要求 2026-07-26 | merge-stable truth：candidate 未 Review / merge / ancestry / sync / 十文档一致前 needs review / 7a gated；全部满足后自动 reviewed / merged / satisfied，无 docs-sync | Current docs Correct-course + project status index | independent Review、`merge-base --is-ancestor`、`main...origin/main = 0 0`、十文档 consistency |
+| HR-CC-017 | 用户2026-07-26 + validated lifecycle V2 | 7a/7b已完成；current sequence为docs sync -> fresh atomic E17-8 shaping/readiness -> exact merge -> E17-9 -> E17-10 | readiness / roadmap / D-084 contracts | prerequisite full-SHA ancestry、AC-to-evidence matrix；不允许8a/8b独立节点 |
+| HR-CC-018 | 用户独立硬要求2026-07-26 + Git truth | E17-7b candidate/merge已是Accepted base ancestors；Correct Course `VALIDATED`不等于E17-8 implementation `READY` | Current docs sync + project status index | candidate/merge ancestry、八文档一致；docs sync后fresh Exact Story readiness |
 
 ## 7. 新 implementation 序列
 
 | Story | 单一主要风险轴 | 最小范围 | 关键 merge gate |
 |---|---|---|---|
-| Current docs Correct-course | 产品、架构、Story 与 requirement receipt 对齐 | 本次十份 Markdown | 独立 Review + merge / ancestry / sync + 十文档一致 |
-| E17-7a Reconnect + Parameter Foundation | owner policy、持久 intent / suppression、参数与纯 presentation 计算 | 复用 E17-6 owner；policy / DataStore / facts / tests / architecture evidence | eligibility、长期 armed、cleanup reason、参数 boundary / round-trip 全绿；无 UI / FGS / Band claim |
-| E17-7b Application / Settings / Capsule Wiring | 唯一 Application composition 与用户操作接线 | Application、settings、capsule mapper、AVD / Band 9 basic gate；原子退休旧 runtime | 唯一 production owner；disconnect / reconnect / clear / opt-out 可区分；foreground auto restore；Band basic gate |
-| E17-8 Application-scoped Ordinary Notification Coordinator | ordinary ID `7200` 单 writer 与 workout identity | session ID + producer token + monotonic stateVersion；Route submit only | 独立 Review / merge；不含 FGS / BLE policy扩张 |
-| E17-9 Connected-device FGS + Training Background Recovery | 合法 FGS、训练后台 retain / reconnect、`7200` handoff、M1 | Service / Manifest / coordinator policy / shared-owner observer / final freshness | final-source AVD + Band 9 lockscreen/background + M1；`START_NOT_STICKY` |
-| E17-10 Integrated Production Acceptance | 已合并能力的端到端证据 | evidence-only；production files / lines / methods = 0 | production finding 固定路由：owner / GATT / callback → E17-6；policy / data → E17-7a；Application / settings / capsule → E17-7b；ordinary notification → E17-8；FGS / handoff / final freshness → E17-9。对应 Repair 独立合入后重建并重跑 |
+| Current docs sync | 将E17-7b Git truth与validated lifecycle V2同步为accepted current state | 本次八份Markdown；不实现E17-8 | 独立Review + merge/ancestry/sync + 八文档一致 |
+| E17-7a / E17-7b | 已完成owner policy/data与Application/settings/capsule wiring | 保留既有identity-bound evidence | `reviewed / merged`；candidate/merge ancestry见current status |
+| Atomic E17-8 Retained Runtime + Ordinary Coordination | 同时闭合workout runtime lifetime与ordinary ID `7200` projection lifetime | retained owner、三Route attach/detach、identity/四态/two gates、Application coordinator、recreation/process death/A→B | 当前`NOT READY`；先fresh Exact Story shaping/readiness；未来同一candidate完整Review/merge，不得8a/8b拆分 |
+| E17-9 Connected-device FGS + Training Background Recovery | 合法FGS、训练后台retain/reconnect、`7200` handoff、M1 | Service/Manifest/coordinator policy/shared-owner observer/final freshness；不持engine/GATT | 前置为atomic E17-8 exact accepted merge + evidence/status一致；`handoffGeneration`独立 |
+| E17-10 Integrated Production Acceptance | 已合并能力的端到端证据 | evidence-only；`production changes = 0` | production finding返回责任Story，不得在E17-10修补 |
 
-7a 与 7b 是两个独立 Review / merge 的 Story，不恢复旧 E17-7“三阶段但单一原子 Story”的拆分。7a 不得让新旧 production owner 并存；它以当前 E17-6 test-only owner 为基础扩展 policy / data / tests。7b 才进行 Application activation、旧 runtime retirement 与用户 wiring。E17-8 保持 ordinary notification identity 收口；E17-9 才声称训练后台维持 / 恢复、FGS handoff 与 M1；E17-10 仍不得修改 production。
+7a与7b的独立历史Review/merge保持。Lifecycle V2只改变后续current contract：原子E17-8必须同时交付retained runtime owner与ordinary coordinator，不得拆成8a/8b，也不得把ownership正确性留给E17-9。E17-9只负责already-authorized FGS/handoff/training-background boundary；E17-10仍不得修改production。
 
 ## 8. 冻结候选与禁止路线
 
@@ -139,11 +148,9 @@ permanently prohibited from merge
 
 ## 9. Merge-stable truth
 
-本 candidate 不硬编码未来 candidate SHA 或 merge SHA。主管理从 Git 解析最终 full SHA：
+E17-7b current Git truth已经固定：candidate `cec16f697a036409693943289d471955ef7a47bc`，merge `e3f2de2106342e06f75c3dce7eaef562ad2a6356`。Branch name、push成功、候选自述、人工反馈或Review文本不能替代full-SHA ancestry。
 
-- 任何一项未满足：独立 Review 未通过；未 `--no-ff` merge / push；candidate full SHA 不是同步后 `main` 与 `origin/main` ancestor；`main...origin/main != 0 0`；本次十份文档不一致——则 Correct-course=`implemented / needs review`、E17-7a prerequisite=`not satisfied`、E17-7a=`planned / prerequisite-gated`，只允许本 candidate 的 Review / Repair。
-- 全部满足后：Correct-course 自动=`reviewed / merged`、E17-7a prerequisite 自动=`satisfied`；不创建 docs-sync、closeout 或递归状态 Story。
-- branch name、push 成功、候选自述、人工反馈或 Review 文本都不能替代 full-SHA ancestry、remote sync 与文档一致性。
+Lifecycle Correct Course V2的`VALIDATED`只接受planning replacement；本docs sync merge后仍不得把原子E17-8称为implementation `READY`。主管理必须从同步`main`建立fresh Exact Story shaping/readiness；只有未来原子E17-8 exact accepted merge full SHA成为同步`main` ancestor且required evidence/status一致，才满足E17-9 prerequisite。E17-10保持production 0。
 
 ## 10. 非目标与验收
 
@@ -151,4 +158,4 @@ permanently prohibited from merge
 - 不修改 E17-2 / E17-3 历史正文或 sealed E16。
 - 不实现 Room 心率记录、复盘、导出、AI 分析、医疗告警、声音 / 震动强制提醒、自动暂停或训练中断。
 - 不改胶囊视觉 / geometry / motion，不新增 BLE framework、controller、wrapper、第二 owner、第二 GATT model 或第三 notification interface。
-- 本轮验收要求：唯一新 decision row；18 项 ledger 完整且唯一；每项均有 source / decision / Story / AC / evidence；十份文档一致；UTF-8 without BOM / NUL；Markdown heading / fence / table 结构有效；exact scope；独立 Review 前只声明 `implemented / needs review`。
+- 本轮docs sync验收要求：唯一新decision `D-084`；E17-7b candidate/merge truth；atomic replacement与fresh-readiness gate；八份文档一致；UTF-8 without BOM/NUL；Markdown heading/fence/table结构有效；exact scope。不得声称E17-8 implementation `READY`。
