@@ -123,12 +123,10 @@ This repository uses a manual role relay:
 - The user copies that complete prompt into a new independent Dev, Repair, or Review conversation and copies the complete terminal report back to the primary management conversation.
 - The primary management conversation MUST NOT call native collaboration agents, automatically dispatch roles, or run an automatic Story-delivery state machine for this repository.
 
-Every planning, Writer, Repair, Validator, Reviewer, re-Validator, or re-Reviewer task conversation is a one-shot execution unit: it accepts exactly one complete initial task prompt and returns exactly one complete terminal report. Once it returns `COMPLETE`, `DONE`, `PASS`, `CHANGES_REQUESTED`, `NEEDS_USER`, `BLOCKED`, or an equivalent terminal status, that task conversation is closed. Any user decision, continuation, Repair, retry, validation, revalidation, Review, or re-Review must be carried by a new complete prompt in a new task conversation; never send a new prompt back to a closed task conversation. Automatic context compaction before the terminal report is internal continuation, not a second user prompt or a new conversation.
-
-The project may use three complementary skills when available:
+The project may use complementary skills when available:
 
 - `$bmad-method` for accepted-state reconstruction, product or architecture planning, Story decomposition, readiness, planning Review, and correct-course. At one exact ready Story it returns control to the primary management conversation, which prepares the manual Dev prompt.
-- `$supervised-story-delivery` as an advisory execution and verification method inside a user-created manual Writer, Repair, Reviewer, or re-Reviewer conversation when the complete filled root prompt names it. It does not dispatch roles, replace either root role template, or authorize automatic delivery.
+- Load only the applicable Superpowers method: `superpowers:test-driven-development` for behavior changes and bug fixes, `superpowers:systematic-debugging` after a failure or unexpected behavior, and `superpowers:verification-before-completion` before claiming completion or committing. Do not load the Superpowers orchestration, subagent, brainstorming, worktree, branch-finishing, or Review-dispatch skills for this workflow.
 - `huashu-design` for UI, design-system, theme, token, layout, interaction, high-fidelity prototype, design variants, motion, and visual Review. It MUST NOT be removed or replaced by a workflow skill.
 
 Skills are advisory and cannot override accepted project instructions, the complete filled root role template, decisions, Story scope, validation gates, evidence requirements, or user authority. Global skill directories MUST NOT be committed.
@@ -138,6 +136,8 @@ Formal role contracts are exclusive:
 - Writer and Repair: one complete filled `DEV_STORY_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
 - Reviewer and re-Reviewer: one complete filled `CODE_REVIEW_PROMPT_TEMPLATE.md` outer block with zero unresolved placeholders.
 - Do not create a freehand Role Packet, abbreviated substitute, split dispatch, additional delivery role, or repository CI/orchestration platform.
+
+The immutable Story, approved finding batch, and validation artifact own task-specific objective, old→new, acceptance criteria, and validation details. When a role can read that identity-bound source locally or from Git, the root prompt references it instead of reproducing those sections. A filled prompt carries only the role, accepted/candidate identities, exact allowed paths and actions, required gates, protected state, and terminal report requirements needed to execute safely.
 
 All user-facing manual-relay artifacts MUST use Simplified Chinese. This includes primary-management delivery, complete copy-ready prompts, role dispatches, Writer/Repair terminal reports, Reviewer/re-Reviewer findings and terminal reports, human-test instructions, and next-step handoffs. Preserve exact technical identities—SHA values, refs, paths, commands, code symbols, filenames, tool names, and fixed machine-readable status tokens—in their original form when translation could make them ambiguous. The accepted root prompt templates themselves MUST be written in Simplified Chinese. A role may read English source material, but its user-facing delivery remains Chinese unless the user explicitly requests another language for that artifact.
 
@@ -152,9 +152,9 @@ Recommended Codex runtime:
 
 The selection MUST consider task complexity, correctness risk, expected context load, tool use, and cost; it MUST NOT be a permanently fixed model or reasoning level. The footer is a reminder for the user to select the recommended runtime manually before starting the new conversation. It does not authorize an agent to change its own model or reasoning level. The complete relayed prompt must contain concrete values and zero unresolved placeholders.
 
-Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its complete accepted role template, and only task-relevant Story/decision/testing/evidence sources. It reports source identities and complete reads in its terminal report. Writer, Repair, Reviewer, and re-Reviewer conversations MUST NOT create subagents; if genuinely independent work is needed, the primary management conversation prepares a separate manual role prompt for the user to relay.
+Each new manually created role conversation reads the applicable skill once, the accepted `AGENTS.md` from its pinned base, its accepted role template, the immutable task source, and only directly relevant evidence. It does not produce a separate read manifest. Writer, Repair, Reviewer, and re-Reviewer conversations MUST NOT create subagents; if genuinely independent work is needed, the primary management conversation prepares a separate manual role prompt for the user to relay.
 
-Automatic context compaction is internal continuation only before a dispatched task conversation returns its terminal report. In that case, use the system summary as a locator, verify the compact continuity tuple—accepted base, candidate SHA, current role/attempt, evidence identity, completed gates, and first incomplete gate—and continue from that gate; reread only a source whose identity changed or whose critical fact cannot be proven. Once a dispatched task returns a terminal report, that task conversation remains closed and compaction cannot resume or reopen it. The primary management conversation is not a dispatched one-shot task: it remains open after receiving terminal reports and may use compaction continuity to restore accepted state, evaluate the report, and prepare the next complete prompt for a new task conversation. Do not replay completed work or roles.
+Automatic context compaction inside the same conversation is not a cold restart. Use the system summary as a locator, confirm the current role and first unfinished action, and reread only a source whose critical fact is unclear or changed. Do not replay completed work or roles.
 
 A genuinely new management or role conversation performs its template's cold-start reads once. A role or phase change is handled by a new manually created conversation and its applicable complete template, not by reloading every source in the existing conversation.
 
@@ -179,6 +179,15 @@ The primary management conversation, not the Reviewer, decides the next Repair o
 “Full Review” means complete coverage of the currently authorized node: its exact base/candidate delta, accepted contract, acceptance criteria, directly affected behavior, required evidence, Git gates, and protected state. It does not authorize re-auditing the whole repository, all historical Stories, upstream skills/plugins, or unrelated modules. Finding one issue blocks integration but does not end the remaining current-node Review; the Reviewer completes all remaining applicable axes and returns one atomic findings batch unless an objective authority, safety, or evidence blocker makes the remainder impossible.
 
 Repair is minimum but causally complete, not the fewest changed files. The Writer must address the complete approved finding batch in one Repair attempt. If the same Story has two consecutive complete Reviews with must-fix findings and another Repair would change core ownership, architecture, data responsibility, or multiple module boundaries, stop the local patch loop and return to a scoped Correct Course instead of continuing incremental Repair.
+
+## Evidence-First Minimal Execution
+
+- Do not assume or hide uncertainty. Separate proven facts, reproducible inference, and unknowns; expose the affected decision and trade-off. An unrelated unknown does not block proven work.
+- Before mutation, define the current problem, success criteria, and observable proof. Implement only the minimum causally complete change, touch only necessary paths, and clean up only what the task created.
+- Do not add speculative features, incidental refactors, future compatibility, or one-use helpers, wrappers, managers, registries, adapters, or abstractions.
+- Trust accepted internal contracts, types, tests, and framework guarantees. Validate at real boundaries such as user input, network, external APIs, devices, and persisted data. Do not add fallback, null/default handling, or defensive branches for states the accepted contract excludes.
+- Never swallow failures through broad catches or silent defaults. Fail fast on real invariant violations and preserve the original error signal.
+- E16 lesson: before implementation, bind the exact production change set, ownership/lifecycle boundaries, and evidence layers. A Repair that needs a new core interface, platform wrapper, callback owner, scheduler/test seam, or unapproved cross-module responsibility returns to Correct Course. Helper existence, source strings, fake/no-op behavior, AVDs, and injected seams do not prove production or physical-device behavior.
 
 Fresh verification means independent evidence against the exact candidate identity, not an automatic full-repository suite. Use only the validation required by the Story's risk profile. UI/physical-device evidence and other human gates remain identity-bound and cannot be replaced by fakes, AVDs, or source inspection.
 
