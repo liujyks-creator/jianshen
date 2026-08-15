@@ -8,57 +8,55 @@
 
 **性质：** docs-only readiness；production 代码、测试、Manifest、Gradle、资源、prototype 与 sealed E16 archive 均未修改
 
-## 2026-08-15 Correct Course delta
+## 2026-07-26 Correct-course delta
 
-本页既有E17-4/5/6 reviewed/merged与readiness passed事实继续有效；E17-7a/7b也已完成当前合并事实。E17-7b最终candidate `cec16f697a036409693943289d471955ef7a47bc` 由merge commit `e3f2de2106342e06f75c3dce7eaef562ad2a6356`合入。第2至14节继续完整保留为historical/non-operative snapshot，不为本次状态同步改写。
+本页既有 E17-4/5/6 reviewed / merged 事实继续有效；第 2 至 14 节的旧盘点、旧 E17-7 单 Story、排除自动恢复、active-training background cleanup、证据矩阵与七文档门禁整体标为 historical / non-operative，并由下方“当前可执行 readiness 替换”及新 Correct-course supersede。当前 sequence 是 E17-7a reconnect + parameter foundation（owner policy / persistent intent / data / pure tests / architecture evidence）、E17-7b Application / settings / capsule wiring + AVD / Band basic、E17-8 ordinary coordinator、E17-9 FGS + training-background retain / recovery + ID `7200` + M1、E17-10 evidence-only 且 production files / lines / methods = 0。
 
-Validated E17-8 lifecycle Correct Course V2取代ordinary-only E17-8 current contract。`VALIDATED`只接受planning correction，不建立implementation `READY`；本docs-only sync不实现E17-8。Current sequence为：docs sync reviewed/merged -> fresh atomic E17-8 Exact Story shaping/readiness -> future exact accepted merge -> E17-9 -> E17-10。
+E17-7a AC 必须覆盖 eligibility 全矩阵、有间隔 bounded windows 且长期 armed、非训练后台 cleanup / visible return、manual suppression 跨 process、age `1..130`（`101` round-trip 无 clamp）、personal max / alert `30..260`、effective max precedence、未取整六区间和 strict alert 优先。E17-7b 必须证明唯一 Application owner、旧 runtime 原子退休、disconnect / reconnect / clear target / opt-out 文案与动作分离、冻结 capsule 直接复用。E17-9 必须证明普通 `ON_STOP` 不直接 cleanup、同一连接 retain、意外断连在合法 `connectedDevice` FGS 下恢复，以及 terminal / manual disconnect / opt-out / permission / Bluetooth / target / FGS legality 停止矩阵。
 
-一个原子E17-8必须在同一candidate同时交付Activity-retained active-workout runtime唯一owner与Application ordinary ID `7200`唯一projection coordinator；不得有可分别实施/Review/merge的E17-8a/E17-8b、临时owner、compatibility bridge、transient registry或未来Story补救。Application coordinator不持workout engine、不是session registry；既有Application heart-rate/GATT owner保持独立唯一，E17-9 Service不持engine/GATT。
+不得恢复 D-078、E16 controller / wrapper、第二 owner 或第三 notification interface；保留 main serialization、identity、cleanup、`START_NOT_STICKY` 与 E17-5 / 6。禁止候选 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 不得 merge / 整体 cherry-pick / 作为 prerequisite。
 
-Retained owner必须持有真实session identity/current producer authority、immutable plan snapshot、engine/progress/`startedAt`、`PRE_START / STARTED_NON_TERMINAL / TERMINAL / INVALIDATED`、terminal-transition gate与persistence-attempt gate；三Route只attach/detach，configuration detach不清有效通知。Terminal transition exactly-once；persistence attempt at-most-once且successful record为0或1。Failure后不retry/upsert/queue/补写、不产生duplicate record、不新增schema/migration、不rollback/revive，identity invalidation与`7200` clear-once继续。
-
-Timed READY且`startedAt = null`为PRE_START；其永久销毁不产生`ABANDONED`或attempt。STARTED_NON_TERMINAL永久销毁固定既有`ABANDONED` exactly-once并至多attempt一次；已TERMINAL不重复。Configuration recreation保持同一runtime/session/start/engine/gates，Route dispose只detach；process death不恢复active workout、不猜测或合成terminal/record并fail-closed清旧`7200`；same-plan A→B使用不同identity且A迟到input不能影响B。Workout-producer generation与E17-9 `handoffGeneration`完全分离。
+本 candidate 未通过独立 Review、`--no-ff` merge / push、full-SHA ancestry、`main...origin/main = 0 0` 与本次十文档一致前为 `implemented / needs review`，E17-7a gated；满足后自动 reviewed / merged / satisfied，无 docs-sync。
 
 ## 1. Readiness 结论
 
-**结论：E17-4 historical readiness=`passed`；原子E17-8 implementation readiness未建立。** D-080/D-081基础readiness、E17-5/6/7a/7b事实保持；lifecycle V2为后续atomic E17-8提供planning input，但必须经fresh Exact Story shaping/readiness后才能进入implementation。
+**结论：passed。** E17-4 的 D-080 / D-081 基础 readiness 与 E17-5 / E17-6 merged facts保持；D-082 通过下方当前可执行替换把 reconnect eligibility、personal parameters、7a / 7b拆分、active-training FGS recovery和final-source双层证据加入现有单owner / 单writer安全边界。无需新增核心 ownership 层、重开 D-080 / D-081 或恢复 E16 controller / wrapper；后续只按当前 E17-7a -> 7b -> 8 -> 9 -> 10 顺序门禁推进。
 
-E17-4/5/6 SHA事实保持；E17-7a immutable SHA `e1b1654168c79edc5bbf78d233fb861e2177c215` 与E17-7b candidate/merge均是Accepted base ancestors。禁止E16 SHA `89d1e23f870185a2e279d35bb293883f64fe70ba` 与frozen candidate `fda5f7cfd3c31af3399dfe231733ea00467a68e8`均不是Accepted base ancestors且不得作为prerequisite。
+E17-4、E17-5、E17-6 均已独立 Review 并合入 `main`：E17-5 immutable SHA `959146a7e41a38d654b4988ba0d443f2aea0d874`、merge commit `bfb065b92d2ec78ca794fa679f7e25e85093bc79`；E17-6 immutable SHA `f9188c09275cd01dbf182823b3886635b17105bc`、merge commit `503d3151d731565837ab76f44fbebc25bb982e0d`。禁止 E16 SHA `89d1e23f870185a2e279d35bb293883f64fe70ba` 不是 `main` ancestor。本 Correct-course candidate 与 E17-7a prerequisite 按页首及新 Correct-course 第 9 节的 merge-stable truth 判定。
 
-## 2026-08-15 当前可执行 readiness 替换
+## 2026-07-26 当前可执行 readiness 替换
 
-本节与页首delta是当前readiness authority。它只允许先进行fresh atomic E17-8 Exact Story shaping/readiness，不直接生成implementation任务。其余第2至14节完整保留为2026-07-18/2026-07-22 **historical/non-operative snapshot**；旧ordinary-only E17-8、旧single-writer reducer范围、旧next-step/gate不得覆盖本节或生成当前任务。
+本节与页首 Correct-course delta 是 D-082 后唯一可生成实现任务的 readiness 合同。其余第 2 至 14 节完整保留为 2026-07-18 E17-4 / 2026-07-22 Planning Repair 的**历史盘点快照（non-operative）**：其中 `manual-only`、`no reconnect`、自动恢复 defer、旧单一 E17-7、`14 / 1 / 7` envelope、pre-FGS training background cleanup、cleanup 后不恢复、Band gate 不自动恢复和旧 next-step / gate 均不得生成当前任务、不得覆盖本节，也不得作为 Review finding 要求恢复旧路线。历史文件路径与已合并事实仍可用于迁移盘点。
 
-### 当前 atomic E17-8 lifecycle / ownership
+### 当前 lifecycle / eligibility
 
-- Activity-retained owner是active workout runtime唯一owner；三Route只attach/detach。进入Route、创建runtime、composition rebuild或Route dispose均不等于训练started。
-- 每次训练使用独立于plan ID的真实session identity；所有command/callback/terminal/projection匹配current identity与producer authority，单调workout-producer generation拒绝duplicate/late/out-of-order/stale/invalidated input。
-- Runtime四态为`PRE_START / STARTED_NON_TERMINAL / TERMINAL / INVALIDATED`。Timed READY且`startedAt=null`是PRE_START；Strength/Follow-along沿用各自accepted start boundary。
-- Configuration recreation reattach同一runtime、session identity、start classification、engine/progress、`startedAt`和两个gate；Route dispose无terminal/permanent-destruction/cleanup权限。
-- PRE_START永久销毁只invalidate/clear-once，不产生`ABANDONED`或persistence attempt；STARTED_NON_TERMINAL使用既有`ABANDONED` exactly-once并至多attempt一次；persistence failure不改变terminal、不retry/rollback/revive，successful record允许0。
-- Process death不依赖`onCleared()`，不恢复active workout、不从destination/plan/notification/stale projection合成session或record；Application coordinator无可信session时fail-closed幂等清旧`7200`。
-- Same-plan A→B使用不同identity；A terminal/invalidated后producer authority失效，任何A迟到input不得改变B或其persistence/`7200` projection。
-- Application ordinary coordinator是ID `7200`唯一projection owner，不持engine且不是registry；Application heart-rate/GATT owner继续独立唯一。Workout-producer generation与E17-9 `handoffGeneration`分离。
+- 自动恢复 eligibility = opt-in + saved exact target + permission + Bluetooth + no persistent manual suppression + App 明确 visible，或 active / paused training 已能合法使用 `connectedDevice` FGS。名称、display name 和附近其他 HRS 不得替代 exact target。
+- App 启动 / recreation 后首次明确 visible、非训练后台返回 visible、前台意外断连或 out-of-range 时，唯一 owner 使用有间隔的 bounded scan windows；单窗口有限时，窗口间隔由 deterministic policy 控制，eligibility 持续成立时长期 armed，不因固定次数耗尽永久停止。
+- bounded-window delay、下一窗口 eligibility 复核与 recovery timing 必须留在唯一 `HeartRateRuntimeOwner` 的 concrete main-looper policy 内。禁止新增 standalone / generic retry scheduler、watchdog、backoff controller、actor、wrapper或相关 production abstraction；测试只可复用现有 deterministic main queue / time control，不得为了测试便利创建 production scheduler abstraction。
+- 非训练后台停止 scan / connect / GATT 并 cleanup，不持续后台扫描；它不清除正常 armed intent，返回 visible 后重新计算 eligibility 并自动恢复。
+- active / paused training 的 Activity / Route `ON_STOP` 本身不是 cleanup。连接未 cleanup、未丢失时，回前台必须仍是同一 Application owner、同一 attempt lineage 与 current bpm；后台意外断连且 eligibility 仍成立时，只允许同一 owner 在合法 FGS 下以新 generation / attempt 恢复 exact target，不能伪称 same attempt。恢复期间 FGS 与 ID `7200` 唯一 writer 保持 active，notification 准确显示 reconnecting；unexpected disconnect 本身不得触发 ordinary demotion。
+- 只有 eligibility 失败、显式断开、opt-out、清除 target、permission / Bluetooth loss、training terminal、FGS legality failure，或 App 已明确 foreground 且不再需要 FGS 时，才按 typed stop reason demote / stop FGS。显式断开持久化 suppression 并保留 opt-in、saved target 与个人参数；只有明确重新连接或选择目标解除。
+- 进程死亡不恢复旧 GATT / callback / generation / attempt，Service 保持 `START_NOT_STICKY`；新进程只可在新的明确 visible / 合法 active-training FGS eligibility 下由唯一 owner 以新 generation / attempt 恢复。
 
 ### 当前 Story / acceptance / evidence 矩阵
 
 | Story | 唯一主要风险轴与允许范围 | 必须验收 | Evidence / merge gate |
 |---|---|---|---|
-| E17-7a / E17-7b | 已完成heart-rate owner policy/data与Application/settings/capsule wiring | 保留identity-bound behavior/evidence，不由本docs sync重测或改写 | `reviewed / merged`；E17-7b candidate/merge见页首 |
-| Atomic E17-8 Retained Runtime + Ordinary Coordination | 同一candidate同时交付retained workout runtime owner与ordinary ID `7200` projection coordinator；三Route只attach/detach；不含FGS/BLE扩张 | identity/四态/two gates；PRE_START/started永久销毁；recreation/process death/A→B；terminal exactly-once、attempt at-most-once、success 0/1；coordinator不持engine/非registry；无8a/8b seam | `NOT READY`；先fresh Exact Story shaping/readiness。后续identity-bound lifecycle/failure/ownership证据与独立Review/merge |
-| E17-9 Connected-device FGS + Training Background Recovery | concrete Service/Manifest、ID `7200` handoff、合法active-training retain/recovery、shared-owner observer、M1/final freshness；Service不持engine/GATT | 前置为atomic E17-8 exact accepted merge；`handoffGeneration`独立；既有FGS/heart-rate gate保持 | future exact merge成为同步main ancestor且evidence/status一致后才可开始 |
-| E17-10 Integrated Production Acceptance | evidence-only；`production changes = 0` | 已合并production能力的identity-bound端到端gate；不得修补production | finding返回责任Story；Repair合并后重建/重跑，旧evidence失效 |
+| E17-7a Reconnect + Parameter Foundation | 在 E17-6 owner 上增加纯 eligibility / recovery reducer、有间隔 bounded-window policy、typed stop reasons、persistent suppression、age / personal max / alert DataStore 与纯 presentation 计算；不得接 Application UI、FGS、Service 或 Band claim | eligibility 全组合；长期 armed；disable / manual disconnect / permission / Bluetooth / target / background原因分离；suppression跨 process；age `1..130`且`101`不 clamp；max / alert `30..260`；personal max优先于`220-age`；仅effective max为none时bpm-only；alert独立且不是第七区间；未取整六区间与strict alert优先 | fake-clock owner / policy tests、DataStore round-trip、mapper boundary、full unit / build / lint / check；独立Review、merge/push、full-SHA ancestry与同步main |
+| E17-7b Application / Settings / Capsule Wiring | `TrainFlowApplication`唯一创建 owner；Activity / Compose / settings / saved-device / capsule接线；原子退休旧provider/scanner ownership；debug入口只能观察同一owner或成为无资源说明页 | production/debug只有一个可达 owner；disconnect / reconnect / clear target / opt-out四种动作与copy准确；permission只由明确用户动作请求；foreground自动恢复、非训练background cleanup、process recreation；mapper / copy / semantics明确区分自动恢复等待下一bounded window、自动恢复正在查找、单窗口未匹配但仍armed且之后eligible继续，以及用户主动扫描结果，任何自动状态不得冒充用户主动扫描、手动停止或永久停止；冻结capsule neutral presentation、视觉/互动/颜色/geometry不改 | static owner/reachability search、Application / visibility / settings / mapper semantics tests、final executable source 的 AVD lifecycle / scan-count / foreground-return与上述自动恢复三态、与用户主动扫描相区分的状态证据、Band 9 production basic GATT / notify；不得把AVD当RF证据 |
+| E17-8 Ordinary Notification Coordinator | Application-scoped ID `7200` ordinary single writer；真实 workout session ID、producer token、monotonic `stateVersion`、bounded detach / reattach；不含FGS或BLE policy扩张 | old session / old Route迟到拒绝；same-plan A→B；terminal幂等；process recreation无事实时清旧`7200`一次；Route只submit | pure coordinator / Android notification tests + AVD route/recreation；独立Review/merge/ancestry |
+| E17-9 Connected-device FGS + Training Background Recovery | concrete Service / Manifest、ID `7200` generation handoff、合法 active-training retain / recovery、shared-owner observer、M1与final freshness；Service不是GATT或训练业务owner | visible-start、immediate startForeground、`START_NOT_STICKY`、permission deny分支、release ack / `ReleaseUnconfirmed`；未断链返回前台同owner/same attempt/current bpm；后台断链且eligible时同owner/new generation-attempt恢复，FGS / ID `7200` writer持续active且notification显示reconnecting；只有停止矩阵或明确foreground no-longer-needs-FGS才demote | final executable source的AVD lifecycle/notification/handoff证据 + 同一final source的Band 9真实GATT/notify锁屏后台retain与recovery证据；两层不得互相冒充；measurement/final APK完整身份链、M1与final rebuild |
+| E17-10 Integrated Production Acceptance | evidence-only；production files / lines / methods = 0 | 已合并7a/7b/8/9端到端gate；production finding固定路由：owner / GATT / callback → E17-6，policy / data → E17-7a，Application / settings / capsule → E17-7b，ordinary notification → E17-8，FGS / handoff / final freshness → E17-9 | 新Repair独立Review/merge后重建新APK并重跑受影响gate；旧APK/截图/日志失效 |
 
-### 当前 preserved presentation 与冻结边界
+### 当前 presentation 与冻结边界
 
 `ageYears: Int?` 的 `1..130` 只是 sanity guard，不是连接 eligibility；`101` 是合法值。`personalMaxHeartRateBpm: Int?` 与 `alertThresholdBpm: Int?` 均为 `30..260`，alert 独立于 max。effective max 依次为 personal max、`220-age`、none。区间使用未取整比率 `<50`低强度、`[50,60)`热身、`[60,70)`燃脂、`[70,80)`有氧、`[80,90)`无氧、`>=90`极限；严格 `bpm > alert` 优先，相等不触发。无 effective max 仍显示 bpm，alert-only 可提示。上述 presentation 直接复用 D-079 冻结的 E16 capsule 状态 / 颜色 / 互动资产，不改 capsule 本体、geometry、layout、motion 或交互。
 
 ### 当前停止条件与禁止候选
 
-若fresh shaping不能由一个Writer在同一candidate因果完整交付runtime owner + ordinary coordinator，或需要8a/8b分别merge、临时owner、bridge、registry、future repair seam、第二workout runtime owner，立即停止并返回Correct Course；不得形成不安全中间production节点。
+若实现 bounded-window delay / recovery timing 需要 standalone 或 generic retry scheduler、watchdog、backoff controller、actor、wrapper、新 production interface，或为了测试便利要求新增 production scheduler abstraction，立即停止并返回主管理；不得以“长期 armed”恢复 E16 controller 路线。测试只能驱动现有 main queue / time control。
 
-若实现需要第二heart-rate/GATT owner、generic BLE seam/wrapper、恢复D-078/E16 controller、Service持有engine/GATT、后台无限scan、自动换target、第三notification interface、修改冻结capsule视觉，或E17-10修改production，停止并返回管理复核。两个禁止SHA继续不是prerequisite。
+任一 Story 需要第二 owner、generic BLE seam / wrapper、恢复 D-078 / E16 controller、Service持有GATT、后台无限scan、自动换target、第三notification interface、修改冻结capsule视觉，或不能在其明确范围内闭合时，停止并返回管理复核。旧 candidate `fda5f7cfd3c31af3399dfe231733ea00467a68e8` 固定为 `frozen / unmergeable / reference-only / permanently prohibited from merge`，不是 prerequisite，不得 merge、整体 cherry-pick、rebase进新路线或替代E17-5/6资产。
 
 ## Historical 2. 盘点基线与硬边界（2026-07-18 snapshot；non-operative）
 

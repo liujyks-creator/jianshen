@@ -1,18 +1,18 @@
 # E17 心率子系统 Correct-course 计划
 
-**状态判定：** E17-0至E17-7b已完成当前合并事实；E17-7b candidate `cec16f697a036409693943289d471955ef7a47bc` 由merge `e3f2de2106342e06f75c3dce7eaef562ad2a6356`合入；原子E17-8 `NOT READY / needs fresh Exact Story shaping/readiness`
-**日期：** 2026-07-12；状态同步：2026-08-15
+**状态判定：** E17-0至E17-6已`reviewed / merged`；E17-4 readiness=`passed`；D-082 Correct-course与E17-7a prerequisite按本页当前 supersession及新 Correct-course 的统一条件式真值判定
+**日期：** 2026-07-12；状态同步：2026-07-22
 **性质：** 产品、设备、架构、测试与 implementation-readiness 重新规划
 
-## 2026-08-15 当前 supersession
+## 2026-07-26 当前 supersession
 
-`docs/planning/e17-auto-reconnect-and-personal-parameters-correct-course.md`的18项ledger继续承载D-082恢复/参数合同；validated E17-8 lifecycle Correct Course V2又取代其中ordinary-only E17-8 current contract。E17-7b已reviewed/merged；V2 `VALIDATED`只接受planning correction，本docs sync不实现E17-8，也不建立implementation `READY`。Eligibility、bounded windows、persistent suppression、参数和冻结胶囊等已完成7a/7b语义保持。
+当前完整合同为 `docs/planning/e17-auto-reconnect-and-personal-parameters-correct-course.md` 的 18 项 ledger；它 supersede 本文后续 manual-only、自动恢复无目标 Story、旧 E17-7 单 Story 与 active-training `ON_STOP` cleanup 冲突措辞，E17-2 / E17-3 正文保持历史记录。Eligibility 为 opt-in + saved exact + permission + Bluetooth + 无持久 suppression + visible 或合法 active-training FGS；前台 bounded windows 有间隔且长期 armed，非训练后台 cleanup / 回前台恢复，训练后台保持同一连接并在合法 FGS 下恢复。显式断开保留 opt-in / target / parameters 并跨 process suppress，仅明确 reconnect / select 清除。
 
 年龄可选 `1..130`（`101` 有效、不 clamp、非 eligibility），个人最大心率 / alert 各自可选 `30..260`；effective max 为 personal max、`220-age`、none。仅 effective max 为 none 时显示 bpm-only；personal max 单独有效或 age 单独有效均可计算六区间。alert 独立且 strict `bpm > alert` 优先，不是区间输入或第七区间；区间按未取整比率 `<50`、`[50,60)`、`[60,70)`、`[70,80)`、`[80,90)`、`>=90` 并复用冻结状态 / 颜色。
 
-Current sequence为：本docs sync reviewed/merged -> fresh atomic E17-8 Exact Story shaping/readiness -> 原子E17-8 future exact accepted merge -> E17-9 -> E17-10。一个原子E17-8必须同时交付Activity-retained active-workout runtime唯一owner与Application ordinary ID `7200`唯一projection coordinator；三Route只attach/detach，Route dispose无terminal/permanent-destruction/cleanup权限，configuration detach不清有效通知，coordinator不持engine且不是session registry。Runtime使用真实session identity与`PRE_START / STARTED_NON_TERMINAL / TERMINAL / INVALIDATED`；terminal exactly-once、persistence attempt at-most-once、success 0或1，failure不retry/upsert/queue/补写、不产生duplicate record、不新增schema/migration、不rollback/revive。Timed READY且`startedAt=null`的永久销毁不产生`ABANDONED`或attempt；started non-terminal使用既有`ABANDONED`。Recreation保持同一runtime/gates；process death不恢复或合成terminal并fail-closed清旧`7200`；same-plan A→B隔离。禁止E17-8a/E17-8b独立merge、临时owner/bridge/registry或未来补救；workout-producer generation与E17-9 `handoffGeneration`分离。E17-9等待future exact merge，E17-10继续evidence-only、`production changes = 0`。
+新序列为 docs CC -> E17-7a foundation -> E17-7b wiring + AVD / Band -> E17-8 ordinary -> E17-9 FGS + training recovery + `7200` + M1 -> E17-10 evidence-only。保留 D-079、唯一 owner / serialization / identity / cleanup / `START_NOT_STICKY` 与 E17-5 / 6；不恢复 D-078、controller 或 wrapper。`fda5f7cfd3c31af3399dfe231733ea00467a68e8` frozen / unmergeable / reference-only / permanently prohibited from merge。candidate 未 Review / merge / ancestry / sync / 十文档一致前为 needs review / 7a gated，满足后自动 reviewed / merged / satisfied，无 docs-sync。
 
-从下方“Historical 1”到文末“Historical 8”的正文是E17-0至E17-6形成时的**historical / non-operative snapshot**，保持原文身份不变。其manual-only、自动恢复defer、旧E17-7、ordinary-only E17-8、旧gate/next-step不得生成当前任务；历史merged facts、D-079冻结资产与D-081安全基础仍按后续accepted decisions保留。
+从下方“Historical 1”到文末“Historical 8”的正文是 E17-0 至 E17-6 形成时的历史计划记录，整体为 **historical / non-operative snapshot**。其中 manual-only、自动恢复 defer、旧单一 E17-7、old `14 / 1 / 7` envelope、pre-FGS background cleanup、process death 后手动恢复及旧 gate / next-step 不得生成当前任务；历史 merged facts、D-079 冻结资产与 D-081 安全基础仍按 D-082 保留范围使用。
 
 ## Historical 1. E17 目标（non-operative snapshot）
 

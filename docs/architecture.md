@@ -19,23 +19,11 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
-## 2026-08-15 E17 当前架构覆盖
+## 2026-07-26 E17 当前架构覆盖
 
-E17-7b 已 `reviewed / merged`：最终 candidate `cec16f697a036409693943289d471955ef7a47bc` 通过 merge commit `e3f2de2106342e06f75c3dce7eaef562ad2a6356` 合入。经 fresh re-validation 的 E17-8 lifecycle Correct Course V2 已取代 ordinary-only E17-8 current contract；该 `VALIDATED` 只接受规划修正，不表示原子 E17-8 implementation `READY`。本 docs sync 不实现 E17-8；合并后首个门禁仍是 fresh atomic Exact Story shaping/readiness。
+保留 Application / 进程级唯一 `HeartRateRuntimeOwner`、main-looper serialization、generation / attempt / raw GATT identity、先失效引用的 cleanup、唯一 ID `7200` writer、合法 `connectedDevice` FGS 与 `START_NOT_STICKY`。自动恢复是 owner policy，不恢复 D-078、E16 controller / wrapper，不新增第二 owner、GATT model 或第三 notification interface。
 
-一个原子 Corrected E17-8 必须同时建立 Activity-retained active-workout runtime 唯一 owner 与 Application-scoped ordinary notification ID `7200` 唯一 projection coordinator。Retained owner 独占真实 session identity、immutable plan snapshot、engine/progress、`startedAt`、domain-start classification、terminal-transition gate、persistence-attempt gate和 active/terminal/invalidated state；Timed、Strength、Follow-along 三种 Route 只 attach/detach。Route dispose 无 domain terminal、permanent-destruction 或 notification cleanup 权限。Application coordinator 只持 projection/coordination state，不持 workout engine，不是第二 session owner或 transient session registry；既有唯一 Application heart-rate/GATT owner继续独立，E17-9 Service 不持 workout engine或GATT。
-
-每次 workout 使用独立于 plan ID 的真实 session identity和 current producer authority；单调 workout-producer generation/version拒绝 duplicate、late、out-of-order、stale或invalidated输入，same-plan A→B 也必须隔离。该 generation 与 E17-9 `handoffGeneration` 在名称、状态、目的和验证上完全分离。
-
-Active-workout lifecycle 至少区分 `PRE_START / STARTED_NON_TERMINAL / TERMINAL / INVALIDATED`，但不新增持久化 terminal 类型。Timed READY 且 `startedAt = null` 永远属于 PRE_START；Strength与Follow-along沿用各自 accepted domain start boundary。每个session的合法terminal transition exactly-once，继续使用既有`COMPLETED` / `ABANDONED`；terminal-record persistence attempt at-most-once，successful record数量允许0或1。失败后不retry、upsert、queue、补写、不产生duplicate record、不新增schema/migration、不rollback或revive；identity invalidation与ID `7200` clear-once继续。
-
-Configuration recreation 由新Route reattach同一retained runtime、session identity、start classification、engine/progress、`startedAt`和两个gate，旧Route dispose只detach。非configuration的Activity/ViewModelStore永久销毁时，PRE_START只invalidate/clear-once，不产生`ABANDONED`或persistence attempt；STARTED_NON_TERMINAL固定既有`ABANDONED` exactly-once并至多attempt一次；已TERMINAL不得重复attempt或可观察cleanup。Process death不依赖`onCleared()`，不持久化/恢复active workout，不从destination、plan ID、notification extras或stale projection猜测session/terminal/record；新进程无可信active session时由Application coordinator fail-closed幂等清理遗留`7200`。
-
-上述runtime owner与ordinary projection owner必须在同一exact candidate交付；E17-8a/E17-8b不得分别实施、Review或merge，也不得引入临时owner、compatibility bridge、transient registry或未来Story补救错误production节点。E17-9只有在未来原子E17-8 exact accepted merge full SHA成为同步`main` ancestor且required evidence/status一致后才能开始；E17-10仍为identity-bound evidence-only，`production changes = 0`。
-
-保留 Application / 进程级唯一 `HeartRateRuntimeOwner`、main-looper serialization、generation / attempt / raw GATT identity、先失效引用的 cleanup、合法 `connectedDevice` FGS 与 `START_NOT_STICKY`。自动恢复仍是该owner policy，不恢复D-078、E16 controller / wrapper，不新增第二GATT owner/model或第三notification interface。
-
-Eligibility 为 opt-in + saved exact + permission + Bluetooth + no persistent suppression + visible 或合法 active-training FGS。前台使用有间隔的 bounded scan windows 且 eligibility 成立时长期 armed；非训练后台 cleanup、回前台重新计算并自动恢复；active training 普通 `ON_STOP` 不直接 cleanup，合法 FGS 下 retain / recover exact target。进程死亡不会复活旧心率引用、GATT 或 attempt，Service 仍为 `START_NOT_STICKY`；新进程首次明确 visible，或新的合法 active-training FGS eligibility 成立时，只能由唯一 Application heart-rate owner 以新 generation / attempt 自动恢复，不能演变成 sticky Service、隐式后台常驻或第二 owner。E17-7a承担policy / persisted suppression / parameters / tests，E17-7b承担Application / settings / capsule且已合并；原子E17-8承担retained workout runtime + ordinary projection coordination，E17-9承担FGS / training recovery / M1，E17-10为evidence-only。
+Eligibility 为 opt-in + saved exact + permission + Bluetooth + no persistent suppression + visible 或合法 active-training FGS。前台使用有间隔的 bounded scan windows 且 eligibility 成立时长期 armed；非训练后台 cleanup、回前台重新计算并自动恢复；active training 普通 `ON_STOP` 不直接 cleanup，合法 FGS 下 retain / recover exact target。进程死亡不会复活旧引用、GATT 或 attempt，Service 仍为 `START_NOT_STICKY`；新进程首次明确 visible，或新的合法 active-training FGS eligibility 成立时，只能由唯一 Application owner 以新 generation / attempt 自动恢复，不能演变成 sticky Service、隐式后台常驻或第二 owner。E17-7a 承担 policy / persisted suppression / parameters / tests，7b 承担 Application / settings / capsule，8 ordinary，9 FGS / training recovery / M1，10 evidence-only。
 
 bounded-window delay、eligibility recheck 与 recovery timing 都属于唯一 `HeartRateRuntimeOwner` 内的 concrete main-looper policy；不得新增 standalone / generic retry scheduler、watchdog、backoff controller、actor、wrapper或相关 production abstraction。测试复用现有 deterministic main queue / time control，不得为了测试便利反向增加 production scheduler abstraction。
 
@@ -75,7 +63,7 @@ active / paused training 已在 background / lockscreen 且 eligibility 仍成�
 | 架构风格 | 分层架构 + feature 模块 | UI、domain、data、platform adapter 分离。 |
 | 异步 | Kotlin Coroutines + Flow | 训练计时、状态订阅、数据库流式观察。 |
 | 本地数据库 | Room | 保存动作、计划、会话、组记录、恢复映射。 |
-| 偏好设置 | DataStore | 保存提醒偏好、训练默认值、默认关闭的心率 opt-in、saved-device convenience hint、D-082 manual suppression 与个人参数；E17-7a/7b已合并，后续受 atomic E17-8 fresh readiness -> exact merge -> E17-9 -> E17-10 门禁约束。 |
+| 偏好设置 | DataStore | 保存提醒偏好、训练默认值、默认关闭的心率 opt-in、saved-device convenience hint、D-082 manual suppression 与个人参数；心率 production implementation 受 E17-7a -> 7b -> 8 -> 9 -> 10 顺序门禁约束。 |
 | 依赖注入 | Hilt | 生产实现与测试替身解耦。 |
 | 后台与提醒 | Notification + WorkManager/Alarm 边界 | 首版普通提醒，不做闹铃级强提醒硬依赖。 |
 | 最小网络 | 无必需网络 | 首版动作内容可随包或本地导入，后续再加同步。 |
@@ -151,7 +139,7 @@ feature:settings
 - 计划提醒通知。
 - 活跃训练通知。
 - 前台训练服务边界。
-- E7.2 / D-027 是普通训练的历史与当前基线：普通 active / paused 训练不启用 foreground service，只提供 ordinary ongoing active workout notification。D-081 是窄例外和部分 supersession；D-082 再窄 supersede “unexpected disconnect 立即降级”的含义。原子E17-8 current contract进一步要求Application ordinary coordinator是ID `7200`唯一ordinary projection owner，三Route只attach/detach retained runtime并提交投影，不持engine、不在dispose时terminal/cleanup；完整ownership/lifecycle合同见页首与第8.1节。
+- E7.2 / D-027 是普通训练的历史与当前基线：普通 active / paused 训练不启用 foreground service，只提供 ordinary ongoing active workout notification。D-081 是窄例外和部分 supersession；D-082 再窄 supersede “unexpected disconnect 立即降级”的含义：active / paused training 已在 background / lockscreen 且 eligibility 仍成立时，`connectedDevice` FGS 与 ID `7200` writer继续 active并进入 reconnecting，只有停止资格成立或明确 foreground 不再需要 FGS 时才降级。Route dispose 不再拥有最终清理权，完整单一 writer 合同见第 8.1 节。
 - 不包含训练状态机，只消费 `WorkoutEvent`、训练 UI state 或 engine state 摘要。
 
 ### 4.8 `core:media`
@@ -358,11 +346,11 @@ stateDiagram-v2
 - 计划提醒：通过通知调度实现，允许系统延迟。
 - 普通活跃训练：沿用 D-027 / E7.2 ordinary ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎；active / paused 本身不普遍变成 FGS，也不承诺普通训练后台精确计时。
 - D-081 窄例外：只有 active / paused training 的合法心率连接或 D-082 bounded recovery 使用 `connectedDevice` FGS；background / lockscreen unexpected disconnect 且 eligibility 仍成立时不得退回 ordinary，FGS 与 ID `7200` writer保持 active、content显示 reconnecting，同一 Application owner以新 generation / attempt恢复。只有 eligibility 失败、显式断开 / opt-out / target clear、training terminal、FGS legality failure，或明确 foreground 不再需要 FGS 时才退回 ordinary。
-- 不新增第三个核心 notification interface。原子E17-8适配现有 `ActiveWorkoutNotificationController` contract，使其production instance成为Application / 进程级ordinary ID `7200`唯一projection coordinator；它不持engine且不是session registry。Route只attach/detach retained runtime并提交当前session identity、producer authority和单调version匹配的训练投影。固定ID `7200`概念上只有`NONE`、`ORDINARY_WORKOUT_NOTIFICATION`、`HEART_RATE_FOREGROUND_SERVICE`三种模式，任一时刻只有一个writer，不产生第二条常驻通知。
+- 不新增第三个核心 notification interface。适配现有 `ActiveWorkoutNotificationController` contract，使其 production instance 成为 Application / 进程级唯一协调者；Route 只提交训练状态。固定 ID `7200` 概念上只有 `NONE`、`ORDINARY_WORKOUT_NOTIFICATION`、`HEART_RATE_FOREGROUND_SERVICE` 三种模式，任一时刻只有一个 writer，不产生第二条常驻通知。
 - FGS 升级：协调者保存最新状态并进入 handoff，从允许的可见前台调用 `startForegroundService()`；Service 在 `onStartCommand()` 路径立即调用 `ServiceCompat.startForeground(7200, notification, FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)`，不加人为延时。FGS content 必须准确说明后台心率连接，不能沿用普通通知“不是 foreground service”的文案。
 - `POST_NOTIFICATIONS` 拒绝时，ordinary notification 可以不发布；FGS 仍必须构造 notification 并传给 `startForeground()`，不得复用现有 `Ignored -> clear / no content` 分支。系统仍可能在 Task Manager / Active apps 展示 FGS。
 - FGS 降级：仅在上述停止资格成立后，先有序停止 / demote FGS并交还 ID `7200` writer，再由协调者以同一 ID 恢复 ordinary notification；若通知权限拒绝则可不发布。background unexpected disconnect 的 bounded recovery 不进入此分支。具体 `stopForeground()` flag 必须证明 handoff 有序、幂等、无重复 cancel。
-- Route dispose只detach，不能触发domain terminal、永久销毁、persistence attempt或取消仍有效训练通知；configuration detach不得清除有效`7200`。合法terminal/invalidation后由coordinator对`7200` clear-once；重复terminal、owner destruction、Service stop、stale producer与cleanup必须幂等且不能影响same-plan后续session。
+- Route dispose 不能取消仍活跃训练的通知；terminal 时协调者停止 FGS并对 `7200` 最终移除一次。重复 terminal、Service stop、Route dispose 与 cleanup 必须幂等。
 - FGS 启动 / 提升失败不创建第二个 GATT owner；明确前台可保留前台连接并发布准确失败事实，随后无合法 FGS 而进入后台必须 cleanup。
 - 权限：清楚解释通知权限用途。
 
@@ -375,7 +363,7 @@ stateDiagram-v2
 
 ### 8.3 心率与健康数据
 
-D-080 / D-081 已 supersede 早期“首版全面不显示心率”的当前式产品范围，D-082 又窄 supersede manual-only / no-reconnect 冲突。当前 E17 接受默认关闭、用户显式 opt-in 后通过标准 HRS 与冻结胶囊显示实时心率；E17-4 readiness 已通过且E17-7a/7b已合并。Validated lifecycle Correct Course V2不建立implementation READY；后续production只能先完成atomic E17-8 fresh Exact Story shaping/readiness及其future exact accepted merge，再进入E17-9，E17-10继续仅做evidence：
+D-080 / D-081 已 supersede 早期“首版全面不显示心率”的当前式产品范围，D-082 又窄 supersede manual-only / no-reconnect 冲突。当前 E17 接受默认关闭、用户显式 opt-in 后通过标准 HRS 与冻结胶囊显示实时心率；E17-4 readiness 已通过，后续 production 只能按 D-082 Correct-course 的 E17-7a -> 7b -> 8 -> 9 -> 10 prerequisite 顺序推进：
 
 ```kotlin
 interface HeartRateProvider {
@@ -466,13 +454,6 @@ interface HeartRateProvider {
 - Android / AVD：权限、foreground service、通知、前后台、process recreation 和 no-crash；不能替代真实 BLE。
 - Band 9 真机：scan / connect / discover / CCCD / notify / manual cleanup，以及活跃训练锁屏 / 临时后台维持当前连接；E17-1 只证明旧 debug 设备 / 协议可行性，新架构必须重新取证。
 
-### 10.5 原子 E17-8 后续验证边界
-
-- Fresh Exact Story 必须为同一candidate绑定三种Route的同identity recreation、PRE_START / STARTED_NON_TERMINAL永久销毁分支、自然/显式/销毁terminal与persistence failure、process-death fail-closed cleanup、same-plan A→B stale rejection，以及Application ordinary ID `7200` owner唯一性。
-- 必须分别证明terminal transition exactly-once、persistence attempt at-most-once和successful record为0或1；一般engine、visibility、Route wiring或单guard测试不能替代identity/start/failure/ownership evidence。
-- Workout-producer generation evidence不得复用或冒充E17-9 `handoffGeneration` evidence。E17-9 Service继续不持workout engine或GATT。
-- 本 docs sync只同步validated planning contract；未运行也不声称任何Gradle、Android、AVD、adb、Band 9、APK、音频或产品行为验证。
-
 ## 11. 未来 iOS 与共享边界
 
 首版不做 iOS，但以下语义必须保持稳定：
@@ -518,7 +499,7 @@ interface HeartRateProvider {
 1. 最低 Android 版本与目标 Android SDK。
 2. 是否首版要求训练退到后台后仍持续准确计时。
 3. 首批动作内容是随包静态 JSON，还是 Room seed 数据。
-4. E17-7b candidate `cec16f697a036409693943289d471955ef7a47bc` 已由 merge `e3f2de2106342e06f75c3dce7eaef562ad2a6356` 合入；validated lifecycle Correct Course V2只建立planning input。原子E17-8仍须fresh Exact Story shaping/readiness；其未来exact accepted merge、required evidence与同步status成立前不得开始E17-9，E17-10仍不得修改production。
+4. D-082 Correct-course 是否已独立 Review / merge / ancestry / sync，并且 E17-7a / 7b / 8 / 9 / 10 的 prerequisite、单一 owner、freshness、`connectedDevice` FGS / 单一通知和 AVD / Band 9 evidence gate 是否逐项满足；未满足对应门禁前不得开始下游心率 Story。
 5. 训练提醒是否只做普通通知，还是在后续版本增加精确提醒选项。
 6. 官方默认 UI 是否先只做浅色工作区 + 深色训练执行页，还是首版同时提供暗色主题。
 
