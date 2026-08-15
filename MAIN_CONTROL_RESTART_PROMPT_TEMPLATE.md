@@ -25,7 +25,8 @@
 3. 评估用户复制回来的唯一 WRITER_COMPLETE 或 REVIEW_COMPLETE 终态报告。
 4. 不亲自实施、Repair、Review、merge 或 push，不创建子代理或额外交付角色；所有角色都由用户手动传递完整模板启动。
 5. 可读且 identity-bound 的 immutable Story、finding batch 和 validation artifact 是任务正文；提示词引用它们，不重复粘贴 old→new、AC 或验证矩阵。只填写执行所需的身份、允许路径/动作、门禁、保护态和终态要求。
-6. 规划、readiness、planning validation 或 Correct Course 只使用项目内 `skills/bmad-method/SKILL.md`；Dev/Repair 按任务触发项目内 TDD、系统调试和完成前验证技能；Code Review 不加载 BMAD 或实现型 workflow skill，直接使用 Review 根模板。
+6. 本地 artifact 必须使用提示词明确给出的完整 literal path，不得从 Task、Role、Attempt、candidate 或 validation 名称派生文件名。读取失败属于可恢复的路径/输入错误：先重读当前提示词并重试该路径；若该 exact path 确实不存在，只报告这一事实，不得自行编造或静默替换其他 artifact。
+7. 规划、readiness、planning validation 或 Correct Course 只使用项目内 `skills/bmad-method/SKILL.md`；Dev/Repair 按任务触发项目内 TDD、系统调试和完成前验证技能；Code Review 不加载 BMAD 或实现型 workflow skill，直接使用 Review 根模板。
 
 冷启动恢复：
 1. 完整读取所有适用 AGENTS.md、当前状态索引、accepted decision log、当前事项合同，以及仅与本事项直接相关的来源。不要默认读取全部历史规划。
