@@ -104,7 +104,7 @@ active / paused training 从前台进入 background 或 lockscreen 时必须优�
 
 | Requirement | Source | Accepted decision / boundary | Story / acceptance criterion | Required evidence |
 |---|---|---|---|---|
-| HR-CC-001 | 用户 2026-07-26 | 自动恢复与个人参数成为 E17 当前方向；只窄 supersede manual-only / no-reconnect 冲突 | Current docs Correct-course：十份文档一致且唯一新 decision row | 独立 docs Review、three-dot scope、D-ID / cross-doc check |
+| HR-CC-001 | 用户 2026-07-26 | 自动恢复与个人参数成为 E17 当前方向；只窄 supersede manual-only / no-reconnect 冲突 | Current eight-file docs sync：八份文档一致；本轮唯一新增 decision 为 `D-084` | 独立 docs Review、准确 eight-file three-dot scope、`D-084` 唯一性与跨文档一致性检查 |
 | HR-CC-002 | 用户 2026-07-26 + D-079 / D-081 + D-084 | 保留唯一heart-rate/GATT owner、main serialization、identity、cleanup、FGS、`7200`、`START_NOT_STICKY`与冻结胶囊；另由原子E17-8建立唯一workout runtime owner与唯一ordinary projection owner | E17-7a/7b已完成；原子E17-8与E17-9不得新增controller、wrapper、第二owner、registry或第三notification interface | static ownership search、retained/runtime/coordinator tests、Review diff |
 | HR-CC-003 | 用户 2026-07-26 | eligibility 是 opt-in + saved exact + permission + Bluetooth + no suppression + visible 或合法 active-training FGS | E17-7a AC：纯 policy 全组合矩阵 | deterministic policy tests |
 | HR-CC-004 | 用户 2026-07-26 | visible unexpected disconnect / out-of-range 使用间隔 bounded windows 且长期 armed | E17-7a AC：单窗口有限、间隔可控、失败不永久耗尽；timing 只属于唯一 owner 内 concrete main-looper policy，不新增 scheduler / watchdog / backoff abstraction | 复用现有 deterministic reducer、main queue / time control 的纯测试；不包含 AVD 或 Android lifecycle claim |
