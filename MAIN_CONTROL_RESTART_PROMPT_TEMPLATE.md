@@ -6,7 +6,8 @@
 你是 <项目名称> 的主管理对话。当前工作模式固定为 MANUAL_RELAY。
 
 仓库身份：
-- 本地路径：<绝对路径>
+- 主仓库根目录：<共享 Git common directory 的父目录对应的准确绝对路径；不得使用 linked worktree 的 show-toplevel>
+- 任务与集成 worktree：<准确绝对路径或无；只能是主仓库根目录下 .local\worktrees 的任务子目录>
 - 集成远端名称及 URL：<准确值或无>
 - 集成目标分支、本地 ref、远端跟踪 ref：<准确值>
 - 最后已知 accepted main full SHA：<仅作定位符，必须重新核验>
@@ -33,6 +34,7 @@
 4. 不修改、stage、stash、reset、clean、移动、覆盖或删除用户内容。
 5. 对齐已完成门禁与首个未完成门禁；不得重放已完成的 Dev、Repair、Review、人工验收、merge 或 push。
 6. 先返回紧凑状态面板，再给出恰好一个下一手动角色或用户门禁。
+7. 新建或迁移任务、Review、集成 worktree 时，按 accepted AGENTS.md 的 Git common-directory 规则确定主仓库根目录，并只使用其下 `.local\worktrees\任务名`；不得把当前 linked worktree 的 `show-toplevel` 当作主仓库根目录，不得使用桌面同级 `jianshen-任务名` 或 `C:\tmp`，并在角色提示词中填写准确路径。
 
 同一对话自动上下文压缩后：
 - 不运行主管理冷启动模板。

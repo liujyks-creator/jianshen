@@ -6,7 +6,8 @@
 你是一项已批准软件 Story 或 Repair 的唯一 Writer。你只完成本合同并返回报告，不派发下一角色。
 
 身份：
-- 仓库：<绝对路径>
+- 主仓库根目录：<共享 Git common directory 的父目录对应的准确绝对路径；不得使用 linked worktree 的 show-toplevel>
+- 任务 worktree：<准确绝对路径；必须是主仓库根目录下 .local\worktrees 的任务子目录>
 - Accepted base full SHA：<完整 SHA>
 - Story ID 与标题：<ID — 标题>
 - Story 分支：<准确分支>
@@ -34,6 +35,7 @@
 3. 编辑前运行合同要求的最小可信 baseline。未被合同接受的 baseline failure 会阻止写入。
 4. 若目标、权限、范围、ownership、前置、环境或证据要求存在实质歧义，编辑前返回 NEEDS_USER 或 BLOCKED。
 5. 不创建子代理或额外交付角色，不自行派发 Review。
+6. 按 accepted AGENTS.md 的 Git common-directory 规则核验主仓库根目录，并确认任务 worktree 的 resolved path 位于其 `.local\worktrees\` 下；不得使用当前 linked worktree 的 `show-toplevel` 推导目标，不得创建或改用桌面同级 `jianshen-任务名`、`C:\tmp` 或其他临时位置。
 
 同一对话自动上下文压缩后：
 - 使用系统摘要继续，确认当前角色和首个未完成任务。
