@@ -210,6 +210,7 @@ For Android UI, APK, screenshot, or smoke work, reuse the existing JDK, Android 
 - Keep edits scoped to the requested task and current product boundary.
 - Add or update documentation when a product decision changes.
 - Prefer explicit branches for feature work, using `codex/<task-name>` when a branch is needed.
+- When a Git worktree is needed, derive its location from the repository root and create or reuse it only under `<repo>/.local/worktrees/<task-name>`. Do not place task or integration worktrees beside the repository on the Desktop or under `C:\tmp`. Before creating or moving one, verify that the resolved destination remains under that ignored root; every filled role prompt must state the exact worktree path.
 - Do not commit secrets, device logs, generated build output, or unrelated local files.
 
 ## Text Encoding

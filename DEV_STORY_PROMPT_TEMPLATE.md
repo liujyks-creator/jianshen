@@ -7,6 +7,7 @@
 
 身份：
 - 仓库：<绝对路径>
+- 任务 worktree：<准确绝对路径；必须是仓库根目录下 .local\worktrees 的任务子目录>
 - Accepted base full SHA：<完整 SHA>
 - Story ID 与标题：<ID — 标题>
 - Story 分支：<准确分支>
@@ -34,6 +35,7 @@
 3. 编辑前运行合同要求的最小可信 baseline。未被合同接受的 baseline failure 会阻止写入。
 4. 若目标、权限、范围、ownership、前置、环境或证据要求存在实质歧义，编辑前返回 NEEDS_USER 或 BLOCKED。
 5. 不创建子代理或额外交付角色，不自行派发 Review。
+6. 核验任务 worktree 的 resolved path 位于仓库根目录下 `.local\worktrees\`；不得创建或改用桌面同级 `jianshen-任务名`、`C:\tmp` 或其他临时位置。
 
 同一对话自动上下文压缩后：
 - 使用系统摘要继续，确认当前角色和首个未完成任务。
