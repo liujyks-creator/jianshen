@@ -5,227 +5,260 @@ description: BMAD-METHOD v6.3.0 经典蒸馏版，选择性吸收至 v6.11.0 的
 
 # BMAD-METHOD 方法论 · 精简通用版
 
-## 这 Skill 是什么
+## 定位、authority 与源头
 
-这是以 **BMAD-METHOD v6.3.0** 为结构基线、选择性吸收至 **v6.11.0** 规划层改进的蒸馏版本，将官方大型工作流压缩为一份可直接使用的**方法论手册 + 关键模板参考**。项目自己的 `AGENTS.md`、accepted decisions、角色模板和权限始终优先；本技能不复制项目专属合同，也不自动创建角色或交付流程。
+这是以 **BMAD-METHOD v6.3.0** 为结构基线、选择性吸收至 **v6.11.0** 规划层改进的蒸馏版。它同时提供 workflow 路由和可执行的 planning 方法，但不安装官方包、不复制项目专属合同，也不自动创建交付角色。
 
-**源头**: https://github.com/bmad-code-org/BMAD-METHOD · MIT License · 结构基线 v6.3.0，规划层更新核对至 v6.11.0
-**为什么不装官方 npm 包**：官方包会展开数百个 workflow 文件；本技能只保留完成实际规划任务所需的路由、产物和门禁。
+项目自己的 `AGENTS.md`、accepted decisions、identity-bound artifacts、角色模板和权限始终优先。技能只能约束如何完成已获准任务，不能扩大任务或工具权限。
 
----
+**源头**：https://github.com/bmad-code-org/BMAD-METHOD · MIT License · 结构基线 v6.3.0，规划层更新核对至 v6.11.0（Create Epics and Stories 与 Correct Course 行为核对 commit `9ce3c397c9b238de96f7365da8019f6f66b059da`）。
 
-## 核心信条 (读懂 BMAD 先读这)
+**为什么不装官方 npm 包**：官方包会展开数百个 workflow 文件；本技能只保留实际规划需要、无法稳定从常识重建的路由、步骤、状态和门禁。
 
-1. **AI 不替你思考, AI 陪你思考**. BMAD 不是"输入需求自动出代码", 是 **facilitator** — 在 PRD/架构/story 每步做 structured elicitation 把你脑子里的东西挖出来并结构化.
-2. **fresh chat per workflow**. 每个 workflow（product-brief / create-prd / create-architecture / etc.）按项目合同在独立任务对话中运行，避免一个对话连跑多个角色或 workflow。
-3. **step-file architecture**. 每个 workflow 拆成 micro-files (step-01, step-02...). 一次只加载当前 step, 做完等用户按 Continue 才进下一步. **永不同时加载多个 step**.
-4. **append-only document building**. PRD / Architecture / Stories 这类产物是**一步步追加**建起来的, 不是一次性写完再改. frontmatter 里 `stepsCompleted: []` 追踪状态.
-5. **不猜**。缺少会改变结论的产品、scope、ownership 或架构决定时，明确报告 UNKNOWN 和权衡；由项目合同决定是在当前 workflow 取得选择，还是以 `NEEDS_USER` 结束并由新任务继续。
-6. **证据先于结论**。区分已证明事实、可复现推论和未知；来源不明的材料不能升级为 accepted 决定或权限。
-7. **最小但因果完整**。只解决当前问题和直接 ripple，不把未来功能、一次性抽象或理论防御分支塞进规划。
+## 核心信条
 
----
+1. **Facilitator，不是静默生成器**：AI 与用户共同形成承重决定；推荐不能冒充用户决定。
+2. **Accepted-state reconstruction**：先从 Git、accepted artifacts、decision log、状态索引和直接证据重建当前事实，再找首个未闭合门禁；不重做身份可证明已完成的工作。
+3. **Evidence first**：区分已证明事实、可复现推论和 `UNKNOWN`；来源不明的材料不能升级为 accepted 决定或权限。
+4. **No guessing**：缺少会改变产品、UX、Architecture、ownership、scope、Story、acceptance 或 evidence 的输入时停在当前 step，由用户决定。
+5. **Minimum causally complete**：只处理当前目标和直接 ripple，不加入推测性功能、未来兼容层、顺手重构或一次性抽象。
+6. **One workflow, one current node**：一次只执行当前 workflow；完成后按项目合同交回，不自动串行下一 workflow 或角色。
 
-## 4 阶段 · 产品到代码的流水线
+## 四阶段与 workflow 路由
 
-```
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│ 1. Analysis  │──▶│ 2. Planning  │──▶│ 3. Solutioning│──▶│4. Implementation│
-│   (理解 WHY) │   │   (定 WHAT)  │   │   (出 HOW)    │   │   (真写代码)   │
-└──────────────┘   └──────────────┘   └──────────────┘   └──────────────┘
-   brainstorm         create-prd       create-architecture   create-story
-   product-brief      validate-prd     create-epics-stories  dev-story
-   document-project   create-ux-design check-impl-readiness  code-review
-                                                             retrospective
-```
+| 阶段 | 目标 | 常用 workflow |
+|---|---|---|
+| 1. Analysis | 理解 WHY | DP document-project、GPC project-context、BP brainstorming、MR/DR/TR research、CB product-brief、WB PRFAQ |
+| 2. Planning | 确定 WHAT | CP create-prd、VP validate-prd、EP/Edit edit-prd、CU create-ux-design |
+| 3. Solutioning | 确定 HOW | CA create-architecture、CE create-epics-and-stories、IR implementation-readiness |
+| 4. Implementation | 实际交付 | SP、CS、VS、DS、CR、QA、ER；只作方法索引，项目正式模板优先 |
 
-每阶段下的 workflow 都是一个 slash-style skill. 阶段间有硬依赖 (CSV `before`/`after` 字段), 不能跳.
+典型规划路径是 `CP → VP → (EP) → CU → CA → CE → IR`，但只补 accepted state 中首个真实缺口。CC Correct Course 是跨阶段的 planning correction，不是 implementation 交付。Brownfield 先重建 accepted state，再决定是否需要 DP/GPC；已有可靠上下文时不机械重做。PRFAQ 在进入 PRD 前证明 customer、problem、stakes 与 solution，把事实和假设分开，并产出 verdict 与 PRD distillate。
 
----
+### 三类执行必须分开
 
-## Workflow 完整索引 · 按阶段
+1. **Workflow 路由**：回答“下一步做什么”，只判断当前状态、依赖、产物和门禁，不代替目标 workflow。
+2. **Interactive planning workflow**：CP、CU、CA、CE、Edit、Correct Course 及其他创建/修改型 planning 使用下述通用交互协议，由同一 Planner 对话逐 step 与用户共同完成。
+3. **Independent planning validation/readiness Review**：VP、IR、fresh Planning Review 独立验证 candidate，不与用户共同设计 candidate；规则见后文独立 Review 章节。
 
-### 🔍 阶段 1 · Analysis (理解 WHY)
+Implementation 交付不属于 interactive planning。项目有正式 Writer/Reviewer 合同时，BMAD 只到 exact Story `READY`，随后交回主管理。
 
-| 代号 | Workflow | 何时用 | 产出 |
-|:---:|---|---|---|
-| **DP** | `bmad-document-project` | **brownfield 首步**. 让 agent 扫你已有代码库生成 AI 友好文档 | project-knowledge/ 目录 |
-| **GPC** | `bmad-generate-project-context` | brownfield 必做. 生成 LLM 优化的 `project-context.md` (AI coding 规则) | `project-context.md` |
-| **BP** | `bmad-brainstorming` | 想法还没清晰时做发散 | brainstorming session 记录 |
-| **MR** / **DR** / **TR** | `bmad-market-research` / `bmad-domain-research` / `bmad-technical-research` | 分别做市场 / 领域 / 技术可行性调研 | research 文档 |
-| **CB** | `bmad-product-brief` | 想法清晰了, 出 1-2 页产品简报 | `product-brief.md` |
-| **WB** | `bmad-prfaq` | 想法还不确定，要用证据压力测试（Amazon Working Backwards） | PR、Customer/Internal FAQ、verdict 与 PRD distillate |
+## 创建/修改型 planning 的通用交互协议
 
-**brownfield 场景**：先重建 accepted state，再决定是否需要 DP/GPC；已有可靠项目上下文时不得机械重做。
+本节是所有 interactive planning workflow 的唯一通用状态合同。具体 workflow 章节只定义专属 step 内容；不得用“用户要求一次规划完整”“批量模式”或“尽快完成”绕过这里的停止点。一次规划完整表示同一 Planner 对话负责完整 workflow，不表示一轮回复静默完成。
 
-**PRFAQ 规划升级**：先证明 customer、problem、stakes 与 solution；缺少其中会改变结论的输入时回到探索，不代填。按商业、内部、开源或非营利等实际 concept type 调整问题，不套同一商业模板。市场、竞争和可行性 claim 使用当前可核验来源，假设必须显式分开。最终产物同时给出对外 PR、Customer FAQ、Internal FAQ、继续/调整/停止 verdict，以及供后续 PRD 使用的紧凑 distillate。
+### 1. 启动与第一轮
 
----
+先读项目 authority 和当前 workflow 直接相关输入，不加载无关历史。第一轮必须展示：
 
-### 📋 阶段 2 · Planning (定 WHAT)
+- workflow 目标；
+- 本次有序步骤；
+- 已发现并准备纳入的 accepted inputs；
+- missing inputs 与 optional inputs；
+- 初始 decision agenda；
+- 当前只处理的第一个 step。
 
-| 代号 | Workflow | 何时用 | 依赖 | 产出 |
-|:---:|---|---|---|---|
-| **CP** | `bmad-create-prd` | **必做**. 做 PRD (产品需求文档) | CB(推荐) | `prd.md` |
-| **VP** | `bmad-validate-prd` | CP 后, 独立对话验证 PRD 质量 | CP | PRD 验证报告 |
-| **EP** | `bmad-edit-prd` | VP 报告有问题, 回来改 | VP | 更新的 PRD |
-| **CU** | `bmad-create-ux-design` | UI 交互占主导的项目使用 | CP | UX 设计文档 |
+如果项目提供 output artifact，则先确认路径和既有身份；未经 workflow 指定的输入确认，不得把候选初始化为 accepted artifact。
 
-典型路径：`CP → VP → (EP) → CU`；只执行当前缺失的门禁。
+### 2. 每轮 elicitation 与决定记录
 
----
+- 每轮最多提出 **3 个**真正 load-bearing 问题。只有会改变产品、UX、Architecture、ownership、scope、Story、acceptance 或 evidence 的决定才要求用户选择；其余按 accepted facts 继续。
+- 每次用户回答后，先记录决定及条件，说明它对当前规划结构的直接影响，更新 pending decisions，再继续当前 step 或显示当前 step 的菜单。
+- 用户未回答的承重问题保持 pending；Planner 不代选，不用推荐、默认值或 `UNKNOWN` 偷渡结论。
+- 用户提出材料性调整时，显式更新受影响的 coverage、dependency/DAG、ownership、下游内容和 validation；不隐藏 ripple。
 
-### 🏗 阶段 3 · Solutioning (出 HOW)
+`NEEDS_USER` 不能替代 Planner 与当前用户的正常 elicitation。只有用户不在当前对话、权限/authority 缺失，或项目合同要求返回主管理时，才使用终态 `NEEDS_USER`。
 
-| 代号 | Workflow | 何时用 | 依赖 | 产出 |
-|:---:|---|---|---|---|
-| **CA** | `bmad-create-architecture` | **必做**. 做技术架构决策 | CP | `architecture.md` |
-| **CE** | `bmad-create-epics-and-stories` | **必做**. 把 PRD+Arch 切成 epics/stories | CA | `epics/` + `stories/` 目录 |
-| **IR** | `bmad-check-implementation-readiness` | **必做**. 跨对照 PRD/UX/架构/stories 有没有对不齐 | CE | readiness 报告 |
+### 3. Step 门禁
 
-**没 IR 过关不能动代码**. 这是 BMAD 的硬闸.
+一次只执行当前 step，不预做未来 step。每个 step 都按以下顺序：
 
----
+1. 核验进入条件和当前 step 输入；
+2. 与用户完成本 step 的分析、选择和候选；
+3. 展示本 step 结果、pending decisions、影响和确认菜单；
+4. **停止并等待**；
+5. 只有用户明确选择 `Continue` 或明确批准当前 step，才保存本 step 状态并进入下一 step。
 
-### 🔨 阶段 4 · Implementation (真写代码)
+聊天、追问、自动上下文压缩、沉默、模糊肯定或“继续完成整个计划”的旧指令都不是当前菜单的 `Continue`。未获确认时留在当前 step，不加载或执行下一 step。
 
-两种路径:
+### 4. Artifact 与可恢复状态
 
-#### 路径 A · 正式 sprint 循环 (推荐 · 长项目)
-```
-SP (sprint-planning) → CS (create-story) → VS (validate-story) → DS (dev-story) → CR (code-review) → 下一 CS ...
-                                                                                     │
-                                                                                     ↘ ER (retrospective) · epic 结束
-```
+Artifact 按 step append-only 渐进构建：只追加已完成 step 的内容，不预填未来 step；当前 step 内可按用户反馈修订其候选。Frontmatter 至少维护：
 
-| 代号 | Workflow | 做什么 |
-|:---:|---|---|
-| **SP** | `bmad-sprint-planning` | 按 epics/stories 出 sprint 计划 (sprint-status.yaml) |
-| **CS** | `bmad-create-story` (action: create) | 从 sprint 里挑下一个 story, 塞上 dev notes 上下文 |
-| **VS** | `bmad-create-story` (action: validate) | 独立对话验 story 够不够 dev 下嘴 |
-| **DS** | `bmad-dev-story` | **真·写代码**. red-green-refactor. story 里有 halt 条件必须停 |
-| **CR** | `bmad-code-review` | **另换一个 LLM** 做 code review (推荐: GPT/Gemini 做 CR 避免同模型盲区) |
-| **CK** | `bmad-checkpoint-preview` | 人类 commit/branch/PR 审 |
-| **QA** | `bmad-qa-generate-e2e-tests` | DS 完成后生成 E2E 自动化测试 |
-| **ER** | `bmad-retrospective` | epic 结束做回顾 |
-| **CC** | `bmad-correct-course` | 路子走歪了, 评估是重启 PRD / 重做架构 / 重切 stories |
+- `stepsCompleted`：只在当前 step 获得所需确认并完成保存后追加；
+- `inputDocuments`：只列用户确认纳入的输入；
+- `currentStep`：当前尚未获准退出的 step；
+- `acceptedDecisions`：用户已明确接受的决定及条件；
+- `pendingDecisions`：仍需用户选择的问题。
 
-#### 路径 B · Quick Dev (bug 修 / 小改动)
-| 代号 | Workflow | 做什么 |
-|:---:|---|---|
-| **QQ** | `bmad-quick-dev` | 跳过 SP→CS→DS, **一步从 intent 到 code**. 适合 L1/L2 级改动 |
+草案只能称为 draft 或 planning candidate，不能称为 accepted 或 complete。不得用 bytes 或 hash 作为跨对话 transport gate；identity 与接受状态遵循项目合同。
 
-`QQ` 只适合无需重开产品、架构或 ownership 决定的局部改动。
+### 5. 最终批准与 completion
 
-**Correct Course 规划升级**：只读取受影响的 PRD、UX、Architecture、SPEC、Epic/Story 和适用 `AGENTS.md` 上下文。局部问题用 incremental 模式，跨产物问题用 batch 模式。输出 Issue Summary、直接与下游 Impact Analysis、Minor/Moderate/Major 分类、推荐路线、逐项 old→new 与理由，以及实施交接；获得明确批准前只形成 planning candidate，不进入代码修改。
+最终完成前必须同时展示：
 
-**交付边界**：v6.11.0 的 `bmad-build`、代码交付 Review、自动实现循环和 Git 集成不进入本技能。项目有正式 Writer/Reviewer 模板时，BMAD 在 exact Story `READY` 后停止；TDD、根因调试、完成前验证、代码 Review 和 Git 交付由项目模板及其指定的实现方法负责。
+- 完整规划草案；
+- requirements coverage；
+- Story/DAG/ownership 或当前 workflow 的等价结构；
+- 自检结果、remaining findings、unknowns 和 load-bearing decisions。
 
----
+然后停止并取得用户对完整草案的明确最终批准。未批准时继续讨论或保持 waiting；不得报告 `COMPLETE`，不得把 candidate 当 accepted，也不得进入实施或下一角色。批准后才记录最后 step、标记 workflow complete，并只交回项目合同规定的下一门禁。
 
-## 每个 Workflow 的运行协议 (共用)
+### 6. 自动上下文压缩后的 fail-closed 恢复
 
-每个官方 BMAD skill 启动时都走这 6 步. 本项目没装官方, 但要遵循精神:
+自动压缩不是冷启动，压缩不是 `Continue`，压缩不是用户批准。使用系统 summary 和 artifact frontmatter 确认 `currentStep`、`stepsCompleted`、`inputDocuments`、accepted decisions、pending decisions 与批准状态：
 
-1. **Resolve workflow block** · 查项目根的 `_bmad/custom/<skill>.toml` 做自定义覆盖 (如有). 本项目可以简化, 直接用默认.
-2. **Execute prepend steps** · 激活前置钩子
-3. **Load persistent facts** · 载入贯穿整 workflow 的事实 (如 `project-context.md`)
-4. **Load config** · 从 `_bmad/bmm/config.yaml` 读 user_name / communication_language / document_output_language / paths
-5. **Greet the user** · 用 communication_language 问候
-6. **Execute append steps** · 激活后置钩子
+- 状态可证明时，从第一个未完成动作继续，不重放已完成 step 或决定；
+- 任一关键状态或 approval 无法证明时，重新读取本技能当前 workflow 的相关小节，保持当前 step，并向用户确认；
+- 不因摘要写了“完成计划”或候选存在而自动越过菜单或最终批准。
 
-然后进入 workflow 主体 — step-01.md → step-02.md → ... 按顺序, 每步有 menu 等用户.
+## CE · Create Epics and Stories 四阶段协议
 
-**停止与继续规则**：
-- 缺少会改变决定的用户选择、权限、必要来源或安全条件 → 停止受影响动作并明确报告。
-- Validation/Review 发现一个问题 → 只阻止 PASS，不停止剩余可执行检查；完成当前节点全部适用轴后一次性返回完整 findings batch。
-- 只有客观权限、安全或 claim-proving evidence 缺失导致剩余轴无法执行时，才提前阻断。
-- 同一局部 Repair 连续失败，且继续会改变核心 ownership、架构、数据职责或多个模块边界 → 转 scoped Correct Course，不继续堆补丁。
+CE 只能按下列唯一顺序执行。每个 step 的确认和停止行为沿用通用交互协议。
 
----
+### Step 1 — Validate prerequisites and extract requirements
 
-## 项目适配边界
+**进入条件**：已路由到 CE，并已重建 accepted state。
 
-- 先读项目自己的 `AGENTS.md`、accepted decision log、状态索引和当前 artifact；不要把其他项目的路径、设备、账号或流程写入全局技能。
-- 已经 accepted 且身份可核验的 PRD、架构、Story 或 evidence 不重做；只补首个真实缺口及其直接 ripple。
-- BMAD 只决定“做什么、为什么、范围、边界和验收”。项目若另有 Writer/Reviewer 模板，READY 后按项目合同交回，不用 BMAD 的 DS/CR 条目取代正式角色。
+1. 在第一轮说明 CE 目标与四阶段计划。
+2. 发现并列出 PRD、Architecture、UX、research、project context 和项目指定输入，区分纳入、排除、缺失、optional；请用户确认纳入、排除和补充项。
+3. 缺少会改变规划的必需输入时停止，不猜。
+4. 从用户确认的完整输入中提取并展示 FR、NFR、Architecture requirements、UX requirements 和 additional requirements，形成 requirements inventory。
+5. 让用户明确确认输入集合与 requirements inventory；有修订则留在 Step 1。
 
----
+**退出条件**：用户明确确认后，才初始化或更新 planning artifact；把确认输入写入 `inputDocuments`，追加 inventory，记录 Step 1，并在 `Continue` 门禁后进入 Step 2。
 
-## 如何在本 Skill 加载后触发各 Workflow
+### Step 2 — Collaboratively design Epics
 
-本 skill 是**方法论手册**，不是自动执行器。用户触发以下意图时，按对应 workflow 的精神执行：
+**进入条件**：Step 1 已记录完成，requirements inventory 已确认。
 
-| 用户说 | 方法 |
-|---|---|
-| "开始 BMAD 第一步" / "bmad-help" | 看项目状态 (有无 product-brief.md/prd.md/architecture.md 等), 推荐下一步 |
-| "做 project context" / "GPC" | 按 `references/templates/project-context-template.md` 格式生成 |
-| "写产品简报" / "product brief" / "CB" | 按 product-brief workflow 5 阶段走 (intent / discovery / elicitation / draft / finalize) |
-| "写 PRD" / "CP" | 按 create-prd workflow step-file 风格执行 |
-| "出架构" / "CA" | 按 create-architecture workflow 做 |
-| "分 epics 和 stories" / "CE" | 按 create-epics-and-stories 做 |
-| "做 sprint planning" / "SP" | 生成 sprint-status.yaml |
-| "dev 下一个 story" / "DS" | 按 dev-story workflow (10 step, red-green-refactor) 实施 |
-| "code review" / "CR" | 对刚写的代码做 review (建议用户换个 LLM 进另一个对话做) |
+1. 解释 Epic 设计原则：按用户价值组织，不按数据库、API、UI 等纯技术层拆分；每个 Epic 尽可能独立交付完整价值，不依赖未来 Epic 才能成立。
+2. 展示完整 Epic list、每个 Epic 的目标、覆盖要求、dependency 和必要的 ownership/risk boundary。
+3. 建立并展示 requirements coverage map；讨论分组、顺序、重叠和遗漏，按用户反馈调整。
+4. 请求用户明确批准完整 Epic 结构。
 
-**严格遵守**：
-- 是否新开任务、产物路径、语言、终态和人工 checkpoint 由当前项目合同决定。
-- 一个 workflow 只负责一个当前节点；不自动串行运行下一 workflow、Writer 或 Reviewer。
-- 可读且 identity-bound 的 immutable artifact 是任务正文；下游提示词引用它，不重复展开 old→new、AC 和验证矩阵。
+**退出条件**：只有完整 Epic list 与 coverage map 获得明确批准，才追加并记录 Step 2，在 `Continue` 门禁后进入 Story 创建。未批准时留在 Step 2，不生成最终 Story 集，也不宣称方向已确定。
 
----
+### Step 3 — Create Stories sequentially
+
+**进入条件**：只使用 Step 2 已批准的 Epic 结构。
+
+按 Epic 顺序逐个处理，不先静默生成全部 Story：
+
+1. 先展示当前 Epic 的目标、覆盖要求、dependency 和适用 constraints。
+2. 与用户形成当前 Epic 的 Story breakdown。每个 Story 至少包含：user/business value 或明确治理价值、objective、prerequisite、old→new、scope、non-goals、ownership/lifecycle、acceptance criteria、evidence/human gate、单 Writer/单 Reviewer capacity。
+3. Story 只能依赖已完成或先序节点；不得依赖同 Epic 或后续 Epic 中尚未完成的未来 Story，除非项目合同允许且 DAG 明确表达。
+4. 当前 Epic 完成后展示 Story 集、coverage 与依赖，取得用户确认后才追加该 Epic，并进入下一 Epic。
+5. 若发现新的承重决定，按通用协议每轮最多询问 3 项并等待；取得决定后更新 coverage、DAG、ownership 和所有受影响下游 Story。
+
+**退出条件**：每个 Epic 分别确认并追加；全部已批准 Epic 处理完后，记录 Step 3，在 `Continue` 门禁后进入 Step 4。
+
+### Step 4 — Final validation
+
+**进入条件**：全部 Epic 的 Story 集已逐个确认。
+
+1. 验证全部 requirements 有 Story/AC coverage。
+2. 验证 Architecture、UX、data、ownership、lifecycle 和 evidence 责任一致。
+3. 验证每个 Story 可由单 Writer 独立实施、单 Reviewer 独立 Review 和合并。
+4. 验证 DAG 无环、无 orphan、无未表达的 forward dependency。
+5. 验证没有 unresolved load-bearing decision；unknown 必须分类并说明影响。
+6. 按通用最终批准协议展示完整草案、自检和 remaining unknowns。
+
+**退出条件**：只有用户明确最终批准，才记录 Step 4 并报告 CE complete；随后只交回项目合同的下一门禁，不自动实施或派发角色。
+
+## Correct Course 六阶段协议
+
+Correct Course 使用同一通用交互协议。局部问题可选 incremental 展示，跨 artifact 问题可选 batch 展示；模式只改变提案呈现粒度，不取消逐 step 确认、用户决定或最终批准。
+
+### Step 1 — Establish trigger and evidence
+
+**进入条件**：已路由到 Correct Course。
+
+明确触发问题、当前症状、成功标准和支持证据；区分 accepted facts、reproducible inference 和 unknown。发现并确认必需 PRD、当前 Epic/Story authority 与项目指定输入。缺少明确 trigger、证据或必需 authority 时停止。
+
+**退出条件**：用户确认 trigger/evidence 边界和输入集合后，记录 Step 1；经 `Continue` 进入 Step 2。
+
+### Step 2 — Complete impact analysis
+
+**进入条件**：Step 1 已完成。
+
+检查当前 Epic/Story、剩余 Epic/Story，以及受影响的 PRD、Architecture、UX、data、evidence、readiness 和项目指定 artifact。区分 direct impact 与 downstream ripple；只跟随受影响关系，不加载无关历史。
+
+**退出条件**：展示完整 impact map、findings 与 unknowns，用户确认分析边界后记录 Step 2；经 `Continue` 进入 Step 3。
+
+### Step 3 — Evaluate paths and decisions
+
+**进入条件**：impact analysis 已确认。
+
+比较 direct adjustment、rollback/revert、MVP/scope review 或项目适用路线，展示各自权衡、风险、影响和推荐。会改变产品、Architecture、ownership、scope 或用户行为的路线必须由用户选择；Correct Course 不得把推荐冒充决定。
+
+**退出条件**：所有承重路线决定由用户明确选择并记录后，展示选定方向；经 `Continue` 进入 Step 4。未决定则留在 Step 3。
+
+### Step 4 — Draft exact proposal
+
+**进入条件**：Step 3 路线和承重决定已确认。
+
+形成完整 proposal：Issue Summary；Minor / Moderate / Major 分类；逐项 old→new 与理由；受影响 artifact、Story/DAG、ownership/lifecycle 调整；精确 non-goals、acceptance、evidence 和 handoff。材料性 ripple 必须显式纳入。
+
+**退出条件**：向用户展示完整 proposal 和 remaining unknowns；处理反馈并保持 planning candidate。用户确认可以进入批准门禁后记录 Step 4，经 `Continue` 进入 Step 5。
+
+### Step 5 — Obtain explicit approval
+
+**进入条件**：完整 proposal 已展示。
+
+回答问题并按反馈修订，随后要求明确 `yes/no` 批准并记录全部条件。`no` 或 `revise` 返回适用的先前 step；未取得明确 `yes` 时只能保留 planning candidate，不实施、不报告 complete。
+
+**退出条件**：仅明确批准后记录 Step 5，并进入 Step 6。
+
+### Step 6 — Complete and hand off
+
+**进入条件**：Step 5 的明确批准可证明。
+
+完成 approved planning candidate，复核批准条件、直接 ripple 和下一责任。到 exact `READY` Story 时交回主管理；不进入代码，不创建或派发 Writer/Reviewer，不 merge 或 push。
+
+**退出条件**：展示最终批准内容和 handoff 后记录 Step 6，Correct Course complete。下一动作仍由项目合同和主管理决定。
+
+## Independent planning validation、readiness 与 Planning Review
+
+VP、IR 和 fresh Planning Review 是独立审查，不使用 interactive planning 的共同设计步骤：
+
+- 从 accepted base、exact candidate identity、适用合同和直接证据独立检查当前授权节点；不继承 candidate 自评或旧 verdict。
+- 完整覆盖 requirements、Architecture、UX、data、ownership/lifecycle、Story/DAG、acceptance、evidence、Git/identity 和 protected state 中适用的轴。
+- 发现一个 finding 只阻止 `PASS`，不停止其他可执行轴；完成全部适用轴后一次性返回 atomic findings batch。
+- 只有 objective authority blocker 才向用户请求输入；权限、安全或 claim-proving evidence blocker 使剩余轴无法执行时，停止并如实报告，不转成共同设计。Reviewer 不与用户共同设计 candidate，也不代替 Planner 取得产品决定。
+- Readiness 是实施硬门禁：未通过 IR 或项目等价 readiness，不进入代码。Review 不能把 draft/candidate 升级为 accepted；正式 Reviewer 的编辑、merge 和 push 权限由项目模板决定。
+
+## Implementation 与正式角色边界
+
+- BMAD 只决定做什么、为什么、范围、边界和验收。到一个 exact ready Story 后停止并交回主管理；不得自动创建 subagent、Writer、Reviewer、状态机或角色流水线。
+- 项目正式 Writer/Reviewer 模板拥有 TDD、根因调试、完成前验证、代码 Review、Git、人工/UI/设备 evidence 和 integration 顺序；本技能的 DS/CR 等索引不能替代它们。
+- Story 在 READY 前绑定准确 production modification set、ownership/lifecycle、错误分类和 evidence 层级；超出单 Writer 因果完整交付或单 Reviewer 独立判定能力时，先拆 Story 或 Correct Course。
+- Repair 若需要新增核心 interface、platform wrapper、callback owner、scheduler/test seam，或跨越未批准的多模块责任边界，触发 E16 结构性失败门禁并回到 scoped Correct Course。连续完整 Review 的 finding 显示核心责任仍不稳定时，不用局部补丁堆叠。
+- Test seam、helper、源码字符串、fake/no-op、AVD 或注入点不能冒充 production wiring、真实设备、权限、并发或外部系统 evidence。
 
 ## 证据优先与反过度工程
 
-1. 先写清当前问题、成功标准和能证明成功的信号，再形成 candidate 或修改建议。
-2. 不假设、不隐藏困惑。事实不足时标明 `UNKNOWN`，说明它影响哪个决定和可选权衡；无关未知不得阻断已证明工作。
-3. 只规划当前目标和直接因果 ripple；不加入推测性功能、未来兼容层、顺手重构或一次性 helper/wrapper/manager/registry/adapter。
-4. 信任已由 accepted contract、类型、测试或框架证明的内部保证；只在用户输入、网络、外部 API、设备等真实系统边界要求校验。
-5. 不为 accepted contract 排除的“不可能状态”增加 fallback、空值检查、默认值或错误处理；不允许宽泛 catch、吞错或静默默认。真实 invariant 失败应 fail-fast 并保留原始信号。
-6. 实施型 Story 适用时采用 RED → GREEN → focused regression；若 RED 不适用，必须先定义独立 oracle。不得把 helper 存在、源码字符串、fake/no-op 或注入 seam 冒充生产行为或真实外部系统 evidence。
-
-## 结构性失败门禁
-
-- Story 在 READY 前列出准确 production modification set、ownership、生命周期、错误分类和 evidence 层级；范围大到无法由一名 Writer 因果完整交付和一名 Reviewer 独立判定时，先拆 Story 或 Correct Course。
-- Repair 只修完整 approved findings batch。若修复需要新增核心 interface、platform wrapper、callback owner、scheduler/test seam，或跨越未批准的多模块责任边界，停止局部 Repair 并返回 Correct Course，不用更长提示词掩盖架构缺口。
-- 测试 seam 只服务可验证性，不能替代 production wiring；fake/no-op 不能证明真实权限、并发、生命周期或外部系统行为。
-- Review 必须核对实际 production 变化清单、runtime ownership、race/error 边界、测试声明与 evidence。发现第一个问题后继续全部剩余可执行轴，最后一次性返回完整 findings；不得只审旧 finding，也不得扩张成全仓历史审计。
-
----
+1. 先定义问题、成功标准和可观察证明，再形成 candidate。
+2. 信任 accepted contract、类型、测试和框架保证；只在用户输入、网络、外部 API、设备等真实边界增加验证。
+3. 不为 accepted contract 排除的不可能状态增加 fallback、空值默认或防御分支；不宽泛 catch、吞错或静默降级。真实 invariant 失败应 fail-fast 并保留原始信号。
+4. 规划只包含当前目标与直接因果 ripple；不加入未批准的功能、兼容层、manager、registry、adapter、wrapper 或一次性 helper。
+5. 可读且 identity-bound 的 immutable artifact 承载任务正文；下游合同引用它，不复制 old→new、AC 或验证矩阵。
 
 ## 参考索引
 
-本 skill 的 `references/` 目录存放关键模板:
+本技能只保持一层本地引用：
 
 - `references/templates/project-context-template.md` — GPC 产出骨架
 - `references/templates/prd-template.md` — PRD 产出骨架
 - `references/templates/architecture-decision-template.md` — CA 产出骨架
 - `references/templates/epics-template.md` — CE 产出骨架
-- `references/workflow-catalog.csv` — BMAD 全部 31 个 workflow 官方描述 (CSV 原版)
+- `references/workflow-catalog.csv` — BMAD workflow 官方描述索引
 
-扩展阅读（非必读）：
-- 官方文档站：https://docs.bmad-method.org
-- 每个 workflow 的详细 step-01/02/03... 在上游源仓库 `src/bmm-skills/<phase>/<skill>/steps/`
+扩展阅读：https://docs.bmad-method.org 。升级前比较实际能力、项目需要和上下文成本；不得仅因上游文件更多就引入整包。
 
----
+## 每次使用时
 
-## FAQ · 常见问题
-
-**Q: 为什么不直接 `npx bmad-method install`?**
-A: 官方装法会展开大量 workflow 文件。蒸馏版优先保证一次读取即可完成路由和当前方法；是否切换官方包应由用户另行决定。
-
-**Q: 本 skill 会不会过时?**
-A: 会。升级前应比较实际能力、项目需要和上下文成本；不得仅因上游文件更多或版本更新就重新引入整包。
-
-**Q: 为什么蒸馏? 直接读源仓库不就行了吗?**
-A: 源仓库文件很多。蒸馏目标是让一次完整读取足以选择正确 workflow、产物与门禁，而不是保留每个上游步骤的文字副本。
-
----
-
-## 给下次对话
-
-新任务加载本 skill 时：
-1. 先读项目权威来源并重建 accepted state。
-2. 找出首个真实未闭合门禁，不重做已证明完成的 workflow。
-3. 选择最低必要规划高度并定义当前产物、成功标准和验证方法。
-4. 完成当前 workflow 后停止，按项目合同交回下一门禁；不要自动连跑下一角色。
+1. 读取项目 authority 并重建 accepted state。
+2. 区分本次是路由、interactive planning、independent Review，还是已到 implementation 边界。
+3. 选择最低必要规划高度，定义当前产物、成功标准和验证方法。
+4. 执行当前 workflow 的唯一顺序和门禁；完成后按项目合同交回，不自动运行下一 workflow 或角色。
