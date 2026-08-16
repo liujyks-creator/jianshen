@@ -35,17 +35,18 @@ description: BMAD-METHOD v6.3.0 经典蒸馏版，选择性吸收至 v6.11.0 的
 
 典型规划路径是 `CP → VP → (EP) → CU → CA → CE → IR`，但只补 accepted state 中首个真实缺口。CC Correct Course 是跨阶段的 planning correction，不是 implementation 交付。已批准 planning candidate 在完整 Planning Review 或 Consistency Audit 后只有 bounded findings 时，优先走后文 `Post-validation Planning Repair fast path`，不得重启 CE 或 Correct Course。Brownfield 先重建 accepted state，再决定是否需要 DP/GPC；已有可靠上下文时不机械重做。PRFAQ 在进入 PRD 前证明 customer、problem、stakes 与 solution，把事实和假设分开，并产出 verdict 与 PRD distillate。
 
-### 三类执行必须分开
+### 四类执行必须分开
 
 1. **Workflow 路由**：回答“下一步做什么”，只判断当前状态、依赖、产物和门禁，不代替目标 workflow。
 2. **Interactive planning workflow**：CP、CU、CA、CE、Edit、Correct Course 及其他创建/修改型 planning 使用下述通用交互协议，由同一 Planner 对话逐 step 与用户共同完成。
 3. **Independent planning validation/readiness Review**：VP、IR、fresh Planning Review 独立验证 candidate，不与用户共同设计 candidate；规则见后文独立 Review 章节。
+4. **Post-validation Planning Repair**：已批准 planning candidate 的 bounded findings Repair 是通用交互协议之外的 bounded exception，只由后文 fast path 的自包含状态合同控制。
 
 Implementation 交付不属于 interactive planning。项目有正式 Writer/Reviewer 合同时，BMAD 只到 exact Story `READY`，随后交回主管理。
 
 ## 创建/修改型 planning 的通用交互协议
 
-本节是所有 interactive planning workflow 的唯一通用状态合同。具体 workflow 章节只定义专属 step 内容；不得用“用户要求一次规划完整”“批量模式”或“尽快完成”绕过这里的停止点。一次规划完整表示同一 Planner 对话负责完整 workflow，不表示一轮回复静默完成。
+本节是所有 interactive planning workflow 的唯一通用状态合同，不包括后文 `Post-validation Planning Repair fast path` 定义的 bounded exception。具体 workflow 章节只定义专属 step 内容；不得用“用户要求一次规划完整”“批量模式”或“尽快完成”绕过这里的停止点。一次规划完整表示同一 Planner 对话负责完整 workflow，不表示一轮回复静默完成。
 
 ### 1. 启动与第一轮
 
@@ -230,13 +231,15 @@ VP、IR 和 fresh Planning Review 是独立审查，不使用 interactive planni
 
 ## Post-validation Planning Repair fast path
 
-本 fast path 只处理已批准 planning candidate 在完整 Planning Review 或 Consistency Audit 后收到的 bounded findings，并优先于普通 workflow 路由：route to post-validation Planning Repair, **not CE Step 1 or Correct Course Step 1**。Do not replay CE 的四阶段或 Correct Course 的六阶段；candidate 版本变化本身不是升级理由，也不得重新确认 accepted inputs、locked decisions、Story inventory、DAG、scope、ownership 或 unaffected content。
+本 fast path 是该 bounded exception 的自包含状态合同，优先于普通 workflow 路由及上述通用交互协议。通用交互协议中的逐 step `Continue`、最终批准和自动压缩后的 approval 恢复规则对本 fast path 不适用。没有新的 load-bearing decision 时，不得插入额外批准循环。
+
+本 fast path 只处理已批准 planning candidate 在完整 Planning Review 或 Consistency Audit 后收到的 bounded findings：route to post-validation Planning Repair, **not CE Step 1 or Correct Course Step 1**。Do not replay CE 的四阶段或 Correct Course 的六阶段；candidate 版本变化本身不是升级理由，也不得重新确认 accepted inputs、locked decisions、Story inventory、DAG、scope、ownership 或 unaffected content。
 
 1. 读取 current candidate、complete identity-bound finding artifact，以及 only directly affected accepted sources。Review 或 audit 即使先发现 must-fix，也必须继续全部适用轴并一次性返回 **complete atomic findings batch**；不得逐条 Repair 或逐条交付 finding。
 2. 把完整 batch 作为一次 atomic Repair，保留 unaffected candidate content 与 accepted decisions，产出一个修复全部 finding 的 next-version complete planning candidate。新版本在 fresh independent validation 通过前仍是 planning candidate。
-3. 没有新的 load-bearing decision 时直接 Repair，不开启新的用户批准循环。若 finding 暴露一个新的承重决定：**Ask only the new load-bearing decision**, 记录答案并 **resume the same Repair**；不得重问既有决定或重启 workflow。
+3. 没有新的 load-bearing decision 时直接 Repair，不开启新的用户批准循环。只有新暴露的 load-bearing decision 才可暂停 Repair；若 finding 暴露该决定：**Ask only the new load-bearing decision**，记录用户答案并 **resume the same Repair**；不得重问既有决定、重启 workflow 或增加其他批准门禁。
 4. 若 finding 使 **Epic/Story structure**、core Architecture、**core ownership/data responsibility** 或 overall product scope 失效，立即停止 fast path，准确报告失效边界并把控制权交回主管理，由其决定是否授权 **scoped Correct Course**。Planner 不得自行扩权或静默扩大 Repair。
-5. 同一 Repair 对话发生自动上下文压缩时，使用 summary 与 candidate state 从 **first unfinished Repair action** 恢复；不得把压缩当作冷启动，不得重放已完成工作或门禁，也不得重启 CE、Correct Course 或本 fast path。
+5. 同一 Repair 对话发生自动上下文压缩时，使用 summary 与 candidate state 从 **first unfinished Repair action** 恢复；通用交互协议的 approval 恢复规则不控制本 fast path，不得因此重新询问或重放门禁。不得把压缩当作冷启动，不得重放已完成工作，也不得重启 CE、Correct Course 或本 fast path。
 
 严格执行以下门禁顺序，不得跳步：
 
