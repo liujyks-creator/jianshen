@@ -138,6 +138,28 @@
 - **Failure signal:** 因所有机械检查绿而 PASS。
 - **Applicable:** `SKILL.md`、`ux-and-visual-contracts.md`、`epic-story-and-readiness.md`。
 
+## R-13 — Product Brief 与 Readiness 路由只有一个 direct owner
+
+### 输入 A：创建 Product Brief
+
+- **Input:** 用户说“创建 Product Brief”。
+- **First action:** 设置 `currentNode = discovery_intake`，只加载 `discovery-and-elicitation.md`，完成 brain dump/source intake、一次“还有什么”、stakes/form-factor、concern scan 与 discovery blockers。
+- **Must not:** 同时加载 Product/Scope reference、在 Discovery node 起草/验证/完成 Product Brief，或仅改 `firstUnfinishedAction` 而不记录 node transition。
+- **State transition/completion:** Discovery completion 全部满足后，记录 `currentNode = product_scope`，把 `firstUnfinishedAction` 设为从已协调 Discovery state draft/update Product Brief；卸载 Discovery 后只加载 `product-and-scope-planning.md`。Product/Scope 独立完成 why/user/journey/capability/scope/success/non-goals、source reconciliation、open items 与 final scope honesty。
+- **Expected artifact state:** shared state 能证明两个 node 的退出/进入顺序；任一时刻只有一个 direct reference，Product Brief completion 只由 `product_scope` node 产生。
+- **Failure signal:** 同一 current node 有两个 owners、必须同时加载两个 reference 才能完成，或 handoff 没有退出条件、`currentNode` 更新、卸载与新的 first action。
+- **Applicable:** `SKILL.md`、`discovery-and-elicitation.md`、`product-and-scope-planning.md`。
+
+### 输入 B：检查 implementation readiness
+
+- **Input:** 用户说“检查 implementation readiness”。
+- **First action:** 只加载 `epic-story-and-readiness.md`，设置 `currentNode = implementation_readiness`，从 accepted sources/journeys/surfaces/concerns/consumers/residual 独立重建 expected inventory。
+- **Must not:** 加载 `validation-correct-course-and-repair.md`、把 ordinary readiness 称为 Planning Review，或把任一检查机制转交给 Validation reference。
+- **State transition/completion:** 在 Epic/Story/Readiness reference 内完成 external coverage、internal traceability、Story/dependency、UX/chart/mock、Architecture/data/owner、evidence 与适用 identity/protected-state 轴；继续检查全部适用轴后一次返回 atomic findings batch 与 `READY`/`NOT_READY` verdict。
+- **Expected artifact state:** readiness artifact 含 expected inventory、全部适用轴、完整 findings/verdict；没有第二个 direct owner 或未定义 handoff。
+- **Failure signal:** ordinary readiness 命中 Validation reference、需要两个 references 才能完成、发现一个 finding 后提前停止，或 Epic/Story reference 再次把完整机制转交外部。
+- **Applicable:** `SKILL.md`、`epic-story-and-readiness.md`。
+
 ## State and output
 
 维护一份 walkthrough matrix，逐场景记录 candidate exact section、推导出的 first action/must-not/blocker/artifact state、实际 verdict 与 evidence。若某场景只有关键词命中，状态仍为 `NOT_WALKED`。
@@ -151,7 +173,7 @@
 
 ## Completion / readiness checks
 
-- R-01–R-12 全部从 candidate 规则逐项走查；
+- R-01–R-13 全部从 candidate 规则逐项走查；
 - 每项 first action、must-not、blocker/completion 与 expected artifact state 都唯一可判定；
 - failure signal 能区分“出现关键词”和“真正解决任务”；
 - 无 scenario 依赖本机绝对路径、旧 template/catalog 或未授权角色；

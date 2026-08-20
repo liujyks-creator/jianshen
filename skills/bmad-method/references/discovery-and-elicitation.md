@@ -2,11 +2,11 @@
 
 ## When to load
 
-当产品意图仍模糊、需要 Product Brief/brainstorm、来源互相冲突、用户说“帮我一起想”，或当前候选需要 Advanced Elicitation 时加载。已进入明确 PRD/UX/Architecture node 且 Discovery 状态足够时，不为仪式性重启本流程。
+当 `currentNode = discovery_intake`，产品意图仍模糊，需要 Product Brief 的 intake/discovery、brainstorm、来源协调，用户说“帮我一起想”，或当前候选需要 Advanced Elicitation 时加载。它唯一拥有 Product Brief 的发现阶段，不负责 draft/update/validate/completion；已进入 `product_scope`、PRD、UX 或 Architecture node 且 Discovery 状态足够时，不为仪式性重启本流程。
 
 ## Goal
 
-在收敛范围前，让用户完整表达真实目标、why-now、现实情境、约束与被拒方向；主动暴露用户尚未想到但会改变规划的 concern，并把发现写入共同状态而不是留在对话记忆里。
+在收敛范围前，让用户完整表达真实目标、why-now、现实情境、约束与被拒方向；主动暴露用户尚未想到但会改变规划的 concern，并把发现写入共同状态而不是留在对话记忆里。完成的是可供 Product/Scope 起草 Product Brief 的 discovery state，而不是 Product Brief 本身。
 
 ## Inputs
 
@@ -72,7 +72,7 @@ Fast path 可批量询问最少缺口，但推断逐项标 `[ASSUMPTION]`，未�
 
 ## State and output
 
-Discovery 产物使用项目既有 Product Brief、intent artifact 或 planning ledger，至少包含：
+Discovery 产物使用项目既有 Product Brief 的 discovery 区域、intent artifact 或 planning ledger，至少包含：
 
 - problem/why-now、named user 与现实情境；
 - goal、success signal、counter-signal；
@@ -83,7 +83,7 @@ Discovery 产物使用项目既有 Product Brief、intent artifact 或 planning 
 - shared state 的 assumptions/openQuestions/phaseBlockers/deferred/sources；
 - `currentNode` 与 `firstUnfinishedAction`。
 
-不要为了套模板填充没有价值的章节；也不要把尚未共同决定的内容写成完整 PRD 或 Story。
+不要为了套模板填充没有价值的章节；也不要在本 node 起草、更新、验证或宣布完成 Product Brief，更不要把尚未共同决定的内容写成完整 PRD 或 Story。
 
 ## Blockers
 
@@ -106,4 +106,5 @@ Discovery 只有在以下条件满足时才可交给 Product/Scope：
 - 发散发生在收敛之前，承重方向由用户选择；
 - assumptions、openQuestions、phaseBlockers、deferred 与 rejected alternatives 没有被草案长度掩盖；
 - Advanced Elicitation 的发现已展示，只有用户接受的改变进入候选；
-- `firstUnfinishedAction` 指向 Product/Scope 的首个具体动作。
+- 退出时原子记录 `currentNode = product_scope`，并把 `firstUnfinishedAction` 设为“从已协调的 Discovery 状态 draft/update Product Brief”的首个具体动作；
+- 状态写入后卸载 Discovery reference，再只加载 Product/Scope reference。任一 completion 未满足时保持 `currentNode = discovery_intake`，不得提前加载 Product/Scope 或同时加载两个 reference。

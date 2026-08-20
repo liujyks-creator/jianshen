@@ -2,11 +2,11 @@
 
 ## When to load
 
-当需要创建/更新 Product Brief 或 PRD、定义产品能力与 current/future 边界、确定当前 Epic done state，或审查 residual capability 时加载。若 Discovery 输入仍不足，返回 Discovery blocker；不要用 PRD 结构替代发现。
+当 `currentNode = product_scope` 且 Discovery 已按退出条件完成，需要 draft/update/validate/complete Product Brief 或 PRD、定义产品能力与 current/future 边界、确定当前 Epic done state，或审查 residual capability 时加载。它唯一拥有 Product Brief 的成稿与完成阶段；Product Brief intent 尚处于 intake/discovery 时不得加载。
 
 ## Goal
 
-定义“为谁、为什么、做什么、做到何种程度、不做什么”，把每项能力诚实分类，并证明当前 Epic 完成后的用户世界与剩余能力没有被 Story 编号或技术分解吞掉。
+基于已协调的 Discovery state，draft/update/validate 并完成 Product Brief，再定义“为谁、为什么、做什么、做到何种程度、不做什么”；把每项能力诚实分类，并证明当前 Epic 完成后的用户世界与剩余能力没有被 Story 编号或技术分解吞掉。
 
 ## Inputs
 
@@ -15,7 +15,7 @@
 - Accepted roadmap/Epic identity、non-goals、prior decisions/rejections。
 - 当前 shared state；Update 时还需 change signal 与 current candidate。
 
-先做 input reconciliation。未受 delta 影响的 accepted facts/decisions 按来源继承；冲突与缺失写入 ledger，不静默补齐。
+先核验 handoff 的 `currentNode = product_scope` 与具体 `firstUnfinishedAction`，再做 input reconciliation。未受 delta 影响的 accepted facts/decisions 按来源继承；冲突与缺失写入 ledger，不静默补齐。没有有效 handoff 时不与 Discovery reference 并行补做发现。
 
 ## Collaboration mechanics
 
@@ -92,12 +92,13 @@ Story suffix 不代表独立 Epic 已存在；例如 `E17-18` 仍必须与独立
 
 ## State and output
 
-产物沿用项目既有 Product Brief/PRD/roadmap 格式，必须可恢复地包含或引用：product spine、scope ledger、FR/NFR、current-Epic done state、post-Epic residual map、source reconciliation 与共同状态。每项 scope classification 的 authority 可追。
+产物沿用项目既有 Product Brief/PRD/roadmap 格式，必须可恢复地包含或引用：product spine、scope ledger、FR/NFR、current-Epic done state、post-Epic residual map、source reconciliation 与共同状态。Product Brief 的 draft/update/validation/completion 记录在本 node；每项 scope classification 的 authority 可追。
 
 ## Blockers
 
 以下情况暂停，不进入 UX/Architecture/CE：
 
+- `currentNode` 不是 `product_scope`，或 Discovery handoff/退出证据缺失；此时记录 `currentNode = discovery_intake` 与具体 discovery blocker，卸载本 reference 后才加载 Discovery；
 - `CURRENT` 与 `FUTURE_CANDIDATE` 边界未由有权用户决定；
 - named journey、核心结果、success 或 non-goal 互相冲突；
 - `UNKNOWN` 会改变主要 surface、core owner/data responsibility 或 Epic boundary；
@@ -113,4 +114,5 @@ Story suffix 不代表独立 Epic 已存在；例如 `E17-18` 仍必须与独立
 - residual map 覆盖 accepted sources 中所有未进入当前 Epic 的能力，下一 Epic 不存在时明确 `UNKNOWN / NOT_DISCOVERED`；
 - source preservation 没有被 requirements coverage 替代；
 - 用户拥有所有 load-bearing scope 决定；
+- Product Brief 的 why/user/journey/capability/scope/success/non-goals、source reconciliation 与 open items 已完成 validation，未把 discovery input 或草案长度冒充 completion；
 - `firstUnfinishedAction` 指向适用 UX 或 Architecture 的首个具体动作。

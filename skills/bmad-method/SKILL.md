@@ -58,39 +58,47 @@ description: 协作完成正式编码前的产品发现与规划，包括 Produc
 
 ## 路由与按需加载
 
-先识别 intent：create、update、validate、Correct Course 或 post-validation Repair；再选择最低必要 planning 高度。普通任务只读当前 node 的一个直接 reference，不默认加载其他领域。
+先识别 intent：create、update、validate、Correct Course 或 post-validation Repair；再选择最低必要 planning 高度。普通任务只读当前 node 的一个直接 reference，不默认加载其他领域；切换 reference 前必须先记录前一 node 的退出条件与状态转换。
 
 | 当前 node / intent | 何时加载 | 直接 reference |
 |---|---|---|
-| Discovery、Product Brief、brainstorm、需求仍模糊 | 需要展开意图、来源、concern 或二次反思 | [discovery-and-elicitation.md](references/discovery-and-elicitation.md) |
-| PRD、产品能力、范围或 Epic 边界 | 需要定义 why/user/journey/capability/scope/done state | [product-and-scope-planning.md](references/product-and-scope-planning.md) |
+| Discovery intake、Product Brief discovery、brainstorm、需求仍模糊 | 需要展开意图、来源、concern 或二次反思 | [discovery-and-elicitation.md](references/discovery-and-elicitation.md) |
+| Product Brief draft/update/validate、PRD、产品能力、范围或 Epic 边界 | Discovery 已完成，需要定义 why/user/journey/capability/scope/done state | [product-and-scope-planning.md](references/product-and-scope-planning.md) |
 | UX、visual direction、surface、state、component、图表 | 需要关闭体验或视觉合同 | [ux-and-visual-contracts.md](references/ux-and-visual-contracts.md) |
 | Architecture / solutioning | 下一级单元可能对非显然承重问题给出不兼容答案 | [architecture-and-solutioning.md](references/architecture-and-solutioning.md) |
 | Epic/Story 分解或 implementation readiness | 上游产品、适用 UX 与 Architecture 已足够关闭 | [epic-story-and-readiness.md](references/epic-story-and-readiness.md) |
 | Planning Review、Consistency Audit、Correct Course、Repair | 审查、变更或修复现有 candidate | [validation-correct-course-and-repair.md](references/validation-correct-course-and-repair.md) |
 | 维护或验证本技能行为 | 需要逐项走查能力 oracle | [regression-scenarios.md](references/regression-scenarios.md) |
 
+“创建/更新 Product Brief”是两个串行 node，不是两个 reference 共同拥有同一 node：
+
+1. 设置 `currentNode = discovery_intake`，只加载 Discovery reference，完成 brain dump/source intake、stakes/form-factor、concern scan 与 discovery blockers。
+2. 只有 Discovery completion 全部满足时，记录 `currentNode = product_scope`，把 `firstUnfinishedAction` 设为从已协调的 Discovery 状态 draft/update Product Brief；随后卸载 Discovery reference，只加载 Product/Scope reference。
+3. Product/Scope 唯一负责 Product Brief 的 draft/update/validate 与 completion。若发现必须返回 Discovery 的缺口，先记录反向状态转换与具体 blocker，再卸载 Product/Scope reference；任一时刻不得同时加载两者完成 ordinary Product Brief。
+
+“检查 implementation readiness”是单一 ordinary node：只加载 Epic/Story/Readiness reference并在其中形成 expected inventory、完成全部适用检查、返回 findings batch 与 readiness verdict。不要为该 intent 加载 Validation reference；后者只拥有 Planning Review、Consistency Audit、Correct Course 与 post-validation Repair。
+
 跨阶段 Planning Review/Consistency Audit 先独立重建应有 inventory，再只加载验证该 inventory 所需的直接 references。Correct Course 只加载 trigger 影响到的领域。Repair 只加载 current candidate、完整 finding batch 与直接相关 accepted sources。
 
 ## 阶段边界
 
 ```text
-Discovery / Product Brief
-→ Product / PRD / Scope
+Discovery intake / Product Brief discovery
+→ Product Brief / Product / PRD / Scope draft-update-validate
 → applicable UX / Visual
 → Architecture / Solutioning
-→ Epic / Story
-→ Planning Review + Consistency Audit / Readiness
+→ Epic / Story / Implementation Readiness
+→ Planning Review + Consistency Audit
 → exact ready Story
 → return to project management
 ```
 
-- Discovery 先发现，不把第一份表达直接压成范围。
+- Discovery 先发现，不把第一份表达直接压成范围；完成后显式切换到 Product/Scope，两个 reference 不并行驻留。
 - Product/Scope 关闭当前与未来边界及 phase blockers 后，才能进入适用 UX/Architecture。
 - UX 关闭 journey/surface/state/component/accessibility，以及适用 visual/chart/mock 合同后，才能进入 Epic/Story。
 - Architecture 只锁定下一级实现会分叉的 non-obvious invariants；继承未受 delta 影响的 accepted parent invariants。
 - Epic/Story 不得首次决定产品范围、UX 语义、core owner 或 data responsibility。
-- Readiness/Review 同时检查 candidate 内部一致性与 candidate 外部完整性。
+- Ordinary Implementation Readiness 在 Epic/Story reference 内同时检查 candidate 内部一致性与 candidate 外部完整性；Planning Review/Consistency Audit 是之后由 Validation reference 拥有的独立门禁。
 
 ## Advanced Elicitation
 

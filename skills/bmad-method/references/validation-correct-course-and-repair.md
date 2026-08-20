@@ -2,7 +2,7 @@
 
 ## When to load
 
-当用户要求 Planning Review、Consistency Audit、implementation readiness、Correct Course，或一个 approved planning candidate 收到完整 Review/Audit findings batch 需要 Repair 时加载。不要把普通 create/update 误路由为 Review；不要把 bounded Repair 重启为 Discovery/CE/Correct Course Step 1。
+当用户要求 Planning Review、Consistency Audit、Correct Course，或一个 approved planning candidate 收到完整 Review/Audit findings batch 需要 Repair 时加载。Ordinary implementation readiness 只加载 `epic-story-and-readiness.md`，不得为该 intent 加载本 reference；不要把普通 create/update 误路由为 Review，也不要把 bounded Repair 重启为 Discovery/CE/Correct Course Step 1。
 
 ## Goal
 
@@ -34,14 +34,14 @@
 
 ### 1. 区分门禁
 
-- **Planning Review / Readiness**：判断 planning quality、external completeness、Story readiness 与 evidence sufficiency。
+- **Planning Review**：在 ordinary implementation readiness 之外独立判断当前授权 planning candidate 的 quality、external completeness、Story readiness 与 evidence sufficiency。
 - **Consistency Audit**：判断 Product→UX→Architecture→data→Story/AC/evidence 的传播、矛盾、owner/identity 一致性。
 - **Correct Course**：处理 trigger 改变 scope/Epic/UX/Architecture/ownership/data 等规划结构。
 - **Post-validation Repair**：只修完整 bounded findings batch，不重新规划 unaffected world。
 
 不得用一个门禁的 PASS 替代另一个。
 
-### 2. Planning Review / Readiness
+### 2. Planning Review
 
 First action：不看 candidate coverage 声明，先从 accepted sources、named journeys、surfaces/states/components/chart/mock、domain concerns、downstream consumers、done state 与 residual map 独立写 expected inventory。对每项记录 source、expected artifact location、consumer/evidence。
 

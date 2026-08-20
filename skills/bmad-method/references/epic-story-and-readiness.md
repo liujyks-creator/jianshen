@@ -2,11 +2,11 @@
 
 ## When to load
 
-当需要创建/更新 Epic/Story、验证分解、检查 implementation readiness，或准备一个 exact ready Story 时加载。若 Product/Scope、适用 UX 或 Architecture 仍有 phase blocker，先返回对应 node，不用 Story AC 吸收上游决定。
+当需要创建/更新 Epic/Story、验证分解、检查 ordinary implementation readiness，或准备一个 exact ready Story 时加载。本 reference 是 implementation readiness node 的唯一 direct owner，可单独完成检查并给出 verdict；若 Product/Scope、适用 UX 或 Architecture 仍有 phase blocker，先返回对应 node，不用 Story AC 吸收上游决定。
 
 ## Goal
 
-把已关闭的产品、UX 与 Architecture 合同分解为按用户价值组织、依赖方向正确、单 Writer 可因果完整实施、单 Reviewer 可独立判定的 Story；在编码前同时证明 candidate 内部一致性与来源世界的外部完整性。
+把已关闭的产品、UX 与 Architecture 合同分解为按用户价值组织、依赖方向正确、单 Writer 可因果完整实施、单 Reviewer 可独立判定的 Story；在编码前独立完成 ordinary implementation readiness，同时证明 candidate 内部一致性与来源世界的外部完整性。
 
 ## Inputs
 
@@ -82,9 +82,9 @@ Story 不得依赖未来 Story；若自然顺序无法消除 forward dependency�
 
 路径计数、DAG 无环或 coverage 声明只能证明内部机械结构，不能关闭外部 phase blocker。
 
-### 6. Readiness：外部重建优先
+### 6. Implementation Readiness：外部重建优先
 
-Readiness/Planning Review first action 不是信任 candidate 的 inventory，而是从以下来源独立重建 expected inventory：
+进入 ordinary readiness 时设置 `currentNode = implementation_readiness`。First action 不是信任 candidate 的 inventory，而是从以下来源独立重建 expected inventory：
 
 1. original accepted sources 与每项 load-bearing claim；
 2. named users/journeys 及其完整结果；
@@ -93,7 +93,16 @@ Readiness/Planning Review first action 不是信任 candidate 的 inventory，�
 5. downstream consumers、owners、data/evidence responsibilities；
 6. current-Epic done state 与 residual capabilities。
 
-再对照 candidate 的 PRD/UX/Architecture/Epic/Story，识别“没有写进 candidate 因而内部 coverage 看不见”的缺失。随后检查内部 traceability、Story quality、AC/evidence、dependency、identity/protected state（若项目要求）。发现一个 finding 只阻止 PASS，不停止其余适用轴；完整机制由 validation reference 管理。
+再对照 candidate 的 PRD/UX/Architecture/Epic/Story，识别“没有写进 candidate 因而内部 coverage 看不见”的缺失，并在本 reference 内完成全部适用轴：
+
+1. expected inventory 与 candidate coverage、scope classification、phase blockers、source preservation；
+2. requirements→Epic→Story/AC/evidence 与反向 traceability、Story value/capacity、dependency/DAG/forward dependency；
+3. UX journey/surface/state/component/accessibility，以及 visual/chart/mock coverage；
+4. Architecture divergence/inherited invariants，以及 data、owner/lifecycle、error/invariant、operational responsibility；
+5. automated/human/UI/device/external evidence 层级是否真正证明 AC；
+6. immutable identity、permission、Git/index 与 protected state（项目合同要求时）。
+
+发现一个 finding 只阻止 `READY`，不停止其余适用轴；只有 objective authority、safety 或 claim-proving evidence blocker 使剩余检查不可能时才提前停止，并列出未检查内容。完成后一次输出完整 atomic findings batch，每项包含 severity、source/evidence、affected artifact/consumer、影响、minimum causally complete correction 与是否 structural/load-bearing；无 finding 且全部适用轴有证据才给 `READY`，否则给 `NOT_READY`/项目规定的等价 verdict。不得加载或转交给 Validation reference 来完成 ordinary readiness。
 
 ### 7. Advanced Elicitation checkpoint
 
@@ -101,7 +110,7 @@ Requirements inventory 与 Epic structure 各形成候选时，可按风险做 s
 
 ## State and output
 
-沿用项目 Epic/Story/readiness artifacts，至少包含：confirmed inputs、requirements inventory、Epic list/done states、coverage maps、dependency graph、Story contracts、residual map、readiness findings 与 shared state。每个 ready Story 有 immutable identity 与可独立判定证据。
+沿用项目 Epic/Story/readiness artifacts，至少包含：confirmed inputs、requirements inventory、Epic list/done states、coverage maps、dependency graph、Story contracts、residual map、readiness expected inventory、完整检查轴、atomic findings batch/verdict 与 shared state。每个 ready Story 有 immutable identity 与可独立判定证据。
 
 ## Blockers
 
@@ -112,6 +121,7 @@ Requirements inventory 与 Epic structure 各形成候选时，可按风险做 s
 - forward dependency、orphan、uncovered current requirement 或 source-preservation gap；
 - Story 超出单 Writer/Reviewer capacity；
 - evidence 层级不能证明 AC。
+- readiness authority/candidate identity/claim-proving evidence 缺失，且导致尚未检查的适用轴客观无法完成。
 
 ## Completion / readiness checks
 
@@ -119,6 +129,7 @@ Requirements inventory 与 Epic structure 各形成候选时，可按风险做 s
 - Epics 按用户价值、顺序独立，current done state 与 residual map 保持；
 - 每个 Story 有完整 contract、只依赖先序 identity、capacity 合理；
 - requirements/source/journey/surface/mock/architecture/evidence 双向 coverage；
-- readiness 从 sources/journeys/surfaces/concerns/consumers/residual 独立重建预期，而非只审 candidate；
+- readiness 从 sources/journeys/surfaces/concerns/consumers/residual 独立重建预期，而非只审 candidate；内部 traceability、Story/dependency、UX/chart/mock、Architecture/data/owner、evidence 与适用 identity/protected state 均已检查；
+- finding 没有提前终止其余轴；完整 atomic findings batch 与 `READY`/`NOT_READY` verdict 已在本 reference 内产生，没有加载或转交 Validation reference；
 - 无 phase blocker；机械 gate 没有替代产品/UX完整性；
 - 到一个 exact ready Story 后设置 `firstUnfinishedAction = return to project management`，遵守 `MANUAL_RELAY`，不进入实现或自动派发角色。
