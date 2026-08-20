@@ -1,0 +1,6 @@
+interface:
+  display_name: "BMAD Method Planning"
+  short_description: "Collaborative pre-implementation product planning"
+  default_prompt: "Use $bmad-method to collaboratively define and validate the next pre-implementation planning node."
+policy:
+  allow_implicit_invocation: true
