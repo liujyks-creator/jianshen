@@ -58,9 +58,9 @@ Then run the directly affected regression set: consumers, state transitions, per
 
 Code that existed before the current attempt—accepted base content, user dirty work, another candidate, or protected state—must remain intact. Process only the approved behavior or complete finding batch. Do not create a one-use helper, wrapper, script, or manager when an existing framework feature or a scoped inline change is sufficient.
 
-If the current agent wrote implementation before RED, removal is allowed only when every removed line is precisely attributable to this still-uncommitted attempt, is not protected, and is not already relied on by accepted work. Preserve all other content and remove the attributable change with a scoped edit, never a destructive Git reset or checkout. Then establish RED.
+If the current agent wrote implementation before RED, removal is allowed only when every removed line is precisely attributable to the current agent's current undelivered attempt, has not been delivered or adopted by accepted work, is not protected, and has no accepted consumer or dependency. Preserve all other content and remove the attributable change with a scoped edit, never a destructive Git reset or checkout. Then establish RED. Local commit or push status alone does not define delivery or adoption.
 
-Exploration may be discarded only when it was identified in advance as temporary, was created by this task, remains uncommitted, and has no accepted consumer.
+Exploration may be discarded only when it was identified in advance as temporary, was created by the current task, has not been delivered or adopted by accepted work, and has no accepted consumer or dependency. Its removal remains subject to the scoped-edit and protected-state limits above regardless of local commit status.
 
 ## Test Selection and Evidence Layers
 
