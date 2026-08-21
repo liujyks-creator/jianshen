@@ -1,120 +1,71 @@
 ---
 name: verification-before-completion
-description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
+description: Use before claiming a candidate is complete, fixed, passing, ready, or safe to commit or push; maps the exact claim to fresh, risk-matched evidence and reports any missing gate honestly.
 ---
 
 # Verification Before Completion
 
-## Overview
+## Purpose and Authority
 
-**Core principle:** Evidence before claims, always.
+Evidence must precede every completion, correctness, readiness, commit, or push claim. This skill defines a verification method; it does not grant scope, permission, integration authority, review authority, or permission to replace a human or device gate.
 
-**Violating the letter of this rule is violating the spirit of this rule.**
+First apply user and system instructions, repository and role contracts, the immutable task or complete finding batch, and accepted product and code contracts. Fix the exact candidate identity, allowed scope, protected and unrelated state, accepted behavior and non-goals including excluded states, baseline failures or warnings, observable success and failure, and required evidence layers. Stop if a new authority or architecture decision is needed.
 
-## The Iron Law
+Verification does not authorize a fix. Candidate regressions return to the approved implementation scope; unrelated baseline issues remain evidenced and reported. Trust accepted internal invariants and use real-boundary evidence where required. Do not create a one-use helper, wrapper, script, manager, validation layer, retry, fallback, silent default, or broad catch merely to make an oracle pass.
 
-```
-NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
-```
+## The Claim-to-Evidence Gate
 
-If you haven't run the verification command in this message, you cannot claim it passes.
+Before a positive claim:
 
-## The Gate Function
+1. **Claim:** State exactly what is complete, fixed, passing, or ready, and identify the candidate being evaluated.
+2. **Risks:** List every risk directly covered by that claim: changed behavior, direct consumers, state or persistence boundaries, artifact identity, scope, and any external, device, or human gate.
+3. **Oracles:** Select a real oracle for each applicable risk.
+4. **Fresh run:** Run the smallest complete set of selected commands and evidence steps against the current candidate.
+5. **Full result:** Let each selected command finish; read its complete relevant output, exit code, failure and warning counts, and produced artifact identity.
+6. **Honest state:** Make only the claim the evidence supports. Otherwise report the actual result, missing gate, and recovery condition.
 
-```
-BEFORE claiming any status or expressing satisfaction:
+Old output, another candidate's artifact, source inspection alone, or confidence is not fresh evidence.
 
-1. IDENTIFY: What command proves this claim?
-2. RUN: Execute the FULL command (fresh, complete)
-3. READ: Full output, check exit code, count failures
-4. VERIFY: Does output confirm the claim?
-   - If NO: State actual status with evidence
-   - If YES: State claim WITH evidence
-5. ONLY THEN: Make the claim
+## Complete Command vs. Complete Risk Set
 
-Skip any step = lying, not verifying
-```
+A **complete selected command** is one chosen oracle run from start to terminal exit without truncating it, stopping after a favorable line, or extrapolating from a subset.
 
-## Common Failures
+The **claim-bound minimum complete risk set** is the collection of commands and evidence steps needed to cover every applicable risk in the exact claim. It may contain a focused test plus directly affected regressions, a build plus an artifact identity check, or a device or human gate in addition to automation.
 
-| Claim | Requires | Not Sufficient |
-|-------|----------|----------------|
-| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
-| Linter clean | Linter output: 0 errors | Partial check, extrapolation |
-| Build succeeds | Build command: exit 0 | Linter passing, logs look good |
-| Bug fixed | Test original symptom: passes | Code changed, assumed fixed |
-| Regression test works | Red-green cycle verified | Test passes once |
-| Agent completed | VCS diff shows changes | Agent reports "success" |
-| Requirements met | Line-by-line checklist | Tests passing |
+These concepts are complementary. Neither means “run the entire repository by default.” Run a repository-wide suite only when the governing task, an accepted project gate, or demonstrated risk propagation requires it. Never call a focused set “all tests.”
 
-## Red Flags - STOP
+## Choose Oracles That Match the Risk
 
-- Using "should", "probably", "seems to"
-- Expressing satisfaction before verification ("Great!", "Perfect!", "Done!", etc.)
-- About to commit/push/PR without verification
-- Trusting agent success reports
-- Relying on partial verification
-- Thinking "just this once"
-- Tired and wanting work over
-- **ANY wording implying success without having run verification**
+| Risk or claim | Direct evidence | Does not prove it |
+|---|---|---|
+| Consumer behavior | Focused RED/GREEN plus directly affected regression | Source text or compilation alone |
+| Compilation/build | Fresh required build with exit 0 | Lint or unit tests alone |
+| Artifact correctness | Fresh artifact plus identity and relevant inspection/run | An older artifact or source diff |
+| Scope/protected state | Candidate diff, index, and protected-state comparison | Passing behavior tests |
+| External integration | Real boundary response and original error handling | A permissive mock |
+| Production wiring | Production-path integration evidence | An injected seam, fake, or no-op |
+| Physical device | Identity-bound physical-device evidence | Unit test, source inspection, or emulator |
+| Human experience | The specified human acceptance | Screenshot existence or automated assertion |
+| Requirements | Acceptance-to-evidence walkthrough | A keyword, regex, or format validator |
 
-## Rationalization Prevention
+Automated evidence proves only its layer. Preserve required identity-bound Reviewer, physical-device, and human gates; a Writer's verification does not complete them.
 
-| Excuse | Reality |
-|--------|---------|
-| "Should work now" | RUN the verification |
-| "I'm confident" | Confidence ≠ evidence |
-| "Just this once" | No exceptions |
-| "Linter passed" | Linter ≠ compiler |
-| "Agent said success" | Verify independently |
-| "I'm tired" | Exhaustion ≠ excuse |
-| "Partial check is enough" | Partial proves nothing |
-| "Different words so rule doesn't apply" | Spirit over letter |
+## Candidate and Baseline Discipline
 
-## Key Patterns
+Verify against the immutable candidate identity when the workflow provides one. If an executable source changed, rebuild the corresponding artifact unless exact equivalence is independently proven.
 
-**Tests:**
-```
-✅ [Run test command] [See: 34/34 pass] "All tests pass"
-❌ "Should pass now" / "Looks correct"
-```
+For any failure or warning, determine whether the candidate introduced it. A candidate regression within scope blocks the claim and must be fixed. A proven pre-existing or unrelated failure is preserved and disclosed; it does not authorize unrelated changes and prevents only claims that include the failing set.
 
-**Regression tests (TDD Red-Green):**
-```
-✅ Write → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass)
-❌ "I've written a regression test" (without red-green verification)
-```
+A warning blocks completion only when the candidate introduced it, it makes a required command fail, or the accepted contract forbids it. Otherwise report it accurately without claiming pristine global output.
 
-**Build:**
-```
-✅ [Run build] [See: exit 0] "Build passes"
-❌ "Linter passed" (linter doesn't check compilation)
-```
+## Before Commit, Push, or Terminal Report
 
-**Requirements:**
-```
-✅ Re-read plan → Create checklist → Verify each → Report gaps or completion
-❌ "Tests pass, phase complete"
-```
+Verify every acceptance criterion with its actual oracle, not merely a passing test count. Check the exact candidate diff and allowed paths, format or artifact requirements, index state, protected state, and remote identity required by the role contract. Read the complete results before committing; after a commit or push, verify the new immutable identity and remote state where required.
 
-**Agent delegation:**
-```
-✅ Agent reports success → Check VCS diff → Verify changes → Report actual state
-❌ Trust agent report
-```
+Do not claim an unperformed Reviewer, merge, physical-device, human, Android, or external gate. Do not move to the next role yourself when the governing workflow assigns that responsibility elsewhere.
 
-## When To Apply
+## Stop and Failure Signals
 
-**ALWAYS before:**
-- ANY variation of success/completion claims
-- ANY expression of satisfaction
-- ANY positive statement about work state
-- Committing, PR creation, task completion
-- Moving to next task
-- Delegating to agents
+Stop and report the actual state when an oracle cannot run, its output is incomplete, the candidate identity is uncertain, a required evidence layer is unavailable, or verification would expand scope or authority.
 
-**Rule applies to:**
-- Exact phrases
-- Paraphrases and synonyms
-- Implications of success
-- ANY communication suggesting completion/correctness
+Failure signals include: “should” or “probably” replacing a run, a partial command represented as complete, a large unrelated suite substituted for the direct oracle, a successful build represented as behavior proof, an emulator represented as a physical device, old evidence reused for a new candidate, or a Writer represented as an independent Reviewer.

@@ -1,158 +1,47 @@
-# Root Cause Tracing
+# Root-Cause Tracing
 
-## Overview
+## When to Apply
 
-Bugs often manifest deep in the call stack (git init in wrong directory, file created in wrong location, database opened with wrong path). Your instinct is to fix where the error appears, but that's treating a symptom.
+Use backward tracing when an error, bad value, wrong state, or side effect appears downstream from its source, or when one test contaminates another. The governing task defines scope and accepted contracts. This method does not authorize downstream guards, new validation layers, or unrelated cleanup.
 
-**Core principle:** Trace backward through the call chain until you find the original trigger, then fix at the source.
+## Trace Backward to the Earliest Wrong State
 
-## When to Use
+Start with a concrete symptom and its identity: value, state, side effect, timestamp or sequence, caller, and failing oracle.
 
-```dot
-digraph when_to_use {
-    "Bug appears deep in stack?" [shape=diamond];
-    "Can trace backwards?" [shape=diamond];
-    "Report evidence blocker" [shape=box];
-    "Trace to original trigger" [shape=box];
+Repeat these questions one boundary at a time:
 
-    "Bug appears deep in stack?" -> "Can trace backwards?" [label="yes"];
-    "Can trace backwards?" -> "Trace to original trigger" [label="yes"];
-    "Can trace backwards?" -> "Report evidence blocker" [label="no - dead end"];
-}
-```
+1. Who produced or supplied this value or state?
+2. When was it first observably wrong?
+3. What input and invariant reached this boundary?
+4. Which preceding boundary was last known correct?
+5. What evidence distinguishes the producer from its caller or consumer?
 
-**Use when:**
-- Error happens deep in execution (not at entry point)
-- Stack trace shows long call chain
-- Unclear where invalid data originated
-- Need to find which test/code triggers the problem
+Use existing stack traces, structured logs, debugger facilities, runner output, artifact metadata, or a minimal temporary probe. Capture only the safe fields necessary to locate the transition; never expose secrets, personal data, or sensitive health data. Remove task-owned probes after use unless the task explicitly adopts them.
 
-## The Tracing Process
+Stop tracing when the earliest controllable source is supported by evidence. If the chain ends at an external or inaccessible boundary, report the last correct boundary, first bad observation, missing evidence, and recovery condition instead of inventing a cause.
 
-### 1. Observe the Symptom
-```
-Error: git init failed in ~/project/packages/core
-```
+## Fix at the Source
 
-### 2. Find Immediate Cause
-**What code directly causes this?**
-```typescript
-await execFileAsync('git', ['init'], { cwd: projectDir });
-```
+Correct the earliest controllable source that violates an accepted contract, then rerun the original symptom oracle and directly affected regression set. Do not add a guard at each layer merely because the bad value passed through it. Trust accepted internal invariants; validate at a real user, persistence, network, external API, or device boundary only when its contract requires validation there.
 
-### 3. Ask: What Called This?
-```typescript
-WorktreeManager.createSessionWorktree(projectDir, sessionId)
-  → called by Session.initializeWorkspace()
-  → called by Session.create()
-  → called by test at Project.create()
-```
+A downstream guard is justified only if that downstream component independently owns an accepted boundary contract. Otherwise it hides the source and creates a second behavior owner.
 
-### 4. Keep Tracing Up
-**What value was passed?**
-- `projectDir = ''` (empty string!)
-- Empty string as `cwd` resolves to `process.cwd()`
-- That's the source code directory!
+## Isolating Test Pollution With Existing Tools
 
-### 5. Find Original Trigger
-**Where did empty string come from?**
-```typescript
-const context = setupCoreTest(); // Returns { tempDir: '' }
-Project.create('name', context.tempDir); // Accessed before beforeEach!
-```
+Use this when a fixed victim test passes alone but fails after other tests or leaves unexpected state.
 
-## Adding Stack Traces
+1. Confirm the victim passes in isolation and that the pollution is absent before the run.
+2. Reproduce a fixed failing order or preceding set with the existing test runner and its filters.
+3. Split the preceding set approximately in half while keeping the victim and environment fixed.
+4. Run one half before the victim and observe the same pollution oracle.
+5. Keep the half that reproduces the pollution; if neither does, test ordering, shared environment, or interaction between subsets is part of the hypothesis.
+6. Repeat until the smallest reproducing polluter or interacting set is identified.
+7. Trace the polluter's state or side effect back to the missing ownership or cleanup contract.
 
-When you can't trace manually, add instrumentation:
+Prefer existing runner selection, ordering, sharding, and filter features. Do not create a single-use script, wrapper, or manager for bisection. If the runner cannot express the stable order, report that evidence limitation rather than substituting a different oracle.
 
-```typescript
-// Before the problematic operation
-async function gitInit(directory: string) {
-  const stack = new Error().stack;
-  console.error('DEBUG git init:', {
-    directory,
-    cwd: process.cwd(),
-    nodeEnv: process.env.NODE_ENV,
-    stack,
-  });
+## Completion and Failure Signals
 
-  await execFileAsync('git', ['init'], { cwd: directory });
-}
-```
+Tracing is complete only when evidence identifies the last correct boundary, the first wrong boundary, and the earliest controllable cause, and the causal fix makes the original oracle pass without masking its signal.
 
-**Critical:** Use `console.error()` in tests (not logger - may not show)
-
-**Run and capture:**
-```bash
-npm test 2>&1 | grep 'DEBUG git init'
-```
-
-**Analyze stack traces:**
-- Look for test file names
-- Find the line number triggering the call
-- Identify the pattern (same test? same parameter?)
-
-## Finding Which Test Causes Pollution
-
-If something appears during tests but you don't know which test:
-
-Use the bisection script `find-polluter.sh` in this directory:
-
-```bash
-./find-polluter.sh '.git' 'src/**/*.test.ts'
-```
-
-Runs tests one-by-one, stops at first polluter. See script for usage.
-
-## Real Example: Empty projectDir
-
-**Symptom:** `.git` created in `packages/core/` (source code)
-
-**Trace chain:**
-1. `git init` runs in `process.cwd()` ← empty cwd parameter
-2. WorktreeManager called with empty projectDir
-3. Session.create() passed empty string
-4. Test accessed `context.tempDir` before beforeEach
-5. setupCoreTest() returns `{ tempDir: '' }` initially
-
-**Root cause:** Top-level variable initialization accessing empty value
-
-**Fix:** Made tempDir a getter that throws if accessed before beforeEach
-
-## Key Principle
-
-```dot
-digraph principle {
-    "Found immediate cause" [shape=ellipse];
-    "Can trace one level up?" [shape=diamond];
-    "Trace backwards" [shape=box];
-    "Is this the source?" [shape=diamond];
-    "Fix at source" [shape=box];
-    "Verify the causal fix" [shape=doublecircle];
-    "NEVER fix just the symptom" [shape=octagon, style=filled, fillcolor=red, fontcolor=white];
-
-    "Found immediate cause" -> "Can trace one level up?";
-    "Can trace one level up?" -> "Trace backwards" [label="yes"];
-    "Can trace one level up?" -> "NEVER fix just the symptom" [label="no"];
-    "Trace backwards" -> "Is this the source?";
-    "Is this the source?" -> "Trace backwards" [label="no - keeps going"];
-    "Is this the source?" -> "Fix at source" [label="yes"];
-    "Fix at source" -> "Verify the causal fix";
-}
-```
-
-**NEVER fix just where the error appears.** Trace back to find the original trigger.
-
-## Stack Trace Tips
-
-**In tests:** Use `console.error()` not logger - logger may be suppressed
-**Before operation:** Log before the dangerous operation, not after it fails
-**Include context:** Directory, cwd, environment variables, timestamps
-**Capture stack:** `new Error().stack` shows complete call chain
-
-## Real-World Impact
-
-From debugging session (2025-10-03):
-- Found root cause through 5-level trace
-- Fixed at source (getter validation)
-- 1847 tests passed, zero pollution
+Stop and report if reaching the cause requires an unapproved owner, schema, core interface, architecture change, or external access. Failure signals include fixing only the symptom, adding blanket defense-in-depth, changing several boundaries at once, relying on an arbitrary test order, or claiming a source without an observable transition.
