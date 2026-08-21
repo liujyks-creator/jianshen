@@ -1,115 +1,46 @@
 # Condition-Based Waiting
 
-## Overview
+## When to Apply
 
-Flaky tests often guess at timing with arbitrary delays. This creates race conditions where tests pass on fast machines but fail under load or in CI.
+Use this method when correctness depends on observing an asynchronous condition and a fixed sleep is only guessing when that condition will become true. The governing contract defines the condition and evidence layer; this method does not authorize a new scheduler, helper, callback owner, or abstraction.
 
-**Core principle:** Wait for the actual condition you care about, not a guess about how long it takes.
+Do not replace a duration when elapsed time itself is the accepted behavior, such as a debounce interval or countdown threshold. In that case, control or measure the contract time explicitly.
 
-## When to Use
+## Choose the Best Observation Mechanism
 
-```dot
-digraph when_to_use {
-    "Test uses setTimeout/sleep?" [shape=diamond];
-    "Testing timing behavior?" [shape=diamond];
-    "Document WHY timeout needed" [shape=box];
-    "Use condition-based waiting" [shape=box];
+Prefer, in order of fit to the system:
 
-    "Test uses setTimeout/sleep?" -> "Testing timing behavior?" [label="yes"];
-    "Testing timing behavior?" -> "Document WHY timeout needed" [label="yes"];
-    "Testing timing behavior?" -> "Use condition-based waiting" [label="no"];
-}
-```
+1. an existing event, callback, completion signal, or framework wait primitive;
+2. an existing virtual clock or scheduler control for time-based logic;
+3. an existing shared helper with the same condition semantics;
+4. bounded polling when no direct signal exists.
 
-**Use when:**
-- Tests have arbitrary delays (`setTimeout`, `sleep`, `time.sleep()`)
-- Tests are flaky (pass sometimes, fail under load)
-- Tests timeout when run in parallel
-- Waiting for async operations to complete
+Do not poll merely because it is familiar. A direct event proves the transition without repeatedly sampling; a virtual clock avoids wall-clock delay when time is the modeled input.
 
-**Don't use when:**
-- Testing actual timing behavior (debounce, throttle intervals)
-- Always document WHY if using arbitrary timeout
+## Define the Waiting Contract
 
-## Core Pattern
+Before implementation, write down:
 
-```typescript
-// ❌ BEFORE: Guessing at timing
-await new Promise(r => setTimeout(r, 50));
-const result = getResult();
-expect(result).toBeDefined();
+- **condition:** the fresh observable predicate or event that means success;
+- **timeout:** the accepted maximum or a justified diagnostic bound;
+- **mechanism:** event, callback, virtual clock, existing helper, or polling;
+- **diagnostic:** the state, counts, last observation, and elapsed time reported on timeout;
+- **cleanup:** listener, callback, timer, or task state released on every exit path.
 
-// ✅ AFTER: Waiting for condition
-await waitFor(() => getResult() !== undefined);
-const result = getResult();
-expect(result).toBeDefined();
-```
+For polling, evaluate fresh state on each iteration, use a bounded timeout, and choose an interval proportional to the operation rather than a universal constant. Timeout must fail with a diagnostic signal; it must not silently continue or return a default.
 
-## Quick Patterns
+## Keep the Implementation Proportional
 
-| Scenario | Pattern |
-|----------|---------|
-| Wait for event | `waitFor(() => events.find(e => e.type === 'DONE'))` |
-| Wait for state | `waitFor(() => machine.state === 'ready')` |
-| Wait for count | `waitFor(() => items.length >= 5)` |
-| Wait for file | `waitFor(() => fs.existsSync(path))` |
-| Complex condition | `waitFor(() => obj.ready && obj.value > 10)` |
+For one call site, keep the minimum condition wait local. Reuse an existing helper when its semantics match. Extract a new shared helper only when multiple real consumers share the same condition, timeout, diagnostic, and lifecycle contract.
 
-## Implementation
+Do not create a one-use helper, wrapper, manager, script, or domain-specific example. Do not replace an arbitrary sleep with a more elaborate abstraction that the accepted design does not own.
 
-Generic polling function:
-```typescript
-async function waitFor<T>(
-  condition: () => T | undefined | null | false,
-  description: string,
-  timeoutMs = 5000
-): Promise<T> {
-  const startTime = Date.now();
+## When a Fixed Duration Is Valid
 
-  while (true) {
-    const result = condition();
-    if (result) return result;
+A fixed duration is valid only when the duration itself is under test or mandated by an external contract. First synchronize on the triggering condition, then advance a virtual clock or measure the documented interval. Record why the duration is required and what tolerance the contract permits. A guessed buffer is not evidence.
 
-    if (Date.now() - startTime > timeoutMs) {
-      throw new Error(`Timeout waiting for ${description} after ${timeoutMs}ms`);
-    }
+## Completion and Failure Signals
 
-    await new Promise(r => setTimeout(r, 10)); // Poll every 10ms
-  }
-}
-```
+The wait is complete when the real condition is observed, cleanup runs, and the consuming assertion verifies the resulting behavior. On timeout, surface the diagnostic state and preserve the failure.
 
-See `condition-based-waiting-example.ts` in this directory for complete implementation with domain-specific helpers (`waitForEvent`, `waitForEventCount`, `waitForEventMatch`) from actual debugging session.
-
-## Common Mistakes
-
-**❌ Polling too fast:** `setTimeout(check, 1)` - wastes CPU
-**✅ Fix:** Poll every 10ms
-
-**❌ No timeout:** Loop forever if condition never met
-**✅ Fix:** Always include timeout with clear error
-
-**❌ Stale data:** Cache state before loop
-**✅ Fix:** Call getter inside loop for fresh data
-
-## When Arbitrary Timeout IS Correct
-
-```typescript
-// Tool ticks every 100ms - need 2 ticks to verify partial output
-await waitForEvent(manager, 'TOOL_STARTED'); // First: wait for condition
-await new Promise(r => setTimeout(r, 200));   // Then: wait for timed behavior
-// 200ms = 2 ticks at 100ms intervals - documented and justified
-```
-
-**Requirements:**
-1. First wait for triggering condition
-2. Based on known timing (not guessing)
-3. Comment explaining WHY
-
-## Real-World Impact
-
-From debugging session (2025-10-03):
-- Fixed 15 flaky tests across 3 files
-- Pass rate: 60% → 100%
-- Execution time: 40% faster
-- No more race conditions
+Stop if the needed event, clock, or ownership change is outside the approved task. Failure signals include an arbitrary sleep, an unbounded loop, stale cached state, polling without diagnostics, an emulator or fake substituted for a required physical boundary, or a new abstraction serving only one call site.

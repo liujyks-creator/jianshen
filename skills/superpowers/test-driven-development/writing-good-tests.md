@@ -1,198 +1,69 @@
 # Writing Good Tests
 
-**Load this reference when:** writing or changing tests, adding mocks, or
-adding cleanup/helper methods for tests.
+## When to Apply
 
-## Overview
+Use this reference when writing or changing a test, mock, fixture, or test helper. The governing task and accepted contract decide which behaviors are in scope. This reference does not authorize additional production behavior, validation, abstractions, or test coverage.
 
-A test exists to catch a specific break. Two principles govern everything
-here:
+## Start With the Observable Contract
 
-```
-1. Every test names the break it catches
-2. Every test exercises the real thing
-```
+Before writing the body, state:
 
-Strict TDD produces both naturally: a test written first and watched
-failing against real code has already proven it can fail, and only earns
-a mock when the real dependency proves slow or external.
+- the consumer-visible outcome or real invariant;
+- the realistic production mutation that must make the test fail;
+- the accepted input and output boundary;
+- the independently derived expected result.
 
-## Principle 1: Name the Break
+If the only possible failure is that a private call, symbol, constant, exact source line, or mock changed, redesign the test around an observable outcome. Test framework behavior only when the project owns an explicit boundary contract with that framework.
 
-Before writing the test body, answer: **what production change should
-make this test fail — and is that change a bug or a decision?** A test
-earns its place by catching a wrong branch, missing side effect, wrong
-argument, boundary case, or broken contract.
+Expectations must not reuse the implementation or its helpers. Prefer a hand-checked literal or a fixture whose expected result was derived independently. A test that passes after the named production mutation is not sensitive to the behavior and must be corrected or removed.
 
-**Derive expectations independently.** Use literals and hand-checked
-fixtures; table-driven tests with literal `want` values are the preferred
-shape. An expectation computed by the code under test — or its helpers —
-passes no matter what that code does:
+## Use Realistic Fixtures
 
-```typescript
-// ❌ Mirror assertion: the same builder computes both sides — always true
-const expected = buildSearchQuery({ tag: 'urgent' });
-expect(buildSearchQuery({ tag: 'urgent' })).toBe(expected);
+A fixture must represent the accepted shape and lifecycle at the boundary being exercised. Include required documented fields and meaningful relationships so that the wrong branch cannot pass accidentally. Do not create impossible internal states merely to increase coverage, and do not omit a required external field just because the current implementation does not read it.
 
-// ✅ Hand-derived literal
-expect(buildSearchQuery({ tag: 'urgent' })).toBe('tag:"urgent"');
-```
+Keep setup proportional to the behavior. If a fixture builder hides the expected value, mirrors production logic, or creates more policy than the contract, replace it with a clearer hand-checked fixture.
 
-**No change detectors.** If only intentional decisions can fail a test —
-a constant's value, exact message wording, private structure — it fires
-on redesign and sleeps through bugs. Test the behavior that depends on
-the decision: not `expect(MAX_RETRIES).toBe(5)` but "a failing call is
-retried 5 times and the 6th attempt never happens."
+## Mock Only the Uncontrollable Boundary
 
-**Behavior, not text.** Asserting that a script, skill, or config
-contains an exact line proves only that the source is the source. Run
-scripts against controlled inputs and assert outputs, side effects, or
-exit codes. Documents that instruct agents are tested by the consuming
-agent's behavior; prose for humans earns no
-test at all.
+Use real components when they are deterministic and reasonably fast. Mock or fake the narrowest network, device, clock, process, or external service boundary that cannot be controlled directly.
 
-**Your code, not the framework.** Test the contract your code makes at
-its boundaries — the route you register, the query you emit, the payload
-you produce. Upstream mechanics are their maintainers' tests to write
-(the classic: asserting your router invokes a registered handler — that
-is the framework's test, not yours). When upstream behavior genuinely
-surprised you, write one narrow characterization test naming the
-assumption. The same boundary applies inside your code: constructors,
-getters, constants, and trivial forwarding earn tests only when they
-validate, normalize, default, derive, enforce, or cause side effects —
-otherwise assert the first consumer-visible result that depends on them.
+Before mocking a method, identify its real side effects. Keep every side effect on which the behavior depends; otherwise the double changes the contract being tested. Make responses and failures specific enough that the wrong call, order, or branch cannot satisfy the test.
 
-### Gate Function
+Assert the component's observable result, not that the mock exists. Call counts and arguments are valid assertions only when they are themselves part of the accepted boundary contract. A fake, injected seam, or emulator proves only that layer and cannot substitute for production or physical-device evidence.
 
-```
-BEFORE writing the test body:
-  Name the production change that would make this test fail.
+## Cover Behavior, Not Every Function
 
-  Cannot name one            → redesign around an observable behavior
-  "The source text changed"  → run the artifact and assert its effects
-  Only intentional decisions → change detector; test the behavior
-                               that depends on the decision
+Trivial forwarding, plain data holders, generated code, and accessors with no validation, derivation, side effect, or state transition do not receive one test per function. Exercise the first consumer-visible result that depends on them.
 
-  Confirm the expected value is derived without the code under test.
-  IF it reuses the code's logic or helpers:
-    Replace it with a literal or hand-checked fixture
-```
+When a function owns a branch, normalization, state transition, side effect, or error contract, test that observable behavior. Test helpers belong in test code. Do not add a production method, wrapper, or manager solely to make one test convenient.
 
-## Principle 2: Exercise the Real Thing
+## Contract-Bound Edges and Errors
 
-**The mock earns no assertions.** A mock assertion passes when the mock
-is present and fails when it is absent — it says nothing about the
-component. Assert the real component's behavior; if the mock is what you
-are checking, unmock it or delete the assertion.
+Build the edge and error matrix from exactly one of these sources:
 
-```typescript
-// ✅ Real behavior
-expect(screen.getByRole('navigation')).toBeInTheDocument();
+- an accepted behavior or invariant;
+- a real user, persistence, network, external API, or device boundary;
+- a reproduced failure included in the task.
 
-// ❌ Mock existence
-expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument();
-```
+For each case, name the contract and expected observable result. Do not turn generic lists such as zero, empty, null, default, malformed, or unauthorized into blanket requirements. If the accepted contract excludes a state, do not add a test, guard, fallback, retry, or silent default for it.
 
-**your human partner's correction:** "Are we testing the behavior of a
-mock?"
+Preserve original error signals at real boundaries unless the accepted contract explicitly maps them to a different user-visible result.
 
-**Mock at the right level.** Learn every side effect of the real method
-before replacing it; mock the slow or external operation and keep what
-the test depends on real. When unsure, run the test against the real
-implementation first and observe what actually needs to happen.
+## Mutation-Sensitivity Check
 
-```typescript
-// ❌ The mock swallows the config write that duplicate detection reads
-vi.mock('ToolCatalog', () => ({
-  discoverAndCacheTools: vi.fn().mockResolvedValue(undefined)
-}));
+For each test, mentally or experimentally apply the realistic mutation it claims to catch:
 
-// ✅ Mock only the slow server startup; the config write stays real
-vi.mock('MCPServerManager');
-```
+- choose the wrong accepted branch;
+- omit the required state change or side effect;
+- produce the wrong contract value;
+- mishandle a boundary failure that the contract includes.
 
-**Make doubles specific.** When arguments, call counts, or ordering are
-part of the contract, assert them — a fake that accepts anything verifies
-nothing. Give each branch (success, error, malformed) its own fixture or
-spy, so the wrong branch cannot satisfy the expectation.
+At least one assertion must fail for that mutation. Do not invent excluded states to make this checklist longer. If a test cannot detect a meaningful regression, remove or redesign it.
 
-**Mirror real data completely.** Mock the complete structure as it exists
-in reality — all documented fields — not just the ones your test reads.
-Partial mocks fail silently when downstream code reads an omitted field:
-the test passes while integration breaks.
+## Scope, Stop, and Completion Signals
 
-**Production classes carry production methods only.** Cleanup that only
-tests need lives in test utilities, never as a `destroy()` on the
-production class. Ask: is this method called only from tests? Does this
-class own this resource's lifecycle? Wrong answers → test utility.
+Keep the test change within the approved behavior and its directly affected consumers. Prefer existing runners, fixtures, clocks, and helpers. A new shared helper is justified only by multiple real consumers with the same semantics, not by a single call site.
 
-**Prefer real components over complex mocks.** When mock setup outgrows
-the test logic, mocks miss methods the real components have, or tests
-break when the mock changes, switch to an integration test with real
-components. **your human partner's question:** "Do we need to be using a
-mock here?"
+Stop and return to the governing task when testing would require a new production owner, core interface, schema, cross-module responsibility, or evidence layer. A blocked physical, human, or external oracle remains a reported gate; it is not permission to replace that evidence with a mock.
 
-### Gate Function
-
-```
-BEFORE adding a mock or test helper:
-  List the real method's side effects; keep the ones the test
-  depends on real — mock the slow/external level below them.
-
-  Mock responses mirror the complete real structure.
-
-  A method only tests call lives in test utilities, not production.
-
-  About to assert on the mock itself?
-    Unmock it or delete the assertion.
-```
-
-## Tests Ship With the Implementation
-
-The TDD cycle — failing test, minimal implementation, refactor — is what
-"complete" means. Ship the tests the behavior needs and only those:
-trivial code and human prose earn none, and a test written to satisfy
-process costs maintenance forever.
-
-## The Mutation Check
-
-Before finishing, mentally mutate the production code; at least one test
-should fail for each realistic mutation:
-
-- Wrong constant or argument
-- Wrong branch handler
-- Missing state change or side effect
-- Empty or default return
-- Missing validation for zero, empty, nil, unauthorized, or malformed input
-
-A mutation nothing catches marks the behavior as unprotected — or the
-test as tautological.
-
-## Quick Reference
-
-| When you... | Do |
-|-------------|-----|
-| Write any test | Name the break it catches — a bug, not a decision |
-| Build an expected value | Derive it by hand; never with the code under test |
-| Test a script or document | Run it / pressure-test its consumer; never grep its text |
-| Reach for a dependency test | Test your boundary contract, not their documented mechanics |
-| Want to assert on a mocked element | Test the real component, or unmock it |
-| Are about to mock a method | Learn its side effects; mock the slow/external level |
-| Build a mock response | Mirror the real structure completely |
-| Need cleanup only tests use | Put it in test utilities |
-| Watch mock setup balloon | Switch to an integration test with real components |
-| Finish a test file | Run the mutation check |
-
-## Warning Signs
-
-- Setup and assertion share the same object, guaranteeing equality
-- The test can fail only through a panic, crash, or missing selector
-- The test fails on every intentional change, never on accidental breakage
-- Expected values are hidden behind loops, builders, or helpers
-- The test greps source text, or asserts a removed symbol stays removed
-- The test would still matter if only the framework remained
-- The test exists for coverage, checking no side effect or outcome
-- An assertion checks a `*-mock` test ID, or fails if you remove the mock
-- A method is called only from test files
-- Mock setup is more than half the test, or you can't explain why the mock is needed
-- Mocking "just to be safe"
+A good test has a meaningful observed RED, passes on the current candidate, fails for its named realistic mutation, and asserts an observable accepted contract without widening scope.
