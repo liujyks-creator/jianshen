@@ -6,7 +6,7 @@
 
 ## Goal
 
-独立发现 candidate 内外的完整问题，一次返回 atomic findings batch；对结构性变化做 scoped Correct Course；对 bounded findings 做最小但因果完整 Repair，并严格执行 fresh Review → fresh Audit 门禁。
+在当前授权范围内独立发现完整问题，一次返回 atomic findings batch；对结构性变化做 scoped Correct Course；对 bounded findings 做最小但因果完整 Repair，并严格执行 closure-bounded fresh Review 与项目合同要求的 applicable Audit 门禁。
 
 ## Inputs
 
@@ -43,7 +43,7 @@
 
 ### 2. Planning Review
 
-First action：不看 candidate coverage 声明，先从 accepted sources、named journeys、surfaces/states/components/chart/mock、domain concerns、downstream consumers、done state 与 residual map 独立写 expected inventory。对每项记录 source、expected artifact location、consumer/evidence。
+初次 Planning Review 的 first action：不看 candidate coverage 声明，先从 accepted sources、named journeys、surfaces/states/components/chart/mock、domain concerns、downstream consumers、done state 与 residual map 独立写 expected inventory。对每项记录 source、expected artifact location、consumer/evidence。Repair 后的 re-Review 不重建 unaffected inventory，按后文 closure boundary 重新绑定既有 inventory 与实际 Repair delta。
 
 然后完整检查当前授权 node：
 
@@ -57,6 +57,18 @@ First action：不看 candidate coverage 声明，先从 accepted sources、name
 Candidate 的 DAG/hash/path count/AC 自洽不能消除 expected inventory 的缺失。发现一个 finding 后继续所有剩余适用轴；只有 objective authority/safety/claim-proving evidence blocker 使余轴无法执行时提前停止并说明未检查内容。
 
 一次输出完整 atomic findings batch：severity、source/evidence、affected artifacts/consumers、why it matters、minimum causally complete correction、是否 load-bearing/structural。无 findings 且所有适用轴有证据才 PASS。
+
+### Planning sufficiency、finding eligibility 与 re-Review closure
+
+Planning 的目标是让下一单元可由一个 Writer 因果完整实施、由一个 Reviewer依据 accepted contract 判定；不是在编码前穷举全部内部实现。只有下列缺口可以作为阻止当前 planning node 通过的 finding：
+
+- 与 accepted source、用户决定或当前 scope 直接冲突；
+- 两种仍被 candidate 允许的实现会在用户可见行为、持久化或迁移兼容、外部接口、安全/隐私、核心 owner/lifecycle 上产生不同结果；
+- Story 的 objective、边界、prerequisite、AC 或 evidence 因缺口而客观不可实施或不可独立审查。
+
+内部类型、函数拆分、查询写法、局部算法、测试组织或其他可由当前 Story Writer 在既有 owner 和边界内决定的普通实现选择，不是 planning finding。不得仅以“还能更精确”“可能有第二种内部写法”或未穷举所有 internal tuple 为由判 FAIL；必须给出 accepted source 和上述外部差异或不可实施性的可执行反例。只在持久化、迁移、外部 API、用户输入、设备等真实边界为合同要求的状态闭合 schema、cross-field rule 或 failure behavior。
+
+Repair 后的 fresh Review 表示重新绑定 exact candidate identity 并取得独立证据，不表示把 unaffected scope 重新打开。re-Review 必须覆盖完整 approved finding batch、共同根因、直接 consumers，以及 Repair 实际改变的相邻合同；对未受 Repair 影响的内容只核验 identity 与 preserved boundary，不重新建立全量 expected inventory。新观察只有同时满足 finding eligibility 且由本次 Repair 引入、暴露或直接影响当前 claim 时才加入当前 atomic batch；其余记录为 deferred，不阻止当前节点 PASS。
 
 ### 3. Consistency Audit
 
@@ -98,9 +110,9 @@ Repair 若需要改变 overall scope、Epic boundary、core Architecture、new c
 
 ```text
 atomic Repair complete
-→ fresh full Planning Review
-→ only after PASS: fresh full Consistency Audit
-→ only after both current-candidate gates PASS: project-defined next gate
+→ fresh current-node Planning Review under the finding-eligibility and closure boundary
+→ if required by the accepted project contract, only after PASS: separate Consistency Audit scoped to its own propagation claims
+→ only after all applicable current-candidate gates PASS: project-defined next gate
 ```
 
 Planning Review 或 Audit 失败后，下一轮仍处理该门禁返回的 complete atomic batch。不得回到 Discovery/CE/Correct Course Step 1；不得从 Audit Repair 直接跳回 Audit；不得把 Writer 自评称作 fresh independent gate。
@@ -122,11 +134,13 @@ Planning Review 或 Audit 失败后，下一轮仍处理该门禁返回的 compl
 
 ## Completion / readiness checks
 
-- Review 从 candidate 外部重建 expected inventory，完成所有适用轴；一个 finding 没有提前终止检查；
+- 初次 Review 从 candidate 外部重建 expected inventory；Repair 后的 re-Review 重新绑定既有 inventory 与实际 delta；两者都完成当前授权范围内的全部适用轴，一个 finding 没有提前终止检查；
+- Planning finding 满足外部差异或不可实施性门槛；没有把普通内部实现选择升级为 blocker；
+- Repair 后的 fresh Review 只重开 finding batch、共同根因、直接 consumers 和实际变化的相邻合同；unaffected scope 保持关闭；
 - Planning Review 与 Consistency Audit 职责、证据和 verdict 分开；
 - Correct Course impact 覆盖 current/future Epic、PRD、UX、Architecture、data、evidence 与直接 ripple，且只提升到必要高度；
 - Repair 使用 current candidate + complete batch + direct sources，保留 unaffected contracts 与 shared state；
 - adjacent-omission scan 覆盖同 owner/state/boundary/consumer/evidence 链，没有扩到无关领域；
 - structural change 已停止并升级，没有静默塞进 AC；
-- Repair 后 fresh full Planning Review PASS，再 fresh full Consistency Audit PASS；
+- Repair 后 fresh current-node Planning Review PASS；项目合同要求独立 Consistency Audit 时，再完成其自身传播范围并取得 PASS；
 - 未声称 independent/manual/implementation evidence 已完成，下一责任服从项目合同。
