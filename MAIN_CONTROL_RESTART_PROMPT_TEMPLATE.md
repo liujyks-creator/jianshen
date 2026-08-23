@@ -61,12 +61,15 @@ Cold start：
    - acceptedFacts、acceptedDecisions、assumptions、openQuestions、phaseBlockers、deferred、rejectedAlternatives 的当前内容或准确 ledger 引用；
    - 本次实际使用的完整 inputDocuments inventory；
    - read boundary、唯一允许 write artifact path、不得修改的 paths/actions、approval/decision ownership；
+   - planning sufficiency boundary：本次哪些外部差异或不可实施性可以构成 finding、哪些普通内部实现选择明确不构成 finding、哪些内容保持 unaffected/closed；
+   - re-Review 时完整 approved finding batch、共同根因、直接 consumers、Repair 实际改变的相邻合同，以及允许重开其他内容的客观条件；
    - Coaching 或 Fast path、真正暂停条件、继续条件与用户承重决定；
    - 对应该 intent 的完整 terminal/handoff schema，含 role/intent/attempt、artifact identity、ledger changes、verdict/findings、currentNode transition、firstUnfinishedAction、protected state 与未授权动作；
    - MANUAL_RELAY、无 subagent、无自动 Writer/Reviewer/implementation/integration；
    - 具体、task-specific 的 Recommended Codex runtime footer。
 3. Planner block 必须说明：进度更新、单个 `Continue`、部分 findings、文档长度、DAG/hash 通过或无 identity 的“完成了”都不是 terminal。
 4. Main→Planner 只传递 freshly verified base、currentNode/firstUnfinishedAction、actual inputs、decision/write boundary 与 terminal schema；不得传递 stale summary、未核验 SHA 或预制用户决定作为 authority。
+5. `fresh` 只要求重新绑定 exact identity 和取得独立证据，不把 unaffected scope 自动重开。不得把整个 candidate、全部历史或所有 internal tuple 写成 re-Review scope；普通内部实现选择只有在能证明用户可见、持久化/迁移、外部接口、安全/隐私、核心 owner/lifecycle 差异，或使 Story 客观不可实施/不可审查时，才可成为 planning finding。
 
 inputDocuments 完整性门禁：
 1. `inputDocuments` 是 Planner 本次实际使用的全部文件，不是分类标签。每项列 exact literal path 与 immutable identity/hash（适用时）。
@@ -81,6 +84,7 @@ inputDocuments 完整性门禁：
 4. 核验 user-owned load-bearing decision 有明确 authority，没有被角色代答；核验 verdict、完整 atomic finding batch、completed/unreviewed axes 与证据边界。
 5. 核验 currentNode 状态转换及 firstUnfinishedAction 唯一且由证据支持。进度、partial findings、`Continue` 或无 identity 完成声明不得推动状态。
 6. Planner→Main 必须返回 artifact path/hash、accepted decisions、unknowns/open questions、完整 findings/verdict 与 firstUnfinishedAction；缺任一承重字段时仍非终态。
+7. re-Review 报告若重新审查未受 Repair 影响的内容，或仅以“还能更精确”“存在另一种内部写法”、未穷举 internal tuple 为由新增 finding，不得据此推动 Repair/Correct Course；先按 planning sufficiency boundary 重新分类为 deferred 或无 finding。
 
 验收 Writer/Repair 终态：
 1. 只接受一份完整 `WRITER_COMPLETE`；核验 accepted base/prerequisites、branch/candidate full SHA 与 direct parent、准确 three-dot scope、完整 Story/finding batch、实际 RED/GREEN/validation、artifact/evidence、index/remote sync 与 protected state。
@@ -111,6 +115,7 @@ inputDocuments 完整性门禁：
 
 唯一 next-gate 选择：
 - bounded post-validation finding batch → Planning Repair，不回到已完成 Discovery/Step 1。
+- Repair 后的 re-Review → 只覆盖完整 finding batch、共同根因、直接 consumers 与 Repair 实际改变的相邻合同；新观察不满足 planning finding eligibility 时记录 deferred，不启动新 Repair/Correct Course。
 - finding 改变 scope/Epic/UX/Architecture/ownership/data 或跨多模块责任 → 最低必要 scoped Correct Course，不用更长 AC 吞下结构变化。
 - Writer 完成但 required human/device gate 未满足 → 用户门禁。
 - Writer 与全部 human gates 完成 → fresh Review prompt。
