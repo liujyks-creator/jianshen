@@ -19,7 +19,9 @@ stepsCompleted:
 # TrainFlow 路线图与 MVP Backlog
 
 
-## 2026-07-26 E17 当前交付序列
+## 2026-07-26 E17 历史交付序列（non-operative / historical / superseded）
+
+本段自此标题起至下一个独立的 E17 remainder V11 canonical roadmap 标题之前，仅保存历史事实；不得生成当前任务，也不得覆盖 V11 canonical roadmap。
 
 1. 当前 docs Correct-course：18 项 receipt 与十文档一致。
 2. E17-7a Reconnect + Parameter Foundation：owner policy、长期 armed eligibility、persistent suppression、age / max / alert data、zone / alert presentation 与 tests / architecture evidence。
@@ -27,9 +29,24 @@ stepsCompleted:
 4. E17-8 ordinary ID `7200` coordinator；E17-9 合法 FGS + active-training retain / recovery + handoff + M1；E17-10 evidence-only、production 0。
 
 每项均须前序 immutable full SHA 已 Review / merge / ancestry / sync。当前 candidate 在十文档一致前 needs review / 7a gated，满足后自动 satisfied，无 docs-sync。保留 E17-5 / 6；禁止 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` merge、整体 cherry-pick 或 prerequisite。下文旧 E17-7 单 Story / manual-only / deferred-without-target 状态均为历史快照。
+
+## E17 remainder V11 canonical roadmap（当前 authoritative）
+
+E17 remainder 的唯一 detailed Story / AC / evidence / owner / schema / DAG authority 是 `docs/planning/e17-remainder-epic-story-plan.md`。其 source 为 `INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`（`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`），已通过 re-Planning Review Attempt 5（`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`PASS`）和 scoped Consistency re-Audit Attempt 2（`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`PASS / CONSISTENCY=PASS`）。以下只保存机械 roadmap 摘要，不在本文件复制或改写 AC：
+
+- Story set：`CS-01`、`CS-02`、`CS-03`、`CS-04`、`CS-05`、`CS-06`、`CS-07`、`CS-08`、`CS-09`、`CS-10`、`CS-11`、`CS-12`，共 12 nodes。
+- Roots=`CS-01/CS-03`，sink=`CS-12`，materialEdges=`28`，uniqueEdges=`28`，acyclic=`true`，orphans=`0`，longestMaterialPath=`8`。
+- 8-node witness：`CS-03 -> CS-04 -> CS-05 -> CS-06 -> CS-09 -> CS-10 -> CS-11 -> CS-12`；`CS-06 -> CS-09` 是显式 material edge。
+- Material graph：`CS-01 -> CS-02`；`CS-01, CS-02, CS-05 -> CS-06/CS-07/CS-08`；`CS-03 -> CS-04 -> CS-05`；`CS-05, CS-06 -> CS-09`；`CS-03, CS-05, CS-06, CS-07, CS-08, CS-09 -> CS-10`；`CS-06, CS-07, CS-08, CS-09, CS-10 -> CS-11`；`CS-02, CS-10, CS-11 -> CS-12`。
+- 实施顺序由上述 material DAG 和 canonical Story prerequisites 唯一约束；tracked planning sync 完成后，主管理一次只从当前 ready nodes 中选择一个 exact Story。第一个 Story 必须从 roots=`CS-01/CS-03` 选择，不得跳过 predecessor、并行假定两个 root 已完成或把 roadmap 顺序改写成新 owner。
+- `U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2` 及 CS-03 / CS-05 / CS-09 / CS-12 唯一责任边界均以 canonical 为准；CS-10 / CS-11 consumer contract 不得在摘要中重写。
+- 当前状态是 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`。只有本 docs-sync 通过 fresh 独立 Review、合并、推送并成为同步 `main` / `origin/main` ancestor 后，才允许主管理选择第一个 exact root Story。当前没有任何 CS Story implementation 或 runtime evidence 完成。
+
+本节以下旧 E17 roadmap、E16-11 / E16-12 “historical not started / superseded”以及“记录 / 分析 / 导出仍未规划”的带日期文字均为 `non-operative / historical`；它们保留历史事实，但不能覆盖 V11 accepted canonical roadmap。
+
 **文档状态:** 首版拆分草案  
 **用途:** 将 PRD、UX、数据契约和 Android 架构拆成可执行里程碑、Epic、Story 与验收顺序。  
-**范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构，D-082 已接受 exact-target 自动恢复、persistent manual suppression 与个人参数。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；本Correct-course与E17-7a prerequisite按页首统一条件式真值判定。该扩展不纳入全天候健康监测、Health Connect 历史同步、医疗告警、通用设备兼容承诺，或记录 / 分析 / 导出实现；后续商业化、云同步和完整课程平台也仍不在本范围。
+**范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构，D-082 已接受 exact-target 自动恢复、persistent manual suppression 与个人参数。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；本Correct-course与E17-7a prerequisite按页首统一条件式真值判定。全天候健康监测、Health Connect 历史同步、医疗告警和通用设备兼容承诺仍不在本范围；E17 remainder 的记录、分析与用户导出已经 V11 接受为 CS-01 至 CS-12 的计划合同，但尚未实现，详细边界只以 canonical 计划为准。后续商业化、云同步和完整课程平台仍不在本范围。
 
 ## 1. 需求库存
 

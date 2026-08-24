@@ -19,6 +19,16 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
+## E17 remainder V11 accepted Architecture（当前 planning authority）
+
+`docs/planning/e17-remainder-epic-story-plan.md` 是 E17 remainder 唯一 detailed Architecture / schema / owner / lifecycle authority。其 exact V11 source（`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`）已通过 re-Planning Review Attempt 5（`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`PASS`）和 scoped Consistency re-Audit Attempt 2（`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`PASS / CONSISTENCY=PASS`）。
+
+V11 接受的 Architecture 包括五表方向与原子 `Migration(4,5)`、canonical session graph、心率 recording / acquisition / sample / analysis snapshot、closed storage JSON、version-aware read、export / lease / provider、`U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2`，以及 CS-03 / CS-05 / CS-09 / CS-12 的唯一 owner 边界。这里只建立权威链接，不复制 detailed contract。
+
+这些是 **已接受但尚未实现** 的 Architecture。当前状态为 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`；本 docs-sync 通过 fresh 独立 Review、合并并成为同步 main ancestor 后，主管理才可从 `CS-01/CS-03` 选择一个 exact root Story。当前 production Room 仍是既有基线，未落地 V11 schema，也没有 V11 runtime、Gradle、APK、AVD、device、human 或 performance evidence。
+
+本节以下带日期 E11 / E16 / 早期 E17 架构记录保留为 `non-operative / historical`。其中旧 future-only recording classification 或旧 Planning Review / Audit gate 的当前式措辞不得覆盖 V11 accepted Architecture。
+
 ## 2026-07-26 E17 当前架构覆盖
 
 保留 Application / 进程级唯一 `HeartRateRuntimeOwner`、main-looper serialization、generation / attempt / raw GATT identity、先失效引用的 cleanup、唯一 ID `7200` writer、合法 `connectedDevice` FGS 与 `START_NOT_STICKY`。自动恢复是 owner policy，不恢复 D-078、E16 controller / wrapper，不新增第二 owner、GATT model 或第三 notification interface。
@@ -394,7 +404,7 @@ interface HeartRateProvider {
 - E17 心率设备选择只保存 provider identifier / display name，不保存 `BluetoothDevice`、`BluetoothGatt`、GATT / SDK model、bpm 样本或 session summary。关闭心率后 owner 必须停止扫描、断开连接、不重连、不记录；可保留已保存设备名称作为 convenience hint，并提供清除入口。
 - Historical E16 reference：E16-10a freshness / offline / reconnect docs-only policy 曾 approved、reviewed / merged（merge commit `56d8029719889d329680f3dc099a77ae94909142`），E16-10b-1 policy core 也曾 reviewed / merged（Story tip `09d17616f213c1df7905e46662f4a195345fdd9a`，merge commit `5cdee7ce1bd7a2b0f76f83adf069179a547fd16c`）。其 10 / 15 / 30 秒 freshness、2 / 5 / 10 秒 retry 与 direct reconnect 设计现只作 reference，不是 E17 默认方案；旧 E16-10b-2 的 unlocked 状态已失效，失败分支永久禁止合并。
 - E17 心率显示必须区分连接 / 数据状态和心率区间状态。无可用 bpm 时只能显示 `未启用`、`未连接源`、`权限未赋予`、`蓝牙关闭`、`正在连接`、`等待数据`、`数据过期`、`离线` 等来源状态。个人最大心率 `30..260` 优先；否则合法年龄 `1..130` 使用 `220-age`，其中 `101` 有效且不得 clamp；两者都没有时只显示 bpm。区间按未取整的 `bpm/effectiveMax` 使用低强度、热身、燃脂、有氧、无氧、极限六段冻结 presentation；提醒阈值 `30..260` 独立，严格 `bpm > alert` 时优先显示冻结的超过上限视觉，相等不触发。
-- 未来记录边界：未训练时只显示不记录；timed 和 strength 训练中允许按 1 秒采样记录心率，覆盖 strength active、rest 与 confirm-record。该记录模型、Room / session schema、summary、history / trends 和训练后分析必须另拆 story；E16-3a 仍只做视觉规划。
+- 历史 E16 记录边界（non-operative）：当时只接受“未训练时只显示不记录、训练中按 1 秒采样”的后续方向，并要求另拆记录模型。该 future-only 表述已被本页开头引用的 V11 accepted Architecture supersede；当前 exact schema、lifecycle、analysis、export、Story owner 和 evidence 只以 canonical 计划为准，且仍是尚未实现的 planning contract。E16-3a 仍只代表其历史视觉规划范围。
 - `超过上限` 表示超过用户设置的提醒阈值，首版只做深红视觉提示，不播放声音、不震动、不强制暂停，不做医疗、危险或训练中断判断。
 - Huawei Health Kit / Health Service Kit、Health Connect、Wear OS、HealthKit 或厂商 SDK 仍只作为未来独立阶段调研。Health Connect 更适合历史摘要 / 趋势候选，不作为当前实时执行页来源。
 - 后续 Health Connect、Wear OS、HealthKit、Huawei、BLE 或厂商 SDK 只能作为 `HeartRateProvider` adapter 接入；adapter 负责抹平平台字段并保留 `sourceKind`、`sourceId` / `sourceLabel`，核心 UI、训练执行引擎、历史统计和 analytics 不能直接依赖 SDK model。
