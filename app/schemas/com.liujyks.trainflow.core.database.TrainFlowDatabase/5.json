@@ -1,0 +1,1273 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "22aad4c23f8ea21def13988081bbfcfe",
+    "entities": [
+      {
+        "tableName": "exercises",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `equipment_json` TEXT NOT NULL, `difficulty` TEXT NOT NULL, `capabilities_json` TEXT NOT NULL, `content_status` TEXT NOT NULL, `updated_at` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "equipmentJson",
+            "columnName": "equipment_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "difficulty",
+            "columnName": "difficulty",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capabilitiesJson",
+            "columnName": "capabilities_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentStatus",
+            "columnName": "content_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "workout_plans",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `mode` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `blocks_json` TEXT NOT NULL, `reminder_json` TEXT, `preferences_json` TEXT, `follow_along_json` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mode",
+            "columnName": "mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "blocksJson",
+            "columnName": "blocks_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reminderJson",
+            "columnName": "reminder_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "preferencesJson",
+            "columnName": "preferences_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "followAlongJson",
+            "columnName": "follow_along_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "workout_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `plan_id` TEXT, `mode` TEXT NOT NULL, `status` TEXT NOT NULL, `plan_snapshot_json` TEXT NOT NULL, `started_at` TEXT, `ended_at` TEXT, `total_elapsed_sec` INTEGER, `effective_elapsed_sec` INTEGER, `paused_elapsed_sec` INTEGER, `timeline_version` INTEGER DEFAULT NULL, `last_durable_offset_ms` INTEGER DEFAULT NULL, `last_mutation_sequence` INTEGER DEFAULT NULL, `trusted_end_offset_ms` INTEGER DEFAULT NULL, `terminal_reason` TEXT DEFAULT NULL, `display_metadata_contract_version` INTEGER DEFAULT NULL, `session_display_metadata_json` TEXT DEFAULT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planId",
+            "columnName": "plan_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mode",
+            "columnName": "mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planSnapshotJson",
+            "columnName": "plan_snapshot_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "started_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "ended_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "totalElapsedSec",
+            "columnName": "total_elapsed_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "effectiveElapsedSec",
+            "columnName": "effective_elapsed_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pausedElapsedSec",
+            "columnName": "paused_elapsed_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timelineVersion",
+            "columnName": "timeline_version",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "lastDurableOffsetMs",
+            "columnName": "last_durable_offset_ms",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "lastMutationSequence",
+            "columnName": "last_mutation_sequence",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "trustedEndOffsetMs",
+            "columnName": "trusted_end_offset_ms",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "terminalReason",
+            "columnName": "terminal_reason",
+            "affinity": "TEXT",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "displayMetadataContractVersion",
+            "columnName": "display_metadata_contract_version",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "sessionDisplayMetadataJson",
+            "columnName": "session_display_metadata_json",
+            "affinity": "TEXT",
+            "defaultValue": "NULL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_workout_sessions_plan_id",
+            "unique": false,
+            "columnNames": [
+              "plan_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_sessions_plan_id` ON `${TABLE_NAME}` (`plan_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "session_step_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `session_id` TEXT NOT NULL, `step_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `block_id` TEXT, `item_id` TEXT, `set_plan_id` TEXT, `exercise_id` TEXT, `started_at` TEXT NOT NULL, `ended_at` TEXT, `skipped` INTEGER NOT NULL, `actual_duration_sec` INTEGER, `planned_duration_sec` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stepId",
+            "columnName": "step_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockId",
+            "columnName": "block_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "setPlanId",
+            "columnName": "set_plan_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exercise_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "started_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "ended_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "skipped",
+            "columnName": "skipped",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actualDurationSec",
+            "columnName": "actual_duration_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "plannedDurationSec",
+            "columnName": "planned_duration_sec",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_session_step_records_session_id",
+            "unique": false,
+            "columnNames": [
+              "session_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_session_step_records_session_id` ON `${TABLE_NAME}` (`session_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "timed_rest_extension_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `session_id` TEXT NOT NULL, `step_id` TEXT NOT NULL, `step_index` INTEGER NOT NULL, `round_index` INTEGER, `rest_stage_id` TEXT, `rest_stage_title` TEXT NOT NULL, `previous_stage_id` TEXT, `previous_stage_title` TEXT, `added_sec` INTEGER NOT NULL, `planned_rest_sec` INTEGER NOT NULL, `rest_elapsed_before_extension_sec` INTEGER NOT NULL, `extension_at_remaining_sec` INTEGER NOT NULL, `cumulative_extra_rest_sec` INTEGER NOT NULL, `event_elapsed_sec` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stepId",
+            "columnName": "step_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stepIndex",
+            "columnName": "step_index",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roundIndex",
+            "columnName": "round_index",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "restStageId",
+            "columnName": "rest_stage_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "restStageTitle",
+            "columnName": "rest_stage_title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "previousStageId",
+            "columnName": "previous_stage_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "previousStageTitle",
+            "columnName": "previous_stage_title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addedSec",
+            "columnName": "added_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plannedRestSec",
+            "columnName": "planned_rest_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restElapsedBeforeExtensionSec",
+            "columnName": "rest_elapsed_before_extension_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "extensionAtRemainingSec",
+            "columnName": "extension_at_remaining_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cumulativeExtraRestSec",
+            "columnName": "cumulative_extra_rest_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventElapsedSec",
+            "columnName": "event_elapsed_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_timed_rest_extension_records_session_id",
+            "unique": false,
+            "columnNames": [
+              "session_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_timed_rest_extension_records_session_id` ON `${TABLE_NAME}` (`session_id`)"
+          },
+          {
+            "name": "index_timed_rest_extension_records_step_id",
+            "unique": false,
+            "columnNames": [
+              "step_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_timed_rest_extension_records_step_id` ON `${TABLE_NAME}` (`step_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "strength_set_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `session_id` TEXT NOT NULL, `exercise_id` TEXT NOT NULL, `source_set_plan_id` TEXT, `set_order` INTEGER NOT NULL, `set_kind` TEXT NOT NULL, `side` TEXT, `planned_json` TEXT, `actual_json` TEXT, `active_duration_sec` INTEGER, `actual_rest_after_sec` INTEGER, `effort` TEXT, `substituted_from_exercise_id` TEXT, `notes` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSetPlanId",
+            "columnName": "source_set_plan_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "setOrder",
+            "columnName": "set_order",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "setKind",
+            "columnName": "set_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "side",
+            "columnName": "side",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "plannedJson",
+            "columnName": "planned_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "actualJson",
+            "columnName": "actual_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "activeDurationSec",
+            "columnName": "active_duration_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "actualRestAfterSec",
+            "columnName": "actual_rest_after_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "effort",
+            "columnName": "effort",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "substitutedFromExerciseId",
+            "columnName": "substituted_from_exercise_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_strength_set_records_session_id",
+            "unique": false,
+            "columnNames": [
+              "session_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_strength_set_records_session_id` ON `${TABLE_NAME}` (`session_id`)"
+          },
+          {
+            "name": "index_strength_set_records_exercise_id",
+            "unique": false,
+            "columnNames": [
+              "exercise_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_strength_set_records_exercise_id` ON `${TABLE_NAME}` (`exercise_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "recovery_areas",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `body_region` TEXT NOT NULL, `summary` TEXT NOT NULL, `media_json` TEXT, `caution_text` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bodyRegion",
+            "columnName": "body_region",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "summary",
+            "columnName": "summary",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaJson",
+            "columnName": "media_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cautionText",
+            "columnName": "caution_text",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "recovery_recommendations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `session_id` TEXT NOT NULL, `trained_muscle_ids_json` TEXT NOT NULL, `area_ids_json` TEXT NOT NULL, `content_ids_json` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trainedMuscleIdsJson",
+            "columnName": "trained_muscle_ids_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "areaIdsJson",
+            "columnName": "area_ids_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentIdsJson",
+            "columnName": "content_ids_json",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recovery_recommendations_session_id",
+            "unique": false,
+            "columnNames": [
+              "session_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recovery_recommendations_session_id` ON `${TABLE_NAME}` (`session_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "workout_phase_intervals",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `session_id` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `start_offset_ms` INTEGER NOT NULL, `end_offset_ms` INTEGER, `start_mutation_sequence` INTEGER NOT NULL, `end_mutation_sequence` INTEGER, `open_marker` INTEGER, `phase_kind` TEXT NOT NULL, `phase_identity_json` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`session_id`) REFERENCES `workout_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startOffsetMs",
+            "columnName": "start_offset_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endOffsetMs",
+            "columnName": "end_offset_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "startMutationSequence",
+            "columnName": "start_mutation_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endMutationSequence",
+            "columnName": "end_mutation_sequence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openMarker",
+            "columnName": "open_marker",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "phaseKind",
+            "columnName": "phase_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phaseIdentityJson",
+            "columnName": "phase_identity_json",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_workout_phase_intervals_session_sequence",
+            "unique": true,
+            "columnNames": [
+              "session_id",
+              "sequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_workout_phase_intervals_session_sequence` ON `${TABLE_NAME}` (`session_id`, `sequence`)"
+          },
+          {
+            "name": "index_workout_phase_intervals_session_open_marker",
+            "unique": true,
+            "columnNames": [
+              "session_id",
+              "open_marker"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_workout_phase_intervals_session_open_marker` ON `${TABLE_NAME}` (`session_id`, `open_marker`)"
+          },
+          {
+            "name": "index_workout_phase_intervals_session_start",
+            "unique": false,
+            "columnNames": [
+              "session_id",
+              "start_offset_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_phase_intervals_session_start` ON `${TABLE_NAME}` (`session_id`, `start_offset_ms`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workout_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "session_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "heart_rate_recordings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recording_id` TEXT NOT NULL, `session_id` TEXT NOT NULL, `status` TEXT NOT NULL, `started_offset_ms` INTEGER NOT NULL, `started_mutation_sequence` INTEGER NOT NULL, `ended_offset_ms` INTEGER, `ended_mutation_sequence` INTEGER, `source_contract_version` INTEGER NOT NULL, `source_kind` TEXT NOT NULL, `acquisition_contract_version` INTEGER NOT NULL, `parameter_snapshot_version` INTEGER NOT NULL, `age` INTEGER, `personal_max_bpm` INTEGER, `effective_max_bpm` INTEGER, `effective_max_source` TEXT, `alert_threshold_bpm` INTEGER, `zone_snapshot_json` TEXT, `original_analysis_version` INTEGER, PRIMARY KEY(`recording_id`), FOREIGN KEY(`session_id`) REFERENCES `workout_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recording_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedOffsetMs",
+            "columnName": "started_offset_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedMutationSequence",
+            "columnName": "started_mutation_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedOffsetMs",
+            "columnName": "ended_offset_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endedMutationSequence",
+            "columnName": "ended_mutation_sequence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sourceContractVersion",
+            "columnName": "source_contract_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceKind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "acquisitionContractVersion",
+            "columnName": "acquisition_contract_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parameterSnapshotVersion",
+            "columnName": "parameter_snapshot_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "age",
+            "columnName": "age",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "personalMaxBpm",
+            "columnName": "personal_max_bpm",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "effectiveMaxBpm",
+            "columnName": "effective_max_bpm",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "effectiveMaxSource",
+            "columnName": "effective_max_source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "alertThresholdBpm",
+            "columnName": "alert_threshold_bpm",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "zoneSnapshotJson",
+            "columnName": "zone_snapshot_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "originalAnalysisVersion",
+            "columnName": "original_analysis_version",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "recording_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_heart_rate_recordings_session_id",
+            "unique": true,
+            "columnNames": [
+              "session_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_heart_rate_recordings_session_id` ON `${TABLE_NAME}` (`session_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workout_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "session_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "heart_rate_acquisition_intervals",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `recording_id` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `start_offset_ms` INTEGER NOT NULL, `end_offset_ms` INTEGER, `start_mutation_sequence` INTEGER NOT NULL, `end_mutation_sequence` INTEGER, `open_marker` INTEGER, `recording_intent` TEXT NOT NULL, `intent_reason` TEXT, `device_state` TEXT NOT NULL, `device_reason` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`recording_id`) REFERENCES `heart_rate_recordings`(`recording_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recording_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startOffsetMs",
+            "columnName": "start_offset_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endOffsetMs",
+            "columnName": "end_offset_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "startMutationSequence",
+            "columnName": "start_mutation_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endMutationSequence",
+            "columnName": "end_mutation_sequence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openMarker",
+            "columnName": "open_marker",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "recordingIntent",
+            "columnName": "recording_intent",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "intentReason",
+            "columnName": "intent_reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deviceState",
+            "columnName": "device_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceReason",
+            "columnName": "device_reason",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_hr_acquisition_recording_sequence",
+            "unique": true,
+            "columnNames": [
+              "recording_id",
+              "sequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_hr_acquisition_recording_sequence` ON `${TABLE_NAME}` (`recording_id`, `sequence`)"
+          },
+          {
+            "name": "index_hr_acquisition_recording_open_marker",
+            "unique": true,
+            "columnNames": [
+              "recording_id",
+              "open_marker"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_hr_acquisition_recording_open_marker` ON `${TABLE_NAME}` (`recording_id`, `open_marker`)"
+          },
+          {
+            "name": "index_hr_acquisition_recording_start",
+            "unique": false,
+            "columnNames": [
+              "recording_id",
+              "start_offset_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_hr_acquisition_recording_start` ON `${TABLE_NAME}` (`recording_id`, `start_offset_ms`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "heart_rate_recordings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recording_id"
+            ],
+            "referencedColumns": [
+              "recording_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "heart_rate_samples",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recording_id` TEXT NOT NULL, `sample_sequence` INTEGER NOT NULL, `offset_ms` INTEGER NOT NULL, `mutation_sequence` INTEGER NOT NULL, `bpm` INTEGER NOT NULL, PRIMARY KEY(`recording_id`, `sample_sequence`), FOREIGN KEY(`recording_id`) REFERENCES `heart_rate_recordings`(`recording_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recording_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleSequence",
+            "columnName": "sample_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offsetMs",
+            "columnName": "offset_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mutationSequence",
+            "columnName": "mutation_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bpm",
+            "columnName": "bpm",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "recording_id",
+            "sample_sequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_hr_samples_canonical_order",
+            "unique": false,
+            "columnNames": [
+              "recording_id",
+              "offset_ms",
+              "mutation_sequence",
+              "sample_sequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_hr_samples_canonical_order` ON `${TABLE_NAME}` (`recording_id`, `offset_ms`, `mutation_sequence`, `sample_sequence`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "heart_rate_recordings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recording_id"
+            ],
+            "referencedColumns": [
+              "recording_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "heart_rate_analysis_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recording_id` TEXT NOT NULL, `analysis_version` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `input_last_mutation_sequence` INTEGER NOT NULL, `sample_status` TEXT NOT NULL, `coverage_status` TEXT NOT NULL, `zone_status` TEXT NOT NULL, `canonical_sample_count` INTEGER NOT NULL, `primary_point_sample_count` INTEGER NOT NULL, `eligible_duration_ms` INTEGER, `covered_duration_ms` INTEGER, `coverage_basis_points` INTEGER, `weighted_bpm_ms` INTEGER, `observed_avg_bpm` INTEGER, `observed_max_bpm` INTEGER, `highest_offset_ms` INTEGER, `highest_mutation_sequence` INTEGER, `highest_sample_sequence` INTEGER, `analysis_config_json` TEXT NOT NULL, `zone_durations_json` TEXT, `phase_aggregates_json` TEXT NOT NULL, `duration_breakdown_json` TEXT NOT NULL, `quality_reasons_json` TEXT NOT NULL, PRIMARY KEY(`recording_id`, `analysis_version`), FOREIGN KEY(`recording_id`) REFERENCES `heart_rate_recordings`(`recording_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recording_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analysisVersion",
+            "columnName": "analysis_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inputLastMutationSequence",
+            "columnName": "input_last_mutation_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleStatus",
+            "columnName": "sample_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coverageStatus",
+            "columnName": "coverage_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zoneStatus",
+            "columnName": "zone_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalSampleCount",
+            "columnName": "canonical_sample_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primaryPointSampleCount",
+            "columnName": "primary_point_sample_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eligibleDurationMs",
+            "columnName": "eligible_duration_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "coveredDurationMs",
+            "columnName": "covered_duration_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "coverageBasisPoints",
+            "columnName": "coverage_basis_points",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "weightedBpmMs",
+            "columnName": "weighted_bpm_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "observedAvgBpm",
+            "columnName": "observed_avg_bpm",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "observedMaxBpm",
+            "columnName": "observed_max_bpm",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "highestOffsetMs",
+            "columnName": "highest_offset_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "highestMutationSequence",
+            "columnName": "highest_mutation_sequence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "highestSampleSequence",
+            "columnName": "highest_sample_sequence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "analysisConfigJson",
+            "columnName": "analysis_config_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zoneDurationsJson",
+            "columnName": "zone_durations_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "phaseAggregatesJson",
+            "columnName": "phase_aggregates_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationBreakdownJson",
+            "columnName": "duration_breakdown_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "qualityReasonsJson",
+            "columnName": "quality_reasons_json",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "recording_id",
+            "analysis_version"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "heart_rate_recordings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recording_id"
+            ],
+            "referencedColumns": [
+              "recording_id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '22aad4c23f8ea21def13988081bbfcfe')"
+    ]
+  }
+}

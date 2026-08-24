@@ -19,7 +19,21 @@ data class WorkoutSessionEntity(
     @ColumnInfo(name = "ended_at") val endedAt: String? = null,
     @ColumnInfo(name = "total_elapsed_sec") val totalElapsedSec: Int? = null,
     @ColumnInfo(name = "effective_elapsed_sec") val effectiveElapsedSec: Int? = null,
-    @ColumnInfo(name = "paused_elapsed_sec") val pausedElapsedSec: Int? = null
+    @ColumnInfo(name = "paused_elapsed_sec") val pausedElapsedSec: Int? = null,
+    @ColumnInfo(name = "timeline_version", defaultValue = "NULL")
+    val timelineVersion: Int? = null,
+    @ColumnInfo(name = "last_durable_offset_ms", defaultValue = "NULL")
+    val lastDurableOffsetMs: Long? = null,
+    @ColumnInfo(name = "last_mutation_sequence", defaultValue = "NULL")
+    val lastMutationSequence: Long? = null,
+    @ColumnInfo(name = "trusted_end_offset_ms", defaultValue = "NULL")
+    val trustedEndOffsetMs: Long? = null,
+    @ColumnInfo(name = "terminal_reason", defaultValue = "NULL")
+    val terminalReason: String? = null,
+    @ColumnInfo(name = "display_metadata_contract_version", defaultValue = "NULL")
+    val displayMetadataContractVersion: Int? = null,
+    @ColumnInfo(name = "session_display_metadata_json", defaultValue = "NULL")
+    val sessionDisplayMetadataJson: String? = null
 )
 
 @Entity(

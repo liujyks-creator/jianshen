@@ -17,13 +17,14 @@
 
 ### 当前 E17 状态索引
 
-#### E17 remainder V11 tracked planning sync（当前 authoritative planning 状态）
+#### E17-CS-03 canonical schema candidate（当前 authoritative delivery 状态）
 
 - 唯一 tracked canonical 详细计划为 `docs/planning/e17-remainder-epic-story-plan.md`；source identity 为 `INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`，`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`。
 - V11 已通过 closure-bounded re-Planning Review Attempt 5：`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`terminal=PASS`，以及 scoped Consistency re-Audit Attempt 2：`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`terminal=PASS`，`CONSISTENCY=PASS`；全部规划门禁已完成，不得重新执行 Planning Review 或 Consistency Audit。
-- 当前节点是 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`。只有本 docs-sync candidate 通过 fresh 独立 Review、合并并推送，candidate full SHA 成为同步 `main` / `origin/main` 的 ancestor 且文档一致后，tracked planning sync 才完成；在此之前不得启动 CS-01 至 CS-12 的实现。
-- tracked planning sync 完成后，主管理只可从 roots=`CS-01/CS-03` 中选择一个 exact root Story 准备 Dev 提示词；不得并行启动两个 root，不得跳过 Story prerequisite。
-- 详细合同保留 12 Stories、28 unique material edges、8-node longest path、`CS-06 -> CS-09`、`U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2`，以及 CS-03 / CS-05 / CS-09 / CS-12 的唯一 owner 边界。它们是已接受但尚未实现的 planning contract；没有 production、runtime、Gradle、APK、AVD、device、human 或 performance evidence。
+- Tracked planning sync 已在 accepted base `abf85553bc0c4a71793858734af265b634caab69` 满足，主管理已选择 root Story `E17-CS-03`。当前 Story branch=`codex/e17-cs-03-canonical-schema-migration-foundation`，状态=`IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`。
+- Candidate 将 Room v4 提升为 v5，保留既有 1→2→3→4 链并新增原子 4→5；fresh v5 与 real v4→v5 使用同一 canonical DDL。它新增七个 nullable session header 字段、五表 / entity / DAO / relation、SQLite constraints / cascade、closed JSON 与 graph validators，以及 byte-stable plan snapshot storage v1。全部 v4 `ready/active/paused/completed/abandoned` 行七列保持 NULL，不合成 timeline / HR facts。
+- Candidate 不含 Recorder、finalizer、legacy reader、history projector、runtime repository、UI、export、BLE 或 notification 变更；未运行 AVD、APK 安装、device 或 human gate。只有 fresh independent Review PASS、`--no-ff` merge / push、candidate full SHA 成为同步 `main` / `origin/main` ancestor 且状态一致后，CS-03 才可提升为 `reviewed / merged`；此前 CS-04 保持 prerequisite-gated。
+- 详细合同仍保留 12 Stories、28 unique material edges、8-node longest path、`CS-06 -> CS-09`、`U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2`，以及 CS-03 / CS-05 / CS-09 / CS-12 的唯一 owner 边界；本 candidate 不改变后续 owner 或 DAG。
 - 本节以下带日期 E17 记录继续保留其历史或既有实现事实；其中对记录、分析、导出使用的旧 future-only classification，或把下一门禁写为 V11 Planning Review / Consistency Audit 的文字，均为 `non-operative / historical`，不能覆盖本节。
 
 2026-08-07 E17-7b 保持 `implemented / needs review`。2026-07-28 post-device UX Repair 已收口手动断开后的重复 / 惰性动作、四段紧凑设置 IA、蓝牙关闭跳转 Android 蓝牙设置、adapter-off `stopScan` 窄异常清理，以及明确区间时采用 `Soft Zone Halo`：约 16% 区间色局部柔和 halo / gradient、细微同色 surface tint、明确区间文字与自适应高对比前景，不使用实心 rail / 强调条。2026-08-07 后续用户验收又只授权一项更窄 geometry Repair：size、viewport 或 exclusion policy 触发重新布局时保留已存储的 `HeartRateCapsuleSnapEdge`，继续贴在原 LEFT / RIGHT 安全边；pointer drag release 仍按 release point 做 nearest-edge inference 并更新存储边。capsule dimensions、vertical clamp、safe-area / exclusion policy、movement threshold、拖动手势、expand / collapse、motion、visual / content / state、IME、其他 geometry 与 E17-9 FGS / 后台 ownership 均未改变。

@@ -23,13 +23,13 @@ stepsCompleted:
 
 # TrainFlow 实现准备检查报告
 
-## E17 remainder V11 tracked planning sync gate（当前 authoritative）
+## E17-CS-03 candidate gate（当前 authoritative）
 
 - 唯一 detailed authority：`docs/planning/e17-remainder-epic-story-plan.md`；source=`INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`，`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`。
 - Planning closure：re-Planning Review Attempt 5，`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`terminal=PASS`；scoped Consistency re-Audit Attempt 2，`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`terminal=PASS`，`CONSISTENCY=PASS`。这些门禁已完成，不得重新执行。
-- 当前结论：`TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`。V11 的 12 Stories、28 material edges、8-node longest path 和唯一 owner 合同已接受，但尚无 Story implementation 或 runtime evidence。
-- 只有本 tracked planning sync Story 通过一次只审查该 docs-sync delta 的 fresh 独立 Review、完成 merge / push、candidate full SHA 成为同步 `main` / `origin/main` ancestor，且状态文档一致后，tracked planning sync 才完成。
-- 在该 merge-stable 条件成立前，不允许准备或启动 CS-01 至 CS-12 Dev。条件成立后，主管理可且只可从 roots=`CS-01/CS-03` 中选择一个 exact root Story，按 canonical AC / evidence / prerequisite 准备 Dev 提示词；其余 Story 继续受 material DAG 约束。
+- Tracked planning sync 已在 accepted base `abf85553bc0c4a71793858734af265b634caab69` 满足，主管理已选择 root Story `E17-CS-03`。当前 branch=`codex/e17-cs-03-canonical-schema-migration-foundation`，结论=`IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`。
+- Candidate evidence 范围仅为 Room v5、real v4→v5 / fresh v5 canonical schema identity、DDL constraints / rollback / cascade / legacy NULL、entity / DAO relation与排序、pure validators、closed JSON 和 plan snapshot storage v1 byte identity。它不提供 runtime Recorder / finalizer / history / export、APK、AVD、device、human 或 performance evidence。
+- 只有 fresh independent Review PASS、`--no-ff` merge / push、candidate full SHA 成为同步 `main` / `origin/main` ancestor、`main...origin/main=0 0` 且状态文档一致后，CS-03 才可自动提升为 `reviewed / merged`。Candidate 期间 CS-04 仍为 `planned / prerequisite-gated`；不得提前准备或启动 CS-04。
 - 本节以下旧 Correct-course、E17-7a/7b 与 E16-11/12 的带日期 readiness 文本保留为历史事实；其中关于记录、分析、导出的旧 future-only classification 和 V11 Review / Audit 的旧未完成状态，均为 `non-operative / historical`，不能覆盖本节。
 
 ## 2026-07-26 E17 Correct-course readiness delta

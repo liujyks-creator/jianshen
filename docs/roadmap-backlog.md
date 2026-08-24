@@ -38,15 +38,15 @@ E17 remainder 的唯一 detailed Story / AC / evidence / owner / schema / DAG au
 - Roots=`CS-01/CS-03`，sink=`CS-12`，materialEdges=`28`，uniqueEdges=`28`，acyclic=`true`，orphans=`0`，longestMaterialPath=`8`。
 - 8-node witness：`CS-03 -> CS-04 -> CS-05 -> CS-06 -> CS-09 -> CS-10 -> CS-11 -> CS-12`；`CS-06 -> CS-09` 是显式 material edge。
 - Material graph：`CS-01 -> CS-02`；`CS-01, CS-02, CS-05 -> CS-06/CS-07/CS-08`；`CS-03 -> CS-04 -> CS-05`；`CS-05, CS-06 -> CS-09`；`CS-03, CS-05, CS-06, CS-07, CS-08, CS-09 -> CS-10`；`CS-06, CS-07, CS-08, CS-09, CS-10 -> CS-11`；`CS-02, CS-10, CS-11 -> CS-12`。
-- 实施顺序由上述 material DAG 和 canonical Story prerequisites 唯一约束；tracked planning sync 完成后，主管理一次只从当前 ready nodes 中选择一个 exact Story。第一个 Story 必须从 roots=`CS-01/CS-03` 选择，不得跳过 predecessor、并行假定两个 root 已完成或把 roadmap 顺序改写成新 owner。
+- 实施顺序由上述 material DAG 和 canonical Story prerequisites 唯一约束；tracked planning sync 已在 accepted base `abf85553bc0c4a71793858734af265b634caab69` 满足，主管理已选择 root=`CS-03`。一次仍只交付一个 exact Story，不得并行假定另一个 root 已完成或把 roadmap 顺序改写成新 owner。
 - `U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2` 及 CS-03 / CS-05 / CS-09 / CS-12 唯一责任边界均以 canonical 为准；CS-10 / CS-11 consumer contract 不得在摘要中重写。
-- 当前状态是 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`。只有本 docs-sync 通过 fresh 独立 Review、合并、推送并成为同步 `main` / `origin/main` ancestor 后，才允许主管理选择第一个 exact root Story。当前没有任何 CS Story implementation 或 runtime evidence 完成。
+- 当前 `CS-03` branch=`codex/e17-cs-03-canonical-schema-migration-foundation`，状态=`IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`。候选仅交付 Room v5 / Migration(4,5)、canonical schema / DAO / validators 与 plan snapshot storage v1 foundation；无 runtime / UI / export / device evidence。只有 fresh independent Review PASS、`--no-ff` merge / push、candidate full SHA ancestry 与状态同步全部成立后，CS-03 才可提升为 `reviewed / merged`；当前不解锁 CS-04。
 
 本节以下旧 E17 roadmap、E16-11 / E16-12 “historical not started / superseded”以及“记录 / 分析 / 导出仍未规划”的带日期文字均为 `non-operative / historical`；它们保留历史事实，但不能覆盖 V11 accepted canonical roadmap。
 
 **文档状态:** 首版拆分草案  
 **用途:** 将 PRD、UX、数据契约和 Android 架构拆成可执行里程碑、Epic、Story 与验收顺序。  
-**范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构，D-082 已接受 exact-target 自动恢复、persistent manual suppression 与个人参数。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；本Correct-course与E17-7a prerequisite按页首统一条件式真值判定。全天候健康监测、Health Connect 历史同步、医疗告警和通用设备兼容承诺仍不在本范围；E17 remainder 的记录、分析与用户导出已经 V11 接受为 CS-01 至 CS-12 的计划合同，但尚未实现，详细边界只以 canonical 计划为准。后续商业化、云同步和完整课程平台仍不在本范围。
+**范围:** Android MVP 与当前 React/Vite 原型承接。原始 Android MVP backlog 曾不包含真实可穿戴设备接入；D-080 已将用户显式 opt-in 后的标准 HRS 心率设备与冻结胶囊显示纳入当前 E17 产品范围，D-081 已确认唯一进程 owner + 活跃训练 `connectedDevice` foreground service 的最小架构，D-082 已接受 exact-target 自动恢复、persistent manual suppression 与个人参数。E17-4/5/6已reviewed/merged，E17-4 readiness=`passed`；本Correct-course与E17-7a prerequisite按页首统一条件式真值判定。全天候健康监测、Health Connect 历史同步、医疗告警和通用设备兼容承诺仍不在本范围；E17 remainder 的记录、分析与用户导出已经 V11 接受为 CS-01 至 CS-12 的计划合同，其中 CS-03 只有待 Review / merge 的 schema foundation candidate，runtime recording、analysis、history、export 与 UI 尚未实现。后续商业化、云同步和完整课程平台仍不在本范围。
 
 ## 1. 需求库存
 
