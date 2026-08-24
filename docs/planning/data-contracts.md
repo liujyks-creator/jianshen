@@ -13,6 +13,16 @@ stepsCompleted:
 
 # TrainFlow 数据与接口标准草案
 
+## E17 remainder V11 accepted data contract（当前 planning authority）
+
+E17 remainder 的唯一 detailed data contract 是 `docs/planning/e17-remainder-epic-story-plan.md`。其 source=`INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`（`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`），已通过 re-Planning Review Attempt 5（`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`PASS`）和 scoped Consistency re-Audit Attempt 2（`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`PASS / CONSISTENCY=PASS`）。
+
+V11 已接受 canonical session header / graph、`Migration(4,5)` 与五表 DDL、phase / recording / acquisition / sample / analysis snapshot、八个 closed storage JSON、plan snapshot storage v1 / legacy strict read、export v1、lease lifecycle、version matrix 和 owner / validator / evidence 分工。详细 key、NULL、type、cross-field、ordering、lifecycle、failure 和 schema 规则不得在本摘要中改写。
+
+这些合同 **尚未落地 production**。当前 Room schema、Kotlin model、repository、reader、analysis、export 和 UI 不能被描述为已经实现 V11；当前也没有 V11 runtime、Gradle、APK、AVD、device、human 或 performance evidence。状态为 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`；本 docs-sync 通过 fresh 独立 Review、合并并成为同步 main ancestor 后，才允许主管理从 `CS-01/CS-03` 选择一个 exact root Story。
+
+本文件后续 E11 / E16 心率段和旧 TypeScript 接口保留其历史背景；凡与 V11 schema 不同、对 recording / analysis / export 使用旧 future-only classification，或暗示旧 summary / sample interface 是当前 schema 的内容，均为 `non-operative / historical`，不得覆盖 canonical。
+
 **文档状态:** 首版草案  
 **日期:** 2026-05-21  
 **用途:** 为前端原型、动作库导入、训练执行引擎和后续 Android 架构提供共同数据边界。
@@ -1100,9 +1110,9 @@ E16-3 之后的未来 UI 边界：
 - 超过用户设置上限时仅做深红视觉提示，不触发声音、震动、强制暂停、医疗警报或训练中断。
 - 浮动胶囊不得遮挡 TimerDial、力量训练主按钮、confirm-record 输入 / 感受选择、完成页固定返回等核心操作；E16-3a 必须先用 `huashu-design` 做 HTML 高保真与 overlap / drag / snap 评审。
 
-### 12.3 后续持久化与心率分析边界
+### 12.3 V11 accepted 持久化与分析边界；旧候选接口（non-operative / historical）
 
-当前 production 仍没有持久化心率记录模型。E16 之后如进入训练中心率记录 / 分析阶段，优先另行设计独立 `heart_rate_samples` / `heart_rate_records`，再由样本派生 session summary；不要把旧的“平均心率趋势”作为唯一目标，也不要把瞬时 `HeartRateState` 直接塞进 `WorkoutSession`。
+当前 production 尚未实现 V11 心率持久化、分析或导出，这一 implementation fact 不再表示合同“未规划”。V11 已接受的唯一 schema / lifecycle / owner / validator / export 合同位于 `docs/planning/e17-remainder-epic-story-plan.md`，只能由 CS-01 至 CS-12 按 material DAG 实现。下方 `WorkoutSessionHeartRateSummary` / `HeartRateSample` 是 E16 阶段的旧候选草图，现为 `non-operative / historical`：不得把它作为 V11 production schema、不得据此改写 V11 的五表 DDL、analysis snapshot、recording identity、source / parameter snapshot、canonical order、input cut、version 或 export 合同，也不得把 planned schema 写成已落地事实。
 
 ```ts
 interface WorkoutSessionHeartRateSummary {

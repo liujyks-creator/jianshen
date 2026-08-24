@@ -17,6 +17,15 @@
 
 ### 当前 E17 状态索引
 
+#### E17 remainder V11 tracked planning sync（当前 authoritative planning 状态）
+
+- 唯一 tracked canonical 详细计划为 `docs/planning/e17-remainder-epic-story-plan.md`；source identity 为 `INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`，`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`。
+- V11 已通过 closure-bounded re-Planning Review Attempt 5：`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`terminal=PASS`，以及 scoped Consistency re-Audit Attempt 2：`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`terminal=PASS`，`CONSISTENCY=PASS`；全部规划门禁已完成，不得重新执行 Planning Review 或 Consistency Audit。
+- 当前节点是 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`。只有本 docs-sync candidate 通过 fresh 独立 Review、合并并推送，candidate full SHA 成为同步 `main` / `origin/main` 的 ancestor 且文档一致后，tracked planning sync 才完成；在此之前不得启动 CS-01 至 CS-12 的实现。
+- tracked planning sync 完成后，主管理只可从 roots=`CS-01/CS-03` 中选择一个 exact root Story 准备 Dev 提示词；不得并行启动两个 root，不得跳过 Story prerequisite。
+- 详细合同保留 12 Stories、28 unique material edges、8-node longest path、`CS-06 -> CS-09`、`U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2`，以及 CS-03 / CS-05 / CS-09 / CS-12 的唯一 owner 边界。它们是已接受但尚未实现的 planning contract；没有 production、runtime、Gradle、APK、AVD、device、human 或 performance evidence。
+- 本节以下带日期 E17 记录继续保留其历史或既有实现事实；其中对记录、分析、导出使用的旧 future-only classification，或把下一门禁写为 V11 Planning Review / Consistency Audit 的文字，均为 `non-operative / historical`，不能覆盖本节。
+
 2026-08-07 E17-7b 保持 `implemented / needs review`。2026-07-28 post-device UX Repair 已收口手动断开后的重复 / 惰性动作、四段紧凑设置 IA、蓝牙关闭跳转 Android 蓝牙设置、adapter-off `stopScan` 窄异常清理，以及明确区间时采用 `Soft Zone Halo`：约 16% 区间色局部柔和 halo / gradient、细微同色 surface tint、明确区间文字与自适应高对比前景，不使用实心 rail / 强调条。2026-08-07 后续用户验收又只授权一项更窄 geometry Repair：size、viewport 或 exclusion policy 触发重新布局时保留已存储的 `HeartRateCapsuleSnapEdge`，继续贴在原 LEFT / RIGHT 安全边；pointer drag release 仍按 release point 做 nearest-edge inference 并更新存储边。capsule dimensions、vertical clamp、safe-area / exclusion policy、movement threshold、拖动手势、expand / collapse、motion、visual / content / state、IME、其他 geometry 与 E17-9 FGS / 后台 ownership 均未改变。
 
 验收采用精确两层证据。旧 phone-tested executable source `12e33626b2af78708c14a7083d7a825db8e9cecf`、APK SHA256 `C0B6F495A5C9C1E417468A9571EA60BA1236362B65D7899C7DBB95B0216785D3` 上用户已通过的 BLE / runtime / recovery / settings / DataStore / parameters / zone criteria，由与新 executable source `2b243e60640e51878442836c5e82b940738ff84c` 的精确 relevant-source equivalence 保留；新 source 的 14,783,384-byte APK SHA256 `FFF73C0F79018F9871F75C512BD84817B82D94D010262EA2A42A1ACC4C46D955` 的 fresh API 36 AVD acceptance 只证明 RIGHT / LEFT resize anchoring、drag-back 与无 crash / ANR。该层不产生新的 phone / HUAWEI Band 9 / RF / GATT / CCCD / notify claim，也不把 AVD 当作物理 BLE 证据。pre-repair UX APK `98C19501AEAB34E01C47F44FEAA091FB7197A47946CD7F77BE9DBF3ECB5D33F5` 继续只是 stale finding source。
