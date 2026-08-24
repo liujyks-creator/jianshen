@@ -19,7 +19,9 @@ stepsCompleted:
 # TrainFlow 路线图与 MVP Backlog
 
 
-## 2026-07-26 E17 当前交付序列
+## 2026-07-26 E17 历史交付序列（non-operative / historical / superseded）
+
+本段自此标题起至下一个独立的 E17 remainder V11 canonical roadmap 标题之前，仅保存历史事实；不得生成当前任务，也不得覆盖 V11 canonical roadmap。
 
 1. 当前 docs Correct-course：18 项 receipt 与十文档一致。
 2. E17-7a Reconnect + Parameter Foundation：owner policy、长期 armed eligibility、persistent suppression、age / max / alert data、zone / alert presentation 与 tests / architecture evidence。
@@ -28,7 +30,7 @@ stepsCompleted:
 
 每项均须前序 immutable full SHA 已 Review / merge / ancestry / sync。当前 candidate 在十文档一致前 needs review / 7a gated，满足后自动 satisfied，无 docs-sync。保留 E17-5 / 6；禁止 `fda5f7cfd3c31af3399dfe231733ea00467a68e8` merge、整体 cherry-pick 或 prerequisite。下文旧 E17-7 单 Story / manual-only / deferred-without-target 状态均为历史快照。
 
-### E17 remainder V11 canonical roadmap（当前 authoritative）
+## E17 remainder V11 canonical roadmap（当前 authoritative）
 
 E17 remainder 的唯一 detailed Story / AC / evidence / owner / schema / DAG authority 是 `docs/planning/e17-remainder-epic-story-plan.md`。其 source 为 `INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`（`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`），已通过 re-Planning Review Attempt 5（`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`PASS`）和 scoped Consistency re-Audit Attempt 2（`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`PASS / CONSISTENCY=PASS`）。以下只保存机械 roadmap 摘要，不在本文件复制或改写 AC：
 
