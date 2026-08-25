@@ -55,6 +55,16 @@ Coaching 默认用开放问题理解约束，再展示 2–3 个真实可行路�
 
 每个 decision 至少记录：stable ID、`Binds`、`Prevents`、`Rule`、source/owner。Rationale 可在 decision ledger，spine 保持可执行。
 
+#### Framework/version 承重可行性门禁
+
+仅当候选 decision 把特定 framework/version 的**非显然能力**作为 persistence、migration、external interface 或 core owner/invariant 的承重前提时，进入 Story 前必须记录该前提、版本、受影响 decision/consumer 和可观察证明：
+
+1. 优先复用当前代码、实际 API signature、官方明确保证或既有 generated/exported artifact；版本和前提未变化时不重复验证。
+2. 上述证据仍不能判定时，才运行最小、只读、一次性的 focused probe；该 probe 只回答当前承重问题，不建立通用 fixture、验证框架或 production seam。
+3. 前提被反证或仍无法证明时，分别记录为 proven limitation 或 `UNKNOWN`，暴露会改变的执行层、schema authority、owner、evidence 与路线权衡，并标记 `phaseBlocker`；不得把该 decision 当作 accepted architecture 交给 Story。
+
+普通 framework 使用、accepted internal contract、显然 API 和已在相同版本/前提下证明的能力不触发该门禁。证据缺口本身不授权新增 production helper、wrapper、callback、fallback、adapter 或抽象；若解决路线确实需要改变这些责任，必须作为 Architecture trade-off 由用户或 accepted authority 选择。
+
 ### 5. Product/UX 与 CE 边界
 
 Architecture 不得首次决定：current/future scope、用户看到的 chart semantics、关键 surface、visual direction、Epic boundary。若这些仍 open，返回对应 node。
@@ -85,6 +95,7 @@ Spine 候选形成后做一次 divergence review、boundary sweep、second-order
 - 所有适用结构维度为 `DECIDED`、安全 `DEFERRED` 或有理由的 `N/A`，无阻塞 `OPEN`；
 - owner 与 shared data responsibility 唯一、dependency direction 和 mutation path 可执行；
 - error/invariant 与 operational envelope 足以让 Story 独立实施不分叉；
+- 每个适用的 framework/version 承重前提都有直接证明；反证、`UNKNOWN` 或执行层/owner迁移仍在 `phaseBlocker` 时不得进入 Story；
 - 没有 Architecture 首次决定产品/UX，也没有把 core decision 推给 CE；
 - 未受 delta 影响的 identity-bound evidence 不重复验证；
 - `firstUnfinishedAction` 指向 Epic/Story prerequisites 的首个具体动作。
