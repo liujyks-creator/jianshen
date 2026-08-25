@@ -25,7 +25,7 @@ stepsCompleted:
 
 V11 接受的 Architecture 包括五表方向与原子 `Migration(4,5)`、canonical session graph、心率 recording / acquisition / sample / analysis snapshot、closed storage JSON、version-aware read、export / lease / provider、`U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2`，以及 CS-03 / CS-05 / CS-09 / CS-12 的唯一 owner 边界。这里只建立权威链接，不复制 detailed contract。
 
-Accepted base `abf85553bc0c4a71793858734af265b634caab69` 已完成 tracked planning sync，并选择 root Story `E17-CS-03`。当前 Story 分支 `codex/e17-cs-03-canonical-schema-migration-foundation` 是 `IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`：候选把 Room 从 v4 提升到 v5，以同一 canonical DDL 支撑 fresh v5 与原子 `Migration(4,5)`，新增七个 session header 列、五张表、entity / DAO / relation、pure validators 和 plan snapshot storage v1；v4 legacy 行保持七列全 NULL。
+Accepted base `abf85553bc0c4a71793858734af265b634caab69` 已完成 tracked planning sync，并选择 root Story `E17-CS-03`。当前 Story 分支 `codex/e17-cs-03-canonical-schema-migration-foundation` 是 `REPAIR_IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`：Correct Course A 以 Room entity/exported schema 作为唯一 physical schema authority；普通 fresh v5 与原子 `Migration(4,5)` 产生相同的 Room 可表达 DDL，不再用 callback 重建表或用 handwritten `CHECK` 补强。七个 session header 列、五张表、PK/FK cascade/UNIQUE/index/nullability 由 SQLite 执行；enum、cross-field、closed JSON、graph、immutable snapshot signature 等 semantic invariants 由唯一 pure validators fail closed。v4 legacy 行仍保持七列全 NULL。
 
 该候选不包含 runtime Recorder、finalizer、legacy reader、history projector、UI、export、BLE 或 device 行为，也没有 APK、AVD、device、human 或 performance evidence。只有候选通过 fresh 独立 Review、完成 `--no-ff` merge / push、候选 full SHA 成为同步 `main` / `origin/main` ancestor 且状态文档一致后，CS-03 才可提升为 `reviewed / merged`；候选状态本身不解锁 CS-04。
 

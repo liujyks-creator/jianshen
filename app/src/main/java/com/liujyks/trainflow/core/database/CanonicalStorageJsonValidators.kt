@@ -1,5 +1,7 @@
 package com.liujyks.trainflow.core.database
 
+import com.liujyks.trainflow.core.data.OrderedStructureSignatureInputV1
+import com.liujyks.trainflow.core.data.WorkoutPlanSnapshotStorageV1
 import java.math.BigDecimal
 
 sealed interface CanonicalValidationResult {
@@ -196,6 +198,26 @@ object SessionDisplayMetadataV1Validator {
 
 object PhaseIdentityV1Validator {
     fun validate(
+        json: String,
+        immutableSnapshot: WorkoutPlanSnapshotStorageV1,
+        expectedPhaseKind: String? = null
+    ): CanonicalValidationResult {
+        val expectedMode = immutableSnapshot.mode.contractValue
+        val structural = validateStructure(json, expectedPhaseKind, expectedMode)
+        if (structural != CanonicalValidationResult.Valid) return structural
+        val root = parseCanonicalJson(json) as CanonicalJsonValue.Obj
+        val actualDigest = root.obj("orderedStructureSignature")
+            ?.string("digestHexLowercase") ?: return invalidPhaseIdentity()
+        val expectedDigest = OrderedStructureSignatureInputV1.digestHexLowercase(immutableSnapshot)
+            ?: return invalidPhaseIdentity()
+        return if (actualDigest == expectedDigest) {
+            CanonicalValidationResult.Valid
+        } else {
+            invalidPhaseIdentity()
+        }
+    }
+
+    fun validateStructure(
         json: String,
         expectedPhaseKind: String? = null,
         expectedMode: String? = null

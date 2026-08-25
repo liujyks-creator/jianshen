@@ -2,6 +2,8 @@ package com.liujyks.trainflow.core.data
 
 import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_CURRENT_VERSION
 import com.liujyks.trainflow.core.model.CooldownBlock
+import com.liujyks.trainflow.core.model.CountdownCue
+import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
 import com.liujyks.trainflow.core.model.PlanPreferences
@@ -28,6 +30,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.security.MessageDigest
 
 class PlanSnapshotStorageV1ValidatorTest {
     @Test
@@ -258,6 +261,156 @@ class PlanSnapshotStorageV1ValidatorTest {
         assertInvalid(PlanSnapshotStorageV1Validator.validate(nonObjectBlock, WorkoutMode.TIMED))
     }
 
+    @Test
+    fun knownProjectionBytesAndIndependentShaGoldensCoverAllModes() {
+        val goldens = listOf(
+            WorkoutMode.TIMED to (
+                "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[]}" to
+                    "4d606740d7a3e5072ee4506e70d40f03b44ed2c762ec3d334b8791a18ccb002a"
+                ),
+            WorkoutMode.STRENGTH to (
+                "{\"signatureInputContractVersion\":1,\"mode\":\"strength\",\"blocks\":[]}" to
+                    "bba02600522e5032df4ef3cd8996a7cc2fa3ef00cb2b49975ebbec3fa678d0ba"
+                ),
+            WorkoutMode.FOLLOW_ALONG to (
+                "{\"signatureInputContractVersion\":1,\"mode\":\"follow_along\",\"blocks\":[]}" to
+                    "dc27bf9244329c6b18f6c38a3e780e0e8f28c8ac9f9606c67fe4f8499742ab74"
+                )
+        )
+
+        goldens.forEach { (mode, expected) ->
+            val storage = validatedStorage(
+                WorkoutPlanSnapshot(title = "Display only", mode = mode, blocks = emptyList())
+            )
+            val bytes = requireNotNull(OrderedStructureSignatureInputV1.encode(storage))
+            assertArrayEquals(expected.first.toByteArray(Charsets.UTF_8), bytes)
+            assertEquals(expected.second, testSha256(bytes))
+            assertEquals(expected.second, OrderedStructureSignatureInputV1.digestHexLowercase(storage))
+        }
+    }
+
+    @Test
+    fun strengthProjectionGoldenCoversZeroDecimalExplicitNullEscapingAndMemberOrder() {
+        val storage = validatedStorage(
+            WorkoutPlanSnapshot(
+                title = "Excluded title",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "strength\"\\\n",
+                        order = 0,
+                        title = "Excluded block title",
+                        exerciseId = "squat",
+                        target = StrengthExerciseTarget(
+                            weight = WeightValue(0.0, WeightUnit.KG),
+                            repTarget = RepTarget.Fixed(10),
+                            restAfterSetSec = null
+                        ),
+                        sets = listOf(
+                            StrengthSetPlan(
+                                id = "set-1",
+                                order = 0,
+                                kind = StrengthSetKind.WORKING,
+                                targetWeight = WeightValue(62.5, WeightUnit.LB),
+                                repTarget = RepTarget.Range(8, 12),
+                                restAfterSec = null
+                            )
+                        ),
+                        substitutions = listOf("goblet-squat", "front-squat")
+                    )
+                )
+            )
+        )
+        val expected =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"strength\",\"blocks\":[{\"blockId\":\"strength\\\"\\\\\\n\",\"blockKind\":\"strength_exercise\",\"order\":0,\"exerciseId\":\"squat\",\"target\":{\"weight\":{\"value\":0,\"unit\":\"kg\"},\"repTarget\":{\"kind\":\"fixed\",\"fixedReps\":10,\"minReps\":null,\"maxReps\":null},\"restAfterSetSec\":null},\"sets\":[{\"setPlanId\":\"set-1\",\"order\":0,\"setKind\":\"working\",\"side\":null,\"targetWeight\":{\"value\":62.5,\"unit\":\"lb\"},\"repTarget\":{\"kind\":\"range\",\"fixedReps\":null,\"minReps\":8,\"maxReps\":12},\"restAfterSec\":null}],\"substitutions\":[\"goblet-squat\",\"front-squat\"],\"setTimerMode\":\"manual_start\"}]}"
+
+        val bytes = requireNotNull(OrderedStructureSignatureInputV1.encode(storage))
+        assertArrayEquals(expected.toByteArray(Charsets.UTF_8), bytes)
+        assertEquals(testSha256(expected.toByteArray(Charsets.UTF_8)), OrderedStructureSignatureInputV1.digestHexLowercase(storage))
+    }
+
+    @Test
+    fun includedMutationsChangeDigestAndExcludedDisplayCueColorMutationsDoNot() {
+        val timed = WorkoutPlanSnapshot(
+            planId = "plan-a",
+            title = "Title A",
+            mode = WorkoutMode.TIMED,
+            blocks = listOf(
+                TimedCircuitBlock(
+                    id = "circuit",
+                    order = 0,
+                    title = "Circuit A",
+                    rounds = 2,
+                    restBetweenRoundsSec = 30,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "item",
+                            exerciseId = "exercise",
+                            labelOverride = "Label A",
+                            stageType = TimedStageType.WORK,
+                            iconKey = "icon-a",
+                            colorHex = "#111111",
+                            workDurationSec = 40,
+                            restAfterSec = 20,
+                            cueSettings = CueSettings(
+                                actionEnding = CountdownCue(
+                                    enabled = true,
+                                    thresholdSec = 3,
+                                    soundEnabled = true,
+                                    vibrationEnabled = true,
+                                    emphasisAnimationEnabled = true,
+                                    voiceCueEnabled = false
+                                )
+                            ),
+                            autoAdvance = true
+                        )
+                    )
+                )
+            )
+        )
+        val canonical = timed.toStorageJson()
+        val originalDigest = digestOf(canonical, WorkoutMode.TIMED)
+        listOf(
+            canonical.replace("\"id\":\"circuit\"", "\"id\":\"circuit-b\""),
+            canonical.replace("\"order\":0", "\"order\":1"),
+            canonical.replace("\"rounds\":2", "\"rounds\":3"),
+            canonical.replace("\"restBetweenRoundsSec\":30", "\"restBetweenRoundsSec\":31"),
+            canonical.replace("\"id\":\"item\"", "\"id\":\"item-b\""),
+            canonical.replace("\"exerciseId\":\"exercise\"", "\"exerciseId\":\"exercise-b\""),
+            canonical.replace("\"stageType\":\"work\"", "\"stageType\":\"custom\""),
+            canonical.replace("\"workDurationSec\":40", "\"workDurationSec\":41"),
+            canonical.replace("\"restAfterSec\":20", "\"restAfterSec\":21"),
+            canonical.replace("\"autoAdvance\":true", "\"autoAdvance\":false")
+        ).forEach { mutation -> assertTrue(originalDigest != digestOf(mutation, WorkoutMode.TIMED)) }
+
+        listOf(
+            canonical.replace("\"planId\":\"plan-a\"", "\"planId\":\"plan-b\""),
+            canonical.replace("\"title\":\"Title A\"", "\"title\":\"Title B\""),
+            canonical.replace("\"title\":\"Circuit A\"", "\"title\":\"Circuit B\""),
+            canonical.replace("\"labelOverride\":\"Label A\"", "\"labelOverride\":\"Label B\""),
+            canonical.replace("\"iconKey\":\"icon-a\"", "\"iconKey\":\"icon-b\""),
+            canonical.replace("\"colorHex\":\"#111111\"", "\"colorHex\":\"#222222\""),
+            canonical.replace("\"thresholdSec\":3", "\"thresholdSec\":4")
+        ).forEach { mutation -> assertEquals(originalDigest, digestOf(mutation, WorkoutMode.TIMED)) }
+    }
+
+    @Test
+    fun corruptUnknownMismatchNonFiniteDropAndReorderFailClosed() {
+        val canonical = timedCompositionSnapshot().toStorageJson()
+        val original = validatedStorage(timedCompositionSnapshot())
+        val originalDigest = requireNotNull(OrderedStructureSignatureInputV1.digestHexLowercase(original))
+        val dropped = canonical.replace(Regex("\\{\\\"id\\\":\\\"target\\\".*?\\}"), "")
+        val reordered = canonical
+            .replace("\"stageGroups\":[", "\"stageGroups\":[{\"id\":\"second\",\"order\":1,\"name\":\"Second\",\"colorHex\":\"#000000\",\"targets\":[]},")
+
+        assertEquals(null, OrderedStructureSignatureInputV1.encode(WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, canonical.replace("ContractVersion\":1", "ContractVersion\":2"))))
+        assertEquals(null, OrderedStructureSignatureInputV1.encode(WorkoutPlanSnapshotStorageV1(WorkoutMode.STRENGTH, canonical)))
+        assertEquals(null, OrderedStructureSignatureInputV1.encode(WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, canonical.replace("\"kind\":\"timed_composition\"", "\"kind\":\"future\""))))
+        assertEquals(null, OrderedStructureSignatureInputV1.encode(WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, canonical.replace("\"rounds\":1", "\"rounds\":NaN"))))
+        assertTrue(digestOf(dropped, WorkoutMode.TIMED) != originalDigest)
+        assertTrue(digestOf(reordered, WorkoutMode.TIMED) != originalDigest)
+    }
+
     private fun emptySnapshot(): WorkoutPlanSnapshot = WorkoutPlanSnapshot(
         title = "训练标题",
         mode = WorkoutMode.TIMED,
@@ -293,6 +446,22 @@ class PlanSnapshotStorageV1ValidatorTest {
             )
         )
     )
+
+    private fun validatedStorage(snapshot: WorkoutPlanSnapshot): WorkoutPlanSnapshotStorageV1 =
+        (PlanSnapshotStorageV1Validator.validate(snapshot.toStorageJson(), snapshot.mode) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+
+    private fun digestOf(json: String, mode: WorkoutMode): String =
+        requireNotNull(
+            OrderedStructureSignatureInputV1.digestHexLowercase(
+                (PlanSnapshotStorageV1Validator.validate(json, mode) as
+                    PlanSnapshotStorageV1ValidationResult.Valid).storage
+            )
+        )
+
+    private fun testSha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 
     private fun assertInvalid(result: PlanSnapshotStorageV1ValidationResult) {
         assertTrue(result is PlanSnapshotStorageV1ValidationResult.Invalid)

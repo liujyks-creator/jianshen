@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.database.parseCanonicalJson
 import com.liujyks.trainflow.core.database.renderCanonicalJson
 import com.liujyks.trainflow.core.model.WorkoutMode
 import java.math.BigDecimal
+import java.security.MessageDigest
 
 object PlanSnapshotStorageV1Validator {
     fun validate(
@@ -388,6 +389,174 @@ object PlanSnapshotStorageV1Validator {
 
     private fun invalid() = PlanSnapshotStorageV1ValidationResult.Invalid()
 }
+
+object OrderedStructureSignatureInputV1 {
+    fun encode(storage: WorkoutPlanSnapshotStorageV1): ByteArray? {
+        val validated = PlanSnapshotStorageV1Validator.validate(storage.persistedJson, storage.mode)
+        if (validated !is PlanSnapshotStorageV1ValidationResult.Valid) return null
+        val root = parseCanonicalJson(storage.persistedJson) as? CanonicalJsonValue.Obj ?: return null
+        val blocks = root.array("blocks")?.map { value ->
+            signatureBlock(value as? CanonicalJsonValue.Obj ?: return null) ?: return null
+        } ?: return null
+        val projection = signatureObject(
+            "signatureInputContractVersion" to CanonicalJsonValue.Num(BigDecimal.ONE),
+            "mode" to CanonicalJsonValue.Str(storage.mode.contractValue),
+            "blocks" to CanonicalJsonValue.Arr(blocks)
+        )
+        return projection.renderCanonicalJson().toByteArray(Charsets.UTF_8)
+    }
+
+    fun digestHexLowercase(storage: WorkoutPlanSnapshotStorageV1): String? =
+        encode(storage)?.let { bytes ->
+            MessageDigest.getInstance("SHA-256")
+                .digest(bytes)
+                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        }
+
+    private fun signatureBlock(block: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? =
+        when (val kind = block.string("kind")) {
+            "warmup", "stretch", "cooldown" -> signatureObject(
+                "blockId" to block.required("id"),
+                "blockKind" to CanonicalJsonValue.Str(kind),
+                "order" to block.required("order"),
+                "durationSec" to block.nullable("durationSec"),
+                "items" to signatureArray(block, "items", ::signatureTimedItem)
+            )
+
+            "rest" -> signatureObject(
+                "blockId" to block.required("id"),
+                "blockKind" to CanonicalJsonValue.Str(kind),
+                "order" to block.required("order"),
+                "durationSec" to block.required("durationSec")
+            )
+
+            "timed_circuit" -> signatureObject(
+                "blockId" to block.required("id"),
+                "blockKind" to CanonicalJsonValue.Str(kind),
+                "order" to block.required("order"),
+                "rounds" to block.required("rounds"),
+                "restBetweenRoundsSec" to block.nullable("restBetweenRoundsSec"),
+                "items" to signatureArray(block, "items", ::signatureTimedItem)
+            )
+
+            "timed_composition" -> signatureObject(
+                "blockId" to block.required("id"),
+                "blockKind" to CanonicalJsonValue.Str(kind),
+                "order" to block.required("order"),
+                "compositionVersion" to block.required("compositionVersion"),
+                "warmupSec" to block.required("warmupSec"),
+                "cooldownSec" to block.required("cooldownSec"),
+                "rounds" to block.required("rounds"),
+                "restBetweenRoundsSec" to block.required("restBetweenRoundsSec"),
+                "stageGroups" to signatureArray(block, "stageGroups", ::signatureStageGroup)
+            )
+
+            "strength_exercise" -> signatureObject(
+                "blockId" to block.required("id"),
+                "blockKind" to CanonicalJsonValue.Str(kind),
+                "order" to block.required("order"),
+                "exerciseId" to block.required("exerciseId"),
+                "target" to (block.obj("target")?.let(::signatureStrengthTarget)
+                    ?: CanonicalJsonValue.Null),
+                "sets" to signatureArray(block, "sets", ::signatureStrengthSet),
+                "substitutions" to block.required("substitutions"),
+                "setTimerMode" to block.required("setTimerMode")
+            )
+
+            else -> null
+        }
+
+    private fun signatureTimedItem(item: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        signatureObject(
+            "itemId" to item.required("id"),
+            "exerciseId" to item.nullable("exerciseId"),
+            "side" to item.nullable("side"),
+            "stageType" to item.required("stageType"),
+            "workDurationSec" to item.required("workDurationSec"),
+            "restAfterSec" to item.nullable("restAfterSec"),
+            "autoAdvance" to item.required("autoAdvance")
+        )
+
+    private fun signatureStageGroup(group: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        signatureObject(
+            "stageGroupId" to group.required("id"),
+            "order" to group.required("order"),
+            "targets" to signatureArray(group, "targets", ::signatureCompositionTarget)
+        )
+
+    private fun signatureCompositionTarget(target: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        signatureObject(
+            "targetId" to target.required("id"),
+            "order" to target.required("order"),
+            "targetKind" to target.required("kind"),
+            "durationSec" to target.required("durationSec"),
+            "autoAdvance" to target.required("autoAdvance")
+        )
+
+    private fun signatureStrengthTarget(target: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        signatureObject(
+            "weight" to (target.obj("weight")?.let(::signatureWeight) ?: CanonicalJsonValue.Null),
+            "repTarget" to (target.obj("repTarget")?.let(::signatureRepTarget)
+                ?: CanonicalJsonValue.Null),
+            "restAfterSetSec" to target.nullable("restAfterSetSec")
+        )
+
+    private fun signatureStrengthSet(set: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        signatureObject(
+            "setPlanId" to set.required("id"),
+            "order" to set.required("order"),
+            "setKind" to set.required("kind"),
+            "side" to set.nullable("side"),
+            "targetWeight" to (set.obj("targetWeight")?.let(::signatureWeight)
+                ?: CanonicalJsonValue.Null),
+            "repTarget" to (set.obj("repTarget")?.let(::signatureRepTarget)
+                ?: CanonicalJsonValue.Null),
+            "restAfterSec" to set.nullable("restAfterSec")
+        )
+
+    private fun signatureWeight(weight: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        signatureObject(
+            "value" to weight.required("value"),
+            "unit" to weight.required("unit")
+        )
+
+    private fun signatureRepTarget(target: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj =
+        when (target.string("kind")) {
+            "fixed" -> signatureObject(
+                "kind" to CanonicalJsonValue.Str("fixed"),
+                "fixedReps" to target.required("reps"),
+                "minReps" to CanonicalJsonValue.Null,
+                "maxReps" to CanonicalJsonValue.Null
+            )
+
+            "range" -> signatureObject(
+                "kind" to CanonicalJsonValue.Str("range"),
+                "fixedReps" to CanonicalJsonValue.Null,
+                "minReps" to target.required("minReps"),
+                "maxReps" to target.required("maxReps")
+            )
+
+            else -> error("Validated storage contains an unsupported rep target")
+        }
+}
+
+private fun signatureArray(
+    owner: CanonicalJsonValue.Obj,
+    key: String,
+    transform: (CanonicalJsonValue.Obj) -> CanonicalJsonValue.Obj
+): CanonicalJsonValue.Arr = CanonicalJsonValue.Arr(
+    requireNotNull(owner.array(key)).map { value -> transform(value as CanonicalJsonValue.Obj) }
+)
+
+private fun signatureObject(
+    vararg fields: Pair<String, CanonicalJsonValue>
+): CanonicalJsonValue.Obj = CanonicalJsonValue.Obj(linkedMapOf(*fields))
+
+private fun CanonicalJsonValue.Obj.required(key: String): CanonicalJsonValue =
+    requireNotNull(fields[key])
+
+private fun CanonicalJsonValue.Obj.nullable(key: String): CanonicalJsonValue =
+    fields[key] ?: CanonicalJsonValue.Null
 
 private fun canonicalArray(
     owner: CanonicalJsonValue.Obj,

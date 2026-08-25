@@ -1,11 +1,9 @@
 package com.liujyks.trainflow.core.database.dao
 
 import androidx.room.Dao
-import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Relation
 import androidx.room.Transaction
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
@@ -49,9 +47,47 @@ interface CanonicalTimelineHeartRateDao {
     )
     suspend fun samplesInCanonicalOrder(recordingId: String): List<HeartRateSampleEntity>
 
-    @Transaction
     @Query("SELECT * FROM workout_sessions WHERE id = :sessionId")
-    suspend fun canonicalGraphRows(sessionId: String): CanonicalSessionGraphRows?
+    suspend fun sessionById(sessionId: String): WorkoutSessionEntity?
+
+    @Query("SELECT * FROM heart_rate_recordings WHERE session_id = :sessionId ORDER BY recording_id")
+    suspend fun recordingsForSession(sessionId: String): List<HeartRateRecordingEntity>
+
+    @Query(
+        """
+        SELECT * FROM heart_rate_acquisition_intervals
+        WHERE recording_id = :recordingId
+        ORDER BY sequence
+        """
+    )
+    suspend fun acquisitionsInSequence(recordingId: String): List<HeartRateAcquisitionIntervalEntity>
+
+    @Query(
+        """
+        SELECT * FROM heart_rate_analysis_snapshots
+        WHERE recording_id = :recordingId
+        ORDER BY analysis_version
+        """
+    )
+    suspend fun snapshotsInVersionOrder(recordingId: String): List<HeartRateAnalysisSnapshotEntity>
+
+    @Transaction
+    suspend fun canonicalGraphRows(sessionId: String): CanonicalSessionGraphRows? {
+        val session = sessionById(sessionId) ?: return null
+        val recordings = recordingsForSession(sessionId).map { recording ->
+            HeartRateRecordingWithRows(
+                recording = recording,
+                acquisitions = acquisitionsInSequence(recording.recordingId),
+                samples = samplesInCanonicalOrder(recording.recordingId),
+                snapshots = snapshotsInVersionOrder(recording.recordingId)
+            )
+        }
+        return CanonicalSessionGraphRows(
+            session = session,
+            phases = phaseIntervals(sessionId),
+            recordings = recordings
+        )
+    }
 
     @Query("SELECT COUNT(*) FROM workout_phase_intervals")
     suspend fun phaseIntervalCount(): Int
@@ -70,35 +106,14 @@ interface CanonicalTimelineHeartRateDao {
 }
 
 data class CanonicalSessionGraphRows(
-    @Embedded val session: WorkoutSessionEntity,
-    @Relation(
-        parentColumn = "id",
-        entityColumn = "session_id"
-    )
+    val session: WorkoutSessionEntity,
     val phases: List<WorkoutPhaseIntervalEntity>,
-    @Relation(
-        entity = HeartRateRecordingEntity::class,
-        parentColumn = "id",
-        entityColumn = "session_id"
-    )
     val recordings: List<HeartRateRecordingWithRows>
 )
 
 data class HeartRateRecordingWithRows(
-    @Embedded val recording: HeartRateRecordingEntity,
-    @Relation(
-        parentColumn = "recording_id",
-        entityColumn = "recording_id"
-    )
+    val recording: HeartRateRecordingEntity,
     val acquisitions: List<HeartRateAcquisitionIntervalEntity>,
-    @Relation(
-        parentColumn = "recording_id",
-        entityColumn = "recording_id"
-    )
     val samples: List<HeartRateSampleEntity>,
-    @Relation(
-        parentColumn = "recording_id",
-        entityColumn = "recording_id"
-    )
     val snapshots: List<HeartRateAnalysisSnapshotEntity>
 )

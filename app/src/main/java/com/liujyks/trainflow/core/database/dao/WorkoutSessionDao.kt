@@ -27,8 +27,43 @@ interface WorkoutSessionDao {
     @Query("SELECT COUNT(*) FROM timed_rest_extension_records")
     suspend fun timedRestExtensionRecordCount(): Int
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertSession(session: WorkoutSessionEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSession(session: WorkoutSessionEntity): Long
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET plan_id = :planId,
+            mode = :mode,
+            status = :status,
+            plan_snapshot_json = :planSnapshotJson,
+            started_at = :startedAt,
+            ended_at = :endedAt,
+            total_elapsed_sec = :totalElapsedSec,
+            effective_elapsed_sec = :effectiveElapsedSec,
+            paused_elapsed_sec = :pausedElapsedSec
+        WHERE id = :id
+          AND timeline_version IS NULL
+          AND last_durable_offset_ms IS NULL
+          AND last_mutation_sequence IS NULL
+          AND trusted_end_offset_ms IS NULL
+          AND terminal_reason IS NULL
+          AND display_metadata_contract_version IS NULL
+          AND session_display_metadata_json IS NULL
+        """
+    )
+    suspend fun updateLegacySession(
+        id: String,
+        planId: String?,
+        mode: String,
+        status: String,
+        planSnapshotJson: String,
+        startedAt: String?,
+        endedAt: String?,
+        totalElapsedSec: Int?,
+        effectiveElapsedSec: Int?,
+        pausedElapsedSec: Int?
+    ): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertStepRecords(records: List<SessionStepRecordEntity>)

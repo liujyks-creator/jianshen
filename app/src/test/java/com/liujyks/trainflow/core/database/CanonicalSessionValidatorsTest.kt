@@ -280,6 +280,7 @@ class CanonicalSessionValidatorsTest {
             add(valid.copy(samples = valid.samples.map { sample -> sample.copy(mutationSequence = 5) }))
             add(valid.copy(samples = valid.samples.map { sample -> sample.copy(recordingId = "other") }))
             add(valid.copy(samples = valid.samples + valid.samples.single().copy(offsetMs = 60)))
+            add(valid.copy(samples = valid.samples.map { sample -> sample.copy(bpm = 0) }))
 
             add(valid.copy(snapshots = valid.snapshots.map { snapshot ->
                 snapshot.copy(inputLastMutationSequence = 3)
@@ -287,16 +288,18 @@ class CanonicalSessionValidatorsTest {
             add(valid.copy(snapshots = valid.snapshots.map { snapshot ->
                 snapshot.copy(recordingId = "other")
             }))
+            add(valid.copy(snapshots = valid.snapshots.map { snapshot ->
+                snapshot.copy(sampleStatus = "no_canonical_samples")
+            }))
             add(valid.copy(snapshots = emptyList()))
             add(valid.copy(snapshots = valid.snapshots + valid.snapshots.single()))
             add(valid.copy(recording = valid.recording?.copy(originalAnalysisVersion = null)))
         }
 
         invalidGraphs.forEachIndexed { index, graph ->
-            assertInvalid(
-                CanonicalSessionGraphV1Validator.validate(graph),
-                "invalid_canonical_graph_v1"
-            )
+            val result = CanonicalSessionGraphV1Validator.validate(graph)
+            assertTrue("illegal matrix row $index was accepted: $graph", result is CanonicalValidationResult.Invalid)
+            assertEquals("invalid_canonical_graph_v1", (result as CanonicalValidationResult.Invalid).code)
         }
     }
 
@@ -396,7 +399,7 @@ class CanonicalSessionValidatorsTest {
         id = "running",
         mode = "timed",
         status = "active",
-        planSnapshotJson = "{}",
+        planSnapshotJson = VALID_PLAN_SNAPSHOT,
         timelineVersion = 1,
         lastDurableOffsetMs = 100,
         lastMutationSequence = 4,
@@ -408,7 +411,7 @@ class CanonicalSessionValidatorsTest {
         id = "session",
         mode = "timed",
         status = "completed",
-        planSnapshotJson = "{}",
+        planSnapshotJson = VALID_PLAN_SNAPSHOT,
         timelineVersion = 1,
         lastDurableOffsetMs = 100,
         lastMutationSequence = 4,
@@ -506,10 +509,12 @@ class CanonicalSessionValidatorsTest {
     private companion object {
         const val VALID_DISPLAY_METADATA =
             "{\"displayMetadataContractVersion\":1,\"entries\":[]}"
+        const val VALID_PLAN_SNAPSHOT =
+            "{\"planSnapshotStorageContractVersion\":1,\"planId\":null,\"title\":\"Timed\",\"mode\":\"timed\",\"blocks\":[{\"id\":\"block\",\"kind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":10,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[]}],\"preferences\":null,\"followAlong\":null}"
         const val VALID_ZONE_SNAPSHOT =
             "{\"zoneSnapshotContractVersion\":1,\"unit\":\"bpm\",\"effectiveMaxBpm\":180,\"effectiveMaxSource\":\"personal_max\",\"zones\":[{\"zoneId\":\"below_50\",\"lowerBoundBasisPointsInclusive\":null,\"upperBoundBasisPointsExclusive\":5000},{\"zoneId\":\"from_50_to_60\",\"lowerBoundBasisPointsInclusive\":5000,\"upperBoundBasisPointsExclusive\":6000},{\"zoneId\":\"from_60_to_70\",\"lowerBoundBasisPointsInclusive\":6000,\"upperBoundBasisPointsExclusive\":7000},{\"zoneId\":\"from_70_to_80\",\"lowerBoundBasisPointsInclusive\":7000,\"upperBoundBasisPointsExclusive\":8000},{\"zoneId\":\"from_80_to_90\",\"lowerBoundBasisPointsInclusive\":8000,\"upperBoundBasisPointsExclusive\":9000},{\"zoneId\":\"at_or_above_90\",\"lowerBoundBasisPointsInclusive\":9000,\"upperBoundBasisPointsExclusive\":null}]}"
         val VALID_PHASE_IDENTITY =
-            "{\"phaseIdentityContractVersion\":1,\"family\":\"timed_composition_v2\",\"payloadVersion\":2,\"mode\":\"timed\",\"phaseKind\":\"timed_work\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"payload\":{\"variant\":\"warmup\",\"compositionVersion\":2,\"compositionBlockId\":\"block\",\"${"timelineStage" + "Id"}\":\"block:warmup\",\"timelineStageKind\":\"warmup\",\"stageGroupId\":\"block:warmup\",\"targetId\":\"block:warmup:target\",\"targetKind\":\"warmup\",\"roundIndex0\":null,\"stageGroupIndex0\":null,\"targetIndex0\":0,\"stageInstanceIndex0\":0,\"${"targetInstance" + "Index0"}\":0,\"stepIndex0\":0}}"
+            "{\"phaseIdentityContractVersion\":1,\"family\":\"timed_composition_v2\",\"payloadVersion\":2,\"mode\":\"timed\",\"phaseKind\":\"timed_work\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855\"},\"payload\":{\"variant\":\"warmup\",\"compositionVersion\":2,\"compositionBlockId\":\"block\",\"${"timelineStage" + "Id"}\":\"block:warmup\",\"timelineStageKind\":\"warmup\",\"stageGroupId\":\"block:warmup\",\"targetId\":\"block:warmup:target\",\"targetKind\":\"warmup\",\"roundIndex0\":null,\"stageGroupIndex0\":null,\"targetIndex0\":0,\"stageInstanceIndex0\":0,\"${"targetInstance" + "Index0"}\":0,\"stepIndex0\":0}}"
         const val VALID_ANALYSIS_CONFIG =
             "{\"analysisConfigContractVersion\":1,\"sampleValidityCapMs\":2500,\"sampleIntervalContractVersion\":1,\"partialLowerBoundBasisPoints\":5000,\"phaseConclusionBasisPoints\":7000,\"normalBasisPoints\":8000,\"coverageThresholdRule\":\"checked_integer_cross_multiply\",\"coverageBasisPointsRule\":\"floor_integer_ratio\",\"displayPercentRule\":\"floor_basis_points_div_100\",\"weightedAverageRule\":\"checked_integer_time_integral\",\"averageDisplayRule\":\"positive_integer_half_up\",\"zeroCoveredRule\":\"null_integral_and_average\",\"observedMaxRule\":\"eligible_canonical_point_first_tie\",\"zoneAttributionContractVersion\":1,\"zoneAttributionRule\":\"checked_cross_multiply_six_zones\",\"statusProjectionContractVersion\":1,\"durationPartitionContractVersion\":1}"
         const val VALID_PHASE_AGGREGATES =

@@ -2,7 +2,7 @@ package com.liujyks.trainflow.core.data
 
 import com.liujyks.trainflow.core.model.WorkoutMode
 
-data class WorkoutPlanSnapshotStorageV1(
+class WorkoutPlanSnapshotStorageV1 internal constructor(
     val mode: WorkoutMode,
     val persistedJson: String
 )

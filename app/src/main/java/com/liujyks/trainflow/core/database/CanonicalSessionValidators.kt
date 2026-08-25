@@ -1,11 +1,14 @@
 package com.liujyks.trainflow.core.database
 
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.model.WorkoutMode
 
 data class CanonicalTuple(
     val offsetMs: Long,
@@ -191,7 +194,7 @@ object AcquisitionV1Validator {
         if (
             interval.id.isEmpty() || interval.recordingId.isEmpty() || interval.sequence < 0 ||
             interval.startOffsetMs < 0 || interval.startMutationSequence < 0 ||
-            !validIntervalEnd(
+            !validCanonicalIntervalEnd(
                 interval.startOffsetMs,
                 interval.startMutationSequence,
                 interval.endOffsetMs,
@@ -320,7 +323,7 @@ object CanonicalSessionGraphV1Validator {
         if (!validateAcquisitionPartition(graph, recording, recordingStart, inputCut, terminal)) {
             return invalidGraph()
         }
-        if (!validateSamples(graph.samples, recording.recordingId, recordingStart, inputCut)) {
+        if (!validateCanonicalSamples(graph.samples, recording.recordingId, recordingStart, inputCut)) {
             return invalidGraph()
         }
         if (!validateSnapshotBinding(graph, recording, terminal)) return invalidGraph()
@@ -333,6 +336,15 @@ object CanonicalSessionGraphV1Validator {
         terminal: Boolean
     ): Boolean {
         if (graph.phases.isEmpty()) return false
+        val mode = WorkoutMode.entries.firstOrNull { value ->
+            value.contractValue == graph.session.mode
+        } ?: return false
+        val snapshot = when (
+            val result = PlanSnapshotStorageV1Validator.validate(graph.session.planSnapshotJson, mode)
+        ) {
+            is PlanSnapshotStorageV1ValidationResult.Valid -> result.storage
+            else -> return false
+        }
         graph.phases.forEachIndexed { index, phase ->
             if (
                 phase.sessionId != graph.session.id || phase.sequence != index ||
@@ -340,11 +352,11 @@ object CanonicalSessionGraphV1Validator {
                 phase.startMutationSequence > inputCut.mutationSequence ||
                 PhaseIdentityV1Validator.validate(
                     phase.phaseIdentityJson,
-                    expectedPhaseKind = phase.phaseKind,
-                    expectedMode = graph.session.mode
+                    immutableSnapshot = snapshot,
+                    expectedPhaseKind = phase.phaseKind
                 ) !=
                 CanonicalValidationResult.Valid ||
-                !validIntervalEnd(
+                !validCanonicalIntervalEnd(
                     phase.startOffsetMs,
                     phase.startMutationSequence,
                     phase.endOffsetMs,
@@ -431,7 +443,7 @@ object CanonicalSessionGraphV1Validator {
         }
     }
 
-    private fun validateSamples(
+    internal fun validateCanonicalSamples(
         samples: List<HeartRateSampleEntity>,
         recordingId: String,
         recordingStart: CanonicalTuple,
@@ -469,6 +481,7 @@ object CanonicalSessionGraphV1Validator {
             snapshot.zoneStatus !in ZONE_STATUSES ||
             snapshot.canonicalSampleCount < 0 || snapshot.primaryPointSampleCount < 0 ||
             snapshot.primaryPointSampleCount > snapshot.canonicalSampleCount ||
+            !validateSampleStatusCounts(snapshot) ||
             snapshot.eligibleDurationMs == null || snapshot.eligibleDurationMs < 0 ||
             snapshot.coveredDurationMs == null || snapshot.coveredDurationMs < 0 ||
             snapshot.coveredDurationMs > snapshot.eligibleDurationMs
@@ -488,6 +501,16 @@ object CanonicalSessionGraphV1Validator {
             CanonicalValidationResult.Valid
     }
 
+    private fun validateSampleStatusCounts(snapshot: HeartRateAnalysisSnapshotEntity): Boolean =
+        when (snapshot.sampleStatus) {
+            "no_canonical_samples" ->
+                snapshot.canonicalSampleCount == 0L && snapshot.primaryPointSampleCount == 0L
+            "canonical_only_excluded" ->
+                snapshot.canonicalSampleCount > 0L && snapshot.primaryPointSampleCount == 0L
+            "primary_points_available" -> snapshot.primaryPointSampleCount > 0L
+            else -> false
+        }
+
     private fun invalidGraph() = CanonicalValidationResult.Invalid("invalid_canonical_graph_v1")
 
     private val SAMPLE_STATUSES = setOf(
@@ -499,7 +522,7 @@ object CanonicalSessionGraphV1Validator {
     private val ZONE_STATUSES = setOf("available", "unavailable_no_effective_max")
 }
 
-private fun validIntervalEnd(
+internal fun validCanonicalIntervalEnd(
     startOffsetMs: Long,
     startMutationSequence: Long,
     endOffsetMs: Long?,

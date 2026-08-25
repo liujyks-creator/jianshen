@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
@@ -32,8 +33,7 @@ class TrainFlowDatabaseSmokeTest {
         database = Room.inMemoryDatabaseBuilder(
             context,
             TrainFlowDatabase::class.java
-        ).addCallback(TrainFlowDatabase.CANONICAL_SCHEMA_V5_ON_CREATE)
-            .allowMainThreadQueries()
+        ).allowMainThreadQueries()
             .build()
     }
 
@@ -84,7 +84,7 @@ class TrainFlowDatabaseSmokeTest {
     }
 
     @Test
-    fun freshVersionFiveEnforcesTheSameCanonicalChecksAsMigration() {
+    fun freshVersionFiveEnforcesRoomPhysicalConstraintsAndPureValidatorsOwnSemanticRules() {
         val db = database.openHelper.writableDatabase
         db.execSQL(
             """
@@ -94,6 +94,21 @@ class TrainFlowDatabaseSmokeTest {
             """.trimIndent()
         )
 
+        db.execSQL(
+            """
+            INSERT INTO workout_phase_intervals(
+                id, session_id, sequence, start_offset_ms, end_offset_ms,
+                start_mutation_sequence, end_mutation_sequence, open_marker,
+                phase_kind, phase_identity_json
+            ) VALUES(
+                'semantic-invalid-phase', 'fresh-session', 0, 0, 0,
+                0, 0, NULL, 'future_kind', '{}'
+            )
+            """.trimIndent()
+        )
+        assertTrue(
+            PhaseIdentityV1Validator.validateStructure("{}") is CanonicalValidationResult.Invalid
+        )
         assertThrows(SQLiteConstraintException::class.java) {
             db.execSQL(
                 """
@@ -102,8 +117,8 @@ class TrainFlowDatabaseSmokeTest {
                     start_mutation_sequence, end_mutation_sequence, open_marker,
                     phase_kind, phase_identity_json
                 ) VALUES(
-                    'invalid-phase', 'fresh-session', 0, 0, 0,
-                    0, 0, NULL, 'future_kind', '{}'
+                    'duplicate-sequence', 'fresh-session', 0, 1, 2,
+                    1, 2, NULL, 'timed_work', '{}'
                 )
                 """.trimIndent()
             )
@@ -112,7 +127,7 @@ class TrainFlowDatabaseSmokeTest {
 
     @Test
     fun canonicalDaoReadsRelationsAndSamplesInExplicitCanonicalOrder() = runBlocking {
-        database.workoutSessionDao().upsertSession(
+        database.workoutSessionDao().insertSession(
             WorkoutSessionEntity(
                 id = "canonical-session",
                 mode = "timed",
@@ -127,20 +142,32 @@ class TrainFlowDatabaseSmokeTest {
             )
         )
         val dao = database.canonicalTimelineHeartRateDao()
-        dao.insertPhaseInterval(
+        listOf(
             WorkoutPhaseIntervalEntity(
-                id = "phase",
+                id = "phase-1",
+                sessionId = "canonical-session",
+                sequence = 1,
+                startOffsetMs = 50,
+                endOffsetMs = 100,
+                startMutationSequence = 1,
+                endMutationSequence = 3,
+                openMarker = null,
+                phaseKind = "timed_rest",
+                phaseIdentityJson = "{}"
+            ),
+            WorkoutPhaseIntervalEntity(
+                id = "phase-0",
                 sessionId = "canonical-session",
                 sequence = 0,
                 startOffsetMs = 0,
-                endOffsetMs = null,
+                endOffsetMs = 50,
                 startMutationSequence = 0,
-                endMutationSequence = null,
-                openMarker = 1,
+                endMutationSequence = 1,
+                openMarker = null,
                 phaseKind = "timed_work",
                 phaseIdentityJson = "{}"
             )
-        )
+        ).forEach { phase -> dao.insertPhaseInterval(phase) }
         dao.insertRecording(
             HeartRateRecordingEntity(
                 recordingId = "recording",
@@ -156,22 +183,36 @@ class TrainFlowDatabaseSmokeTest {
                 parameterSnapshotVersion = 1
             )
         )
-        dao.insertAcquisitionInterval(
+        listOf(
             HeartRateAcquisitionIntervalEntity(
-                id = "acquisition",
+                id = "acquisition-1",
+                recordingId = "recording",
+                sequence = 1,
+                startOffsetMs = 50,
+                endOffsetMs = 100,
+                startMutationSequence = 1,
+                endMutationSequence = 3,
+                openMarker = null,
+                recordingIntent = "expected_recording",
+                intentReason = null,
+                deviceState = "live",
+                deviceReason = null
+            ),
+            HeartRateAcquisitionIntervalEntity(
+                id = "acquisition-0",
                 recordingId = "recording",
                 sequence = 0,
                 startOffsetMs = 0,
-                endOffsetMs = null,
+                endOffsetMs = 50,
                 startMutationSequence = 0,
-                endMutationSequence = null,
-                openMarker = 1,
+                endMutationSequence = 1,
+                openMarker = null,
                 recordingIntent = "expected_recording",
                 intentReason = null,
                 deviceState = "live",
                 deviceReason = null
             )
-        )
+        ).forEach { acquisition -> dao.insertAcquisitionInterval(acquisition) }
         listOf(
             HeartRateSampleEntity("recording", 0, 10, 3, 130),
             HeartRateSampleEntity("recording", 1, 5, 2, 120),
@@ -183,11 +224,17 @@ class TrainFlowDatabaseSmokeTest {
             dao.samplesInCanonicalOrder("recording").map { sample -> sample.sampleSequence }
         )
         val graph = requireNotNull(dao.canonicalGraphRows("canonical-session"))
-        assertEquals(listOf("phase"), graph.phases.map { phase -> phase.id })
+        assertEquals(listOf("phase-0", "phase-1"), graph.phases.map { phase -> phase.id })
         assertEquals(1, graph.recordings.size)
         assertEquals("recording", graph.recordings.single().recording.recordingId)
-        assertEquals(1, graph.recordings.single().acquisitions.size)
-        assertEquals(3, graph.recordings.single().samples.size)
+        assertEquals(
+            listOf("acquisition-0", "acquisition-1"),
+            graph.recordings.single().acquisitions.map { acquisition -> acquisition.id }
+        )
+        assertEquals(
+            listOf(1L, 2L, 0L),
+            graph.recordings.single().samples.map { sample -> sample.sampleSequence }
+        )
         assertTrue(graph.recordings.single().snapshots.isEmpty())
     }
 }

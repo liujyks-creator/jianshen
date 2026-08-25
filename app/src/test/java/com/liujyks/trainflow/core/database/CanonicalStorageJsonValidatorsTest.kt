@@ -1,5 +1,8 @@
 package com.liujyks.trainflow.core.database
 
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.model.WorkoutMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,7 +13,7 @@ class CanonicalStorageJsonValidatorsTest {
         listOf(
             CanonicalStorageJsonV1Validators.validateSessionDisplayMetadata(DISPLAY_METADATA),
             CanonicalStorageJsonV1Validators.validateZoneSnapshot(ZONE_SNAPSHOT),
-            PhaseIdentityV1Validator.validate(phaseFixtures().first().json),
+            PhaseIdentityV1Validator.validateStructure(phaseFixtures().first().json),
             CanonicalStorageJsonV1Validators.validateAnalysisConfig(ANALYSIS_CONFIG),
             CanonicalStorageJsonV1Validators.validateZoneDurations(ZONE_DURATIONS),
             CanonicalStorageJsonV1Validators.validatePhaseAggregates(PHASE_AGGREGATES),
@@ -62,6 +65,81 @@ class CanonicalStorageJsonValidatorsTest {
     }
 
     @Test
+    fun eachClosedStorageObjectRejectsTheCompleteStructuralMutationMatrix() {
+        val cases = listOf(
+            ClosedJsonCase(
+                "session_display_metadata",
+                DISPLAY_METADATA,
+                "displayMetadataContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validateSessionDisplayMetadata(json) }
+            ),
+            ClosedJsonCase(
+                "zone_snapshot",
+                ZONE_SNAPSHOT,
+                "zoneSnapshotContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validateZoneSnapshot(json) }
+            ),
+            ClosedJsonCase(
+                "phase_identity",
+                phaseFixtures().first().json,
+                "phaseIdentityContractVersion",
+                { json -> PhaseIdentityV1Validator.validateStructure(json) }
+            ),
+            ClosedJsonCase(
+                "analysis_config",
+                ANALYSIS_CONFIG,
+                "analysisConfigContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validateAnalysisConfig(json) }
+            ),
+            ClosedJsonCase(
+                "zone_durations",
+                ZONE_DURATIONS,
+                "zoneDurationsContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validateZoneDurations(json) }
+            ),
+            ClosedJsonCase(
+                "phase_aggregates",
+                PHASE_AGGREGATES,
+                "phaseAggregatesContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validatePhaseAggregates(json) }
+            ),
+            ClosedJsonCase(
+                "duration_breakdown",
+                DURATION_BREAKDOWN,
+                "durationBreakdownContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validateDurationBreakdown(json) }
+            ),
+            ClosedJsonCase(
+                "quality_reasons",
+                QUALITY_REASONS,
+                "qualityReasonsContractVersion",
+                { json -> CanonicalStorageJsonV1Validators.validateQualityReasons(json) }
+            )
+        )
+
+        cases.forEach { case ->
+            val version = "\"${case.versionKey}\":1"
+            val mutations = linkedMapOf(
+                "missing" to case.canonical.replace("$version,", ""),
+                "extra" to case.canonical.dropLast(1) + ",\"extra\":true}",
+                "wrong_type" to "[${case.canonical}]",
+                "null" to case.canonical.replace(version, "\"${case.versionKey}\":null"),
+                "unknown_version" to case.canonical.replace(version, "\"${case.versionKey}\":2"),
+                "duplicate" to case.canonical.replace(version, "$version,$version"),
+                "number_string" to case.canonical.replace(version, "\"${case.versionKey}\":\"1\""),
+                "trailing" to case.canonical + " trailing"
+            )
+            mutations.forEach { (mutation, json) ->
+                val result = case.validator(json)
+                assertTrue(
+                    "${case.name}/$mutation unexpectedly accepted",
+                    result != CanonicalValidationResult.Valid
+                )
+            }
+        }
+    }
+
+    @Test
     fun qualityReasonsValidationIsStructuralAndDoesNotStealCs05Semantics() {
         val structurallyValidButSemanticallyOwnedByCs05 =
             "{\"qualityReasonsContractVersion\":1,\"sessionReasons\":[],\"phaseReasons\":[{\"phaseSequence\":0,\"reasonCode\":\"process_interrupted\",\"durationMs\":5}]}"
@@ -92,7 +170,7 @@ class CanonicalStorageJsonValidatorsTest {
         val fixtures = phaseFixtures()
         assertEquals(32, fixtures.size)
         fixtures.forEach { fixture ->
-            val result = PhaseIdentityV1Validator.validate(fixture.json, fixture.phaseKind)
+            val result = PhaseIdentityV1Validator.validateStructure(fixture.json, fixture.phaseKind)
             assertTrue("${fixture.name} failed with $result", result is CanonicalValidationResult.Valid)
         }
     }
@@ -104,25 +182,36 @@ class CanonicalStorageJsonValidatorsTest {
         val compositionWarmup = phaseFixtures().first { it.name == "composition_warmup" }.json
 
         assertInvalid(
-            PhaseIdentityV1Validator.validate(
+            PhaseIdentityV1Validator.validateStructure(
                 strengthPaused.replace("\"variant\":\"paused\",", "")
             )
         )
         assertInvalid(
-            PhaseIdentityV1Validator.validate(
+            PhaseIdentityV1Validator.validateStructure(
                 followPaused.replace("\"blockId\":null", "\"blockId\":\"unexpected\"")
             )
         )
         assertInvalid(
-            PhaseIdentityV1Validator.validate(
+            PhaseIdentityV1Validator.validateStructure(
                 compositionWarmup.replace("\"stepIndex0\":0", "\"stepIndex0\":-1")
             )
         )
         assertInvalid(
-            PhaseIdentityV1Validator.validate(
+            PhaseIdentityV1Validator.validateStructure(
                 compositionWarmup.replace(DIGEST, DIGEST.uppercase())
             )
         )
+    }
+
+    @Test
+    fun shapeOnlyDigestCannotValidateAPhaseIdentity() {
+        val shapeOnlyIdentity = phaseFixtures().first { it.name == "composition_warmup" }.json
+        val snapshotJson =
+            "{\"planSnapshotStorageContractVersion\":1,\"planId\":null,\"title\":\"Timed\",\"mode\":\"timed\",\"blocks\":[],\"preferences\":null,\"followAlong\":null}"
+        val snapshot = (PlanSnapshotStorageV1Validator.validate(snapshotJson, WorkoutMode.TIMED) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+
+        assertInvalid(PhaseIdentityV1Validator.validate(shapeOnlyIdentity, snapshot))
     }
 
     private fun phaseFixtures(): List<PhaseFixture> = buildList {
@@ -263,6 +352,13 @@ class CanonicalStorageJsonValidatorsTest {
         val name: String,
         val phaseKind: String,
         val json: String
+    )
+
+    private data class ClosedJsonCase(
+        val name: String,
+        val canonical: String,
+        val versionKey: String,
+        val validator: (String) -> CanonicalValidationResult
     )
 
     private companion object {
