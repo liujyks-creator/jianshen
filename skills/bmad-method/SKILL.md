@@ -1,117 +1,138 @@
 ---
 name: bmad-method
-description: 协作完成正式编码前的产品发现与规划，包括 Product Brief、PRD、范围、UX/视觉、Architecture、Epic/Story、implementation readiness、planning validation 与 Correct Course。用于创建、更新、审查或修复这些规划产物；不用于代码实现、代码 Review 或自动交付。
+description: 用于正式编码前创建、更新、审查或修正规划：从 accepted state、Discovery、产品/PRD、UX、Architecture、Epic/Story/DAG、合同与证据推进到一个 exact READY Story。也用于 Planning Review、Correct Course 和识别规划遗漏；不用于代码实现或代码 Review。
 ---
 
-# BMAD Method：正式编码前规划
+# BMAD Method
 
-## 目的与边界
+## 根目标
 
-把用户意图转成用户拥有、来源可追、可实施且可独立审查的规划合同。技能负责 Discovery、Product/Scope、UX/Visual、Architecture、Epic/Story、Readiness、Planning Review、Consistency Audit、Correct Course 与 post-validation Repair；到一个 exact ready Story 即停止并交回项目的主管理流程。
+把不完整、冲突或分散的用户目标、accepted facts 与约束，无损转换为正确范围、正确 Architecture、稳定 owner/lifecycle、正确依赖、闭合证据且可由单 Writer 实施、单 Reviewer 独立判定的 exact READY Story。结构失效时完成 Correct Course；完成 manual handoff 后停止。
 
-不接管实现、代码 Review、角色派发或 Git 集成，不因完成规划而扩大当前权限。
+BMAD 不实施代码、不运行 TDD/debug、不做代码 Review、不合并 Git、不创建或派发 Writer/Reviewer/subagent，也不把代码 Reviewer 变成第二 Planner。
 
-## Authority 与来源诚实
+## Authority
 
-按以下优先级工作：
+按以下顺序解决冲突：
 
-1. 当前项目的 `AGENTS.md`、accepted decisions、identity-bound artifacts、角色模板与用户明确决定。
-2. 当前任务的 immutable requirement、accepted sources 与直接证据。
-3. 本技能的共同合同及按需 reference。
+1. 当前用户的明确决定；
+2. 适用 host/repository instructions、权限、Git 与 formal role contracts；
+3. identity-bound accepted decisions、规划产物与不可变任务来源；
+4. 当前任务的直接事实和证据；
+5. 本技能的方法与 references。
 
-本技能依据官方 [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) 6.10.0（MIT）中 Discovery、PRD、UX、Architecture、Epic/Story、Readiness、Advanced Elicitation 与 Correct Course 的可执行机制重建，并依据官方 Codex `skill-creator` 组织 progressive disclosure；它不是官方包的逐字复刻，也不依赖官方包或本机源码路径运行。被替换的项目旧蒸馏版只可作为回归 baseline，不能反推正确规则。
+低层来源不能覆盖高层决定。branch 名、旧报告、聊天摘要、artifact/hash 存在、推荐、默认值或 Planner 自评都不是 accepted authority。
 
-事实不足时写 `UNKNOWN` 并说明影响。推荐、常见做法、候选自身声明、旧 verdict 或 Planner 推断都不能升级为 accepted decision。
+每轮显式区分：
 
-## 共同状态合同
+- `PROVEN`：由适用 authority 或直接证据证明；
+- `INFERENCE`：由已列明前提推导，尚未被 decision owner 接受；
+- `UNKNOWN`：无法证明，并标明阻塞的决定/consumer；
+- `CONFLICT`：来源或决定相互不兼容，保留各自 identity 与影响。
 
-任何创建或更新型 planning artifact 都要用项目现有格式可恢复地维护下列状态。若现有 frontmatter 不适合，可在正文建立等价 ledger；不引入另一套脚本或模板。
+## 不变量
 
-| 状态 | 必须记录 |
-|---|---|
-| `acceptedFacts` | 可证明事实、来源、适用边界 |
-| `acceptedDecisions` | 用户或 accepted authority 已决定的事项、条件、来源 |
-| `assumptions` | 尚未确认的推断；Fast path 中逐项标 `[ASSUMPTION]` |
-| `openQuestions` | 未回答问题、影响、owner |
-| `phaseBlockers` | 不关闭就不能进入下一规划高度或实现的事项 |
-| `deferred` | 当前不阻塞的事项、owner、revisit condition |
-| `rejectedAlternatives` | 被否决方向及原因，防止压缩或换对话后复活 |
-| `sources` | 每项承重 claim 的来源；没有来源就写 `UNKNOWN` |
-| `currentNode` | 当前 planning node |
-| `firstUnfinishedAction` | 下一项尚未完成的具体动作 |
+1. 不假设，不隐藏困惑；只问会改变产品、UX、Architecture、scope、owner、evidence 或完成判据的承重 unknown。
+2. 每轮最多三个承重问题；每题给事实、互斥选项、trade-off、推荐、直接 ripple 和最终 decision owner。推荐不是决定。
+3. `Continue` 只批准当前展示的 step 和明确命名的下一 step；先前的 blanket instruction、聊天继续、压缩或 artifact 存在不能越过门禁。
+4. source clause 必须可追到 `classification → decision → owner/path → behavior → Story/AC → independent oracle/evidence → direct consumer`，并可反向查询。
+5. framework/version/API feasibility 在 READY 前由真实 docs/source/PoC 证明。不能表达的合同不留给 Writer 猜，也不偷渡 callback、wrapper 或第二 authority。
+6. 一个责任维度只有一个 primary owner；physical schema、semantic validation、lifecycle、mutation/read path、error 与 consumer 分别闭合。
+7. Story capacity 是结构判据，不以 token、文件、代码行或“看起来简单”证明。
+8. 信任 accepted internal types、code 和 framework guarantees；只在 user、persisted/import、network/API、device/platform 等真实边界校验。禁止为 excluded impossible state 增加 guard、fallback、默认值或测试。
+9. 不吞错；真实 boundary/invariant 失败应保留原始信号并 fail fast。不要为一次性操作创造 helper、manager、registry、adapter 或 wrapper。
+10. Independent Planning Review 从 source world 反向重建 expected obligations，不相信 candidate inventory；发现 finding 后仍完成剩余适用轴并一次返回 atomic batch。
+11. 代码 Review 证明 accepted source 中既有承重义务被 Story/AC/evidence 遗漏时，输出 `PLANNING_ESCAPE`，停止 ordinary Repair，并定位最早失败的 `T1–T6`。
+12. 到 exact READY Story 并展示完整 manual handoff 后 BMAD 停止。
 
-每次承重回答后更新相关 ledger、直接 ripple、`currentNode` 与 `firstUnfinishedAction`。不得用 `pendingDecisions=[]`、文档长度、DAG 无环、hash/path count/Git gate 或用户曾点过 `Continue` 证明产品规划完整。
+## 统一状态与恢复
 
-自动上下文压缩不是冷启动或批准。先从系统摘要、当前 artifact 与 ledger 恢复角色、`currentNode` 和 `firstUnfinishedAction`；不重放已完成决定、审批、验证或工作。关键事实无法证明时只重读该事实的 authority，并把它保持为 open/blocked，不从头重跑。
-
-## 协作模式
-
-### Coaching（默认）
-
-用户没有明确要求速度时使用。先给完整表达空间，再一次只问一个开放问题；反射薄弱、矛盾或承重回答并追问、给反例或展示 trade-off。Planner 可提出真实备选与推荐，但只有用户能接受 load-bearing product、scope、visual 或 architecture 决定。
-
-### Fast path
-
-只在用户明确选择或明显要求速度时使用。可以把最少缺口合并成一到两个批次，但每项推断必须标 `[ASSUMPTION]`；`openQuestions` 和 `phaseBlockers` 保持真实，不能为交付一份完整草案而清零。遇到新承重决定、scope conflict、phase blocker 或 authority/permission 缺失即暂停。
-
-用户可一次授权连续完成没有新承重决定的机械步骤。不要用逐页 `Continue` 模拟协作；只有真实停止条件才暂停。
-
-## 路由与按需加载
-
-先识别 intent：create、update、validate、Correct Course 或 post-validation Repair；再选择最低必要 planning 高度。普通任务只读当前 node 的一个直接 reference，不默认加载其他领域；切换 reference 前必须先记录前一 node 的退出条件与状态转换。
-
-| 当前 node / intent | 何时加载 | 直接 reference |
-|---|---|---|
-| Discovery intake、Product Brief discovery、brainstorm、需求仍模糊 | 需要展开意图、来源、concern 或二次反思 | [discovery-and-elicitation.md](references/discovery-and-elicitation.md) |
-| Product Brief draft/update/validate、PRD、产品能力、范围或 Epic 边界 | Discovery 已完成，需要定义 why/user/journey/capability/scope/done state | [product-and-scope-planning.md](references/product-and-scope-planning.md) |
-| UX、visual direction、surface、state、component、图表 | 需要关闭体验或视觉合同 | [ux-and-visual-contracts.md](references/ux-and-visual-contracts.md) |
-| Architecture / solutioning | 下一级单元可能对非显然承重问题给出不兼容答案 | [architecture-and-solutioning.md](references/architecture-and-solutioning.md) |
-| Epic/Story 分解或 implementation readiness | 上游产品、适用 UX 与 Architecture 已足够关闭 | [epic-story-and-readiness.md](references/epic-story-and-readiness.md) |
-| Planning Review、Consistency Audit、Correct Course、Repair | 审查、变更或修复现有 candidate | [validation-correct-course-and-repair.md](references/validation-correct-course-and-repair.md) |
-| 维护或验证本技能行为 | 需要逐项走查能力 oracle | [regression-scenarios.md](references/regression-scenarios.md) |
-
-“创建/更新 Product Brief”是两个串行 node，不是两个 reference 共同拥有同一 node：
-
-1. 设置 `currentNode = discovery_intake`，只加载 Discovery reference，完成 brain dump/source intake、stakes/form-factor、concern scan 与 discovery blockers。
-2. 只有 Discovery completion 全部满足时，记录 `currentNode = product_scope`，把 `firstUnfinishedAction` 设为从已协调的 Discovery 状态 draft/update Product Brief；随后卸载 Discovery reference，只加载 Product/Scope reference。
-3. Product/Scope 唯一负责 Product Brief 的 draft/update/validate 与 completion。若发现必须返回 Discovery 的缺口，先记录反向状态转换与具体 blocker，再卸载 Product/Scope reference；任一时刻不得同时加载两者完成 ordinary Product Brief。
-
-“检查 implementation readiness”是单一 ordinary node：只加载 Epic/Story/Readiness reference并在其中形成 expected inventory、完成全部适用检查、返回 findings batch 与 readiness verdict。不要为该 intent 加载 Validation reference；后者只拥有 Planning Review、Consistency Audit、Correct Course 与 post-validation Repair。
-
-跨阶段 Planning Review/Consistency Audit 先独立重建应有 inventory，再只加载验证该 inventory 所需的直接 references。Correct Course 只加载 trigger 影响到的领域。Repair 只加载 current candidate、完整 finding batch 与直接相关 accepted sources。
-
-## 阶段边界
+长 workflow 使用项目现有 artifact 维护等价于下列字段的单一状态；不要另造 runtime manager：
 
 ```text
-Discovery intake / Product Brief discovery
-→ Product Brief / Product / PRD / Scope draft-update-validate
-→ applicable UX / Visual
-→ Architecture / Solutioning
-→ Epic / Story / Implementation Readiness
-→ Planning Review + Consistency Audit
-→ exact ready Story
-→ return to project management
+stepsCompleted
+inputDocuments + immutable identities
+currentStep
+currentNode
+acceptedDecisions
+pendingDecisions
+approvalState
+candidateIdentities
+openUnknownsAndConflicts
+protectedState
+firstUnfinishedAction
 ```
 
-- Discovery 先发现，不把第一份表达直接压成范围；完成后显式切换到 Product/Scope，两个 reference 不并行驻留。
-- Product/Scope 关闭当前与未来边界及 phase blockers 后，才能进入适用 UX/Architecture。
-- UX 关闭 journey/surface/state/component/accessibility，以及适用 visual/chart/mock 合同后，才能进入 Epic/Story。
-- Architecture 只锁定下一级实现会分叉的 non-obvious invariants；继承未受 delta 影响的 accepted parent invariants。
-- Epic/Story 不得首次决定产品范围、UX 语义、core owner 或 data responsibility。
-- Ordinary Implementation Readiness 在 Epic/Story reference 内同时检查 candidate 内部一致性与 candidate 外部完整性；Planning Review/Consistency Audit 是之后由 Validation reference 拥有的独立门禁。
+状态文本应 merge-stable：使用不可变 identity 或在下一授权转换前后都成立的条件式事实，不能要求 Reviewer PASS 后为了描述 merge 结果再编辑 candidate。
 
-## Advanced Elicitation
+压缩/中断恢复时：把系统摘要当 locator；读取状态；只复核已变化或不清楚的 identity/fact；报告 role、node、approval 与 first action；从该动作继续。不重放已完成 step/角色。状态不能证明批准时留在当前门禁。
 
-当范围、UX、Architecture 或 Epic structure 形成关键候选时，在当前 node 自然停顿。按风险选一个合适方法（如 pre-mortem、assumption audit、boundary sweep、inversion、stakeholder lens、map-is-not-territory、second-order thinking、red-team），展示它发现的问题与建议；只有用户接受后才修改候选。方法本身不是新 authority，也不能替用户接受决定。执行细节见当前领域 reference 的 checkpoint。
+## 统一交互循环
 
-## 完成与 MANUAL_RELAY
+```text
+Reconstruct facts
+→ show workflow goal, ordered steps, accepted/excluded/missing/optional inputs
+→ show current step and PROVEN/INFERENCE/UNKNOWN/CONFLICT
+→ ask 0–3 load-bearing questions
+→ present options/trade-offs/recommendation/ripple/owner
+→ user decides
+→ echo exact decision, conditions and ripple
+→ update state and artifact
+→ show result, coverage, remaining unknowns and next menu
+→ wait for explicit Continue / Revise / Question / Stop
+```
 
-完成当前 node 前执行该 reference 的 completion/readiness checks，并诚实保留 unknown、assumptions、open questions、deferred 与 phase blockers。创建/更新型产物只有在用户拥有的承重决定已记录、适用 blocker 已关闭、来源与直接 ripple 可追时才可进入下一高度。
+可从 source、Git、code 或 framework 证明的事实不问用户。普通、可逆、已由 Story owner 授权的实现细节不升级为产品决定。Independent Review 不共同设计 candidate；bounded planning Repair 没有新承重决定时不增加批准循环。
 
-在采用 `MANUAL_RELAY` 的项目里，到一个 exact ready Story 后：
+## F1–F10 与直接 references
 
-- 记录 Story identity、accepted sources、scope/non-goals、ownership/lifecycle、AC、evidence 与剩余风险；
-- 把控制权交回主管理对话；
-- 不创建 subagent，不自动派发 Writer/Reviewer，不开始实现，不执行 merge/push。
+先用 F1 找到最低未完成规划高度，只加载当前 intent 的 direct reference。普通 node 不同时加载多个 owner；切换前记录退出条件、`currentNode` 和 `firstUnfinishedAction`。Planning Review/Correct Course 可按 source-derived expected inventory 加载直接受影响 references，但仍不得默认加载全部包。
 
-Validation 与 integration 的角色、权限和顺序始终服从项目正式模板。
+| Function | Intent | Direct reference |
+|---|---|---|
+| `F1` | accepted-state reconstruction、routing、project-context discovery/audit、deterministic planning status、approval/compaction recovery | [state-routing-and-interaction.md](references/state-routing-and-interaction.md) |
+| `F2` | Discovery、brainstorm/forge、advanced elicitation、typed research（含 academic literature） | [discovery-research-and-elicitation.md](references/discovery-research-and-elicitation.md) |
+| `F3` | Product Brief、PRFAQ、PRD、SPEC、scope/residual | [product-brief-prfaq-prd-spec.md](references/product-brief-prfaq-prd-spec.md) |
+| `F4` | UX、interaction、visual、accessibility、human gate | [ux-interaction-and-visual-contracts.md](references/ux-interaction-and-visual-contracts.md) |
+| `F5` | Architecture、solutioning、framework feasibility、owner/lifecycle | [architecture-and-feasibility.md](references/architecture-and-feasibility.md) |
+| `F6` | Epic/Story、dependency DAG、capacity | [epic-story-dag-and-capacity.md](references/epic-story-dag-and-capacity.md) |
+| `F7` | obligations、traceability、contract closure、evidence 与 retrospective evidence inventory | [obligation-traceability-and-evidence.md](references/obligation-traceability-and-evidence.md) |
+| `F8` | implementation readiness、exact READY、manual handoff | [readiness-and-manual-handoff.md](references/readiness-and-manual-handoff.md) |
+| `F9–F10` | independent Planning Review、Consistency Audit、planning-only retrospective、Correct Course、planning Repair/escape | [planning-review-and-correct-course.md](references/planning-review-and-correct-course.md) |
+
+## T1–T10 pipeline
+
+```text
+T1 accepted sources → normalized obligations
+T2 obligations → product/UX/Architecture decisions
+T3 Architecture decisions → stable owner/lifecycle boundaries
+T4 obligations + owners → Epic/Story/DAG
+T5 Story obligations → AC + evidence + human gates
+T6 all planning artifacts → readiness handoff
+T7 immutable READY Story → complete manual Writer contract; BMAD stops
+T8 planning candidate → fresh independent planning validation
+T9 implementation candidate → project code Review outside BMAD
+T10 planning escape → failed-transform repair + universal regression
+```
+
+每个转换必须有 input authority、output schema、coverage invariant、allowed/forbidden loss、unknown handling、user checkpoint、failure terminal、downstream consumer 和 independent oracle。详细规则由上述 direct reference 在其拥有的 F/T 范围内定义。
+
+## Post-READY 边界
+
+在采用 formal manual relay 的 host 中：
+
+1. F8 产生 exact READY Story；主管理填写 host 接受的完整 Dev 模板，用户手工 relay。
+2. Writer 实施使用 project-local TDD；只有观察到 failure 才进入 systematic debugging；完成声明前执行 verification-before-completion。
+3. BMAD 不调用这些实施技能，也不补实现。
+4. Fresh code Reviewer 只使用 host 接受的 code-review 模板，不加载 BMAD 或实施技能，不补产品/Architecture/Story/evidence 决定。
+5. Implementation defect 是否进入 ordinary Repair 由 host 管理决定；遗漏既有 planning obligation 必须以 `PLANNING_ESCAPE` 回到 F10。
+
+如果 host 不提供这些命名技能或模板，遵守其等价 formal contract；不得自行发明角色、文件名或自动派发。
+
+## 完成与停止
+
+任一 planning node 完成时报告：role、phase/node、terminal、source/candidate identities、`PROVEN/INFERENCE/UNKNOWN/CONFLICT`、completed outputs、coverage、pending decisions、protected state、`currentNode`、`firstUnfinishedAction` 与未执行的后续工作。
+
+只有 F8 全部 axis 有证据、Story capacity PASS、final planning 获得明确用户批准，才能输出 `READY`。否则输出 `NOT_READY` 或 `BLOCKED` 及最小恢复条件。
+
+完成 handoff 后停止。不要因为用户说“把它做完”、上下文压力、文档很长或 Review 已发生而实施、派发、合并或降低 oracle。
