@@ -1,6 +1,6 @@
 interface:
   display_name: "BMAD Method Planning"
-  short_description: "Collaborative pre-implementation product planning"
-  default_prompt: "Use $bmad-method to collaboratively define and validate the next pre-implementation planning node."
+  short_description: "从Discovery推进到exact READY Story的交互式规划"
+  default_prompt: "使用 $bmad-method 重建accepted state，并以交互式门禁推进当前最低未完成的正式编码前规划节点；只在exact READY Story与完整manual handoff形成后停止，不实施代码、不做代码Review，也不自动创建或派发角色。"
 policy:
   allow_implicit_invocation: true
