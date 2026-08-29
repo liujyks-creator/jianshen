@@ -2,10 +2,27 @@ package com.liujyks.trainflow.core.database
 
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
+import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.core.model.RestBlock
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthExerciseTarget
+import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetPlan
+import com.liujyks.trainflow.core.model.StretchBlock
+import com.liujyks.trainflow.core.model.TimedCircuitBlock
+import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.WarmupBlock
+import com.liujyks.trainflow.core.model.WeightUnit
+import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.security.MessageDigest
 
 class CanonicalStorageJsonValidatorsTest {
     @Test
@@ -140,6 +157,221 @@ class CanonicalStorageJsonValidatorsTest {
     }
 
     @Test
+    fun eachClosedObjectCoversRealRequiredNullableNestedAndArrayMembers() {
+        fun memberToken(json: String, key: String, occurrence: Int = 0): String {
+            val marker = "\"$key\":"
+            var start = -1
+            var searchFrom = 0
+            repeat(occurrence + 1) {
+                start = json.indexOf(marker, searchFrom)
+                require(start >= 0) { "Missing test member $key occurrence $occurrence" }
+                searchFrom = start + marker.length
+            }
+            val valueStart = start + marker.length
+            var index = valueStart
+            var inString = false
+            var escaped = false
+            var depth = 0
+            while (index < json.length) {
+                val char = json[index]
+                if (inString) {
+                    if (escaped) escaped = false else if (char == '\\') escaped = true else if (char == '"') inString = false
+                } else {
+                    when (char) {
+                        '"' -> inString = true
+                        '{', '[' -> depth += 1
+                        '}', ']' -> if (depth > 0) depth -= 1 else break
+                        ',' -> if (depth == 0) break
+                    }
+                }
+                index += 1
+            }
+            return json.substring(start, index)
+        }
+
+        fun removeToken(json: String, token: String): String = when {
+            json.contains("$token,") -> json.replaceFirst("$token,", "")
+            json.contains(",$token") -> json.replaceFirst(",$token", "")
+            else -> error("Token is not a removable member: $token")
+        }
+
+        fun assertRequiredMembers(
+            label: String,
+            json: String,
+            validator: (String) -> CanonicalValidationResult,
+            members: List<Pair<String, Int>>
+        ) {
+            assertValid(validator(json))
+            members.forEach { (key, occurrence) ->
+                val token = memberToken(json, key, occurrence)
+                val value = token.substringAfter(':')
+                val wrongValue = when (value.first()) {
+                    '"' -> "0"
+                    '{' -> "[]"
+                    '[' -> "{}"
+                    't', 'f' -> "\"wrong\""
+                    else -> "\"wrong\""
+                }
+                linkedMapOf(
+                    "missing" to removeToken(json, token),
+                    "wrong_type" to json.replaceFirst(token, "\"$key\":$wrongValue"),
+                    "null" to json.replaceFirst(token, "\"$key\":null"),
+                    "duplicate" to json.replaceFirst(token, "$token,$token")
+                ).forEach { (mutation, candidate) ->
+                    assertTrue(
+                        "$label.$key[$occurrence]/$mutation unexpectedly accepted",
+                        validator(candidate) != CanonicalValidationResult.Valid
+                    )
+                }
+            }
+        }
+
+        fun assertNullableMembers(
+            label: String,
+            json: String,
+            validator: (String) -> CanonicalValidationResult,
+            members: List<Pair<String, Int>>
+        ) {
+            assertValid(validator(json))
+            members.forEach { (key, occurrence) ->
+                val token = memberToken(json, key, occurrence)
+                assertTrue("$label.$key[$occurrence] is not the intended NULL fixture", token.endsWith(":null"))
+                linkedMapOf(
+                    "wrong_type" to json.replaceFirst(token, "\"$key\":{}"),
+                    "duplicate" to json.replaceFirst(token, "$token,$token")
+                ).forEach { (mutation, candidate) ->
+                    assertTrue(
+                        "$label.$key[$occurrence]/$mutation unexpectedly accepted",
+                        validator(candidate) != CanonicalValidationResult.Valid
+                    )
+                }
+            }
+        }
+
+        val displayWithEntry = displayMetadata(entry("exercise-1", "深蹲", "plan_snapshot"))
+        assertRequiredMembers(
+            "session_display_metadata",
+            displayWithEntry,
+            CanonicalStorageJsonV1Validators::validateSessionDisplayMetadata,
+            listOf("entries", "entityKind", "stableId", "displayNameAtFirstReference", "resolutionSource").map { it to 0 }
+        )
+        assertNullableMembers(
+            "session_display_metadata",
+            displayWithEntry,
+            CanonicalStorageJsonV1Validators::validateSessionDisplayMetadata,
+            listOf("customNameAtFirstReference" to 0)
+        )
+        assertRequiredMembers(
+            "zone_snapshot",
+            ZONE_SNAPSHOT,
+            CanonicalStorageJsonV1Validators::validateZoneSnapshot,
+            listOf("unit", "effectiveMaxBpm", "effectiveMaxSource", "zones", "zoneId", "upperBoundBasisPointsExclusive").map { it to 0 }
+        )
+        assertNullableMembers(
+            "zone_snapshot",
+            ZONE_SNAPSHOT,
+            CanonicalStorageJsonV1Validators::validateZoneSnapshot,
+            listOf("lowerBoundBasisPointsInclusive" to 0, "upperBoundBasisPointsExclusive" to 5)
+        )
+
+        val phaseIdentity = phaseFixtures().first().json
+        assertRequiredMembers(
+            "phase_identity",
+            phaseIdentity,
+            PhaseIdentityV1Validator::validateStructure,
+            listOf(
+                "family", "payloadVersion", "mode", "phaseKind", "orderedStructureSignature",
+                "signatureContractVersion", "algorithm", "digestHexLowercase", "payload", "variant",
+                "blockId", "stepIndex0", "legacyBlockKind", "legacyStageType"
+            ).map { it to 0 }
+        )
+        assertNullableMembers(
+            "phase_identity",
+            phaseIdentity,
+            PhaseIdentityV1Validator::validateStructure,
+            listOf("itemId", "exerciseId", "roundIndex0").map { it to 0 }
+        )
+
+        assertRequiredMembers(
+            "analysis_config",
+            ANALYSIS_CONFIG,
+            CanonicalStorageJsonV1Validators::validateAnalysisConfig,
+            listOf(
+                "sampleValidityCapMs", "sampleIntervalContractVersion", "partialLowerBoundBasisPoints",
+                "phaseConclusionBasisPoints", "normalBasisPoints", "coverageThresholdRule",
+                "coverageBasisPointsRule", "displayPercentRule", "weightedAverageRule",
+                "averageDisplayRule", "zeroCoveredRule", "observedMaxRule",
+                "zoneAttributionContractVersion", "zoneAttributionRule",
+                "statusProjectionContractVersion", "durationPartitionContractVersion"
+            ).map { it to 0 }
+        )
+        assertRequiredMembers(
+            "zone_durations",
+            ZONE_DURATIONS,
+            CanonicalStorageJsonV1Validators::validateZoneDurations,
+            listOf(
+                "below50DurationMs", "from50To60DurationMs", "from60To70DurationMs",
+                "from70To80DurationMs", "from80To90DurationMs", "atOrAbove90DurationMs"
+            ).map { it to 0 }
+        )
+
+        assertRequiredMembers(
+            "phase_aggregates",
+            PHASE_AGGREGATES_WITH_ENTRY,
+            CanonicalStorageJsonV1Validators::validatePhaseAggregates,
+            listOf(
+                "aggregates", "phaseSequence", "phaseKind", "eligibleDurationMs", "coveredDurationMs",
+                "coverageStatus", "conclusionEligible"
+            ).map { it to 0 }
+        )
+        assertNullableMembers(
+            "phase_aggregates",
+            PHASE_AGGREGATES_WITH_ENTRY,
+            CanonicalStorageJsonV1Validators::validatePhaseAggregates,
+            listOf(
+                "coverageBasisPoints", "weightedBpmMs", "observedAvgBpm", "observedMaxBpm",
+                "highestOffsetMs", "highestMutationSequence", "highestSampleSequence"
+            ).map { it to 0 }
+        )
+
+        assertRequiredMembers(
+            "duration_breakdown",
+            DURATION_BREAKDOWN,
+            CanonicalStorageJsonV1Validators::validateDurationBreakdown,
+            listOf(
+                "canonicalSessionDurationMs", "recordingWindowDurationMs", "notRequestedBeforeRecordingStartMs",
+                "intentAxis", "expectedRecordingDurationMs", "userExcludedDurationMs", "userTurnedOffDurationMs",
+                "userOptedOutDurationMs", "userDisconnectedSuppressRecoveryDurationMs", "phaseAxis",
+                "primaryEligibleDurationMs", "phaseExcludedDurationMs", "strengthPrepareExcludedDurationMs",
+                "pausedExcludedDurationMs", "primaryAnalysisPartition", "eligibleCoveredDurationMs",
+                "eligibleUncoveredDurationMs", "deviceStateDurations", "not_observing", "no_source_selected",
+                "permission_required", "bluetooth_unavailable", "searching", "connecting", "waiting_first_sample",
+                "live", "stale", "reconnecting", "disconnected", "technical_failure", "deviceReasonDurations",
+                "initial_acquisition", "automatic_recovery", "source_not_selected", "source_unavailable",
+                "permission_missing", "permission_revoked", "bluetooth_off", "platform_unavailable",
+                "first_sample_timeout", "sample_stale_timeout", "unexpected_disconnect", "connection_timeout",
+                "measurement_stream_unavailable", "platform_failure", "orthogonalityContract", "contractVersion", "rule"
+            ).map { it to 0 }
+        )
+
+        val qualityWithEntries =
+            "{\"qualityReasonsContractVersion\":1,\"sessionReasons\":[{\"reasonCode\":\"unavailable_no_effective_max\",\"durationMs\":null}],\"phaseReasons\":[{\"phaseSequence\":0,\"reasonCode\":\"paused_excluded\",\"durationMs\":5}]}"
+        assertRequiredMembers(
+            "quality_reasons",
+            qualityWithEntries,
+            CanonicalStorageJsonV1Validators::validateQualityReasons,
+            listOf("sessionReasons" to 0, "phaseReasons" to 0, "reasonCode" to 0, "phaseSequence" to 0, "reasonCode" to 1)
+        )
+        val qualityWithNullDurations = qualityWithEntries.replace("\"durationMs\":5", "\"durationMs\":null")
+        assertNullableMembers(
+            "quality_reasons",
+            qualityWithNullDurations,
+            CanonicalStorageJsonV1Validators::validateQualityReasons,
+            listOf("durationMs" to 0, "durationMs" to 1)
+        )
+    }
+
+    @Test
     fun qualityReasonsValidationIsStructuralAndDoesNotStealCs05Semantics() {
         val structurallyValidButSemanticallyOwnedByCs05 =
             "{\"qualityReasonsContractVersion\":1,\"sessionReasons\":[],\"phaseReasons\":[{\"phaseSequence\":0,\"reasonCode\":\"process_interrupted\",\"durationMs\":5}]}"
@@ -214,6 +446,223 @@ class CanonicalStorageJsonValidatorsTest {
         assertInvalid(PhaseIdentityV1Validator.validate(shapeOnlyIdentity, snapshot))
     }
 
+    @Test
+    fun phaseIdentityPayloadMustBindStableIdsKindsAndIndicesToTheSameSnapshot() {
+        val snapshotJson =
+            "{\"planSnapshotStorageContractVersion\":1,\"planId\":null,\"title\":\"Timed\",\"mode\":\"timed\",\"blocks\":[{\"id\":\"composition\",\"kind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":0,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[{\"id\":\"group\",\"order\":0,\"name\":\"Display\",\"colorHex\":\"#111111\",\"targets\":[{\"id\":\"target\",\"order\":0,\"name\":\"Display\",\"kind\":\"action\",\"durationSec\":30,\"colorHex\":\"#222222\",\"autoAdvance\":true}]}]}],\"preferences\":null,\"followAlong\":null}"
+        val expectedProjection =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[{\"blockId\":\"composition\",\"blockKind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":0,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[{\"stageGroupId\":\"group\",\"order\":0,\"targets\":[{\"targetId\":\"target\",\"order\":0,\"targetKind\":\"action\",\"durationSec\":30,\"autoAdvance\":true}]}]}]}"
+        val digest = testSha256(expectedProjection.toByteArray(Charsets.UTF_8))
+        val payload = compositionPayload(
+            "stage_group_action",
+            "composition",
+            "composition:r1:g1:group",
+            "stage_group",
+            "group",
+            "target",
+            "action",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        )
+        val identity = envelope(
+            "timed_composition_v2",
+            2,
+            "timed",
+            "timed_work",
+            payload,
+            digest
+        )
+        val snapshot = (PlanSnapshotStorageV1Validator.validate(snapshotJson, WorkoutMode.TIMED) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+
+        assertValid(PhaseIdentityV1Validator.validate(identity, snapshot, "timed_work"))
+        listOf(
+            identity.replace("\"compositionBlockId\":\"composition\"", "\"compositionBlockId\":\"other\""),
+            identity.replace("\"stageGroupId\":\"group\"", "\"stageGroupId\":\"other\""),
+            identity.replace("\"targetId\":\"target\"", "\"targetId\":\"other\""),
+            identity.replace("\"targetKind\":\"action\"", "\"targetKind\":\"custom\""),
+            identity.replace("\"roundIndex0\":0", "\"roundIndex0\":1"),
+            identity.replace("\"stageGroupIndex0\":0", "\"stageGroupIndex0\":1"),
+            identity.replace("\"targetIndex0\":0", "\"targetIndex0\":1")
+        ).forEachIndexed { index, mutation ->
+            assertTrue(
+                "Stable snapshot binding mutation $index unexpectedly validated",
+                PhaseIdentityV1Validator.validate(mutation, snapshot, "timed_work") is
+                    CanonicalValidationResult.Invalid
+            )
+        }
+    }
+
+    @Test
+    fun allPhaseFamiliesBindSnapshotBoundariesCircuitsRestsSubstitutionsAndPaused() {
+        fun validated(snapshot: WorkoutPlanSnapshot) =
+            (PlanSnapshotStorageV1Validator.validate(snapshot.toStorageJson(), snapshot.mode) as
+                PlanSnapshotStorageV1ValidationResult.Valid).storage
+        fun digest(projection: String) = testSha256(projection.toByteArray(Charsets.UTF_8))
+        fun assertBound(identity: String, snapshot: com.liujyks.trainflow.core.data.WorkoutPlanSnapshotStorageV1, kind: String) =
+            assertValid(PhaseIdentityV1Validator.validate(identity, snapshot, kind))
+
+        val item = TimedExerciseItem(
+            id = "item",
+            exerciseId = "exercise",
+            stageType = TimedStageType.WORK,
+            workDurationSec = 20,
+            restAfterSec = 10,
+            autoAdvance = true
+        )
+        val sharedBlocks = listOf(
+            WarmupBlock("warmup", 0, durationSec = 10),
+            StretchBlock("stretch", 1, items = listOf(item)),
+            TimedCircuitBlock("circuit", 2, rounds = 2, restBetweenRoundsSec = 5, items = listOf(item)),
+            RestBlock("rest", 3, durationSec = 10)
+        )
+        val sharedProjectionBlocks =
+            "[{\"blockId\":\"warmup\",\"blockKind\":\"warmup\",\"order\":0,\"durationSec\":10,\"items\":[]},{\"blockId\":\"stretch\",\"blockKind\":\"stretch\",\"order\":1,\"durationSec\":null,\"items\":[{\"itemId\":\"item\",\"exerciseId\":\"exercise\",\"side\":null,\"stageType\":\"work\",\"workDurationSec\":20,\"restAfterSec\":10,\"autoAdvance\":true}]},{\"blockId\":\"circuit\",\"blockKind\":\"timed_circuit\",\"order\":2,\"rounds\":2,\"restBetweenRoundsSec\":5,\"items\":[{\"itemId\":\"item\",\"exerciseId\":\"exercise\",\"side\":null,\"stageType\":\"work\",\"workDurationSec\":20,\"restAfterSec\":10,\"autoAdvance\":true}]},{\"blockId\":\"rest\",\"blockKind\":\"rest\",\"order\":3,\"durationSec\":10}]"
+
+        val timedSnapshot = validated(WorkoutPlanSnapshot(title = "Timed", mode = WorkoutMode.TIMED, blocks = sharedBlocks))
+        val timedDigest = digest("{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":$sharedProjectionBlocks}")
+        val legacyIdentities = listOf(
+            "timed_work" to legacyPayload("boundary_block_work", "warmup", 0, "warmup", "warmup", null, null, null),
+            "timed_work" to legacyPayload("boundary_item_work", "stretch", 0, "stretch", "work", "item", "exercise", null),
+            "timed_work" to legacyPayload("circuit_item_work", "circuit", 0, "timed_circuit", "work", "item", "exercise", 0),
+            "timed_rest" to legacyPayload("circuit_rest_after_item", "circuit", 1, "timed_circuit", "rest", "item", "exercise", 0),
+            "timed_rest" to legacyPayload("between_round_rest", "circuit", 2, "timed_circuit", "rest", null, null, 0),
+            "timed_rest" to legacyPayload("standalone_rest", "rest", 0, "rest", "rest", null, null, null),
+            "paused" to legacyPayload("paused", null, null, null, null, null, null, null)
+        ).map { (kind, payload) -> kind to envelope("legacy_timed_v1", 1, "timed", kind, payload, timedDigest) }
+        legacyIdentities.forEach { (kind, identity) -> assertBound(identity, timedSnapshot, kind) }
+        linkedMapOf(
+            "legacy.blockId" to legacyIdentities[2].second.replace("\"blockId\":\"circuit\"", "\"blockId\":\"other\""),
+            "legacy.blockKind" to legacyIdentities[2].second.replace("\"legacyBlockKind\":\"timed_circuit\"", "\"legacyBlockKind\":\"stretch\""),
+            "legacy.itemId" to legacyIdentities[2].second.replace("\"itemId\":\"item\"", "\"itemId\":\"other\""),
+            "legacy.exerciseId" to legacyIdentities[2].second.replace("\"exerciseId\":\"exercise\"", "\"exerciseId\":\"other\""),
+            "legacy.roundIndex0" to legacyIdentities[2].second.replace("\"roundIndex0\":0", "\"roundIndex0\":2"),
+            "legacy.stepIndex0" to legacyIdentities[2].second.replace("\"stepIndex0\":0", "\"stepIndex0\":1")
+        ).forEach { (field, identity) ->
+            assertTrue("$field mismatch validated", PhaseIdentityV1Validator.validate(identity, timedSnapshot) is CanonicalValidationResult.Invalid)
+        }
+
+        val followSnapshot = validated(
+            WorkoutPlanSnapshot(
+                title = "Follow",
+                mode = WorkoutMode.FOLLOW_ALONG,
+                blocks = sharedBlocks,
+                followAlong = FollowAlongPlanMeta(preset = true)
+            )
+        )
+        val followDigest = digest("{\"signatureInputContractVersion\":1,\"mode\":\"follow_along\",\"blocks\":$sharedProjectionBlocks}")
+        val followIdentities = listOf(
+            "follow_along_action" to followPayload("non_circuit_action", "stretch", 0, "action", "item", "exercise", null),
+            "follow_along_action" to followPayload("circuit_action", "circuit", 0, "action", "item", "exercise", 0),
+            "follow_along_rest" to followPayload("circuit_rest_after_action", "circuit", 1, "rest_after_action", "item", "exercise", 0),
+            "follow_along_rest" to followPayload("between_round_rest", "circuit", 2, "between_round_rest", null, null, 0),
+            "follow_along_rest" to followPayload("block_rest", "rest", 0, "block_rest", null, null, null),
+            "follow_along_action" to followPayload("boundary", "warmup", 0, "boundary", null, null, null),
+            "paused" to followPayload("paused", null, null, null, null, null, null)
+        ).map { (kind, payload) -> kind to envelope("follow_along_v1", 1, "follow_along", kind, payload, followDigest) }
+        followIdentities.forEach { (kind, identity) -> assertBound(identity, followSnapshot, kind) }
+        linkedMapOf(
+            "follow.blockId" to followIdentities[1].second.replace("\"blockId\":\"circuit\"", "\"blockId\":\"other\""),
+            "follow.itemId" to followIdentities[1].second.replace("\"itemId\":\"item\"", "\"itemId\":\"other\""),
+            "follow.exerciseId" to followIdentities[1].second.replace("\"exerciseId\":\"exercise\"", "\"exerciseId\":\"other\""),
+            "follow.roundIndex0" to followIdentities[1].second.replace("\"roundIndex0\":0", "\"roundIndex0\":2"),
+            "follow.stepIndex0" to followIdentities[1].second.replace("\"stepIndex0\":0", "\"stepIndex0\":1")
+        ).forEach { (field, identity) ->
+            assertTrue("$field mismatch validated", PhaseIdentityV1Validator.validate(identity, followSnapshot) is CanonicalValidationResult.Invalid)
+        }
+
+        val strengthSnapshot = validated(
+            WorkoutPlanSnapshot(
+                title = "Strength",
+                mode = WorkoutMode.STRENGTH,
+                blocks = listOf(
+                    StrengthExerciseBlock(
+                        id = "strength",
+                        order = 0,
+                        exerciseId = "squat",
+                        target = StrengthExerciseTarget(WeightValue(60.0, WeightUnit.KG), RepTarget.Fixed(10), 90),
+                        sets = listOf(StrengthSetPlan("set", 0, StrengthSetKind.WORKING)),
+                        substitutions = listOf("front-squat")
+                    )
+                )
+            )
+        )
+        val strengthProjection =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"strength\",\"blocks\":[{\"blockId\":\"strength\",\"blockKind\":\"strength_exercise\",\"order\":0,\"exerciseId\":\"squat\",\"target\":{\"weight\":{\"value\":60,\"unit\":\"kg\"},\"repTarget\":{\"kind\":\"fixed\",\"fixedReps\":10,\"minReps\":null,\"maxReps\":null},\"restAfterSetSec\":90},\"sets\":[{\"setPlanId\":\"set\",\"order\":0,\"setKind\":\"working\",\"side\":null,\"targetWeight\":null,\"repTarget\":null,\"restAfterSec\":null}],\"substitutions\":[\"front-squat\"],\"setTimerMode\":\"manual_start\"}]}"
+        val strengthDigest = digest(strengthProjection)
+        listOf(
+            "prepare_set" to "strength_prepare_set",
+            "active_set" to "strength_active_set",
+            "confirm_set" to "strength_confirm_set",
+            "rest" to "strength_rest"
+        ).forEach { (variant, kind) ->
+            assertBound(
+                envelope("strength_v1", 1, "strength", kind, strengthPayload(variant, "strength", "set", "squat", "squat", 0, 0, "working", null), strengthDigest),
+                strengthSnapshot,
+                kind
+            )
+        }
+        val substituted = envelope(
+            "strength_v1", 1, "strength", "strength_active_set",
+            strengthPayload("active_set", "strength", "set", "squat", "front-squat", 0, 0, "working", "squat"),
+            strengthDigest
+        )
+        assertBound(substituted, strengthSnapshot, "strength_active_set")
+        assertBound(
+            envelope("strength_v1", 1, "strength", "paused", strengthPayload("paused", null, null, null, null, null, null, null, null), strengthDigest),
+            strengthSnapshot,
+            "paused"
+        )
+        linkedMapOf(
+            "strength.blockId" to substituted.replace("\"blockId\":\"strength\"", "\"blockId\":\"other\""),
+            "strength.setPlanId" to substituted.replace("\"setPlanId\":\"set\"", "\"setPlanId\":\"other\""),
+            "strength.plannedExerciseId" to substituted.replace("\"plannedExerciseId\":\"squat\"", "\"plannedExerciseId\":\"other\""),
+            "strength.actualExerciseId" to substituted.replace("\"actualExerciseId\":\"front-squat\"", "\"actualExerciseId\":\"unlisted\""),
+            "strength.exerciseSetIndex0" to substituted.replace("\"exerciseSetIndex0\":0", "\"exerciseSetIndex0\":1"),
+            "strength.globalSetIndex0" to substituted.replace("\"globalSetIndex0\":0", "\"globalSetIndex0\":1"),
+            "strength.setKind" to substituted.replace("\"setKind\":\"working\"", "\"setKind\":\"warmup\"")
+        ).forEach { (field, identity) ->
+            assertTrue("$field mismatch validated", PhaseIdentityV1Validator.validate(identity, strengthSnapshot) is CanonicalValidationResult.Invalid)
+        }
+    }
+
+    @Test
+    fun compositionBindingEnumeratesWarmupTargetsRoundRestCooldownAndPaused() {
+        val snapshotJson =
+            "{\"planSnapshotStorageContractVersion\":1,\"planId\":null,\"title\":\"Composition\",\"mode\":\"timed\",\"blocks\":[{\"id\":\"composition\",\"kind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":10,\"cooldownSec\":10,\"rounds\":2,\"restBetweenRoundsSec\":5,\"stageGroups\":[{\"id\":\"group\",\"order\":0,\"name\":\"Display\",\"colorHex\":\"#111111\",\"targets\":[{\"id\":\"work\",\"order\":0,\"name\":\"Work\",\"kind\":\"action\",\"durationSec\":20,\"colorHex\":\"#222222\",\"autoAdvance\":true},{\"id\":\"rest\",\"order\":1,\"name\":\"Rest\",\"kind\":\"rest\",\"durationSec\":10,\"colorHex\":\"#333333\",\"autoAdvance\":true}]}]}],\"preferences\":null,\"followAlong\":null}"
+        val projection =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[{\"blockId\":\"composition\",\"blockKind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":10,\"cooldownSec\":10,\"rounds\":2,\"restBetweenRoundsSec\":5,\"stageGroups\":[{\"stageGroupId\":\"group\",\"order\":0,\"targets\":[{\"targetId\":\"work\",\"order\":0,\"targetKind\":\"action\",\"durationSec\":20,\"autoAdvance\":true},{\"targetId\":\"rest\",\"order\":1,\"targetKind\":\"rest\",\"durationSec\":10,\"autoAdvance\":true}]}]}]}"
+        val digest = testSha256(projection.toByteArray(Charsets.UTF_8))
+        val snapshot = (PlanSnapshotStorageV1Validator.validate(snapshotJson, WorkoutMode.TIMED) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+        val identities = listOf(
+            "timed_work" to compositionPayload("warmup", "composition", "composition:warmup", "warmup", "composition:warmup", "composition:warmup:target", "warmup", null, null, 0, 0, 0, 0),
+            "timed_work" to compositionPayload("stage_group_action", "composition", "composition:r1:g1:group", "stage_group", "group", "work", "action", 0, 0, 0, 1, 1, 1),
+            "timed_rest" to compositionPayload("stage_group_rest", "composition", "composition:r1:g1:group", "stage_group", "group", "rest", "rest", 0, 0, 1, 1, 2, 2),
+            "timed_rest" to compositionPayload("between_round_rest", "composition", "composition:r1:between-round-rest", "between_round_rest", "composition:r1:between-round-rest", "composition:r1:between-round-rest:target", "between_round_rest", 0, null, 0, 2, 3, 3),
+            "timed_work" to compositionPayload("stage_group_action", "composition", "composition:r2:g1:group", "stage_group", "group", "work", "action", 1, 0, 0, 3, 4, 4),
+            "timed_work" to compositionPayload("cooldown", "composition", "composition:cooldown", "cooldown", "composition:cooldown", "composition:cooldown:target", "cooldown", null, null, 0, 4, 6, 6),
+            "paused" to compositionPayload("paused", null, null, null, null, null, null, null, null, null, null, null, null)
+        ).map { (kind, payload) -> kind to envelope("timed_composition_v2", 2, "timed", kind, payload, digest) }
+        identities.forEach { (kind, identity) ->
+            assertValid(PhaseIdentityV1Validator.validate(identity, snapshot, kind))
+        }
+        val action = identities[1].second
+        linkedMapOf(
+            "timeline_stage_id" to action.replace("\"$TIMELINE_STAGE_ID_KEY\":\"composition:r1:g1:group\"", "\"$TIMELINE_STAGE_ID_KEY\":\"other\""),
+            "timelineStageKind" to action.replace("\"timelineStageKind\":\"stage_group\"", "\"timelineStageKind\":\"warmup\""),
+            "stageInstanceIndex0" to action.replace("\"stageInstanceIndex0\":1", "\"stageInstanceIndex0\":2"),
+            "target_instance_index" to action.replace("\"$TARGET_ORDINAL_KEY\":1", "\"$TARGET_ORDINAL_KEY\":2"),
+            "stepIndex0" to action.replace("\"stepIndex0\":1", "\"stepIndex0\":2")
+        ).forEach { (field, mutation) ->
+            assertTrue("Composition $field mismatch validated", PhaseIdentityV1Validator.validate(mutation, snapshot) is CanonicalValidationResult.Invalid)
+        }
+    }
+
     private fun phaseFixtures(): List<PhaseFixture> = buildList {
         fun addLegacy(name: String, phaseKind: String, payload: String) = add(
             PhaseFixture(name, phaseKind, envelope("legacy_timed_v1", 1, "timed", phaseKind, payload))
@@ -274,9 +723,10 @@ class CanonicalStorageJsonValidatorsTest {
         payloadVersion: Int,
         mode: String,
         phaseKind: String,
-        payload: String
+        payload: String,
+        digest: String = DIGEST
     ): String =
-        "{\"phaseIdentityContractVersion\":1,\"family\":\"$family\",\"payloadVersion\":$payloadVersion,\"mode\":\"$mode\",\"phaseKind\":\"$phaseKind\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"$DIGEST\"},\"payload\":$payload}"
+        "{\"phaseIdentityContractVersion\":1,\"family\":\"$family\",\"payloadVersion\":$payloadVersion,\"mode\":\"$mode\",\"phaseKind\":\"$phaseKind\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"$digest\"},\"payload\":$payload}"
 
     private fun legacyPayload(
         variant: String,
@@ -347,6 +797,10 @@ class CanonicalStorageJsonValidatorsTest {
     private fun assertInvalid(result: CanonicalValidationResult) {
         assertTrue(result is CanonicalValidationResult.Invalid)
     }
+
+    private fun testSha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 
     private data class PhaseFixture(
         val name: String,

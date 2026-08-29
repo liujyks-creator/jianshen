@@ -470,10 +470,14 @@ object CanonicalSessionGraphV1Validator {
         return snapshot.recordingId == recording.recordingId && snapshot.analysisVersion == 1 &&
             snapshot.inputLastMutationSequence == graph.session.lastMutationSequence &&
             snapshot.inputLastMutationSequence == recording.endedMutationSequence &&
-            validateSnapshotStructure(snapshot)
+            validateSnapshotStructure(graph, recording, snapshot)
     }
 
-    private fun validateSnapshotStructure(snapshot: HeartRateAnalysisSnapshotEntity): Boolean {
+    private fun validateSnapshotStructure(
+        graph: CanonicalSessionGraphV1,
+        recording: HeartRateRecordingEntity,
+        snapshot: HeartRateAnalysisSnapshotEntity
+    ): Boolean {
         if (
             snapshot.createdAt.isEmpty() || snapshot.inputLastMutationSequence < 0 ||
             snapshot.sampleStatus !in SAMPLE_STATUSES ||
@@ -488,7 +492,9 @@ object CanonicalSessionGraphV1Validator {
         ) {
             return false
         }
-        return CanonicalStorageJsonV1Validators.validateAnalysisConfig(snapshot.analysisConfigJson) ==
+        val structuresValid = CanonicalStorageJsonV1Validators.validateAnalysisConfig(
+            snapshot.analysisConfigJson
+        ) ==
             CanonicalValidationResult.Valid &&
             (snapshot.zoneDurationsJson == null ||
                 CanonicalStorageJsonV1Validators.validateZoneDurations(snapshot.zoneDurationsJson) ==
@@ -499,6 +505,337 @@ object CanonicalSessionGraphV1Validator {
             CanonicalValidationResult.Valid &&
             CanonicalStorageJsonV1Validators.validateQualityReasons(snapshot.qualityReasonsJson) ==
             CanonicalValidationResult.Valid
+        return structuresValid && validateAnalysisBinding(graph, recording, snapshot)
+    }
+
+    private fun validateAnalysisBinding(
+        graph: CanonicalSessionGraphV1,
+        recording: HeartRateRecordingEntity,
+        snapshot: HeartRateAnalysisSnapshotEntity
+    ): Boolean = try {
+        val finalOffset = graph.session.trustedEndOffsetMs ?: return false
+        val whole = analysisMetrics(
+            samples = graph.samples,
+            phases = graph.phases,
+            acquisitions = graph.acquisitions,
+            phaseSequence = null,
+            recordingStartOffset = recording.startedOffsetMs,
+            finalOffset = finalOffset
+        ) ?: return false
+        if (
+            snapshot.canonicalSampleCount != graph.samples.size.toLong() ||
+            snapshot.primaryPointSampleCount != whole.primarySamples.size.toLong() ||
+            snapshot.sampleStatus != expectedSampleStatus(
+                graph.samples.size.toLong(),
+                whole.primarySamples.size.toLong()
+            ) || snapshot.eligibleDurationMs != whole.eligibleDurationMs ||
+            snapshot.coveredDurationMs != whole.coveredDurationMs ||
+            snapshot.coverageBasisPoints != whole.coverageBasisPoints ||
+            snapshot.coverageStatus != whole.coverageStatus ||
+            snapshot.weightedBpmMs != whole.weightedBpmMs ||
+            snapshot.observedAvgBpm != whole.observedAvgBpm ||
+            !matchesAnchor(snapshot, whole.maximumSample)
+        ) {
+            return false
+        }
+        validateZoneBinding(snapshot, recording, whole) &&
+            validatePhaseAggregateBinding(snapshot.phaseAggregatesJson, graph, recording, finalOffset) &&
+            validateDurationBinding(snapshot.durationBreakdownJson, graph, recording, whole, finalOffset)
+    } catch (_: ArithmeticException) {
+        false
+    }
+
+    private fun analysisMetrics(
+        samples: List<HeartRateSampleEntity>,
+        phases: List<WorkoutPhaseIntervalEntity>,
+        acquisitions: List<HeartRateAcquisitionIntervalEntity>,
+        phaseSequence: Int?,
+        recordingStartOffset: Long,
+        finalOffset: Long
+    ): AnalysisMetrics? {
+        val eligibleSegments = buildList {
+            phases.filter { phase ->
+                phase.phaseKind in PRIMARY_PHASE_KINDS &&
+                    (phaseSequence == null || phase.sequence == phaseSequence)
+            }.forEach { phase ->
+                val phaseEnd = phase.endOffsetMs ?: return null
+                acquisitions.filter { interval -> interval.recordingIntent == "expected_recording" }
+                    .forEach { acquisition ->
+                        val acquisitionEnd = acquisition.endOffsetMs ?: return null
+                        val start = maxOf(
+                            phase.startOffsetMs,
+                            acquisition.startOffsetMs,
+                            recordingStartOffset
+                        )
+                        val end = minOf(phaseEnd, acquisitionEnd, finalOffset)
+                        if (end > start) add(AnalysisSegment(start, end))
+                    }
+            }
+        }
+        val eligibleDuration = eligibleSegments.fold(0L) { total, segment ->
+            Math.addExact(total, segment.endOffsetMs - segment.startOffsetMs)
+        }
+        val orderedSamples = samples.sortedWith(
+            compareBy<HeartRateSampleEntity> { sample -> sample.offsetMs }
+                .thenBy { sample -> sample.mutationSequence }
+                .thenBy { sample -> sample.sampleSequence }
+        )
+        val primarySamples = orderedSamples.filter { sample ->
+            eligibleSegments.any { segment ->
+                sample.offsetMs >= segment.startOffsetMs && sample.offsetMs < segment.endOffsetMs
+            }
+        }
+        var coveredDuration = 0L
+        var weighted = 0L
+        primarySamples.forEach { sample ->
+            val segment = eligibleSegments.singleOrNull { candidate ->
+                sample.offsetMs >= candidate.startOffsetMs && sample.offsetMs < candidate.endOffsetMs
+            } ?: return@forEach
+            val globalIndex = orderedSamples.indexOf(sample)
+            val nextOffset = orderedSamples.getOrNull(globalIndex + 1)?.offsetMs ?: Long.MAX_VALUE
+            val cappedEnd = Math.addExact(sample.offsetMs, SAMPLE_VALIDITY_CAP_MS)
+            val contributionEnd = minOf(nextOffset, cappedEnd, segment.endOffsetMs, finalOffset)
+            val duration = (contributionEnd - sample.offsetMs).coerceAtLeast(0)
+            coveredDuration = Math.addExact(coveredDuration, duration)
+            weighted = Math.addExact(weighted, Math.multiplyExact(sample.bpm.toLong(), duration))
+        }
+        val basis = if (eligibleDuration == 0L) {
+            null
+        } else {
+            Math.multiplyExact(coveredDuration, 10_000L).floorDiv(eligibleDuration).toInt()
+        }
+        val coverageStatus = when {
+            eligibleDuration == 0L -> "no_eligible_duration"
+            meetsThreshold(coveredDuration, eligibleDuration, 8_000L) -> "normal"
+            meetsThreshold(coveredDuration, eligibleDuration, 5_000L) -> "partial"
+            else -> "insufficient"
+        }
+        val average = if (coveredDuration == 0L) {
+            null
+        } else {
+            val quotient = weighted / coveredDuration
+            val remainder = weighted % coveredDuration
+            (quotient + if (remainder >= coveredDuration / 2 + coveredDuration % 2) 1 else 0).toInt()
+        }
+        val maximum = primarySamples.maxWithOrNull(
+            compareBy<HeartRateSampleEntity> { sample -> sample.bpm }
+                .thenByDescending { sample -> sample.offsetMs }
+                .thenByDescending { sample -> sample.mutationSequence }
+                .thenByDescending { sample -> sample.sampleSequence }
+        )
+        return AnalysisMetrics(
+            eligibleDuration,
+            coveredDuration,
+            basis,
+            coverageStatus,
+            if (coveredDuration == 0L) null else weighted,
+            average,
+            primarySamples,
+            maximum,
+            eligibleSegments,
+            orderedSamples
+        )
+    }
+
+    private fun meetsThreshold(covered: Long, eligible: Long, basisPoints: Long): Boolean =
+        Math.multiplyExact(covered, 10_000L) >= Math.multiplyExact(eligible, basisPoints)
+
+    private fun expectedSampleStatus(canonicalCount: Long, primaryCount: Long): String = when {
+        canonicalCount == 0L -> "no_canonical_samples"
+        primaryCount == 0L -> "canonical_only_excluded"
+        else -> "primary_points_available"
+    }
+
+    private fun matchesAnchor(
+        snapshot: HeartRateAnalysisSnapshotEntity,
+        sample: HeartRateSampleEntity?
+    ): Boolean = if (sample == null) {
+        snapshot.observedMaxBpm == null && snapshot.highestOffsetMs == null &&
+            snapshot.highestMutationSequence == null && snapshot.highestSampleSequence == null
+    } else {
+        snapshot.observedMaxBpm == sample.bpm && snapshot.highestOffsetMs == sample.offsetMs &&
+            snapshot.highestMutationSequence == sample.mutationSequence &&
+            snapshot.highestSampleSequence == sample.sampleSequence
+    }
+
+    private fun validateZoneBinding(
+        snapshot: HeartRateAnalysisSnapshotEntity,
+        recording: HeartRateRecordingEntity,
+        metrics: AnalysisMetrics
+    ): Boolean {
+        val effectiveMax = recording.effectiveMaxBpm
+        if (effectiveMax == null) {
+            return snapshot.zoneStatus == "unavailable_no_effective_max" &&
+                snapshot.zoneDurationsJson == null
+        }
+        if (snapshot.zoneStatus != "available") return false
+        if (metrics.eligibleDurationMs == 0L) return snapshot.zoneDurationsJson == null
+        val json = snapshot.zoneDurationsJson ?: return false
+        val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return false
+        val expected = LongArray(6)
+        metrics.primarySamples.forEach { sample ->
+            val segment = metrics.eligibleSegments.singleOrNull { candidate ->
+                sample.offsetMs >= candidate.startOffsetMs && sample.offsetMs < candidate.endOffsetMs
+            } ?: return@forEach
+            val index = metrics.orderedSamples.indexOf(sample)
+            val nextOffset = metrics.orderedSamples.getOrNull(index + 1)?.offsetMs ?: Long.MAX_VALUE
+            val end = minOf(
+                nextOffset,
+                Math.addExact(sample.offsetMs, SAMPLE_VALIDITY_CAP_MS),
+                segment.endOffsetMs
+            )
+            val duration = (end - sample.offsetMs).coerceAtLeast(0)
+            val scaled = Math.multiplyExact(sample.bpm.toLong(), 10_000L)
+            val zoneIndex = when {
+                scaled < effectiveMax * 5_000L -> 0
+                scaled < effectiveMax * 6_000L -> 1
+                scaled < effectiveMax * 7_000L -> 2
+                scaled < effectiveMax * 8_000L -> 3
+                scaled < effectiveMax * 9_000L -> 4
+                else -> 5
+            }
+            expected[zoneIndex] = Math.addExact(expected[zoneIndex], duration)
+        }
+        val checkedZoneTotal = expected.fold(0L, Math::addExact)
+        return ZONE_DURATION_FIELD_NAMES.map { key -> root.jsonLong(key) } ==
+            expected.toList() && checkedZoneTotal == metrics.coveredDurationMs
+    }
+
+    private fun validatePhaseAggregateBinding(
+        json: String,
+        graph: CanonicalSessionGraphV1,
+        recording: HeartRateRecordingEntity,
+        finalOffset: Long
+    ): Boolean {
+        val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return false
+        val entries = root.jsonArray("aggregates") ?: return false
+        val primaryPhases = graph.phases.filter { phase -> phase.phaseKind in PRIMARY_PHASE_KINDS }
+        if (entries.size != primaryPhases.size) return false
+        return entries.zip(primaryPhases).all { (value, phase) ->
+            val entry = value as? CanonicalJsonValue.Obj ?: return@all false
+            val metrics = analysisMetrics(
+                graph.samples,
+                graph.phases,
+                graph.acquisitions,
+                phase.sequence,
+                recording.startedOffsetMs,
+                finalOffset
+            ) ?: return@all false
+            entry.jsonLong("phaseSequence") == phase.sequence.toLong() &&
+                entry.jsonString("phaseKind") == phase.phaseKind &&
+                entry.jsonLong("eligibleDurationMs") == metrics.eligibleDurationMs &&
+                entry.jsonLong("coveredDurationMs") == metrics.coveredDurationMs &&
+                entry.jsonLong("coverageBasisPoints") == metrics.coverageBasisPoints?.toLong() &&
+                entry.jsonString("coverageStatus") == metrics.coverageStatus &&
+                entry.jsonBoolean("conclusionEligible") == (
+                    metrics.eligibleDurationMs > 0 && meetsThreshold(
+                        metrics.coveredDurationMs,
+                        metrics.eligibleDurationMs,
+                        7_000L
+                    )
+                    ) && entry.jsonLong("weightedBpmMs") == metrics.weightedBpmMs &&
+                entry.jsonLong("observedAvgBpm") == metrics.observedAvgBpm?.toLong() &&
+                matchesAggregateAnchor(entry, metrics.maximumSample)
+        }
+    }
+
+    private fun matchesAggregateAnchor(
+        entry: CanonicalJsonValue.Obj,
+        sample: HeartRateSampleEntity?
+    ): Boolean = if (sample == null) {
+        listOf(
+            "observedMaxBpm",
+            "highestOffsetMs",
+            "highestMutationSequence",
+            "highestSampleSequence"
+        ).all(entry::jsonNull)
+    } else {
+        entry.jsonLong("observedMaxBpm") == sample.bpm.toLong() &&
+            entry.jsonLong("highestOffsetMs") == sample.offsetMs &&
+            entry.jsonLong("highestMutationSequence") == sample.mutationSequence &&
+            entry.jsonLong("highestSampleSequence") == sample.sampleSequence
+    }
+
+    private fun validateDurationBinding(
+        json: String,
+        graph: CanonicalSessionGraphV1,
+        recording: HeartRateRecordingEntity,
+        metrics: AnalysisMetrics,
+        finalOffset: Long
+    ): Boolean {
+        val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return false
+        val intent = root.jsonObject("intentAxis") ?: return false
+        val phaseAxis = root.jsonObject("phaseAxis") ?: return false
+        val primary = root.jsonObject("primaryAnalysisPartition") ?: return false
+        val deviceStates = root.jsonObject("deviceStateDurations") ?: return false
+        val deviceReasons = root.jsonObject("deviceReasonDurations") ?: return false
+        val recordingWindow = finalOffset - recording.startedOffsetMs
+        var expectedIntent = 0L
+        var userExcluded = 0L
+        val exclusionDurations = mutableMapOf<String, Long>().withDefault { 0L }
+        val deviceStateDurations = mutableMapOf<String, Long>().withDefault { 0L }
+        val deviceReasonDurations = mutableMapOf<String, Long>().withDefault { 0L }
+        graph.acquisitions.forEach { acquisition ->
+            val duration = (acquisition.endOffsetMs ?: return false) - acquisition.startOffsetMs
+            if (acquisition.recordingIntent == "expected_recording") {
+                expectedIntent = Math.addExact(expectedIntent, duration)
+            } else {
+                userExcluded = Math.addExact(userExcluded, duration)
+                val reason = acquisition.intentReason ?: return false
+                exclusionDurations[reason] = Math.addExact(exclusionDurations.getValue(reason), duration)
+            }
+            deviceStateDurations[acquisition.deviceState] = Math.addExact(
+                deviceStateDurations.getValue(acquisition.deviceState),
+                duration
+            )
+            acquisition.deviceReason?.let { reason ->
+                deviceReasonDurations[reason] = Math.addExact(
+                    deviceReasonDurations.getValue(reason),
+                    duration
+                )
+            }
+        }
+        var phaseExcluded = 0L
+        var prepareExcluded = 0L
+        var pausedExcluded = 0L
+        graph.phases.filter { phase -> phase.phaseKind !in PRIMARY_PHASE_KINDS }.forEach { phase ->
+            val phaseEnd = phase.endOffsetMs ?: return false
+            graph.acquisitions.filter { it.recordingIntent == "expected_recording" }.forEach { acquisition ->
+                val acquisitionEnd = acquisition.endOffsetMs ?: return false
+                val start = maxOf(phase.startOffsetMs, acquisition.startOffsetMs, recording.startedOffsetMs)
+                val end = minOf(phaseEnd, acquisitionEnd, finalOffset)
+                val duration = (end - start).coerceAtLeast(0)
+                phaseExcluded = Math.addExact(phaseExcluded, duration)
+                if (phase.phaseKind == "strength_prepare_set") {
+                    prepareExcluded = Math.addExact(prepareExcluded, duration)
+                }
+                if (phase.phaseKind == "paused") {
+                    pausedExcluded = Math.addExact(pausedExcluded, duration)
+                }
+            }
+        }
+        return root.jsonLong("canonicalSessionDurationMs") == finalOffset &&
+            root.jsonLong("recordingWindowDurationMs") == recordingWindow &&
+            root.jsonLong("notRequestedBeforeRecordingStartMs") == recording.startedOffsetMs &&
+            intent.jsonLong("expectedRecordingDurationMs") == expectedIntent &&
+            intent.jsonLong("userExcludedDurationMs") == userExcluded &&
+            intent.jsonLong("userTurnedOffDurationMs") == exclusionDurations.getValue("user_turned_off") &&
+            intent.jsonLong("userOptedOutDurationMs") == exclusionDurations.getValue("user_opted_out") &&
+            intent.jsonLong("userDisconnectedSuppressRecoveryDurationMs") ==
+            exclusionDurations.getValue("user_disconnected_suppress_recovery") &&
+            phaseAxis.jsonLong("primaryEligibleDurationMs") == metrics.eligibleDurationMs &&
+            phaseAxis.jsonLong("phaseExcludedDurationMs") == phaseExcluded &&
+            phaseAxis.jsonLong("strengthPrepareExcludedDurationMs") == prepareExcluded &&
+            phaseAxis.jsonLong("pausedExcludedDurationMs") == pausedExcluded &&
+            primary.jsonLong("primaryEligibleDurationMs") == metrics.eligibleDurationMs &&
+            primary.jsonLong("eligibleCoveredDurationMs") == metrics.coveredDurationMs &&
+            primary.jsonLong("eligibleUncoveredDurationMs") ==
+            metrics.eligibleDurationMs - metrics.coveredDurationMs &&
+            DEVICE_STATE_NAMES.all { key ->
+                deviceStates.jsonLong(key) == deviceStateDurations.getValue(key)
+            } && DEVICE_REASON_NAMES.all { key ->
+                deviceReasons.jsonLong(key) == deviceReasonDurations.getValue(key)
+            }
     }
 
     private fun validateSampleStatusCounts(snapshot: HeartRateAnalysisSnapshotEntity): Boolean =
@@ -520,7 +857,97 @@ object CanonicalSessionGraphV1Validator {
     )
     private val COVERAGE_STATUSES = setOf("no_eligible_duration", "insufficient", "partial", "normal")
     private val ZONE_STATUSES = setOf("available", "unavailable_no_effective_max")
+    private val PRIMARY_PHASE_KINDS = setOf(
+        "timed_work",
+        "timed_rest",
+        "strength_active_set",
+        "strength_confirm_set",
+        "strength_rest",
+        "follow_along_action",
+        "follow_along_rest"
+    )
+    private const val SAMPLE_VALIDITY_CAP_MS = 2_500L
+    private val ZONE_DURATION_FIELD_NAMES = listOf(
+        "below50DurationMs",
+        "from50To60DurationMs",
+        "from60To70DurationMs",
+        "from70To80DurationMs",
+        "from80To90DurationMs",
+        "atOrAbove90DurationMs"
+    )
+    private val DEVICE_STATE_NAMES = listOf(
+        "not_observing",
+        "no_source_selected",
+        "permission_required",
+        "bluetooth_unavailable",
+        "searching",
+        "connecting",
+        "waiting_first_sample",
+        "live",
+        "stale",
+        "reconnecting",
+        "disconnected",
+        "technical_failure"
+    )
+    private val DEVICE_REASON_NAMES = listOf(
+        "initial_acquisition",
+        "automatic_recovery",
+        "source_not_selected",
+        "source_unavailable",
+        "permission_missing",
+        "permission_revoked",
+        "bluetooth_off",
+        "platform_unavailable",
+        "first_sample_timeout",
+        "sample_stale_timeout",
+        "unexpected_disconnect",
+        "connection_timeout",
+        "measurement_stream_unavailable",
+        "platform_failure"
+    )
 }
+
+private data class AnalysisSegment(
+    val startOffsetMs: Long,
+    val endOffsetMs: Long
+)
+
+private data class AnalysisMetrics(
+    val eligibleDurationMs: Long,
+    val coveredDurationMs: Long,
+    val coverageBasisPoints: Int?,
+    val coverageStatus: String,
+    val weightedBpmMs: Long?,
+    val observedAvgBpm: Int?,
+    val primarySamples: List<HeartRateSampleEntity>,
+    val maximumSample: HeartRateSampleEntity?,
+    val eligibleSegments: List<AnalysisSegment>,
+    val orderedSamples: List<HeartRateSampleEntity>
+)
+
+private fun CanonicalJsonValue.Obj.jsonLong(key: String): Long? =
+    (fields[key] as? CanonicalJsonValue.Num)?.value?.let { number ->
+        try {
+            number.longValueExact()
+        } catch (_: ArithmeticException) {
+            null
+        }
+    }
+
+private fun CanonicalJsonValue.Obj.jsonString(key: String): String? =
+    (fields[key] as? CanonicalJsonValue.Str)?.value
+
+private fun CanonicalJsonValue.Obj.jsonBoolean(key: String): Boolean? =
+    (fields[key] as? CanonicalJsonValue.Bool)?.value
+
+private fun CanonicalJsonValue.Obj.jsonObject(key: String): CanonicalJsonValue.Obj? =
+    fields[key] as? CanonicalJsonValue.Obj
+
+private fun CanonicalJsonValue.Obj.jsonArray(key: String): List<CanonicalJsonValue>? =
+    (fields[key] as? CanonicalJsonValue.Arr)?.values
+
+private fun CanonicalJsonValue.Obj.jsonNull(key: String): Boolean =
+    fields[key] === CanonicalJsonValue.Null
 
 internal fun validCanonicalIntervalEnd(
     startOffsetMs: Long,

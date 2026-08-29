@@ -263,29 +263,96 @@ class PlanSnapshotStorageV1ValidatorTest {
 
     @Test
     fun knownProjectionBytesAndIndependentShaGoldensCoverAllModes() {
-        val goldens = listOf(
-            WorkoutMode.TIMED to (
-                "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[]}" to
-                    "4d606740d7a3e5072ee4506e70d40f03b44ed2c762ec3d334b8791a18ccb002a"
-                ),
-            WorkoutMode.STRENGTH to (
-                "{\"signatureInputContractVersion\":1,\"mode\":\"strength\",\"blocks\":[]}" to
-                    "bba02600522e5032df4ef3cd8996a7cc2fa3ef00cb2b49975ebbec3fa678d0ba"
-                ),
-            WorkoutMode.FOLLOW_ALONG to (
-                "{\"signatureInputContractVersion\":1,\"mode\":\"follow_along\",\"blocks\":[]}" to
-                    "dc27bf9244329c6b18f6c38a3e780e0e8f28c8ac9f9606c67fe4f8499742ab74"
+        val item = TimedExerciseItem(
+            id = "item",
+            exerciseId = "exercise",
+            stageType = TimedStageType.WORK,
+            workDurationSec = 40,
+            restAfterSec = 20,
+            autoAdvance = true
+        )
+        val timed = WorkoutPlanSnapshot(
+            title = "Excluded timed title",
+            mode = WorkoutMode.TIMED,
+            blocks = listOf(
+                WarmupBlock("warmup", 0, durationSec = 60),
+                TimedCircuitBlock("circuit", 1, rounds = 2, restBetweenRoundsSec = 30, items = listOf(item)),
+                TimedCompositionBlock(
+                    id = "composition",
+                    order = 2,
+                    rounds = 1,
+                    stageGroups = listOf(
+                        TimedCompositionStageGroup(
+                            id = "group",
+                            order = 0,
+                            name = "Excluded group name",
+                            colorHex = "#111111",
+                            targets = listOf(
+                                TimedCompositionTarget(
+                                    id = "target",
+                                    order = 0,
+                                    name = "Excluded target name",
+                                    kind = TimedCompositionTargetKind.ACTION,
+                                    durationSec = 30,
+                                    colorHex = "#222222"
+                                )
+                            )
+                        )
+                    )
                 )
+            )
+        )
+        val strength = WorkoutPlanSnapshot(
+            title = "Excluded strength title",
+            mode = WorkoutMode.STRENGTH,
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "strength",
+                    order = 0,
+                    exerciseId = "squat",
+                    target = StrengthExerciseTarget(
+                        weight = WeightValue(60.0, WeightUnit.KG),
+                        repTarget = RepTarget.Fixed(10),
+                        restAfterSetSec = 90
+                    ),
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "set",
+                            order = 0,
+                            kind = StrengthSetKind.WORKING,
+                            targetWeight = WeightValue(62.5, WeightUnit.LB),
+                            repTarget = RepTarget.Range(8, 12),
+                            restAfterSec = null
+                        )
+                    ),
+                    substitutions = listOf("front-squat")
+                )
+            )
+        )
+        val follow = WorkoutPlanSnapshot(
+            title = "Excluded follow title",
+            mode = WorkoutMode.FOLLOW_ALONG,
+            blocks = listOf(
+                TimedCircuitBlock("follow", 0, rounds = 1, restBetweenRoundsSec = null, items = listOf(item))
+            ),
+            followAlong = FollowAlongPlanMeta(preset = true)
+        )
+        val goldens = listOf(
+            timed to
+                "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[{\"blockId\":\"warmup\",\"blockKind\":\"warmup\",\"order\":0,\"durationSec\":60,\"items\":[]},{\"blockId\":\"circuit\",\"blockKind\":\"timed_circuit\",\"order\":1,\"rounds\":2,\"restBetweenRoundsSec\":30,\"items\":[{\"itemId\":\"item\",\"exerciseId\":\"exercise\",\"side\":null,\"stageType\":\"work\",\"workDurationSec\":40,\"restAfterSec\":20,\"autoAdvance\":true}]},{\"blockId\":\"composition\",\"blockKind\":\"timed_composition\",\"order\":2,\"compositionVersion\":2,\"warmupSec\":0,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[{\"stageGroupId\":\"group\",\"order\":0,\"targets\":[{\"targetId\":\"target\",\"order\":0,\"targetKind\":\"action\",\"durationSec\":30,\"autoAdvance\":true}]}]}]}",
+            strength to
+                "{\"signatureInputContractVersion\":1,\"mode\":\"strength\",\"blocks\":[{\"blockId\":\"strength\",\"blockKind\":\"strength_exercise\",\"order\":0,\"exerciseId\":\"squat\",\"target\":{\"weight\":{\"value\":60,\"unit\":\"kg\"},\"repTarget\":{\"kind\":\"fixed\",\"fixedReps\":10,\"minReps\":null,\"maxReps\":null},\"restAfterSetSec\":90},\"sets\":[{\"setPlanId\":\"set\",\"order\":0,\"setKind\":\"working\",\"side\":null,\"targetWeight\":{\"value\":62.5,\"unit\":\"lb\"},\"repTarget\":{\"kind\":\"range\",\"fixedReps\":null,\"minReps\":8,\"maxReps\":12},\"restAfterSec\":null}],\"substitutions\":[\"front-squat\"],\"setTimerMode\":\"manual_start\"}]}",
+            follow to
+                "{\"signatureInputContractVersion\":1,\"mode\":\"follow_along\",\"blocks\":[{\"blockId\":\"follow\",\"blockKind\":\"timed_circuit\",\"order\":0,\"rounds\":1,\"restBetweenRoundsSec\":null,\"items\":[{\"itemId\":\"item\",\"exerciseId\":\"exercise\",\"side\":null,\"stageType\":\"work\",\"workDurationSec\":40,\"restAfterSec\":20,\"autoAdvance\":true}]}]}"
         )
 
-        goldens.forEach { (mode, expected) ->
-            val storage = validatedStorage(
-                WorkoutPlanSnapshot(title = "Display only", mode = mode, blocks = emptyList())
-            )
+        goldens.forEach { (snapshot, expected) ->
+            val storage = validatedStorage(snapshot)
             val bytes = requireNotNull(OrderedStructureSignatureInputV1.encode(storage))
-            assertArrayEquals(expected.first.toByteArray(Charsets.UTF_8), bytes)
-            assertEquals(expected.second, testSha256(bytes))
-            assertEquals(expected.second, OrderedStructureSignatureInputV1.digestHexLowercase(storage))
+            assertArrayEquals(expected.toByteArray(Charsets.UTF_8), bytes)
+            val independentDigest = testSha256(expected.toByteArray(Charsets.UTF_8))
+            assertEquals(independentDigest, testSha256(bytes))
+            assertEquals(independentDigest, OrderedStructureSignatureInputV1.digestHexLowercase(storage))
         }
     }
 
@@ -392,6 +459,153 @@ class PlanSnapshotStorageV1ValidatorTest {
             canonical.replace("\"colorHex\":\"#111111\"", "\"colorHex\":\"#222222\""),
             canonical.replace("\"thresholdSec\":3", "\"thresholdSec\":4")
         ).forEach { mutation -> assertEquals(originalDigest, digestOf(mutation, WorkoutMode.TIMED)) }
+    }
+
+    @Test
+    fun includedAndExcludedMatricesCoverCompositionStrengthAndFollowAlongMembers() {
+        val composition = timedCompositionSnapshot().toStorageJson()
+        val compositionDigest = digestOf(composition, WorkoutMode.TIMED)
+        linkedMapOf(
+            "composition.blockId" to composition.replace("\"id\":\"block\"", "\"id\":\"block-b\""),
+            "composition.blockOrder" to composition.replaceFirst("\"order\":0", "\"order\":1"),
+            "composition.warmupSec" to composition.replace("\"warmupSec\":0", "\"warmupSec\":1"),
+            "composition.cooldownSec" to composition.replace("\"cooldownSec\":0", "\"cooldownSec\":1"),
+            "composition.rounds" to composition.replace("\"rounds\":1", "\"rounds\":2"),
+            "composition.restBetweenRoundsSec" to composition.replace("\"restBetweenRoundsSec\":0", "\"restBetweenRoundsSec\":1"),
+            "composition.stageGroupId" to composition.replace("\"id\":\"group\"", "\"id\":\"group-b\""),
+            "composition.stageGroupOrder" to composition.replaceFirst("\"order\":0,\"name\":\"Group\"", "\"order\":1,\"name\":\"Group\""),
+            "composition.targetId" to composition.replace("\"id\":\"target\"", "\"id\":\"target-b\""),
+            "composition.targetOrder" to composition.replaceFirst("\"order\":0,\"name\":\"Work\"", "\"order\":1,\"name\":\"Work\""),
+            "composition.targetKind" to composition.replace("\"kind\":\"action\"", "\"kind\":\"rest\""),
+            "composition.durationSec" to composition.replace("\"durationSec\":30", "\"durationSec\":31"),
+            "composition.autoAdvance" to composition.replace("\"autoAdvance\":true", "\"autoAdvance\":false")
+        ).forEach { (field, mutation) ->
+            assertTrue("Included $field did not change digest", compositionDigest != digestOf(mutation, WorkoutMode.TIMED))
+        }
+        linkedMapOf(
+            "root.title" to composition.replace("\"title\":\"Timed\"", "\"title\":\"Timed B\""),
+            "composition.blockTitle" to composition.replace("\"title\":null", "\"title\":\"Display\""),
+            "composition.groupName" to composition.replace("\"name\":\"Group\"", "\"name\":\"Group B\""),
+            "composition.groupColor" to composition.replace("\"colorHex\":\"#F26B4F\"", "\"colorHex\":\"#111111\""),
+            "composition.groupIcon" to composition.replaceFirst("\"iconKey\":null", "\"iconKey\":\"group-icon\""),
+            "composition.targetName" to composition.replace("\"name\":\"Work\"", "\"name\":\"Work B\""),
+            "composition.targetColor" to composition.replace(
+                "\"durationSec\":30,\"colorHex\":\"#F26B4F\"",
+                "\"durationSec\":30,\"colorHex\":\"#222222\""
+            ),
+            "composition.targetIcon" to composition.replace(
+                "\"durationSec\":30,\"colorHex\":\"#F26B4F\",\"iconKey\":null",
+                "\"durationSec\":30,\"colorHex\":\"#F26B4F\",\"iconKey\":\"target-icon\""
+            )
+        ).forEach { (field, mutation) ->
+            assertEquals("Excluded $field changed digest", compositionDigest, digestOf(mutation, WorkoutMode.TIMED))
+        }
+
+        val strength = WorkoutPlanSnapshot(
+            title = "Strength display",
+            mode = WorkoutMode.STRENGTH,
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "strength",
+                    order = 0,
+                    exerciseId = "squat",
+                    target = StrengthExerciseTarget(
+                        weight = WeightValue(60.0, WeightUnit.KG),
+                        repTarget = RepTarget.Fixed(10),
+                        restAfterSetSec = 90
+                    ),
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "set",
+                            order = 0,
+                            kind = StrengthSetKind.WORKING,
+                            targetWeight = WeightValue(62.5, WeightUnit.LB),
+                            repTarget = RepTarget.Range(8, 12),
+                            restAfterSec = 80
+                        )
+                    ),
+                    substitutions = listOf("front-squat", "goblet-squat")
+                )
+            )
+        ).toStorageJson()
+        val strengthDigest = digestOf(strength, WorkoutMode.STRENGTH)
+        linkedMapOf(
+            "strength.blockId" to strength.replace("\"id\":\"strength\"", "\"id\":\"strength-b\""),
+            "strength.blockOrder" to strength.replaceFirst("\"order\":0", "\"order\":1"),
+            "strength.exerciseId" to strength.replace("\"exerciseId\":\"squat\"", "\"exerciseId\":\"deadlift\""),
+            "strength.targetWeightValue" to strength.replaceFirst("\"value\":60", "\"value\":61"),
+            "strength.targetWeightUnit" to strength.replaceFirst("\"unit\":\"kg\"", "\"unit\":\"lb\""),
+            "strength.targetRep" to strength.replace("\"reps\":10", "\"reps\":11"),
+            "strength.targetRest" to strength.replace("\"restAfterSetSec\":90", "\"restAfterSetSec\":91"),
+            "strength.setId" to strength.replace("\"id\":\"set\"", "\"id\":\"set-b\""),
+            "strength.setOrder" to strength.replaceFirst("\"order\":0,\"kind\":\"working\"", "\"order\":1,\"kind\":\"working\""),
+            "strength.setKind" to strength.replace("\"kind\":\"working\"", "\"kind\":\"warmup\""),
+            "strength.setWeightDecimal" to strength.replace("\"value\":62.5", "\"value\":63.5"),
+            "strength.setWeightUnit" to strength.replace("\"unit\":\"lb\"", "\"unit\":\"kg\""),
+            "strength.repMin" to strength.replace("\"minReps\":8", "\"minReps\":7"),
+            "strength.repMax" to strength.replace("\"maxReps\":12", "\"maxReps\":13"),
+            "strength.setRest" to strength.replace("\"restAfterSec\":80", "\"restAfterSec\":90"),
+            "strength.substitutionValue" to strength.replace("\"front-squat\"", "\"split-squat\""),
+            "strength.substitutionOrder" to strength.replace("[\"front-squat\",\"goblet-squat\"]", "[\"goblet-squat\",\"front-squat\"]"),
+            "strength.setTimerMode" to strength.replace("\"manual_start\"", "\"auto_after_rest\"")
+        ).forEach { (field, mutation) ->
+            assertTrue("Included $field replacement did not change source", mutation != strength)
+            assertTrue("Included $field did not change digest", strengthDigest != digestOf(mutation, WorkoutMode.STRENGTH))
+        }
+        assertEquals(
+            strengthDigest,
+            digestOf(strength.replace("\"title\":\"Strength display\"", "\"title\":\"Other display\""), WorkoutMode.STRENGTH)
+        )
+
+        val follow = WorkoutPlanSnapshot(
+            title = "Follow display",
+            mode = WorkoutMode.FOLLOW_ALONG,
+            blocks = listOf(
+                TimedCircuitBlock(
+                    "follow",
+                    0,
+                    rounds = 2,
+                    restBetweenRoundsSec = 30,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "follow-item",
+                            exerciseId = "follow-exercise",
+                            labelOverride = "Excluded label",
+                            stageType = TimedStageType.WORK,
+                            iconKey = "excluded-icon",
+                            colorHex = "#123456",
+                            workDurationSec = 40,
+                            restAfterSec = 20,
+                            autoAdvance = true
+                        )
+                    )
+                )
+            ),
+            followAlong = FollowAlongPlanMeta(preset = true, coverMediaId = "excluded-cover")
+        ).toStorageJson()
+        val followDigest = digestOf(follow, WorkoutMode.FOLLOW_ALONG)
+        linkedMapOf(
+            "follow.blockId" to follow.replace("\"id\":\"follow\"", "\"id\":\"follow-b\""),
+            "follow.rounds" to follow.replace("\"rounds\":2", "\"rounds\":3"),
+            "follow.restBetweenRoundsSec" to follow.replace("\"restBetweenRoundsSec\":30", "\"restBetweenRoundsSec\":31"),
+            "follow.itemId" to follow.replace("\"id\":\"follow-item\"", "\"id\":\"follow-item-b\""),
+            "follow.exerciseId" to follow.replace("\"exerciseId\":\"follow-exercise\"", "\"exerciseId\":\"follow-exercise-b\""),
+            "follow.stageType" to follow.replace("\"stageType\":\"work\"", "\"stageType\":\"custom\""),
+            "follow.workDurationSec" to follow.replace("\"workDurationSec\":40", "\"workDurationSec\":41"),
+            "follow.restAfterSec" to follow.replace("\"restAfterSec\":20", "\"restAfterSec\":21"),
+            "follow.autoAdvance" to follow.replace("\"autoAdvance\":true", "\"autoAdvance\":false")
+        ).forEach { (field, mutation) ->
+            assertTrue("Included $field did not change digest", followDigest != digestOf(mutation, WorkoutMode.FOLLOW_ALONG))
+        }
+        linkedMapOf(
+            "follow.title" to follow.replace("\"title\":\"Follow display\"", "\"title\":\"Other\""),
+            "follow.itemLabel" to follow.replace("\"labelOverride\":\"Excluded label\"", "\"labelOverride\":\"Other\""),
+            "follow.itemIcon" to follow.replace("\"iconKey\":\"excluded-icon\"", "\"iconKey\":\"other-icon\""),
+            "follow.itemColor" to follow.replace("\"colorHex\":\"#123456\"", "\"colorHex\":\"#654321\""),
+            "follow.coverMedia" to follow.replace("\"coverMediaId\":\"excluded-cover\"", "\"coverMediaId\":\"other-cover\"")
+        ).forEach { (field, mutation) ->
+            assertEquals("Excluded $field changed digest", followDigest, digestOf(mutation, WorkoutMode.FOLLOW_ALONG))
+        }
     }
 
     @Test

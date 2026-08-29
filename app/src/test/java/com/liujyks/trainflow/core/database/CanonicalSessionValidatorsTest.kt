@@ -98,6 +98,185 @@ class CanonicalSessionValidatorsTest {
     }
 
     @Test
+    fun analysisSnapshotSemanticsBindTypedFieldsToTheSameRawInputCut() {
+        val valid = validTerminalGraph()
+        val mutations = listOf(
+            valid.copy(snapshots = listOf(terminalSnapshot().copy(canonicalSampleCount = 2))),
+            valid.copy(snapshots = listOf(terminalSnapshot().copy(primaryPointSampleCount = 0))),
+            valid.copy(snapshots = listOf(terminalSnapshot().copy(coverageBasisPoints = 9999))),
+            valid.copy(snapshots = listOf(terminalSnapshot().copy(weightedBpmMs = 1))),
+            valid.copy(snapshots = listOf(terminalSnapshot().copy(observedAvgBpm = 119))),
+            valid.copy(snapshots = listOf(terminalSnapshot().copy(highestOffsetMs = 49)))
+        )
+
+        mutations.forEachIndexed { index, graph ->
+            assertTrue(
+                "Analysis/raw binding mutation $index unexpectedly validated",
+                CanonicalSessionGraphV1Validator.validate(graph) is CanonicalValidationResult.Invalid
+            )
+        }
+    }
+
+    @Test
+    fun analysisSnapshotCoversThresholdNullZoneTieAndExcludedInputMatrices() {
+        fun aggregate(
+            eligible: Long,
+            covered: Long,
+            basis: Int?,
+            status: String,
+            weighted: Long?,
+            average: Int?,
+            maximum: Int?,
+            offset: Long?
+        ): String =
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":0,\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":$eligible,\"coveredDurationMs\":$covered,\"coverageBasisPoints\":${basis ?: "null"},\"coverageStatus\":\"$status\",\"conclusionEligible\":${eligible > 0 && covered * 10_000 >= eligible * 7_000},\"weightedBpmMs\":${weighted ?: "null"},\"observedAvgBpm\":${average ?: "null"},\"observedMaxBpm\":${maximum ?: "null"},\"highestOffsetMs\":${offset ?: "null"},\"highestMutationSequence\":${if (offset == null) "null" else "0"},\"highestSampleSequence\":${if (offset == null) "null" else "0"}}]}"
+        fun duration(
+            primaryEligible: Long,
+            covered: Long,
+            phaseExcluded: Long = 0,
+            pausedExcluded: Long = 0,
+            expectedIntent: Long = 100,
+            userExcluded: Long = 0,
+            userTurnedOff: Long = 0
+        ): String =
+            "{\"durationBreakdownContractVersion\":1,\"canonicalSessionDurationMs\":100,\"recordingWindowDurationMs\":100,\"notRequestedBeforeRecordingStartMs\":0,\"intentAxis\":{\"expectedRecordingDurationMs\":$expectedIntent,\"userExcludedDurationMs\":$userExcluded,\"userTurnedOffDurationMs\":$userTurnedOff,\"userOptedOutDurationMs\":0,\"userDisconnectedSuppressRecoveryDurationMs\":0},\"phaseAxis\":{\"primaryEligibleDurationMs\":$primaryEligible,\"phaseExcludedDurationMs\":$phaseExcluded,\"strengthPrepareExcludedDurationMs\":0,\"pausedExcludedDurationMs\":$pausedExcluded},\"primaryAnalysisPartition\":{\"primaryEligibleDurationMs\":$primaryEligible,\"eligibleCoveredDurationMs\":$covered,\"eligibleUncoveredDurationMs\":${primaryEligible - covered}},\"deviceStateDurations\":{\"not_observing\":0,\"no_source_selected\":0,\"permission_required\":0,\"bluetooth_unavailable\":0,\"searching\":0,\"connecting\":0,\"waiting_first_sample\":0,\"live\":100,\"stale\":0,\"reconnecting\":0,\"disconnected\":0,\"technical_failure\":0},\"deviceReasonDurations\":{\"initial_acquisition\":0,\"automatic_recovery\":0,\"source_not_selected\":0,\"source_unavailable\":0,\"permission_missing\":0,\"permission_revoked\":0,\"bluetooth_off\":0,\"platform_unavailable\":0,\"first_sample_timeout\":0,\"sample_stale_timeout\":0,\"unexpected_disconnect\":0,\"connection_timeout\":0,\"measurement_stream_unavailable\":0,\"platform_failure\":0},\"orthogonalityContract\":{\"contractVersion\":1,\"rule\":\"primary_partition_is_mutually_exclusive_device_axes_are_independent_do_not_sum\"}}"
+        fun coverageGraph(offset: Long, covered: Long, basis: Int, status: String): CanonicalSessionGraphV1 {
+            val weighted = 120L * covered
+            return validTerminalGraph().copy(
+                samples = listOf(HeartRateSampleEntity("recording", 0, offset, 0, 120)),
+                snapshots = listOf(
+                    terminalSnapshot().copy(
+                        coverageStatus = status,
+                        coveredDurationMs = covered,
+                        coverageBasisPoints = basis,
+                        weightedBpmMs = weighted,
+                        observedAvgBpm = 120,
+                        highestOffsetMs = offset,
+                        phaseAggregatesJson = aggregate(100, covered, basis, status, weighted, 120, 120, offset),
+                        durationBreakdownJson = duration(100, covered)
+                    )
+                )
+            )
+        }
+
+        assertValid(CanonicalSessionGraphV1Validator.validate(coverageGraph(50, 50, 5000, "partial")))
+        assertValid(CanonicalSessionGraphV1Validator.validate(coverageGraph(75, 25, 2500, "insufficient")))
+
+        val firstHighestTie = validTerminalGraph().copy(
+            samples = listOf(
+                HeartRateSampleEntity("recording", 0, 0, 0, 130),
+                HeartRateSampleEntity("recording", 1, 50, 1, 130)
+            ),
+            snapshots = listOf(
+                terminalSnapshot().copy(
+                    canonicalSampleCount = 2,
+                    primaryPointSampleCount = 2,
+                    weightedBpmMs = 13000,
+                    observedAvgBpm = 130,
+                    observedMaxBpm = 130,
+                    phaseAggregatesJson = aggregate(100, 100, 10000, "normal", 13000, 130, 130, 0)
+                )
+            )
+        )
+        assertValid(CanonicalSessionGraphV1Validator.validate(firstHighestTie))
+        assertInvalid(
+            CanonicalSessionGraphV1Validator.validate(
+                firstHighestTie.copy(
+                    snapshots = listOf(firstHighestTie.snapshots.single().copy(highestOffsetMs = 50, highestMutationSequence = 1, highestSampleSequence = 1))
+                )
+            ),
+            "invalid_canonical_graph_v1"
+        )
+
+        val zoneAvailable = validTerminalGraph().copy(
+            recording = terminalRecording().copy(
+                personalMaxBpm = 200,
+                effectiveMaxBpm = 200,
+                effectiveMaxSource = "personal_max",
+                zoneSnapshotJson = VALID_ZONE_SNAPSHOT_200
+            ),
+            snapshots = listOf(
+                terminalSnapshot().copy(
+                    zoneStatus = "available",
+                    zoneDurationsJson = VALID_ZONE_DURATIONS_120_OF_200
+                )
+            )
+        )
+        assertValid(CanonicalSessionGraphV1Validator.validate(zoneAvailable))
+        assertInvalid(
+            CanonicalSessionGraphV1Validator.validate(
+                zoneAvailable.copy(
+                    snapshots = listOf(zoneAvailable.snapshots.single().copy(zoneDurationsJson = VALID_ZONE_DURATIONS_WRONG_BUCKET))
+                )
+            ),
+            "invalid_canonical_graph_v1"
+        )
+
+        val pausedExcluded = validTerminalGraph().copy(
+            phases = listOf(terminalPhase().copy(phaseKind = "paused", phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY)),
+            snapshots = listOf(
+                terminalSnapshot().copy(
+                    sampleStatus = "canonical_only_excluded",
+                    coverageStatus = "no_eligible_duration",
+                    primaryPointSampleCount = 0,
+                    eligibleDurationMs = 0,
+                    coveredDurationMs = 0,
+                    coverageBasisPoints = null,
+                    weightedBpmMs = null,
+                    observedAvgBpm = null,
+                    observedMaxBpm = null,
+                    highestOffsetMs = null,
+                    highestMutationSequence = null,
+                    highestSampleSequence = null,
+                    phaseAggregatesJson = "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[]}",
+                    durationBreakdownJson = duration(0, 0, phaseExcluded = 100, pausedExcluded = 100)
+                )
+            )
+        )
+        assertValid(CanonicalSessionGraphV1Validator.validate(pausedExcluded))
+
+        val userExcluded = validTerminalGraph().copy(
+            acquisitions = listOf(
+                terminalAcquisition().copy(recordingIntent = "user_excluded", intentReason = "user_turned_off")
+            ),
+            snapshots = listOf(
+                terminalSnapshot().copy(
+                    sampleStatus = "canonical_only_excluded",
+                    coverageStatus = "no_eligible_duration",
+                    primaryPointSampleCount = 0,
+                    eligibleDurationMs = 0,
+                    coveredDurationMs = 0,
+                    coverageBasisPoints = null,
+                    weightedBpmMs = null,
+                    observedAvgBpm = null,
+                    observedMaxBpm = null,
+                    highestOffsetMs = null,
+                    highestMutationSequence = null,
+                    highestSampleSequence = null,
+                    phaseAggregatesJson = aggregate(0, 0, null, "no_eligible_duration", null, null, null, null),
+                    durationBreakdownJson = duration(0, 0, expectedIntent = 0, userExcluded = 100, userTurnedOff = 100)
+                )
+            )
+        )
+        assertValid(CanonicalSessionGraphV1Validator.validate(userExcluded))
+
+        listOf(
+            terminalSnapshot().copy(coverageBasisPoints = null),
+            terminalSnapshot().copy(weightedBpmMs = null),
+            terminalSnapshot().copy(observedMaxBpm = null),
+            terminalSnapshot().copy(coverageStatus = "partial"),
+            terminalSnapshot().copy(sampleStatus = "canonical_only_excluded"),
+            terminalSnapshot().copy(phaseAggregatesJson = VALID_PHASE_AGGREGATES.replace("\"weightedBpmMs\":12000", "\"weightedBpmMs\":11999")),
+            terminalSnapshot().copy(durationBreakdownJson = VALID_DURATION_BREAKDOWN.replace("\"eligibleCoveredDurationMs\":100", "\"eligibleCoveredDurationMs\":99"))
+        ).forEachIndexed { index, snapshot ->
+            assertTrue(
+                "Analysis required-iff/raw JSON mutation $index unexpectedly validated",
+                CanonicalSessionGraphV1Validator.validate(validTerminalGraph().copy(snapshots = listOf(snapshot))) is CanonicalValidationResult.Invalid
+            )
+        }
+    }
+
+    @Test
     fun phaseIdentityModeMustMatchTheOwningSessionMode() {
         assertInvalid(
             CanonicalSessionGraphV1Validator.validate(
@@ -279,7 +458,7 @@ class CanonicalSessionValidatorsTest {
             add(valid.copy(samples = valid.samples.map { sample -> sample.copy(offsetMs = 101) }))
             add(valid.copy(samples = valid.samples.map { sample -> sample.copy(mutationSequence = 5) }))
             add(valid.copy(samples = valid.samples.map { sample -> sample.copy(recordingId = "other") }))
-            add(valid.copy(samples = valid.samples + valid.samples.single().copy(offsetMs = 60)))
+            add(valid.copy(samples = valid.samples + valid.samples.first().copy(offsetMs = 60)))
             add(valid.copy(samples = valid.samples.map { sample -> sample.copy(bpm = 0) }))
 
             add(valid.copy(snapshots = valid.snapshots.map { snapshot ->
@@ -347,8 +526,8 @@ class CanonicalSessionValidatorsTest {
             HeartRateSampleEntity(
                 recordingId = "recording",
                 sampleSequence = 0,
-                offsetMs = 50,
-                mutationSequence = 2,
+                offsetMs = 0,
+                mutationSequence = 0,
                 bpm = 120
             )
         ),
@@ -376,6 +555,17 @@ class CanonicalSessionValidatorsTest {
                 sequence = 1,
                 startOffsetMs = 50,
                 startMutationSequence = 2
+            )
+        ),
+        samples = listOf(
+            HeartRateSampleEntity("recording", 0, 0, 0, 120),
+            HeartRateSampleEntity("recording", 1, 50, 2, 120)
+        ),
+        snapshots = listOf(
+            terminalSnapshot().copy(
+                canonicalSampleCount = 2,
+                primaryPointSampleCount = 2,
+                phaseAggregatesJson = VALID_SPLIT_PHASE_AGGREGATES
             )
         )
     )
@@ -482,8 +672,8 @@ class CanonicalSessionValidatorsTest {
             weightedBpmMs = 12000,
             observedAvgBpm = 120,
             observedMaxBpm = 120,
-            highestOffsetMs = 50,
-            highestMutationSequence = 2,
+            highestOffsetMs = 0,
+            highestMutationSequence = 0,
             highestSampleSequence = 0,
             analysisConfigJson = VALID_ANALYSIS_CONFIG,
             zoneDurationsJson = null,
@@ -515,10 +705,20 @@ class CanonicalSessionValidatorsTest {
             "{\"zoneSnapshotContractVersion\":1,\"unit\":\"bpm\",\"effectiveMaxBpm\":180,\"effectiveMaxSource\":\"personal_max\",\"zones\":[{\"zoneId\":\"below_50\",\"lowerBoundBasisPointsInclusive\":null,\"upperBoundBasisPointsExclusive\":5000},{\"zoneId\":\"from_50_to_60\",\"lowerBoundBasisPointsInclusive\":5000,\"upperBoundBasisPointsExclusive\":6000},{\"zoneId\":\"from_60_to_70\",\"lowerBoundBasisPointsInclusive\":6000,\"upperBoundBasisPointsExclusive\":7000},{\"zoneId\":\"from_70_to_80\",\"lowerBoundBasisPointsInclusive\":7000,\"upperBoundBasisPointsExclusive\":8000},{\"zoneId\":\"from_80_to_90\",\"lowerBoundBasisPointsInclusive\":8000,\"upperBoundBasisPointsExclusive\":9000},{\"zoneId\":\"at_or_above_90\",\"lowerBoundBasisPointsInclusive\":9000,\"upperBoundBasisPointsExclusive\":null}]}"
         val VALID_PHASE_IDENTITY =
             "{\"phaseIdentityContractVersion\":1,\"family\":\"timed_composition_v2\",\"payloadVersion\":2,\"mode\":\"timed\",\"phaseKind\":\"timed_work\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855\"},\"payload\":{\"variant\":\"warmup\",\"compositionVersion\":2,\"compositionBlockId\":\"block\",\"${"timelineStage" + "Id"}\":\"block:warmup\",\"timelineStageKind\":\"warmup\",\"stageGroupId\":\"block:warmup\",\"targetId\":\"block:warmup:target\",\"targetKind\":\"warmup\",\"roundIndex0\":null,\"stageGroupIndex0\":null,\"targetIndex0\":0,\"stageInstanceIndex0\":0,\"${"targetInstance" + "Index0"}\":0,\"stepIndex0\":0}}"
+        val VALID_PAUSED_PHASE_IDENTITY =
+            "{\"phaseIdentityContractVersion\":1,\"family\":\"timed_composition_v2\",\"payloadVersion\":2,\"mode\":\"timed\",\"phaseKind\":\"paused\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855\"},\"payload\":{\"variant\":\"paused\",\"compositionVersion\":2,\"compositionBlockId\":null,\"${"timelineStage" + "Id"}\":null,\"timelineStageKind\":null,\"stageGroupId\":null,\"targetId\":null,\"targetKind\":null,\"roundIndex0\":null,\"stageGroupIndex0\":null,\"targetIndex0\":null,\"stageInstanceIndex0\":null,\"${"targetInstance" + "Index0"}\":null,\"stepIndex0\":null}}"
+        const val VALID_ZONE_SNAPSHOT_200 =
+            "{\"zoneSnapshotContractVersion\":1,\"unit\":\"bpm\",\"effectiveMaxBpm\":200,\"effectiveMaxSource\":\"personal_max\",\"zones\":[{\"zoneId\":\"below_50\",\"lowerBoundBasisPointsInclusive\":null,\"upperBoundBasisPointsExclusive\":5000},{\"zoneId\":\"from_50_to_60\",\"lowerBoundBasisPointsInclusive\":5000,\"upperBoundBasisPointsExclusive\":6000},{\"zoneId\":\"from_60_to_70\",\"lowerBoundBasisPointsInclusive\":6000,\"upperBoundBasisPointsExclusive\":7000},{\"zoneId\":\"from_70_to_80\",\"lowerBoundBasisPointsInclusive\":7000,\"upperBoundBasisPointsExclusive\":8000},{\"zoneId\":\"from_80_to_90\",\"lowerBoundBasisPointsInclusive\":8000,\"upperBoundBasisPointsExclusive\":9000},{\"zoneId\":\"at_or_above_90\",\"lowerBoundBasisPointsInclusive\":9000,\"upperBoundBasisPointsExclusive\":null}]}"
+        const val VALID_ZONE_DURATIONS_120_OF_200 =
+            "{\"zoneDurationsContractVersion\":1,\"below50DurationMs\":0,\"from50To60DurationMs\":0,\"from60To70DurationMs\":100,\"from70To80DurationMs\":0,\"from80To90DurationMs\":0,\"atOrAbove90DurationMs\":0}"
+        const val VALID_ZONE_DURATIONS_WRONG_BUCKET =
+            "{\"zoneDurationsContractVersion\":1,\"below50DurationMs\":0,\"from50To60DurationMs\":100,\"from60To70DurationMs\":0,\"from70To80DurationMs\":0,\"from80To90DurationMs\":0,\"atOrAbove90DurationMs\":0}"
         const val VALID_ANALYSIS_CONFIG =
             "{\"analysisConfigContractVersion\":1,\"sampleValidityCapMs\":2500,\"sampleIntervalContractVersion\":1,\"partialLowerBoundBasisPoints\":5000,\"phaseConclusionBasisPoints\":7000,\"normalBasisPoints\":8000,\"coverageThresholdRule\":\"checked_integer_cross_multiply\",\"coverageBasisPointsRule\":\"floor_integer_ratio\",\"displayPercentRule\":\"floor_basis_points_div_100\",\"weightedAverageRule\":\"checked_integer_time_integral\",\"averageDisplayRule\":\"positive_integer_half_up\",\"zeroCoveredRule\":\"null_integral_and_average\",\"observedMaxRule\":\"eligible_canonical_point_first_tie\",\"zoneAttributionContractVersion\":1,\"zoneAttributionRule\":\"checked_cross_multiply_six_zones\",\"statusProjectionContractVersion\":1,\"durationPartitionContractVersion\":1}"
         const val VALID_PHASE_AGGREGATES =
-            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[]}"
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":0,\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":100,\"coveredDurationMs\":100,\"coverageBasisPoints\":10000,\"coverageStatus\":\"normal\",\"conclusionEligible\":true,\"weightedBpmMs\":12000,\"observedAvgBpm\":120,\"observedMaxBpm\":120,\"highestOffsetMs\":0,\"highestMutationSequence\":0,\"highestSampleSequence\":0}]}"
+        const val VALID_SPLIT_PHASE_AGGREGATES =
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":0,\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":50,\"coveredDurationMs\":50,\"coverageBasisPoints\":10000,\"coverageStatus\":\"normal\",\"conclusionEligible\":true,\"weightedBpmMs\":6000,\"observedAvgBpm\":120,\"observedMaxBpm\":120,\"highestOffsetMs\":0,\"highestMutationSequence\":0,\"highestSampleSequence\":0},{\"phaseSequence\":1,\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":50,\"coveredDurationMs\":50,\"coverageBasisPoints\":10000,\"coverageStatus\":\"normal\",\"conclusionEligible\":true,\"weightedBpmMs\":6000,\"observedAvgBpm\":120,\"observedMaxBpm\":120,\"highestOffsetMs\":50,\"highestMutationSequence\":2,\"highestSampleSequence\":1}]}"
         const val VALID_DURATION_BREAKDOWN =
             "{\"durationBreakdownContractVersion\":1,\"canonicalSessionDurationMs\":100,\"recordingWindowDurationMs\":100,\"notRequestedBeforeRecordingStartMs\":0,\"intentAxis\":{\"expectedRecordingDurationMs\":100,\"userExcludedDurationMs\":0,\"userTurnedOffDurationMs\":0,\"userOptedOutDurationMs\":0,\"userDisconnectedSuppressRecoveryDurationMs\":0},\"phaseAxis\":{\"primaryEligibleDurationMs\":100,\"phaseExcludedDurationMs\":0,\"strengthPrepareExcludedDurationMs\":0,\"pausedExcludedDurationMs\":0},\"primaryAnalysisPartition\":{\"primaryEligibleDurationMs\":100,\"eligibleCoveredDurationMs\":100,\"eligibleUncoveredDurationMs\":0},\"deviceStateDurations\":{\"not_observing\":0,\"no_source_selected\":0,\"permission_required\":0,\"bluetooth_unavailable\":0,\"searching\":0,\"connecting\":0,\"waiting_first_sample\":0,\"live\":100,\"stale\":0,\"reconnecting\":0,\"disconnected\":0,\"technical_failure\":0},\"deviceReasonDurations\":{\"initial_acquisition\":0,\"automatic_recovery\":0,\"source_not_selected\":0,\"source_unavailable\":0,\"permission_missing\":0,\"permission_revoked\":0,\"bluetooth_off\":0,\"platform_unavailable\":0,\"first_sample_timeout\":0,\"sample_stale_timeout\":0,\"unexpected_disconnect\":0,\"connection_timeout\":0,\"measurement_stream_unavailable\":0,\"platform_failure\":0},\"orthogonalityContract\":{\"contractVersion\":1,\"rule\":\"primary_partition_is_mutually_exclusive_device_axes_are_independent_do_not_sum\"}}"
         const val VALID_QUALITY_REASONS =

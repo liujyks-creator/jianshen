@@ -210,11 +210,313 @@ object PhaseIdentityV1Validator {
             ?.string("digestHexLowercase") ?: return invalidPhaseIdentity()
         val expectedDigest = OrderedStructureSignatureInputV1.digestHexLowercase(immutableSnapshot)
             ?: return invalidPhaseIdentity()
-        return if (actualDigest == expectedDigest) {
+        return if (
+            actualDigest == expectedDigest &&
+            validateSnapshotPayloadBinding(root, immutableSnapshot)
+        ) {
             CanonicalValidationResult.Valid
         } else {
             invalidPhaseIdentity()
         }
+    }
+
+    private fun validateSnapshotPayloadBinding(
+        identity: CanonicalJsonValue.Obj,
+        immutableSnapshot: WorkoutPlanSnapshotStorageV1
+    ): Boolean {
+        val snapshot = parseCanonicalJson(immutableSnapshot.persistedJson) as?
+            CanonicalJsonValue.Obj ?: return false
+        val blocks = snapshot.array("blocks")?.map { value ->
+            value as? CanonicalJsonValue.Obj ?: return false
+        } ?: return false
+        val payload = identity.obj("payload") ?: return false
+        return when (identity.string("family")) {
+            "legacy_timed_v1" -> validateLegacySnapshotBinding(payload, blocks)
+            "timed_composition_v2" -> validateCompositionSnapshotBinding(payload, blocks)
+            "strength_v1" -> validateStrengthSnapshotBinding(payload, blocks)
+            "follow_along_v1" -> validateFollowSnapshotBinding(payload, blocks)
+            else -> false
+        }
+    }
+
+    private fun validateLegacySnapshotBinding(
+        payload: CanonicalJsonValue.Obj,
+        blocks: List<CanonicalJsonValue.Obj>
+    ): Boolean {
+        if (payload.string("variant") == "paused") return true
+        val blockId = payload.string("blockId") ?: return false
+        val block = blocks.singleOrNull { candidate -> candidate.string("id") == blockId }
+            ?: return false
+        if (block.string("kind") != payload.string("legacyBlockKind")) return false
+        val roundIndex = payload.int("roundIndex0")
+        if (roundIndex != null && roundIndex !in 0 until (block.int("rounds") ?: return false)) {
+            return false
+        }
+        val variant = payload.string("variant") ?: return false
+        val itemId = payload.string("itemId")
+        if (itemId == null) {
+            return when (variant) {
+                "boundary_block_work" -> payload.int("stepIndex0") == 0L &&
+                    block.string("kind") in setOf("warmup", "stretch", "cooldown")
+                "between_round_rest" -> block.string("kind") == "timed_circuit" &&
+                    roundIndex != null && roundIndex < (block.int("rounds") ?: return false) - 1 &&
+                    (block.int("restBetweenRoundsSec") ?: 0L) > 0L &&
+                    payload.int("stepIndex0") == timedCircuitBetweenRoundStepIndex(block, roundIndex)
+                "standalone_rest" -> payload.int("stepIndex0") == 0L && block.string("kind") == "rest"
+                else -> false
+            }
+        }
+        val items = block.array("items") ?: return false
+        val itemIndex = items.indexOfFirst { value ->
+            (value as? CanonicalJsonValue.Obj)?.string("id") == itemId
+        }
+        if (itemIndex < 0) return false
+        val item = items[itemIndex] as CanonicalJsonValue.Obj
+        val restAfter = variant in setOf("boundary_rest_after_item", "circuit_rest_after_item")
+        val expectedStep = timedItemStepIndex(block, itemIndex, roundIndex, restAfter) ?: return false
+        val expectedExercise = if (variant in setOf("boundary_item_rest", "circuit_item_rest")) {
+            null
+        } else {
+            item.string("exerciseId")
+        }
+        return payload.int("stepIndex0") == expectedStep &&
+            payload.string("exerciseId") == expectedExercise &&
+            when (variant) {
+                "boundary_item_work", "circuit_item_work" ->
+                    item.string("stageType") != "rest" && payload.string("legacyStageType") == item.string("stageType")
+                "boundary_item_rest", "circuit_item_rest" -> item.string("stageType") == "rest"
+                "boundary_rest_after_item", "circuit_rest_after_item" -> (item.int("restAfterSec") ?: 0L) > 0L
+                else -> false
+            }
+    }
+
+    private fun validateCompositionSnapshotBinding(
+        payload: CanonicalJsonValue.Obj,
+        blocks: List<CanonicalJsonValue.Obj>
+    ): Boolean {
+        if (payload.string("variant") == "paused") return true
+        val blockId = payload.string("compositionBlockId") ?: return false
+        val block = blocks.singleOrNull { candidate ->
+            candidate.string("id") == blockId && candidate.string("kind") == "timed_composition"
+        } ?: return false
+        val expectedSteps = compositionSnapshotSteps(block) ?: return false
+        val stepIndex = payload.int("stepIndex0") ?: return false
+        val expected = expectedSteps.getOrNull(stepIndex.toInt()) ?: return false
+        return expected.matches(payload)
+    }
+
+    private fun compositionSnapshotSteps(
+        block: CanonicalJsonValue.Obj
+    ): List<CompositionSnapshotStep>? {
+        val blockId = block.string("id") ?: return null
+        val rounds = block.int("rounds")?.toInt() ?: return null
+        val groups = block.array("stageGroups")?.map { value ->
+            value as? CanonicalJsonValue.Obj ?: return null
+        } ?: return null
+        val result = mutableListOf<CompositionSnapshotStep>()
+        var stageInstanceIndex0 = 0L
+        var targetInstanceIndex0 = 0L
+        fun add(
+            variant: String,
+            timelineStageId: String,
+            timelineStageKind: String,
+            stageGroupId: String,
+            targetId: String,
+            targetKind: String,
+            roundIndex0: Long?,
+            stageGroupIndex0: Long?,
+            targetIndex0: Long
+        ) {
+            result += CompositionSnapshotStep(
+                variant,
+                blockId,
+                timelineStageId,
+                timelineStageKind,
+                stageGroupId,
+                targetId,
+                targetKind,
+                roundIndex0,
+                stageGroupIndex0,
+                targetIndex0,
+                stageInstanceIndex0,
+                targetInstanceIndex0,
+                result.size.toLong()
+            )
+            targetInstanceIndex0 += 1
+        }
+        if ((block.int("warmupSec") ?: return null) > 0) {
+            val stageId = "$blockId:warmup"
+            add("warmup", stageId, "warmup", stageId, "$stageId:target", "warmup", null, null, 0)
+            stageInstanceIndex0 += 1
+        }
+        repeat(rounds) { roundIndex0 ->
+            groups.forEachIndexed { groupIndex0, group ->
+                val groupId = group.string("id") ?: return null
+                if (group.int("order") != groupIndex0.toLong()) return null
+                val stageId = "$blockId:r${roundIndex0 + 1}:g${groupIndex0 + 1}:$groupId"
+                val targets = group.array("targets") ?: return null
+                targets.forEachIndexed { targetIndex0, value ->
+                    val target = value as? CanonicalJsonValue.Obj ?: return null
+                    if (target.int("order") != targetIndex0.toLong()) return null
+                    val kind = target.string("kind") ?: return null
+                    add(
+                        "stage_group_$kind",
+                        stageId,
+                        "stage_group",
+                        groupId,
+                        target.string("id") ?: return null,
+                        kind,
+                        roundIndex0.toLong(),
+                        groupIndex0.toLong(),
+                        targetIndex0.toLong()
+                    )
+                }
+                stageInstanceIndex0 += 1
+            }
+            if (roundIndex0 < rounds - 1 && (block.int("restBetweenRoundsSec") ?: return null) > 0) {
+                val stageId = "$blockId:r${roundIndex0 + 1}:between-round-rest"
+                add(
+                    "between_round_rest",
+                    stageId,
+                    "between_round_rest",
+                    stageId,
+                    "$stageId:target",
+                    "between_round_rest",
+                    roundIndex0.toLong(),
+                    null,
+                    0
+                )
+                stageInstanceIndex0 += 1
+            }
+        }
+        if ((block.int("cooldownSec") ?: return null) > 0) {
+            val stageId = "$blockId:cooldown"
+            add("cooldown", stageId, "cooldown", stageId, "$stageId:target", "cooldown", null, null, 0)
+        }
+        return result
+    }
+
+    private fun validateStrengthSnapshotBinding(
+        payload: CanonicalJsonValue.Obj,
+        blocks: List<CanonicalJsonValue.Obj>
+    ): Boolean {
+        if (payload.string("variant") == "paused") return true
+        val blockId = payload.string("blockId") ?: return false
+        val blockIndex = blocks.indexOfFirst { candidate -> candidate.string("id") == blockId }
+        if (blockIndex < 0) return false
+        val block = blocks[blockIndex]
+        if (block.string("kind") != "strength_exercise" ||
+            payload.string("plannedExerciseId") != block.string("exerciseId")
+        ) {
+            return false
+        }
+        val sets = block.array("sets") ?: return false
+        val setId = payload.string("setPlanId") ?: return false
+        val setIndex = sets.indexOfFirst { value ->
+            (value as? CanonicalJsonValue.Obj)?.string("id") == setId
+        }
+        if (setIndex < 0) return false
+        val set = sets[setIndex] as CanonicalJsonValue.Obj
+        val plannedExerciseId = block.string("exerciseId") ?: return false
+        val actualExerciseId = payload.string("actualExerciseId") ?: return false
+        val substitutedFrom = payload.string("substitutedFromExerciseId")
+        val substitutions = block.array("substitutions")?.map { value ->
+            (value as? CanonicalJsonValue.Str)?.value ?: return false
+        } ?: return false
+        val globalSetIndex = blocks.take(blockIndex).sumOf { candidate ->
+            if (candidate.string("kind") == "strength_exercise") {
+                candidate.array("sets")?.size ?: return false
+            } else {
+                0
+            }
+        } + setIndex
+        return payload.int("exerciseSetIndex0") == setIndex.toLong() &&
+            payload.int("globalSetIndex0") == globalSetIndex.toLong() &&
+            payload.string("setKind") == set.string("kind") &&
+            if (substitutedFrom == null) {
+                actualExerciseId == plannedExerciseId
+            } else {
+                substitutedFrom == plannedExerciseId && actualExerciseId != plannedExerciseId &&
+                    actualExerciseId in substitutions
+            }
+    }
+
+    private fun validateFollowSnapshotBinding(
+        payload: CanonicalJsonValue.Obj,
+        blocks: List<CanonicalJsonValue.Obj>
+    ): Boolean {
+        if (payload.string("variant") == "paused") return true
+        val blockId = payload.string("blockId") ?: return false
+        val block = blocks.singleOrNull { candidate -> candidate.string("id") == blockId }
+            ?: return false
+        val roundIndex = payload.int("roundIndex0")
+        if (roundIndex != null && roundIndex !in 0 until (block.int("rounds") ?: return false)) {
+            return false
+        }
+        val variant = payload.string("variant") ?: return false
+        val itemId = payload.string("itemId")
+        if (itemId == null) {
+            return when (variant) {
+                "between_round_rest" -> block.string("kind") == "timed_circuit" &&
+                    roundIndex != null && roundIndex < (block.int("rounds") ?: return false) - 1 &&
+                    (block.int("restBetweenRoundsSec") ?: 0L) > 0L &&
+                    payload.int("stepIndex0") == timedCircuitBetweenRoundStepIndex(block, roundIndex)
+                "block_rest" -> block.string("kind") == "rest" && payload.int("stepIndex0") == 0L
+                "boundary" -> block.string("kind") in setOf("warmup", "stretch", "cooldown") &&
+                    block.int("durationSec") != null && payload.int("stepIndex0") == 0L
+                else -> false
+            }
+        }
+        val items = block.array("items") ?: return false
+        val itemIndex = items.indexOfFirst { value ->
+            (value as? CanonicalJsonValue.Obj)?.string("id") == itemId
+        }
+        if (itemIndex < 0) return false
+        val item = items[itemIndex] as CanonicalJsonValue.Obj
+        val restAfter = variant in setOf("circuit_rest_after_action", "non_circuit_rest_after_action")
+        val expectedStep = timedItemStepIndex(block, itemIndex, roundIndex, restAfter) ?: return false
+        return payload.int("stepIndex0") == expectedStep &&
+            payload.string("exerciseId") == item.string("exerciseId") &&
+            if (restAfter) (item.int("restAfterSec") ?: 0L) > 0L else true
+    }
+
+    private fun timedItemStepIndex(
+        block: CanonicalJsonValue.Obj,
+        itemIndex: Int,
+        roundIndex: Long?,
+        restAfter: Boolean
+    ): Long? {
+        val items = block.array("items")?.map { value ->
+            value as? CanonicalJsonValue.Obj ?: return null
+        } ?: return null
+        if (itemIndex !in items.indices) return null
+        val stepsPerItems = items.sumOf { item -> 1L + if ((item.int("restAfterSec") ?: 0L) > 0L) 1L else 0L }
+        val roundStart = if (block.string("kind") == "timed_circuit") {
+            val round = roundIndex ?: return null
+            val between = if ((block.int("restBetweenRoundsSec") ?: 0L) > 0L) 1L else 0L
+            round * (stepsPerItems + between)
+        } else {
+            if (roundIndex != null) return null
+            0L
+        }
+        val itemStart = items.take(itemIndex).sumOf { item ->
+            1L + if ((item.int("restAfterSec") ?: 0L) > 0L) 1L else 0L
+        }
+        if (restAfter && (items[itemIndex].int("restAfterSec") ?: 0L) <= 0L) return null
+        return roundStart + itemStart + if (restAfter) 1L else 0L
+    }
+
+    private fun timedCircuitBetweenRoundStepIndex(
+        block: CanonicalJsonValue.Obj,
+        roundIndex: Long
+    ): Long? {
+        val items = block.array("items")?.map { value ->
+            value as? CanonicalJsonValue.Obj ?: return null
+        } ?: return null
+        val stepsPerItems = items.sumOf { item ->
+            1L + if ((item.int("restAfterSec") ?: 0L) > 0L) 1L else 0L
+        }
+        return roundIndex * (stepsPerItems + 1L) + stepsPerItems
     }
 
     fun validateStructure(
@@ -485,6 +787,37 @@ object PhaseIdentityV1Validator {
 
     private fun invalidPhaseIdentity() =
         CanonicalValidationResult.Invalid("invalid_phase_identity_v1")
+}
+
+private data class CompositionSnapshotStep(
+    val variant: String,
+    val compositionBlockId: String,
+    val timelineStageId: String,
+    val timelineStageKind: String,
+    val stageGroupId: String,
+    val targetId: String,
+    val targetKind: String,
+    val roundIndex0: Long?,
+    val stageGroupIndex0: Long?,
+    val targetIndex0: Long,
+    val stageInstanceIndex0: Long,
+    val targetInstanceIndex0: Long,
+    val stepIndex0: Long
+) {
+    fun matches(payload: CanonicalJsonValue.Obj): Boolean =
+        payload.string("variant") == variant &&
+            payload.string("compositionBlockId") == compositionBlockId &&
+            payload.string("timelineStageId") == timelineStageId &&
+            payload.string("timelineStageKind") == timelineStageKind &&
+            payload.string("stageGroupId") == stageGroupId &&
+            payload.string("targetId") == targetId &&
+            payload.string("targetKind") == targetKind &&
+            payload.matchesNullableInteger("roundIndex0", roundIndex0) &&
+            payload.matchesNullableInteger("stageGroupIndex0", stageGroupIndex0) &&
+            payload.int("targetIndex0") == targetIndex0 &&
+            payload.int("stageInstanceIndex0") == stageInstanceIndex0 &&
+            payload.int("targetInstanceIndex0") == targetInstanceIndex0 &&
+            payload.int("stepIndex0") == stepIndex0
 }
 
 private inline fun validateVersionedObject(
