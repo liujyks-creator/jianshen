@@ -277,6 +277,121 @@ class CanonicalSessionValidatorsTest {
     }
 
     @Test
+    fun analysisMembershipUsesTheWholeCanonicalTupleAndKeepsZeroDurationPointsEligible() {
+        fun phaseAggregates(maximum: Int, mutationSequence: Long, sampleSequence: Long): String =
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":1,\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":0,\"coveredDurationMs\":0,\"coverageBasisPoints\":null,\"coverageStatus\":\"no_eligible_duration\",\"conclusionEligible\":false,\"weightedBpmMs\":null,\"observedAvgBpm\":null,\"observedMaxBpm\":$maximum,\"highestOffsetMs\":50,\"highestMutationSequence\":$mutationSequence,\"highestSampleSequence\":$sampleSequence}]}"
+        val durationBreakdown =
+            "{\"durationBreakdownContractVersion\":1,\"canonicalSessionDurationMs\":100,\"recordingWindowDurationMs\":100,\"notRequestedBeforeRecordingStartMs\":0,\"intentAxis\":{\"expectedRecordingDurationMs\":0,\"userExcludedDurationMs\":100,\"userTurnedOffDurationMs\":100,\"userOptedOutDurationMs\":0,\"userDisconnectedSuppressRecoveryDurationMs\":0},\"phaseAxis\":{\"primaryEligibleDurationMs\":0,\"phaseExcludedDurationMs\":0,\"strengthPrepareExcludedDurationMs\":0,\"pausedExcludedDurationMs\":0},\"primaryAnalysisPartition\":{\"primaryEligibleDurationMs\":0,\"eligibleCoveredDurationMs\":0,\"eligibleUncoveredDurationMs\":0},\"deviceStateDurations\":{\"not_observing\":0,\"no_source_selected\":0,\"permission_required\":0,\"bluetooth_unavailable\":0,\"searching\":0,\"connecting\":0,\"waiting_first_sample\":0,\"live\":100,\"stale\":0,\"reconnecting\":0,\"disconnected\":0,\"technical_failure\":0},\"deviceReasonDurations\":{\"initial_acquisition\":0,\"automatic_recovery\":0,\"source_not_selected\":0,\"source_unavailable\":0,\"permission_missing\":0,\"permission_revoked\":0,\"bluetooth_off\":0,\"platform_unavailable\":0,\"first_sample_timeout\":0,\"sample_stale_timeout\":0,\"unexpected_disconnect\":0,\"connection_timeout\":0,\"measurement_stream_unavailable\":0,\"platform_failure\":0},\"orthogonalityContract\":{\"contractVersion\":1,\"rule\":\"primary_partition_is_mutually_exclusive_device_axes_are_independent_do_not_sum\"}}"
+        val graph = validTerminalGraph().copy(
+            phases = listOf(
+                terminalPhase().copy(
+                    id = "before-point",
+                    endOffsetMs = 50,
+                    endMutationSequence = 1,
+                    phaseKind = "paused",
+                    phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY
+                ),
+                terminalPhase().copy(
+                    id = "point",
+                    sequence = 1,
+                    startOffsetMs = 50,
+                    startMutationSequence = 1,
+                    endOffsetMs = 50,
+                    endMutationSequence = 3
+                ),
+                terminalPhase().copy(
+                    id = "after-point",
+                    sequence = 2,
+                    startOffsetMs = 50,
+                    startMutationSequence = 3,
+                    phaseKind = "paused",
+                    phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY
+                )
+            ),
+            acquisitions = listOf(
+                terminalAcquisition().copy(
+                    id = "before-point",
+                    endOffsetMs = 50,
+                    endMutationSequence = 1,
+                    recordingIntent = "user_excluded",
+                    intentReason = "user_turned_off"
+                ),
+                terminalAcquisition().copy(
+                    id = "point",
+                    sequence = 1,
+                    startOffsetMs = 50,
+                    startMutationSequence = 1,
+                    endOffsetMs = 50,
+                    endMutationSequence = 3
+                ),
+                terminalAcquisition().copy(
+                    id = "after-point",
+                    sequence = 2,
+                    startOffsetMs = 50,
+                    startMutationSequence = 3,
+                    recordingIntent = "user_excluded",
+                    intentReason = "user_turned_off"
+                )
+            ),
+            samples = listOf(
+                HeartRateSampleEntity("recording", 0, 50, 0, 250),
+                HeartRateSampleEntity("recording", 1, 50, 1, 130),
+                HeartRateSampleEntity("recording", 2, 50, 2, 140),
+                HeartRateSampleEntity("recording", 3, 50, 3, 240),
+                HeartRateSampleEntity("recording", 4, 50, 4, 230)
+            ),
+            snapshots = listOf(
+                terminalSnapshot().copy(
+                    sampleStatus = "primary_points_available",
+                    coverageStatus = "no_eligible_duration",
+                    canonicalSampleCount = 5,
+                    primaryPointSampleCount = 2,
+                    eligibleDurationMs = 0,
+                    coveredDurationMs = 0,
+                    coverageBasisPoints = null,
+                    weightedBpmMs = null,
+                    observedAvgBpm = null,
+                    observedMaxBpm = 140,
+                    highestOffsetMs = 50,
+                    highestMutationSequence = 2,
+                    highestSampleSequence = 2,
+                    phaseAggregatesJson = phaseAggregates(140, 2, 2),
+                    durationBreakdownJson = durationBreakdown
+                )
+            )
+        )
+
+        assertValid(CanonicalSessionGraphV1Validator.validate(graph))
+
+        val exactSinglePoint = graph.copy(
+            phases = graph.phases.mapIndexed { index, phase ->
+                when (index) {
+                    1 -> phase.copy(endMutationSequence = 2)
+                    2 -> phase.copy(startMutationSequence = 2)
+                    else -> phase
+                }
+            },
+            acquisitions = graph.acquisitions.mapIndexed { index, acquisition ->
+                when (index) {
+                    1 -> acquisition.copy(endMutationSequence = 2)
+                    2 -> acquisition.copy(startMutationSequence = 2)
+                    else -> acquisition
+                }
+            },
+            snapshots = listOf(
+                graph.snapshots.single().copy(
+                    primaryPointSampleCount = 1,
+                    observedMaxBpm = 130,
+                    highestMutationSequence = 1,
+                    highestSampleSequence = 1,
+                    phaseAggregatesJson = phaseAggregates(130, 1, 1)
+                )
+            )
+        )
+        assertValid(CanonicalSessionGraphV1Validator.validate(exactSinglePoint))
+    }
+
+    @Test
     fun phaseIdentityModeMustMatchTheOwningSessionMode() {
         assertInvalid(
             CanonicalSessionGraphV1Validator.validate(

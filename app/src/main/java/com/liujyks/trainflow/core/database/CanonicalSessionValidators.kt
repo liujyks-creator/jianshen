@@ -519,8 +519,14 @@ object CanonicalSessionGraphV1Validator {
             phases = graph.phases,
             acquisitions = graph.acquisitions,
             phaseSequence = null,
-            recordingStartOffset = recording.startedOffsetMs,
-            finalOffset = finalOffset
+            recordingStart = CanonicalTuple(
+                recording.startedOffsetMs,
+                recording.startedMutationSequence
+            ),
+            finalTuple = CanonicalTuple(
+                finalOffset,
+                graph.session.lastMutationSequence ?: return false
+            )
         ) ?: return false
         if (
             snapshot.canonicalSampleCount != graph.samples.size.toLong() ||
@@ -550,30 +556,36 @@ object CanonicalSessionGraphV1Validator {
         phases: List<WorkoutPhaseIntervalEntity>,
         acquisitions: List<HeartRateAcquisitionIntervalEntity>,
         phaseSequence: Int?,
-        recordingStartOffset: Long,
-        finalOffset: Long
+        recordingStart: CanonicalTuple,
+        finalTuple: CanonicalTuple
     ): AnalysisMetrics? {
         val eligibleSegments = buildList {
             phases.filter { phase ->
                 phase.phaseKind in PRIMARY_PHASE_KINDS &&
                     (phaseSequence == null || phase.sequence == phaseSequence)
             }.forEach { phase ->
-                val phaseEnd = phase.endOffsetMs ?: return null
+                val phaseEnd = CanonicalTuple(
+                    phase.endOffsetMs ?: return null,
+                    phase.endMutationSequence ?: return null
+                )
                 acquisitions.filter { interval -> interval.recordingIntent == "expected_recording" }
                     .forEach { acquisition ->
-                        val acquisitionEnd = acquisition.endOffsetMs ?: return null
-                        val start = maxOf(
-                            phase.startOffsetMs,
-                            acquisition.startOffsetMs,
-                            recordingStartOffset
+                        val acquisitionEnd = CanonicalTuple(
+                            acquisition.endOffsetMs ?: return null,
+                            acquisition.endMutationSequence ?: return null
                         )
-                        val end = minOf(phaseEnd, acquisitionEnd, finalOffset)
+                        val start = maxOf(
+                            CanonicalTuple(phase.startOffsetMs, phase.startMutationSequence),
+                            CanonicalTuple(acquisition.startOffsetMs, acquisition.startMutationSequence),
+                            recordingStart
+                        )
+                        val end = minOf(phaseEnd, acquisitionEnd, finalTuple)
                         if (end > start) add(AnalysisSegment(start, end))
                     }
             }
         }
         val eligibleDuration = eligibleSegments.fold(0L) { total, segment ->
-            Math.addExact(total, segment.endOffsetMs - segment.startOffsetMs)
+            Math.addExact(total, segment.end.offsetMs - segment.start.offsetMs)
         }
         val orderedSamples = samples.sortedWith(
             compareBy<HeartRateSampleEntity> { sample -> sample.offsetMs }
@@ -581,20 +593,27 @@ object CanonicalSessionGraphV1Validator {
                 .thenBy { sample -> sample.sampleSequence }
         )
         val primarySamples = orderedSamples.filter { sample ->
+            val sampleTuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
             eligibleSegments.any { segment ->
-                sample.offsetMs >= segment.startOffsetMs && sample.offsetMs < segment.endOffsetMs
+                sampleTuple >= segment.start && sampleTuple < segment.end
             }
         }
         var coveredDuration = 0L
         var weighted = 0L
         primarySamples.forEach { sample ->
+            val sampleTuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
             val segment = eligibleSegments.singleOrNull { candidate ->
-                sample.offsetMs >= candidate.startOffsetMs && sample.offsetMs < candidate.endOffsetMs
+                sampleTuple >= candidate.start && sampleTuple < candidate.end
             } ?: return@forEach
             val globalIndex = orderedSamples.indexOf(sample)
             val nextOffset = orderedSamples.getOrNull(globalIndex + 1)?.offsetMs ?: Long.MAX_VALUE
             val cappedEnd = Math.addExact(sample.offsetMs, SAMPLE_VALIDITY_CAP_MS)
-            val contributionEnd = minOf(nextOffset, cappedEnd, segment.endOffsetMs, finalOffset)
+            val contributionEnd = minOf(
+                nextOffset,
+                cappedEnd,
+                segment.end.offsetMs,
+                finalTuple.offsetMs
+            )
             val duration = (contributionEnd - sample.offsetMs).coerceAtLeast(0)
             coveredDuration = Math.addExact(coveredDuration, duration)
             weighted = Math.addExact(weighted, Math.multiplyExact(sample.bpm.toLong(), duration))
@@ -674,15 +693,16 @@ object CanonicalSessionGraphV1Validator {
         val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return false
         val expected = LongArray(6)
         metrics.primarySamples.forEach { sample ->
+            val sampleTuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
             val segment = metrics.eligibleSegments.singleOrNull { candidate ->
-                sample.offsetMs >= candidate.startOffsetMs && sample.offsetMs < candidate.endOffsetMs
+                sampleTuple >= candidate.start && sampleTuple < candidate.end
             } ?: return@forEach
             val index = metrics.orderedSamples.indexOf(sample)
             val nextOffset = metrics.orderedSamples.getOrNull(index + 1)?.offsetMs ?: Long.MAX_VALUE
             val end = minOf(
                 nextOffset,
                 Math.addExact(sample.offsetMs, SAMPLE_VALIDITY_CAP_MS),
-                segment.endOffsetMs
+                segment.end.offsetMs
             )
             val duration = (end - sample.offsetMs).coerceAtLeast(0)
             val scaled = Math.multiplyExact(sample.bpm.toLong(), 10_000L)
@@ -718,8 +738,11 @@ object CanonicalSessionGraphV1Validator {
                 graph.phases,
                 graph.acquisitions,
                 phase.sequence,
-                recording.startedOffsetMs,
-                finalOffset
+                CanonicalTuple(recording.startedOffsetMs, recording.startedMutationSequence),
+                CanonicalTuple(
+                    finalOffset,
+                    graph.session.lastMutationSequence ?: return false
+                )
             ) ?: return@all false
             entry.jsonLong("phaseSequence") == phase.sequence.toLong() &&
                 entry.jsonString("phaseKind") == phase.phaseKind &&
@@ -908,8 +931,8 @@ object CanonicalSessionGraphV1Validator {
 }
 
 private data class AnalysisSegment(
-    val startOffsetMs: Long,
-    val endOffsetMs: Long
+    val start: CanonicalTuple,
+    val end: CanonicalTuple
 )
 
 private data class AnalysisMetrics(

@@ -4,6 +4,7 @@ import com.liujyks.trainflow.core.model.TIMED_COMPOSITION_CURRENT_VERSION
 import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
+import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
 import com.liujyks.trainflow.core.model.PlanPreferences
@@ -13,13 +14,17 @@ import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthExerciseTarget
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetPlan
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionCompatibilityMeta
+import com.liujyks.trainflow.core.model.TimedCompositionCompatibilitySourceVersion
 import com.liujyks.trainflow.core.model.TimedCompositionStageGroup
 import com.liujyks.trainflow.core.model.TimedCompositionTarget
 import com.liujyks.trainflow.core.model.TimedCompositionTargetKind
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
+import com.liujyks.trainflow.core.model.TimedStageStyle
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.WeightUnit
@@ -245,6 +250,69 @@ class PlanSnapshotStorageV1ValidatorTest {
             val json = snapshot.toStorageJson()
             val result = PlanSnapshotStorageV1Validator.validate(json, snapshot.mode)
             assertTrue("Writer output failed strict v1 validation: $json", result is PlanSnapshotStorageV1ValidationResult.Valid)
+        }
+    }
+
+    @Test
+    fun repTargetsAreStrictlyBoundedFromOneThroughTwoHundredAndRangesAreOrdered() {
+        val canonical = WorkoutPlanSnapshot(
+            title = "Strength",
+            mode = WorkoutMode.STRENGTH,
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "strength",
+                    order = 0,
+                    exerciseId = "squat",
+                    target = StrengthExerciseTarget(repTarget = RepTarget.Fixed(1)),
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "set",
+                            order = 0,
+                            kind = StrengthSetKind.WORKING,
+                            repTarget = RepTarget.Range(1, 200)
+                        )
+                    )
+                )
+            )
+        ).toStorageJson()
+        val valid = listOf(
+            canonical,
+            canonical.replace("\"reps\":1", "\"reps\":200"),
+            canonical.replace("\"minReps\":1,\"maxReps\":200", "\"minReps\":1,\"maxReps\":1"),
+            canonical.replace("\"minReps\":1,\"maxReps\":200", "\"minReps\":200,\"maxReps\":200")
+        )
+        val invalid = listOf(
+            canonical.replace("\"reps\":1", "\"reps\":0"),
+            canonical.replace("\"reps\":1", "\"reps\":201"),
+            canonical.replace("\"reps\":1", "\"reps\":1.5"),
+            canonical.replace("\"reps\":1", "\"reps\":\"1\""),
+            canonical.replace("\"minReps\":1", "\"minReps\":0"),
+            canonical.replace("\"maxReps\":200", "\"maxReps\":201"),
+            canonical.replace("\"minReps\":1,\"maxReps\":200", "\"minReps\":12,\"maxReps\":8"),
+            canonical.replace("\"minReps\":1", "\"minReps\":1.5"),
+            canonical.replace("\"maxReps\":200", "\"maxReps\":\"200\""),
+            canonical.replace("\"kind\":\"fixed\",\"reps\":1", "\"kind\":\"range\",\"reps\":1"),
+            canonical.replace(
+                "\"kind\":\"range\",\"minReps\":1,\"maxReps\":200",
+                "\"kind\":\"fixed\",\"minReps\":1,\"maxReps\":200"
+            )
+        )
+
+        valid.forEach { json ->
+            assertTrue(
+                "Boundary-valid RepTarget failed: $json",
+                PlanSnapshotStorageV1Validator.validate(json, WorkoutMode.STRENGTH) is
+                    PlanSnapshotStorageV1ValidationResult.Valid
+            )
+        }
+        invalid.forEach { json ->
+            assertInvalid(PlanSnapshotStorageV1Validator.validate(json, WorkoutMode.STRENGTH))
+            assertEquals(
+                null,
+                OrderedStructureSignatureInputV1.encode(
+                    WorkoutPlanSnapshotStorageV1(WorkoutMode.STRENGTH, json)
+                )
+            )
         }
     }
 
@@ -519,6 +587,7 @@ class PlanSnapshotStorageV1ValidatorTest {
                             id = "set",
                             order = 0,
                             kind = StrengthSetKind.WORKING,
+                            side = ExerciseSide.RIGHT,
                             targetWeight = WeightValue(62.5, WeightUnit.LB),
                             repTarget = RepTarget.Range(8, 12),
                             restAfterSec = 80
@@ -540,6 +609,7 @@ class PlanSnapshotStorageV1ValidatorTest {
             "strength.setId" to strength.replace("\"id\":\"set\"", "\"id\":\"set-b\""),
             "strength.setOrder" to strength.replaceFirst("\"order\":0,\"kind\":\"working\"", "\"order\":1,\"kind\":\"working\""),
             "strength.setKind" to strength.replace("\"kind\":\"working\"", "\"kind\":\"warmup\""),
+            "strength.setSide" to strength.replace("\"side\":\"right\"", "\"side\":\"left\""),
             "strength.setWeightDecimal" to strength.replace("\"value\":62.5", "\"value\":63.5"),
             "strength.setWeightUnit" to strength.replace("\"unit\":\"lb\"", "\"unit\":\"kg\""),
             "strength.repMin" to strength.replace("\"minReps\":8", "\"minReps\":7"),
@@ -571,6 +641,7 @@ class PlanSnapshotStorageV1ValidatorTest {
                             id = "follow-item",
                             exerciseId = "follow-exercise",
                             labelOverride = "Excluded label",
+                            side = ExerciseSide.LEFT,
                             stageType = TimedStageType.WORK,
                             iconKey = "excluded-icon",
                             colorHex = "#123456",
@@ -590,6 +661,7 @@ class PlanSnapshotStorageV1ValidatorTest {
             "follow.restBetweenRoundsSec" to follow.replace("\"restBetweenRoundsSec\":30", "\"restBetweenRoundsSec\":31"),
             "follow.itemId" to follow.replace("\"id\":\"follow-item\"", "\"id\":\"follow-item-b\""),
             "follow.exerciseId" to follow.replace("\"exerciseId\":\"follow-exercise\"", "\"exerciseId\":\"follow-exercise-b\""),
+            "follow.side" to follow.replace("\"side\":\"left\"", "\"side\":\"right\""),
             "follow.stageType" to follow.replace("\"stageType\":\"work\"", "\"stageType\":\"custom\""),
             "follow.workDurationSec" to follow.replace("\"workDurationSec\":40", "\"workDurationSec\":41"),
             "follow.restAfterSec" to follow.replace("\"restAfterSec\":20", "\"restAfterSec\":21"),
@@ -623,6 +695,308 @@ class PlanSnapshotStorageV1ValidatorTest {
         assertEquals(null, OrderedStructureSignatureInputV1.encode(WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, canonical.replace("\"rounds\":1", "\"rounds\":NaN"))))
         assertTrue(digestOf(dropped, WorkoutMode.TIMED) != originalDigest)
         assertTrue(digestOf(reordered, WorkoutMode.TIMED) != originalDigest)
+    }
+
+    @Test
+    fun orderedSignatureBytesAndIndependentDigestsCoverTheCompleteSAInventory() {
+        fun assertProjection(snapshot: WorkoutPlanSnapshot, expected: String) {
+            val storage = validatedStorage(snapshot)
+            val expectedBytes = expected.toByteArray(Charsets.UTF_8)
+            assertArrayEquals(expectedBytes, OrderedStructureSignatureInputV1.encode(storage))
+            assertEquals(
+                testSha256(expectedBytes),
+                OrderedStructureSignatureInputV1.digestHexLowercase(storage)
+            )
+        }
+
+        val compatibility = TimedCompositionCompatibilityMeta(
+            sourceVersion = TimedCompositionCompatibilitySourceVersion.LEGACY_TIMED_CIRCUIT,
+            legacyBlockId = "legacy-block",
+            legacyItemId = "legacy-item",
+            legacyStageType = TimedStageType.WORK,
+            convertedAt = "2026-08-29T00:00:00Z"
+        )
+        val cueSettings = CueSettings(
+            actionEnding = CountdownCue(thresholdSec = 3, voiceCueEnabled = true),
+            restEnding = CountdownCue(thresholdSec = 4, vibrationEnabled = false)
+        )
+        val itemA = TimedExerciseItem(
+            id = "item-a",
+            exerciseId = "exercise-\"a",
+            labelOverride = "Excluded label",
+            side = ExerciseSide.LEFT,
+            stageType = TimedStageType.WORK,
+            iconKey = "excluded-icon",
+            colorHex = "#111111",
+            workDurationSec = 40,
+            restAfterSec = 20,
+            cueSettings = cueSettings,
+            autoAdvance = true
+        )
+        val itemB = TimedExerciseItem(
+            id = "item-b",
+            exerciseId = null,
+            side = null,
+            stageType = TimedStageType.CUSTOM,
+            workDurationSec = 15,
+            restAfterSec = null,
+            autoAdvance = false
+        )
+        val groupA = TimedCompositionStageGroup(
+            id = "group-a",
+            order = 0,
+            name = "Excluded group name",
+            colorHex = "#222222",
+            iconKey = "excluded-group-icon",
+            targets = listOf(
+                TimedCompositionTarget(
+                    id = "target-a",
+                    order = 0,
+                    name = "Excluded target A",
+                    kind = TimedCompositionTargetKind.ACTION,
+                    durationSec = 30,
+                    colorHex = "#333333",
+                    iconKey = "excluded-target-icon",
+                    cueSettings = cueSettings,
+                    autoAdvance = true,
+                    compatibility = compatibility
+                ),
+                TimedCompositionTarget(
+                    id = "target-b",
+                    order = 1,
+                    name = "Excluded target B",
+                    kind = TimedCompositionTargetKind.REST,
+                    durationSec = 10,
+                    colorHex = "#444444",
+                    autoAdvance = false
+                )
+            ),
+            cueSettings = cueSettings,
+            compatibility = compatibility
+        )
+        val groupB = TimedCompositionStageGroup(
+            id = "group-b",
+            order = 1,
+            name = "Excluded group B",
+            colorHex = "#555555",
+            targets = listOf(
+                TimedCompositionTarget(
+                    id = "target-c",
+                    order = 0,
+                    name = "Excluded target C",
+                    kind = TimedCompositionTargetKind.CUSTOM,
+                    durationSec = 20,
+                    colorHex = "#666666"
+                )
+            )
+        )
+        val timed = WorkoutPlanSnapshot(
+            planId = "excluded-plan",
+            title = "Excluded title",
+            mode = WorkoutMode.TIMED,
+            blocks = listOf(
+                WarmupBlock("warmup", 0, title = "Excluded warmup", durationSec = null, items = listOf(itemA, itemB)),
+                RestBlock("rest", 1, durationSec = 10, title = "Excluded rest", label = "Excluded rest label"),
+                TimedCircuitBlock("circuit", 2, rounds = 2, items = listOf(itemA, itemB), title = "Excluded circuit", restBetweenRoundsSec = 30),
+                TimedCompositionBlock(
+                    id = "composition",
+                    order = 3,
+                    title = "Excluded composition",
+                    warmupSec = 5,
+                    warmupStyle = TimedStageStyle("#777777", "warmup"),
+                    cooldownSec = 6,
+                    cooldownStyle = TimedStageStyle("#888888", "cooldown"),
+                    rounds = 2,
+                    restBetweenRoundsSec = 7,
+                    restBetweenRoundsStyle = TimedStageStyle("#999999", "rest"),
+                    stageGroups = listOf(groupA, groupB),
+                    compatibility = compatibility
+                )
+            ),
+            preferences = PlanPreferences(
+                cueSettings = cueSettings,
+                heartRateDisplay = HeartRateDisplayPreference(
+                    enabled = true,
+                    showDisconnectedPlaceholder = false
+                )
+            )
+        )
+        val timedExpected =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[{\"blockId\":\"warmup\",\"blockKind\":\"warmup\",\"order\":0,\"durationSec\":null,\"items\":[{\"itemId\":\"item-a\",\"exerciseId\":\"exercise-\\\"a\",\"side\":\"left\",\"stageType\":\"work\",\"workDurationSec\":40,\"restAfterSec\":20,\"autoAdvance\":true},{\"itemId\":\"item-b\",\"exerciseId\":null,\"side\":null,\"stageType\":\"custom\",\"workDurationSec\":15,\"restAfterSec\":null,\"autoAdvance\":false}]},{\"blockId\":\"rest\",\"blockKind\":\"rest\",\"order\":1,\"durationSec\":10},{\"blockId\":\"circuit\",\"blockKind\":\"timed_circuit\",\"order\":2,\"rounds\":2,\"restBetweenRoundsSec\":30,\"items\":[{\"itemId\":\"item-a\",\"exerciseId\":\"exercise-\\\"a\",\"side\":\"left\",\"stageType\":\"work\",\"workDurationSec\":40,\"restAfterSec\":20,\"autoAdvance\":true},{\"itemId\":\"item-b\",\"exerciseId\":null,\"side\":null,\"stageType\":\"custom\",\"workDurationSec\":15,\"restAfterSec\":null,\"autoAdvance\":false}]},{\"blockId\":\"composition\",\"blockKind\":\"timed_composition\",\"order\":3,\"compositionVersion\":2,\"warmupSec\":5,\"cooldownSec\":6,\"rounds\":2,\"restBetweenRoundsSec\":7,\"stageGroups\":[{\"stageGroupId\":\"group-a\",\"order\":0,\"targets\":[{\"targetId\":\"target-a\",\"order\":0,\"targetKind\":\"action\",\"durationSec\":30,\"autoAdvance\":true},{\"targetId\":\"target-b\",\"order\":1,\"targetKind\":\"rest\",\"durationSec\":10,\"autoAdvance\":false}]},{\"stageGroupId\":\"group-b\",\"order\":1,\"targets\":[{\"targetId\":\"target-c\",\"order\":0,\"targetKind\":\"custom\",\"durationSec\":20,\"autoAdvance\":true}]}]}]}"
+        assertProjection(timed, timedExpected)
+
+        val strength = WorkoutPlanSnapshot(
+            planId = "excluded-strength-plan",
+            title = "Excluded strength title",
+            mode = WorkoutMode.STRENGTH,
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "strength-a",
+                    order = 0,
+                    exerciseId = "squat-\"a",
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "set-a",
+                            order = 0,
+                            kind = StrengthSetKind.WORKING,
+                            side = ExerciseSide.RIGHT,
+                            targetWeight = WeightValue(62.5, WeightUnit.LB),
+                            repTarget = RepTarget.Range(8, 12),
+                            restAfterSec = 80
+                        ),
+                        StrengthSetPlan("set-b", 1, StrengthSetKind.DROP)
+                    ),
+                    title = "Excluded strength block title",
+                    target = StrengthExerciseTarget(
+                        weight = WeightValue(-0.0, WeightUnit.KG),
+                        repTarget = RepTarget.Fixed(1),
+                        restAfterSetSec = 90
+                    ),
+                    substitutions = listOf("front-squat", "goblet-squat"),
+                    setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST
+                ),
+                StrengthExerciseBlock(
+                    id = "strength-b",
+                    order = 1,
+                    exerciseId = "deadlift",
+                    sets = emptyList(),
+                    target = null
+                )
+            ),
+            preferences = PlanPreferences(cueSettings = cueSettings)
+        )
+        val strengthExpected =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"strength\",\"blocks\":[{\"blockId\":\"strength-a\",\"blockKind\":\"strength_exercise\",\"order\":0,\"exerciseId\":\"squat-\\\"a\",\"target\":{\"weight\":{\"value\":0,\"unit\":\"kg\"},\"repTarget\":{\"kind\":\"fixed\",\"fixedReps\":1,\"minReps\":null,\"maxReps\":null},\"restAfterSetSec\":90},\"sets\":[{\"setPlanId\":\"set-a\",\"order\":0,\"setKind\":\"working\",\"side\":\"right\",\"targetWeight\":{\"value\":62.5,\"unit\":\"lb\"},\"repTarget\":{\"kind\":\"range\",\"fixedReps\":null,\"minReps\":8,\"maxReps\":12},\"restAfterSec\":80},{\"setPlanId\":\"set-b\",\"order\":1,\"setKind\":\"drop\",\"side\":null,\"targetWeight\":null,\"repTarget\":null,\"restAfterSec\":null}],\"substitutions\":[\"front-squat\",\"goblet-squat\"],\"setTimerMode\":\"auto_after_rest\"},{\"blockId\":\"strength-b\",\"blockKind\":\"strength_exercise\",\"order\":1,\"exerciseId\":\"deadlift\",\"target\":null,\"sets\":[],\"substitutions\":[],\"setTimerMode\":\"manual_start\"}]}"
+        assertProjection(strength, strengthExpected)
+        assertTrue(strength.toStorageJson().contains("\"value\":0"))
+        assertTrue(!strength.toStorageJson().contains("\"value\":-0"))
+
+        val follow = WorkoutPlanSnapshot(
+            planId = "excluded-follow-plan",
+            title = "Excluded follow title",
+            mode = WorkoutMode.FOLLOW_ALONG,
+            blocks = listOf(
+                StretchBlock(
+                    "follow",
+                    0,
+                    title = "Excluded follow block",
+                    items = listOf(itemA.copy(side = ExerciseSide.BOTH))
+                )
+            ),
+            preferences = PlanPreferences(
+                cueSettings = cueSettings,
+                heartRateDisplay = HeartRateDisplayPreference(
+                    enabled = false,
+                    showDisconnectedPlaceholder = true
+                )
+            ),
+            followAlong = FollowAlongPlanMeta(
+                preset = true,
+                coverMediaId = "cover",
+                coachMediaIds = listOf("coach"),
+                chapterIds = listOf("chapter"),
+                timelineCueIds = listOf("timeline"),
+                musicTrackIds = listOf("music"),
+                aiAnalysisProfileId = "ai"
+            )
+        )
+        val followExpected =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"follow_along\",\"blocks\":[{\"blockId\":\"follow\",\"blockKind\":\"stretch\",\"order\":0,\"durationSec\":null,\"items\":[{\"itemId\":\"item-a\",\"exerciseId\":\"exercise-\\\"a\",\"side\":\"both\",\"stageType\":\"work\",\"workDurationSec\":40,\"restAfterSec\":20,\"autoAdvance\":true}]}]}"
+        assertProjection(follow, followExpected)
+
+        listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY).forEach { value ->
+            val nonFinite = strength.copy(
+                blocks = listOf(
+                    (strength.blocks.first() as StrengthExerciseBlock).copy(
+                        target = StrengthExerciseTarget(weight = WeightValue(value, WeightUnit.KG))
+                    )
+                )
+            ).toStorageJson()
+            assertInvalid(PlanSnapshotStorageV1Validator.validate(nonFinite, WorkoutMode.STRENGTH))
+            assertEquals(
+                null,
+                OrderedStructureSignatureInputV1.encode(
+                    WorkoutPlanSnapshotStorageV1(WorkoutMode.STRENGTH, nonFinite)
+                )
+            )
+        }
+    }
+
+    @Test
+    fun everySAExecutionArrayUsesSameElementOrderAsSignatureInput() {
+        fun assertReorderChangesDigest(
+            label: String,
+            original: WorkoutPlanSnapshot,
+            reordered: WorkoutPlanSnapshot,
+            sameElements: Boolean
+        ) {
+            assertTrue("$label did not use the same elements", sameElements)
+            assertTrue(
+                "$label same-element reorder did not change digest",
+                digestOf(original.toStorageJson(), original.mode) !=
+                    digestOf(reordered.toStorageJson(), reordered.mode)
+            )
+        }
+
+        val blockA = RestBlock("rest-a", 0, 10)
+        val blockB = RestBlock("rest-b", 1, 20)
+        assertReorderChangesDigest(
+            "blocks",
+            WorkoutPlanSnapshot(title = "Blocks", mode = WorkoutMode.TIMED, blocks = listOf(blockA, blockB)),
+            WorkoutPlanSnapshot(title = "Blocks", mode = WorkoutMode.TIMED, blocks = listOf(blockB, blockA)),
+            listOf(blockA, blockB).toSet() == listOf(blockB, blockA).toSet()
+        )
+
+        val itemA = TimedExerciseItem("item-a", workDurationSec = 10)
+        val itemB = TimedExerciseItem("item-b", workDurationSec = 20)
+        val itemsOriginal = StretchBlock("stretch", 0, items = listOf(itemA, itemB))
+        val itemsReordered = itemsOriginal.copy(items = listOf(itemB, itemA))
+        assertReorderChangesDigest(
+            "items",
+            WorkoutPlanSnapshot(title = "Items", mode = WorkoutMode.TIMED, blocks = listOf(itemsOriginal)),
+            WorkoutPlanSnapshot(title = "Items", mode = WorkoutMode.TIMED, blocks = listOf(itemsReordered)),
+            itemsOriginal.items.toSet() == itemsReordered.items.toSet()
+        )
+
+        val targetA = TimedCompositionTarget("target-a", 0, "A", TimedCompositionTargetKind.ACTION, 10, "#111111")
+        val targetB = TimedCompositionTarget("target-b", 1, "B", TimedCompositionTargetKind.REST, 20, "#222222")
+        val groupA = TimedCompositionStageGroup("group-a", 0, "A", "#111111", targets = listOf(targetA, targetB))
+        val groupB = TimedCompositionStageGroup("group-b", 1, "B", "#222222", targets = emptyList())
+        val groupsOriginal = TimedCompositionBlock("composition", 0, rounds = 1, stageGroups = listOf(groupA, groupB))
+        assertReorderChangesDigest(
+            "stageGroups",
+            WorkoutPlanSnapshot(title = "Groups", mode = WorkoutMode.TIMED, blocks = listOf(groupsOriginal)),
+            WorkoutPlanSnapshot(title = "Groups", mode = WorkoutMode.TIMED, blocks = listOf(groupsOriginal.copy(stageGroups = listOf(groupB, groupA)))),
+            listOf(groupA, groupB).toSet() == listOf(groupB, groupA).toSet()
+        )
+        assertReorderChangesDigest(
+            "targets",
+            WorkoutPlanSnapshot(title = "Targets", mode = WorkoutMode.TIMED, blocks = listOf(groupsOriginal.copy(stageGroups = listOf(groupA)))),
+            WorkoutPlanSnapshot(title = "Targets", mode = WorkoutMode.TIMED, blocks = listOf(groupsOriginal.copy(stageGroups = listOf(groupA.copy(targets = listOf(targetB, targetA)))))),
+            listOf(targetA, targetB).toSet() == listOf(targetB, targetA).toSet()
+        )
+
+        val setA = StrengthSetPlan("set-a", 0, StrengthSetKind.WORKING)
+        val setB = StrengthSetPlan("set-b", 1, StrengthSetKind.DROP)
+        val strength = StrengthExerciseBlock(
+            "strength",
+            0,
+            "squat",
+            listOf(setA, setB),
+            substitutions = listOf("front-squat", "goblet-squat")
+        )
+        assertReorderChangesDigest(
+            "sets",
+            WorkoutPlanSnapshot(title = "Sets", mode = WorkoutMode.STRENGTH, blocks = listOf(strength)),
+            WorkoutPlanSnapshot(title = "Sets", mode = WorkoutMode.STRENGTH, blocks = listOf(strength.copy(sets = listOf(setB, setA)))),
+            listOf(setA, setB).toSet() == listOf(setB, setA).toSet()
+        )
+        assertReorderChangesDigest(
+            "substitutions",
+            WorkoutPlanSnapshot(title = "Substitutions", mode = WorkoutMode.STRENGTH, blocks = listOf(strength)),
+            WorkoutPlanSnapshot(title = "Substitutions", mode = WorkoutMode.STRENGTH, blocks = listOf(strength.copy(substitutions = listOf("goblet-squat", "front-squat")))),
+            strength.substitutions.toSet() == setOf("goblet-squat", "front-squat")
+        )
     }
 
     private fun emptySnapshot(): WorkoutPlanSnapshot = WorkoutPlanSnapshot(

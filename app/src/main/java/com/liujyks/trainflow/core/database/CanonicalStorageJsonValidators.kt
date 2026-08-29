@@ -150,16 +150,21 @@ object CanonicalStorageJsonV1Validators {
             if (!root.hasExactKeys(QUALITY_REASON_ROOT_KEYS)) return@validateVersionedObject false
             val sessionReasons = root.array("sessionReasons") ?: return@validateVersionedObject false
             val phaseReasons = root.array("phaseReasons") ?: return@validateVersionedObject false
+            val sessionReasonCodes = mutableSetOf<String>()
+            val phaseReasonKeys = mutableSetOf<Pair<Long, String>>()
             sessionReasons.all { value ->
                 val item = value as? CanonicalJsonValue.Obj ?: return@all false
+                val reasonCode = item.string("reasonCode") ?: return@all false
                 item.hasExactKeys(SESSION_REASON_KEYS) &&
-                    item.string("reasonCode") in QUALITY_REASON_CODES &&
+                    reasonCode in QUALITY_REASON_CODES && sessionReasonCodes.add(reasonCode) &&
                     item.isNullableNonNegativeInteger("durationMs")
             } && phaseReasons.all { value ->
                 val item = value as? CanonicalJsonValue.Obj ?: return@all false
+                val phaseSequence = item.int("phaseSequence") ?: return@all false
+                val reasonCode = item.string("reasonCode") ?: return@all false
                 item.hasExactKeys(PHASE_REASON_KEYS) &&
-                    item.isNonNegativeInteger("phaseSequence") &&
-                    item.string("reasonCode") in QUALITY_REASON_CODES &&
+                    phaseSequence >= 0 && reasonCode in QUALITY_REASON_CODES &&
+                    phaseReasonKeys.add(phaseSequence to reasonCode) &&
                     item.isNullableNonNegativeInteger("durationMs")
             }
         }
@@ -475,7 +480,8 @@ object PhaseIdentityV1Validator {
         val item = items[itemIndex] as CanonicalJsonValue.Obj
         val restAfter = variant in setOf("circuit_rest_after_action", "non_circuit_rest_after_action")
         val expectedStep = timedItemStepIndex(block, itemIndex, roundIndex, restAfter) ?: return false
-        return payload.int("stepIndex0") == expectedStep &&
+        return item.string("stageType") != "rest" &&
+            payload.int("stepIndex0") == expectedStep &&
             payload.string("exerciseId") == item.string("exerciseId") &&
             if (restAfter) (item.int("restAfterSec") ?: 0L) > 0L else true
     }

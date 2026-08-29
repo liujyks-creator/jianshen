@@ -301,27 +301,33 @@ object PlanSnapshotStorageV1Validator {
         return orderedObject(value, listOf("value", "unit"))
     }
 
-    private fun canonicalRepTarget(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? =
-        when (value.string("kind")) {
-            "fixed" -> if (
-                value.hasExactKeys(setOf("kind", "reps")) && value.isNonNegativeInteger("reps")
-            ) {
-                orderedObject(value, listOf("kind", "reps"))
-            } else {
-                null
+    private fun canonicalRepTarget(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? {
+        return when (value.string("kind")) {
+            "fixed" -> {
+                val reps = value.int("reps") ?: return null
+                if (value.hasExactKeys(setOf("kind", "reps")) && reps in 1L..200L) {
+                    orderedObject(value, listOf("kind", "reps"))
+                } else {
+                    null
+                }
             }
 
-            "range" -> if (
-                value.hasExactKeys(setOf("kind", "minReps", "maxReps")) &&
-                value.isNonNegativeInteger("minReps") && value.isNonNegativeInteger("maxReps")
-            ) {
-                orderedObject(value, listOf("kind", "minReps", "maxReps"))
-            } else {
-                null
+            "range" -> {
+                val minReps = value.int("minReps") ?: return null
+                val maxReps = value.int("maxReps") ?: return null
+                if (
+                    value.hasExactKeys(setOf("kind", "minReps", "maxReps")) &&
+                    minReps in 1L..200L && maxReps in 1L..200L && minReps <= maxReps
+                ) {
+                    orderedObject(value, listOf("kind", "minReps", "maxReps"))
+                } else {
+                    null
+                }
             }
 
             else -> null
         }
+    }
 
     private fun canonicalPreferences(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? {
         if (!value.hasRequiredAndOptionalKeys(emptySet(), setOf("cueSettings", "heartRateDisplay"))) {
