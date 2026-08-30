@@ -1,20 +1,38 @@
 package com.liujyks.trainflow.core.data
 
 import android.content.Context
+import android.database.Cursor
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.CanonicalTuple
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
-import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,12 +60,14 @@ class WorkoutSessionRecorderReconciliationTest {
     }
 
     @Test
-    fun legacyActiveAndPausedRelaunchReturnsTypedResidualsWithoutAnyDatabaseMutation() = runBlocking {
+    fun legacyReadyActiveAndPausedReturnTypedResidualsWithoutMutationAndAllowCanonicalStart() = runBlocking {
+        insertSession(legacySession("legacy-ready", "ready"))
         insertSession(legacySession("legacy-active", "active"))
         insertSession(legacySession("legacy-paused", "paused"))
         val before = databaseSnapshot()
+        val repository = WorkoutSessionRepository(database)
 
-        val result = WorkoutSessionRepository(database).prepareRecorder()
+        val result = repository.prepareRecorder()
 
         assertTrue(result is RecorderReconciliationResult.Succeeded)
         result as RecorderReconciliationResult.Succeeded
@@ -62,12 +82,34 @@ class WorkoutSessionRecorderReconciliationTest {
                     sessionId = "legacy-paused",
                     status = "paused",
                     timelineStatus = "legacy_noncanonical_nonterminal"
+                ),
+                LegacySessionResidual(
+                    sessionId = "legacy-ready",
+                    status = "ready",
+                    timelineStatus = "legacy_incomplete_nonterminal"
                 )
             ),
             result.legacyResiduals
         )
         assertTrue(result.reconciledSessions.isEmpty())
         assertEquals(before, databaseSnapshot())
+
+        val started = repository.startCanonicalSession(
+            canonicalHeader("canonical-new"),
+            openPhase("canonical-new")
+        )
+
+        assertSame(result, started)
+        assertEquals(
+            "active",
+            database.canonicalTimelineHeartRateDao().sessionById("canonical-new")?.status
+        )
+        assertEquals(
+            listOf("active", "paused", "ready"),
+            listOf("legacy-active", "legacy-paused", "legacy-ready").map { sessionId ->
+                requireNotNull(database.canonicalTimelineHeartRateDao().sessionById(sessionId)).status
+            }
+        )
     }
 
     @Test
@@ -99,10 +141,288 @@ class WorkoutSessionRecorderReconciliationTest {
     @Test
     fun unknownVersionAndCorruptJsonAreTypedNonretryableManualResolutionFailures() = runBlocking {
         insertSession(
-            canonicalHeader("unknown-version").copy(timelineVersion = 2)
+            canonicalHeader("unknown-timeline").copy(timelineVersion = 2)
+        )
+        insertSession(
+            canonicalHeader("unknown-display-column").copy(displayMetadataContractVersion = 2)
+        )
+        insertSession(
+            canonicalHeader("unknown-display-json").copy(
+                sessionDisplayMetadataJson = VALID_DISPLAY_METADATA.replace(
+                    "\"displayMetadataContractVersion\":1",
+                    "\"displayMetadataContractVersion\":2"
+                )
+            )
         )
         insertSession(
             canonicalHeader("corrupt-json").copy(sessionDisplayMetadataJson = "{}")
+        )
+        val before = databaseSnapshot()
+        val repository = WorkoutSessionRepository(database)
+
+        val result = repository.prepareRecorder()
+
+        assertTrue(result is RecorderReconciliationResult.ManualResolutionRequired)
+        result as RecorderReconciliationResult.ManualResolutionRequired
+        assertEquals(
+            listOf(
+                RecorderFailureKind.CORRUPT_JSON,
+                RecorderFailureKind.UNKNOWN_VERSION,
+                RecorderFailureKind.UNKNOWN_VERSION,
+                RecorderFailureKind.UNKNOWN_VERSION
+            ),
+            result.failures.sortedBy { it.sessionId }.map { it.kind }
+        )
+        assertTrue(result.failures.all { failure ->
+            !failure.retryable && failure.manualResolutionRequired
+        })
+        assertEquals(
+            mapOf(
+                "corrupt-json" to "invalid_session_display_metadata_contract",
+                "unknown-display-column" to "unsupported_display_metadata_version_2",
+                "unknown-display-json" to "unsupported_session_display_metadata_version_2",
+                "unknown-timeline" to "unsupported_timeline_version_2"
+            ),
+            result.failures.associate { failure -> failure.sessionId to failure.code }
+        )
+        assertEquals(before, databaseSnapshot())
+        assertEquals(null, inFlightOrNull(repository))
+        assertSame(result, repository.prepareRecorder())
+    }
+
+    @Test
+    fun nestedUnknownVersionsKeepSpecificContractAndVersionAcrossIndependentRoomFixtures() = runBlocking {
+        insertCanonicalRunningSession(
+            sessionId = "unknown-plan-snapshot",
+            session = canonicalHeader("unknown-plan-snapshot").copy(
+                planSnapshotJson = VALID_PLAN_SNAPSHOT.replace(
+                    "\"planSnapshotStorageContractVersion\":1",
+                    "\"planSnapshotStorageContractVersion\":2"
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-plan-composition",
+            session = canonicalHeader("unknown-plan-composition").copy(
+                planSnapshotJson = VALID_PLAN_SNAPSHOT.replace(
+                    "\"compositionVersion\":2",
+                    "\"compositionVersion\":3"
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-plan-compatibility",
+            session = canonicalHeader("unknown-plan-compatibility").copy(
+                planSnapshotJson = VALID_PLAN_SNAPSHOT.replace(
+                    "\"stageGroups\":[]}",
+                    "\"stageGroups\":[],\"compatibility\":{\"sourceVersion\":\"future_v3\"}}"
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-phase-identity",
+            phaseIdentityJson = VALID_PHASE_IDENTITY.replace(
+                "\"phaseIdentityContractVersion\":1",
+                "\"phaseIdentityContractVersion\":2"
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-phase-payload",
+            phaseIdentityJson = VALID_PHASE_IDENTITY.replace(
+                "\"payloadVersion\":2",
+                "\"payloadVersion\":3"
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-signature",
+            phaseIdentityJson = VALID_PHASE_IDENTITY.replace(
+                "\"signatureContractVersion\":1",
+                "\"signatureContractVersion\":2"
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-phase-composition",
+            phaseIdentityJson = VALID_PHASE_IDENTITY.replace(
+                "\"compositionVersion\":2",
+                "\"compositionVersion\":3"
+            )
+        )
+        insertCanonicalRunningSessionWithActiveRecording(
+            sessionId = "unknown-recording-source",
+            recordingTransform = { recording -> recording.copy(sourceContractVersion = 2) }
+        )
+        insertCanonicalRunningSessionWithActiveRecording(
+            sessionId = "unknown-acquisition",
+            recordingTransform = { recording -> recording.copy(acquisitionContractVersion = 2) }
+        )
+        insertCanonicalRunningSessionWithActiveRecording(
+            sessionId = "unknown-parameter-snapshot",
+            recordingTransform = { recording -> recording.copy(parameterSnapshotVersion = 2) }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-original-analysis",
+            recordingTransform = { recording -> recording.copy(originalAnalysisVersion = 2) }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-zone-snapshot",
+            recordingTransform = { recording ->
+                recording.copy(
+                    personalMaxBpm = 200,
+                    effectiveMaxBpm = 200,
+                    effectiveMaxSource = "personal_max",
+                    zoneSnapshotJson = VALID_ZONE_SNAPSHOT_200.replace(
+                        "\"zoneSnapshotContractVersion\":1",
+                        "\"zoneSnapshotContractVersion\":2"
+                    )
+                )
+            },
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    zoneStatus = "available",
+                    zoneDurationsJson = VALID_ZONE_DURATIONS_120_OF_200
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-analysis-snapshot",
+            snapshotTransform = { snapshot -> snapshot.copy(analysisVersion = 2) }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-analysis-config",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    analysisConfigJson = snapshot.analysisConfigJson.replace(
+                        "\"analysisConfigContractVersion\":1",
+                        "\"analysisConfigContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-sample-interval",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    analysisConfigJson = snapshot.analysisConfigJson.replace(
+                        "\"sampleIntervalContractVersion\":1",
+                        "\"sampleIntervalContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-zone-attribution",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    analysisConfigJson = snapshot.analysisConfigJson.replace(
+                        "\"zoneAttributionContractVersion\":1",
+                        "\"zoneAttributionContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-status-projection",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    analysisConfigJson = snapshot.analysisConfigJson.replace(
+                        "\"statusProjectionContractVersion\":1",
+                        "\"statusProjectionContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-duration-partition",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    analysisConfigJson = snapshot.analysisConfigJson.replace(
+                        "\"durationPartitionContractVersion\":1",
+                        "\"durationPartitionContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-zone-durations",
+            recordingTransform = { recording ->
+                recording.copy(
+                    personalMaxBpm = 200,
+                    effectiveMaxBpm = 200,
+                    effectiveMaxSource = "personal_max",
+                    zoneSnapshotJson = VALID_ZONE_SNAPSHOT_200
+                )
+            },
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    zoneStatus = "available",
+                    zoneDurationsJson = VALID_ZONE_DURATIONS_120_OF_200.replace(
+                        "\"zoneDurationsContractVersion\":1",
+                        "\"zoneDurationsContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-phase-aggregates",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    phaseAggregatesJson = snapshot.phaseAggregatesJson.replace(
+                        "\"phaseAggregatesContractVersion\":1",
+                        "\"phaseAggregatesContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-duration-breakdown",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    durationBreakdownJson = snapshot.durationBreakdownJson.replace(
+                        "\"durationBreakdownContractVersion\":1",
+                        "\"durationBreakdownContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-duration-orthogonality",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    durationBreakdownJson = snapshot.durationBreakdownJson.replace(
+                        "\"contractVersion\":1",
+                        "\"contractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession(
+            sessionId = "unknown-quality-reasons",
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    qualityReasonsJson = snapshot.qualityReasonsJson.replace(
+                        "\"qualityReasonsContractVersion\":1",
+                        "\"qualityReasonsContractVersion\":2"
+                    )
+                )
+            }
+        )
+        insertCanonicalTerminalSession("valid-terminal-control")
+        insertCanonicalTerminalSession(
+            sessionId = "valid-zoned-control",
+            recordingTransform = { recording ->
+                recording.copy(
+                    personalMaxBpm = 200,
+                    effectiveMaxBpm = 200,
+                    effectiveMaxSource = "personal_max",
+                    zoneSnapshotJson = VALID_ZONE_SNAPSHOT_200
+                )
+            },
+            snapshotTransform = { snapshot ->
+                snapshot.copy(
+                    zoneStatus = "available",
+                    zoneDurationsJson = VALID_ZONE_DURATIONS_120_OF_200
+                )
+            }
         )
         val before = databaseSnapshot()
 
@@ -110,38 +430,80 @@ class WorkoutSessionRecorderReconciliationTest {
 
         assertTrue(result is RecorderReconciliationResult.ManualResolutionRequired)
         result as RecorderReconciliationResult.ManualResolutionRequired
+        assertTrue(result.failures.all { failure -> failure.kind == RecorderFailureKind.UNKNOWN_VERSION })
         assertEquals(
-            listOf(RecorderFailureKind.CORRUPT_JSON, RecorderFailureKind.UNKNOWN_VERSION),
-            result.failures.sortedBy { it.sessionId }.map { it.kind }
+            mapOf(
+                "unknown-acquisition" to "unsupported_acquisition_version_2",
+                "unknown-analysis-config" to "unsupported_analysis_config_version_2",
+                "unknown-analysis-snapshot" to "unsupported_analysis_snapshot_version_2",
+                "unknown-duration-breakdown" to "unsupported_duration_breakdown_version_2",
+                "unknown-duration-orthogonality" to
+                    "unsupported_duration_breakdown_orthogonality_version_2",
+                "unknown-duration-partition" to "unsupported_duration_partition_version_2",
+                "unknown-original-analysis" to "unsupported_original_analysis_version_2",
+                "unknown-parameter-snapshot" to
+                    "unsupported_recording_parameter_snapshot_version_2",
+                "unknown-phase-aggregates" to "unsupported_phase_aggregates_version_2",
+                "unknown-phase-composition" to
+                    "unsupported_phase_identity_timed_composition_version_3",
+                "unknown-phase-identity" to "unsupported_phase_identity_version_2",
+                "unknown-phase-payload" to "unsupported_phase_identity_payload_version_3",
+                "unknown-plan-compatibility" to
+                    "unsupported_plan_snapshot_compatibility_version_future_v3",
+                "unknown-plan-composition" to
+                    "unsupported_plan_snapshot_timed_composition_version_3",
+                "unknown-plan-snapshot" to "unsupported_plan_snapshot_storage_version_2",
+                "unknown-quality-reasons" to "unsupported_quality_reasons_version_2",
+                "unknown-recording-source" to "unsupported_recording_source_version_2",
+                "unknown-sample-interval" to "unsupported_sample_interval_version_2",
+                "unknown-signature" to "unsupported_ordered_structure_signature_version_2",
+                "unknown-status-projection" to "unsupported_status_projection_version_2",
+                "unknown-zone-attribution" to "unsupported_zone_attribution_version_2",
+                "unknown-zone-durations" to "unsupported_zone_durations_version_2",
+                "unknown-zone-snapshot" to "unsupported_zone_snapshot_version_2"
+            ),
+            result.failures.associate { failure -> failure.sessionId to failure.code }
         )
-        assertTrue(result.failures.all { failure ->
-            !failure.retryable && failure.manualResolutionRequired
-        })
         assertEquals(before, databaseSnapshot())
     }
 
     @Test
-    fun canonicalNoHeartRateRelaunchUsesExactCasTupleThenBecomesIdempotent() = runBlocking {
+    fun twoRepositoriesRaceOnePersistedCandidateThenFreshRepositoryReentryIsIdempotent() = runBlocking {
         insertCanonicalRunningSession("canonical-running")
-        val repository = WorkoutSessionRepository(database)
+        insertUnrelatedUserTableSentinels("canonical-running")
+        val repositoryOne = WorkoutSessionRepository(database)
+        val repositoryTwo = WorkoutSessionRepository(database)
+        val ready = CountDownLatch(2)
+        val start = CompletableDeferred<Unit>()
 
-        val first = repository.prepareRecorder()
-        val afterFirst = databaseSnapshot()
-        val second = repository.prepareRecorder()
+        val results = coroutineScope {
+            val contenders = listOf(repositoryOne, repositoryTwo).map { repository ->
+                async(Dispatchers.IO) {
+                    ready.countDown()
+                    start.await()
+                    repository.prepareRecorder()
+                }
+            }
+            assertTrue(ready.await(5, TimeUnit.SECONDS))
+            start.complete(Unit)
+            contenders.map { contender -> contender.await() }
+        }
 
-        assertSame(first, second)
-        assertTrue(first is RecorderReconciliationResult.Succeeded)
-        first as RecorderReconciliationResult.Succeeded
+        assertTrue(results.all { result -> result is RecorderReconciliationResult.Succeeded })
+        val succeeded = results.map { result -> result as RecorderReconciliationResult.Succeeded }
         assertEquals(
-            listOf(
-                ReconciledCanonicalSession(
-                    sessionId = "canonical-running",
-                    expectedTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 4),
-                    reconciledTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 5),
-                    reconciliationContractVersion = 1
-                )
+            listOf(0, 1),
+            succeeded.map { result -> result.reconciledSessions.size }.sorted()
+        )
+        assertEquals(
+            ReconciledCanonicalSession(
+                sessionId = "canonical-running",
+                expectedTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 4),
+                reconciledTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 5),
+                reconciliationContractVersion = 1
             ),
-            first.reconciledSessions
+            succeeded.single { result -> result.reconciledSessions.isNotEmpty() }
+                .reconciledSessions.single()
         )
         val session = requireNotNull(
             database.canonicalTimelineHeartRateDao().sessionById("canonical-running")
@@ -157,18 +519,237 @@ class WorkoutSessionRecorderReconciliationTest {
         assertEquals(100L, phase.endOffsetMs)
         assertEquals(5L, phase.endMutationSequence)
         assertEquals(null, phase.openMarker)
-        assertEquals(afterFirst, databaseSnapshot())
+        val afterRace = databaseSnapshot()
 
-        val losingCasRowCount = database.workoutSessionDao().reconcileProcessInterrupted(
-            sessionId = "canonical-running",
-            expectedStatus = "active",
-            expectedOffsetMs = 100,
-            expectedMutationSequence = 4,
-            reconciledMutationSequence = 5,
-            reconciliationContractVersion = 1
+        val reentered = WorkoutSessionRepository(database).prepareRecorder()
+
+        assertTrue(reentered is RecorderReconciliationResult.Succeeded)
+        reentered as RecorderReconciliationResult.Succeeded
+        assertTrue(reentered.reconciledSessions.isEmpty())
+        assertEquals(afterRace, databaseSnapshot())
+    }
+
+    @Test
+    fun reconciliationPostValidationKeepsValidatorSignalAndRollsBackWholeTransaction() = runBlocking {
+        insertCanonicalRunningSession("post-validation")
+        insertUnrelatedUserTableSentinels("post-validation")
+        database.openHelper.writableDatabase.execSQL(
+            """
+            CREATE TRIGGER corrupt_reconciled_phase_after_close
+            AFTER UPDATE OF open_marker ON workout_phase_intervals
+            WHEN NEW.session_id = 'post-validation' AND NEW.open_marker IS NULL
+            BEGIN
+              UPDATE workout_phase_intervals SET phase_kind = 'corrupted' WHERE id = NEW.id;
+            END
+            """.trimIndent()
         )
-        assertEquals(0, losingCasRowCount)
-        assertEquals(afterFirst, databaseSnapshot())
+        val before = databaseSnapshot()
+
+        val failure = runCatching {
+            WorkoutSessionRepository(database).prepareRecorder()
+        }.exceptionOrNull()
+
+        assertTrue(failure is RecorderValidationException)
+        failure as RecorderValidationException
+        assertEquals("invalid_canonical_graph_v1", failure.code)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
+    fun reconciliationPhaseGuardFailureRollsBackHeaderAndTriggerMutation() = runBlocking {
+        insertCanonicalRunningSession("phase-guard")
+        insertUnrelatedUserTableSentinels("phase-guard")
+        database.openHelper.writableDatabase.execSQL(
+            """
+            CREATE TRIGGER invalidate_phase_guard_after_header_reconcile
+            AFTER UPDATE OF status ON workout_sessions
+            WHEN NEW.id = 'phase-guard' AND NEW.status = 'abandoned'
+            BEGIN
+              UPDATE workout_phase_intervals SET open_marker = NULL WHERE session_id = NEW.id;
+            END
+            """.trimIndent()
+        )
+        val before = databaseSnapshot()
+
+        val failure = runCatching {
+            WorkoutSessionRepository(database).prepareRecorder()
+        }.exceptionOrNull()
+
+        assertTrue(failure is RecorderGuardedWriteException)
+        failure as RecorderGuardedWriteException
+        assertEquals("close_process_interrupted_phase", failure.guard)
+        assertEquals(0, failure.actualRowCount)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
+    fun ownerCancellationCompletesSameFlightForWaiterAndAllowsFreshRetry() = runBlocking {
+        val queryEntered = CountDownLatch(1)
+        val releaseQuery = CountDownLatch(1)
+        val queryReleased = CountDownLatch(1)
+        val blockFirstGateQuery = AtomicBoolean(true)
+        database.close()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, TrainFlowDatabase::class.java)
+            .allowMainThreadQueries()
+            .setQueryCallback(
+                RoomDatabase.QueryCallback { sqlQuery, _ ->
+                    val normalized = sqlQuery.lowercase()
+                    if (
+                        normalized.contains("from workout_sessions") &&
+                        normalized.contains("order by id") &&
+                        blockFirstGateQuery.compareAndSet(true, false)
+                    ) {
+                        queryEntered.countDown()
+                        check(releaseQuery.await(5, TimeUnit.SECONDS))
+                        queryReleased.countDown()
+                    }
+                },
+                Executor { command -> command.run() }
+            )
+            .build()
+        insertSession(legacySession("legacy-active", "active"))
+        val repository = WorkoutSessionRepository(database)
+        val mutexProbe = GateMutexProbe()
+        replaceGateMutex(repository, mutexProbe)
+        val ownerCancellation = CancellationException("owner_cancelled")
+        val owner = async(Dispatchers.IO) { repository.prepareRecorder() }
+        assertTrue(queryEntered.await(5, TimeUnit.SECONDS))
+        val flight = inFlight(repository)
+        val completionCause = AtomicReference<Throwable?>()
+        val flightCompleted = CountDownLatch(1)
+        flight.invokeOnCompletion { cause ->
+            completionCause.set(cause)
+            flightCompleted.countDown()
+        }
+        val waiter = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.prepareRecorder()
+        }
+        mutexProbe.lockForTest()
+        try {
+            owner.cancel(ownerCancellation)
+            releaseQuery.countDown()
+            assertTrue(queryReleased.await(5, TimeUnit.SECONDS))
+            assertTrue(mutexProbe.cleanupLockAttempt.await(5, TimeUnit.SECONDS))
+        } finally {
+            mutexProbe.unlockForTest()
+        }
+
+        val ownerFailure = withTimeout(5_000) {
+            runCatching { owner.await() }.exceptionOrNull()
+        }
+        val waiterFailure = withTimeoutOrNull(5_000) {
+            runCatching { waiter.await() }.exceptionOrNull()
+        }
+
+        assertTrue(flightCompleted.await(5, TimeUnit.SECONDS))
+        val propagatedCause = requireNotNull(completionCause.get())
+        assertTrue(propagatedCause is CancellationException)
+        assertEquals(ownerCancellation.message, propagatedCause.message)
+        assertTrue(ownerFailure is CancellationException)
+        assertNotNull(waiterFailure)
+        assertTrue(waiterFailure is CancellationException)
+        assertEquals(propagatedCause.message, ownerFailure?.message)
+        assertEquals(ownerCancellation.message, waiterFailure?.message)
+        assertEquals(null, inFlightOrNull(repository))
+        val retry = withTimeout(5_000) { repository.prepareRecorder() }
+        assertTrue(retry is RecorderReconciliationResult.Succeeded)
+        retry as RecorderReconciliationResult.Succeeded
+        assertEquals(listOf("legacy-active"), retry.legacyResiduals.map { residual -> residual.sessionId })
+    }
+
+    @Test
+    fun exceptionalFlightPropagatesOriginalCauseToOwnerAndWaiterThenAllowsRetry() = runBlocking {
+        val queryEntered = CountDownLatch(1)
+        val releaseQuery = CountDownLatch(1)
+        val blockFirstGateQuery = AtomicBoolean(true)
+        database.close()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, TrainFlowDatabase::class.java)
+            .allowMainThreadQueries()
+            .setQueryCallback(
+                RoomDatabase.QueryCallback { sqlQuery, _ ->
+                    val normalized = sqlQuery.lowercase()
+                    if (
+                        normalized.contains("from workout_sessions") &&
+                        normalized.contains("order by id") &&
+                        blockFirstGateQuery.compareAndSet(true, false)
+                    ) {
+                        queryEntered.countDown()
+                        check(releaseQuery.await(5, TimeUnit.SECONDS))
+                    }
+                },
+                Executor { command -> command.run() }
+            )
+            .build()
+        insertCanonicalRunningSession("exceptional-flight")
+        database.openHelper.writableDatabase.execSQL(
+            """
+            CREATE TRIGGER invalidate_exceptional_flight_phase_guard
+            AFTER UPDATE OF status ON workout_sessions
+            WHEN NEW.id = 'exceptional-flight' AND NEW.status = 'abandoned'
+            BEGIN
+              UPDATE workout_phase_intervals SET open_marker = NULL WHERE session_id = NEW.id;
+            END
+            """.trimIndent()
+        )
+        val before = databaseSnapshot()
+        val repository = WorkoutSessionRepository(database)
+        val completionCause = AtomicReference<Throwable?>()
+        val flightCompleted = CountDownLatch(1)
+        val (ownerFailure, waiterFailure) = supervisorScope {
+            val owner = async(Dispatchers.IO) { repository.prepareRecorder() }
+            assertTrue(queryEntered.await(5, TimeUnit.SECONDS))
+            val flight = inFlight(repository)
+            flight.invokeOnCompletion { cause ->
+                completionCause.set(cause)
+                flightCompleted.countDown()
+            }
+            val waiter = async(start = CoroutineStart.UNDISPATCHED) {
+                repository.prepareRecorder()
+            }
+
+            releaseQuery.countDown()
+            val ownerCause = withTimeout(5_000) {
+                runCatching { owner.await() }.exceptionOrNull()
+            }
+            val waiterCause = withTimeout(5_000) {
+                runCatching { waiter.await() }.exceptionOrNull()
+            }
+            ownerCause to waiterCause
+        }
+
+        assertTrue(flightCompleted.await(5, TimeUnit.SECONDS))
+        val propagatedCause = requireNotNull(completionCause.get())
+        assertTrue(propagatedCause is RecorderGuardedWriteException)
+        propagatedCause as RecorderGuardedWriteException
+        assertEquals("close_process_interrupted_phase", propagatedCause.guard)
+        assertEquals(0, propagatedCause.actualRowCount)
+        assertSame(propagatedCause, ownerFailure)
+        assertSame(propagatedCause, waiterFailure)
+        assertEquals(before, databaseSnapshot())
+        assertEquals(null, inFlightOrNull(repository))
+
+        database.openHelper.writableDatabase.execSQL(
+            "DROP TRIGGER invalidate_exceptional_flight_phase_guard"
+        )
+        val retry = withTimeout(5_000) { repository.prepareRecorder() }
+        assertTrue(retry is RecorderReconciliationResult.Succeeded)
+        retry as RecorderReconciliationResult.Succeeded
+        assertEquals(listOf("exceptional-flight"), retry.reconciledSessions.map { it.sessionId })
+    }
+
+    @Test
+    fun databaseSnapshotManifestCoversEveryRoomUserTableAndEveryPersistedColumn() = runBlocking {
+        insertCanonicalTerminalSession("manifest")
+        insertUnrelatedUserTableSentinels("manifest")
+
+        val snapshot = databaseSnapshot()
+
+        assertEquals(
+            EXPECTED_USER_TABLES,
+            snapshot.map { row -> row.substringBefore('|') }.distinct().sorted()
+        )
     }
 
     @Test
@@ -224,6 +805,7 @@ class WorkoutSessionRecorderReconciliationTest {
         assertTrue(retried is RecorderReconciliationResult.FinalizerPrerequisitePending)
         assertTrue(result !== retried)
         assertEquals(before, databaseSnapshot())
+        assertEquals(null, inFlightOrNull(repository))
 
         // CS-04B restores the final Succeeded obligation after the CS-05 finalizer exists.
     }
@@ -245,6 +827,7 @@ class WorkoutSessionRecorderReconciliationTest {
         val retried = repository.prepareRecorder()
         assertTrue(retried is RecorderReconciliationResult.FinalizerPrerequisitePending)
         assertTrue(concurrent[0] !== retried)
+        assertEquals(null, inFlightOrNull(repository))
     }
 
     @Test
@@ -266,42 +849,41 @@ class WorkoutSessionRecorderReconciliationTest {
         assertTrue(cached is RecorderReconciliationResult.Succeeded)
         cached as RecorderReconciliationResult.Succeeded
         assertEquals(listOf("legacy-active"), cached.legacyResiduals.map { it.sessionId })
+        assertEquals(null, inFlightOrNull(repository))
     }
 
-    private suspend fun insertCanonicalRunningSession(sessionId: String) {
-        insertSession(canonicalHeader(sessionId))
+    private suspend fun insertCanonicalRunningSession(
+        sessionId: String,
+        session: WorkoutSessionEntity = canonicalHeader(sessionId),
+        phaseIdentityJson: String = VALID_PHASE_IDENTITY
+    ) {
+        insertSession(session)
         database.canonicalTimelineHeartRateDao().insertPhaseInterval(
-            WorkoutPhaseIntervalEntity(
-                id = "$sessionId:phase:0",
-                sessionId = sessionId,
-                sequence = 0,
-                startOffsetMs = 0,
-                endOffsetMs = null,
-                startMutationSequence = 0,
-                endMutationSequence = null,
-                openMarker = 1,
-                phaseKind = "timed_work",
-                phaseIdentityJson = VALID_PHASE_IDENTITY
-            )
+            openPhase(sessionId, phaseIdentityJson)
         )
     }
 
-    private suspend fun insertCanonicalRunningSessionWithActiveRecording(sessionId: String) {
+    private suspend fun insertCanonicalRunningSessionWithActiveRecording(
+        sessionId: String,
+        recordingTransform: (HeartRateRecordingEntity) -> HeartRateRecordingEntity = { it }
+    ) {
         insertCanonicalRunningSession(sessionId)
         database.canonicalTimelineHeartRateDao().insertRecording(
-            HeartRateRecordingEntity(
-                recordingId = "$sessionId:recording",
-                sessionId = sessionId,
-                status = "active",
-                startedOffsetMs = 0,
-                startedMutationSequence = 0,
-                endedOffsetMs = null,
-                endedMutationSequence = null,
-                sourceContractVersion = 1,
-                sourceKind = "ble_hrs",
-                acquisitionContractVersion = 1,
-                parameterSnapshotVersion = 1,
-                originalAnalysisVersion = null
+            recordingTransform(
+                HeartRateRecordingEntity(
+                    recordingId = "$sessionId:recording",
+                    sessionId = sessionId,
+                    status = "active",
+                    startedOffsetMs = 0,
+                    startedMutationSequence = 0,
+                    endedOffsetMs = null,
+                    endedMutationSequence = null,
+                    sourceContractVersion = 1,
+                    sourceKind = "ble_hrs",
+                    acquisitionContractVersion = 1,
+                    parameterSnapshotVersion = 1,
+                    originalAnalysisVersion = null
+                )
             )
         )
         database.canonicalTimelineHeartRateDao().insertAcquisitionInterval(
@@ -320,6 +902,200 @@ class WorkoutSessionRecorderReconciliationTest {
                 deviceReason = null
             )
         )
+    }
+
+    private suspend fun insertCanonicalTerminalSession(
+        sessionId: String,
+        recordingTransform: (HeartRateRecordingEntity) -> HeartRateRecordingEntity = { it },
+        snapshotTransform: (HeartRateAnalysisSnapshotEntity) -> HeartRateAnalysisSnapshotEntity = { it }
+    ) {
+        insertSession(
+            canonicalHeader(sessionId).copy(
+                status = "completed",
+                trustedEndOffsetMs = 100,
+                terminalReason = "completed"
+            )
+        )
+        database.canonicalTimelineHeartRateDao().insertPhaseInterval(
+            openPhase(sessionId).copy(
+                endOffsetMs = 100,
+                endMutationSequence = 4,
+                openMarker = null
+            )
+        )
+        database.canonicalTimelineHeartRateDao().insertRecording(
+            recordingTransform(
+                HeartRateRecordingEntity(
+                    recordingId = "$sessionId:recording",
+                    sessionId = sessionId,
+                    status = "terminal",
+                    startedOffsetMs = 0,
+                    startedMutationSequence = 0,
+                    endedOffsetMs = 100,
+                    endedMutationSequence = 4,
+                    sourceContractVersion = 1,
+                    sourceKind = "ble_hrs",
+                    acquisitionContractVersion = 1,
+                    parameterSnapshotVersion = 1,
+                    originalAnalysisVersion = 1
+                )
+            )
+        )
+        database.canonicalTimelineHeartRateDao().insertAcquisitionInterval(
+            HeartRateAcquisitionIntervalEntity(
+                id = "$sessionId:acquisition",
+                recordingId = "$sessionId:recording",
+                sequence = 0,
+                startOffsetMs = 0,
+                endOffsetMs = 100,
+                startMutationSequence = 0,
+                endMutationSequence = 4,
+                openMarker = null,
+                recordingIntent = "expected_recording",
+                intentReason = null,
+                deviceState = "live",
+                deviceReason = null
+            )
+        )
+        database.canonicalTimelineHeartRateDao().insertSample(
+            HeartRateSampleEntity(
+                recordingId = "$sessionId:recording",
+                sampleSequence = 0,
+                offsetMs = 0,
+                mutationSequence = 0,
+                bpm = 120
+            )
+        )
+        database.canonicalTimelineHeartRateDao().insertAnalysisSnapshot(
+            snapshotTransform(
+                HeartRateAnalysisSnapshotEntity(
+                    recordingId = "$sessionId:recording",
+                    analysisVersion = 1,
+                    createdAt = "2026-08-25T00:00:00Z",
+                    inputLastMutationSequence = 4,
+                    sampleStatus = "primary_points_available",
+                    coverageStatus = "normal",
+                    zoneStatus = "unavailable_no_effective_max",
+                    canonicalSampleCount = 1,
+                    primaryPointSampleCount = 1,
+                    eligibleDurationMs = 100,
+                    coveredDurationMs = 100,
+                    coverageBasisPoints = 10000,
+                    weightedBpmMs = 12000,
+                    observedAvgBpm = 120,
+                    observedMaxBpm = 120,
+                    highestOffsetMs = 0,
+                    highestMutationSequence = 0,
+                    highestSampleSequence = 0,
+                    analysisConfigJson = VALID_ANALYSIS_CONFIG,
+                    zoneDurationsJson = null,
+                    phaseAggregatesJson = VALID_PHASE_AGGREGATES,
+                    durationBreakdownJson = VALID_DURATION_BREAKDOWN,
+                    qualityReasonsJson = VALID_QUALITY_REASONS
+                )
+            )
+        )
+    }
+
+    private fun openPhase(
+        sessionId: String,
+        phaseIdentityJson: String = VALID_PHASE_IDENTITY
+    ) = WorkoutPhaseIntervalEntity(
+        id = "$sessionId:phase:0",
+        sessionId = sessionId,
+        sequence = 0,
+        startOffsetMs = 0,
+        endOffsetMs = null,
+        startMutationSequence = 0,
+        endMutationSequence = null,
+        openMarker = 1,
+        phaseKind = "timed_work",
+        phaseIdentityJson = phaseIdentityJson
+    )
+
+    private fun insertUnrelatedUserTableSentinels(sessionId: String) {
+        val sql = database.openHelper.writableDatabase
+        sql.execSQL(
+            "INSERT INTO exercises VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>("sentinel-exercise", "Sentinel", "mobility", "[]", "beginner", "{}", "ready", null)
+        )
+        sql.execSQL(
+            "INSERT INTO workout_plans VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(
+                "sentinel-plan", "timed", "Sentinel", null, "[]", null, null, null,
+                "2026-08-30T00:00:00Z", "2026-08-30T00:00:00Z"
+            )
+        )
+        sql.execSQL(
+            "INSERT INTO session_step_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(
+                "sentinel-step", sessionId, "step", "timed_work", "block", "item", null,
+                "sentinel-exercise", "2026-08-30T00:00:00Z", null, 0, null, 10
+            )
+        )
+        sql.execSQL(
+            "INSERT INTO timed_rest_extension_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(
+                "sentinel-rest", sessionId, "step", 0, null, null, "Rest", null, null,
+                15, 30, 5, 25, 15, 35
+            )
+        )
+        sql.execSQL(
+            "INSERT INTO strength_set_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(
+                "sentinel-set", sessionId, "sentinel-exercise", null, 0, "working", null,
+                null, null, null, null, null, null, null
+            )
+        )
+        sql.execSQL(
+            "INSERT INTO recovery_areas VALUES (?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>("sentinel-area", "Area", "whole_body", "Summary", null, null)
+        )
+        sql.execSQL(
+            "INSERT INTO recovery_recommendations VALUES (?, ?, ?, ?, ?)",
+            arrayOf<Any?>("sentinel-recovery", sessionId, "[]", "[\"sentinel-area\"]", null)
+        )
+    }
+
+    private fun inFlight(
+        repository: WorkoutSessionRepository
+    ): CompletableDeferred<RecorderReconciliationResult> = requireNotNull(
+        inFlightOrNull(repository)
+    )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun inFlightOrNull(
+        repository: WorkoutSessionRepository
+    ): CompletableDeferred<RecorderReconciliationResult>? {
+        val field = WorkoutSessionRepository::class.java.getDeclaredField("recorderGateInFlight")
+        field.isAccessible = true
+        return field.get(repository) as CompletableDeferred<RecorderReconciliationResult>?
+    }
+
+    private fun replaceGateMutex(repository: WorkoutSessionRepository, mutex: Mutex) {
+        val field = WorkoutSessionRepository::class.java.getDeclaredField("recorderGateMutex")
+        field.isAccessible = true
+        field.set(repository, mutex)
+    }
+
+    private class GateMutexProbe(
+        private val delegate: Mutex = Mutex()
+    ) : Mutex by delegate {
+        private val lockAttempts = AtomicInteger()
+        val cleanupLockAttempt = CountDownLatch(1)
+
+        override suspend fun lock(owner: Any?) {
+            if (lockAttempts.incrementAndGet() == 3) cleanupLockAttempt.countDown()
+            delegate.lock(owner)
+        }
+
+        suspend fun lockForTest() {
+            delegate.lock()
+        }
+
+        fun unlockForTest() {
+            delegate.unlock()
+        }
     }
 
     private fun canonicalHeader(sessionId: String) = WorkoutSessionEntity(
@@ -347,25 +1123,63 @@ class WorkoutSessionRecorderReconciliationTest {
 
     private fun databaseSnapshot(): List<String> {
         val sql = database.openHelper.writableDatabase
-        return listOf(
-            "workout_sessions" to "id",
-            "workout_phase_intervals" to "id",
-            "heart_rate_recordings" to "recording_id",
-            "heart_rate_acquisition_intervals" to "id",
-            "heart_rate_samples" to "recording_id, sample_sequence",
-            "heart_rate_analysis_snapshots" to "recording_id, analysis_version"
-        ).flatMap { (table, orderBy) ->
-            sql.query("SELECT * FROM $table ORDER BY $orderBy").use { cursor ->
+        val tables = sql.query(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name NOT GLOB 'sqlite_*'
+              AND name NOT IN ('android_metadata', 'room_master_table')
+            ORDER BY name
+            """.trimIndent()
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) add(cursor.getString(0))
+            }
+        }
+        check(tables == EXPECTED_USER_TABLES) {
+            "Room user-table manifest changed: $tables"
+        }
+        return tables.flatMap { table ->
+            val quotedTable = quoteSqlIdentifier(table)
+            val columns = sql.query("PRAGMA table_info($quotedTable)").use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) {
                         add(
-                            buildString {
-                                append(table)
-                                repeat(cursor.columnCount) { index ->
-                                    append('|')
-                                    if (cursor.isNull(index)) append("<NULL>") else append(cursor.getString(index))
-                                }
-                            }
+                            SnapshotColumn(
+                                name = cursor.getString(1),
+                                declaredType = cursor.getString(2),
+                                notNull = cursor.getInt(3) == 1,
+                                primaryKeyOrder = cursor.getInt(5)
+                            )
+                        )
+                    }
+                }
+            }.sortedBy { column -> column.name }
+            check(columns.isNotEmpty()) { "Room user table has no persisted columns: $table" }
+            val primaryKey = columns.filter { column -> column.primaryKeyOrder > 0 }
+                .sortedBy { column -> column.primaryKeyOrder }
+            check(primaryKey.isNotEmpty()) { "Room user table has no primary key: $table" }
+            val selectColumns = columns.joinToString(", ") { column ->
+                quoteSqlIdentifier(column.name)
+            }
+            val orderColumns = primaryKey.joinToString(", ") { column ->
+                quoteSqlIdentifier(column.name)
+            }
+            buildList {
+                add(
+                    "$table|schema|" + columns.joinToString("|") { column ->
+                        "${column.name}:${column.declaredType}:${column.notNull}:${column.primaryKeyOrder}"
+                    }
+                )
+                sql.query(
+                    "SELECT $selectColumns FROM $quotedTable ORDER BY $orderColumns"
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        add(
+                            "$table|row|" + columns.mapIndexed { index, column ->
+                                "${column.name}=${cursor.snapshotValue(index)}"
+                            }.joinToString("|")
                         )
                     }
                 }
@@ -373,12 +1187,68 @@ class WorkoutSessionRecorderReconciliationTest {
         }
     }
 
+    private data class SnapshotColumn(
+        val name: String,
+        val declaredType: String,
+        val notNull: Boolean,
+        val primaryKeyOrder: Int
+    )
+
+    private fun Cursor.snapshotValue(index: Int): String = when (getType(index)) {
+        Cursor.FIELD_TYPE_NULL -> "null"
+        Cursor.FIELD_TYPE_INTEGER -> "integer:${getLong(index)}"
+        Cursor.FIELD_TYPE_FLOAT -> "float:${java.lang.Double.toHexString(getDouble(index))}"
+        Cursor.FIELD_TYPE_STRING -> getString(index).toByteArray(Charsets.UTF_8).let { bytes ->
+            "string:${bytes.size}:${bytes.toHexString()}"
+        }
+
+        Cursor.FIELD_TYPE_BLOB -> getBlob(index).let { bytes ->
+            "blob:${bytes.size}:${bytes.toHexString()}"
+        }
+
+        else -> error("Unsupported SQLite value type ${getType(index)}")
+    }
+
+    private fun ByteArray.toHexString(): String = joinToString(separator = "") { byte ->
+        (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+
+    private fun quoteSqlIdentifier(identifier: String): String =
+        "\"${identifier.replace("\"", "\"\"")}\""
+
     private companion object {
+        val EXPECTED_USER_TABLES = listOf(
+            "exercises",
+            "heart_rate_acquisition_intervals",
+            "heart_rate_analysis_snapshots",
+            "heart_rate_recordings",
+            "heart_rate_samples",
+            "recovery_areas",
+            "recovery_recommendations",
+            "session_step_records",
+            "strength_set_records",
+            "timed_rest_extension_records",
+            "workout_phase_intervals",
+            "workout_plans",
+            "workout_sessions"
+        )
         const val VALID_DISPLAY_METADATA =
             "{\"displayMetadataContractVersion\":1,\"entries\":[]}"
         const val VALID_PLAN_SNAPSHOT =
             "{\"planSnapshotStorageContractVersion\":1,\"planId\":null,\"title\":\"Timed\",\"mode\":\"timed\",\"blocks\":[{\"id\":\"block\",\"kind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":10,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[]}],\"preferences\":null,\"followAlong\":null}"
         val VALID_PHASE_IDENTITY =
             "{\"phaseIdentityContractVersion\":1,\"family\":\"timed_composition_v2\",\"payloadVersion\":2,\"mode\":\"timed\",\"phaseKind\":\"timed_work\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855\"},\"payload\":{\"variant\":\"warmup\",\"compositionVersion\":2,\"compositionBlockId\":\"block\",\"${"timelineStage" + "Id"}\":\"block:warmup\",\"timelineStageKind\":\"warmup\",\"stageGroupId\":\"block:warmup\",\"targetId\":\"block:warmup:target\",\"targetKind\":\"warmup\",\"roundIndex0\":null,\"stageGroupIndex0\":null,\"targetIndex0\":0,\"stageInstanceIndex0\":0,\"${"targetInstance" + "Index0"}\":0,\"stepIndex0\":0}}"
+        const val VALID_ANALYSIS_CONFIG =
+            "{\"analysisConfigContractVersion\":1,\"sampleValidityCapMs\":2500,\"sampleIntervalContractVersion\":1,\"partialLowerBoundBasisPoints\":5000,\"phaseConclusionBasisPoints\":7000,\"normalBasisPoints\":8000,\"coverageThresholdRule\":\"checked_integer_cross_multiply\",\"coverageBasisPointsRule\":\"floor_integer_ratio\",\"displayPercentRule\":\"floor_basis_points_div_100\",\"weightedAverageRule\":\"checked_integer_time_integral\",\"averageDisplayRule\":\"positive_integer_half_up\",\"zeroCoveredRule\":\"null_integral_and_average\",\"observedMaxRule\":\"eligible_canonical_point_first_tie\",\"zoneAttributionContractVersion\":1,\"zoneAttributionRule\":\"checked_cross_multiply_six_zones\",\"statusProjectionContractVersion\":1,\"durationPartitionContractVersion\":1}"
+        const val VALID_ZONE_SNAPSHOT_200 =
+            "{\"zoneSnapshotContractVersion\":1,\"unit\":\"bpm\",\"effectiveMaxBpm\":200,\"effectiveMaxSource\":\"personal_max\",\"zones\":[{\"zoneId\":\"below_50\",\"lowerBoundBasisPointsInclusive\":null,\"upperBoundBasisPointsExclusive\":5000},{\"zoneId\":\"from_50_to_60\",\"lowerBoundBasisPointsInclusive\":5000,\"upperBoundBasisPointsExclusive\":6000},{\"zoneId\":\"from_60_to_70\",\"lowerBoundBasisPointsInclusive\":6000,\"upperBoundBasisPointsExclusive\":7000},{\"zoneId\":\"from_70_to_80\",\"lowerBoundBasisPointsInclusive\":7000,\"upperBoundBasisPointsExclusive\":8000},{\"zoneId\":\"from_80_to_90\",\"lowerBoundBasisPointsInclusive\":8000,\"upperBoundBasisPointsExclusive\":9000},{\"zoneId\":\"at_or_above_90\",\"lowerBoundBasisPointsInclusive\":9000,\"upperBoundBasisPointsExclusive\":null}]}"
+        const val VALID_ZONE_DURATIONS_120_OF_200 =
+            "{\"zoneDurationsContractVersion\":1,\"below50DurationMs\":0,\"from50To60DurationMs\":0,\"from60To70DurationMs\":100,\"from70To80DurationMs\":0,\"from80To90DurationMs\":0,\"atOrAbove90DurationMs\":0}"
+        const val VALID_PHASE_AGGREGATES =
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":0,\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":100,\"coveredDurationMs\":100,\"coverageBasisPoints\":10000,\"coverageStatus\":\"normal\",\"conclusionEligible\":true,\"weightedBpmMs\":12000,\"observedAvgBpm\":120,\"observedMaxBpm\":120,\"highestOffsetMs\":0,\"highestMutationSequence\":0,\"highestSampleSequence\":0}]}"
+        const val VALID_DURATION_BREAKDOWN =
+            "{\"durationBreakdownContractVersion\":1,\"canonicalSessionDurationMs\":100,\"recordingWindowDurationMs\":100,\"notRequestedBeforeRecordingStartMs\":0,\"intentAxis\":{\"expectedRecordingDurationMs\":100,\"userExcludedDurationMs\":0,\"userTurnedOffDurationMs\":0,\"userOptedOutDurationMs\":0,\"userDisconnectedSuppressRecoveryDurationMs\":0},\"phaseAxis\":{\"primaryEligibleDurationMs\":100,\"phaseExcludedDurationMs\":0,\"strengthPrepareExcludedDurationMs\":0,\"pausedExcludedDurationMs\":0},\"primaryAnalysisPartition\":{\"primaryEligibleDurationMs\":100,\"eligibleCoveredDurationMs\":100,\"eligibleUncoveredDurationMs\":0},\"deviceStateDurations\":{\"not_observing\":0,\"no_source_selected\":0,\"permission_required\":0,\"bluetooth_unavailable\":0,\"searching\":0,\"connecting\":0,\"waiting_first_sample\":0,\"live\":100,\"stale\":0,\"reconnecting\":0,\"disconnected\":0,\"technical_failure\":0},\"deviceReasonDurations\":{\"initial_acquisition\":0,\"automatic_recovery\":0,\"source_not_selected\":0,\"source_unavailable\":0,\"permission_missing\":0,\"permission_revoked\":0,\"bluetooth_off\":0,\"platform_unavailable\":0,\"first_sample_timeout\":0,\"sample_stale_timeout\":0,\"unexpected_disconnect\":0,\"connection_timeout\":0,\"measurement_stream_unavailable\":0,\"platform_failure\":0},\"orthogonalityContract\":{\"contractVersion\":1,\"rule\":\"primary_partition_is_mutually_exclusive_device_axes_are_independent_do_not_sum\"}}"
+        const val VALID_QUALITY_REASONS =
+            "{\"qualityReasonsContractVersion\":1,\"sessionReasons\":[],\"phaseReasons\":[]}"
     }
 }

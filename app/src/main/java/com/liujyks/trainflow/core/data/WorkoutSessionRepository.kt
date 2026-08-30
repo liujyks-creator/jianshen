@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.core.data
 
 import androidx.room.withTransaction
+import com.liujyks.trainflow.core.database.CanonicalJsonValue
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1Validator
 import com.liujyks.trainflow.core.database.CanonicalSessionHeaderV1Result
@@ -8,11 +9,14 @@ import com.liujyks.trainflow.core.database.CanonicalSessionHeaderV1Validator
 import com.liujyks.trainflow.core.database.CanonicalStorageJsonV1Validators
 import com.liujyks.trainflow.core.database.CanonicalTuple
 import com.liujyks.trainflow.core.database.CanonicalValidationResult
+import com.liujyks.trainflow.core.database.PhaseIdentityV1Validator
 import com.liujyks.trainflow.core.database.SessionDisplayMetadataV1Validator
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.database.parseCanonicalJson
 import com.liujyks.trainflow.core.database.dao.CanonicalSessionGraphRows
 import com.liujyks.trainflow.core.database.dao.WorkoutSessionWithRecords
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
@@ -34,10 +38,14 @@ import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutSession
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal data class LegacySessionResidual(
     val sessionId: String,
@@ -145,25 +153,32 @@ internal class WorkoutSessionRepository(
         }
         if (!ownsFlight) return flight.await()
 
+        var outcome: Result<RecorderReconciliationResult>? = null
         return try {
             val result = runRecorderReconciliation()
-            recorderGateMutex.withLock {
-                check(recorderGateInFlight === flight)
-                if (result !is RecorderReconciliationResult.FinalizerPrerequisitePending) {
-                    completedRecorderGate = result
-                }
-                recorderGateInFlight = null
-                flight.complete(result)
-            }
+            currentCoroutineContext().ensureActive()
+            outcome = Result.success(result)
             result
         } catch (cause: Throwable) {
-            recorderGateMutex.withLock {
-                if (recorderGateInFlight === flight) {
-                    recorderGateInFlight = null
-                }
-                flight.completeExceptionally(cause)
-            }
+            outcome = Result.failure(cause)
             throw cause
+        } finally {
+            val completedOutcome = checkNotNull(outcome)
+            withContext(NonCancellable) {
+                recorderGateMutex.withLock {
+                    check(recorderGateInFlight === flight)
+                    completedOutcome.getOrNull()?.let { result ->
+                        if (result !is RecorderReconciliationResult.FinalizerPrerequisitePending) {
+                            completedRecorderGate = result
+                        }
+                    }
+                    recorderGateInFlight = null
+                    completedOutcome.fold(
+                        onSuccess = flight::complete,
+                        onFailure = flight::completeExceptionally
+                    )
+                }
+            }
         }
     }
 
@@ -442,7 +457,7 @@ internal class WorkoutSessionRepository(
             dao.sessionsForRecorderGate().forEach { session ->
                 when (val classification = classifyForRecorderGate(session)) {
                     is RecorderGateClassification.Legacy -> {
-                        if (classification.header.status in LEGACY_RUNNING_STATUSES) {
+                        if (classification.header.status in LEGACY_NONTERMINAL_STATUSES) {
                             residuals += LegacySessionResidual(
                                 sessionId = session.id,
                                 status = classification.header.status,
@@ -511,6 +526,11 @@ internal class WorkoutSessionRepository(
                     "invalid_canonical_session_graph_v1"
                 )
             )
+        if (header !is CanonicalSessionHeaderV1Result.Legacy) {
+            unsupportedPersistedVersionFailure(session.id, graph)?.let { failure ->
+                return RecorderGateClassification.Failure(failure)
+            }
+        }
         val graphValidation = CanonicalSessionGraphV1Validator.validate(graph)
         if (graphValidation != CanonicalValidationResult.Valid) {
             val code = (graphValidation as? CanonicalValidationResult.Invalid)?.code
@@ -596,6 +616,119 @@ internal class WorkoutSessionRepository(
         )
     }
 
+    private fun unsupportedPersistedVersionFailure(
+        sessionId: String,
+        graph: CanonicalSessionGraphV1
+    ): RecorderManualResolutionFailure? {
+        val mode = WorkoutMode.entries.firstOrNull { value ->
+            value.contractValue == graph.session.mode
+        }
+        if (mode != null) {
+            when (val result = PlanSnapshotStorageV1Validator.validate(graph.session.planSnapshotJson, mode)) {
+                is PlanSnapshotStorageV1ValidationResult.UnsupportedVersion ->
+                    return unknownVersionFailure(
+                        sessionId,
+                        "plan_snapshot_storage",
+                        result.actualVersion
+                    )
+
+                is PlanSnapshotStorageV1ValidationResult.Valid,
+                is PlanSnapshotStorageV1ValidationResult.Invalid -> Unit
+            }
+        }
+        unsupportedPlanSnapshotNestedVersion(graph.session.planSnapshotJson)?.let { version ->
+            return unknownVersionFailure(sessionId, version.contract, version.actualVersion)
+        }
+
+        graph.phases.forEach { phase ->
+            unsupportedVersion(
+                PhaseIdentityV1Validator.validateStructure(
+                    phase.phaseIdentityJson,
+                    expectedPhaseKind = phase.phaseKind,
+                    expectedMode = graph.session.mode
+                )
+            )?.let { version ->
+                return unknownVersionFailure(sessionId, version.contract, version.actualVersion)
+            }
+            unsupportedPhaseIdentityNestedVersion(phase.phaseIdentityJson)?.let { version ->
+                return unknownVersionFailure(sessionId, version.contract, version.actualVersion)
+            }
+        }
+
+        graph.recording?.let { recording ->
+            if (recording.sourceContractVersion != 1) {
+                return unknownVersionFailure(
+                    sessionId,
+                    "recording_source",
+                    recording.sourceContractVersion.toString()
+                )
+            }
+            if (recording.acquisitionContractVersion != 1) {
+                return unknownVersionFailure(
+                    sessionId,
+                    "acquisition",
+                    recording.acquisitionContractVersion.toString()
+                )
+            }
+            if (recording.parameterSnapshotVersion != 1) {
+                return unknownVersionFailure(
+                    sessionId,
+                    "recording_parameter_snapshot",
+                    recording.parameterSnapshotVersion.toString()
+                )
+            }
+            recording.originalAnalysisVersion?.takeIf { version -> version != 1 }?.let { version ->
+                return unknownVersionFailure(sessionId, "original_analysis", version.toString())
+            }
+            recording.zoneSnapshotJson?.let { json ->
+                unsupportedVersion(CanonicalStorageJsonV1Validators.validateZoneSnapshot(json))
+                    ?.let { version ->
+                        return unknownVersionFailure(
+                            sessionId,
+                            version.contract,
+                            version.actualVersion
+                        )
+                    }
+            }
+        }
+
+        graph.snapshots.forEach { snapshot ->
+            if (snapshot.analysisVersion != 1) {
+                return unknownVersionFailure(
+                    sessionId,
+                    "analysis_snapshot",
+                    snapshot.analysisVersion.toString()
+                )
+            }
+            listOf(
+                snapshot.analysisConfigJson to
+                    CanonicalStorageJsonV1Validators::validateAnalysisConfig,
+                snapshot.zoneDurationsJson to
+                    CanonicalStorageJsonV1Validators::validateZoneDurations,
+                snapshot.phaseAggregatesJson to
+                    CanonicalStorageJsonV1Validators::validatePhaseAggregates,
+                snapshot.durationBreakdownJson to
+                    CanonicalStorageJsonV1Validators::validateDurationBreakdown,
+                snapshot.qualityReasonsJson to
+                    CanonicalStorageJsonV1Validators::validateQualityReasons
+            ).forEach { (json, validator) ->
+                if (json != null) {
+                    unsupportedVersion(validator(json))?.let { version ->
+                        return unknownVersionFailure(
+                            sessionId,
+                            version.contract,
+                            version.actualVersion
+                        )
+                    }
+                }
+            }
+            unsupportedAnalysisNestedVersion(snapshot)?.let { version ->
+                return unknownVersionFailure(sessionId, version.contract, version.actualVersion)
+            }
+        }
+        return null
+    }
+
     private suspend fun reconcileCanonicalCandidate(
         candidate: CanonicalReconciliationCandidate
     ): ReconciledCanonicalSession {
@@ -626,9 +759,10 @@ internal class WorkoutSessionRepository(
         requireExactlyOne("close_process_interrupted_phase", phaseRowCount)
 
         val reconciledGraph = requireNotNull(loadCanonicalGraph(session.id))
-        check(CanonicalSessionGraphV1Validator.validate(reconciledGraph) == CanonicalValidationResult.Valid) {
-            "reconciled canonical graph failed CanonicalSessionGraphV1Validator"
-        }
+        requireValidation(
+            CanonicalSessionGraphV1Validator.validate(reconciledGraph),
+            "invalid_canonical_session_graph_v1"
+        )
         return ReconciledCanonicalSession(
             sessionId = session.id,
             expectedTuple = tuple,
@@ -709,9 +843,177 @@ internal class WorkoutSessionRepository(
     private companion object {
         const val RECONCILIATION_CONTRACT_VERSION = 1
         const val DISPLAY_METADATA_CONTRACT_VERSION = 1
-        val LEGACY_RUNNING_STATUSES = setOf("active", "paused")
+        val LEGACY_NONTERMINAL_STATUSES = setOf("ready", "active", "paused")
     }
 }
+
+private data class UnsupportedPersistedVersion(
+    val contract: String,
+    val actualVersion: String
+)
+
+private fun unknownVersionFailure(
+    sessionId: String,
+    contract: String,
+    actualVersion: String
+) = manualFailure(
+    sessionId = sessionId,
+    kind = RecorderFailureKind.UNKNOWN_VERSION,
+    code = "unsupported_${contract}_version_$actualVersion"
+)
+
+private fun unsupportedVersion(
+    result: CanonicalValidationResult
+): UnsupportedPersistedVersion? = when (result) {
+    is CanonicalValidationResult.UnsupportedVersion -> UnsupportedPersistedVersion(
+        contract = result.contract,
+        actualVersion = result.actualVersion
+    )
+
+    is CanonicalValidationResult.Invalid,
+    CanonicalValidationResult.Valid -> null
+}
+
+private fun unsupportedPlanSnapshotNestedVersion(
+    json: String
+): UnsupportedPersistedVersion? {
+    val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return null
+    val blocks = (root.fields["blocks"] as? CanonicalJsonValue.Arr)?.values.orEmpty()
+    blocks.forEach { value ->
+        val block = value as? CanonicalJsonValue.Obj ?: return@forEach
+        if (block.stringValue("kind") == "timed_composition") {
+            block.integerValue("compositionVersion")
+                ?.takeIf { version -> version != 2L }
+                ?.let { version ->
+                    return UnsupportedPersistedVersion(
+                        "plan_snapshot_timed_composition",
+                        version.toString()
+                    )
+                }
+        }
+    }
+    return root.unsupportedCompatibilitySourceVersion()
+}
+
+private fun unsupportedPhaseIdentityNestedVersion(
+    json: String
+): UnsupportedPersistedVersion? {
+    val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return null
+    val family = root.stringValue("family")
+    val acceptedPayloadVersion = when (family) {
+        "timed_composition_v2" -> 2L
+        "legacy_timed_v1", "strength_v1", "follow_along_v1" -> 1L
+        else -> null
+    }
+    if (acceptedPayloadVersion != null) {
+        root.integerValue("payloadVersion")
+            ?.takeIf { version -> version != acceptedPayloadVersion }
+            ?.let { version ->
+                return UnsupportedPersistedVersion(
+                    "phase_identity_payload",
+                    version.toString()
+                )
+            }
+    }
+    root.objectValue("orderedStructureSignature")
+        ?.integerValue("signatureContractVersion")
+        ?.takeIf { version -> version != 1L }
+        ?.let { version ->
+            return UnsupportedPersistedVersion(
+                "ordered_structure_signature",
+                version.toString()
+            )
+        }
+    if (family == "timed_composition_v2") {
+        root.objectValue("payload")
+            ?.integerValue("compositionVersion")
+            ?.takeIf { version -> version != 2L }
+            ?.let { version ->
+                return UnsupportedPersistedVersion(
+                    "phase_identity_timed_composition",
+                    version.toString()
+                )
+            }
+    }
+    return null
+}
+
+private fun unsupportedAnalysisNestedVersion(
+    snapshot: HeartRateAnalysisSnapshotEntity
+): UnsupportedPersistedVersion? {
+    val analysisConfig = parseCanonicalJson(snapshot.analysisConfigJson) as?
+        CanonicalJsonValue.Obj
+    if (analysisConfig != null) {
+        listOf(
+            "sampleIntervalContractVersion" to "sample_interval",
+            "zoneAttributionContractVersion" to "zone_attribution",
+            "statusProjectionContractVersion" to "status_projection",
+            "durationPartitionContractVersion" to "duration_partition"
+        ).forEach { (key, contract) ->
+            analysisConfig.integerValue(key)
+                ?.takeIf { version -> version != 1L }
+                ?.let { version ->
+                    return UnsupportedPersistedVersion(contract, version.toString())
+                }
+        }
+    }
+    val durationBreakdown = parseCanonicalJson(snapshot.durationBreakdownJson) as?
+        CanonicalJsonValue.Obj
+    durationBreakdown?.objectValue("orthogonalityContract")
+        ?.integerValue("contractVersion")
+        ?.takeIf { version -> version != 1L }
+        ?.let { version ->
+            return UnsupportedPersistedVersion(
+                "duration_breakdown_orthogonality",
+                version.toString()
+            )
+        }
+    return null
+}
+
+private fun CanonicalJsonValue.unsupportedCompatibilitySourceVersion(): UnsupportedPersistedVersion? =
+    when (this) {
+        is CanonicalJsonValue.Obj -> {
+            val sourceVersion = fields["sourceVersion"] as? CanonicalJsonValue.Str
+            if (
+                sourceVersion != null &&
+                sourceVersion.value !in PLAN_COMPATIBILITY_SOURCE_VERSIONS
+            ) {
+                UnsupportedPersistedVersion("plan_snapshot_compatibility", sourceVersion.value)
+            } else {
+                fields.values.firstNotNullOfOrNull { value ->
+                    value.unsupportedCompatibilitySourceVersion()
+                }
+            }
+        }
+
+        is CanonicalJsonValue.Arr -> values.firstNotNullOfOrNull { value ->
+            value.unsupportedCompatibilitySourceVersion()
+        }
+
+        is CanonicalJsonValue.Bool,
+        CanonicalJsonValue.Null,
+        is CanonicalJsonValue.Num,
+        is CanonicalJsonValue.Str -> null
+    }
+
+private fun CanonicalJsonValue.Obj.integerValue(key: String): Long? =
+    try {
+        (fields[key] as? CanonicalJsonValue.Num)?.value?.longValueExact()
+    } catch (_: ArithmeticException) {
+        null
+    }
+
+private fun CanonicalJsonValue.Obj.stringValue(key: String): String? =
+    (fields[key] as? CanonicalJsonValue.Str)?.value
+
+private fun CanonicalJsonValue.Obj.objectValue(key: String): CanonicalJsonValue.Obj? =
+    fields[key] as? CanonicalJsonValue.Obj
+
+private val PLAN_COMPATIBILITY_SOURCE_VERSIONS = setOf(
+    "legacy_timed_circuit",
+    "composition_v2"
+)
 
 private data class CanonicalReconciliationCandidate(
     val session: WorkoutSessionEntity,

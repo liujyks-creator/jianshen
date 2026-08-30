@@ -27,7 +27,7 @@ interface CanonicalTimelineHeartRateDao {
     suspend fun insertSample(sample: HeartRateSampleEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertAnalysisSnapshot(snapshot: HeartRateAnalysisSnapshotEntity): Long
+    suspend fun insertAnalysisSnapshot(snapshot: HeartRateAnalysisSnapshotEntity)
 
     @Query(
         """
