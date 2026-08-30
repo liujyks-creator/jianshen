@@ -32,6 +32,7 @@ import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthSetKind
 import com.liujyks.trainflow.core.model.StrengthSetRecord
+import com.liujyks.trainflow.core.model.TimedCompositionCompatibilitySourceVersion
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
@@ -890,9 +891,12 @@ private fun unsupportedPlanSnapshotNestedVersion(
                         version.toString()
                     )
                 }
+            block.unsupportedTimedCompositionCompatibilitySourceVersion()?.let { version ->
+                return version
+            }
         }
     }
-    return root.unsupportedCompatibilitySourceVersion()
+    return null
 }
 
 private fun unsupportedPhaseIdentityNestedVersion(
@@ -971,31 +975,39 @@ private fun unsupportedAnalysisNestedVersion(
     return null
 }
 
-private fun CanonicalJsonValue.unsupportedCompatibilitySourceVersion(): UnsupportedPersistedVersion? =
-    when (this) {
-        is CanonicalJsonValue.Obj -> {
-            val sourceVersion = fields["sourceVersion"] as? CanonicalJsonValue.Str
-            if (
-                sourceVersion != null &&
-                sourceVersion.value !in PLAN_COMPATIBILITY_SOURCE_VERSIONS
-            ) {
-                UnsupportedPersistedVersion("plan_snapshot_compatibility", sourceVersion.value)
-            } else {
-                fields.values.firstNotNullOfOrNull { value ->
-                    value.unsupportedCompatibilitySourceVersion()
-                }
+private fun CanonicalJsonValue.Obj.unsupportedTimedCompositionCompatibilitySourceVersion():
+    UnsupportedPersistedVersion? {
+    objectValue("compatibility")?.unsupportedCompatibilitySourceVersion()?.let { version ->
+        return version
+    }
+    val stageGroups = (fields["stageGroups"] as? CanonicalJsonValue.Arr)?.values.orEmpty()
+    for (groupValue in stageGroups) {
+        val group = groupValue as? CanonicalJsonValue.Obj ?: continue
+        group.objectValue("compatibility")?.unsupportedCompatibilitySourceVersion()?.let { version ->
+            return version
+        }
+        val targets = (group.fields["targets"] as? CanonicalJsonValue.Arr)?.values.orEmpty()
+        for (targetValue in targets) {
+            val target = targetValue as? CanonicalJsonValue.Obj ?: continue
+            target.objectValue("compatibility")?.unsupportedCompatibilitySourceVersion()?.let { version ->
+                return version
             }
         }
-
-        is CanonicalJsonValue.Arr -> values.firstNotNullOfOrNull { value ->
-            value.unsupportedCompatibilitySourceVersion()
-        }
-
-        is CanonicalJsonValue.Bool,
-        CanonicalJsonValue.Null,
-        is CanonicalJsonValue.Num,
-        is CanonicalJsonValue.Str -> null
     }
+    return null
+}
+
+private fun CanonicalJsonValue.Obj.unsupportedCompatibilitySourceVersion():
+    UnsupportedPersistedVersion? {
+    val sourceVersion = stringValue("sourceVersion") ?: return null
+    if (TimedCompositionCompatibilitySourceVersion.entries.any { source ->
+            source.contractValue == sourceVersion
+        }
+    ) {
+        return null
+    }
+    return UnsupportedPersistedVersion("plan_snapshot_compatibility", sourceVersion)
+}
 
 private fun CanonicalJsonValue.Obj.integerValue(key: String): Long? =
     try {
@@ -1009,11 +1021,6 @@ private fun CanonicalJsonValue.Obj.stringValue(key: String): String? =
 
 private fun CanonicalJsonValue.Obj.objectValue(key: String): CanonicalJsonValue.Obj? =
     fields[key] as? CanonicalJsonValue.Obj
-
-private val PLAN_COMPATIBILITY_SOURCE_VERSIONS = setOf(
-    "legacy_timed_circuit",
-    "composition_v2"
-)
 
 private data class CanonicalReconciliationCandidate(
     val session: WorkoutSessionEntity,

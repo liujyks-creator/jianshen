@@ -468,6 +468,90 @@ class WorkoutSessionRecorderReconciliationTest {
     }
 
     @Test
+    fun illegalSourceVersionPositionsStayInvalidWhileLegalCompatibilityPathsStayTypedUnknown() = runBlocking {
+        fun snapshotWithStageGroups(groupsJson: String): String =
+            VALID_PLAN_SNAPSHOT.replace("\"stageGroups\":[]", "\"stageGroups\":[$groupsJson]")
+
+        insertCanonicalRunningSession(
+            sessionId = "illegal-root-source-version",
+            session = canonicalHeader("illegal-root-source-version").copy(
+                planSnapshotJson = VALID_PLAN_SNAPSHOT.replace(
+                    "\"planSnapshotStorageContractVersion\":1",
+                    "\"planSnapshotStorageContractVersion\":1,\"sourceVersion\":\"future_root_v3\""
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "illegal-nested-source-version",
+            session = canonicalHeader("illegal-nested-source-version").copy(
+                planSnapshotJson = snapshotWithStageGroups(
+                    "{\"id\":\"group\",\"order\":0,\"name\":\"Group\",\"colorHex\":\"#FFFFFF\"," +
+                        "\"targets\":[],\"sourceVersion\":\"future_nested_v3\"}"
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-block-compatibility",
+            session = canonicalHeader("unknown-block-compatibility").copy(
+                planSnapshotJson = VALID_PLAN_SNAPSHOT.replace(
+                    "\"stageGroups\":[]}",
+                    "\"stageGroups\":[],\"compatibility\":{\"sourceVersion\":\"future_block_v3\"}}"
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-group-compatibility",
+            session = canonicalHeader("unknown-group-compatibility").copy(
+                planSnapshotJson = snapshotWithStageGroups(
+                    "{\"id\":\"group\",\"order\":0,\"name\":\"Group\",\"colorHex\":\"#FFFFFF\"," +
+                        "\"targets\":[],\"compatibility\":{\"sourceVersion\":\"future_group_v3\"}}"
+                )
+            )
+        )
+        insertCanonicalRunningSession(
+            sessionId = "unknown-target-compatibility",
+            session = canonicalHeader("unknown-target-compatibility").copy(
+                planSnapshotJson = snapshotWithStageGroups(
+                    "{\"id\":\"group\",\"order\":0,\"name\":\"Group\",\"colorHex\":\"#FFFFFF\"," +
+                        "\"targets\":[{\"id\":\"target\",\"order\":0,\"name\":\"Target\",\"kind\":\"action\"," +
+                        "\"durationSec\":10,\"colorHex\":\"#FFFFFF\",\"autoAdvance\":true," +
+                        "\"compatibility\":{\"sourceVersion\":\"future_target_v3\"}}]}"
+                )
+            )
+        )
+        val before = databaseSnapshot()
+
+        val result = WorkoutSessionRepository(database).prepareRecorder()
+
+        assertTrue(result is RecorderReconciliationResult.ManualResolutionRequired)
+        result as RecorderReconciliationResult.ManualResolutionRequired
+        assertEquals(
+            mapOf(
+                "illegal-nested-source-version" to
+                    (RecorderFailureKind.INVALID_CANONICAL_GRAPH to "invalid_canonical_graph_v1"),
+                "illegal-root-source-version" to
+                    (RecorderFailureKind.INVALID_CANONICAL_GRAPH to "invalid_canonical_graph_v1"),
+                "unknown-block-compatibility" to
+                    (RecorderFailureKind.UNKNOWN_VERSION to
+                        "unsupported_plan_snapshot_compatibility_version_future_block_v3"),
+                "unknown-group-compatibility" to
+                    (RecorderFailureKind.UNKNOWN_VERSION to
+                        "unsupported_plan_snapshot_compatibility_version_future_group_v3"),
+                "unknown-target-compatibility" to
+                    (RecorderFailureKind.UNKNOWN_VERSION to
+                        "unsupported_plan_snapshot_compatibility_version_future_target_v3")
+            ),
+            result.failures.associate { failure ->
+                failure.sessionId to (failure.kind to failure.code)
+            }
+        )
+        assertTrue(result.failures.all { failure ->
+            !failure.retryable && failure.manualResolutionRequired
+        })
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
     fun twoRepositoriesRaceOnePersistedCandidateThenFreshRepositoryReentryIsIdempotent() = runBlocking {
         insertCanonicalRunningSession("canonical-running")
         insertUnrelatedUserTableSentinels("canonical-running")
