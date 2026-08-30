@@ -33,7 +33,25 @@ internal class WorkoutSessionRepository(
 
     suspend fun upsertSession(session: WorkoutSession) {
         database.withTransaction {
-            dao.upsertSession(session.toEntity())
+            val entity = session.toEntity()
+            val inserted = dao.insertSession(entity) != -1L
+            if (!inserted) {
+                val updated = dao.updateLegacySession(
+                    id = entity.id,
+                    planId = entity.planId,
+                    mode = entity.mode,
+                    status = entity.status,
+                    planSnapshotJson = entity.planSnapshotJson,
+                    startedAt = entity.startedAt,
+                    endedAt = entity.endedAt,
+                    totalElapsedSec = entity.totalElapsedSec,
+                    effectiveElapsedSec = entity.effectiveElapsedSec,
+                    pausedElapsedSec = entity.pausedElapsedSec
+                )
+                check(updated == 1) {
+                    "Legacy workout-session write rejected for canonical session ${entity.id}"
+                }
+            }
             dao.deleteStepRecordsForSession(session.id)
             dao.deleteTimedRestExtensionRecordsForSession(session.id)
             dao.deleteStrengthSetRecordsForSession(session.id)

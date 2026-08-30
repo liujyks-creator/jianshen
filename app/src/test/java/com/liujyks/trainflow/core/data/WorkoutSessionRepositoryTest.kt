@@ -310,6 +310,97 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun legacyRewriteCannotReplaceCanonicalParentOrDeleteAnyExistingChildren() = runBlocking {
+        val original = timedSession(
+            id = "canonical-protected",
+            status = SessionStatus.COMPLETED,
+            totalElapsedSec = 75,
+            effectiveElapsedSec = 60,
+            pausedElapsedSec = 15
+        )
+        repository.upsertSession(original)
+        val sql = database.openHelper.writableDatabase
+        sql.execSQL(
+            """
+            UPDATE workout_sessions
+            SET timeline_version=1,
+                last_durable_offset_ms=100,
+                last_mutation_sequence=4,
+                trusted_end_offset_ms=100,
+                terminal_reason='completed',
+                display_metadata_contract_version=1,
+                session_display_metadata_json='{"displayMetadataContractVersion":1,"entries":[]}'
+            WHERE id='canonical-protected'
+            """.trimIndent()
+        )
+        sql.execSQL(
+            """
+            INSERT INTO workout_phase_intervals VALUES(
+                'phase', 'canonical-protected', 0, 0, 100, 0, 4, NULL, 'timed_work', '{}'
+            )
+            """.trimIndent()
+        )
+        sql.execSQL(
+            """
+            INSERT INTO heart_rate_recordings VALUES(
+                'recording', 'canonical-protected', 'terminal', 0, 0, 100, 4,
+                1, 'ble_hrs', 1, 1, NULL, NULL, NULL, NULL, NULL, NULL, 1
+            )
+            """.trimIndent()
+        )
+        sql.execSQL(
+            """
+            INSERT INTO heart_rate_acquisition_intervals VALUES(
+                'acquisition', 'recording', 0, 0, 100, 0, 4, NULL,
+                'expected_recording', NULL, 'live', NULL
+            )
+            """.trimIndent()
+        )
+        sql.execSQL("INSERT INTO heart_rate_samples VALUES('recording', 0, 10, 1, 120)")
+        sql.execSQL(
+            """
+            INSERT INTO heart_rate_analysis_snapshots VALUES(
+                'recording', 1, '2026-08-25T00:00:00Z', 4,
+                'primary_points_available', 'normal', 'unavailable_no_effective_max',
+                1, 1, 100, 100, 10000, 12000, 120, 120, 10, 1, 0,
+                '{}', NULL, '{}', '{}', '{}'
+            )
+            """.trimIndent()
+        )
+
+        val rewrite = runCatching {
+            repository.upsertSession(original.copy(status = SessionStatus.ABANDONED))
+        }
+
+        assertTrue(rewrite.exceptionOrNull() is IllegalStateException)
+        val header = sql.query(
+            """
+            SELECT status, timeline_version, last_durable_offset_ms,
+                   last_mutation_sequence, trusted_end_offset_ms, terminal_reason,
+                   display_metadata_contract_version, session_display_metadata_json
+            FROM workout_sessions WHERE id='canonical-protected'
+            """.trimIndent()
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            (0 until cursor.columnCount).map { index -> cursor.getString(index) }
+        }
+        assertEquals(
+            listOf(
+                "completed", "1", "100", "4", "100", "completed", "1",
+                "{\"displayMetadataContractVersion\":1,\"entries\":[]}"
+            ),
+            header
+        )
+        val canonicalDao = database.canonicalTimelineHeartRateDao()
+        assertEquals(1, canonicalDao.phaseIntervalCount())
+        assertEquals(1, canonicalDao.recordingCount())
+        assertEquals(1, canonicalDao.acquisitionIntervalCount())
+        assertEquals(1, canonicalDao.sampleCount())
+        assertEquals(1, canonicalDao.analysisSnapshotCount())
+        assertEquals(2, database.workoutSessionDao().stepRecordCount())
+    }
+
+    @Test
     fun deleteAllSessionsRemovesSessionsAndChildRecords() = runBlocking {
         repository.upsertSession(
             timedSession(

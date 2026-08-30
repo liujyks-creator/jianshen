@@ -19,7 +19,9 @@ E17 remainder 的唯一 detailed data contract 是 `docs/planning/e17-remainder-
 
 V11 已接受 canonical session header / graph、`Migration(4,5)` 与五表 DDL、phase / recording / acquisition / sample / analysis snapshot、八个 closed storage JSON、plan snapshot storage v1 / legacy strict read、export v1、lease lifecycle、version matrix 和 owner / validator / evidence 分工。详细 key、NULL、type、cross-field、ordering、lifecycle、failure 和 schema 规则不得在本摘要中改写。
 
-这些合同 **尚未落地 production**。当前 Room schema、Kotlin model、repository、reader、analysis、export 和 UI 不能被描述为已经实现 V11；当前也没有 V11 runtime、Gradle、APK、AVD、device、human 或 performance evidence。状态为 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`；本 docs-sync 通过 fresh 独立 Review、合并并成为同步 main ancestor 后，才允许主管理从 `CS-01/CS-03` 选择一个 exact root Story。
+Accepted base `abf85553bc0c4a71793858734af265b634caab69` 已完成 tracked planning sync，并选择 root Story `E17-CS-03`。Git-ancestry 条件式真值如下：candidate 尚未成为同步 `main` / `origin/main` ancestor 时，分支 `codex/e17-cs-03-canonical-schema-migration-foundation` 解释为 `REPAIR_IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`，CS-04 locked；complete fresh Review PASS、机械 `--no-ff` merge / push、candidate ancestry、`main...origin/main=0 0` 与五份状态文档一致全部成立后，CS-03 自动解释为 `reviewed / merged`，CS-04 prerequisite 自动为 `satisfied`。不预写未来 merge SHA，也不另建 docs-sync gate。Correct Course A 固定 Room entity/exported schema 为 physical authority：SQLite 只负责 Room 2.8.4 可表达的 columns/nullability、PK、FK cascade、UNIQUE 与 index；enum、cross-field、closed JSON、ordered graph 和 signature 等 semantic invariants 由唯一 pure validators fail closed，不再宣称 handwritten `CHECK`、migration、fresh callback 三方一致。Signature Decision S-A 的 canonical projection、真实 SHA-256 与 immutable plan snapshot expected-digest comparison 已纳入该候选。它不实现 runtime recording、finalization、legacy reader、history projection、UI 或 export。
+
+本 candidate 没有 APK、AVD、device、human 或 performance evidence。
 
 本文件后续 E11 / E16 心率段和旧 TypeScript 接口保留其历史背景；凡与 V11 schema 不同、对 recording / analysis / export 使用旧 future-only classification，或暗示旧 summary / sample interface 是当前 schema 的内容，均为 `non-operative / historical`，不得覆盖 canonical。
 
@@ -1112,7 +1114,7 @@ E16-3 之后的未来 UI 边界：
 
 ### 12.3 V11 accepted 持久化与分析边界；旧候选接口（non-operative / historical）
 
-当前 production 尚未实现 V11 心率持久化、分析或导出，这一 implementation fact 不再表示合同“未规划”。V11 已接受的唯一 schema / lifecycle / owner / validator / export 合同位于 `docs/planning/e17-remainder-epic-story-plan.md`，只能由 CS-01 至 CS-12 按 material DAG 实现。下方 `WorkoutSessionHeartRateSummary` / `HeartRateSample` 是 E16 阶段的旧候选草图，现为 `non-operative / historical`：不得把它作为 V11 production schema、不得据此改写 V11 的五表 DDL、analysis snapshot、recording identity、source / parameter snapshot、canonical order、input cut、version 或 export 合同，也不得把 planned schema 写成已落地事实。
+Accepted base production 仍是 Room v4；本 CS-03 分支只形成尚待 Review / merge 的 Room v5 持久化与 validator candidate，分析、runtime recording 与 export 仍未实现。V11 已接受的唯一 schema / lifecycle / owner / validator / export 合同位于 `docs/planning/e17-remainder-epic-story-plan.md`，只能由 CS-01 至 CS-12 按 material DAG 实现。下方 `WorkoutSessionHeartRateSummary` / `HeartRateSample` 是 E16 阶段的旧候选草图，现为 `non-operative / historical`：不得把它作为 V11 production schema、不得据此改写 V11 的五表 DDL、analysis snapshot、recording identity、source / parameter snapshot、canonical order、input cut、version 或 export 合同，也不得把 candidate 写成 reviewed / merged 事实。
 
 ```ts
 interface WorkoutSessionHeartRateSummary {
@@ -1148,6 +1150,7 @@ interface HeartRateSample {
 - 采样粒度按 1 秒控制。计时训练覆盖全过程；力量训练覆盖 active、rest、confirm-record 等训练 session 区间。
 - 区间可由 bpm + 用户年龄 + 当时规则推导，但若落库 zone，必须能追溯年龄 / 公式 / 来源边界；年龄缺失时不写区间判断。
 - 未来任何持久化 sample 都必须至少保留 `sourceKind`、`sourceLabel`、`sourceId`、`bpm`、`measuredAt` 和 `recordedAt` 边界；summary 必须额外保留 `sampleCount`。缺少这些边界时只能作为不可比较或不可绘制数据处理。
+- **E17 canonical narrow supersession：** 上一条旧 per-sample source / wall-time 要求不再适用于 E17。CS-03 的 `heart_rate_samples` 只保存 `recording_id`、`sample_sequence`、`offset_ms`、`mutation_sequence`、`bpm`；versioned `source_contract_version=1/source_kind=ble_hrs` 只存在于 recording header。Sample 不得保存 source label / ID、device、phase、wall timestamp、GATT 或 diagnostic 字段；未来多 source 必须新增 source contract / version，不能静默复用 `ble_hrs`。
 - 无明确 `sourceKind`、无 `bpm` / `averageBpm`、无 `measuredAt` / `recordedAt`，或 summary 无 `sampleCount` 边界时，不绘制平均心率趋势。
 - 心率 summary / 趋势不得从执行页瞬时 `HeartRateState` 反推，不得绘制假趋势。
 - 后续分析可以做平均心率、峰值、区间时长、超过上限时长、休息恢复下降、力量 set-to-set 心率变化和计时训练强度曲线；不得输出医疗判断、危险告警、训练中断依据或康复结论。训练轻 / 重 / 疲劳类提示必须另拆规则与文案评审，保持非医疗语气。

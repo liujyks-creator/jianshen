@@ -99,12 +99,13 @@ internal fun String.toFollowAlongMetaStorage(): FollowAlongPlanMeta? {
 
 internal fun WorkoutPlanSnapshot.toStorageJson(): String {
     return jsonObject(
-        "planId" to planId?.jsonString(),
+        "planSnapshotStorageContractVersion" to 1.jsonNumber(),
+        "planId" to (planId?.jsonString() ?: JsonValue.Null),
         "title" to title.jsonString(),
         "mode" to mode.contractValue.jsonString(),
-        "blocks" to blocks.map { block -> block.toJson() }.jsonArray(),
-        "preferences" to preferences?.toJson(),
-        "followAlong" to followAlong?.toJson()
+        "blocks" to blocks.map { block -> block.toJson(canonicalSnapshot = true) }.jsonArray(),
+        "preferences" to (preferences?.toJson() ?: JsonValue.Null),
+        "followAlong" to (followAlong?.toJson() ?: JsonValue.Null)
     ).render()
 }
 
@@ -127,7 +128,7 @@ internal fun String.toPlanSnapshot(fallbackMode: WorkoutMode): WorkoutPlanSnapsh
     )
 }
 
-private fun PlanBlock.toJson(): JsonValue.Obj {
+private fun PlanBlock.toJson(canonicalSnapshot: Boolean = false): JsonValue.Obj {
     return when (this) {
         is WarmupBlock -> jsonObject(
             commonBlockFields(),
@@ -160,7 +161,7 @@ private fun PlanBlock.toJson(): JsonValue.Obj {
             "items" to items.map { item -> item.toJson() }.jsonArray()
         )
 
-        is TimedCompositionBlock -> normalized().let { block ->
+        is TimedCompositionBlock -> (if (canonicalSnapshot) this else normalized()).let { block ->
             jsonObject(
                 block.commonBlockFields(),
                 "compositionVersion" to block.compositionVersion.jsonNumber(),
@@ -682,11 +683,16 @@ private fun JsonValue.Obj.stringArray(name: String): List<String> {
 private fun JsonValue.render(): String {
     return when (this) {
         is JsonValue.Obj -> fields.entries.joinToString(
+            separator = ",",
             prefix = "{",
             postfix = "}"
         ) { (key, value) -> "${key.escapeJson().quote()}:${value.render()}" }
 
-        is JsonValue.Arr -> values.joinToString(prefix = "[", postfix = "]") { value -> value.render() }
+        is JsonValue.Arr -> values.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]"
+        ) { value -> value.render() }
         is JsonValue.Str -> value.escapeJson().quote()
         is JsonValue.Num -> {
             val long = value.toLong()
@@ -706,10 +712,17 @@ private fun String.escapeJson(): String {
             when (char) {
                 '\\' -> append("\\\\")
                 '"' -> append("\\\"")
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
                 '\n' -> append("\\n")
                 '\r' -> append("\\r")
                 '\t' -> append("\\t")
-                else -> append(char)
+                else -> if (char.code < 0x20) {
+                    append("\\u")
+                    append(char.code.toString(16).padStart(4, '0'))
+                } else {
+                    append(char)
+                }
             }
         }
     }

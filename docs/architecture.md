@@ -25,7 +25,9 @@ stepsCompleted:
 
 V11 接受的 Architecture 包括五表方向与原子 `Migration(4,5)`、canonical session graph、心率 recording / acquisition / sample / analysis snapshot、closed storage JSON、version-aware read、export / lease / provider、`U-A`、`R-A`、`CC-D03-B`、`P-BALANCED-V2`，以及 CS-03 / CS-05 / CS-09 / CS-12 的唯一 owner 边界。这里只建立权威链接，不复制 detailed contract。
 
-这些是 **已接受但尚未实现** 的 Architecture。当前状态为 `TRACKED_PLANNING_SYNC_CANDIDATE / NOT_IMPLEMENTATION_READY`；本 docs-sync 通过 fresh 独立 Review、合并并成为同步 main ancestor 后，主管理才可从 `CS-01/CS-03` 选择一个 exact root Story。当前 production Room 仍是既有基线，未落地 V11 schema，也没有 V11 runtime、Gradle、APK、AVD、device、human 或 performance evidence。
+Accepted base `abf85553bc0c4a71793858734af265b634caab69` 已完成 tracked planning sync，并选择 root Story `E17-CS-03`。Git-ancestry 条件式真值如下：当 Story candidate 尚未成为同步 `main` / `origin/main` 的 ancestor 时，分支 `codex/e17-cs-03-canonical-schema-migration-foundation` 解释为 `REPAIR_IMPLEMENTED_CANDIDATE / NEEDS_FRESH_INDEPENDENT_REVIEW / NOT_MERGED`，CS-04 保持 locked；只有 complete fresh Review PASS、机械 `--no-ff` merge / push、candidate 成为同步 refs 的 ancestor、`main...origin/main=0 0` 且五份状态文档一致时，CS-03 才自动解释为 `reviewed / merged`，CS-04 prerequisite 自动为 `satisfied`。不预写未来 merge SHA，也不另建 docs-sync gate。Correct Course A 以 Room entity/exported schema 作为唯一 physical schema authority；普通 fresh v5 与原子 `Migration(4,5)` 产生相同的 Room 可表达 DDL，不再用 callback 重建表或用 handwritten `CHECK` 补强。七个 session header 列、五张表、PK/FK cascade/UNIQUE/index/nullability 由 SQLite 执行；enum、cross-field、closed JSON、graph、immutable snapshot signature 等 semantic invariants 由唯一 pure validators fail closed。v4 legacy 行仍保持七列全 NULL。
+
+该候选不包含 runtime Recorder、finalizer、legacy reader、history projector、UI、export、BLE 或 device 行为，也没有 APK、AVD、device、human 或 performance evidence。
 
 本节以下带日期 E11 / E16 / 早期 E17 架构记录保留为 `non-operative / historical`。其中旧 future-only recording classification 或旧 Planning Review / Audit gate 的当前式措辞不得覆盖 V11 accepted Architecture。
 
@@ -254,17 +256,23 @@ WorkoutEngine
 |---|---|---|
 | `exercises` | 标准动作库 | `id`、`name`、`category`、`equipment`、`difficulty`、`capabilities_json`、`content_status` |
 | `workout_plans` | 用户训练计划 | `id`、`mode`、`title`、`blocks_json`、`reminder_json`、`preferences_json`、`created_at`、`updated_at` |
-| `workout_sessions` | 训练会话 | `id`、`plan_id`、`mode`、`status`、`plan_snapshot_json`、`started_at`、`ended_at`、`total_elapsed_sec`、`effective_elapsed_sec`、`paused_elapsed_sec` |
+| `workout_sessions` | 训练会话；CS-03 candidate 增加 nullable canonical header | 既有字段 + `timeline_version`、`last_durable_offset_ms`、`last_mutation_sequence`、`trusted_end_offset_ms`、`terminal_reason`、`display_metadata_contract_version`、`session_display_metadata_json` |
 | `session_step_records` | 执行步骤记录 | `id`、`session_id`、`step_id`、`kind`、`exercise_id`、`started_at`、`ended_at`、`skipped`、`actual_duration_sec`、`planned_duration_sec` |
 | `timed_rest_extension_records` | 计时训练额外休息记录 | `id`、`session_id`、`step_id`、`step_index`、`round_index`、`rest_stage_id`、`previous_stage_id`、`added_sec`、`planned_rest_sec`、`extension_at_remaining_sec`、`cumulative_extra_rest_sec` |
 | `strength_set_records` | 力量组记录 | `id`、`session_id`、`exercise_id`、`source_set_plan_id`、`set_order`、`planned_json`、`actual_json`、`active_duration_sec`、`actual_rest_after_sec`、`effort` |
 | `recovery_areas` | 恢复区域 | `id`、`name`、`body_region`、`summary` |
 | `recovery_recommendations` | 训练恢复建议 | `id`、`session_id`、`trained_muscle_ids_json`、`area_ids_json` |
+| `workout_phase_intervals` | canonical phase partition | session FK cascade、连续 sequence、canonical tuple、open marker、closed phase identity JSON |
+| `heart_rate_recordings` | 每 session 至多一个 recording header | source / acquisition / parameter versions、frozen max / zone parameters、terminal analysis binding |
+| `heart_rate_acquisition_intervals` | recording intent 与 device-state 正交 partition | recording FK cascade、连续 sequence、canonical tuple、open marker、closed literals |
+| `heart_rate_samples` | 最小 canonical observation | `(recording_id,sample_sequence)` PK、`offset_ms`、`mutation_sequence`、`bpm`；显式 canonical order index |
+| `heart_rate_analysis_snapshots` | immutable versioned analysis snapshot | `(recording_id,analysis_version)` PK、input cut、typed axes、aggregates / duration / reason JSON |
 
 ### 6.2 快照规则
 
 - 开始训练时生成 `WorkoutSession`。
 - 会话保存 `WorkoutPlanSnapshot`。E10.4 MVP 的本地 `plan_snapshot_json` 需要保存完整 blocks 结构和已存在的 preferences / cue / followAlong 元数据，不能只保存 title / mode；`WorkoutSession.planId` 与快照内可选 `planId` 一起保留计划来源。
+- CS-03 candidate 的新 canonical session 使用 literal `planSnapshotStorageContractVersion=1`、七个固定 root keys 和稳定 UTF-8 JSON；strict parse 后重序列化必须与 persisted bytes 完全一致。`Migration(4,5)` 不改写既有 unversioned snapshot，legacy strict reader 仍由 CS-09 独占。
 - 后续编辑计划不影响历史会话。
 - 力量组记录保存计划值与实际值，不能只保存差异。
 - E10.4 起，计时、力量和基础跟练 completed / abandoned 终态通过 repository 写入本地 Room session records；记录页从该真实本地源读取。终态写入使用一次性 guard 和异常吞并边界，避免 route 重组重复插入或 Room 异常直接 crash UI。
