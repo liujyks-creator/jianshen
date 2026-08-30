@@ -8,10 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
 import com.liujyks.trainflow.core.data.WorkoutPlanRepository
-import com.liujyks.trainflow.core.data.WorkoutSessionRepository
-import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
 import com.liujyks.trainflow.ui.shell.official.TrainFlowApp
@@ -24,19 +21,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val context = LocalContext.current
             val trainFlowApplication = application as TrainFlowApplication
             val preferencesDataSource: TrainFlowPreferencesDataSource =
                 trainFlowApplication.preferencesDataSource
-            val trainFlowDatabase = remember(context) {
-                TrainFlowDatabase.create(context.applicationContext)
-            }
+            val trainFlowDatabase = trainFlowApplication.trainFlowDatabase
             val workoutPlanRepository = remember(trainFlowDatabase) {
                 WorkoutPlanRepository(trainFlowDatabase)
             }
-            val workoutSessionRepository = remember(trainFlowDatabase) {
-                WorkoutSessionRepository(trainFlowDatabase)
-            }
+            val workoutSessionRepository = trainFlowApplication.workoutSessionRepository
             val preferences by preferencesDataSource.preferences.collectAsState(
                 initial = TrainFlowPreferences()
             )

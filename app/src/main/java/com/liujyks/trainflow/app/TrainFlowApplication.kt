@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
 import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
@@ -34,6 +36,12 @@ class TrainFlowApplication : Application() {
     internal lateinit var preferencesDataSource: TrainFlowPreferencesDataSource
         private set
 
+    internal lateinit var trainFlowDatabase: TrainFlowDatabase
+        private set
+
+    internal lateinit var workoutSessionRepository: WorkoutSessionRepository
+        private set
+
     private var latestPreferences = TrainFlowPreferences()
     private var visibilityFact = ProcessVisibilityFact.UNKNOWN
     private val mutableProcessVisibility = MutableStateFlow(ProcessVisibilityFact.UNKNOWN)
@@ -49,6 +57,8 @@ class TrainFlowApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        trainFlowDatabase = TrainFlowDatabase.create(this)
+        workoutSessionRepository = WorkoutSessionRepository(trainFlowDatabase)
         heartRateRuntimeOwner = HeartRateRuntimeOwner(this)
         preferencesDataSource = TrainFlowPreferencesDataSource(trainFlowPreferencesDataStore)
         ProcessVisibilityTracker(this) { fact ->

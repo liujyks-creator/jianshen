@@ -15,19 +15,115 @@ import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 @Dao
 interface CanonicalTimelineHeartRateDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertPhaseInterval(interval: WorkoutPhaseIntervalEntity)
+    suspend fun insertPhaseInterval(interval: WorkoutPhaseIntervalEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertRecording(recording: HeartRateRecordingEntity)
+    suspend fun insertRecording(recording: HeartRateRecordingEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertAcquisitionInterval(interval: HeartRateAcquisitionIntervalEntity)
+    suspend fun insertAcquisitionInterval(interval: HeartRateAcquisitionIntervalEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertSample(sample: HeartRateSampleEntity)
+    suspend fun insertSample(sample: HeartRateSampleEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAnalysisSnapshot(snapshot: HeartRateAnalysisSnapshotEntity)
+
+    @Query(
+        """
+        UPDATE workout_phase_intervals
+        SET end_offset_ms = :endOffsetMs,
+            end_mutation_sequence = :endMutationSequence,
+            open_marker = NULL
+        WHERE id = :expectedOpenRowId
+          AND session_id = :sessionId
+          AND end_offset_ms IS NULL
+          AND end_mutation_sequence IS NULL
+          AND open_marker = 1
+          AND EXISTS (
+              SELECT 1 FROM workout_sessions
+              WHERE id = :sessionId
+                AND status = 'abandoned'
+                AND timeline_version = :reconciliationContractVersion
+                AND last_durable_offset_ms = :endOffsetMs
+                AND last_mutation_sequence = :endMutationSequence
+                AND trusted_end_offset_ms = :endOffsetMs
+                AND terminal_reason = 'process_interrupted'
+          )
+        """
+    )
+    suspend fun closeOpenPhaseForProcessInterruption(
+        sessionId: String,
+        expectedOpenRowId: String,
+        endOffsetMs: Long,
+        endMutationSequence: Long,
+        reconciliationContractVersion: Int
+    ): Int
+
+    @Query(
+        """
+        UPDATE workout_phase_intervals
+        SET end_offset_ms = :endOffsetMs,
+            end_mutation_sequence = :endMutationSequence,
+            open_marker = NULL
+        WHERE id = :expectedOpenRowId
+          AND session_id = :sessionId
+          AND end_offset_ms IS NULL
+          AND end_mutation_sequence IS NULL
+          AND open_marker = 1
+          AND EXISTS (
+              SELECT 1 FROM workout_sessions
+              WHERE id = :sessionId
+                AND status = :expectedStatus
+                AND timeline_version = 1
+                AND last_durable_offset_ms = :endOffsetMs
+                AND last_mutation_sequence = :endMutationSequence
+                AND trusted_end_offset_ms IS NULL
+                AND terminal_reason IS NULL
+          )
+        """
+    )
+    suspend fun closeOpenPhase(
+        sessionId: String,
+        expectedStatus: String,
+        expectedOpenRowId: String,
+        endOffsetMs: Long,
+        endMutationSequence: Long
+    ): Int
+
+    @Query(
+        """
+        UPDATE heart_rate_acquisition_intervals
+        SET end_offset_ms = :endOffsetMs,
+            end_mutation_sequence = :endMutationSequence,
+            open_marker = NULL
+        WHERE id = :expectedOpenRowId
+          AND recording_id = :recordingId
+          AND end_offset_ms IS NULL
+          AND end_mutation_sequence IS NULL
+          AND open_marker = 1
+          AND EXISTS (
+              SELECT 1
+              FROM heart_rate_recordings AS recording
+              JOIN workout_sessions AS session ON session.id = recording.session_id
+              WHERE recording.recording_id = :recordingId
+                AND recording.status = 'active'
+                AND session.status = :expectedSessionStatus
+                AND session.timeline_version = 1
+                AND session.last_durable_offset_ms = :endOffsetMs
+                AND session.last_mutation_sequence = :endMutationSequence
+                AND session.trusted_end_offset_ms IS NULL
+                AND session.terminal_reason IS NULL
+          )
+        """
+    )
+    suspend fun closeOpenAcquisition(
+        recordingId: String,
+        expectedSessionStatus: String,
+        expectedOpenRowId: String,
+        endOffsetMs: Long,
+        endMutationSequence: Long
+    ): Int
 
     @Query(
         """
