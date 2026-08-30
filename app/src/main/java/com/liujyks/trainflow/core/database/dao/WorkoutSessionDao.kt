@@ -166,6 +166,61 @@ interface WorkoutSessionDao {
     @Query(
         """
         UPDATE workout_sessions
+        SET status = :terminalStatus,
+            last_durable_offset_ms = :finalOffsetMs,
+            last_mutation_sequence = :finalMutationSequence,
+            trusted_end_offset_ms = :finalOffsetMs,
+            terminal_reason = :terminalReason
+        WHERE id = :sessionId
+          AND status = :expectedStatus
+          AND timeline_version = 1
+          AND last_durable_offset_ms = :expectedOffsetMs
+          AND last_mutation_sequence = :expectedMutationSequence
+          AND trusted_end_offset_ms IS NULL
+          AND terminal_reason IS NULL
+          AND display_metadata_contract_version = 1
+          AND session_display_metadata_json IS NOT NULL
+          AND EXISTS (
+              SELECT 1
+              FROM workout_phase_intervals AS phase
+              JOIN heart_rate_recordings AS recording
+                ON recording.session_id = :sessionId
+              JOIN heart_rate_acquisition_intervals AS acquisition
+                ON acquisition.recording_id = recording.recording_id
+              WHERE phase.id = :expectedClosedPhaseId
+                AND phase.session_id = :sessionId
+                AND phase.end_offset_ms = :finalOffsetMs
+                AND phase.end_mutation_sequence = :finalMutationSequence
+                AND phase.open_marker IS NULL
+                AND recording.recording_id = :recordingId
+                AND recording.status = 'terminal'
+                AND recording.ended_offset_ms = :finalOffsetMs
+                AND recording.ended_mutation_sequence = :finalMutationSequence
+                AND recording.original_analysis_version IS NULL
+                AND acquisition.id = :expectedClosedAcquisitionId
+                AND acquisition.end_offset_ms = :finalOffsetMs
+                AND acquisition.end_mutation_sequence = :finalMutationSequence
+                AND acquisition.open_marker IS NULL
+          )
+        """
+    )
+    suspend fun finalizeTerminalizeSession(
+        sessionId: String,
+        recordingId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedClosedPhaseId: String,
+        expectedClosedAcquisitionId: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long,
+        terminalStatus: String,
+        terminalReason: String
+    ): Int
+
+    @Query(
+        """
+        UPDATE workout_sessions
         SET plan_id = :planId,
             mode = :mode,
             status = :status,
