@@ -30,6 +30,139 @@ interface WorkoutSessionDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSession(session: WorkoutSessionEntity): Long
 
+    @Query("SELECT * FROM workout_sessions ORDER BY id")
+    suspend fun sessionsForRecorderGate(): List<WorkoutSessionEntity>
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET status = 'abandoned',
+            trusted_end_offset_ms = :expectedOffsetMs,
+            terminal_reason = 'process_interrupted',
+            last_mutation_sequence = :reconciledMutationSequence
+        WHERE id = :sessionId
+          AND status = :expectedStatus
+          AND timeline_version = :reconciliationContractVersion
+          AND last_durable_offset_ms = :expectedOffsetMs
+          AND last_mutation_sequence = :expectedMutationSequence
+          AND trusted_end_offset_ms IS NULL
+          AND terminal_reason IS NULL
+          AND display_metadata_contract_version = 1
+          AND session_display_metadata_json IS NOT NULL
+        """
+    )
+    suspend fun reconcileProcessInterrupted(
+        sessionId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        reconciledMutationSequence: Long,
+        reconciliationContractVersion: Int
+    ): Int
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET last_durable_offset_ms = :nextOffsetMs,
+            last_mutation_sequence = :nextMutationSequence
+        WHERE id = :sessionId
+          AND status = :expectedStatus
+          AND timeline_version = 1
+          AND last_durable_offset_ms = :expectedOffsetMs
+          AND last_mutation_sequence = :expectedMutationSequence
+          AND trusted_end_offset_ms IS NULL
+          AND terminal_reason IS NULL
+          AND EXISTS (
+              SELECT 1 FROM workout_phase_intervals
+              WHERE id = :expectedOpenPhaseId
+                AND session_id = :sessionId
+                AND end_offset_ms IS NULL
+                AND end_mutation_sequence IS NULL
+                AND open_marker = 1
+          )
+          AND (
+              (:expectedRecordingId IS NULL AND :expectedOpenAcquisitionId IS NULL)
+              OR EXISTS (
+                  SELECT 1
+                  FROM heart_rate_recordings AS recording
+                  JOIN heart_rate_acquisition_intervals AS acquisition
+                    ON acquisition.recording_id = recording.recording_id
+                  WHERE recording.recording_id = :expectedRecordingId
+                    AND recording.session_id = :sessionId
+                    AND recording.status = 'active'
+                    AND acquisition.id = :expectedOpenAcquisitionId
+                    AND acquisition.end_offset_ms IS NULL
+                    AND acquisition.end_mutation_sequence IS NULL
+                    AND acquisition.open_marker = 1
+              )
+          )
+        """
+    )
+    suspend fun advanceCanonicalHeader(
+        sessionId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedOpenPhaseId: String,
+        expectedRecordingId: String?,
+        expectedOpenAcquisitionId: String?,
+        nextOffsetMs: Long,
+        nextMutationSequence: Long
+    ): Int
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET last_durable_offset_ms = :nextOffsetMs,
+            last_mutation_sequence = :nextMutationSequence,
+            session_display_metadata_json = :nextDisplayMetadataJson
+        WHERE id = :sessionId
+          AND status = :expectedStatus
+          AND timeline_version = 1
+          AND last_durable_offset_ms = :expectedOffsetMs
+          AND last_mutation_sequence = :expectedMutationSequence
+          AND trusted_end_offset_ms IS NULL
+          AND terminal_reason IS NULL
+          AND display_metadata_contract_version = 1
+          AND EXISTS (
+              SELECT 1 FROM workout_phase_intervals
+              WHERE id = :expectedOpenPhaseId
+                AND session_id = :sessionId
+                AND end_offset_ms IS NULL
+                AND end_mutation_sequence IS NULL
+                AND open_marker = 1
+          )
+          AND (
+              (:expectedRecordingId IS NULL AND :expectedOpenAcquisitionId IS NULL)
+              OR EXISTS (
+                  SELECT 1
+                  FROM heart_rate_recordings AS recording
+                  JOIN heart_rate_acquisition_intervals AS acquisition
+                    ON acquisition.recording_id = recording.recording_id
+                  WHERE recording.recording_id = :expectedRecordingId
+                    AND recording.session_id = :sessionId
+                    AND recording.status = 'active'
+                    AND acquisition.id = :expectedOpenAcquisitionId
+                    AND acquisition.end_offset_ms IS NULL
+                    AND acquisition.end_mutation_sequence IS NULL
+                    AND acquisition.open_marker = 1
+              )
+          )
+        """
+    )
+    suspend fun appendCanonicalDisplayMetadata(
+        sessionId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedOpenPhaseId: String,
+        expectedRecordingId: String?,
+        expectedOpenAcquisitionId: String?,
+        nextOffsetMs: Long,
+        nextMutationSequence: Long,
+        nextDisplayMetadataJson: String
+    ): Int
+
     @Query(
         """
         UPDATE workout_sessions

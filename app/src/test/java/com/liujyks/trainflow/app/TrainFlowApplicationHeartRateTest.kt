@@ -4,6 +4,8 @@ import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.liujyks.trainflow.core.data.RecorderReconciliationResult
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.health.BleHeartRateScanStateKind
 import com.liujyks.trainflow.feature.settings.HeartRateBlePermissionStatus
 import com.liujyks.trainflow.core.health.HeartRateRecoveryPhase
@@ -25,12 +27,46 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.Shadows.shadowOf
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TrainFlowApplication::class, sdk = [35])
 class TrainFlowApplicationHeartRateTest {
+    @Test
+    fun applicationProvisionsOneStableRepositoryAndLeavesItsRecorderGateLazy() = runBlocking {
+        val application = ApplicationProvider.getApplicationContext<TrainFlowApplication>()
+        val result = withContext(Dispatchers.IO) {
+            application.trainFlowDatabase.clearAllTables()
+            application.trainFlowDatabase.workoutSessionDao().insertSession(
+                WorkoutSessionEntity(
+                    id = "legacy-created-after-application-on-create",
+                    mode = "timed",
+                    status = "active",
+                    planSnapshotJson = "{\"title\":\"Legacy\",\"mode\":\"timed\",\"blocks\":[]}"
+                )
+            )
+            application.workoutSessionRepository.prepareRecorder()
+        }
+
+        val repository = application.workoutSessionRepository
+        val database = application.trainFlowDatabase
+
+        assertSame(repository, application.workoutSessionRepository)
+        assertSame(database, application.trainFlowDatabase)
+        assertTrue(result is RecorderReconciliationResult.Succeeded)
+        result as RecorderReconciliationResult.Succeeded
+        assertEquals(
+            listOf("legacy-created-after-application-on-create"),
+            result.legacyResiduals.map { residual -> residual.sessionId }
+        )
+        withContext(Dispatchers.IO) {
+            application.trainFlowDatabase.clearAllTables()
+        }
+    }
+
     @Test
     fun applicationExposesOneStableRuntimeOwner() {
         val application =
