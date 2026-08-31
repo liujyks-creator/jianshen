@@ -1,7 +1,5 @@
 package com.liujyks.trainflow.core.database
 
-import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
-import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
@@ -339,20 +337,18 @@ object CanonicalSessionGraphV1Validator {
         val mode = WorkoutMode.entries.firstOrNull { value ->
             value.contractValue == graph.session.mode
         } ?: return false
-        val snapshot = when (
-            val result = PlanSnapshotStorageV1Validator.validate(graph.session.planSnapshotJson, mode)
-        ) {
-            is PlanSnapshotStorageV1ValidationResult.Valid -> result.storage
-            else -> return false
-        }
+        val context = PhaseIdentityV1Validator.prepareContext(
+            persistedJson = graph.session.planSnapshotJson,
+            mode = mode
+        ) ?: return false
         graph.phases.forEachIndexed { index, phase ->
             if (
                 phase.sessionId != graph.session.id || phase.sequence != index ||
                 phase.startOffsetMs < 0 || phase.startMutationSequence < 0 ||
                 phase.startMutationSequence > inputCut.mutationSequence ||
-                PhaseIdentityV1Validator.validate(
+                PhaseIdentityV1Validator.validatePrepared(
                     phase.phaseIdentityJson,
-                    immutableSnapshot = snapshot,
+                    context = context,
                     expectedPhaseKind = phase.phaseKind
                 ) !=
                 CanonicalValidationResult.Valid ||

@@ -2,6 +2,7 @@ package com.liujyks.trainflow.core.database
 
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.WorkoutPlanSnapshotStorageV1
 import com.liujyks.trainflow.core.data.toStorageJson
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.RepTarget
@@ -739,8 +740,13 @@ class CanonicalStorageJsonValidatorsTest {
             (PlanSnapshotStorageV1Validator.validate(snapshot.toStorageJson(), snapshot.mode) as
                 PlanSnapshotStorageV1ValidationResult.Valid).storage
         fun digest(projection: String) = testSha256(projection.toByteArray(Charsets.UTF_8))
-        fun assertBound(identity: String, snapshot: com.liujyks.trainflow.core.data.WorkoutPlanSnapshotStorageV1, kind: String) =
-            assertValid(PhaseIdentityV1Validator.validate(identity, snapshot, kind))
+        fun assertBound(identity: String, snapshot: WorkoutPlanSnapshotStorageV1, kind: String) {
+            val context = requireNotNull(PhaseIdentityV1Validator.prepareContext(snapshot))
+            val standalone = PhaseIdentityV1Validator.validate(identity, snapshot, kind)
+            val prepared = PhaseIdentityV1Validator.validatePrepared(identity, context, kind)
+            assertEquals(standalone, prepared)
+            assertValid(prepared)
+        }
 
         val item = TimedExerciseItem(
             id = "item",
@@ -863,7 +869,11 @@ class CanonicalStorageJsonValidatorsTest {
             "strength.globalSetIndex0" to substituted.replace("\"globalSetIndex0\":0", "\"globalSetIndex0\":1"),
             "strength.setKind" to substituted.replace("\"setKind\":\"working\"", "\"setKind\":\"warmup\"")
         ).forEach { (field, identity) ->
-            assertTrue("$field mismatch validated", PhaseIdentityV1Validator.validate(identity, strengthSnapshot) is CanonicalValidationResult.Invalid)
+            val context = requireNotNull(PhaseIdentityV1Validator.prepareContext(strengthSnapshot))
+            val standalone = PhaseIdentityV1Validator.validate(identity, strengthSnapshot)
+            val prepared = PhaseIdentityV1Validator.validatePrepared(identity, context)
+            assertEquals("$field changed prepared semantics", standalone, prepared)
+            assertTrue("$field mismatch validated", prepared is CanonicalValidationResult.Invalid)
         }
     }
 
@@ -935,8 +945,106 @@ class CanonicalStorageJsonValidatorsTest {
             "target_instance_index" to action.replace("\"$TARGET_ORDINAL_KEY\":1", "\"$TARGET_ORDINAL_KEY\":2"),
             "stepIndex0" to action.replace("\"stepIndex0\":1", "\"stepIndex0\":2")
         ).forEach { (field, mutation) ->
-            assertTrue("Composition $field mismatch validated", PhaseIdentityV1Validator.validate(mutation, snapshot) is CanonicalValidationResult.Invalid)
+            val context = requireNotNull(PhaseIdentityV1Validator.prepareContext(snapshot))
+            val standalone = PhaseIdentityV1Validator.validate(mutation, snapshot)
+            val prepared = PhaseIdentityV1Validator.validatePrepared(mutation, context)
+            assertEquals("Composition $field changed prepared semantics", standalone, prepared)
+            assertTrue("Composition $field mismatch validated", prepared is CanonicalValidationResult.Invalid)
         }
+    }
+
+    @Test
+    fun standaloneAndPreparedPathsPreserveTypedResultsAndFailurePrecedence() {
+        val snapshotJson =
+            "{\"planSnapshotStorageContractVersion\":1,\"planId\":null,\"title\":\"Composition\",\"mode\":\"timed\",\"blocks\":[{\"id\":\"composition\",\"kind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":10,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[]}],\"preferences\":null,\"followAlong\":null}"
+        val projection =
+            "{\"signatureInputContractVersion\":1,\"mode\":\"timed\",\"blocks\":[{\"blockId\":\"composition\",\"blockKind\":\"timed_composition\",\"order\":0,\"compositionVersion\":2,\"warmupSec\":10,\"cooldownSec\":0,\"rounds\":1,\"restBetweenRoundsSec\":0,\"stageGroups\":[]}]}"
+        val digest = testSha256(projection.toByteArray(Charsets.UTF_8))
+        val snapshot = (PlanSnapshotStorageV1Validator.validate(snapshotJson, WorkoutMode.TIMED) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+        val context = requireNotNull(PhaseIdentityV1Validator.prepareContext(snapshot))
+        val valid = envelope(
+            "timed_composition_v2",
+            2,
+            "timed",
+            "timed_work",
+            compositionPayload(
+                "warmup",
+                "composition",
+                "composition:warmup",
+                "warmup",
+                "composition:warmup",
+                "composition:warmup:target",
+                "warmup",
+                null,
+                null,
+                0,
+                0,
+                0,
+                0
+            ),
+            digest
+        )
+        val cases = listOf(
+            valid,
+            valid.replace("\"phaseIdentityContractVersion\":1", "\"phaseIdentityContractVersion\":2"),
+            valid.replace("\"family\":\"timed_composition_v2\",", ""),
+            valid.replace("\"payloadVersion\":2", "\"payloadVersion\":\"2\""),
+            valid.replace("\"mode\":\"timed\"", "\"mode\":\"strength\""),
+            valid.replace("\"phaseKind\":\"timed_work\"", "\"phaseKind\":\"timed_rest\""),
+            valid.replace(digest, DIGEST),
+            valid.replace("\"compositionBlockId\":\"composition\"", "\"compositionBlockId\":\"other\""),
+            valid.replace("\"stepIndex0\":0", "\"stepIndex0\":1"),
+            valid.replace("\"payload\":{", "\"extra\":true,\"payload\":{")
+        )
+        cases.forEachIndexed { index, identity ->
+            assertEquals(
+                "typed prepared differential $index",
+                PhaseIdentityV1Validator.validate(identity, snapshot, "timed_work"),
+                PhaseIdentityV1Validator.validatePrepared(identity, context, "timed_work")
+            )
+        }
+
+        val invalidSnapshot = WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, "$snapshotJson ")
+        val unsupportedIdentity = cases[1]
+        assertEquals(
+            CanonicalValidationResult.UnsupportedVersion("phase_identity", "2"),
+            PhaseIdentityV1Validator.validate(unsupportedIdentity, invalidSnapshot, "timed_work")
+        )
+        assertEquals(null, PhaseIdentityV1Validator.prepareContext(invalidSnapshot))
+    }
+
+    @Test
+    fun preparedBindingDoesNotCollapseDuplicateSnapshotIds() {
+        val duplicateSnapshot = WorkoutPlanSnapshot(
+            title = "Duplicate",
+            mode = WorkoutMode.TIMED,
+            blocks = listOf(
+                WarmupBlock("duplicate", 0, durationSec = 10),
+                WarmupBlock("duplicate", 1, durationSec = 20)
+            )
+        )
+        val storage = (PlanSnapshotStorageV1Validator.validate(
+            duplicateSnapshot.toStorageJson(),
+            WorkoutMode.TIMED
+        ) as PlanSnapshotStorageV1ValidationResult.Valid).storage
+        val digest = requireNotNull(
+            com.liujyks.trainflow.core.data.OrderedStructureSignatureInputV1.digestHexLowercase(storage)
+        )
+        val identity = envelope(
+            "legacy_timed_v1",
+            1,
+            "timed",
+            "timed_work",
+            legacyPayload("boundary_block_work", "duplicate", 0, "warmup", "warmup", null, null, null),
+            digest
+        )
+        val context = requireNotNull(PhaseIdentityV1Validator.prepareContext(storage))
+        val standalone = PhaseIdentityV1Validator.validate(identity, storage, "timed_work")
+        val prepared = PhaseIdentityV1Validator.validatePrepared(identity, context, "timed_work")
+
+        assertEquals(standalone, prepared)
+        assertInvalid(prepared)
     }
 
     private fun phaseFixtures(): List<PhaseFixture> = buildList {

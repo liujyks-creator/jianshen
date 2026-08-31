@@ -7,26 +7,72 @@ import com.liujyks.trainflow.core.model.WorkoutMode
 import java.math.BigDecimal
 import java.security.MessageDigest
 
+internal sealed interface PreparedPlanSnapshotStorageV1Result {
+    data class Valid(
+        val prepared: PreparedPlanSnapshotStorageV1
+    ) : PreparedPlanSnapshotStorageV1Result
+
+    data class Invalid(
+        val result: PlanSnapshotStorageV1ValidationResult
+    ) : PreparedPlanSnapshotStorageV1Result
+}
+
+internal class PreparedPlanSnapshotStorageV1 internal constructor(
+    val storage: WorkoutPlanSnapshotStorageV1,
+    internal val validatedRoot: CanonicalJsonValue.Obj,
+    private val orderedStructureSignatureInput: String,
+    val orderedStructureDigestHexLowercase: String
+) {
+    fun orderedStructureSignatureInputBytes(): ByteArray =
+        orderedStructureSignatureInput.toByteArray(Charsets.UTF_8)
+}
+
 object PlanSnapshotStorageV1Validator {
     fun validate(
         persistedJson: String,
         sessionMode: WorkoutMode
-    ): PlanSnapshotStorageV1ValidationResult {
+    ): PlanSnapshotStorageV1ValidationResult = when (val result = prepare(persistedJson, sessionMode)) {
+        is PreparedPlanSnapshotStorageV1Result.Valid ->
+            PlanSnapshotStorageV1ValidationResult.Valid(result.prepared.storage)
+        is PreparedPlanSnapshotStorageV1Result.Invalid -> result.result
+    }
+
+    internal fun prepare(
+        persistedJson: String,
+        sessionMode: WorkoutMode
+    ): PreparedPlanSnapshotStorageV1Result {
         val root = parseCanonicalJson(persistedJson) as? CanonicalJsonValue.Obj
-            ?: return invalid()
-        val version = root.int("planSnapshotStorageContractVersion") ?: return invalid()
+            ?: return invalidPrepared()
+        val version = root.int("planSnapshotStorageContractVersion") ?: return invalidPrepared()
         if (version != 1L) {
-            return PlanSnapshotStorageV1ValidationResult.UnsupportedVersion(version.toString())
+            return PreparedPlanSnapshotStorageV1Result.Invalid(
+                PlanSnapshotStorageV1ValidationResult.UnsupportedVersion(version.toString())
+            )
         }
-        val canonical = canonicalRoot(root, sessionMode) ?: return invalid()
-        if (canonical.renderCanonicalJson() != persistedJson) return invalid()
-        return PlanSnapshotStorageV1ValidationResult.Valid(
-            WorkoutPlanSnapshotStorageV1(
-                mode = sessionMode,
-                persistedJson = persistedJson
+        val canonical = canonicalRoot(root, sessionMode) ?: return invalidPrepared()
+        if (canonical.renderCanonicalJson() != persistedJson) return invalidPrepared()
+        val signatureInput = OrderedStructureSignatureInputV1.renderValidated(root, sessionMode)
+            ?: return invalidPrepared()
+        val signatureBytes = signatureInput.toByteArray(Charsets.UTF_8)
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(signatureBytes)
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        return PreparedPlanSnapshotStorageV1Result.Valid(
+            PreparedPlanSnapshotStorageV1(
+                storage = WorkoutPlanSnapshotStorageV1(
+                    mode = sessionMode,
+                    persistedJson = persistedJson
+                ),
+                validatedRoot = root,
+                orderedStructureSignatureInput = signatureInput,
+                orderedStructureDigestHexLowercase = digest
             )
         )
     }
+
+    private fun invalidPrepared() = PreparedPlanSnapshotStorageV1Result.Invalid(
+        PlanSnapshotStorageV1ValidationResult.Invalid()
+    )
 
     private fun canonicalRoot(
         root: CanonicalJsonValue.Obj,
@@ -392,32 +438,37 @@ object PlanSnapshotStorageV1Validator {
         }
         return orderedObject(value, FOLLOW_ALONG_ORDER)
     }
-
-    private fun invalid() = PlanSnapshotStorageV1ValidationResult.Invalid()
 }
 
 object OrderedStructureSignatureInputV1 {
     fun encode(storage: WorkoutPlanSnapshotStorageV1): ByteArray? {
-        val validated = PlanSnapshotStorageV1Validator.validate(storage.persistedJson, storage.mode)
-        if (validated !is PlanSnapshotStorageV1ValidationResult.Valid) return null
-        val root = parseCanonicalJson(storage.persistedJson) as? CanonicalJsonValue.Obj ?: return null
+        val prepared = PlanSnapshotStorageV1Validator.prepare(storage.persistedJson, storage.mode)
+        return (prepared as? PreparedPlanSnapshotStorageV1Result.Valid)
+            ?.prepared
+            ?.orderedStructureSignatureInputBytes()
+    }
+
+    fun digestHexLowercase(storage: WorkoutPlanSnapshotStorageV1): String? {
+        val prepared = PlanSnapshotStorageV1Validator.prepare(storage.persistedJson, storage.mode)
+        return (prepared as? PreparedPlanSnapshotStorageV1Result.Valid)
+            ?.prepared
+            ?.orderedStructureDigestHexLowercase
+    }
+
+    internal fun renderValidated(
+        root: CanonicalJsonValue.Obj,
+        mode: WorkoutMode
+    ): String? {
         val blocks = root.array("blocks")?.map { value ->
             signatureBlock(value as? CanonicalJsonValue.Obj ?: return null) ?: return null
         } ?: return null
         val projection = signatureObject(
             "signatureInputContractVersion" to CanonicalJsonValue.Num(BigDecimal.ONE),
-            "mode" to CanonicalJsonValue.Str(storage.mode.contractValue),
+            "mode" to CanonicalJsonValue.Str(mode.contractValue),
             "blocks" to CanonicalJsonValue.Arr(blocks)
         )
-        return projection.renderCanonicalJson().toByteArray(Charsets.UTF_8)
+        return projection.renderCanonicalJson()
     }
-
-    fun digestHexLowercase(storage: WorkoutPlanSnapshotStorageV1): String? =
-        encode(storage)?.let { bytes ->
-            MessageDigest.getInstance("SHA-256")
-                .digest(bytes)
-                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-        }
 
     private fun signatureBlock(block: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? =
         when (val kind = block.string("kind")) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.AnalysisSnapshotV1Validator
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
@@ -29,11 +30,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class WorkoutSessionFinalizerTest {
     private lateinit var database: TrainFlowDatabase
+    @Volatile
+    private var guardedUpdateMutation: ((String) -> Unit)? = null
 
     @Before
     fun createDatabase() {
@@ -252,6 +257,62 @@ class WorkoutSessionFinalizerTest {
     }
 
     @Test
+    fun allFiveFinalizerGuardsRejectRowCountTwoAndRollbackAllThirteenTables() = runBlocking {
+        val cases = listOf(
+            GuardRowCountTwoCase(
+                table = "workout_phase_intervals",
+                updateMarker = "set end_offset_ms",
+                rowPredicate = "id='$PHASE_ID'",
+                guard = "finalize_close_open_phase"
+            ),
+            GuardRowCountTwoCase(
+                table = "heart_rate_acquisition_intervals",
+                updateMarker = "set end_offset_ms",
+                rowPredicate = "id='$ACQUISITION_ID'",
+                guard = "finalize_close_open_acquisition"
+            ),
+            GuardRowCountTwoCase(
+                table = "heart_rate_recordings",
+                updateMarker = "set status = 'terminal'",
+                rowPredicate = "recording_id='$RECORDING_ID'",
+                guard = "finalize_terminalize_recording"
+            ),
+            GuardRowCountTwoCase(
+                table = "workout_sessions",
+                updateMarker = "trusted_end_offset_ms",
+                rowPredicate = "id='$SESSION_ID'",
+                guard = "finalize_terminalize_session"
+            ),
+            GuardRowCountTwoCase(
+                table = "heart_rate_recordings",
+                updateMarker = "original_analysis_version = 1",
+                rowPredicate = "recording_id='$RECORDING_ID'",
+                guard = "bind_original_analysis"
+            )
+        )
+
+        cases.forEachIndexed { index, case ->
+            if (index > 0) resetDatabase()
+            seedActiveRecording()
+            rebuildTableWithoutConstraints(case.table)
+            val mutationFired = armDuplicateBeforeGuardedUpdate(case)
+            val before = databaseSnapshot(allowMissingPrimaryKeyFor = case.table)
+
+            val failure = runCatching {
+                WorkoutSessionRepository(database).finalizeRecordingSession(request())
+            }.exceptionOrNull()
+
+            assertTrue("${case.guard} did not reach its real Room UPDATE", mutationFired.get())
+            assertGuard(failure, case.guard, 2)
+            assertEquals(
+                "guard ${case.guard} mutated one of 13 tables",
+                before,
+                databaseSnapshot(allowMissingPrimaryKeyFor = case.table)
+            )
+        }
+    }
+
+    @Test
     fun twoRepositoriesHaveExactlyOneCommitWinnerAndFreshReentryCannotDuplicateBinding() = runBlocking {
         seedActiveRecording()
         val results = coroutineScope {
@@ -299,10 +360,17 @@ class WorkoutSessionFinalizerTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         database = Room.inMemoryDatabaseBuilder(context, TrainFlowDatabase::class.java)
             .allowMainThreadQueries()
+            .setQueryCallback(
+                RoomDatabase.QueryCallback { sqlQuery, _ ->
+                    guardedUpdateMutation?.invoke(sqlQuery)
+                },
+                Executor { command -> command.run() }
+            )
             .build()
     }
 
     private fun resetDatabase() {
+        guardedUpdateMutation = null
         database.close()
         openDatabase()
     }
@@ -413,7 +481,63 @@ class WorkoutSessionFinalizerTest {
         assertEquals(rowCount, failure.actualRowCount)
     }
 
-    private fun databaseSnapshot(): List<String> {
+    private fun rebuildTableWithoutConstraints(table: String) {
+        val sql = database.openHelper.writableDatabase
+        val quotedTable = quoteSqlIdentifier(table)
+        val columns = sql.query("PRAGMA table_info($quotedTable)").use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        SnapshotColumn(
+                            name = cursor.getString(1),
+                            declaredType = cursor.getString(2),
+                            notNull = cursor.getInt(3) == 1,
+                            primaryKeyOrder = cursor.getInt(5)
+                        )
+                    )
+                }
+            }
+        }
+        check(columns.isNotEmpty()) { "Cannot rebuild empty table $table" }
+        val copyTable = quoteSqlIdentifier("${table}_guard_copy")
+        val columnList = columns.joinToString(", ") { column -> quoteSqlIdentifier(column.name) }
+        val definitions = columns.joinToString(", ") { column ->
+            buildString {
+                append(quoteSqlIdentifier(column.name))
+                if (column.declaredType.isNotEmpty()) append(" ${column.declaredType}")
+                if (column.notNull) append(" NOT NULL")
+            }
+        }
+        sql.execSQL("PRAGMA foreign_keys=OFF")
+        sql.execSQL("CREATE TABLE $copyTable AS SELECT $columnList FROM $quotedTable")
+        sql.execSQL("DROP TABLE $quotedTable")
+        sql.execSQL("CREATE TABLE $quotedTable ($definitions)")
+        sql.execSQL("INSERT INTO $quotedTable ($columnList) SELECT $columnList FROM $copyTable")
+        sql.execSQL("DROP TABLE $copyTable")
+    }
+
+    private fun armDuplicateBeforeGuardedUpdate(case: GuardRowCountTwoCase): AtomicBoolean {
+        val fired = AtomicBoolean(false)
+        guardedUpdateMutation = { rawSql ->
+            val normalized = rawSql.lowercase().replace(Regex("\\s+"), " ").trim()
+            if (
+                normalized.startsWith("update") &&
+                normalized.contains(case.table) &&
+                normalized.contains(case.updateMarker) &&
+                fired.compareAndSet(false, true)
+            ) {
+                guardedUpdateMutation = null
+                val quotedTable = quoteSqlIdentifier(case.table)
+                database.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO $quotedTable SELECT * FROM $quotedTable " +
+                        "WHERE ${case.rowPredicate} LIMIT 1"
+                )
+            }
+        }
+        return fired
+    }
+
+    private fun databaseSnapshot(allowMissingPrimaryKeyFor: String? = null): List<String> {
         val sql = database.openHelper.writableDatabase
         val tables = sql.query(
             """
@@ -442,9 +566,14 @@ class WorkoutSessionFinalizerTest {
                 }
             }.sortedBy { it.name }
             val primaryKey = columns.filter { it.primaryKeyOrder > 0 }.sortedBy { it.primaryKeyOrder }
-            check(columns.isNotEmpty() && primaryKey.isNotEmpty())
+            check(columns.isNotEmpty())
+            check(primaryKey.isNotEmpty() || table == allowMissingPrimaryKeyFor) {
+                "Room user table has no primary key: $table"
+            }
             val select = columns.joinToString(", ") { quoteSqlIdentifier(it.name) }
-            val order = primaryKey.joinToString(", ") { quoteSqlIdentifier(it.name) }
+            val order = (primaryKey.ifEmpty { columns }).joinToString(", ") {
+                quoteSqlIdentifier(it.name)
+            }
             buildList {
                 add("$table|schema|" + columns.joinToString("|") {
                     "${it.name}:${it.declaredType}:${it.notNull}:${it.primaryKeyOrder}"
@@ -465,6 +594,13 @@ class WorkoutSessionFinalizerTest {
         val declaredType: String,
         val notNull: Boolean,
         val primaryKeyOrder: Int
+    )
+
+    private data class GuardRowCountTwoCase(
+        val table: String,
+        val updateMarker: String,
+        val rowPredicate: String,
+        val guard: String
     )
 
     private fun Cursor.snapshotValue(index: Int): String = when (getType(index)) {
