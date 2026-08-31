@@ -129,6 +129,139 @@ class CanonicalSessionValidatorsTest {
     }
 
     @Test
+    fun analysisDurationBindingKeepsPhaseAndIntentAxesIndependentAcrossPartitions() {
+        val phases = listOf(
+            terminalPhase().copy(
+                id = "phase-0",
+                endOffsetMs = 20,
+                endMutationSequence = 1,
+                phaseKind = "paused",
+                phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY
+            ),
+            terminalPhase().copy(
+                id = "phase-1",
+                sequence = 1,
+                startOffsetMs = 20,
+                startMutationSequence = 1,
+                endOffsetMs = 80,
+                endMutationSequence = 3
+            ),
+            terminalPhase().copy(
+                id = "phase-2",
+                sequence = 2,
+                startOffsetMs = 80,
+                startMutationSequence = 3,
+                phaseKind = "paused",
+                phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY
+            )
+        )
+        val acquisitions = listOf(
+            terminalAcquisition().copy(
+                id = "acquisition-0",
+                endOffsetMs = 30,
+                endMutationSequence = 1
+            ),
+            terminalAcquisition().copy(
+                id = "acquisition-1",
+                sequence = 1,
+                startOffsetMs = 30,
+                startMutationSequence = 1,
+                endOffsetMs = 50,
+                endMutationSequence = 2,
+                recordingIntent = "user_excluded",
+                intentReason = "user_turned_off"
+            ),
+            terminalAcquisition().copy(
+                id = "acquisition-2",
+                sequence = 2,
+                startOffsetMs = 50,
+                startMutationSequence = 2,
+                endOffsetMs = 90,
+                endMutationSequence = 3
+            ),
+            terminalAcquisition().copy(
+                id = "acquisition-3",
+                sequence = 3,
+                startOffsetMs = 90,
+                startMutationSequence = 3,
+                recordingIntent = "user_excluded",
+                intentReason = "user_turned_off"
+            )
+        )
+        val samples = listOf(
+            HeartRateSampleEntity("recording", 0, 20, 1, 120),
+            HeartRateSampleEntity("recording", 1, 40, 2, 200),
+            HeartRateSampleEntity("recording", 2, 50, 2, 130)
+        )
+        val phaseAggregates =
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":1," +
+                "\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":40,\"coveredDurationMs\":40," +
+                "\"coverageBasisPoints\":10000,\"coverageStatus\":\"normal\"," +
+                "\"conclusionEligible\":true,\"weightedBpmMs\":5100,\"observedAvgBpm\":128," +
+                "\"observedMaxBpm\":130,\"highestOffsetMs\":50,\"highestMutationSequence\":2," +
+                "\"highestSampleSequence\":2}]}"
+        val durationBreakdown =
+            "{\"durationBreakdownContractVersion\":1,\"canonicalSessionDurationMs\":100," +
+                "\"recordingWindowDurationMs\":100,\"notRequestedBeforeRecordingStartMs\":0," +
+                "\"intentAxis\":{\"expectedRecordingDurationMs\":70,\"userExcludedDurationMs\":30," +
+                "\"userTurnedOffDurationMs\":30,\"userOptedOutDurationMs\":0," +
+                "\"userDisconnectedSuppressRecoveryDurationMs\":0}," +
+                "\"phaseAxis\":{\"primaryEligibleDurationMs\":40,\"phaseExcludedDurationMs\":30," +
+                "\"strengthPrepareExcludedDurationMs\":0,\"pausedExcludedDurationMs\":30}," +
+                "\"primaryAnalysisPartition\":{\"primaryEligibleDurationMs\":40," +
+                "\"eligibleCoveredDurationMs\":40,\"eligibleUncoveredDurationMs\":0}," +
+                "\"deviceStateDurations\":{\"not_observing\":0,\"no_source_selected\":0," +
+                "\"permission_required\":0,\"bluetooth_unavailable\":0,\"searching\":0," +
+                "\"connecting\":0,\"waiting_first_sample\":0,\"live\":100,\"stale\":0," +
+                "\"reconnecting\":0,\"disconnected\":0,\"technical_failure\":0}," +
+                "\"deviceReasonDurations\":{\"initial_acquisition\":0,\"automatic_recovery\":0," +
+                "\"source_not_selected\":0,\"source_unavailable\":0,\"permission_missing\":0," +
+                "\"permission_revoked\":0,\"bluetooth_off\":0,\"platform_unavailable\":0," +
+                "\"first_sample_timeout\":0,\"sample_stale_timeout\":0,\"unexpected_disconnect\":0," +
+                "\"connection_timeout\":0,\"measurement_stream_unavailable\":0," +
+                "\"platform_failure\":0},\"orthogonalityContract\":{\"contractVersion\":1," +
+                "\"rule\":\"primary_partition_is_mutually_exclusive_device_axes_are_independent_do_not_sum\"}}"
+        val snapshot = terminalSnapshot().copy(
+            canonicalSampleCount = 3,
+            primaryPointSampleCount = 2,
+            eligibleDurationMs = 40,
+            coveredDurationMs = 40,
+            coverageBasisPoints = 10000,
+            weightedBpmMs = 5100,
+            observedAvgBpm = 128,
+            observedMaxBpm = 130,
+            highestOffsetMs = 50,
+            highestMutationSequence = 2,
+            highestSampleSequence = 2,
+            phaseAggregatesJson = phaseAggregates,
+            durationBreakdownJson = durationBreakdown
+        )
+        val graph = validTerminalGraph().copy(
+            phases = phases,
+            acquisitions = acquisitions,
+            samples = samples,
+            snapshots = listOf(snapshot)
+        )
+
+        assertValid(CanonicalSessionGraphV1Validator.validate(graph))
+        assertInvalid(
+            CanonicalSessionGraphV1Validator.validate(
+                graph.copy(
+                    snapshots = listOf(
+                        snapshot.copy(
+                            durationBreakdownJson = durationBreakdown.replace(
+                                "\"phaseExcludedDurationMs\":30",
+                                "\"phaseExcludedDurationMs\":40"
+                            )
+                        )
+                    )
+                )
+            ),
+            "invalid_canonical_graph_v1"
+        )
+    }
+
+    @Test
     fun analysisSnapshotCoversThresholdNullZoneTieAndExcludedInputMatrices() {
         fun aggregate(
             eligible: Long,
