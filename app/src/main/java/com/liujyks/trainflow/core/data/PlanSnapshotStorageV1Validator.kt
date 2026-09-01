@@ -6,6 +6,7 @@ import com.liujyks.trainflow.core.database.renderCanonicalJson
 import com.liujyks.trainflow.core.model.WorkoutMode
 import java.math.BigDecimal
 import java.security.MessageDigest
+import java.util.Collections
 
 internal sealed interface PreparedPlanSnapshotStorageV1Result {
     data class Valid(
@@ -17,14 +18,89 @@ internal sealed interface PreparedPlanSnapshotStorageV1Result {
     ) : PreparedPlanSnapshotStorageV1Result
 }
 
-internal class PreparedPlanSnapshotStorageV1 internal constructor(
-    val storage: WorkoutPlanSnapshotStorageV1,
-    internal val validatedRoot: CanonicalJsonValue.Obj,
+private object PreparedPlanSnapshotStorageV1FactoryProof
+
+internal class PreparedPlanSnapshotStorageV1 private constructor(
+    private val storage: WorkoutPlanSnapshotStorageV1,
     private val orderedStructureSignatureInput: String,
-    val orderedStructureDigestHexLowercase: String
+    private val orderedStructureDigestHexLowercase: String,
+    phaseBindingBlocks: List<PlanSnapshotPhaseBlockFactsV1>
 ) {
-    fun orderedStructureSignatureInputBytes(): ByteArray =
+    private val phaseBindingBlocks = Collections.unmodifiableList(ArrayList(phaseBindingBlocks))
+
+    internal fun storage(): WorkoutPlanSnapshotStorageV1 = storage
+
+    internal fun orderedStructureSignatureInputBytes(): ByteArray =
         orderedStructureSignatureInput.toByteArray(Charsets.UTF_8)
+
+    internal fun orderedStructureDigestHexLowercase(): String = orderedStructureDigestHexLowercase
+
+    internal fun phaseBindingBlocks(): List<PlanSnapshotPhaseBlockFactsV1> = phaseBindingBlocks
+
+    internal companion object {
+        internal fun fromValidated(
+            factoryProof: Any,
+            storage: WorkoutPlanSnapshotStorageV1,
+            orderedStructureSignatureInput: String,
+            orderedStructureDigestHexLowercase: String,
+            phaseBindingBlocks: List<PlanSnapshotPhaseBlockFactsV1>
+        ): PreparedPlanSnapshotStorageV1? = if (factoryProof === PreparedPlanSnapshotStorageV1FactoryProof) {
+            PreparedPlanSnapshotStorageV1(
+                storage = storage,
+                orderedStructureSignatureInput = orderedStructureSignatureInput,
+                orderedStructureDigestHexLowercase = orderedStructureDigestHexLowercase,
+                phaseBindingBlocks = phaseBindingBlocks
+            )
+        } else {
+            null
+        }
+    }
+}
+
+internal class PlanSnapshotPhaseBlockFactsV1 internal constructor(
+    val id: String,
+    val kind: String,
+    val rounds: Long?,
+    val restBetweenRoundsSec: Long?,
+    val durationSec: Long?,
+    val warmupSec: Long?,
+    val cooldownSec: Long?,
+    val exerciseId: String?,
+    items: List<Item>,
+    sets: List<SetPlan>,
+    substitutions: List<String>,
+    compositionGroups: List<CompositionGroup>
+) {
+    val items: List<Item> = Collections.unmodifiableList(ArrayList(items))
+    val sets: List<SetPlan> = Collections.unmodifiableList(ArrayList(sets))
+    val substitutions: List<String> = Collections.unmodifiableList(ArrayList(substitutions))
+    val compositionGroups: List<CompositionGroup> = Collections.unmodifiableList(ArrayList(compositionGroups))
+
+    internal data class Item(
+        val id: String,
+        val exerciseId: String?,
+        val stageType: String,
+        val restAfterSec: Long?
+    )
+
+    internal data class SetPlan(
+        val id: String,
+        val kind: String
+    )
+
+    internal class CompositionGroup internal constructor(
+        val id: String,
+        val order: Long,
+        targets: List<CompositionTarget>
+    ) {
+        val targets: List<CompositionTarget> = Collections.unmodifiableList(ArrayList(targets))
+    }
+
+    internal data class CompositionTarget(
+        val id: String,
+        val order: Long,
+        val kind: String
+    )
 }
 
 object PlanSnapshotStorageV1Validator {
@@ -33,7 +109,7 @@ object PlanSnapshotStorageV1Validator {
         sessionMode: WorkoutMode
     ): PlanSnapshotStorageV1ValidationResult = when (val result = prepare(persistedJson, sessionMode)) {
         is PreparedPlanSnapshotStorageV1Result.Valid ->
-            PlanSnapshotStorageV1ValidationResult.Valid(result.prepared.storage)
+            PlanSnapshotStorageV1ValidationResult.Valid(result.prepared.storage())
         is PreparedPlanSnapshotStorageV1Result.Invalid -> result.result
     }
 
@@ -58,15 +134,72 @@ object PlanSnapshotStorageV1Validator {
             .digest(signatureBytes)
             .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
         return PreparedPlanSnapshotStorageV1Result.Valid(
-            PreparedPlanSnapshotStorageV1(
-                storage = WorkoutPlanSnapshotStorageV1(
-                    mode = sessionMode,
-                    persistedJson = persistedJson
-                ),
-                validatedRoot = root,
-                orderedStructureSignatureInput = signatureInput,
-                orderedStructureDigestHexLowercase = digest
+            requireNotNull(
+                PreparedPlanSnapshotStorageV1.fromValidated(
+                    factoryProof = PreparedPlanSnapshotStorageV1FactoryProof,
+                    storage = WorkoutPlanSnapshotStorageV1(
+                        mode = sessionMode,
+                        persistedJson = persistedJson
+                    ),
+                    orderedStructureSignatureInput = signatureInput,
+                    orderedStructureDigestHexLowercase = digest,
+                    phaseBindingBlocks = phaseBindingBlockFacts(root)
+                )
             )
+        )
+    }
+
+    private fun phaseBindingBlockFacts(
+        root: CanonicalJsonValue.Obj
+    ): List<PlanSnapshotPhaseBlockFactsV1> = requireNotNull(root.array("blocks")).map { value ->
+        val block = value as CanonicalJsonValue.Obj
+        val items = block.array("items").orEmpty().map { itemValue ->
+            val item = itemValue as CanonicalJsonValue.Obj
+            PlanSnapshotPhaseBlockFactsV1.Item(
+                id = requireNotNull(item.string("id")),
+                exerciseId = item.string("exerciseId"),
+                stageType = requireNotNull(item.string("stageType")),
+                restAfterSec = item.int("restAfterSec")
+            )
+        }
+        val sets = block.array("sets").orEmpty().map { setValue ->
+            val set = setValue as CanonicalJsonValue.Obj
+            PlanSnapshotPhaseBlockFactsV1.SetPlan(
+                id = requireNotNull(set.string("id")),
+                kind = requireNotNull(set.string("kind"))
+            )
+        }
+        val substitutions = block.array("substitutions").orEmpty().map { substitution ->
+            (substitution as CanonicalJsonValue.Str).value
+        }
+        val compositionGroups = block.array("stageGroups").orEmpty().map { groupValue ->
+            val group = groupValue as CanonicalJsonValue.Obj
+            PlanSnapshotPhaseBlockFactsV1.CompositionGroup(
+                id = requireNotNull(group.string("id")),
+                order = requireNotNull(group.int("order")),
+                targets = requireNotNull(group.array("targets")).map { targetValue ->
+                    val target = targetValue as CanonicalJsonValue.Obj
+                    PlanSnapshotPhaseBlockFactsV1.CompositionTarget(
+                        id = requireNotNull(target.string("id")),
+                        order = requireNotNull(target.int("order")),
+                        kind = requireNotNull(target.string("kind"))
+                    )
+                }
+            )
+        }
+        PlanSnapshotPhaseBlockFactsV1(
+            id = requireNotNull(block.string("id")),
+            kind = requireNotNull(block.string("kind")),
+            rounds = block.int("rounds"),
+            restBetweenRoundsSec = block.int("restBetweenRoundsSec"),
+            durationSec = block.int("durationSec"),
+            warmupSec = block.int("warmupSec"),
+            cooldownSec = block.int("cooldownSec"),
+            exerciseId = block.string("exerciseId"),
+            items = items,
+            sets = sets,
+            substitutions = substitutions,
+            compositionGroups = compositionGroups
         )
     }
 
@@ -452,7 +585,7 @@ object OrderedStructureSignatureInputV1 {
         val prepared = PlanSnapshotStorageV1Validator.prepare(storage.persistedJson, storage.mode)
         return (prepared as? PreparedPlanSnapshotStorageV1Result.Valid)
             ?.prepared
-            ?.orderedStructureDigestHexLowercase
+            ?.orderedStructureDigestHexLowercase()
     }
 
     internal fun renderValidated(

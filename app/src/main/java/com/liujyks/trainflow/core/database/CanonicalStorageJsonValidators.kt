@@ -1,10 +1,13 @@
 package com.liujyks.trainflow.core.database
 
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PlanSnapshotPhaseBlockFactsV1
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1
 import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
 import com.liujyks.trainflow.core.data.WorkoutPlanSnapshotStorageV1
 import com.liujyks.trainflow.core.model.WorkoutMode
 import java.math.BigDecimal
+import java.util.Collections
 
 sealed interface CanonicalValidationResult {
     data object Valid : CanonicalValidationResult
@@ -203,10 +206,12 @@ object SessionDisplayMetadataV1Validator {
         CanonicalValidationResult.Invalid("invalid_session_display_metadata_contract")
 }
 
-internal class PreparedPhaseIdentityV1Context internal constructor(
+private object PreparedPhaseIdentityV1ContextFactoryProof
+
+internal class PreparedPhaseIdentityV1Context private constructor(
     val expectedMode: String,
     val expectedDigest: String,
-    blocks: List<PreparedSnapshotBlockView>
+    blocks: List<PhaseSnapshotBlockBindingV1>
 ) {
     private val blocksById = blocks.groupBy { block -> block.id }
     private val compositionBlocksById = blocks
@@ -218,40 +223,54 @@ internal class PreparedPhaseIdentityV1Context internal constructor(
         }
     }
 
-    internal fun uniqueBlockById(id: String): PreparedSnapshotBlockView? =
+    internal fun uniqueBlockById(id: String): PhaseSnapshotBlockBindingV1? =
         blocksById[id]?.singleOrNull()
 
-    internal fun uniqueCompositionBlockById(id: String): PreparedSnapshotBlockView? =
+    internal fun uniqueCompositionBlockById(id: String): PhaseSnapshotBlockBindingV1? =
         compositionBlocksById[id]?.singleOrNull()
 
-    internal fun firstBlockById(id: String): PreparedSnapshotBlockView? = firstBlockById[id]
+    internal fun firstBlockById(id: String): PhaseSnapshotBlockBindingV1? = firstBlockById[id]
+
+    internal companion object {
+        internal fun fromValidated(
+            factoryProof: Any,
+            expectedMode: String,
+            expectedDigest: String,
+            blocks: List<PhaseSnapshotBlockBindingV1>
+        ): PreparedPhaseIdentityV1Context? =
+            if (factoryProof === PreparedPhaseIdentityV1ContextFactoryProof) {
+                PreparedPhaseIdentityV1Context(expectedMode, expectedDigest, blocks)
+            } else {
+                null
+            }
+    }
 }
 
-internal class PreparedSnapshotBlockView internal constructor(
-    val root: CanonicalJsonValue.Obj,
+internal class PhaseSnapshotBlockBindingV1 private constructor(
+    val id: String,
+    val kind: String,
+    val rounds: Long?,
+    val restBetweenRoundsSec: Long?,
+    val durationSec: Long?,
+    val exerciseId: String?,
     val precedingStrengthSetCount: Int,
-    private val compositionSteps: List<CompositionSnapshotStep>?
+    val items: List<PlanSnapshotPhaseBlockFactsV1.Item>,
+    val sets: List<PlanSnapshotPhaseBlockFactsV1.SetPlan>,
+    val substitutions: List<String>,
+    compositionSteps: List<CompositionSnapshotStep>?
 ) {
-    val id: String = requireNotNull(root.string("id"))
-    val kind: String = requireNotNull(root.string("kind"))
-    val items: List<CanonicalJsonValue.Obj> = root.array("items")?.map { value ->
-        value as CanonicalJsonValue.Obj
-    }.orEmpty()
-    val sets: List<CanonicalJsonValue.Obj> = root.array("sets")?.map { value ->
-        value as CanonicalJsonValue.Obj
-    }.orEmpty()
-    val substitutions: List<String> = root.array("substitutions")?.map { value ->
-        (value as CanonicalJsonValue.Str).value
-    }.orEmpty()
+    private val compositionSteps = compositionSteps?.let { steps ->
+        Collections.unmodifiableList(ArrayList(steps))
+    }
     private val firstItemIndexById = buildMap {
         items.forEachIndexed { index, item ->
-            val itemId = requireNotNull(item.string("id"))
+            val itemId = item.id
             if (itemId !in this) put(itemId, index)
         }
     }
     private val firstSetIndexById = buildMap {
         sets.forEachIndexed { index, set ->
-            val setId = requireNotNull(set.string("id"))
+            val setId = set.id
             if (setId !in this) put(setId, index)
         }
     }
@@ -262,7 +281,7 @@ internal class PreparedSnapshotBlockView internal constructor(
         var nextStep = 0L
         itemStepStarts = items.map { item ->
             val start = nextStep
-            nextStep += 1L + if ((item.int("restAfterSec") ?: 0L) > 0L) 1L else 0L
+            nextStep += 1L + if ((item.restAfterSec ?: 0L) > 0L) 1L else 0L
             start
         }
         stepsPerItems = nextStep
@@ -280,13 +299,13 @@ internal class PreparedSnapshotBlockView internal constructor(
         if (itemIndex !in items.indices) return null
         val roundStart = if (kind == "timed_circuit") {
             val round = roundIndex ?: return null
-            val between = if ((root.int("restBetweenRoundsSec") ?: 0L) > 0L) 1L else 0L
+            val between = if ((restBetweenRoundsSec ?: 0L) > 0L) 1L else 0L
             round * (stepsPerItems + between)
         } else {
             if (roundIndex != null) return null
             0L
         }
-        if (restAfter && (items[itemIndex].int("restAfterSec") ?: 0L) <= 0L) return null
+        if (restAfter && (items[itemIndex].restAfterSec ?: 0L) <= 0L) return null
         return roundStart + itemStepStarts[itemIndex] + if (restAfter) 1L else 0L
     }
 
@@ -297,6 +316,32 @@ internal class PreparedSnapshotBlockView internal constructor(
         val stepIndex = payload.int("stepIndex0") ?: return false
         val expected = compositionSteps?.getOrNull(stepIndex.toInt()) ?: return false
         return expected.matches(payload)
+    }
+
+    internal companion object {
+        internal fun fromValidated(
+            factoryProof: Any,
+            facts: PlanSnapshotPhaseBlockFactsV1,
+            precedingStrengthSetCount: Int,
+            compositionSteps: List<CompositionSnapshotStep>?
+        ): PhaseSnapshotBlockBindingV1? =
+            if (factoryProof === PreparedPhaseIdentityV1ContextFactoryProof) {
+                PhaseSnapshotBlockBindingV1(
+                    id = facts.id,
+                    kind = facts.kind,
+                    rounds = facts.rounds,
+                    restBetweenRoundsSec = facts.restBetweenRoundsSec,
+                    durationSec = facts.durationSec,
+                    exerciseId = facts.exerciseId,
+                    precedingStrengthSetCount = precedingStrengthSetCount,
+                    items = facts.items,
+                    sets = facts.sets,
+                    substitutions = facts.substitutions,
+                    compositionSteps = compositionSteps
+                )
+            } else {
+                null
+            }
     }
 }
 
@@ -328,28 +373,33 @@ object PhaseIdentityV1Validator {
         val preparedResult = PlanSnapshotStorageV1Validator.prepare(persistedJson, mode)
         val prepared = (preparedResult as? PreparedPlanSnapshotStorageV1Result.Valid)?.prepared
             ?: return null
-        val rootBlocks = prepared.validatedRoot.array("blocks")?.map { value ->
-            value as CanonicalJsonValue.Obj
-        } ?: return null
+        return prepareContext(prepared)
+    }
+
+    internal fun prepareContext(
+        prepared: PreparedPlanSnapshotStorageV1
+    ): PreparedPhaseIdentityV1Context? {
         var precedingStrengthSetCount = 0
-        val blocks = rootBlocks.map { root ->
-            val view = PreparedSnapshotBlockView(
-                root = root,
+        val blocks = prepared.phaseBindingBlocks().map { facts ->
+            val view = requireNotNull(PhaseSnapshotBlockBindingV1.fromValidated(
+                factoryProof = PreparedPhaseIdentityV1ContextFactoryProof,
+                facts = facts,
                 precedingStrengthSetCount = precedingStrengthSetCount,
-                compositionSteps = if (root.string("kind") == "timed_composition") {
-                    compositionSnapshotSteps(root)
+                compositionSteps = if (facts.kind == "timed_composition") {
+                    compositionSnapshotSteps(facts)
                 } else {
                     null
                 }
-            )
+            ))
             if (view.kind == "strength_exercise") {
                 precedingStrengthSetCount += view.sets.size
             }
             view
         }
-        return PreparedPhaseIdentityV1Context(
-            expectedMode = prepared.storage.mode.contractValue,
-            expectedDigest = prepared.orderedStructureDigestHexLowercase,
+        return PreparedPhaseIdentityV1Context.fromValidated(
+            factoryProof = PreparedPhaseIdentityV1ContextFactoryProof,
+            expectedMode = prepared.storage().mode.contractValue,
+            expectedDigest = prepared.orderedStructureDigestHexLowercase(),
             blocks = blocks
         )
     }
@@ -403,10 +453,9 @@ object PhaseIdentityV1Validator {
         if (payload.string("variant") == "paused") return true
         val blockId = payload.string("blockId") ?: return false
         val blockView = context.uniqueBlockById(blockId) ?: return false
-        val block = blockView.root
-        if (block.string("kind") != payload.string("legacyBlockKind")) return false
+        if (blockView.kind != payload.string("legacyBlockKind")) return false
         val roundIndex = payload.int("roundIndex0")
-        if (roundIndex != null && roundIndex !in 0 until (block.int("rounds") ?: return false)) {
+        if (roundIndex != null && roundIndex !in 0 until (blockView.rounds ?: return false)) {
             return false
         }
         val variant = payload.string("variant") ?: return false
@@ -414,12 +463,12 @@ object PhaseIdentityV1Validator {
         if (itemId == null) {
             return when (variant) {
                 "boundary_block_work" -> payload.int("stepIndex0") == 0L &&
-                    block.string("kind") in setOf("warmup", "stretch", "cooldown")
-                "between_round_rest" -> block.string("kind") == "timed_circuit" &&
-                    roundIndex != null && roundIndex < (block.int("rounds") ?: return false) - 1 &&
-                    (block.int("restBetweenRoundsSec") ?: 0L) > 0L &&
+                    blockView.kind in setOf("warmup", "stretch", "cooldown")
+                "between_round_rest" -> blockView.kind == "timed_circuit" &&
+                    roundIndex != null && roundIndex < (blockView.rounds ?: return false) - 1 &&
+                    (blockView.restBetweenRoundsSec ?: 0L) > 0L &&
                     payload.int("stepIndex0") == blockView.timedCircuitBetweenRoundStepIndex(roundIndex)
-                "standalone_rest" -> payload.int("stepIndex0") == 0L && block.string("kind") == "rest"
+                "standalone_rest" -> payload.int("stepIndex0") == 0L && blockView.kind == "rest"
                 else -> false
             }
         }
@@ -430,15 +479,15 @@ object PhaseIdentityV1Validator {
         val expectedExercise = if (variant in setOf("boundary_item_rest", "circuit_item_rest")) {
             null
         } else {
-            item.string("exerciseId")
+            item.exerciseId
         }
         return payload.int("stepIndex0") == expectedStep &&
             payload.string("exerciseId") == expectedExercise &&
             when (variant) {
                 "boundary_item_work", "circuit_item_work" ->
-                    item.string("stageType") != "rest" && payload.string("legacyStageType") == item.string("stageType")
-                "boundary_item_rest", "circuit_item_rest" -> item.string("stageType") == "rest"
-                "boundary_rest_after_item", "circuit_rest_after_item" -> (item.int("restAfterSec") ?: 0L) > 0L
+                    item.stageType != "rest" && payload.string("legacyStageType") == item.stageType
+                "boundary_item_rest", "circuit_item_rest" -> item.stageType == "rest"
+                "boundary_rest_after_item", "circuit_rest_after_item" -> (item.restAfterSec ?: 0L) > 0L
                 else -> false
             }
     }
@@ -454,13 +503,11 @@ object PhaseIdentityV1Validator {
     }
 
     private fun compositionSnapshotSteps(
-        block: CanonicalJsonValue.Obj
+        block: PlanSnapshotPhaseBlockFactsV1
     ): List<CompositionSnapshotStep>? {
-        val blockId = block.string("id") ?: return null
-        val rounds = block.int("rounds")?.toInt() ?: return null
-        val groups = block.array("stageGroups")?.map { value ->
-            value as? CanonicalJsonValue.Obj ?: return null
-        } ?: return null
+        val blockId = block.id
+        val rounds = block.rounds?.toInt() ?: return null
+        val groups = block.compositionGroups
         val result = mutableListOf<CompositionSnapshotStep>()
         var stageInstanceIndex0 = 0L
         var targetInstanceIndex0 = 0L
@@ -492,27 +539,25 @@ object PhaseIdentityV1Validator {
             )
             targetInstanceIndex0 += 1
         }
-        if ((block.int("warmupSec") ?: return null) > 0) {
+        if ((block.warmupSec ?: return null) > 0) {
             val stageId = "$blockId:warmup"
             add("warmup", stageId, "warmup", stageId, "$stageId:target", "warmup", null, null, 0)
             stageInstanceIndex0 += 1
         }
         repeat(rounds) { roundIndex0 ->
             groups.forEachIndexed { groupIndex0, group ->
-                val groupId = group.string("id") ?: return null
-                if (group.int("order") != groupIndex0.toLong()) return null
+                val groupId = group.id
+                if (group.order != groupIndex0.toLong()) return null
                 val stageId = "$blockId:r${roundIndex0 + 1}:g${groupIndex0 + 1}:$groupId"
-                val targets = group.array("targets") ?: return null
-                targets.forEachIndexed { targetIndex0, value ->
-                    val target = value as? CanonicalJsonValue.Obj ?: return null
-                    if (target.int("order") != targetIndex0.toLong()) return null
-                    val kind = target.string("kind") ?: return null
+                group.targets.forEachIndexed { targetIndex0, target ->
+                    if (target.order != targetIndex0.toLong()) return null
+                    val kind = target.kind
                     add(
                         "stage_group_$kind",
                         stageId,
                         "stage_group",
                         groupId,
-                        target.string("id") ?: return null,
+                        target.id,
                         kind,
                         roundIndex0.toLong(),
                         groupIndex0.toLong(),
@@ -521,7 +566,7 @@ object PhaseIdentityV1Validator {
                 }
                 stageInstanceIndex0 += 1
             }
-            if (roundIndex0 < rounds - 1 && (block.int("restBetweenRoundsSec") ?: return null) > 0) {
+            if (roundIndex0 < rounds - 1 && (block.restBetweenRoundsSec ?: return null) > 0) {
                 val stageId = "$blockId:r${roundIndex0 + 1}:between-round-rest"
                 add(
                     "between_round_rest",
@@ -537,7 +582,7 @@ object PhaseIdentityV1Validator {
                 stageInstanceIndex0 += 1
             }
         }
-        if ((block.int("cooldownSec") ?: return null) > 0) {
+        if ((block.cooldownSec ?: return null) > 0) {
             val stageId = "$blockId:cooldown"
             add("cooldown", stageId, "cooldown", stageId, "$stageId:target", "cooldown", null, null, 0)
         }
@@ -551,22 +596,21 @@ object PhaseIdentityV1Validator {
         if (payload.string("variant") == "paused") return true
         val blockId = payload.string("blockId") ?: return false
         val blockView = context.firstBlockById(blockId) ?: return false
-        val block = blockView.root
-        if (block.string("kind") != "strength_exercise" ||
-            payload.string("plannedExerciseId") != block.string("exerciseId")
+        if (blockView.kind != "strength_exercise" ||
+            payload.string("plannedExerciseId") != blockView.exerciseId
         ) {
             return false
         }
         val setId = payload.string("setPlanId") ?: return false
         val setIndex = blockView.firstSetIndexById(setId) ?: return false
         val set = blockView.sets[setIndex]
-        val plannedExerciseId = block.string("exerciseId") ?: return false
+        val plannedExerciseId = blockView.exerciseId ?: return false
         val actualExerciseId = payload.string("actualExerciseId") ?: return false
         val substitutedFrom = payload.string("substitutedFromExerciseId")
         val globalSetIndex = blockView.precedingStrengthSetCount + setIndex
         return payload.int("exerciseSetIndex0") == setIndex.toLong() &&
             payload.int("globalSetIndex0") == globalSetIndex.toLong() &&
-            payload.string("setKind") == set.string("kind") &&
+            payload.string("setKind") == set.kind &&
             if (substitutedFrom == null) {
                 actualExerciseId == plannedExerciseId
             } else {
@@ -582,22 +626,21 @@ object PhaseIdentityV1Validator {
         if (payload.string("variant") == "paused") return true
         val blockId = payload.string("blockId") ?: return false
         val blockView = context.uniqueBlockById(blockId) ?: return false
-        val block = blockView.root
         val roundIndex = payload.int("roundIndex0")
-        if (roundIndex != null && roundIndex !in 0 until (block.int("rounds") ?: return false)) {
+        if (roundIndex != null && roundIndex !in 0 until (blockView.rounds ?: return false)) {
             return false
         }
         val variant = payload.string("variant") ?: return false
         val itemId = payload.string("itemId")
         if (itemId == null) {
             return when (variant) {
-                "between_round_rest" -> block.string("kind") == "timed_circuit" &&
-                    roundIndex != null && roundIndex < (block.int("rounds") ?: return false) - 1 &&
-                    (block.int("restBetweenRoundsSec") ?: 0L) > 0L &&
+                "between_round_rest" -> blockView.kind == "timed_circuit" &&
+                    roundIndex != null && roundIndex < (blockView.rounds ?: return false) - 1 &&
+                    (blockView.restBetweenRoundsSec ?: 0L) > 0L &&
                     payload.int("stepIndex0") == blockView.timedCircuitBetweenRoundStepIndex(roundIndex)
-                "block_rest" -> block.string("kind") == "rest" && payload.int("stepIndex0") == 0L
-                "boundary" -> block.string("kind") in setOf("warmup", "stretch", "cooldown") &&
-                    block.int("durationSec") != null && payload.int("stepIndex0") == 0L
+                "block_rest" -> blockView.kind == "rest" && payload.int("stepIndex0") == 0L
+                "boundary" -> blockView.kind in setOf("warmup", "stretch", "cooldown") &&
+                    blockView.durationSec != null && payload.int("stepIndex0") == 0L
                 else -> false
             }
         }
@@ -605,10 +648,10 @@ object PhaseIdentityV1Validator {
         val item = blockView.items[itemIndex]
         val restAfter = variant in setOf("circuit_rest_after_action", "non_circuit_rest_after_action")
         val expectedStep = blockView.timedItemStepIndex(itemIndex, roundIndex, restAfter) ?: return false
-        return item.string("stageType") != "rest" &&
+        return item.stageType != "rest" &&
             payload.int("stepIndex0") == expectedStep &&
-            payload.string("exerciseId") == item.string("exerciseId") &&
-            if (restAfter) (item.int("restAfterSec") ?: 0L) > 0L else true
+            payload.string("exerciseId") == item.exerciseId &&
+            if (restAfter) (item.restAfterSec ?: 0L) > 0L else true
     }
 
     fun validateStructure(

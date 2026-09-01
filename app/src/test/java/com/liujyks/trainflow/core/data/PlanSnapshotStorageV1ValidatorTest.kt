@@ -444,17 +444,34 @@ class PlanSnapshotStorageV1ValidatorTest {
             assertTrue(preparedResult is PreparedPlanSnapshotStorageV1Result.Valid)
             val prepared = (preparedResult as PreparedPlanSnapshotStorageV1Result.Valid).prepared
 
-            assertEquals(publicStorage.mode, prepared.storage.mode)
-            assertEquals(publicStorage.persistedJson, prepared.storage.persistedJson)
+            assertEquals(publicStorage.mode, prepared.storage().mode)
+            assertEquals(publicStorage.persistedJson, prepared.storage().persistedJson)
             assertArrayEquals(
                 OrderedStructureSignatureInputV1.encode(publicStorage),
                 prepared.orderedStructureSignatureInputBytes()
             )
             assertEquals(
                 OrderedStructureSignatureInputV1.digestHexLowercase(publicStorage),
-                prepared.orderedStructureDigestHexLowercase
+                prepared.orderedStructureDigestHexLowercase()
+            )
+            val returnedBytes = prepared.orderedStructureSignatureInputBytes()
+            returnedBytes.fill(0)
+            assertArrayEquals(
+                OrderedStructureSignatureInputV1.encode(publicStorage),
+                prepared.orderedStructureSignatureInputBytes()
             )
         }
+
+        assertEquals(
+            null,
+            PreparedPlanSnapshotStorageV1.fromValidated(
+                factoryProof = Any(),
+                storage = WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, "{}"),
+                orderedStructureSignatureInput = "{}",
+                orderedStructureDigestHexLowercase = "0".repeat(64),
+                phaseBindingBlocks = emptyList()
+            )
+        )
 
         val canonical = timedCompositionSnapshot().toStorageJson()
         val invalidStorage = listOf(

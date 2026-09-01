@@ -777,6 +777,31 @@ class CanonicalSessionValidatorsTest {
     }
 
     @Test
+    fun sampleSequenceUniquenessRemainsOrderIndependentWithPrimitiveValidationStorage() {
+        val samples = listOf(
+            HeartRateSampleEntity("recording", 9, 0, 0, 120),
+            HeartRateSampleEntity("recording", 1, 20, 1, 121),
+            HeartRateSampleEntity("recording", 5, 40, 2, 122)
+        )
+        assertTrue(
+            CanonicalSessionGraphV1Validator.validateCanonicalSamples(
+                samples,
+                recordingId = "recording",
+                recordingStart = CanonicalTuple(0, 0),
+                inputCut = CanonicalTuple(100, 10)
+            )
+        )
+        assertTrue(
+            !CanonicalSessionGraphV1Validator.validateCanonicalSamples(
+                samples + HeartRateSampleEntity("recording", 1, 60, 3, 123),
+                recordingId = "recording",
+                recordingStart = CanonicalTuple(0, 0),
+                inputCut = CanonicalTuple(100, 10)
+            )
+        )
+    }
+
+    @Test
     fun laterInvalidPhaseAndInvalidSnapshotAlwaysFailTheWholeGraph() {
         val valid = validSplitTerminalGraph()
         val invalidLaterPhase = valid.copy(

@@ -2,6 +2,8 @@ package com.liujyks.trainflow.core.database
 
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
 import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PlanSnapshotPhaseBlockFactsV1
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
 import com.liujyks.trainflow.core.data.WorkoutPlanSnapshotStorageV1
 import com.liujyks.trainflow.core.data.toStorageJson
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
@@ -1012,6 +1014,66 @@ class CanonicalStorageJsonValidatorsTest {
             PhaseIdentityV1Validator.validate(unsupportedIdentity, invalidSnapshot, "timed_work")
         )
         assertEquals(null, PhaseIdentityV1Validator.prepareContext(invalidSnapshot))
+    }
+
+    @Test
+    fun forgedPreparedContextCannotValidateWithoutFactoryEvidence() {
+        val forged = PreparedPhaseIdentityV1Context.fromValidated(
+            factoryProof = Any(),
+            expectedMode = "timed",
+            expectedDigest = DIGEST,
+            blocks = emptyList()
+        )
+
+        assertEquals(null, forged)
+    }
+
+    @Test
+    fun preparedBindingRetainsNoMutableParsedRootAndIsolatesReturnedDerivedBytes() {
+        val snapshot = WorkoutPlanSnapshot(
+            title = "Mutation isolation",
+            mode = WorkoutMode.TIMED,
+            blocks = listOf(WarmupBlock("block", 0, durationSec = 10))
+        )
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            snapshot.toStorageJson(),
+            WorkoutMode.TIMED
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val storage = prepared.storage()
+        val digest = requireNotNull(
+            com.liujyks.trainflow.core.data.OrderedStructureSignatureInputV1.digestHexLowercase(storage)
+        )
+        val identity = envelope(
+            family = "legacy_timed_v1",
+            payloadVersion = 1,
+            mode = "timed",
+            phaseKind = "timed_work",
+            payload = legacyPayload(
+                "boundary_block_work",
+                "block",
+                0,
+                "warmup",
+                "warmup",
+                null,
+                null,
+                null
+            ),
+            digest = digest
+        )
+        val context = requireNotNull(PhaseIdentityV1Validator.prepareContext(prepared))
+        assertValid(PhaseIdentityV1Validator.validatePrepared(identity, context, "timed_work"))
+
+        val returnedBytes = prepared.orderedStructureSignatureInputBytes()
+        returnedBytes.fill(0)
+        assertTrue(!returnedBytes.contentEquals(prepared.orderedStructureSignatureInputBytes()))
+
+        @Suppress("UNCHECKED_CAST")
+        val collectionMutation = runCatching {
+            (prepared.phaseBindingBlocks() as MutableList<PlanSnapshotPhaseBlockFactsV1>).clear()
+        }.exceptionOrNull()
+        assertTrue(collectionMutation is UnsupportedOperationException)
+
+        assertValid(PhaseIdentityV1Validator.validatePrepared(identity, context, "timed_work"))
     }
 
     @Test
