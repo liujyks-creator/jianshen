@@ -13,6 +13,7 @@ import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
@@ -837,65 +838,218 @@ class WorkoutSessionRecorderReconciliationTest {
     }
 
     @Test
-    fun canonicalActiveRecordingRelaunchReturnsUncachedFinalizerPendingWithoutAnyMutation() = runBlocking {
+    fun canonicalActiveRecordingRelaunchFinalizesTerminalGraphCachesSuccessAndAllowsProtectedStart() = runBlocking {
         insertCanonicalRunningSessionWithActiveRecording("canonical-with-recording")
-        val before = databaseSnapshot()
         val repository = WorkoutSessionRepository(database)
+        val callStartedAt = Instant.now()
 
         val result = repository.prepareRecorder()
+        val callFinishedAt = Instant.now()
 
-        assertTrue(result !is RecorderReconciliationResult.Succeeded)
-        assertTrue(result !is RecorderReconciliationResult.ManualResolutionRequired)
-        assertTrue(result is RecorderReconciliationResult.FinalizerPrerequisitePending)
-        result as RecorderReconciliationResult.FinalizerPrerequisitePending
-        assertEquals("FINALIZER_PREREQUISITE_PENDING", result.code)
+        assertTrue(result is RecorderReconciliationResult.Succeeded)
+        result as RecorderReconciliationResult.Succeeded
         assertTrue(result.legacyResiduals.isEmpty())
-        assertTrue(result.reconciledSessions.isEmpty())
         assertEquals(
             listOf(
-                FinalizerPrerequisiteCandidate(
+                ReconciledCanonicalSession(
                     sessionId = "canonical-with-recording",
-                    expectedStatus = "active",
                     expectedTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 4),
-                    recordingId = "canonical-with-recording:recording",
+                    reconciledTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 5),
                     reconciliationContractVersion = 1
                 )
             ),
-            result.candidates
+            result.reconciledSessions
         )
-        assertEquals(before, databaseSnapshot())
+        val rows = requireNotNull(
+            database.canonicalTimelineHeartRateDao()
+                .canonicalGraphRows("canonical-with-recording")
+        )
+        assertEquals("abandoned", rows.session.status)
+        assertEquals(100L, rows.session.lastDurableOffsetMs)
+        assertEquals(5L, rows.session.lastMutationSequence)
+        assertEquals(100L, rows.session.trustedEndOffsetMs)
+        assertEquals("process_interrupted", rows.session.terminalReason)
+        assertEquals(1, rows.phases.size)
+        assertEquals(100L, rows.phases.single().endOffsetMs)
+        assertEquals(5L, rows.phases.single().endMutationSequence)
+        assertEquals(null, rows.phases.single().openMarker)
+        val recordingRows = rows.recordings.single()
+        assertEquals("canonical-with-recording:recording", recordingRows.recording.recordingId)
+        assertEquals("canonical-with-recording", recordingRows.recording.sessionId)
+        assertEquals("terminal", recordingRows.recording.status)
+        assertEquals(100L, recordingRows.recording.endedOffsetMs)
+        assertEquals(5L, recordingRows.recording.endedMutationSequence)
+        assertEquals(1, recordingRows.recording.originalAnalysisVersion)
+        assertEquals(1, recordingRows.acquisitions.size)
+        assertEquals(100L, recordingRows.acquisitions.single().endOffsetMs)
+        assertEquals(5L, recordingRows.acquisitions.single().endMutationSequence)
+        assertEquals(null, recordingRows.acquisitions.single().openMarker)
+        assertEquals(1, recordingRows.samples.size)
+        assertEquals(1, recordingRows.snapshots.size)
+        val snapshot = recordingRows.snapshots.single()
+        assertEquals("canonical-with-recording:recording", snapshot.recordingId)
+        assertEquals(1, snapshot.analysisVersion)
+        assertEquals(5L, snapshot.inputLastMutationSequence)
+        assertEquals("primary_points_available", snapshot.sampleStatus)
+        assertEquals("normal", snapshot.coverageStatus)
+        assertEquals("unavailable_no_effective_max", snapshot.zoneStatus)
+        assertEquals(1L, snapshot.canonicalSampleCount)
+        assertEquals(1L, snapshot.primaryPointSampleCount)
+        assertEquals(100L, snapshot.eligibleDurationMs)
+        assertEquals(100L, snapshot.coveredDurationMs)
+        assertEquals(10_000, snapshot.coverageBasisPoints)
+        assertEquals(12_000L, snapshot.weightedBpmMs)
+        assertEquals(120, snapshot.observedAvgBpm)
+        assertEquals(120, snapshot.observedMaxBpm)
+        assertEquals(0L, snapshot.highestOffsetMs)
+        assertEquals(0L, snapshot.highestMutationSequence)
+        assertEquals(0L, snapshot.highestSampleSequence)
+        assertEquals(VALID_ANALYSIS_CONFIG, snapshot.analysisConfigJson)
+        assertEquals(null, snapshot.zoneDurationsJson)
+        assertEquals(VALID_PHASE_AGGREGATES, snapshot.phaseAggregatesJson)
+        assertEquals(VALID_DURATION_BREAKDOWN, snapshot.durationBreakdownJson)
+        assertEquals(
+            "{\"qualityReasonsContractVersion\":1,\"sessionReasons\":[" +
+                "{\"reasonCode\":\"unavailable_no_effective_max\",\"durationMs\":null}," +
+                "{\"reasonCode\":\"process_interrupted\",\"durationMs\":null}]," +
+                "\"phaseReasons\":[{\"phaseSequence\":0," +
+                "\"reasonCode\":\"unavailable_no_effective_max\",\"durationMs\":null}]}",
+            snapshot.qualityReasonsJson
+        )
+        val createdAt = Instant.parse(snapshot.createdAt)
+        assertTrue(!createdAt.isBefore(callStartedAt.minusSeconds(10)))
+        assertTrue(!createdAt.isAfter(callFinishedAt.plusSeconds(10)))
 
-        val protectedWrite = runCatching {
+        val afterFinalization = databaseSnapshot()
+        assertSame(result, repository.prepareRecorder())
+        assertEquals(afterFinalization, databaseSnapshot())
+        val protectedStart = repository.startCanonicalSession(
+            canonicalHeader("canonical-after-finalization"),
+            openPhase("canonical-after-finalization")
+        )
+        assertSame(result, protectedStart)
+        assertEquals(
+            "active",
+            database.canonicalTimelineHeartRateDao()
+                .sessionById("canonical-after-finalization")?.status
+        )
+        assertEquals(null, inFlightOrNull(repository))
+    }
+
+    @Test
+    fun integratedFinalizerFailureKeepsOriginalGuardRollsBackAndDoesNotCache() = runBlocking {
+        insertCanonicalRunningSessionWithActiveRecording("binding-failure")
+        insertUnrelatedUserTableSentinels("binding-failure")
+        database.openHelper.writableDatabase.execSQL(
+            """
+            CREATE TRIGGER occupy_original_binding_after_snapshot
+            AFTER INSERT ON heart_rate_analysis_snapshots
+            WHEN NEW.recording_id = 'binding-failure:recording'
+            BEGIN
+              UPDATE heart_rate_recordings
+              SET original_analysis_version = 1
+              WHERE recording_id = NEW.recording_id;
+            END
+            """.trimIndent()
+        )
+        val before = databaseSnapshot()
+        val repository = WorkoutSessionRepository(database)
+
+        repeat(2) {
+            val failure = runCatching { repository.prepareRecorder() }.exceptionOrNull()
+            assertTrue(failure is RecorderGuardedWriteException)
+            failure as RecorderGuardedWriteException
+            assertEquals("bind_original_analysis", failure.guard)
+            assertEquals(0, failure.actualRowCount)
+            assertEquals(before, databaseSnapshot())
+            assertEquals(null, inFlightOrNull(repository))
+        }
+
+        val protectedFailure = runCatching {
             repository.appendSessionDisplayMetadata(
                 expected = RecorderExpectedState(
-                    sessionId = "canonical-with-recording",
+                    sessionId = "binding-failure",
                     status = "active",
                     durableTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 4),
-                    openPhaseId = "canonical-with-recording:phase:0",
-                    recordingId = "canonical-with-recording:recording",
-                    openAcquisitionId = "canonical-with-recording:acquisition"
+                    openPhaseId = "binding-failure:phase:0",
+                    recordingId = "binding-failure:recording",
+                    openAcquisitionId = "binding-failure:acquisition"
                 ),
                 nextTuple = CanonicalTuple(offsetMs = 100, mutationSequence = 5),
                 nextJson = VALID_DISPLAY_METADATA
             )
-        }
-        val blocked = protectedWrite.exceptionOrNull()
-        assertTrue(blocked is RecorderGateBlockedException)
-        blocked as RecorderGateBlockedException
-        assertTrue(blocked.result is RecorderReconciliationResult.FinalizerPrerequisitePending)
+        }.exceptionOrNull()
+        assertTrue(protectedFailure is RecorderGuardedWriteException)
+        protectedFailure as RecorderGuardedWriteException
+        assertEquals("bind_original_analysis", protectedFailure.guard)
+        assertEquals(0, protectedFailure.actualRowCount)
         assertEquals(before, databaseSnapshot())
 
-        val retried = repository.prepareRecorder()
-        assertTrue(retried is RecorderReconciliationResult.FinalizerPrerequisitePending)
-        assertTrue(result !== retried)
-        assertEquals(before, databaseSnapshot())
-        assertEquals(null, inFlightOrNull(repository))
-
-        // CS-04B restores the final Succeeded obligation after the CS-05 finalizer exists.
+        database.openHelper.writableDatabase.execSQL(
+            "DROP TRIGGER occupy_original_binding_after_snapshot"
+        )
+        val retry = repository.prepareRecorder()
+        assertTrue(retry is RecorderReconciliationResult.Succeeded)
+        assertEquals(
+            listOf("binding-failure"),
+            (retry as RecorderReconciliationResult.Succeeded)
+                .reconciledSessions.map { session -> session.sessionId }
+        )
     }
 
     @Test
-    fun concurrentPendingAccessSharesOneFlightButDoesNotCachePendingAfterCompletion() = runBlocking {
+    fun mixedDatabaseReconcilesNoRecordingAndActiveRecordingWithIdentityBoundOrder() = runBlocking {
+        insertSession(legacySession("legacy-active", "active"))
+        insertCanonicalRunningSession("no-recording")
+        insertCanonicalRunningSessionWithActiveRecording("with-recording")
+        insertCanonicalTerminalSession("terminal-recording")
+
+        val result = WorkoutSessionRepository(database).prepareRecorder()
+
+        assertTrue(result is RecorderReconciliationResult.Succeeded)
+        result as RecorderReconciliationResult.Succeeded
+        assertEquals(
+            listOf("legacy-active"),
+            result.legacyResiduals.map { residual -> residual.sessionId }
+        )
+        assertEquals(
+            listOf(
+                ReconciledCanonicalSession(
+                    sessionId = "no-recording",
+                    expectedTuple = CanonicalTuple(100, 4),
+                    reconciledTuple = CanonicalTuple(100, 5),
+                    reconciliationContractVersion = 1
+                ),
+                ReconciledCanonicalSession(
+                    sessionId = "with-recording",
+                    expectedTuple = CanonicalTuple(100, 4),
+                    reconciledTuple = CanonicalTuple(100, 5),
+                    reconciliationContractVersion = 1
+                )
+            ),
+            result.reconciledSessions
+        )
+        val dao = database.canonicalTimelineHeartRateDao()
+        assertEquals("abandoned", dao.sessionById("no-recording")?.status)
+        assertEquals("process_interrupted", dao.sessionById("no-recording")?.terminalReason)
+        assertEquals("abandoned", dao.sessionById("with-recording")?.status)
+        assertEquals("process_interrupted", dao.sessionById("with-recording")?.terminalReason)
+        assertEquals("completed", dao.sessionById("terminal-recording")?.status)
+        val finalizedRecording = requireNotNull(dao.canonicalGraphRows("with-recording"))
+            .recordings.single()
+        assertEquals("with-recording:recording", finalizedRecording.recording.recordingId)
+        assertEquals("with-recording", finalizedRecording.recording.sessionId)
+        assertEquals(1, finalizedRecording.snapshots.size)
+        assertEquals("with-recording:recording", finalizedRecording.snapshots.single().recordingId)
+        assertEquals(1, finalizedRecording.recording.originalAnalysisVersion)
+        val preservedTerminal = requireNotNull(dao.canonicalGraphRows("terminal-recording"))
+            .recordings.single()
+        assertEquals("terminal-recording:recording", preservedTerminal.recording.recordingId)
+        assertEquals("2026-08-25T00:00:00Z", preservedTerminal.snapshots.single().createdAt)
+    }
+
+    @Test
+    fun concurrentActiveRecordingAccessProducesOneFinalizationAndCachesSameSuccess() = runBlocking {
         insertCanonicalRunningSessionWithActiveRecording("canonical-with-recording")
         val repository = WorkoutSessionRepository(database)
 
@@ -907,10 +1061,19 @@ class WorkoutSessionRecorderReconciliationTest {
         }
 
         assertSame(concurrent[0], concurrent[1])
-        assertTrue(concurrent[0] is RecorderReconciliationResult.FinalizerPrerequisitePending)
-        val retried = repository.prepareRecorder()
-        assertTrue(retried is RecorderReconciliationResult.FinalizerPrerequisitePending)
-        assertTrue(concurrent[0] !== retried)
+        assertTrue(concurrent[0] is RecorderReconciliationResult.Succeeded)
+        val succeeded = concurrent[0] as RecorderReconciliationResult.Succeeded
+        assertEquals(
+            listOf("canonical-with-recording"),
+            succeeded.reconciledSessions.map { session -> session.sessionId }
+        )
+        val recordingRows = requireNotNull(
+            database.canonicalTimelineHeartRateDao()
+                .canonicalGraphRows("canonical-with-recording")
+        ).recordings.single()
+        assertEquals(1, recordingRows.snapshots.size)
+        assertEquals(1, recordingRows.recording.originalAnalysisVersion)
+        assertSame(concurrent[0], repository.prepareRecorder())
         assertEquals(null, inFlightOrNull(repository))
     }
 
@@ -984,6 +1147,15 @@ class WorkoutSessionRecorderReconciliationTest {
                 intentReason = null,
                 deviceState = "live",
                 deviceReason = null
+            )
+        )
+        database.canonicalTimelineHeartRateDao().insertSample(
+            HeartRateSampleEntity(
+                recordingId = "$sessionId:recording",
+                sampleSequence = 0,
+                offsetMs = 0,
+                mutationSequence = 0,
+                bpm = 120
             )
         )
     }

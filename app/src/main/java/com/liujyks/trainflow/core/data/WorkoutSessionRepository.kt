@@ -40,6 +40,7 @@ import com.liujyks.trainflow.core.model.WeightUnit
 import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutSession
+import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -60,14 +61,6 @@ internal data class ReconciledCanonicalSession(
     val sessionId: String,
     val expectedTuple: CanonicalTuple,
     val reconciledTuple: CanonicalTuple,
-    val reconciliationContractVersion: Int
-)
-
-internal data class FinalizerPrerequisiteCandidate(
-    val sessionId: String,
-    val expectedStatus: String,
-    val expectedTuple: CanonicalTuple,
-    val recordingId: String,
     val reconciliationContractVersion: Int
 )
 
@@ -100,12 +93,6 @@ internal sealed interface RecorderReconciliationResult {
         val failures: List<RecorderManualResolutionFailure>
     ) : RecorderReconciliationResult
 
-    data class FinalizerPrerequisitePending(
-        override val legacyResiduals: List<LegacySessionResidual>,
-        val reconciledSessions: List<ReconciledCanonicalSession>,
-        val candidates: List<FinalizerPrerequisiteCandidate>,
-        val code: String = "FINALIZER_PREREQUISITE_PENDING"
-    ) : RecorderReconciliationResult
 }
 
 internal class RecorderGuardedWriteException(
@@ -360,9 +347,7 @@ internal class WorkoutSessionRepository(
                 recorderGateMutex.withLock {
                     check(recorderGateInFlight === flight)
                     completedOutcome.getOrNull()?.let { result ->
-                        if (result !is RecorderReconciliationResult.FinalizerPrerequisitePending) {
-                            completedRecorderGate = result
-                        }
+                        completedRecorderGate = result
                     }
                     recorderGateInFlight = null
                     completedOutcome.fold(
@@ -590,8 +575,6 @@ internal class WorkoutSessionRepository(
             is RecorderReconciliationResult.Succeeded -> result
             is RecorderReconciliationResult.ManualResolutionRequired ->
                 throw RecorderGateBlockedException(result)
-            is RecorderReconciliationResult.FinalizerPrerequisitePending ->
-                throw RecorderGateBlockedException(result)
         }
 
     private suspend fun validatedExpectedGraph(
@@ -643,7 +626,6 @@ internal class WorkoutSessionRepository(
         database.withTransaction {
             val residuals = mutableListOf<LegacySessionResidual>()
             val candidates = mutableListOf<CanonicalReconciliationCandidate>()
-            val pendingCandidates = mutableListOf<FinalizerPrerequisiteCandidate>()
             val failures = mutableListOf<RecorderManualResolutionFailure>()
 
             dao.sessionsForRecorderGate().forEach { session ->
@@ -665,15 +647,6 @@ internal class WorkoutSessionRepository(
                             graph = classification.graph
                         )
 
-                    is RecorderGateClassification.FinalizerPrerequisite ->
-                        pendingCandidates += FinalizerPrerequisiteCandidate(
-                            sessionId = session.id,
-                            expectedStatus = session.status,
-                            expectedTuple = classification.header.durableTuple,
-                            recordingId = requireNotNull(classification.graph.recording).recordingId,
-                            reconciliationContractVersion = RECONCILIATION_CONTRACT_VERSION
-                        )
-
                     RecorderGateClassification.CanonicalTerminal -> Unit
                     is RecorderGateClassification.Failure -> failures += classification.failure
                 }
@@ -687,20 +660,34 @@ internal class WorkoutSessionRepository(
             }
 
             val reconciled = candidates.map { candidate ->
-                reconcileCanonicalCandidate(candidate)
+                val recording = candidate.graph.recording
+                if (recording == null) {
+                    reconcileCanonicalCandidate(candidate)
+                } else {
+                    val finalized = finalizeRecordingSession(
+                        RecordingFinalizationRequest(
+                            sessionId = candidate.session.id,
+                            recordingId = recording.recordingId,
+                            expectedStatus = candidate.session.status,
+                            expectedTuple = candidate.durableTuple,
+                            finalOffsetMs = candidate.durableTuple.offsetMs,
+                            terminalStatus = "abandoned",
+                            terminalReason = "process_interrupted",
+                            snapshotCreatedAt = Instant.now().toString()
+                        )
+                    )
+                    ReconciledCanonicalSession(
+                        sessionId = finalized.sessionId,
+                        expectedTuple = candidate.durableTuple,
+                        reconciledTuple = finalized.finalTuple,
+                        reconciliationContractVersion = RECONCILIATION_CONTRACT_VERSION
+                    )
+                }
             }
-            if (pendingCandidates.isEmpty()) {
-                RecorderReconciliationResult.Succeeded(
-                    legacyResiduals = residuals,
-                    reconciledSessions = reconciled
-                )
-            } else {
-                RecorderReconciliationResult.FinalizerPrerequisitePending(
-                    legacyResiduals = residuals,
-                    reconciledSessions = reconciled,
-                    candidates = pendingCandidates
-                )
-            }
+            RecorderReconciliationResult.Succeeded(
+                legacyResiduals = residuals,
+                reconciledSessions = reconciled
+            )
         }
 
     private suspend fun classifyForRecorderGate(
@@ -733,13 +720,8 @@ internal class WorkoutSessionRepository(
         }
         return when (header) {
             is CanonicalSessionHeaderV1Result.Legacy -> RecorderGateClassification.Legacy(header)
-            is CanonicalSessionHeaderV1Result.CanonicalRunning -> {
-                if (graph.recording != null) {
-                    RecorderGateClassification.FinalizerPrerequisite(header, graph)
-                } else {
-                    RecorderGateClassification.CanonicalRunning(header, graph)
-                }
-            }
+            is CanonicalSessionHeaderV1Result.CanonicalRunning ->
+                RecorderGateClassification.CanonicalRunning(header, graph)
 
             is CanonicalSessionHeaderV1Result.CanonicalTerminal ->
                 RecorderGateClassification.CanonicalTerminal
@@ -1225,11 +1207,6 @@ private sealed interface RecorderGateClassification {
     ) : RecorderGateClassification
 
     data class CanonicalRunning(
-        val header: CanonicalSessionHeaderV1Result.CanonicalRunning,
-        val graph: CanonicalSessionGraphV1
-    ) : RecorderGateClassification
-
-    data class FinalizerPrerequisite(
         val header: CanonicalSessionHeaderV1Result.CanonicalRunning,
         val graph: CanonicalSessionGraphV1
     ) : RecorderGateClassification
