@@ -127,6 +127,189 @@ interface CanonicalTimelineHeartRateDao {
 
     @Query(
         """
+        UPDATE workout_phase_intervals
+        SET end_offset_ms = :finalOffsetMs,
+            end_mutation_sequence = :finalMutationSequence,
+            open_marker = NULL
+        WHERE id = :expectedOpenPhaseId
+          AND session_id = :sessionId
+          AND end_offset_ms IS NULL
+          AND end_mutation_sequence IS NULL
+          AND open_marker = 1
+          AND EXISTS (
+              SELECT 1
+              FROM workout_sessions AS session
+              JOIN heart_rate_recordings AS recording
+                ON recording.session_id = session.id
+              JOIN heart_rate_acquisition_intervals AS acquisition
+                ON acquisition.recording_id = recording.recording_id
+              WHERE session.id = :sessionId
+                AND session.status = :expectedStatus
+                AND session.timeline_version = 1
+                AND session.last_durable_offset_ms = :expectedOffsetMs
+                AND session.last_mutation_sequence = :expectedMutationSequence
+                AND session.trusted_end_offset_ms IS NULL
+                AND session.terminal_reason IS NULL
+                AND recording.recording_id = :recordingId
+                AND recording.status = 'active'
+                AND recording.ended_offset_ms IS NULL
+                AND recording.ended_mutation_sequence IS NULL
+                AND recording.original_analysis_version IS NULL
+                AND acquisition.id = :expectedOpenAcquisitionId
+                AND acquisition.end_offset_ms IS NULL
+                AND acquisition.end_mutation_sequence IS NULL
+                AND acquisition.open_marker = 1
+          )
+        """
+    )
+    suspend fun finalizeCloseOpenPhase(
+        sessionId: String,
+        recordingId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedOpenPhaseId: String,
+        expectedOpenAcquisitionId: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long
+    ): Int
+
+    @Query(
+        """
+        UPDATE heart_rate_acquisition_intervals
+        SET end_offset_ms = :finalOffsetMs,
+            end_mutation_sequence = :finalMutationSequence,
+            open_marker = NULL
+        WHERE id = :expectedOpenAcquisitionId
+          AND recording_id = :recordingId
+          AND end_offset_ms IS NULL
+          AND end_mutation_sequence IS NULL
+          AND open_marker = 1
+          AND EXISTS (
+              SELECT 1
+              FROM workout_sessions AS session
+              JOIN workout_phase_intervals AS phase
+                ON phase.session_id = session.id
+              JOIN heart_rate_recordings AS recording
+                ON recording.session_id = session.id
+              WHERE session.id = :sessionId
+                AND session.status = :expectedStatus
+                AND session.timeline_version = 1
+                AND session.last_durable_offset_ms = :expectedOffsetMs
+                AND session.last_mutation_sequence = :expectedMutationSequence
+                AND session.trusted_end_offset_ms IS NULL
+                AND session.terminal_reason IS NULL
+                AND phase.id = :expectedClosedPhaseId
+                AND phase.end_offset_ms = :finalOffsetMs
+                AND phase.end_mutation_sequence = :finalMutationSequence
+                AND phase.open_marker IS NULL
+                AND recording.recording_id = :recordingId
+                AND recording.status = 'active'
+                AND recording.ended_offset_ms IS NULL
+                AND recording.ended_mutation_sequence IS NULL
+                AND recording.original_analysis_version IS NULL
+          )
+        """
+    )
+    suspend fun finalizeCloseOpenAcquisition(
+        sessionId: String,
+        recordingId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedClosedPhaseId: String,
+        expectedOpenAcquisitionId: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long
+    ): Int
+
+    @Query(
+        """
+        UPDATE heart_rate_recordings
+        SET status = 'terminal',
+            ended_offset_ms = :finalOffsetMs,
+            ended_mutation_sequence = :finalMutationSequence
+        WHERE recording_id = :recordingId
+          AND session_id = :sessionId
+          AND status = 'active'
+          AND ended_offset_ms IS NULL
+          AND ended_mutation_sequence IS NULL
+          AND original_analysis_version IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM workout_sessions AS session
+              JOIN workout_phase_intervals AS phase
+                ON phase.session_id = session.id
+              JOIN heart_rate_acquisition_intervals AS acquisition
+                ON acquisition.recording_id = :recordingId
+              WHERE session.id = :sessionId
+                AND session.status = :expectedStatus
+                AND session.timeline_version = 1
+                AND session.last_durable_offset_ms = :expectedOffsetMs
+                AND session.last_mutation_sequence = :expectedMutationSequence
+                AND session.trusted_end_offset_ms IS NULL
+                AND session.terminal_reason IS NULL
+                AND phase.id = :expectedClosedPhaseId
+                AND phase.end_offset_ms = :finalOffsetMs
+                AND phase.end_mutation_sequence = :finalMutationSequence
+                AND phase.open_marker IS NULL
+                AND acquisition.id = :expectedClosedAcquisitionId
+                AND acquisition.end_offset_ms = :finalOffsetMs
+                AND acquisition.end_mutation_sequence = :finalMutationSequence
+                AND acquisition.open_marker IS NULL
+          )
+        """
+    )
+    suspend fun finalizeTerminalizeRecording(
+        sessionId: String,
+        recordingId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedClosedPhaseId: String,
+        expectedClosedAcquisitionId: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long
+    ): Int
+
+    @Query(
+        """
+        UPDATE heart_rate_recordings
+        SET original_analysis_version = 1
+        WHERE recording_id = :recordingId
+          AND session_id = :sessionId
+          AND status = 'terminal'
+          AND ended_offset_ms = :finalOffsetMs
+          AND ended_mutation_sequence = :finalMutationSequence
+          AND original_analysis_version IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM workout_sessions AS session
+              JOIN heart_rate_analysis_snapshots AS snapshot
+                ON snapshot.recording_id = :recordingId
+              WHERE session.id = :sessionId
+                AND session.status = :terminalStatus
+                AND session.terminal_reason = :terminalReason
+                AND session.timeline_version = 1
+                AND session.last_durable_offset_ms = :finalOffsetMs
+                AND session.trusted_end_offset_ms = :finalOffsetMs
+                AND session.last_mutation_sequence = :finalMutationSequence
+                AND snapshot.analysis_version = 1
+                AND snapshot.input_last_mutation_sequence = :finalMutationSequence
+          )
+        """
+    )
+    suspend fun bindOriginalAnalysisV1(
+        sessionId: String,
+        recordingId: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long,
+        terminalStatus: String,
+        terminalReason: String
+    ): Int
+
+    @Query(
+        """
         SELECT * FROM workout_phase_intervals
         WHERE session_id = :sessionId
         ORDER BY sequence

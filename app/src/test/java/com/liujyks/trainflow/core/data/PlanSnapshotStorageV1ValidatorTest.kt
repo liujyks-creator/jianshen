@@ -425,6 +425,75 @@ class PlanSnapshotStorageV1ValidatorTest {
     }
 
     @Test
+    fun preparedSnapshotMatchesPublicBytesAndDigestForEveryModeAndRejectsInvalidStorage() {
+        val snapshots = listOf(
+            WorkoutPlanSnapshot(title = "Timed", mode = WorkoutMode.TIMED, blocks = emptyList()),
+            WorkoutPlanSnapshot(title = "Strength", mode = WorkoutMode.STRENGTH, blocks = emptyList()),
+            WorkoutPlanSnapshot(
+                title = "Follow",
+                mode = WorkoutMode.FOLLOW_ALONG,
+                blocks = emptyList(),
+                followAlong = FollowAlongPlanMeta(preset = true)
+            )
+        )
+        snapshots.forEach { snapshot ->
+            val json = snapshot.toStorageJson()
+            val publicStorage = (PlanSnapshotStorageV1Validator.validate(json, snapshot.mode) as
+                PlanSnapshotStorageV1ValidationResult.Valid).storage
+            val preparedResult = PlanSnapshotStorageV1Validator.prepare(json, snapshot.mode)
+            assertTrue(preparedResult is PreparedPlanSnapshotStorageV1Result.Valid)
+            val prepared = (preparedResult as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+
+            assertEquals(publicStorage.mode, prepared.storage().mode)
+            assertEquals(publicStorage.persistedJson, prepared.storage().persistedJson)
+            assertArrayEquals(
+                OrderedStructureSignatureInputV1.encode(publicStorage),
+                prepared.orderedStructureSignatureInputBytes()
+            )
+            assertEquals(
+                OrderedStructureSignatureInputV1.digestHexLowercase(publicStorage),
+                prepared.orderedStructureDigestHexLowercase()
+            )
+            val returnedBytes = prepared.orderedStructureSignatureInputBytes()
+            returnedBytes.fill(0)
+            assertArrayEquals(
+                OrderedStructureSignatureInputV1.encode(publicStorage),
+                prepared.orderedStructureSignatureInputBytes()
+            )
+        }
+
+        assertEquals(
+            null,
+            PreparedPlanSnapshotStorageV1.fromValidated(
+                factoryProof = Any(),
+                storage = WorkoutPlanSnapshotStorageV1(WorkoutMode.TIMED, "{}"),
+                orderedStructureSignatureInput = "{}",
+                orderedStructureDigestHexLowercase = "0".repeat(64),
+                phaseBindingBlocks = emptyList()
+            )
+        )
+
+        val canonical = timedCompositionSnapshot().toStorageJson()
+        val invalidStorage = listOf(
+            canonical.replace("\"planId\":null,", ""),
+            canonical.replace("\"title\":\"Timed\"", "\"title\":\"Timed\",\"extra\":true"),
+            canonical.replace("\"planSnapshotStorageContractVersion\":1", "\"planSnapshotStorageContractVersion\":\"1\""),
+            canonical.replace("\"title\":\"Timed\"", "\"title\":null"),
+            canonical.replace("\"planSnapshotStorageContractVersion\":1", "\"planSnapshotStorageContractVersion\":2"),
+            canonical.replaceFirst("\"order\":0", "\"order\":-1"),
+            canonical.replace("\"planId\":null", "\"planId\":null,\"planId\":null"),
+            "$canonical "
+        )
+        invalidStorage.forEachIndexed { index, json ->
+            assertTrue(
+                "invalid prepared storage $index produced a usable context",
+                PlanSnapshotStorageV1Validator.prepare(json, WorkoutMode.TIMED) !is
+                    PreparedPlanSnapshotStorageV1Result.Valid
+            )
+        }
+    }
+
+    @Test
     fun strengthProjectionGoldenCoversZeroDecimalExplicitNullEscapingAndMemberOrder() {
         val storage = validatedStorage(
             WorkoutPlanSnapshot(

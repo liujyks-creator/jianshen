@@ -1,14 +1,25 @@
 package com.liujyks.trainflow.core.database
 
+import com.liujyks.trainflow.core.data.OrderedStructureSignatureInputV1
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.toStorageJson
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetPlan
+import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class CanonicalSessionValidatorsTest {
     @Test
@@ -115,6 +126,139 @@ class CanonicalSessionValidatorsTest {
                 CanonicalSessionGraphV1Validator.validate(graph) is CanonicalValidationResult.Invalid
             )
         }
+    }
+
+    @Test
+    fun analysisDurationBindingKeepsPhaseAndIntentAxesIndependentAcrossPartitions() {
+        val phases = listOf(
+            terminalPhase().copy(
+                id = "phase-0",
+                endOffsetMs = 20,
+                endMutationSequence = 1,
+                phaseKind = "paused",
+                phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY
+            ),
+            terminalPhase().copy(
+                id = "phase-1",
+                sequence = 1,
+                startOffsetMs = 20,
+                startMutationSequence = 1,
+                endOffsetMs = 80,
+                endMutationSequence = 3
+            ),
+            terminalPhase().copy(
+                id = "phase-2",
+                sequence = 2,
+                startOffsetMs = 80,
+                startMutationSequence = 3,
+                phaseKind = "paused",
+                phaseIdentityJson = VALID_PAUSED_PHASE_IDENTITY
+            )
+        )
+        val acquisitions = listOf(
+            terminalAcquisition().copy(
+                id = "acquisition-0",
+                endOffsetMs = 30,
+                endMutationSequence = 1
+            ),
+            terminalAcquisition().copy(
+                id = "acquisition-1",
+                sequence = 1,
+                startOffsetMs = 30,
+                startMutationSequence = 1,
+                endOffsetMs = 50,
+                endMutationSequence = 2,
+                recordingIntent = "user_excluded",
+                intentReason = "user_turned_off"
+            ),
+            terminalAcquisition().copy(
+                id = "acquisition-2",
+                sequence = 2,
+                startOffsetMs = 50,
+                startMutationSequence = 2,
+                endOffsetMs = 90,
+                endMutationSequence = 3
+            ),
+            terminalAcquisition().copy(
+                id = "acquisition-3",
+                sequence = 3,
+                startOffsetMs = 90,
+                startMutationSequence = 3,
+                recordingIntent = "user_excluded",
+                intentReason = "user_turned_off"
+            )
+        )
+        val samples = listOf(
+            HeartRateSampleEntity("recording", 0, 20, 1, 120),
+            HeartRateSampleEntity("recording", 1, 40, 2, 200),
+            HeartRateSampleEntity("recording", 2, 50, 2, 130)
+        )
+        val phaseAggregates =
+            "{\"phaseAggregatesContractVersion\":1,\"aggregates\":[{\"phaseSequence\":1," +
+                "\"phaseKind\":\"timed_work\",\"eligibleDurationMs\":40,\"coveredDurationMs\":40," +
+                "\"coverageBasisPoints\":10000,\"coverageStatus\":\"normal\"," +
+                "\"conclusionEligible\":true,\"weightedBpmMs\":5100,\"observedAvgBpm\":128," +
+                "\"observedMaxBpm\":130,\"highestOffsetMs\":50,\"highestMutationSequence\":2," +
+                "\"highestSampleSequence\":2}]}"
+        val durationBreakdown =
+            "{\"durationBreakdownContractVersion\":1,\"canonicalSessionDurationMs\":100," +
+                "\"recordingWindowDurationMs\":100,\"notRequestedBeforeRecordingStartMs\":0," +
+                "\"intentAxis\":{\"expectedRecordingDurationMs\":70,\"userExcludedDurationMs\":30," +
+                "\"userTurnedOffDurationMs\":30,\"userOptedOutDurationMs\":0," +
+                "\"userDisconnectedSuppressRecoveryDurationMs\":0}," +
+                "\"phaseAxis\":{\"primaryEligibleDurationMs\":40,\"phaseExcludedDurationMs\":30," +
+                "\"strengthPrepareExcludedDurationMs\":0,\"pausedExcludedDurationMs\":30}," +
+                "\"primaryAnalysisPartition\":{\"primaryEligibleDurationMs\":40," +
+                "\"eligibleCoveredDurationMs\":40,\"eligibleUncoveredDurationMs\":0}," +
+                "\"deviceStateDurations\":{\"not_observing\":0,\"no_source_selected\":0," +
+                "\"permission_required\":0,\"bluetooth_unavailable\":0,\"searching\":0," +
+                "\"connecting\":0,\"waiting_first_sample\":0,\"live\":100,\"stale\":0," +
+                "\"reconnecting\":0,\"disconnected\":0,\"technical_failure\":0}," +
+                "\"deviceReasonDurations\":{\"initial_acquisition\":0,\"automatic_recovery\":0," +
+                "\"source_not_selected\":0,\"source_unavailable\":0,\"permission_missing\":0," +
+                "\"permission_revoked\":0,\"bluetooth_off\":0,\"platform_unavailable\":0," +
+                "\"first_sample_timeout\":0,\"sample_stale_timeout\":0,\"unexpected_disconnect\":0," +
+                "\"connection_timeout\":0,\"measurement_stream_unavailable\":0," +
+                "\"platform_failure\":0},\"orthogonalityContract\":{\"contractVersion\":1," +
+                "\"rule\":\"primary_partition_is_mutually_exclusive_device_axes_are_independent_do_not_sum\"}}"
+        val snapshot = terminalSnapshot().copy(
+            canonicalSampleCount = 3,
+            primaryPointSampleCount = 2,
+            eligibleDurationMs = 40,
+            coveredDurationMs = 40,
+            coverageBasisPoints = 10000,
+            weightedBpmMs = 5100,
+            observedAvgBpm = 128,
+            observedMaxBpm = 130,
+            highestOffsetMs = 50,
+            highestMutationSequence = 2,
+            highestSampleSequence = 2,
+            phaseAggregatesJson = phaseAggregates,
+            durationBreakdownJson = durationBreakdown
+        )
+        val graph = validTerminalGraph().copy(
+            phases = phases,
+            acquisitions = acquisitions,
+            samples = samples,
+            snapshots = listOf(snapshot)
+        )
+
+        assertValid(CanonicalSessionGraphV1Validator.validate(graph))
+        assertInvalid(
+            CanonicalSessionGraphV1Validator.validate(
+                graph.copy(
+                    snapshots = listOf(
+                        snapshot.copy(
+                            durationBreakdownJson = durationBreakdown.replace(
+                                "\"phaseExcludedDurationMs\":30",
+                                "\"phaseExcludedDurationMs\":40"
+                            )
+                        )
+                    )
+                )
+            ),
+            "invalid_canonical_graph_v1"
+        )
     }
 
     @Test
@@ -632,6 +776,110 @@ class CanonicalSessionValidatorsTest {
         )
     }
 
+    @Test
+    fun sampleSequenceUniquenessRemainsOrderIndependentWithPrimitiveValidationStorage() {
+        val samples = listOf(
+            HeartRateSampleEntity("recording", 9, 0, 0, 120),
+            HeartRateSampleEntity("recording", 1, 20, 1, 121),
+            HeartRateSampleEntity("recording", 5, 40, 2, 122)
+        )
+        assertTrue(
+            CanonicalSessionGraphV1Validator.validateCanonicalSamples(
+                samples,
+                recordingId = "recording",
+                recordingStart = CanonicalTuple(0, 0),
+                inputCut = CanonicalTuple(100, 10)
+            )
+        )
+        assertTrue(
+            !CanonicalSessionGraphV1Validator.validateCanonicalSamples(
+                samples + HeartRateSampleEntity("recording", 1, 60, 3, 123),
+                recordingId = "recording",
+                recordingStart = CanonicalTuple(0, 0),
+                inputCut = CanonicalTuple(100, 10)
+            )
+        )
+    }
+
+    @Test
+    fun laterInvalidPhaseAndInvalidSnapshotAlwaysFailTheWholeGraph() {
+        val valid = validSplitTerminalGraph()
+        val invalidLaterPhase = valid.copy(
+            phases = valid.phases.mapIndexed { index, phase ->
+                if (index == 1) {
+                    phase.copy(
+                        phaseIdentityJson = phase.phaseIdentityJson.replace(
+                            VALID_PHASE_DIGEST,
+                            "0".repeat(64)
+                        )
+                    )
+                } else {
+                    phase
+                }
+            }
+        )
+        val invalidSnapshot = valid.copy(
+            session = valid.session.copy(planSnapshotJson = "${valid.session.planSnapshotJson} ")
+        )
+
+        assertValid(CanonicalSessionGraphV1Validator.validate(valid))
+        assertInvalid(
+            CanonicalSessionGraphV1Validator.validate(invalidLaterPhase),
+            "invalid_canonical_graph_v1"
+        )
+        assertInvalid(
+            CanonicalSessionGraphV1Validator.validate(invalidSnapshot),
+            "invalid_canonical_graph_v1"
+        )
+    }
+
+    @Test
+    fun preparedGraphValidationIsIsolatedAcrossInvocationsSessionsModesSnapshotsAndThreads() {
+        val timedA = validTerminalGraph()
+        val invalidB = timedA.copy(
+            phases = timedA.phases.map { phase ->
+                phase.copy(
+                    phaseIdentityJson = phase.phaseIdentityJson.replace(
+                        VALID_PHASE_DIGEST,
+                        "f".repeat(64)
+                    )
+                )
+            }
+        )
+        val strengthC = validStrengthRunningGraph()
+
+        assertValid(CanonicalSessionGraphV1Validator.validate(timedA))
+        assertInvalid(CanonicalSessionGraphV1Validator.validate(invalidB), "invalid_canonical_graph_v1")
+        assertValid(CanonicalSessionGraphV1Validator.validate(strengthC))
+        assertValid(CanonicalSessionGraphV1Validator.validate(timedA))
+
+        val executor = Executors.newFixedThreadPool(6)
+        try {
+            val graphs = List(96) { index ->
+                when (index % 3) {
+                    0 -> timedA to true
+                    1 -> invalidB to false
+                    else -> strengthC to true
+                }
+            }
+            val results = executor.invokeAll(
+                graphs.map { (graph, _) ->
+                    Callable { CanonicalSessionGraphV1Validator.validate(graph) }
+                }
+            ).map { future -> future.get() }
+            graphs.zip(results).forEachIndexed { index, (expectedAndGraph, result) ->
+                val expectedValid = expectedAndGraph.second
+                assertEquals(
+                    "parallel graph $index leaked prepared state",
+                    expectedValid,
+                    result == CanonicalValidationResult.Valid
+                )
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
     private fun validTerminalGraph(): CanonicalSessionGraphV1 = CanonicalSessionGraphV1(
         session = canonicalTerminalSession(),
         phases = listOf(terminalPhase()),
@@ -684,6 +932,50 @@ class CanonicalSessionValidatorsTest {
             )
         )
     )
+
+    private fun validStrengthRunningGraph(): CanonicalSessionGraphV1 {
+        val planSnapshotJson = WorkoutPlanSnapshot(
+            title = "Strength",
+            mode = WorkoutMode.STRENGTH,
+            blocks = listOf(
+                StrengthExerciseBlock(
+                    id = "strength",
+                    order = 0,
+                    exerciseId = "squat",
+                    sets = listOf(
+                        StrengthSetPlan(
+                            id = "set",
+                            order = 0,
+                            kind = StrengthSetKind.WORKING
+                        )
+                    )
+                )
+            )
+        ).toStorageJson()
+        val storage = (PlanSnapshotStorageV1Validator.validate(planSnapshotJson, WorkoutMode.STRENGTH) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+        val digest = requireNotNull(OrderedStructureSignatureInputV1.digestHexLowercase(storage))
+        val identity =
+            "{\"phaseIdentityContractVersion\":1,\"family\":\"strength_v1\",\"payloadVersion\":1,\"mode\":\"strength\",\"phaseKind\":\"strength_active_set\",\"orderedStructureSignature\":{\"signatureContractVersion\":1,\"algorithm\":\"sha256\",\"digestHexLowercase\":\"$digest\"},\"payload\":{\"variant\":\"active_set\",\"blockId\":\"strength\",\"setPlanId\":\"set\",\"plannedExerciseId\":\"squat\",\"actualExerciseId\":\"squat\",\"exerciseSetIndex0\":0,\"globalSetIndex0\":0,\"setKind\":\"working\",\"substitutedFromExerciseId\":null}}"
+        return CanonicalSessionGraphV1(
+            session = canonicalRunningSession().copy(
+                id = "strength-session",
+                mode = "strength",
+                planSnapshotJson = planSnapshotJson
+            ),
+            phases = listOf(
+                terminalPhase().copy(
+                    id = "strength-phase",
+                    sessionId = "strength-session",
+                    endOffsetMs = null,
+                    endMutationSequence = null,
+                    openMarker = 1,
+                    phaseKind = "strength_active_set",
+                    phaseIdentityJson = identity
+                )
+            )
+        )
+    }
 
     private fun activeRecordingForTerminalSession(): HeartRateRecordingEntity =
         terminalRecording().copy(
@@ -812,6 +1104,8 @@ class CanonicalSessionValidatorsTest {
     }
 
     private companion object {
+        const val VALID_PHASE_DIGEST =
+            "38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855"
         const val VALID_DISPLAY_METADATA =
             "{\"displayMetadataContractVersion\":1,\"entries\":[]}"
         const val VALID_PLAN_SNAPSHOT =

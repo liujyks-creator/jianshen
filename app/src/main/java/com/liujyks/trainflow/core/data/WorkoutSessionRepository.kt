@@ -1,6 +1,8 @@
 package com.liujyks.trainflow.core.data
 
 import androidx.room.withTransaction
+import com.liujyks.trainflow.core.database.AnalysisSnapshotV1Validator
+import com.liujyks.trainflow.core.database.CanonicalAnalysisV1
 import com.liujyks.trainflow.core.database.CanonicalJsonValue
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1Validator
@@ -128,6 +130,24 @@ internal data class RecorderExpectedState(
     val openAcquisitionId: String? = null
 )
 
+internal data class RecordingFinalizationRequest(
+    val sessionId: String,
+    val recordingId: String,
+    val expectedStatus: String,
+    val expectedTuple: CanonicalTuple,
+    val finalOffsetMs: Long,
+    val terminalStatus: String,
+    val terminalReason: String,
+    val snapshotCreatedAt: String
+)
+
+internal data class RecordingFinalizationResult(
+    val sessionId: String,
+    val recordingId: String,
+    val finalTuple: CanonicalTuple,
+    val analysisVersion: Int
+)
+
 internal class WorkoutSessionRepository(
     private val database: TrainFlowDatabase
 ) {
@@ -141,6 +161,177 @@ internal class WorkoutSessionRepository(
 
     val sessions: Flow<List<WorkoutSession>> = dao.observeSessionsWithRecords()
         .map { rows -> rows.map { row -> row.toDomain() } }
+
+    internal suspend fun finalizeRecordingSession(
+        request: RecordingFinalizationRequest
+    ): RecordingFinalizationResult {
+        if (!validTerminalPair(request.terminalStatus, request.terminalReason)) {
+            throw RecorderValidationException("invalid_terminal_status_reason_v1")
+        }
+        if (request.snapshotCreatedAt.isEmpty()) {
+            throw RecorderValidationException("invalid_snapshot_created_at_v1")
+        }
+        if (request.finalOffsetMs < request.expectedTuple.offsetMs) {
+            throw RecorderValidationException("invalid_final_tuple_v1")
+        }
+        return database.withTransaction {
+            val graph = loadCanonicalGraph(request.sessionId)
+                ?: throw RecorderGuardedWriteException("finalization_expected_session", 0)
+            requireValidGraph(graph)
+            val sessionTuple = CanonicalTuple(
+                graph.session.lastDurableOffsetMs
+                    ?: throw RecorderGuardedWriteException("finalization_expected_header", 0),
+                graph.session.lastMutationSequence
+                    ?: throw RecorderGuardedWriteException("finalization_expected_header", 0)
+            )
+            val recording = graph.recording
+            val openPhase = graph.phases.singleOrNull { phase -> phase.openMarker == 1 }
+            val openAcquisition = graph.acquisitions.singleOrNull { interval ->
+                interval.openMarker == 1
+            }
+            if (
+                graph.session.id != request.sessionId ||
+                graph.session.status != request.expectedStatus ||
+                sessionTuple != request.expectedTuple ||
+                recording?.recordingId != request.recordingId || recording.status != "active" ||
+                openPhase == null || openAcquisition == null ||
+                openAcquisition.recordingId != request.recordingId
+            ) {
+                throw RecorderGuardedWriteException("finalization_expected_state", 0)
+            }
+
+            val finalTuple = CanonicalTuple(
+                offsetMs = request.finalOffsetMs,
+                mutationSequence = Math.addExact(request.expectedTuple.mutationSequence, 1L)
+            )
+            val terminalSession = graph.session.copy(
+                status = request.terminalStatus,
+                lastDurableOffsetMs = finalTuple.offsetMs,
+                lastMutationSequence = finalTuple.mutationSequence,
+                trustedEndOffsetMs = finalTuple.offsetMs,
+                terminalReason = request.terminalReason
+            )
+            val terminalPhases = graph.phases.dropLast(1) + openPhase.copy(
+                endOffsetMs = finalTuple.offsetMs,
+                endMutationSequence = finalTuple.mutationSequence,
+                openMarker = null
+            )
+            val terminalAcquisitions = graph.acquisitions.dropLast(1) + openAcquisition.copy(
+                endOffsetMs = finalTuple.offsetMs,
+                endMutationSequence = finalTuple.mutationSequence,
+                openMarker = null
+            )
+            val terminalRecording = recording.copy(
+                status = "terminal",
+                endedOffsetMs = finalTuple.offsetMs,
+                endedMutationSequence = finalTuple.mutationSequence,
+                originalAnalysisVersion = 1
+            )
+            val terminalGraphWithoutSnapshot = graph.copy(
+                session = terminalSession,
+                phases = terminalPhases,
+                recording = terminalRecording,
+                acquisitions = terminalAcquisitions
+            )
+            val snapshot = CanonicalAnalysisV1.derive(
+                terminalGraphWithoutSnapshot,
+                request.snapshotCreatedAt
+            )
+            val terminalGraph = terminalGraphWithoutSnapshot.copy(snapshots = listOf(snapshot))
+            requireValidGraph(terminalGraph)
+            requireValidation(
+                AnalysisSnapshotV1Validator.validate(terminalGraph, snapshot),
+                "invalid_analysis_snapshot_v1"
+            )
+
+            requireExactlyOne(
+                "finalize_close_open_phase",
+                canonicalDao.finalizeCloseOpenPhase(
+                    sessionId = request.sessionId,
+                    recordingId = request.recordingId,
+                    expectedStatus = request.expectedStatus,
+                    expectedOffsetMs = request.expectedTuple.offsetMs,
+                    expectedMutationSequence = request.expectedTuple.mutationSequence,
+                    expectedOpenPhaseId = openPhase.id,
+                    expectedOpenAcquisitionId = openAcquisition.id,
+                    finalOffsetMs = finalTuple.offsetMs,
+                    finalMutationSequence = finalTuple.mutationSequence
+                )
+            )
+            requireExactlyOne(
+                "finalize_close_open_acquisition",
+                canonicalDao.finalizeCloseOpenAcquisition(
+                    sessionId = request.sessionId,
+                    recordingId = request.recordingId,
+                    expectedStatus = request.expectedStatus,
+                    expectedOffsetMs = request.expectedTuple.offsetMs,
+                    expectedMutationSequence = request.expectedTuple.mutationSequence,
+                    expectedClosedPhaseId = openPhase.id,
+                    expectedOpenAcquisitionId = openAcquisition.id,
+                    finalOffsetMs = finalTuple.offsetMs,
+                    finalMutationSequence = finalTuple.mutationSequence
+                )
+            )
+            requireExactlyOne(
+                "finalize_terminalize_recording",
+                canonicalDao.finalizeTerminalizeRecording(
+                    sessionId = request.sessionId,
+                    recordingId = request.recordingId,
+                    expectedStatus = request.expectedStatus,
+                    expectedOffsetMs = request.expectedTuple.offsetMs,
+                    expectedMutationSequence = request.expectedTuple.mutationSequence,
+                    expectedClosedPhaseId = openPhase.id,
+                    expectedClosedAcquisitionId = openAcquisition.id,
+                    finalOffsetMs = finalTuple.offsetMs,
+                    finalMutationSequence = finalTuple.mutationSequence
+                )
+            )
+            requireExactlyOne(
+                "finalize_terminalize_session",
+                dao.finalizeTerminalizeSession(
+                    sessionId = request.sessionId,
+                    recordingId = request.recordingId,
+                    expectedStatus = request.expectedStatus,
+                    expectedOffsetMs = request.expectedTuple.offsetMs,
+                    expectedMutationSequence = request.expectedTuple.mutationSequence,
+                    expectedClosedPhaseId = openPhase.id,
+                    expectedClosedAcquisitionId = openAcquisition.id,
+                    finalOffsetMs = finalTuple.offsetMs,
+                    finalMutationSequence = finalTuple.mutationSequence,
+                    terminalStatus = request.terminalStatus,
+                    terminalReason = request.terminalReason
+                )
+            )
+            canonicalDao.insertAnalysisSnapshot(snapshot)
+            requireExactlyOne(
+                "bind_original_analysis",
+                canonicalDao.bindOriginalAnalysisV1(
+                    sessionId = request.sessionId,
+                    recordingId = request.recordingId,
+                    finalOffsetMs = finalTuple.offsetMs,
+                    finalMutationSequence = finalTuple.mutationSequence,
+                    terminalStatus = request.terminalStatus,
+                    terminalReason = request.terminalReason
+                )
+            )
+
+            val persisted = loadCanonicalGraph(request.sessionId)
+                ?: throw RecorderGuardedWriteException("finalization_post_write_session", 0)
+            requireValidGraph(persisted)
+            val persistedSnapshot = persisted.snapshots.singleOrNull()
+                ?: throw RecorderGuardedWriteException("finalization_post_write_snapshot", 0)
+            requireValidation(
+                AnalysisSnapshotV1Validator.validate(persisted, persistedSnapshot),
+                "invalid_analysis_snapshot_v1"
+            )
+            RecordingFinalizationResult(
+                sessionId = request.sessionId,
+                recordingId = request.recordingId,
+                finalTuple = finalTuple,
+                analysisVersion = 1
+            )
+        }
+    }
 
     suspend fun prepareRecorder(): RecorderReconciliationResult {
         completedRecorderGate?.let { result -> return result }
@@ -1075,6 +1266,13 @@ private fun manualFailure(
 
 private fun requireExactlyOne(guard: String, actualRowCount: Int) {
     if (actualRowCount != 1) throw RecorderGuardedWriteException(guard, actualRowCount)
+}
+
+private fun validTerminalPair(status: String, reason: String): Boolean = when (status) {
+    "completed" -> reason == "completed"
+    "abandoned" -> reason == "user_abandoned" || reason == "owner_cleared" ||
+        reason == "process_interrupted"
+    else -> false
 }
 
 private fun requireInserted(guard: String, insertedRowId: Long) {

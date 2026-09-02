@@ -1,7 +1,5 @@
 package com.liujyks.trainflow.core.database
 
-import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
-import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
@@ -339,20 +337,18 @@ object CanonicalSessionGraphV1Validator {
         val mode = WorkoutMode.entries.firstOrNull { value ->
             value.contractValue == graph.session.mode
         } ?: return false
-        val snapshot = when (
-            val result = PlanSnapshotStorageV1Validator.validate(graph.session.planSnapshotJson, mode)
-        ) {
-            is PlanSnapshotStorageV1ValidationResult.Valid -> result.storage
-            else -> return false
-        }
+        val context = PhaseIdentityV1Validator.prepareContext(
+            persistedJson = graph.session.planSnapshotJson,
+            mode = mode
+        ) ?: return false
         graph.phases.forEachIndexed { index, phase ->
             if (
                 phase.sessionId != graph.session.id || phase.sequence != index ||
                 phase.startOffsetMs < 0 || phase.startMutationSequence < 0 ||
                 phase.startMutationSequence > inputCut.mutationSequence ||
-                PhaseIdentityV1Validator.validate(
+                PhaseIdentityV1Validator.validatePrepared(
                     phase.phaseIdentityJson,
-                    immutableSnapshot = snapshot,
+                    context = context,
                     expectedPhaseKind = phase.phaseKind
                 ) !=
                 CanonicalValidationResult.Valid ||
@@ -449,14 +445,23 @@ object CanonicalSessionGraphV1Validator {
         recordingStart: CanonicalTuple,
         inputCut: CanonicalTuple
     ): Boolean {
-        val sampleSequences = mutableSetOf<Long>()
-        return samples.all { sample ->
+        val sampleSequences = LongArray(samples.size)
+        samples.forEachIndexed { index, sample ->
             val tuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
-            sample.recordingId == recordingId && sample.sampleSequence >= 0 &&
-                sampleSequences.add(sample.sampleSequence) && sample.bpm in 1..65535 &&
-                tuple >= recordingStart && tuple <= inputCut &&
-                sample.mutationSequence <= inputCut.mutationSequence
+            if (
+                sample.recordingId != recordingId || sample.sampleSequence < 0 ||
+                sample.bpm !in 1..65535 || tuple < recordingStart || tuple > inputCut ||
+                sample.mutationSequence > inputCut.mutationSequence
+            ) {
+                return false
+            }
+            sampleSequences[index] = sample.sampleSequence
         }
+        sampleSequences.sort()
+        for (index in 1 until sampleSequences.size) {
+            if (sampleSequences[index - 1] == sampleSequences[index]) return false
+        }
+        return true
     }
 
     private fun validateSnapshotBinding(
@@ -514,8 +519,13 @@ object CanonicalSessionGraphV1Validator {
         snapshot: HeartRateAnalysisSnapshotEntity
     ): Boolean = try {
         val finalOffset = graph.session.trustedEndOffsetMs ?: return false
+        val orderedSamples = graph.samples.sortedWith(
+            compareBy<HeartRateSampleEntity> { sample -> sample.offsetMs }
+                .thenBy { sample -> sample.mutationSequence }
+                .thenBy { sample -> sample.sampleSequence }
+        )
         val whole = analysisMetrics(
-            samples = graph.samples,
+            orderedSamples = orderedSamples,
             phases = graph.phases,
             acquisitions = graph.acquisitions,
             phaseSequence = null,
@@ -530,10 +540,10 @@ object CanonicalSessionGraphV1Validator {
         ) ?: return false
         if (
             snapshot.canonicalSampleCount != graph.samples.size.toLong() ||
-            snapshot.primaryPointSampleCount != whole.primarySamples.size.toLong() ||
+            snapshot.primaryPointSampleCount != whole.primarySampleCount.toLong() ||
             snapshot.sampleStatus != expectedSampleStatus(
                 graph.samples.size.toLong(),
-                whole.primarySamples.size.toLong()
+                whole.primarySampleCount.toLong()
             ) || snapshot.eligibleDurationMs != whole.eligibleDurationMs ||
             snapshot.coveredDurationMs != whole.coveredDurationMs ||
             snapshot.coverageBasisPoints != whole.coverageBasisPoints ||
@@ -545,14 +555,20 @@ object CanonicalSessionGraphV1Validator {
             return false
         }
         validateZoneBinding(snapshot, recording, whole) &&
-            validatePhaseAggregateBinding(snapshot.phaseAggregatesJson, graph, recording, finalOffset) &&
+            validatePhaseAggregateBinding(
+                snapshot.phaseAggregatesJson,
+                graph,
+                recording,
+                orderedSamples,
+                finalOffset
+            ) &&
             validateDurationBinding(snapshot.durationBreakdownJson, graph, recording, whole, finalOffset)
     } catch (_: ArithmeticException) {
         false
     }
 
     private fun analysisMetrics(
-        samples: List<HeartRateSampleEntity>,
+        orderedSamples: List<HeartRateSampleEntity>,
         phases: List<WorkoutPhaseIntervalEntity>,
         acquisitions: List<HeartRateAcquisitionIntervalEntity>,
         phaseSequence: Int?,
@@ -587,25 +603,38 @@ object CanonicalSessionGraphV1Validator {
         val eligibleDuration = eligibleSegments.fold(0L) { total, segment ->
             Math.addExact(total, segment.end.offsetMs - segment.start.offsetMs)
         }
-        val orderedSamples = samples.sortedWith(
-            compareBy<HeartRateSampleEntity> { sample -> sample.offsetMs }
-                .thenBy { sample -> sample.mutationSequence }
-                .thenBy { sample -> sample.sampleSequence }
-        )
-        val primarySamples = orderedSamples.filter { sample ->
+        var primarySampleIndexes = IntArray(minOf(16, orderedSamples.size))
+        var primarySampleCount = 0
+        orderedSamples.indices.forEach { index ->
+            val sample = orderedSamples[index]
             val sampleTuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
-            eligibleSegments.any { segment ->
+            if (eligibleSegments.any { segment ->
                 sampleTuple >= segment.start && sampleTuple < segment.end
+            }) {
+                if (primarySampleCount == primarySampleIndexes.size) {
+                    val nextSize = if (primarySampleIndexes.size > orderedSamples.size / 2) {
+                        orderedSamples.size
+                    } else {
+                        primarySampleIndexes.size * 2
+                    }
+                    primarySampleIndexes = primarySampleIndexes.copyOf(nextSize)
+                }
+                primarySampleIndexes[primarySampleCount] = index
+                primarySampleCount += 1
             }
         }
         var coveredDuration = 0L
         var weighted = 0L
-        primarySamples.forEach { sample ->
+        var maximum: HeartRateSampleEntity? = null
+        for (primaryIndex in 0 until primarySampleCount) {
+            val globalIndex = primarySampleIndexes[primaryIndex]
+            val sample = orderedSamples[globalIndex]
             val sampleTuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
             val segment = eligibleSegments.singleOrNull { candidate ->
                 sampleTuple >= candidate.start && sampleTuple < candidate.end
-            } ?: return@forEach
-            val globalIndex = orderedSamples.indexOf(sample)
+            } ?: continue
+            val currentMaximum = maximum
+            if (currentMaximum == null || sample.bpm > currentMaximum.bpm) maximum = sample
             val nextOffset = orderedSamples.getOrNull(globalIndex + 1)?.offsetMs ?: Long.MAX_VALUE
             val cappedEnd = Math.addExact(sample.offsetMs, SAMPLE_VALIDITY_CAP_MS)
             val contributionEnd = minOf(
@@ -636,12 +665,6 @@ object CanonicalSessionGraphV1Validator {
             val remainder = weighted % coveredDuration
             (quotient + if (remainder >= coveredDuration / 2 + coveredDuration % 2) 1 else 0).toInt()
         }
-        val maximum = primarySamples.maxWithOrNull(
-            compareBy<HeartRateSampleEntity> { sample -> sample.bpm }
-                .thenByDescending { sample -> sample.offsetMs }
-                .thenByDescending { sample -> sample.mutationSequence }
-                .thenByDescending { sample -> sample.sampleSequence }
-        )
         return AnalysisMetrics(
             eligibleDuration,
             coveredDuration,
@@ -649,7 +672,8 @@ object CanonicalSessionGraphV1Validator {
             coverageStatus,
             if (coveredDuration == 0L) null else weighted,
             average,
-            primarySamples,
+            primarySampleIndexes,
+            primarySampleCount,
             maximum,
             eligibleSegments,
             orderedSamples
@@ -692,12 +716,13 @@ object CanonicalSessionGraphV1Validator {
         val json = snapshot.zoneDurationsJson ?: return false
         val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return false
         val expected = LongArray(6)
-        metrics.primarySamples.forEach { sample ->
+        for (primaryIndex in 0 until metrics.primarySampleCount) {
+            val index = metrics.primarySampleIndexes[primaryIndex]
+            val sample = metrics.orderedSamples[index]
             val sampleTuple = CanonicalTuple(sample.offsetMs, sample.mutationSequence)
             val segment = metrics.eligibleSegments.singleOrNull { candidate ->
                 sampleTuple >= candidate.start && sampleTuple < candidate.end
-            } ?: return@forEach
-            val index = metrics.orderedSamples.indexOf(sample)
+            } ?: continue
             val nextOffset = metrics.orderedSamples.getOrNull(index + 1)?.offsetMs ?: Long.MAX_VALUE
             val end = minOf(
                 nextOffset,
@@ -725,6 +750,7 @@ object CanonicalSessionGraphV1Validator {
         json: String,
         graph: CanonicalSessionGraphV1,
         recording: HeartRateRecordingEntity,
+        orderedSamples: List<HeartRateSampleEntity>,
         finalOffset: Long
     ): Boolean {
         val root = parseCanonicalJson(json) as? CanonicalJsonValue.Obj ?: return false
@@ -734,7 +760,7 @@ object CanonicalSessionGraphV1Validator {
         return entries.zip(primaryPhases).all { (value, phase) ->
             val entry = value as? CanonicalJsonValue.Obj ?: return@all false
             val metrics = analysisMetrics(
-                graph.samples,
+                orderedSamples,
                 graph.phases,
                 graph.acquisitions,
                 phase.sequence,
@@ -818,12 +844,15 @@ object CanonicalSessionGraphV1Validator {
                 )
             }
         }
+        val expectedAcquisitions = graph.acquisitions.filter { acquisition ->
+            acquisition.recordingIntent == "expected_recording"
+        }
         var phaseExcluded = 0L
         var prepareExcluded = 0L
         var pausedExcluded = 0L
         graph.phases.filter { phase -> phase.phaseKind !in PRIMARY_PHASE_KINDS }.forEach { phase ->
             val phaseEnd = phase.endOffsetMs ?: return false
-            graph.acquisitions.filter { it.recordingIntent == "expected_recording" }.forEach { acquisition ->
+            expectedAcquisitions.forEach { acquisition ->
                 val acquisitionEnd = acquisition.endOffsetMs ?: return false
                 val start = maxOf(phase.startOffsetMs, acquisition.startOffsetMs, recording.startedOffsetMs)
                 val end = minOf(phaseEnd, acquisitionEnd, finalOffset)
@@ -942,7 +971,8 @@ private data class AnalysisMetrics(
     val coverageStatus: String,
     val weightedBpmMs: Long?,
     val observedAvgBpm: Int?,
-    val primarySamples: List<HeartRateSampleEntity>,
+    val primarySampleIndexes: IntArray,
+    val primarySampleCount: Int,
     val maximumSample: HeartRateSampleEntity?,
     val eligibleSegments: List<AnalysisSegment>,
     val orderedSamples: List<HeartRateSampleEntity>
