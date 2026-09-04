@@ -124,6 +124,46 @@ class WorkoutSessionRecorderGuardedWriteTest {
     }
 
     @Test
+    fun recorderStartTransactionRollsBackEveryRowAndRecognizesTheExactCommittedGraph() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val admission = repository.admitRecorder("entry:atomic-guard")
+        val candidate = CanonicalSessionGraphV1(
+            session = canonicalSession(),
+            phases = listOf(initialPhase()),
+            recording = activeRecording().copy(startedMutationSequence = 0),
+            acquisitions = listOf(
+                acquisition(
+                    id = ACQUISITION_0_ID,
+                    sequence = 0,
+                    tuple = CanonicalTuple(0, 0),
+                    state = "not_observing",
+                    reason = null
+                )
+            )
+        )
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER reject_atomic_acquisition BEFORE INSERT ON " +
+                "heart_rate_acquisition_intervals BEGIN SELECT RAISE(ABORT, 'reject'); END"
+        )
+        val before = databaseSnapshot()
+
+        val rejected = runCatching {
+            repository.commitRecorderStart(admission.ownerToken, candidate)
+        }
+
+        assertTrue(rejected.exceptionOrNull() is android.database.sqlite.SQLiteException)
+        assertEquals(before, databaseSnapshot())
+        database.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_atomic_acquisition")
+
+        val first = repository.commitRecorderStart(admission.ownerToken, candidate)
+        val resultLossRetry = repository.commitRecorderStart(admission.ownerToken, candidate)
+
+        assertEquals(first, resultLossRetry)
+        assertEquals(CanonicalTuple(0, 0), first.durableTuple)
+        assertEquals(candidate, requireGraph(SESSION_ID))
+    }
+
+    @Test
     fun invalidStateReasonAndSampleAfterCutBothRollbackWithoutPartialWrites() = runBlocking {
         val repository = recordingRepository()
         val beforeInvalidPair = databaseSnapshot()

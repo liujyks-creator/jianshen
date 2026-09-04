@@ -61,6 +61,62 @@ class WorkoutSessionRecorderReconciliationTest {
     }
 
     @Test
+    fun concurrentAdmissionsMintOneOwnerAndPendingBlocksBeforeAnyGateCacheUse() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        assertTrue(repository.prepareRecorder() is RecorderReconciliationResult.Succeeded)
+
+        val attempts = coroutineScope {
+            (0 until 8).map { index ->
+                async(Dispatchers.IO) {
+                    runCatching { repository.admitRecorder("entry:race:$index") }
+                }
+            }.map { it.await() }
+        }
+
+        val admitted = attempts.single { it.isSuccess }.getOrThrow()
+        assertTrue(attempts.filter { it.isFailure }.all {
+            it.exceptionOrNull() is RecorderAdmissionBusyException
+        })
+        assertEquals(
+            admitted.ownerToken,
+            (repository.recorderOwnerState() as RecorderOwnerState.Active).ownerToken
+        )
+
+        assertEquals(
+            RecorderOwnerClearResult.Pending,
+            repository.beginRecorderOwnerClearHandoff(admitted.ownerToken)
+        )
+        assertTrue(repository.recorderOwnerState() is RecorderOwnerState.OwnerClearPending)
+        assertTrue(
+            runCatching { repository.admitRecorder("entry:pending") }.exceptionOrNull() is
+                RecorderAdmissionBusyException
+        )
+        assertEquals(
+            RecorderOwnerReleaseResult.Released,
+            repository.releaseRecorderOwner(admitted.ownerToken)
+        )
+        assertEquals(RecorderOwnerState.Open, repository.recorderOwnerState())
+    }
+
+    @Test
+    fun freshRepositoryReconcilesDurableProcessInterruptionBeforeMintingOwner() = runBlocking {
+        val sessionId = "fresh-process-boundary"
+        insertCanonicalRunningSession(sessionId)
+
+        val freshRepository = WorkoutSessionRepository(database)
+        val admission = freshRepository.admitRecorder("entry:fresh-process")
+
+        val persisted = requireNotNull(
+            database.canonicalTimelineHeartRateDao().canonicalGraphRows(sessionId)
+        ).session
+        assertEquals("abandoned", persisted.status)
+        assertEquals("process_interrupted", persisted.terminalReason)
+        assertTrue(freshRepository.recorderOwnerState() is RecorderOwnerState.Active)
+        assertEquals(admission.ownerToken,
+            (freshRepository.recorderOwnerState() as RecorderOwnerState.Active).ownerToken)
+    }
+
+    @Test
     fun legacyReadyActiveAndPausedReturnTypedResidualsWithoutMutationAndAllowCanonicalStart() = runBlocking {
         insertSession(legacySession("legacy-ready", "ready"))
         insertSession(legacySession("legacy-active", "active"))

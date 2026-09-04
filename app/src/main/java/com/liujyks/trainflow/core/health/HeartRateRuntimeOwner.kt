@@ -98,10 +98,80 @@ internal class HeartRateRuntimeOwner(
     private var cleanupInProgress = false
     private var cleanupGatt: BluetoothGatt? = null
     private var cleanupObservedPermissionLoss = false
+    private val persistenceLock = Any()
+    private var currentObservationCause = HeartRateRuntimeObservationCause.NOT_OBSERVING
+    private var persistenceSink: PersistenceSink? = null
 
     /** Every typed action is queued, including calls made from the main thread. */
     fun submit(action: HeartRateRuntimeAction) {
         mainHandler.post { handleAction(action) }
+    }
+
+    fun bindPersistenceSink(
+        bindingId: HeartRatePersistenceBindingId,
+        sink: (HeartRateRuntimeObservation) -> Unit
+    ): HeartRatePersistenceBindResult = synchronized(persistenceLock) {
+        val installed = persistenceSink
+        if (installed != null) {
+            return@synchronized if (installed.binding.bindingId == bindingId) {
+                HeartRatePersistenceBindResult.MatchingInstalled(installed.binding)
+            } else {
+                HeartRatePersistenceBindResult.ConflictingInstalled(
+                    bindingId,
+                    installed.binding.bindingId
+                )
+            }
+        }
+        if (ownerClosed) {
+            return@synchronized HeartRatePersistenceBindResult.Unresolved(bindingId)
+        }
+        val anchor = SystemClock.elapsedRealtime()
+        val snapshot = HeartRateRuntimeObservation(
+            bindingId = bindingId,
+            receipt = 0,
+            elapsedRealtimeMs = anchor,
+            payload = HeartRateRuntimeObservationPayload.CurrentSnapshot(currentObservationCause)
+        )
+        val binding = HeartRatePersistenceBinding(bindingId, anchor, snapshot)
+        persistenceSink = PersistenceSink(binding, sink, nextReceipt = 1)
+        HeartRatePersistenceBindResult.Installed(binding)
+    }
+
+    fun persistenceBindingDisposition(
+        bindingId: HeartRatePersistenceBindingId
+    ): HeartRatePersistenceBindingDisposition = synchronized(persistenceLock) {
+        val installed = persistenceSink
+        when {
+            installed == null && ownerClosed ->
+                HeartRatePersistenceBindingDisposition.Unresolved(bindingId)
+            installed == null -> HeartRatePersistenceBindingDisposition.KnownAbsent(bindingId)
+            installed.binding.bindingId == bindingId ->
+                HeartRatePersistenceBindingDisposition.MatchingInstalled(bindingId)
+            else -> HeartRatePersistenceBindingDisposition.ConflictingInstalled(
+                bindingId,
+                installed.binding.bindingId
+            )
+        }
+    }
+
+    fun exactUnbindPersistenceSink(
+        bindingId: HeartRatePersistenceBindingId
+    ): HeartRatePersistenceUnbindResult = synchronized(persistenceLock) {
+        val installed = persistenceSink
+        when {
+            installed == null && ownerClosed ->
+                HeartRatePersistenceUnbindResult.Unresolved(bindingId)
+            installed == null -> HeartRatePersistenceUnbindResult.KnownAbsent(bindingId)
+            installed.binding.bindingId != bindingId ->
+                HeartRatePersistenceUnbindResult.ConflictingInstalled(
+                    bindingId,
+                    installed.binding.bindingId
+                )
+            else -> {
+                persistenceSink = null
+                HeartRatePersistenceUnbindResult.Unbound(bindingId)
+            }
+        }
     }
 
     override fun close() {
@@ -195,7 +265,10 @@ internal class HeartRateRuntimeOwner(
             )
         )
         cleanup(
-            requestedFact = HeartRateRuntimeFact.PermissionRequired(currentSource()),
+            requestedFact = HeartRateRuntimeFact.PermissionRequired(
+                currentSource(),
+                revoked = true
+            ),
             permissionLossOverridesFact = false
         )
     }
@@ -315,7 +388,7 @@ internal class HeartRateRuntimeOwner(
             message = "Scanning standard BLE Heart Rate Service"
         )
         if (activeAttempt == null) {
-            publish(HeartRateRuntimeFact.Scanning())
+            publish(HeartRateRuntimeFact.Scanning(recovery = origin == ScanOrigin.RECOVERY))
         }
         if (origin == ScanOrigin.RECOVERY) {
             publishRecovery(
@@ -663,6 +736,7 @@ internal class HeartRateRuntimeOwner(
             cleanup(HeartRateRuntimeFact.BluetoothOff(sourceForIdentifier(identifier)))
             return
         }
+        val recoveryAttempt = activeScan?.origin == ScanOrigin.RECOVERY
         if (!detachAndStopActiveScan()) return
         if (!detachAndCloseActiveAttempt()) return
 
@@ -673,7 +747,8 @@ internal class HeartRateRuntimeOwner(
             ownerGeneration = scanGeneration,
             targetIdentifier = identifier,
             source = source,
-            phase = AttemptPhase.CONNECTING
+            phase = AttemptPhase.CONNECTING,
+            recovery = recoveryAttempt
         )
         activeAttempt = attempt
         val callback = AttemptGattCallback(
@@ -682,7 +757,7 @@ internal class HeartRateRuntimeOwner(
             targetIdentifier = identifier
         )
         attempt.callback = callback
-        publish(HeartRateRuntimeFact.Connecting(source))
+        publish(HeartRateRuntimeFact.Connecting(source, recovery = recoveryAttempt))
         publishRecovery(
             HeartRateRecoveryState(
                 phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
@@ -921,7 +996,12 @@ internal class HeartRateRuntimeOwner(
         val nowElapsed = SystemClock.elapsedRealtime()
         attempt.phase = AttemptPhase.WAITING_FIRST_DATA
         attempt.timeline = HeartRateFreshnessTimeline().notifyEnabled(nowElapsed)
-        publish(HeartRateRuntimeFact.WaitingFirstData(attempt.source))
+        publish(
+            HeartRateRuntimeFact.WaitingFirstData(
+                attempt.source,
+                recovery = attempt.recovery
+            )
+        )
         publishRecovery(
             HeartRateRecoveryState(
                 phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
@@ -1333,6 +1413,26 @@ internal class HeartRateRuntimeOwner(
 
     private fun publish(fact: HeartRateRuntimeFact) {
         checkMainThread()
+        val cause = observationCause(fact)
+        currentObservationCause = cause
+        synchronized(persistenceLock) {
+            persistenceSink?.let { installed ->
+                val receipt = installed.nextReceipt
+                installed.nextReceipt = Math.incrementExact(receipt)
+                installed.sink(
+                    HeartRateRuntimeObservation(
+                        bindingId = installed.binding.bindingId,
+                        receipt = receipt,
+                        elapsedRealtimeMs = SystemClock.elapsedRealtime(),
+                        payload = if (fact is HeartRateRuntimeFact.Live) {
+                            HeartRateRuntimeObservationPayload.ValidMeasurement(fact.bpm)
+                        } else {
+                            HeartRateRuntimeObservationPayload.RuntimeTransition(cause)
+                        }
+                    )
+                )
+            }
+        }
         val state = fact.toHeartRateState()
         if (mutableHeartRateState.value != state) {
             mutableHeartRateState.value = state
@@ -1351,6 +1451,60 @@ internal class HeartRateRuntimeOwner(
             "HeartRateRuntimeOwner state transition must run on its main Handler"
         }
     }
+
+    private fun observationCause(fact: HeartRateRuntimeFact): HeartRateRuntimeObservationCause =
+        when (fact) {
+            HeartRateRuntimeFact.Disabled -> HeartRateRuntimeObservationCause.NOT_OBSERVING
+            is HeartRateRuntimeFact.PermissionRequired -> if (fact.revoked) {
+                HeartRateRuntimeObservationCause.PERMISSION_REVOKED
+            } else {
+                HeartRateRuntimeObservationCause.PERMISSION_MISSING
+            }
+            is HeartRateRuntimeFact.BluetoothOff -> HeartRateRuntimeObservationCause.BLUETOOTH_OFF
+            is HeartRateRuntimeFact.NotConnected -> if (fact.source == null) {
+                HeartRateRuntimeObservationCause.NO_SOURCE_SELECTED
+            } else {
+                HeartRateRuntimeObservationCause.SOURCE_UNAVAILABLE
+            }
+            is HeartRateRuntimeFact.Scanning -> if (fact.recovery) {
+                HeartRateRuntimeObservationCause.RECOVERY_SEARCHING
+            } else {
+                HeartRateRuntimeObservationCause.INITIAL_SEARCHING
+            }
+            is HeartRateRuntimeFact.Connecting -> if (fact.recovery) {
+                HeartRateRuntimeObservationCause.RECOVERY_CONNECTING
+            } else {
+                HeartRateRuntimeObservationCause.INITIAL_CONNECTING
+            }
+            is HeartRateRuntimeFact.WaitingFirstData -> if (fact.recovery) {
+                HeartRateRuntimeObservationCause.RECOVERY_WAITING_FIRST_SAMPLE
+            } else {
+                HeartRateRuntimeObservationCause.INITIAL_WAITING_FIRST_SAMPLE
+            }
+            is HeartRateRuntimeFact.Live -> HeartRateRuntimeObservationCause.LIVE
+            is HeartRateRuntimeFact.DataInterrupted -> if (fact.beforeFirstSample) {
+                HeartRateRuntimeObservationCause.FIRST_SAMPLE_TIMEOUT
+            } else {
+                HeartRateRuntimeObservationCause.SAMPLE_STALE_TIMEOUT
+            }
+            is HeartRateRuntimeFact.LinkDisconnected ->
+                HeartRateRuntimeObservationCause.UNEXPECTED_DISCONNECT
+            is HeartRateRuntimeFact.IntentionalStop ->
+                HeartRateRuntimeObservationCause.SOURCE_UNAVAILABLE
+            is HeartRateRuntimeFact.TechnicalFailure -> when (fact.reason) {
+                HeartRateTechnicalFailure.PLATFORM_UNAVAILABLE ->
+                    HeartRateRuntimeObservationCause.PLATFORM_UNAVAILABLE
+                HeartRateTechnicalFailure.SERVICE_DISCOVERY_FAILED,
+                HeartRateTechnicalFailure.CCCD_FAILED ->
+                    HeartRateRuntimeObservationCause.MEASUREMENT_STREAM_UNAVAILABLE
+                HeartRateTechnicalFailure.CONNECT_FAILED ->
+                    HeartRateRuntimeObservationCause.SOURCE_UNAVAILABLE
+                HeartRateTechnicalFailure.PLATFORM_FAILURE,
+                HeartRateTechnicalFailure.INVALID_MONOTONIC_TIME,
+                HeartRateTechnicalFailure.INVALID_FACT ->
+                    HeartRateRuntimeObservationCause.PLATFORM_FAILURE
+            }
+        }
 
     private inner class RuntimeScanCallback(
         private val generation: Long
@@ -1523,6 +1677,12 @@ internal class HeartRateRuntimeOwner(
         }
     }
 
+    private data class PersistenceSink(
+        val binding: HeartRatePersistenceBinding,
+        val sink: (HeartRateRuntimeObservation) -> Unit,
+        var nextReceipt: Long
+    )
+
     private data class ActiveScan(
         val generation: Long,
         val scanner: BluetoothLeScanner,
@@ -1542,6 +1702,7 @@ internal class HeartRateRuntimeOwner(
         val targetIdentifier: String,
         val source: HeartRateSourceHint,
         var phase: AttemptPhase,
+        val recovery: Boolean,
         var callback: BluetoothGattCallback? = null,
         var gatt: BluetoothGatt? = null,
         var measurement: BluetoothGattCharacteristic? = null,

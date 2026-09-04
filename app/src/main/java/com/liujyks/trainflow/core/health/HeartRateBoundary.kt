@@ -10,6 +10,114 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
+@JvmInline
+internal value class HeartRatePersistenceBindingId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Heart-rate persistence binding ID must not be blank" }
+    }
+}
+
+internal enum class HeartRateRuntimeObservationCause {
+    NOT_OBSERVING,
+    NO_SOURCE_SELECTED,
+    PERMISSION_MISSING,
+    PERMISSION_REVOKED,
+    BLUETOOTH_OFF,
+    PLATFORM_UNAVAILABLE,
+    INITIAL_SEARCHING,
+    RECOVERY_SEARCHING,
+    INITIAL_CONNECTING,
+    RECOVERY_CONNECTING,
+    INITIAL_WAITING_FIRST_SAMPLE,
+    RECOVERY_WAITING_FIRST_SAMPLE,
+    LIVE,
+    FIRST_SAMPLE_TIMEOUT,
+    SAMPLE_STALE_TIMEOUT,
+    RECOVERY_RECONNECTING,
+    UNEXPECTED_DISCONNECT_RECONNECTING,
+    SOURCE_UNAVAILABLE,
+    UNEXPECTED_DISCONNECT,
+    MEASUREMENT_STREAM_UNAVAILABLE,
+    PLATFORM_FAILURE
+}
+
+internal sealed interface HeartRateRuntimeObservationPayload {
+    data class CurrentSnapshot(
+        val cause: HeartRateRuntimeObservationCause
+    ) : HeartRateRuntimeObservationPayload
+
+    data class RuntimeTransition(
+        val cause: HeartRateRuntimeObservationCause
+    ) : HeartRateRuntimeObservationPayload
+
+    data class ValidMeasurement(val bpm: Int) : HeartRateRuntimeObservationPayload {
+        init {
+            require(bpm in 1..65535) { "Heart-rate BPM must be in 1..65535" }
+        }
+    }
+}
+
+internal data class HeartRateRuntimeObservation(
+    val bindingId: HeartRatePersistenceBindingId,
+    val receipt: Long,
+    val elapsedRealtimeMs: Long,
+    val payload: HeartRateRuntimeObservationPayload
+)
+
+internal data class HeartRatePersistenceBinding(
+    val bindingId: HeartRatePersistenceBindingId,
+    val monotonicAnchorMs: Long,
+    val snapshot: HeartRateRuntimeObservation
+)
+
+internal sealed interface HeartRatePersistenceBindResult {
+    data class Installed(val binding: HeartRatePersistenceBinding) :
+        HeartRatePersistenceBindResult
+
+    data class MatchingInstalled(val binding: HeartRatePersistenceBinding) :
+        HeartRatePersistenceBindResult
+
+    data class ConflictingInstalled(
+        val requestedBindingId: HeartRatePersistenceBindingId,
+        val installedBindingId: HeartRatePersistenceBindingId
+    ) : HeartRatePersistenceBindResult
+
+    data class Unresolved(val requestedBindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceBindResult
+}
+
+internal sealed interface HeartRatePersistenceBindingDisposition {
+    data class KnownAbsent(val requestedBindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceBindingDisposition
+
+    data class MatchingInstalled(val requestedBindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceBindingDisposition
+
+    data class ConflictingInstalled(
+        val requestedBindingId: HeartRatePersistenceBindingId,
+        val installedBindingId: HeartRatePersistenceBindingId
+    ) : HeartRatePersistenceBindingDisposition
+
+    data class Unresolved(val requestedBindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceBindingDisposition
+}
+
+internal sealed interface HeartRatePersistenceUnbindResult {
+    data class Unbound(val bindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceUnbindResult
+
+    data class KnownAbsent(val bindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceUnbindResult
+
+    data class ConflictingInstalled(
+        val requestedBindingId: HeartRatePersistenceBindingId,
+        val installedBindingId: HeartRatePersistenceBindingId
+    ) : HeartRatePersistenceUnbindResult
+
+    data class Unresolved(val requestedBindingId: HeartRatePersistenceBindingId) :
+        HeartRatePersistenceUnbindResult
+}
+
 /**
  * E0.2 package boundary for abstract heart-rate state providers.
  *
@@ -33,19 +141,34 @@ internal data class HeartRateSourceHint(
  */
 internal sealed interface HeartRateRuntimeFact {
     data object Disabled : HeartRateRuntimeFact
-    data class PermissionRequired(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
+    data class PermissionRequired(
+        val source: HeartRateSourceHint? = null,
+        val revoked: Boolean = false
+    ) : HeartRateRuntimeFact
     data class BluetoothOff(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
     data class NotConnected(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
-    data class Scanning(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
-    data class Connecting(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
-    data class WaitingFirstData(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
+    data class Scanning(
+        val source: HeartRateSourceHint? = null,
+        val recovery: Boolean = false
+    ) : HeartRateRuntimeFact
+    data class Connecting(
+        val source: HeartRateSourceHint? = null,
+        val recovery: Boolean = false
+    ) : HeartRateRuntimeFact
+    data class WaitingFirstData(
+        val source: HeartRateSourceHint? = null,
+        val recovery: Boolean = false
+    ) : HeartRateRuntimeFact
     data class Live(
         val bpm: Int,
         val measuredAt: String,
         val source: HeartRateSourceHint? = null
     ) : HeartRateRuntimeFact
 
-    data class DataInterrupted(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
+    data class DataInterrupted(
+        val source: HeartRateSourceHint? = null,
+        val beforeFirstSample: Boolean = false
+    ) : HeartRateRuntimeFact
     data class LinkDisconnected(val source: HeartRateSourceHint? = null) : HeartRateRuntimeFact
     data class TechnicalFailure(
         val reason: HeartRateTechnicalFailure,
@@ -150,7 +273,10 @@ internal fun HeartRateFreshnessDecision.toRuntimeFact(
         measuredAt = measuredAt.orEmpty(),
         source = source
     )
-    HeartRateFreshnessKind.DATA_INTERRUPTED -> HeartRateRuntimeFact.DataInterrupted(source)
+    HeartRateFreshnessKind.DATA_INTERRUPTED -> HeartRateRuntimeFact.DataInterrupted(
+        source,
+        beforeFirstSample = reason == HeartRateFreshnessReason.FIRST_SAMPLE_INTERRUPTED
+    )
     HeartRateFreshnessKind.LINK_DISCONNECTED -> HeartRateRuntimeFact.LinkDisconnected(source)
     HeartRateFreshnessKind.TECHNICAL_FAILURE -> HeartRateRuntimeFact.TechnicalFailure(
         reason = reason.toTechnicalFailure(),

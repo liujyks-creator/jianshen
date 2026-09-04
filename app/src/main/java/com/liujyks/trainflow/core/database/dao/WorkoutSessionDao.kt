@@ -221,6 +221,46 @@ interface WorkoutSessionDao {
     @Query(
         """
         UPDATE workout_sessions
+        SET status = :terminalStatus,
+            trusted_end_offset_ms = :finalOffsetMs,
+            terminal_reason = :terminalReason
+        WHERE id = :sessionId
+          AND status = :expectedStatus
+          AND timeline_version = 1
+          AND last_durable_offset_ms = :finalOffsetMs
+          AND last_mutation_sequence = :finalMutationSequence
+          AND trusted_end_offset_ms IS NULL
+          AND terminal_reason IS NULL
+          AND display_metadata_contract_version = 1
+          AND session_display_metadata_json IS NOT NULL
+          AND EXISTS (
+              SELECT 1
+              FROM workout_phase_intervals AS phase
+              WHERE phase.id = :expectedClosedPhaseId
+                AND phase.session_id = :sessionId
+                AND phase.end_offset_ms = :finalOffsetMs
+                AND phase.end_mutation_sequence = :finalMutationSequence
+                AND phase.open_marker IS NULL
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM heart_rate_recordings
+              WHERE session_id = :sessionId
+          )
+        """
+    )
+    suspend fun finalizeTerminalizeSessionWithoutRecording(
+        sessionId: String,
+        expectedStatus: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long,
+        expectedClosedPhaseId: String,
+        terminalStatus: String,
+        terminalReason: String
+    ): Int
+
+    @Query(
+        """
+        UPDATE workout_sessions
         SET plan_id = :planId,
             mode = :mode,
             status = :status,
