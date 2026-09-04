@@ -27,6 +27,8 @@ import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.health.HeartRatePersistenceBindingId
+import com.liujyks.trainflow.core.health.HeartRatePersistenceBindingDisposition
+import com.liujyks.trainflow.core.health.HeartRatePersistenceUnbindResult
 import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.SessionStatus
@@ -112,6 +114,40 @@ internal class RecorderGateBlockedException(
 @JvmInline
 internal value class RecorderOwnerToken(val value: Long)
 
+@JvmInline
+internal value class RecorderHandoffToken(val value: Long)
+
+@JvmInline
+internal value class RecorderBlockToken(val value: Long)
+
+internal enum class RecorderTerminalAuthority {
+    ORDINARY,
+    OWNER_CLEAR,
+    FRESH_PROCESS
+}
+
+internal sealed interface RecorderCleanupProof {
+    val bindingId: HeartRatePersistenceBindingId
+
+    data class KnownAbsent(
+        val disposition: HeartRatePersistenceBindingDisposition.KnownAbsent
+    ) : RecorderCleanupProof {
+        override val bindingId: HeartRatePersistenceBindingId = disposition.requestedBindingId
+    }
+
+    data class Unbound(
+        val result: HeartRatePersistenceUnbindResult.Unbound
+    ) : RecorderCleanupProof {
+        override val bindingId: HeartRatePersistenceBindingId = result.bindingId
+    }
+
+    data class ExactKnownAbsent(
+        val result: HeartRatePersistenceUnbindResult.KnownAbsent
+    ) : RecorderCleanupProof {
+        override val bindingId: HeartRatePersistenceBindingId = result.bindingId
+    }
+}
+
 internal data class RecorderAdmission(
     val entryId: String,
     val ownerToken: RecorderOwnerToken,
@@ -125,19 +161,28 @@ internal sealed interface RecorderOwnerState {
     data class Active(
         val entryId: String,
         val ownerToken: RecorderOwnerToken,
-        val bindingId: HeartRatePersistenceBindingId
+        val bindingId: HeartRatePersistenceBindingId,
+        val sessionId: String? = null,
+        val terminalIntent: RecorderTerminalIntent? = null
     ) : RecorderOwnerState
 
     data class OwnerClearPending(
         val entryId: String,
         val ownerToken: RecorderOwnerToken,
-        val bindingId: HeartRatePersistenceBindingId
+        val bindingId: HeartRatePersistenceBindingId,
+        val handoffToken: RecorderHandoffToken,
+        val sessionId: String?,
+        val terminalIntent: RecorderTerminalIntent?,
+        val primaryCause: Throwable?
     ) : RecorderOwnerState
 
     data class Blocked(
         val entryId: String,
         val ownerToken: RecorderOwnerToken,
         val bindingId: HeartRatePersistenceBindingId,
+        val blockToken: RecorderBlockToken,
+        val sessionId: String?,
+        val terminalIntent: RecorderTerminalIntent?,
         val primaryCause: Throwable,
         val secondaryCause: Throwable?
     ) : RecorderOwnerState
@@ -154,12 +199,21 @@ internal class RecorderOwnerBlockedException(
 internal sealed interface RecorderOwnerReleaseResult {
     data object Released : RecorderOwnerReleaseResult
     data object Stale : RecorderOwnerReleaseResult
+    data object CleanupRequired : RecorderOwnerReleaseResult
+    data object CleanupRejected : RecorderOwnerReleaseResult
 }
 
 internal sealed interface RecorderOwnerClearResult {
-    data object Pending : RecorderOwnerClearResult
-    data object AlreadyPending : RecorderOwnerClearResult
+    data class Pending(val handoffToken: RecorderHandoffToken) : RecorderOwnerClearResult
+    data class AlreadyPending(val handoffToken: RecorderHandoffToken) : RecorderOwnerClearResult
+    data object AlreadyReleased : RecorderOwnerClearResult
     data object Stale : RecorderOwnerClearResult
+}
+
+internal sealed interface RecorderOwnerBlockResult {
+    data class Blocked(val blockToken: RecorderBlockToken) : RecorderOwnerBlockResult
+    data class AlreadyBlocked(val blockToken: RecorderBlockToken) : RecorderOwnerBlockResult
+    data object Stale : RecorderOwnerBlockResult
 }
 
 internal data class WorkoutTimelineStartResult(
@@ -173,7 +227,8 @@ internal data class NoRecordingFinalizationRequest(
     val expectedTuple: CanonicalTuple,
     val finalOffsetMs: Long,
     val terminalStatus: String,
-    val terminalReason: String
+    val terminalReason: String,
+    val authority: RecorderTerminalAuthority
 )
 
 internal data class RecorderExpectedState(
@@ -193,7 +248,8 @@ internal data class RecordingFinalizationRequest(
     val finalOffsetMs: Long,
     val terminalStatus: String,
     val terminalReason: String,
-    val snapshotCreatedAt: String
+    val snapshotCreatedAt: String,
+    val authority: RecorderTerminalAuthority = RecorderTerminalAuthority.FRESH_PROCESS
 )
 
 internal data class RecordingFinalizationResult(
@@ -203,6 +259,46 @@ internal data class RecordingFinalizationResult(
     val analysisVersion: Int
 )
 
+internal data class RecorderTerminalIntent(
+    val authority: RecorderTerminalAuthority,
+    val sessionId: String,
+    val recordingId: String?,
+    val terminalStatus: String,
+    val terminalReason: String,
+    val finalOffsetMs: Long,
+    val snapshotCreatedAt: String,
+    val predecessorGraph: CanonicalSessionGraphV1,
+    val producedGraph: CanonicalSessionGraphV1
+) {
+    val predecessorTuple: CanonicalTuple = CanonicalTuple(
+        requireNotNull(predecessorGraph.session.lastDurableOffsetMs),
+        requireNotNull(predecessorGraph.session.lastMutationSequence)
+    )
+
+    val finalTuple: CanonicalTuple = CanonicalTuple(
+        requireNotNull(producedGraph.session.lastDurableOffsetMs),
+        requireNotNull(producedGraph.session.lastMutationSequence)
+    )
+
+    fun matches(request: RecordingFinalizationRequest): Boolean =
+        authority == request.authority &&
+            sessionId == request.sessionId &&
+            recordingId == request.recordingId &&
+            terminalStatus == request.terminalStatus &&
+            terminalReason == request.terminalReason &&
+            finalOffsetMs == request.finalOffsetMs &&
+            predecessorTuple == request.expectedTuple
+
+    fun matches(request: NoRecordingFinalizationRequest): Boolean =
+        authority == request.authority &&
+            sessionId == request.sessionId &&
+            recordingId == null &&
+            terminalStatus == request.terminalStatus &&
+            terminalReason == request.terminalReason &&
+            finalOffsetMs == request.finalOffsetMs &&
+            predecessorTuple == request.expectedTuple
+}
+
 internal class WorkoutSessionRepository(
     private val database: TrainFlowDatabase
 ) {
@@ -211,6 +307,8 @@ internal class WorkoutSessionRepository(
     private val recorderGateMutex = Mutex()
     private val recorderOwnerLock = Any()
     private var recorderOwnerTokenSequence = 0L
+    private var recorderHandoffTokenSequence = 0L
+    private var recorderBlockTokenSequence = 0L
 
     @Volatile
     private var currentRecorderOwner: RecorderOwnerState = RecorderOwnerState.Open
@@ -232,21 +330,23 @@ internal class WorkoutSessionRepository(
             is RecorderReconciliationResult.ManualResolutionRequired ->
                 throw RecorderGateBlockedException(result)
         }
-        return synchronized(recorderOwnerLock) {
-            when (val state = currentRecorderOwner) {
-                RecorderOwnerState.Open -> {
-                    recorderOwnerTokenSequence = Math.incrementExact(recorderOwnerTokenSequence)
-                    val token = RecorderOwnerToken(recorderOwnerTokenSequence)
-                    val bindingId = HeartRatePersistenceBindingId("recorder-binding:${token.value}")
-                    currentRecorderOwner = RecorderOwnerState.Active(
-                        entryId,
-                        token,
-                        bindingId
-                    )
-                    RecorderAdmission(entryId, token, bindingId, reconciliation)
+        return recorderGateMutex.withLock {
+            synchronized(recorderOwnerLock) {
+                when (val state = currentRecorderOwner) {
+                    RecorderOwnerState.Open -> {
+                        recorderOwnerTokenSequence = Math.incrementExact(recorderOwnerTokenSequence)
+                        val token = RecorderOwnerToken(recorderOwnerTokenSequence)
+                        val bindingId = HeartRatePersistenceBindingId("recorder-binding:${token.value}")
+                        currentRecorderOwner = RecorderOwnerState.Active(
+                            entryId,
+                            token,
+                            bindingId
+                        )
+                        RecorderAdmission(entryId, token, bindingId, reconciliation)
+                    }
+                    is RecorderOwnerState.Blocked -> throw RecorderOwnerBlockedException(state)
+                    else -> throw RecorderAdmissionBusyException(state)
                 }
-                is RecorderOwnerState.Blocked -> throw RecorderOwnerBlockedException(state)
-                else -> throw RecorderAdmissionBusyException(state)
             }
         }
     }
@@ -256,17 +356,23 @@ internal class WorkoutSessionRepository(
     ): RecorderOwnerClearResult = synchronized(recorderOwnerLock) {
         when (val state = currentRecorderOwner) {
             is RecorderOwnerState.Active -> if (state.ownerToken == ownerToken) {
+                recorderHandoffTokenSequence = Math.incrementExact(recorderHandoffTokenSequence)
+                val handoffToken = RecorderHandoffToken(recorderHandoffTokenSequence)
                 currentRecorderOwner = RecorderOwnerState.OwnerClearPending(
-                    state.entryId,
-                    state.ownerToken,
-                    state.bindingId
+                    entryId = state.entryId,
+                    ownerToken = state.ownerToken,
+                    bindingId = state.bindingId,
+                    handoffToken = handoffToken,
+                    sessionId = state.sessionId,
+                    terminalIntent = state.terminalIntent,
+                    primaryCause = null
                 )
-                RecorderOwnerClearResult.Pending
+                RecorderOwnerClearResult.Pending(handoffToken)
             } else {
                 RecorderOwnerClearResult.Stale
             }
             is RecorderOwnerState.OwnerClearPending -> if (state.ownerToken == ownerToken) {
-                RecorderOwnerClearResult.AlreadyPending
+                RecorderOwnerClearResult.AlreadyPending(state.handoffToken)
             } else {
                 RecorderOwnerClearResult.Stale
             }
@@ -277,56 +383,108 @@ internal class WorkoutSessionRepository(
     internal fun blockRecorderOwner(
         ownerToken: RecorderOwnerToken,
         primaryCause: Throwable,
-        secondaryCause: Throwable?
-    ) = synchronized(recorderOwnerLock) {
+        secondaryCause: Throwable?,
+        handoffToken: RecorderHandoffToken? = null
+    ): RecorderOwnerBlockResult = synchronized(recorderOwnerLock) {
         val state = currentRecorderOwner
         when (state) {
-            is RecorderOwnerState.Active -> if (state.ownerToken == ownerToken) {
+            is RecorderOwnerState.Active -> if (
+                state.ownerToken == ownerToken && handoffToken == null
+            ) {
+                recorderBlockTokenSequence = Math.incrementExact(recorderBlockTokenSequence)
+                val blockToken = RecorderBlockToken(recorderBlockTokenSequence)
                 currentRecorderOwner = RecorderOwnerState.Blocked(
-                    state.entryId,
-                    state.ownerToken,
-                    state.bindingId,
-                    primaryCause,
-                    secondaryCause
+                    entryId = state.entryId,
+                    ownerToken = state.ownerToken,
+                    bindingId = state.bindingId,
+                    blockToken = blockToken,
+                    sessionId = state.sessionId,
+                    terminalIntent = state.terminalIntent,
+                    primaryCause = primaryCause,
+                    secondaryCause = secondaryCause
                 )
+                RecorderOwnerBlockResult.Blocked(blockToken)
+            } else {
+                RecorderOwnerBlockResult.Stale
             }
-            is RecorderOwnerState.OwnerClearPending -> if (state.ownerToken == ownerToken) {
+            is RecorderOwnerState.OwnerClearPending -> if (
+                state.ownerToken == ownerToken && state.handoffToken == handoffToken
+            ) {
+                recorderBlockTokenSequence = Math.incrementExact(recorderBlockTokenSequence)
+                val blockToken = RecorderBlockToken(recorderBlockTokenSequence)
                 currentRecorderOwner = RecorderOwnerState.Blocked(
-                    state.entryId,
-                    state.ownerToken,
-                    state.bindingId,
-                    primaryCause,
-                    secondaryCause
+                    entryId = state.entryId,
+                    ownerToken = state.ownerToken,
+                    bindingId = state.bindingId,
+                    blockToken = blockToken,
+                    sessionId = state.sessionId,
+                    terminalIntent = state.terminalIntent,
+                    primaryCause = state.primaryCause ?: primaryCause,
+                    secondaryCause = secondaryCause
                 )
+                RecorderOwnerBlockResult.Blocked(blockToken)
+            } else {
+                RecorderOwnerBlockResult.Stale
             }
-            else -> Unit
+            is RecorderOwnerState.Blocked -> if (state.ownerToken == ownerToken) {
+                RecorderOwnerBlockResult.AlreadyBlocked(state.blockToken)
+            } else {
+                RecorderOwnerBlockResult.Stale
+            }
+            RecorderOwnerState.Open -> RecorderOwnerBlockResult.Stale
         }
     }
 
     internal fun releaseRecorderOwner(
         ownerToken: RecorderOwnerToken
     ): RecorderOwnerReleaseResult = synchronized(recorderOwnerLock) {
-        val matches = when (val state = currentRecorderOwner) {
+        when (val state = currentRecorderOwner) {
             is RecorderOwnerState.Active -> state.ownerToken == ownerToken
             is RecorderOwnerState.OwnerClearPending -> state.ownerToken == ownerToken
             is RecorderOwnerState.Blocked -> state.ownerToken == ownerToken
             RecorderOwnerState.Open -> false
+        }.let { matches ->
+            if (matches) RecorderOwnerReleaseResult.CleanupRequired
+            else RecorderOwnerReleaseResult.Stale
         }
-        if (matches) {
-            currentRecorderOwner = RecorderOwnerState.Open
-            RecorderOwnerReleaseResult.Released
-        } else {
-            RecorderOwnerReleaseResult.Stale
+    }
+
+    internal fun releaseRecorderOwner(
+        ownerToken: RecorderOwnerToken,
+        cleanupProof: RecorderCleanupProof,
+        handoffToken: RecorderHandoffToken? = null,
+        blockToken: RecorderBlockToken? = null
+    ): RecorderOwnerReleaseResult = synchronized(recorderOwnerLock) {
+        val state = currentRecorderOwner
+        val bindingMatches = when (state) {
+            is RecorderOwnerState.Active -> state.bindingId == cleanupProof.bindingId
+            is RecorderOwnerState.OwnerClearPending -> state.bindingId == cleanupProof.bindingId
+            is RecorderOwnerState.Blocked -> state.bindingId == cleanupProof.bindingId
+            RecorderOwnerState.Open -> false
         }
+        if (!bindingMatches) return@synchronized RecorderOwnerReleaseResult.CleanupRejected
+        val exactState = when (state) {
+            is RecorderOwnerState.Active ->
+                state.ownerToken == ownerToken && handoffToken == null && blockToken == null
+            is RecorderOwnerState.OwnerClearPending ->
+                state.ownerToken == ownerToken && state.handoffToken == handoffToken &&
+                    blockToken == null
+            is RecorderOwnerState.Blocked ->
+                state.ownerToken == ownerToken && state.blockToken == blockToken
+            RecorderOwnerState.Open -> false
+        }
+        if (!exactState) return@synchronized RecorderOwnerReleaseResult.Stale
+        currentRecorderOwner = RecorderOwnerState.Open
+        RecorderOwnerReleaseResult.Released
     }
 
     internal suspend fun commitRecorderStart(
         ownerToken: RecorderOwnerToken,
         candidate: CanonicalSessionGraphV1
     ): WorkoutTimelineStartResult {
-        requireRecorderOwner(ownerToken)
+        requireRecorderStartOwner(ownerToken)
         requireValidGraph(candidate)
-        return database.withTransaction {
+        val result = database.withTransaction {
             loadCanonicalGraph(candidate.session.id)?.let { persisted ->
                 if (persisted == candidate) return@withTransaction candidate.startResult()
                 throw RecorderGuardedWriteException("conflicting_recorder_start_graph", 0)
@@ -355,6 +513,8 @@ internal class WorkoutSessionRepository(
             }
             candidate.startResult()
         }
+        recordRecorderSession(ownerToken, candidate.session.id)
+        return result
     }
 
     internal suspend fun startRecorderHeartRateRecording(
@@ -364,8 +524,28 @@ internal class WorkoutSessionRepository(
         recording: HeartRateRecordingEntity,
         initialAcquisition: HeartRateAcquisitionIntervalEntity
     ) {
-        requireRecorderOwner(ownerToken)
-        startHeartRateRecording(expected, nextTuple, recording, initialAcquisition)
+        requireRecorderMutationOwner(ownerToken)
+        startHeartRateRecordingMutation(expected, nextTuple, recording, initialAcquisition)
+    }
+
+    internal suspend fun appendRecorderSessionDisplayMetadata(
+        ownerToken: RecorderOwnerToken,
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        nextJson: String
+    ) {
+        requireRecorderMutationOwner(ownerToken)
+        appendSessionDisplayMetadataMutation(expected, nextTuple, nextJson)
+    }
+
+    internal suspend fun transitionRecorderPhase(
+        ownerToken: RecorderOwnerToken,
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        nextPhase: WorkoutPhaseIntervalEntity
+    ) {
+        requireRecorderMutationOwner(ownerToken)
+        transitionPhaseMutation(expected, nextTuple, nextPhase)
     }
 
     internal suspend fun transitionRecorderAcquisition(
@@ -374,8 +554,8 @@ internal class WorkoutSessionRepository(
         nextTuple: CanonicalTuple,
         nextAcquisition: HeartRateAcquisitionIntervalEntity
     ) {
-        requireRecorderOwner(ownerToken)
-        transitionAcquisition(expected, nextTuple, nextAcquisition)
+        requireRecorderMutationOwner(ownerToken)
+        transitionAcquisitionMutation(expected, nextTuple, nextAcquisition)
     }
 
     internal suspend fun appendRecorderSample(
@@ -384,8 +564,8 @@ internal class WorkoutSessionRepository(
         nextTuple: CanonicalTuple,
         sample: HeartRateSampleEntity
     ) {
-        requireRecorderOwner(ownerToken)
-        appendHeartRateSample(expected, nextTuple, sample)
+        requireRecorderMutationOwner(ownerToken)
+        appendHeartRateSampleMutation(expected, nextTuple, sample)
     }
 
     internal suspend fun transitionRecorderAcquisitionAndAppendSample(
@@ -395,7 +575,7 @@ internal class WorkoutSessionRepository(
         nextAcquisition: HeartRateAcquisitionIntervalEntity,
         sample: HeartRateSampleEntity
     ) {
-        requireRecorderOwner(ownerToken)
+        requireRecorderMutationOwner(ownerToken)
         database.withTransaction {
             val graph = validatedExpectedGraph(expected)
             requireNextTuple(expected.durableTuple, nextTuple)
@@ -448,49 +628,70 @@ internal class WorkoutSessionRepository(
         ownerToken: RecorderOwnerToken,
         request: RecordingFinalizationRequest
     ): RecordingFinalizationResult {
-        requireRecorderOwner(ownerToken)
-        val finalTuple = CanonicalTuple(
-            request.finalOffsetMs,
-            Math.incrementExact(request.expectedTuple.mutationSequence)
-        )
-        loadCanonicalGraph(request.sessionId)?.let { graph ->
-            val recording = graph.recording
-            val snapshot = graph.snapshots.singleOrNull()
-            if (
-                graph.session.status == request.terminalStatus &&
-                graph.session.terminalReason == request.terminalReason &&
-                graph.session.trustedEndOffsetMs == request.finalOffsetMs &&
-                graph.session.lastDurableOffsetMs == finalTuple.offsetMs &&
-                graph.session.lastMutationSequence == finalTuple.mutationSequence &&
-                recording?.recordingId == request.recordingId &&
-                recording.status == "terminal" &&
-                recording.endedOffsetMs == finalTuple.offsetMs &&
-                recording.endedMutationSequence == finalTuple.mutationSequence &&
-                recording.originalAnalysisVersion == 1 && snapshot?.analysisVersion == 1 &&
-                snapshot.inputLastMutationSequence == finalTuple.mutationSequence
-            ) {
-                requireValidGraph(graph)
-                return RecordingFinalizationResult(
-                    request.sessionId,
-                    request.recordingId,
-                    finalTuple,
-                    analysisVersion = 1
-                )
-            }
-            if (graph.session.status != request.expectedStatus) {
-                throw RecorderGuardedWriteException("conflicting_terminal_graph", 0)
-            }
+        requireRecorderTerminalOwner(ownerToken)
+        requireTerminalAuthority(request.authority, request.terminalStatus, request.terminalReason)
+        val intent = resolveRecordingTerminalIntent(ownerToken, request)
+        val persistedBefore = loadCanonicalGraph(request.sessionId)
+            ?: throw RecorderGuardedWriteException("finalization_expected_session", 0)
+        if (persistedBefore == intent.producedGraph) {
+            validateRecognizedRecordingTerminal(intent.producedGraph)
+            return intent.recordingResult()
         }
-        return finalizeRecordingSession(request)
+        if (persistedBefore != intent.predecessorGraph) {
+            throw RecorderGuardedWriteException("conflicting_terminal_graph", 0)
+        }
+        val result = finalizeRecordingSession(
+            request.copy(snapshotCreatedAt = intent.snapshotCreatedAt)
+        )
+        val persistedAfter = loadCanonicalGraph(request.sessionId)
+            ?: throw RecorderGuardedWriteException("finalization_post_write_session", 0)
+        if (persistedAfter != intent.producedGraph) {
+            throw RecorderGuardedWriteException("finalization_post_write_identity", 0)
+        }
+        validateRecognizedRecordingTerminal(persistedAfter)
+        return result
     }
 
-    internal suspend fun finalizeRecorderWithoutRecording(
+    private suspend fun resolveRecordingTerminalIntent(
         ownerToken: RecorderOwnerToken,
-        request: NoRecordingFinalizationRequest
-    ): WorkoutTimelineTerminalResult {
-        requireRecorderOwner(ownerToken)
-        if (!validTerminalPair(request.terminalStatus, request.terminalReason)) {
-            throw RecorderValidationException("invalid_terminal_status_reason_v1")
+        request: RecordingFinalizationRequest
+    ): RecorderTerminalIntent {
+        recorderTerminalIntent(ownerToken)?.let { existing ->
+            if (!existing.matches(request)) {
+                throw RecorderTerminalConflictException("Terminal request conflicts with first intent")
+            }
+            return existing
+        }
+        val predecessor = loadCanonicalGraph(request.sessionId)
+            ?: throw RecorderGuardedWriteException("finalization_expected_session", 0)
+        val proposed = buildRecordingTerminalIntent(request, predecessor)
+        return installRecorderTerminalIntent(ownerToken, proposed, request)
+    }
+
+    private fun buildRecordingTerminalIntent(
+        request: RecordingFinalizationRequest,
+        graph: CanonicalSessionGraphV1
+    ): RecorderTerminalIntent {
+        requireValidGraph(graph)
+        val sessionTuple = CanonicalTuple(
+            graph.session.lastDurableOffsetMs
+                ?: throw RecorderGuardedWriteException("finalization_expected_header", 0),
+            graph.session.lastMutationSequence
+                ?: throw RecorderGuardedWriteException("finalization_expected_header", 0)
+        )
+        val recording = graph.recording
+        val openPhase = graph.phases.singleOrNull { phase -> phase.openMarker == 1 }
+        val openAcquisition = graph.acquisitions.singleOrNull { interval -> interval.openMarker == 1 }
+        if (
+            graph.session.id != request.sessionId || graph.session.status != request.expectedStatus ||
+            sessionTuple != request.expectedTuple || recording?.recordingId != request.recordingId ||
+            recording.status != "active" || openPhase == null || openAcquisition == null ||
+            openAcquisition.recordingId != request.recordingId
+        ) {
+            throw RecorderGuardedWriteException("finalization_expected_state", 0)
+        }
+        if (request.snapshotCreatedAt.isEmpty()) {
+            throw RecorderValidationException("invalid_snapshot_created_at_v1")
         }
         if (request.finalOffsetMs < request.expectedTuple.offsetMs) {
             throw RecorderValidationException("invalid_final_tuple_v1")
@@ -499,22 +700,92 @@ internal class WorkoutSessionRepository(
             request.finalOffsetMs,
             Math.incrementExact(request.expectedTuple.mutationSequence)
         )
+        val withoutSnapshot = graph.copy(
+            session = graph.session.copy(
+                status = request.terminalStatus,
+                lastDurableOffsetMs = finalTuple.offsetMs,
+                lastMutationSequence = finalTuple.mutationSequence,
+                trustedEndOffsetMs = finalTuple.offsetMs,
+                terminalReason = request.terminalReason
+            ),
+            phases = graph.phases.dropLast(1) + openPhase.copy(
+                endOffsetMs = finalTuple.offsetMs,
+                endMutationSequence = finalTuple.mutationSequence,
+                openMarker = null
+            ),
+            recording = recording.copy(
+                status = "terminal",
+                endedOffsetMs = finalTuple.offsetMs,
+                endedMutationSequence = finalTuple.mutationSequence,
+                originalAnalysisVersion = 1
+            ),
+            acquisitions = graph.acquisitions.dropLast(1) + openAcquisition.copy(
+                endOffsetMs = finalTuple.offsetMs,
+                endMutationSequence = finalTuple.mutationSequence,
+                openMarker = null
+            )
+        )
+        val snapshot = CanonicalAnalysisV1.derive(withoutSnapshot, request.snapshotCreatedAt)
+        val produced = withoutSnapshot.copy(snapshots = listOf(snapshot))
+        validateRecognizedRecordingTerminal(produced)
+        return RecorderTerminalIntent(
+            authority = request.authority,
+            sessionId = request.sessionId,
+            recordingId = request.recordingId,
+            terminalStatus = request.terminalStatus,
+            terminalReason = request.terminalReason,
+            finalOffsetMs = request.finalOffsetMs,
+            snapshotCreatedAt = request.snapshotCreatedAt,
+            predecessorGraph = graph,
+            producedGraph = produced
+        )
+    }
+
+    private fun validateRecognizedRecordingTerminal(graph: CanonicalSessionGraphV1) {
+        requireValidGraph(graph)
+        val recording = graph.recording
+            ?: throw RecorderGuardedWriteException("terminal_recording_missing", 0)
+        val snapshot = graph.snapshots.singleOrNull()
+            ?: throw RecorderGuardedWriteException("terminal_snapshot_missing", 0)
+        if (recording.originalAnalysisVersion != snapshot.analysisVersion) {
+            throw RecorderGuardedWriteException("terminal_original_analysis_binding", 0)
+        }
+        requireValidation(
+            AnalysisSnapshotV1Validator.validate(graph, snapshot),
+            "invalid_analysis_snapshot_v1"
+        )
+    }
+
+    private fun RecorderTerminalIntent.recordingResult() = RecordingFinalizationResult(
+        sessionId = sessionId,
+        recordingId = requireNotNull(recordingId),
+        finalTuple = finalTuple,
+        analysisVersion = 1
+    )
+
+    internal suspend fun finalizeRecorderWithoutRecording(
+        ownerToken: RecorderOwnerToken,
+        request: NoRecordingFinalizationRequest
+    ): WorkoutTimelineTerminalResult {
+        requireRecorderTerminalOwner(ownerToken)
+        requireTerminalAuthority(request.authority, request.terminalStatus, request.terminalReason)
+        if (request.finalOffsetMs < request.expectedTuple.offsetMs) {
+            throw RecorderValidationException("invalid_final_tuple_v1")
+        }
+        val intent = resolveNoRecordingTerminalIntent(ownerToken, request)
         return database.withTransaction {
             val graph = loadCanonicalGraph(request.sessionId)
                 ?: throw RecorderGuardedWriteException("no_recording_terminal_expected_session", 0)
-            if (
-                graph.session.status == request.terminalStatus &&
-                graph.session.terminalReason == request.terminalReason &&
-                graph.session.trustedEndOffsetMs == finalTuple.offsetMs &&
-                graph.session.lastMutationSequence == finalTuple.mutationSequence &&
-                graph.recording == null && graph.snapshots.isEmpty()
-            ) {
-                requireValidGraph(graph)
+            if (graph == intent.producedGraph) {
+                requireValidGraph(intent.producedGraph)
                 return@withTransaction WorkoutTimelineTerminalResult(
                     request.sessionId,
-                    finalTuple,
+                    intent.finalTuple,
                     analysisVersion = null
                 )
+            }
+            if (graph != intent.predecessorGraph) {
+                throw RecorderGuardedWriteException("conflicting_terminal_graph", 0)
             }
             val expected = RecorderExpectedState(
                 sessionId = request.sessionId,
@@ -527,30 +798,16 @@ internal class WorkoutSessionRepository(
             if (validated.recording != null) {
                 throw RecorderGuardedWriteException("no_recording_terminal_has_recording", 0)
             }
-            val terminalGraph = validated.copy(
-                session = validated.session.copy(
-                    status = request.terminalStatus,
-                    lastDurableOffsetMs = finalTuple.offsetMs,
-                    lastMutationSequence = finalTuple.mutationSequence,
-                    trustedEndOffsetMs = finalTuple.offsetMs,
-                    terminalReason = request.terminalReason
-                ),
-                phases = validated.phases.dropLast(1) + validated.phases.last().copy(
-                    endOffsetMs = finalTuple.offsetMs,
-                    endMutationSequence = finalTuple.mutationSequence,
-                    openMarker = null
-                )
-            )
-            requireValidGraph(terminalGraph)
-            advanceHeader(expected, finalTuple)
+            requireValidGraph(intent.producedGraph)
+            advanceHeader(expected, intent.finalTuple)
             requireExactlyOne(
                 "no_recording_terminal_close_phase",
                 canonicalDao.closeOpenPhase(
                     sessionId = request.sessionId,
                     expectedStatus = request.expectedStatus,
                     expectedOpenRowId = expected.openPhaseId,
-                    endOffsetMs = finalTuple.offsetMs,
-                    endMutationSequence = finalTuple.mutationSequence
+                    endOffsetMs = intent.finalTuple.offsetMs,
+                    endMutationSequence = intent.finalTuple.mutationSequence
                 )
             )
             requireExactlyOne(
@@ -558,8 +815,8 @@ internal class WorkoutSessionRepository(
                 dao.finalizeTerminalizeSessionWithoutRecording(
                     sessionId = request.sessionId,
                     expectedStatus = request.expectedStatus,
-                    finalOffsetMs = finalTuple.offsetMs,
-                    finalMutationSequence = finalTuple.mutationSequence,
+                    finalOffsetMs = intent.finalTuple.offsetMs,
+                    finalMutationSequence = intent.finalTuple.mutationSequence,
                     expectedClosedPhaseId = expected.openPhaseId,
                     terminalStatus = request.terminalStatus,
                     terminalReason = request.terminalReason
@@ -568,12 +825,116 @@ internal class WorkoutSessionRepository(
             val persisted = loadCanonicalGraph(request.sessionId)
                 ?: throw RecorderGuardedWriteException("no_recording_terminal_post_write_graph", 0)
             requireValidGraph(persisted)
-            WorkoutTimelineTerminalResult(request.sessionId, finalTuple, analysisVersion = null)
+            if (persisted != intent.producedGraph) {
+                throw RecorderGuardedWriteException("no_recording_terminal_post_write_identity", 0)
+            }
+            WorkoutTimelineTerminalResult(
+                request.sessionId,
+                intent.finalTuple,
+                analysisVersion = null
+            )
+        }
+    }
+
+    private suspend fun resolveNoRecordingTerminalIntent(
+        ownerToken: RecorderOwnerToken,
+        request: NoRecordingFinalizationRequest
+    ): RecorderTerminalIntent {
+        recorderTerminalIntent(ownerToken)?.let { existing ->
+            if (!existing.matches(request)) {
+                throw RecorderTerminalConflictException("Terminal request conflicts with first intent")
+            }
+            return existing
+        }
+        val predecessor = loadCanonicalGraph(request.sessionId)
+            ?: throw RecorderGuardedWriteException("no_recording_terminal_expected_session", 0)
+        requireValidGraph(predecessor)
+        val tuple = CanonicalTuple(
+            predecessor.session.lastDurableOffsetMs
+                ?: throw RecorderGuardedWriteException("no_recording_terminal_header", 0),
+            predecessor.session.lastMutationSequence
+                ?: throw RecorderGuardedWriteException("no_recording_terminal_header", 0)
+        )
+        val openPhase = predecessor.phases.singleOrNull { it.openMarker == 1 }
+            ?: throw RecorderGuardedWriteException("no_recording_terminal_open_phase", 0)
+        if (
+            predecessor.session.status != request.expectedStatus || tuple != request.expectedTuple ||
+            predecessor.recording != null || predecessor.acquisitions.isNotEmpty() ||
+            predecessor.samples.isNotEmpty() || predecessor.snapshots.isNotEmpty()
+        ) {
+            throw RecorderGuardedWriteException("no_recording_terminal_expected_state", 0)
+        }
+        val finalTuple = CanonicalTuple(
+            request.finalOffsetMs,
+            Math.incrementExact(request.expectedTuple.mutationSequence)
+        )
+        val produced = predecessor.copy(
+            session = predecessor.session.copy(
+                status = request.terminalStatus,
+                lastDurableOffsetMs = finalTuple.offsetMs,
+                lastMutationSequence = finalTuple.mutationSequence,
+                trustedEndOffsetMs = finalTuple.offsetMs,
+                terminalReason = request.terminalReason
+            ),
+            phases = predecessor.phases.dropLast(1) + openPhase.copy(
+                endOffsetMs = finalTuple.offsetMs,
+                endMutationSequence = finalTuple.mutationSequence,
+                openMarker = null
+            )
+        )
+        requireValidGraph(produced)
+        val proposed = RecorderTerminalIntent(
+            authority = request.authority,
+            sessionId = request.sessionId,
+            recordingId = null,
+            terminalStatus = request.terminalStatus,
+            terminalReason = request.terminalReason,
+            finalOffsetMs = request.finalOffsetMs,
+            snapshotCreatedAt = "",
+            predecessorGraph = predecessor,
+            producedGraph = produced
+        )
+        return installRecorderTerminalIntent(ownerToken, proposed, request)
+    }
+
+    private fun installRecorderTerminalIntent(
+        ownerToken: RecorderOwnerToken,
+        proposed: RecorderTerminalIntent,
+        request: NoRecordingFinalizationRequest
+    ): RecorderTerminalIntent = synchronized(recorderOwnerLock) {
+        when (val state = currentRecorderOwner) {
+            is RecorderOwnerState.Active -> {
+                if (state.ownerToken != ownerToken) throw RecorderAdmissionBusyException(state)
+                state.terminalIntent?.let { existing ->
+                    if (!existing.matches(request)) {
+                        throw RecorderTerminalConflictException(
+                            "Terminal request conflicts with first intent"
+                        )
+                    }
+                    return@synchronized existing
+                }
+                currentRecorderOwner = state.copy(terminalIntent = proposed)
+                proposed
+            }
+            is RecorderOwnerState.OwnerClearPending -> {
+                if (state.ownerToken != ownerToken) throw RecorderAdmissionBusyException(state)
+                state.terminalIntent?.let { existing ->
+                    if (!existing.matches(request)) {
+                        throw RecorderTerminalConflictException(
+                            "Terminal request conflicts with first intent"
+                        )
+                    }
+                    return@synchronized existing
+                }
+                currentRecorderOwner = state.copy(terminalIntent = proposed)
+                proposed
+            }
+            else -> throw RecorderAdmissionBusyException(state)
         }
     }
 
     internal suspend fun invalidateRecorderGateCache(ownerToken: RecorderOwnerToken) {
-        requireRecorderOwner(ownerToken)
+        requireRecorderCleanupOwner(ownerToken)
         recorderGateMutex.withLock {
             if (recorderGateInFlight != null) {
                 throw IllegalStateException("Recorder gate cannot be invalidated while reconciliation is active")
@@ -590,14 +951,112 @@ internal class WorkoutSessionRepository(
         }
     }
 
-    private fun requireRecorderOwner(ownerToken: RecorderOwnerToken) =
+    private fun requireRecorderStartOwner(ownerToken: RecorderOwnerToken) =
+        requireRecorderOwnerState(ownerToken, allowPending = true, allowBlocked = false)
+
+    private fun requireRecorderMutationOwner(ownerToken: RecorderOwnerToken) =
+        requireRecorderOwnerState(ownerToken, allowPending = false, allowBlocked = false)
+
+    private fun requireRecorderTerminalOwner(ownerToken: RecorderOwnerToken) =
+        requireRecorderOwnerState(ownerToken, allowPending = true, allowBlocked = false)
+
+    private fun requireRecorderCleanupOwner(ownerToken: RecorderOwnerToken) =
+        requireRecorderOwnerState(ownerToken, allowPending = true, allowBlocked = true)
+
+    private fun requireRecorderOwnerState(
+        ownerToken: RecorderOwnerToken,
+        allowPending: Boolean,
+        allowBlocked: Boolean
+    ) = synchronized(recorderOwnerLock) {
+        val matches = when (val state = currentRecorderOwner) {
+            is RecorderOwnerState.Active -> state.ownerToken == ownerToken
+            is RecorderOwnerState.OwnerClearPending ->
+                allowPending && state.ownerToken == ownerToken
+            is RecorderOwnerState.Blocked -> allowBlocked && state.ownerToken == ownerToken
+            RecorderOwnerState.Open -> false
+        }
+        if (!matches) throw RecorderAdmissionBusyException(currentRecorderOwner)
+    }
+
+    private fun recordRecorderSession(ownerToken: RecorderOwnerToken, sessionId: String) =
         synchronized(recorderOwnerLock) {
-            val matches = when (val state = currentRecorderOwner) {
-                is RecorderOwnerState.Active -> state.ownerToken == ownerToken
-                is RecorderOwnerState.OwnerClearPending -> state.ownerToken == ownerToken
-                else -> false
+            currentRecorderOwner = when (val state = currentRecorderOwner) {
+                is RecorderOwnerState.Active -> if (state.ownerToken == ownerToken) {
+                    state.copy(sessionId = sessionId)
+                } else {
+                    throw RecorderAdmissionBusyException(state)
+                }
+                is RecorderOwnerState.OwnerClearPending -> if (state.ownerToken == ownerToken) {
+                    state.copy(sessionId = sessionId)
+                } else {
+                    throw RecorderAdmissionBusyException(state)
+                }
+                else -> throw RecorderAdmissionBusyException(state)
             }
-            if (!matches) throw RecorderAdmissionBusyException(currentRecorderOwner)
+        }
+
+    private fun recorderTerminalIntent(ownerToken: RecorderOwnerToken): RecorderTerminalIntent? =
+        synchronized(recorderOwnerLock) {
+            when (val state = currentRecorderOwner) {
+                is RecorderOwnerState.Active -> if (state.ownerToken == ownerToken) {
+                    state.terminalIntent
+                } else {
+                    throw RecorderAdmissionBusyException(state)
+                }
+                is RecorderOwnerState.OwnerClearPending -> if (state.ownerToken == ownerToken) {
+                    state.terminalIntent
+                } else {
+                    throw RecorderAdmissionBusyException(state)
+                }
+                is RecorderOwnerState.Blocked -> if (state.ownerToken == ownerToken) {
+                    state.terminalIntent
+                } else {
+                    throw RecorderAdmissionBusyException(state)
+                }
+                RecorderOwnerState.Open -> throw RecorderAdmissionBusyException(state)
+            }
+        }
+
+    private fun installRecorderTerminalIntent(
+        ownerToken: RecorderOwnerToken,
+        proposed: RecorderTerminalIntent,
+        request: RecordingFinalizationRequest
+    ): RecorderTerminalIntent = synchronized(recorderOwnerLock) {
+        when (val state = currentRecorderOwner) {
+            is RecorderOwnerState.Active -> {
+                if (state.ownerToken != ownerToken) throw RecorderAdmissionBusyException(state)
+                state.terminalIntent?.let { existing ->
+                    if (!existing.matches(request)) {
+                        throw RecorderTerminalConflictException(
+                            "Terminal request conflicts with first intent"
+                        )
+                    }
+                    return@synchronized existing
+                }
+                currentRecorderOwner = state.copy(terminalIntent = proposed)
+                proposed
+            }
+            is RecorderOwnerState.OwnerClearPending -> {
+                if (state.ownerToken != ownerToken) throw RecorderAdmissionBusyException(state)
+                state.terminalIntent?.let { existing ->
+                    if (!existing.matches(request)) {
+                        throw RecorderTerminalConflictException(
+                            "Terminal request conflicts with first intent"
+                        )
+                    }
+                    return@synchronized existing
+                }
+                currentRecorderOwner = state.copy(terminalIntent = proposed)
+                proposed
+            }
+            else -> throw RecorderAdmissionBusyException(state)
+        }
+    }
+
+    private suspend fun <T> withOpenRecorderSerialization(action: suspend () -> T): T =
+        recorderGateMutex.withLock {
+            requireRecorderOwnerOpen()
+            action()
         }
 
     private fun CanonicalSessionGraphV1.startResult() = WorkoutTimelineStartResult(
@@ -611,9 +1070,7 @@ internal class WorkoutSessionRepository(
     internal suspend fun finalizeRecordingSession(
         request: RecordingFinalizationRequest
     ): RecordingFinalizationResult {
-        if (!validTerminalPair(request.terminalStatus, request.terminalReason)) {
-            throw RecorderValidationException("invalid_terminal_status_reason_v1")
-        }
+        requireTerminalAuthority(request.authority, request.terminalStatus, request.terminalReason)
         if (request.snapshotCreatedAt.isEmpty()) {
             throw RecorderValidationException("invalid_snapshot_created_at_v1")
         }
@@ -780,8 +1237,9 @@ internal class WorkoutSessionRepository(
     }
 
     suspend fun prepareRecorder(): RecorderReconciliationResult {
-        completedRecorderGate?.let { result -> return result }
+        requireRecorderOwnerOpen()
         val (flight, ownsFlight) = recorderGateMutex.withLock {
+            requireRecorderOwnerOpen()
             completedRecorderGate?.let { result -> return result }
             recorderGateInFlight?.let { existing -> existing to false }
                 ?: CompletableDeferred<RecorderReconciliationResult>().let { created ->
@@ -789,12 +1247,17 @@ internal class WorkoutSessionRepository(
                     created to true
                 }
         }
-        if (!ownsFlight) return flight.await()
+        if (!ownsFlight) {
+            val result = flight.await()
+            requireRecorderOwnerOpen()
+            return result
+        }
 
         var outcome: Result<RecorderReconciliationResult>? = null
         return try {
             val result = runRecorderReconciliation()
             currentCoroutineContext().ensureActive()
+            requireRecorderOwnerOpen()
             outcome = Result.success(result)
             result
         } catch (cause: Throwable) {
@@ -828,10 +1291,12 @@ internal class WorkoutSessionRepository(
             phases = listOf(initialPhase)
         )
         requireValidGraph(candidate)
-        database.withTransaction {
-            requireInserted("insert_canonical_session", dao.insertSession(session))
-            requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(initialPhase))
-            requireValidGraph(requireNotNull(loadCanonicalGraph(session.id)))
+        withOpenRecorderSerialization {
+            database.withTransaction {
+                requireInserted("insert_canonical_session", dao.insertSession(session))
+                requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(initialPhase))
+                requireValidGraph(requireNotNull(loadCanonicalGraph(session.id)))
+            }
         }
         return gate
     }
@@ -842,6 +1307,17 @@ internal class WorkoutSessionRepository(
         nextJson: String
     ): RecorderReconciliationResult.Succeeded {
         val gate = requireRecorderGateSucceeded()
+        withOpenRecorderSerialization {
+            appendSessionDisplayMetadataMutation(expected, nextTuple, nextJson)
+        }
+        return gate
+    }
+
+    private suspend fun appendSessionDisplayMetadataMutation(
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        nextJson: String
+    ) {
         database.withTransaction {
             val graph = validatedExpectedGraph(expected)
             requireNextTuple(expected.durableTuple, nextTuple)
@@ -877,7 +1353,6 @@ internal class WorkoutSessionRepository(
             requireExactlyOne("append_display_metadata", rowCount)
             requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     suspend fun transitionPhase(
@@ -886,6 +1361,17 @@ internal class WorkoutSessionRepository(
         nextPhase: WorkoutPhaseIntervalEntity
     ): RecorderReconciliationResult.Succeeded {
         val gate = requireRecorderGateSucceeded()
+        withOpenRecorderSerialization {
+            transitionPhaseMutation(expected, nextTuple, nextPhase)
+        }
+        return gate
+    }
+
+    private suspend fun transitionPhaseMutation(
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        nextPhase: WorkoutPhaseIntervalEntity
+    ) {
         database.withTransaction {
             val graph = validatedExpectedGraph(expected)
             requireNextTuple(expected.durableTuple, nextTuple)
@@ -917,7 +1403,6 @@ internal class WorkoutSessionRepository(
             requireInserted("insert_next_phase", canonicalDao.insertPhaseInterval(nextPhase))
             requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     suspend fun startHeartRateRecording(
@@ -927,6 +1412,18 @@ internal class WorkoutSessionRepository(
         initialAcquisition: HeartRateAcquisitionIntervalEntity
     ): RecorderReconciliationResult.Succeeded {
         val gate = requireRecorderGateSucceeded()
+        withOpenRecorderSerialization {
+            startHeartRateRecordingMutation(expected, nextTuple, recording, initialAcquisition)
+        }
+        return gate
+    }
+
+    private suspend fun startHeartRateRecordingMutation(
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        recording: HeartRateRecordingEntity,
+        initialAcquisition: HeartRateAcquisitionIntervalEntity
+    ) {
         database.withTransaction {
             val graph = validatedExpectedGraph(expected)
             requireNextTuple(expected.durableTuple, nextTuple)
@@ -951,7 +1448,6 @@ internal class WorkoutSessionRepository(
             )
             requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     suspend fun transitionAcquisition(
@@ -960,6 +1456,17 @@ internal class WorkoutSessionRepository(
         nextAcquisition: HeartRateAcquisitionIntervalEntity
     ): RecorderReconciliationResult.Succeeded {
         val gate = requireRecorderGateSucceeded()
+        withOpenRecorderSerialization {
+            transitionAcquisitionMutation(expected, nextTuple, nextAcquisition)
+        }
+        return gate
+    }
+
+    private suspend fun transitionAcquisitionMutation(
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        nextAcquisition: HeartRateAcquisitionIntervalEntity
+    ) {
         database.withTransaction {
             val graph = validatedExpectedGraph(expected)
             requireNextTuple(expected.durableTuple, nextTuple)
@@ -998,7 +1505,6 @@ internal class WorkoutSessionRepository(
             )
             requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     suspend fun appendHeartRateSample(
@@ -1007,6 +1513,17 @@ internal class WorkoutSessionRepository(
         sample: HeartRateSampleEntity
     ): RecorderReconciliationResult.Succeeded {
         val gate = requireRecorderGateSucceeded()
+        withOpenRecorderSerialization {
+            appendHeartRateSampleMutation(expected, nextTuple, sample)
+        }
+        return gate
+    }
+
+    private suspend fun appendHeartRateSampleMutation(
+        expected: RecorderExpectedState,
+        nextTuple: CanonicalTuple,
+        sample: HeartRateSampleEntity
+    ) {
         database.withTransaction {
             val graph = validatedExpectedGraph(expected)
             requireNextTuple(expected.durableTuple, nextTuple)
@@ -1026,7 +1543,6 @@ internal class WorkoutSessionRepository(
             requireInserted("insert_sample", canonicalDao.insertSample(sample))
             requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     private suspend fun requireRecorderGateSucceeded(): RecorderReconciliationResult.Succeeded =
@@ -1704,11 +2220,33 @@ private fun requireExactlyOne(guard: String, actualRowCount: Int) {
     if (actualRowCount != 1) throw RecorderGuardedWriteException(guard, actualRowCount)
 }
 
-private fun validTerminalPair(status: String, reason: String): Boolean = when (status) {
-    "completed" -> reason == "completed"
-    "abandoned" -> reason == "user_abandoned" || reason == "owner_cleared" ||
-        reason == "process_interrupted"
-    else -> false
+private fun requireTerminalAuthority(
+    authority: RecorderTerminalAuthority,
+    status: String,
+    reason: String
+) {
+    val valid = when (authority) {
+        RecorderTerminalAuthority.ORDINARY ->
+            (status == "completed" && reason == "completed") ||
+                (status == "abandoned" && reason == "user_abandoned")
+        RecorderTerminalAuthority.OWNER_CLEAR ->
+            status == "abandoned" && reason == "owner_cleared"
+        RecorderTerminalAuthority.FRESH_PROCESS -> when (status) {
+            "completed" -> reason == "completed"
+            "abandoned" -> reason == "user_abandoned" || reason == "owner_cleared" ||
+                reason == "process_interrupted"
+            else -> false
+        }
+    }
+    if (!valid) {
+        throw RecorderValidationException(
+            if (authority == RecorderTerminalAuthority.FRESH_PROCESS) {
+                "invalid_terminal_status_reason_v1"
+            } else {
+                "invalid_terminal_authority_v1"
+            }
+        )
+    }
 }
 
 private fun requireInserted(guard: String, insertedRowId: Long) {

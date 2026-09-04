@@ -15,9 +15,12 @@ import android.bluetooth.le.ScanSettings
 import android.os.Handler
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
-import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -93,7 +96,6 @@ class HeartRateRuntimeObservationTest {
             connected.characteristic,
             byteArrayOf(0x00, 88)
         )
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
         connected.callback.onCharacteristicChanged(
             connected.gatt,
             connected.characteristic,
@@ -108,6 +110,155 @@ class HeartRateRuntimeObservationTest {
         })
         assertEquals(2, samples.map { it.receipt }.distinct().size)
         assertEquals((1L..received.size.toLong()).toList(), received.map { it.receipt })
+    }
+
+    @Test
+    fun bindDispositionAndExactUnbindShareTheMainLooperPublicationCut() {
+        val executor = Executors.newSingleThreadExecutor()
+        val entered = CountDownLatch(1)
+        try {
+            val bindCompleted = CountDownLatch(1)
+            val bind = executor.submit<HeartRatePersistenceBindResult> {
+                entered.countDown()
+                try {
+                    owner.bindPersistenceSink(bindingId("linearized")) { }
+                } finally {
+                    bindCompleted.countDown()
+                }
+            }
+            assertTrue(entered.await(2, TimeUnit.SECONDS))
+            assertFalse(
+                "off-main bind must wait for the main-looper cut",
+                bindCompleted.await(200, TimeUnit.MILLISECONDS)
+            )
+
+            idleMain()
+            assertTrue(bind.get(2, TimeUnit.SECONDS) is HeartRatePersistenceBindResult.Installed)
+
+            val dispositionCompleted = CountDownLatch(1)
+            val disposition = executor.submit<HeartRatePersistenceBindingDisposition> {
+                try {
+                    owner.persistenceBindingDisposition(bindingId("linearized"))
+                } finally {
+                    dispositionCompleted.countDown()
+                }
+            }
+            assertFalse(
+                "off-main disposition must wait for the main-looper cut",
+                dispositionCompleted.await(200, TimeUnit.MILLISECONDS)
+            )
+            idleMain()
+            assertTrue(disposition.get(2, TimeUnit.SECONDS) is
+                HeartRatePersistenceBindingDisposition.MatchingInstalled)
+
+            val unbindCompleted = CountDownLatch(1)
+            val unbind = executor.submit<HeartRatePersistenceUnbindResult> {
+                try {
+                    owner.exactUnbindPersistenceSink(bindingId("linearized"))
+                } finally {
+                    unbindCompleted.countDown()
+                }
+            }
+            assertFalse(
+                "off-main unbind must wait for the main-looper cut",
+                unbindCompleted.await(200, TimeUnit.MILLISECONDS)
+            )
+            idleMain()
+            assertEquals(
+                HeartRatePersistenceUnbindResult.Unbound(bindingId("linearized")),
+                unbind.get(2, TimeUnit.SECONDS)
+            )
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun onlyThePairedPlatformOverloadsForOneCallbackAreDeduplicated() {
+        val received = mutableListOf<HeartRateRuntimeObservation>()
+        owner.bindPersistenceSink(bindingId("overloads"), received::add)
+        val connected = connect("AA:BB:CC:DD:EE:52")
+        val payload = byteArrayOf(0x00, 89)
+
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            payload
+        )
+        @Suppress("DEPRECATION")
+        run {
+            connected.characteristic.value = payload
+            connected.callback.onCharacteristicChanged(
+                connected.gatt,
+                connected.characteristic
+            )
+        }
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            payload
+        )
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            payload
+        )
+
+        val samples = received.filter {
+            it.payload is HeartRateRuntimeObservationPayload.ValidMeasurement
+        }
+        assertEquals(listOf(89, 89, 89), samples.map {
+            (it.payload as HeartRateRuntimeObservationPayload.ValidMeasurement).bpm
+        })
+        assertEquals(3, samples.map { it.receipt }.distinct().size)
+    }
+
+    @Test
+    fun unexpectedDisconnectPublishesItsRealReconnectObligation() {
+        val received = mutableListOf<HeartRateRuntimeObservation>()
+        owner.bindPersistenceSink(bindingId("unexpected-reconnect"), received::add)
+        val address = "AA:BB:CC:DD:EE:53"
+        val connected = connect(address)
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput(address))
+        )
+        idleMain()
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+        idleMain()
+
+        assertTrue(received.causes().contains(
+            HeartRateRuntimeObservationCause.UNEXPECTED_DISCONNECT
+        ))
+        assertTrue(received.causes().contains(
+            HeartRateRuntimeObservationCause.UNEXPECTED_DISCONNECT_RECONNECTING
+        ))
+    }
+
+    @Test
+    fun failedRecoveryWindowPublishesRecoveryReconnectingFromTheRealScanCallback() {
+        val received = mutableListOf<HeartRateRuntimeObservation>()
+        owner.bindPersistenceSink(bindingId("recovery-reconnect"), received::add)
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryEligibility(
+                eligibleInput("AA:BB:CC:DD:EE:54")
+            )
+        )
+        idleMain()
+
+        val scanner = application.getSystemService(BluetoothManager::class.java)
+            .adapter.bluetoothLeScanner
+        shadowOf(scanner).scanCallbacks.single()
+            .onScanFailed(android.bluetooth.le.ScanCallback.SCAN_FAILED_INTERNAL_ERROR)
+        idleMain()
+
+        assertTrue(received.causes().contains(
+            HeartRateRuntimeObservationCause.RECOVERY_RECONNECTING
+        ))
     }
 
     @Test
@@ -223,6 +374,24 @@ class HeartRateRuntimeObservationTest {
     }
 
     private fun idleMain() = shadowOf(Looper.getMainLooper()).idle()
+
+    private fun eligibleInput(address: String) = HeartRateRecoveryEligibilityInput(
+        optedIn = true,
+        savedTargetIdentifier = address,
+        permissionGranted = true,
+        bluetoothEnabled = true,
+        manuallySuppressed = false,
+        appVisible = true,
+        activeTrainingFgsActive = false
+    )
+
+    private fun List<HeartRateRuntimeObservation>.causes() = mapNotNull { observation ->
+        when (val payload = observation.payload) {
+            is HeartRateRuntimeObservationPayload.CurrentSnapshot -> payload.cause
+            is HeartRateRuntimeObservationPayload.RuntimeTransition -> payload.cause
+            is HeartRateRuntimeObservationPayload.ValidMeasurement -> null
+        }
+    }
 
     private fun bindingId(value: String) = HeartRatePersistenceBindingId("binding:$value")
 

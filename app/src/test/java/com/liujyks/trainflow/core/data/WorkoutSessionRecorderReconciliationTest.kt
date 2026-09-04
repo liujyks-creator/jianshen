@@ -82,9 +82,9 @@ class WorkoutSessionRecorderReconciliationTest {
             (repository.recorderOwnerState() as RecorderOwnerState.Active).ownerToken
         )
 
-        assertEquals(
-            RecorderOwnerClearResult.Pending,
-            repository.beginRecorderOwnerClearHandoff(admitted.ownerToken)
+        assertTrue(
+            repository.beginRecorderOwnerClearHandoff(admitted.ownerToken) is
+                RecorderOwnerClearResult.Pending
         )
         assertTrue(repository.recorderOwnerState() is RecorderOwnerState.OwnerClearPending)
         assertTrue(
@@ -92,10 +92,10 @@ class WorkoutSessionRecorderReconciliationTest {
                 RecorderAdmissionBusyException
         )
         assertEquals(
-            RecorderOwnerReleaseResult.Released,
+            RecorderOwnerReleaseResult.CleanupRequired,
             repository.releaseRecorderOwner(admitted.ownerToken)
         )
-        assertEquals(RecorderOwnerState.Open, repository.recorderOwnerState())
+        assertTrue(repository.recorderOwnerState() is RecorderOwnerState.OwnerClearPending)
     }
 
     @Test

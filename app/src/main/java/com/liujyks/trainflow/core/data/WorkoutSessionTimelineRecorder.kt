@@ -20,9 +20,8 @@ import com.liujyks.trainflow.core.health.HeartRateRuntimeObservationPayload
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -68,36 +67,50 @@ internal class RecorderObservationRejectedException(message: String) : IllegalSt
 
 internal class RecorderTerminalConflictException(message: String) : IllegalStateException(message)
 
+internal class RecorderOwnerClearPendingException :
+    IllegalStateException("Workout timeline recorder owner clear is pending")
+
 internal class WorkoutSessionTimelineRecorder private constructor(
     private val repository: WorkoutSessionRepository,
     private val runtimeOwner: HeartRateRuntimeOwner,
     private val scope: CoroutineScope,
     private val admission: RecorderAdmission,
-    private val binding: HeartRatePersistenceBinding
+    private val binding: HeartRatePersistenceBinding,
+    private val preparedStartRequest: WorkoutTimelineStartRequest
 ) {
     private val mutableState = MutableStateFlow<WorkoutSessionTimelineRecorderState>(
         WorkoutSessionTimelineRecorderState.Prepared
     )
     private val commands = Channel<Command>(Channel.UNLIMITED)
+    private val lifecycleLock = Any()
     private val preStartObservations = mutableListOf(binding.snapshot)
     private var expectedReceipt = 1L
     private var latestCause = snapshotCause(binding.snapshot)
     private var activeSession: ActiveSession? = null
     private var terminalCache: TerminalCache? = null
+    private var terminalAttempt: TerminalAttempt? = null
+    private var ownerClearHandoff: OwnerClearHandoff? = null
+    private var ownerBlockToken: RecorderBlockToken? = null
 
     val state: StateFlow<WorkoutSessionTimelineRecorderState> = mutableState
     val bindingId: HeartRatePersistenceBindingId = admission.bindingId
     val ownerToken: RecorderOwnerToken = admission.ownerToken
 
     init {
-        scope.launch {
+        scope.launch(NonCancellable) {
             for (command in commands) {
                 when (command) {
                     is Command.Observe -> handleObservation(command.observation)
                     is Command.Start -> handleStart(command)
                     is Command.EnableRecording -> handleEnableRecording(command)
                     is Command.SetRecordingExpected -> handleSetRecordingExpected(command)
-                    is Command.Terminalize -> handleTerminal(command.request, command.reply)
+                    is Command.AppendDisplayMetadata -> handleAppendDisplayMetadata(command)
+                    is Command.TransitionPhase -> handleTransitionPhase(command)
+                    is Command.Terminalize -> handleTerminal(
+                        command.request,
+                        command.reply,
+                        RecorderTerminalAuthority.ORDINARY
+                    )
                     is Command.OwnerClear -> handleOwnerClear(command.request)
                 }
             }
@@ -106,17 +119,21 @@ internal class WorkoutSessionTimelineRecorder private constructor(
 
     suspend fun start(request: WorkoutTimelineStartRequest): WorkoutTimelineStartResult {
         val reply = CompletableDeferred<WorkoutTimelineStartResult>()
-        commands.send(Command.Start(request, reply))
+        submitMutation(Command.Start(request, reply))
         return reply.await()
     }
 
     fun acceptRuntimeObservation(observation: HeartRateRuntimeObservation) {
-        commands.trySend(Command.Observe(observation)).getOrThrow()
+        synchronized(lifecycleLock) {
+            if (ownerClearHandoff == null) {
+                commands.trySend(Command.Observe(observation)).getOrThrow()
+            }
+        }
     }
 
     suspend fun enableRecording(recording: HeartRateRecordingEntity, offsetMs: Long) {
         val reply = CompletableDeferred<Unit>()
-        commands.send(Command.EnableRecording(recording, offsetMs, reply))
+        submitMutation(Command.EnableRecording(recording, offsetMs, reply))
         reply.await()
     }
 
@@ -126,7 +143,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         offsetMs: Long
     ) {
         val reply = CompletableDeferred<Unit>()
-        commands.send(
+        submitMutation(
             Command.SetRecordingExpected(
                 recordingExpected,
                 userExclusionReason,
@@ -137,25 +154,94 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         reply.await()
     }
 
+    suspend fun appendSessionDisplayMetadata(nextJson: String, offsetMs: Long) {
+        val reply = CompletableDeferred<Unit>()
+        submitMutation(Command.AppendDisplayMetadata(nextJson, offsetMs, reply))
+        reply.await()
+    }
+
+    suspend fun transitionPhase(
+        phaseId: String,
+        phaseKind: String,
+        phaseIdentityJson: String,
+        offsetMs: Long
+    ) {
+        val reply = CompletableDeferred<Unit>()
+        submitMutation(
+            Command.TransitionPhase(
+                phaseId,
+                phaseKind,
+                phaseIdentityJson,
+                offsetMs,
+                reply
+            )
+        )
+        reply.await()
+    }
+
     suspend fun terminalize(
         request: WorkoutTimelineTerminalRequest
     ): WorkoutTimelineTerminalResult {
+        validateTerminalRequest(request, RecorderTerminalAuthority.ORDINARY)
+        synchronized(lifecycleLock) {
+            terminalCache?.let { cached ->
+                if (!cached.matches(request)) {
+                    throw RecorderTerminalConflictException(
+                        "Terminal request conflicts with durable result"
+                    )
+                }
+                if (mutableState.value == WorkoutSessionTimelineRecorderState.Released) {
+                    return cached.result
+                }
+            }
+        }
         val reply = CompletableDeferred<WorkoutTimelineTerminalResult>()
-        commands.send(Command.Terminalize(request, reply))
+        submitMutation(Command.Terminalize(request, reply))
         return reply.await()
     }
 
     fun beginOwnerClearHandoff(
         request: WorkoutTimelineOwnerClearRequest
-    ): RecorderOwnerClearResult {
-        val transition = repository.beginRecorderOwnerClearHandoff(ownerToken)
-        if (transition == RecorderOwnerClearResult.Pending) {
-            scope.launch(Dispatchers.Default) {
-                delay(1)
-                commands.send(Command.OwnerClear(request))
-            }
+    ): RecorderOwnerClearResult = synchronized(lifecycleLock) {
+        if (mutableState.value == WorkoutSessionTimelineRecorderState.Released) {
+            return@synchronized RecorderOwnerClearResult.AlreadyReleased
         }
-        return transition
+        ownerClearHandoff?.let { existing ->
+            return@synchronized RecorderOwnerClearResult.AlreadyPending(existing.handoffToken)
+        }
+        val transition = repository.beginRecorderOwnerClearHandoff(ownerToken)
+        when (transition) {
+            is RecorderOwnerClearResult.Pending -> {
+                val currentFailure = when (val state = mutableState.value) {
+                    is WorkoutSessionTimelineRecorderState.ActivePersistenceFailed -> state.cause
+                    is WorkoutSessionTimelineRecorderState.TerminalFailed -> state.cause
+                    else -> null
+                }
+                ownerClearHandoff = OwnerClearHandoff(
+                    transition.handoffToken,
+                    currentFailure ?: RecorderOwnerClearPendingException()
+                )
+                commands.trySend(Command.OwnerClear(request)).getOrThrow()
+            }
+            else -> Unit
+        }
+        transition
+    }
+
+    private fun submitMutation(command: Command) {
+        synchronized(lifecycleLock) {
+            ownerClearHandoff?.let { throw it.mutationFailure }
+            when (val state = mutableState.value) {
+                is WorkoutSessionTimelineRecorderState.ActivePersistenceFailed -> throw state.cause
+                is WorkoutSessionTimelineRecorderState.TerminalFailed -> {
+                    if (command !is Command.Terminalize) throw state.cause
+                }
+                WorkoutSessionTimelineRecorderState.Released ->
+                    throw IllegalStateException("Workout timeline recorder is released")
+                else -> Unit
+            }
+            commands.trySend(command).getOrThrow()
+        }
     }
 
     private suspend fun handleObservation(observation: HeartRateRuntimeObservation) {
@@ -182,6 +268,13 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         if (mutableState.value != WorkoutSessionTimelineRecorderState.Prepared) {
             command.reply.completeExceptionally(
                 IllegalStateException("Workout timeline recorder is not prepared")
+            )
+            return
+        }
+        if (command.request != preparedStartRequest) {
+            failStart(
+                command.reply,
+                IllegalArgumentException("Start request does not match the validated prepared request")
             )
             return
         }
@@ -219,39 +312,79 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     private fun failBeforeRoom(primary: Throwable) {
         when (val disposition = runtimeOwner.persistenceBindingDisposition(bindingId)) {
             is HeartRatePersistenceBindingDisposition.KnownAbsent -> {
-                repository.releaseRecorderOwner(ownerToken)
-                mutableState.value = WorkoutSessionTimelineRecorderState.Released
+                releaseFailedStart(primary, RecorderCleanupProof.KnownAbsent(disposition))
             }
             is HeartRatePersistenceBindingDisposition.MatchingInstalled -> {
                 when (val unbind = runtimeOwner.exactUnbindPersistenceSink(bindingId)) {
-                    is HeartRatePersistenceUnbindResult.Unbound,
-                    is HeartRatePersistenceUnbindResult.KnownAbsent -> {
-                        repository.releaseRecorderOwner(ownerToken)
-                        mutableState.value = WorkoutSessionTimelineRecorderState.Released
-                    }
+                    is HeartRatePersistenceUnbindResult.Unbound -> releaseFailedStart(
+                        primary,
+                        RecorderCleanupProof.Unbound(unbind)
+                    )
+                    is HeartRatePersistenceUnbindResult.KnownAbsent -> releaseFailedStart(
+                        primary,
+                        RecorderCleanupProof.ExactKnownAbsent(unbind)
+                    )
                     is HeartRatePersistenceUnbindResult.ConflictingInstalled -> {
                         val secondary = unbind.conflictFailure()
-                        repository.blockRecorderOwner(ownerToken, primary, secondary)
+                        blockOwner(primary, secondary)
                         mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(primary)
                     }
                     is HeartRatePersistenceUnbindResult.Unresolved -> {
                         val secondary = unbind.unresolvedFailure()
-                        repository.blockRecorderOwner(ownerToken, primary, secondary)
+                        blockOwner(primary, secondary)
                         mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(primary)
                     }
                 }
             }
             is HeartRatePersistenceBindingDisposition.ConflictingInstalled -> {
                 val secondary = disposition.conflictFailure()
-                repository.blockRecorderOwner(ownerToken, primary, secondary)
+                blockOwner(primary, secondary)
                 mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(primary)
             }
             is HeartRatePersistenceBindingDisposition.Unresolved -> {
                 val secondary = disposition.unresolvedFailure()
-                repository.blockRecorderOwner(ownerToken, primary, secondary)
+                blockOwner(primary, secondary)
                 mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(primary)
             }
         }
+    }
+
+    private fun releaseFailedStart(primary: Throwable, cleanupProof: RecorderCleanupProof) {
+        when (val release = releaseOwner(cleanupProof)) {
+            RecorderOwnerReleaseResult.Released -> {
+                mutableState.value = WorkoutSessionTimelineRecorderState.Released
+            }
+            else -> {
+                val secondary = RecorderBindingDispositionException(
+                    "Failed-start owner release did not complete: $release"
+                )
+                blockOwner(primary, secondary)
+                mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(primary)
+            }
+        }
+    }
+
+    private fun releaseOwner(cleanupProof: RecorderCleanupProof): RecorderOwnerReleaseResult =
+        repository.releaseRecorderOwner(
+            ownerToken = ownerToken,
+            cleanupProof = cleanupProof,
+            handoffToken = ownerClearHandoff?.handoffToken,
+            blockToken = ownerBlockToken
+        )
+
+    private fun blockOwner(primary: Throwable, secondary: Throwable?): RecorderOwnerBlockResult {
+        val result = repository.blockRecorderOwner(
+            ownerToken = ownerToken,
+            primaryCause = primary,
+            secondaryCause = secondary,
+            handoffToken = ownerClearHandoff?.handoffToken
+        )
+        ownerBlockToken = when (result) {
+            is RecorderOwnerBlockResult.Blocked -> result.blockToken
+            is RecorderOwnerBlockResult.AlreadyBlocked -> result.blockToken
+            RecorderOwnerBlockResult.Stale -> ownerBlockToken
+        }
+        return result
     }
 
     private suspend fun persistObservation(observation: HeartRateRuntimeObservation) {
@@ -299,19 +432,22 @@ internal class WorkoutSessionTimelineRecorder private constructor(
 
     private suspend fun persistAcquisitionTransition(
         active: ActiveSession,
-        nextTuple: CanonicalTuple,
+        ignoredNextTuple: CanonicalTuple,
         cause: HeartRateRuntimeObservationCause
     ) {
+        val fact = CanonicalHeartRateObservationMapper.acquisition(
+            cause,
+            active.recordingExpected,
+            active.userExclusionReason
+        )
+        if (fact == active.acquisitionFact) return
+        val nextTuple = active.nextTuple(ignoredNextTuple.offsetMs)
         val nextSequence = Math.incrementExact(active.acquisitionSequence)
         val next = acquisition(
             recordingId = requireNotNull(active.recordingId),
             sequence = nextSequence,
             tuple = nextTuple,
-            fact = CanonicalHeartRateObservationMapper.acquisition(
-                cause,
-                active.recordingExpected,
-                active.userExclusionReason
-            )
+            fact = fact
         )
         repository.transitionRecorderAcquisition(
             ownerToken,
@@ -322,7 +458,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         active.tuple = nextTuple
         active.acquisitionSequence = nextSequence
         active.openAcquisitionId = next.id
-        active.devicePair = CanonicalHeartRateObservationMapper.mapCause(cause)
+        active.acquisitionFact = fact
     }
 
     private suspend fun persistMeasurement(
@@ -338,10 +474,12 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             mutationSequence = nextTuple.mutationSequence,
             bpm = bpm
         )
-        val livePair = CanonicalHeartRateObservationMapper.mapCause(
-            HeartRateRuntimeObservationCause.LIVE
+        val liveFact = CanonicalHeartRateObservationMapper.acquisition(
+            HeartRateRuntimeObservationCause.LIVE,
+            active.recordingExpected,
+            active.userExclusionReason
         )
-        if (active.devicePair == livePair) {
+        if (active.acquisitionFact == liveFact) {
             repository.appendRecorderSample(ownerToken, active.expected(), nextTuple, sample)
         } else {
             val nextSequence = Math.incrementExact(active.acquisitionSequence)
@@ -349,11 +487,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 recordingId,
                 nextSequence,
                 nextTuple,
-                CanonicalHeartRateObservationMapper.acquisition(
-                    HeartRateRuntimeObservationCause.LIVE,
-                    active.recordingExpected,
-                    active.userExclusionReason
-                )
+                liveFact
             )
             repository.transitionRecorderAcquisitionAndAppendSample(
                 ownerToken,
@@ -364,18 +498,14 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             )
             active.acquisitionSequence = nextSequence
             active.openAcquisitionId = next.id
-            active.devicePair = livePair
+            active.acquisitionFact = liveFact
         }
         active.tuple = nextTuple
         active.nextSampleSequence = Math.incrementExact(active.nextSampleSequence)
     }
 
     private suspend fun handleEnableRecording(command: Command.EnableRecording) {
-        val active = activeSession
-        if (mutableState.value != WorkoutSessionTimelineRecorderState.Started || active == null) {
-            command.reply.completeExceptionally(IllegalStateException("Recorder is not started"))
-            return
-        }
+        val active = activeForMutation(command.reply) ?: return
         if (active.recordingId != null) {
             command.reply.completeExceptionally(IllegalStateException("Recording already exists"))
             return
@@ -411,7 +541,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             active.nextSampleSequence = 0
             active.recordingExpected = true
             active.userExclusionReason = null
-            active.devicePair = CanonicalHeartRateObservationMapper.mapCause(latestCause)
+            active.acquisitionFact = fact
             command.reply.complete(Unit)
         } catch (failure: SQLiteException) {
             failActiveCommand(command.reply, failure)
@@ -429,11 +559,8 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     }
 
     private suspend fun handleSetRecordingExpected(command: Command.SetRecordingExpected) {
-        val active = activeSession
-        if (
-            mutableState.value != WorkoutSessionTimelineRecorderState.Started ||
-            active?.recordingId == null
-        ) {
+        val active = activeForMutation(command.reply) ?: return
+        if (active.recordingId == null) {
             command.reply.completeExceptionally(IllegalStateException("Active recording is required"))
             return
         }
@@ -444,6 +571,10 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 command.recordingExpected,
                 command.userExclusionReason
             )
+            if (fact == active.acquisitionFact) {
+                command.reply.complete(Unit)
+                return
+            }
             val nextSequence = Math.incrementExact(active.acquisitionSequence)
             val next = acquisition(active.recordingId!!, nextSequence, nextTuple, fact)
             repository.transitionRecorderAcquisition(
@@ -457,6 +588,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             active.acquisitionSequence = nextSequence
             active.recordingExpected = command.recordingExpected
             active.userExclusionReason = command.userExclusionReason
+            active.acquisitionFact = fact
             command.reply.complete(Unit)
         } catch (failure: SQLiteException) {
             failActiveCommand(command.reply, failure)
@@ -470,6 +602,94 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             failActiveCommand(command.reply, failure)
         } catch (failure: IllegalStateException) {
             failActiveCommand(command.reply, failure)
+        }
+    }
+
+    private suspend fun handleAppendDisplayMetadata(command: Command.AppendDisplayMetadata) {
+        val active = activeForMutation(command.reply) ?: return
+        try {
+            val nextTuple = active.nextTuple(command.offsetMs)
+            repository.appendRecorderSessionDisplayMetadata(
+                ownerToken,
+                active.expected(),
+                nextTuple,
+                command.nextJson
+            )
+            active.tuple = nextTuple
+            command.reply.complete(Unit)
+        } catch (failure: SQLiteException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: RecorderGuardedWriteException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: RecorderValidationException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: ArithmeticException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: IllegalArgumentException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: IllegalStateException) {
+            failActiveCommand(command.reply, failure)
+        }
+    }
+
+    private suspend fun handleTransitionPhase(command: Command.TransitionPhase) {
+        val active = activeForMutation(command.reply) ?: return
+        try {
+            val nextTuple = active.nextTuple(command.offsetMs)
+            val nextSequence = Math.incrementExact(active.phaseSequence)
+            val nextPhase = WorkoutPhaseIntervalEntity(
+                id = command.phaseId,
+                sessionId = active.sessionId,
+                sequence = nextSequence,
+                startOffsetMs = nextTuple.offsetMs,
+                endOffsetMs = null,
+                startMutationSequence = nextTuple.mutationSequence,
+                endMutationSequence = null,
+                openMarker = 1,
+                phaseKind = command.phaseKind,
+                phaseIdentityJson = command.phaseIdentityJson
+            )
+            repository.transitionRecorderPhase(
+                ownerToken,
+                active.expected(),
+                nextTuple,
+                nextPhase
+            )
+            active.tuple = nextTuple
+            active.openPhaseId = nextPhase.id
+            active.phaseSequence = nextSequence
+            command.reply.complete(Unit)
+        } catch (failure: SQLiteException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: RecorderGuardedWriteException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: RecorderValidationException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: ArithmeticException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: IllegalArgumentException) {
+            failActiveCommand(command.reply, failure)
+        } catch (failure: IllegalStateException) {
+            failActiveCommand(command.reply, failure)
+        }
+    }
+
+    private fun activeForMutation(reply: CompletableDeferred<Unit>): ActiveSession? {
+        return when (val state = mutableState.value) {
+            WorkoutSessionTimelineRecorderState.Started -> activeSession
+                ?: error("Started recorder must have an active session")
+            is WorkoutSessionTimelineRecorderState.ActivePersistenceFailed -> {
+                reply.completeExceptionally(state.cause)
+                null
+            }
+            is WorkoutSessionTimelineRecorderState.TerminalFailed -> {
+                reply.completeExceptionally(state.cause)
+                null
+            }
+            else -> {
+                reply.completeExceptionally(IllegalStateException("Recorder is not mutable"))
+                null
+            }
         }
     }
 
@@ -487,8 +707,15 @@ internal class WorkoutSessionTimelineRecorder private constructor(
 
     private suspend fun handleTerminal(
         request: WorkoutTimelineTerminalRequest,
-        reply: CompletableDeferred<WorkoutTimelineTerminalResult>?
+        reply: CompletableDeferred<WorkoutTimelineTerminalResult>?,
+        authority: RecorderTerminalAuthority
     ) {
+        try {
+            validateTerminalRequest(request, authority)
+        } catch (failure: RecorderValidationException) {
+            reply?.completeExceptionally(failure)
+            return
+        }
         val cached = terminalCache
         if (cached != null) {
             if (!cached.matches(request)) {
@@ -515,6 +742,23 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             reply?.completeExceptionally(IllegalStateException("Recorder has no active session"))
             return
         }
+        val activeFailure = mutableState.value as?
+            WorkoutSessionTimelineRecorderState.ActivePersistenceFailed
+        if (activeFailure != null) {
+            reply?.completeExceptionally(activeFailure.cause)
+            return
+        }
+        val attempt = terminalAttempt
+        if (attempt != null && !attempt.matches(request, active.tuple, authority)) {
+            reply?.completeExceptionally(
+                RecorderTerminalConflictException("Terminal request conflicts with first intent")
+            )
+            return
+        }
+        val effectiveRequest = attempt?.request ?: request
+        if (attempt == null) {
+            terminalAttempt = TerminalAttempt(request, active.tuple, authority)
+        }
         mutableState.value = WorkoutSessionTimelineRecorderState.Terminating
         try {
             val result = if (active.recordingId == null) {
@@ -524,9 +768,10 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                         sessionId = active.sessionId,
                         expectedStatus = "active",
                         expectedTuple = active.tuple,
-                        finalOffsetMs = request.finalOffsetMs,
-                        terminalStatus = request.terminalStatus,
-                        terminalReason = request.terminalReason
+                        finalOffsetMs = effectiveRequest.finalOffsetMs,
+                        terminalStatus = effectiveRequest.terminalStatus,
+                        terminalReason = effectiveRequest.terminalReason,
+                        authority = authority
                     )
                 )
             } else {
@@ -537,10 +782,11 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                         recordingId = active.recordingId!!,
                         expectedStatus = "active",
                         expectedTuple = active.tuple,
-                        finalOffsetMs = request.finalOffsetMs,
-                        terminalStatus = request.terminalStatus,
-                        terminalReason = request.terminalReason,
-                        snapshotCreatedAt = request.snapshotCreatedAt
+                        finalOffsetMs = effectiveRequest.finalOffsetMs,
+                        terminalStatus = effectiveRequest.terminalStatus,
+                        terminalReason = effectiveRequest.terminalReason,
+                        snapshotCreatedAt = effectiveRequest.snapshotCreatedAt,
+                        authority = authority
                     )
                 )
                 WorkoutTimelineTerminalResult(
@@ -549,7 +795,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                     finalized.analysisVersion
                 )
             }
-            terminalCache = TerminalCache(request, active.tuple, result)
+            terminalCache = TerminalCache(effectiveRequest, active.tuple, result)
             finishRelease(result)
             reply?.complete(result)
         } catch (failure: SQLiteException) {
@@ -570,22 +816,28 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     private suspend fun finishRelease(result: WorkoutTimelineTerminalResult) {
         terminalCache = requireNotNull(terminalCache)
         repository.invalidateRecorderGateCache(ownerToken)
-        when (val unbind = runtimeOwner.exactUnbindPersistenceSink(bindingId)) {
-            is HeartRatePersistenceUnbindResult.Unbound,
-            is HeartRatePersistenceUnbindResult.KnownAbsent -> Unit
+        val cleanupProof = when (val unbind = runtimeOwner.exactUnbindPersistenceSink(bindingId)) {
+            is HeartRatePersistenceUnbindResult.Unbound -> RecorderCleanupProof.Unbound(unbind)
+            is HeartRatePersistenceUnbindResult.KnownAbsent ->
+                RecorderCleanupProof.ExactKnownAbsent(unbind)
             is HeartRatePersistenceUnbindResult.ConflictingInstalled -> {
                 val failure = unbind.conflictFailure()
-                repository.blockRecorderOwner(ownerToken, failure, failure)
+                blockOwner(failure, null)
                 throw failure
             }
             is HeartRatePersistenceUnbindResult.Unresolved -> {
                 val failure = unbind.unresolvedFailure()
-                repository.blockRecorderOwner(ownerToken, failure, failure)
+                blockOwner(failure, null)
                 throw failure
             }
         }
-        if (repository.releaseRecorderOwner(ownerToken) != RecorderOwnerReleaseResult.Released) {
-            throw IllegalStateException("Recorder owner release lost exact token identity")
+        val release = releaseOwner(cleanupProof)
+        if (release != RecorderOwnerReleaseResult.Released) {
+            val failure = RecorderBindingDispositionException(
+                "Recorder owner release did not complete: $release"
+            )
+            blockOwner(failure, null)
+            throw failure
         }
         activeSession?.tuple = result.finalTuple
         mutableState.value = WorkoutSessionTimelineRecorderState.Released
@@ -595,42 +847,87 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         reply: CompletableDeferred<WorkoutTimelineTerminalResult>?,
         failure: Throwable
     ) {
+        if (ownerClearHandoff != null) {
+            blockOwner(failure, null)
+        }
         mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(failure)
         reply?.completeExceptionally(failure)
     }
 
     private suspend fun handleOwnerClear(request: WorkoutTimelineOwnerClearRequest) {
-        when (mutableState.value) {
+        when (val state = mutableState.value) {
             WorkoutSessionTimelineRecorderState.Prepared -> {
-                val unbind = runtimeOwner.exactUnbindPersistenceSink(bindingId)
-                if (
-                    unbind is HeartRatePersistenceUnbindResult.Unbound ||
-                    unbind is HeartRatePersistenceUnbindResult.KnownAbsent
-                ) {
-                    repository.releaseRecorderOwner(ownerToken)
-                    mutableState.value = WorkoutSessionTimelineRecorderState.Released
-                } else {
-                    val failure = RecorderBindingDispositionException(
-                        "Owner-clear could not prove exact runtime unbind"
-                    )
-                    repository.blockRecorderOwner(ownerToken, failure, failure)
-                    mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(failure)
+                when (val unbind = runtimeOwner.exactUnbindPersistenceSink(bindingId)) {
+                    is HeartRatePersistenceUnbindResult.Unbound ->
+                        releasePreparedOwner(RecorderCleanupProof.Unbound(unbind))
+                    is HeartRatePersistenceUnbindResult.KnownAbsent ->
+                        releasePreparedOwner(RecorderCleanupProof.ExactKnownAbsent(unbind))
+                    is HeartRatePersistenceUnbindResult.ConflictingInstalled -> {
+                        val failure = unbind.conflictFailure()
+                        blockOwner(failure, null)
+                        mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(failure)
+                    }
+                    is HeartRatePersistenceUnbindResult.Unresolved -> {
+                        val failure = unbind.unresolvedFailure()
+                        blockOwner(failure, null)
+                        mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(failure)
+                    }
                 }
             }
-            WorkoutSessionTimelineRecorderState.Started,
-            is WorkoutSessionTimelineRecorderState.ActivePersistenceFailed -> handleTerminal(
+            WorkoutSessionTimelineRecorderState.Started -> handleTerminal(
                 WorkoutTimelineTerminalRequest(
                     terminalStatus = "abandoned",
                     terminalReason = "owner_cleared",
                     finalOffsetMs = request.finalOffsetMs,
                     snapshotCreatedAt = request.snapshotCreatedAt
                 ),
-                reply = null
+                reply = null,
+                authority = RecorderTerminalAuthority.OWNER_CLEAR
             )
+            is WorkoutSessionTimelineRecorderState.ActivePersistenceFailed -> {
+                blockOwner(state.cause, null)
+                mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(state.cause)
+            }
+            is WorkoutSessionTimelineRecorderState.TerminalFailed -> blockOwner(state.cause, null)
             WorkoutSessionTimelineRecorderState.Starting,
             WorkoutSessionTimelineRecorderState.Terminating,
-            is WorkoutSessionTimelineRecorderState.TerminalFailed,
             WorkoutSessionTimelineRecorderState.Released -> Unit
+        }
+    }
+
+    private fun releasePreparedOwner(cleanupProof: RecorderCleanupProof) {
+        val release = releaseOwner(cleanupProof)
+        if (release == RecorderOwnerReleaseResult.Released) {
+            mutableState.value = WorkoutSessionTimelineRecorderState.Released
+        } else {
+            val failure = RecorderBindingDispositionException(
+                "Prepared owner release did not complete: $release"
+            )
+            blockOwner(failure, null)
+            mutableState.value = WorkoutSessionTimelineRecorderState.TerminalFailed(failure)
+        }
+    }
+
+    private fun validateTerminalRequest(
+        request: WorkoutTimelineTerminalRequest,
+        authority: RecorderTerminalAuthority
+    ) {
+        val validPair = when (authority) {
+            RecorderTerminalAuthority.ORDINARY ->
+                (request.terminalStatus == "completed" && request.terminalReason == "completed") ||
+                    (request.terminalStatus == "abandoned" &&
+                        request.terminalReason == "user_abandoned")
+            RecorderTerminalAuthority.OWNER_CLEAR ->
+                request.terminalStatus == "abandoned" &&
+                    request.terminalReason == "owner_cleared"
+            RecorderTerminalAuthority.FRESH_PROCESS -> false
+        }
+        if (!validPair) throw RecorderValidationException("invalid_terminal_authority_v1")
+        if (request.finalOffsetMs < 0) {
+            throw RecorderValidationException("invalid_final_tuple_v1")
+        }
+        if (request.snapshotCreatedAt.isEmpty()) {
+            throw RecorderValidationException("invalid_snapshot_created_at_v1")
         }
     }
 
@@ -664,6 +961,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         var acquisitionSequence = -1
         var sampleSequence = 0L
         var currentCause = snapshotCause(binding.snapshot)
+        var currentFact: CanonicalHeartRateAcquisitionFact? = null
         val acquisitions = mutableListOf<HeartRateAcquisitionIntervalEntity>()
         val samples = mutableListOf<HeartRateSampleEntity>()
         val recording = request.recording?.copy(
@@ -677,72 +975,86 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         )
         if (recording != null) {
             acquisitionSequence = 0
+            currentFact = CanonicalHeartRateObservationMapper.acquisition(
+                currentCause,
+                recordingExpected = true,
+                userExclusionReason = null
+            )
             acquisitions += acquisition(
                 recording.recordingId,
                 acquisitionSequence,
                 tuple,
-                CanonicalHeartRateObservationMapper.acquisition(
-                    currentCause,
-                    recordingExpected = true,
-                    userExclusionReason = null
-                )
+                currentFact
             )
             observations.drop(1).forEach { observation ->
-                tuple = CanonicalTuple(
-                    initialTuple.offsetMs,
-                    Math.incrementExact(tuple.mutationSequence)
-                )
                 when (val payload = observation.payload) {
                     is HeartRateRuntimeObservationPayload.CurrentSnapshot -> {
                         currentCause = payload.cause
-                        acquisitionSequence = Math.incrementExact(acquisitionSequence)
-                        closeLastAcquisition(acquisitions, tuple)
-                        acquisitions += acquisition(
-                            recording.recordingId,
-                            acquisitionSequence,
-                            tuple,
-                            CanonicalHeartRateObservationMapper.acquisition(
-                                currentCause,
-                                recordingExpected = true,
-                                userExclusionReason = null
-                            )
+                        val nextFact = CanonicalHeartRateObservationMapper.acquisition(
+                            currentCause,
+                            recordingExpected = true,
+                            userExclusionReason = null
                         )
-                    }
-                    is HeartRateRuntimeObservationPayload.RuntimeTransition -> {
-                        currentCause = payload.cause
-                        acquisitionSequence = Math.incrementExact(acquisitionSequence)
-                        closeLastAcquisition(acquisitions, tuple)
-                        acquisitions += acquisition(
-                            recording.recordingId,
-                            acquisitionSequence,
-                            tuple,
-                            CanonicalHeartRateObservationMapper.acquisition(
-                                currentCause,
-                                recordingExpected = true,
-                                userExclusionReason = null
+                        if (nextFact != currentFact) {
+                            tuple = CanonicalTuple(
+                                initialTuple.offsetMs,
+                                Math.incrementExact(tuple.mutationSequence)
                             )
-                        )
-                    }
-                    is HeartRateRuntimeObservationPayload.ValidMeasurement -> {
-                        currentCause = HeartRateRuntimeObservationCause.LIVE
-                        val live = CanonicalHeartRateObservationMapper.mapCause(currentCause)
-                        val previous = acquisitions.last()
-                        if (
-                            previous.deviceState != live.deviceState ||
-                            previous.deviceReason != live.deviceReason
-                        ) {
                             acquisitionSequence = Math.incrementExact(acquisitionSequence)
                             closeLastAcquisition(acquisitions, tuple)
                             acquisitions += acquisition(
                                 recording.recordingId,
                                 acquisitionSequence,
                                 tuple,
-                                CanonicalHeartRateObservationMapper.acquisition(
-                                    currentCause,
-                                    recordingExpected = true,
-                                    userExclusionReason = null
-                                )
+                                nextFact
                             )
+                            currentFact = nextFact
+                        }
+                    }
+                    is HeartRateRuntimeObservationPayload.RuntimeTransition -> {
+                        currentCause = payload.cause
+                        val nextFact = CanonicalHeartRateObservationMapper.acquisition(
+                            currentCause,
+                            recordingExpected = true,
+                            userExclusionReason = null
+                        )
+                        if (nextFact != currentFact) {
+                            tuple = CanonicalTuple(
+                                initialTuple.offsetMs,
+                                Math.incrementExact(tuple.mutationSequence)
+                            )
+                            acquisitionSequence = Math.incrementExact(acquisitionSequence)
+                            closeLastAcquisition(acquisitions, tuple)
+                            acquisitions += acquisition(
+                                recording.recordingId,
+                                acquisitionSequence,
+                                tuple,
+                                nextFact
+                            )
+                            currentFact = nextFact
+                        }
+                    }
+                    is HeartRateRuntimeObservationPayload.ValidMeasurement -> {
+                        currentCause = HeartRateRuntimeObservationCause.LIVE
+                        val liveFact = CanonicalHeartRateObservationMapper.acquisition(
+                            currentCause,
+                            recordingExpected = true,
+                            userExclusionReason = null
+                        )
+                        tuple = CanonicalTuple(
+                            initialTuple.offsetMs,
+                            Math.incrementExact(tuple.mutationSequence)
+                        )
+                        if (liveFact != currentFact) {
+                            acquisitionSequence = Math.incrementExact(acquisitionSequence)
+                            closeLastAcquisition(acquisitions, tuple)
+                            acquisitions += acquisition(
+                                recording.recordingId,
+                                acquisitionSequence,
+                                tuple,
+                                liveFact
+                            )
+                            currentFact = liveFact
                         }
                         samples += HeartRateSampleEntity(
                             recording.recordingId,
@@ -782,7 +1094,8 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 nextSampleSequence = sampleSequence,
                 recordingExpected = recording != null,
                 userExclusionReason = null,
-                devicePair = CanonicalHeartRateObservationMapper.mapCause(currentCause)
+                acquisitionFact = currentFact,
+                phaseSequence = request.initialPhase.sequence
             )
         )
     }
@@ -873,7 +1186,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
 
     private data class ActiveSession(
         val sessionId: String,
-        val openPhaseId: String,
+        var openPhaseId: String,
         var tuple: CanonicalTuple,
         val startAnchorMs: Long,
         var recordingId: String?,
@@ -882,7 +1195,8 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         var nextSampleSequence: Long,
         var recordingExpected: Boolean,
         var userExclusionReason: String?,
-        var devicePair: CanonicalHeartRateDevicePair
+        var acquisitionFact: CanonicalHeartRateAcquisitionFact?,
+        var phaseSequence: Int
     )
 
     private data class TerminalCache(
@@ -895,6 +1209,27 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 request.terminalReason == candidate.terminalReason &&
                 request.finalOffsetMs == candidate.finalOffsetMs
     }
+
+    private data class TerminalAttempt(
+        val request: WorkoutTimelineTerminalRequest,
+        val predecessor: CanonicalTuple,
+        val authority: RecorderTerminalAuthority
+    ) {
+        fun matches(
+            candidate: WorkoutTimelineTerminalRequest,
+            candidatePredecessor: CanonicalTuple,
+            candidateAuthority: RecorderTerminalAuthority
+        ): Boolean = authority == candidateAuthority &&
+            predecessor == candidatePredecessor &&
+            request.terminalStatus == candidate.terminalStatus &&
+            request.terminalReason == candidate.terminalReason &&
+            request.finalOffsetMs == candidate.finalOffsetMs
+    }
+
+    private data class OwnerClearHandoff(
+        val handoffToken: RecorderHandoffToken,
+        val mutationFailure: Throwable
+    )
 
     private sealed interface Command {
         data class Observe(val observation: HeartRateRuntimeObservation) : Command
@@ -913,6 +1248,18 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             val offsetMs: Long,
             val reply: CompletableDeferred<Unit>
         ) : Command
+        data class AppendDisplayMetadata(
+            val nextJson: String,
+            val offsetMs: Long,
+            val reply: CompletableDeferred<Unit>
+        ) : Command
+        data class TransitionPhase(
+            val phaseId: String,
+            val phaseKind: String,
+            val phaseIdentityJson: String,
+            val offsetMs: Long,
+            val reply: CompletableDeferred<Unit>
+        ) : Command
         data class Terminalize(
             val request: WorkoutTimelineTerminalRequest,
             val reply: CompletableDeferred<WorkoutTimelineTerminalResult>
@@ -923,10 +1270,12 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     companion object {
         suspend fun prepare(
             entryId: String,
+            startRequest: WorkoutTimelineStartRequest,
             repository: WorkoutSessionRepository,
             runtimeOwner: HeartRateRuntimeOwner,
             scope: CoroutineScope
         ): WorkoutSessionTimelineRecorder {
+            validateStartRequest(startRequest)
             val admission = repository.admitRecorder(entryId)
             val pending = ArrayDeque<HeartRateRuntimeObservation>()
             var recorder: WorkoutSessionTimelineRecorder? = null
@@ -961,10 +1310,42 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 runtimeOwner,
                 scope,
                 admission,
-                binding
+                binding,
+                startRequest
             ).also { created ->
                 recorder = created
                 while (pending.isNotEmpty()) created.acceptRuntimeObservation(pending.removeFirst())
+            }
+        }
+
+        private fun validateStartRequest(request: WorkoutTimelineStartRequest) {
+            require(request.session.id.isNotBlank()) { "Session ID must not be blank" }
+            require(request.session.status == "active") { "Recorder start session must be active" }
+            require(request.initialPhase.sessionId == request.session.id) {
+                "Initial phase must belong to the session"
+            }
+            require(request.initialPhase.sequence == 0) {
+                "Initial phase sequence must be zero"
+            }
+            require(request.initialPhase.openMarker == 1) {
+                "Initial phase must be open"
+            }
+            val offset = requireNotNull(request.session.lastDurableOffsetMs) {
+                "Recorder start requires a durable offset"
+            }
+            val mutation = requireNotNull(request.session.lastMutationSequence) {
+                "Recorder start requires a mutation sequence"
+            }
+            require(request.initialPhase.startOffsetMs == offset) {
+                "Initial phase offset must equal the session cut"
+            }
+            require(request.initialPhase.startMutationSequence == mutation) {
+                "Initial phase mutation must equal the session cut"
+            }
+            request.recording?.let { recording ->
+                require(recording.sessionId == request.session.id) {
+                    "Recording must belong to the session"
+                }
             }
         }
     }

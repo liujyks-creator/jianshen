@@ -164,6 +164,143 @@ class WorkoutSessionRecorderGuardedWriteTest {
     }
 
     @Test
+    fun cacheHitPrepareAndEveryDirectMutationFrontDoorFailWhileRecorderOwnsOrder() = runBlocking {
+        val outcomes = listOf(
+            directFrontDoorOutcome("prepare", withRecording = false) { repository ->
+                repository.prepareRecorder()
+                Unit
+            },
+            directFrontDoorOutcome("display", withRecording = false) { repository ->
+                repository.appendSessionDisplayMetadata(
+                    expected = expected(CanonicalTuple(0, 0)),
+                    nextTuple = CanonicalTuple(0, 1),
+                    nextJson = DISPLAY_METADATA_WITH_ENTRY
+                )
+                Unit
+            },
+            directFrontDoorOutcome("phase", withRecording = false) { repository ->
+                repository.transitionPhase(
+                    expected = expected(CanonicalTuple(0, 0)),
+                    nextTuple = CanonicalTuple(0, 1),
+                    nextPhase = nextPhase(PHASE_1_ID, 0, 1)
+                )
+                Unit
+            },
+            directFrontDoorOutcome("recording", withRecording = false) { repository ->
+                repository.startHeartRateRecording(
+                    expected = expected(CanonicalTuple(0, 0)),
+                    nextTuple = CanonicalTuple(0, 1),
+                    recording = activeRecording().copy(startedMutationSequence = 1),
+                    initialAcquisition = acquisition(
+                        ACQUISITION_0_ID,
+                        sequence = 0,
+                        tuple = CanonicalTuple(0, 1),
+                        state = "searching",
+                        reason = "initial_acquisition"
+                    )
+                )
+                Unit
+            },
+            directFrontDoorOutcome("acquisition", withRecording = true) { repository ->
+                repository.transitionAcquisition(
+                    expected = expected(
+                        tuple = CanonicalTuple(0, 3),
+                        recordingId = RECORDING_ID,
+                        openAcquisitionId = ACQUISITION_0_ID
+                    ),
+                    nextTuple = CanonicalTuple(0, 4),
+                    nextAcquisition = acquisition(
+                        ACQUISITION_1_ID,
+                        sequence = 1,
+                        tuple = CanonicalTuple(0, 4),
+                        state = "live",
+                        reason = null
+                    )
+                )
+                Unit
+            },
+            directFrontDoorOutcome("sample", withRecording = true) { repository ->
+                repository.appendHeartRateSample(
+                    expected = expected(
+                        tuple = CanonicalTuple(0, 3),
+                        recordingId = RECORDING_ID,
+                        openAcquisitionId = ACQUISITION_0_ID
+                    ),
+                    nextTuple = CanonicalTuple(0, 4),
+                    sample = HeartRateSampleEntity(
+                        recordingId = RECORDING_ID,
+                        sampleSequence = 0,
+                        offsetMs = 0,
+                        mutationSequence = 4,
+                        bpm = 120
+                    )
+                )
+                Unit
+            }
+        )
+
+        assertEquals(
+            emptyList<String>(),
+            outcomes.filterNot { outcome ->
+                outcome.failure is RecorderAdmissionBusyException &&
+                    outcome.before == outcome.after
+            }.map { outcome ->
+                "${outcome.name}:${outcome.failure?.javaClass?.simpleName ?: "success"}:" +
+                    "changed=${outcome.before != outcome.after}"
+            }
+        )
+    }
+
+    @Test
+    fun durableTerminalResultLossRequiresTheCompleteProducedGraphAndOriginalBinding() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val admission = repository.admitRecorder("entry:durable-terminal")
+        val candidate = CanonicalSessionGraphV1(
+            session = canonicalSession(),
+            phases = listOf(initialPhase()),
+            recording = activeRecording().copy(startedMutationSequence = 0),
+            acquisitions = listOf(
+                acquisition(
+                    id = ACQUISITION_0_ID,
+                    sequence = 0,
+                    tuple = CanonicalTuple(0, 0),
+                    state = "not_observing",
+                    reason = null
+                )
+            )
+        )
+        repository.commitRecorderStart(admission.ownerToken, candidate)
+        val request = RecordingFinalizationRequest(
+            sessionId = SESSION_ID,
+            recordingId = RECORDING_ID,
+            expectedStatus = "active",
+            expectedTuple = CanonicalTuple(0, 0),
+            finalOffsetMs = 10,
+            terminalStatus = "completed",
+            terminalReason = "completed",
+            snapshotCreatedAt = "2026-09-04T00:00:00Z",
+            authority = RecorderTerminalAuthority.ORDINARY
+        )
+        repository.finalizeRecorderRecording(admission.ownerToken, request)
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE heart_rate_analysis_snapshots SET quality_reasons_json=" +
+                "'{\"qualityReasonsContractVersion\":1,\"sessionReasons\":[],\"phaseReasons\":[]}' " +
+                "WHERE recording_id='$RECORDING_ID'"
+        )
+
+        val resultLossRetry = runCatching {
+            repository.finalizeRecorderRecording(admission.ownerToken, request)
+        }
+
+        assertTrue(
+            resultLossRetry.exceptionOrNull()?.stackTraceToString(),
+            resultLossRetry.exceptionOrNull() is RecorderGuardedWriteException ||
+                resultLossRetry.exceptionOrNull() is RecorderValidationException
+        )
+        assertEquals(1, database.canonicalTimelineHeartRateDao().analysisSnapshotCount())
+    }
+
+    @Test
     fun invalidStateReasonAndSampleAfterCutBothRollbackWithoutPartialWrites() = runBlocking {
         val repository = recordingRepository()
         val beforeInvalidPair = databaseSnapshot()
@@ -373,6 +510,34 @@ class WorkoutSessionRecorderGuardedWriteTest {
         return repository
     }
 
+    private suspend fun directFrontDoorOutcome(
+        name: String,
+        withRecording: Boolean,
+        action: suspend (WorkoutSessionRepository) -> Unit
+    ): DirectFrontDoorOutcome {
+        database.clearAllTables()
+        val repository = WorkoutSessionRepository(database)
+        repository.startCanonicalSession(canonicalSession(), initialPhase())
+        if (withRecording) {
+            repository.startHeartRateRecording(
+                expected = expected(CanonicalTuple(0, 0)),
+                nextTuple = CanonicalTuple(0, 3),
+                recording = activeRecording(),
+                initialAcquisition = acquisition(
+                    ACQUISITION_0_ID,
+                    sequence = 0,
+                    tuple = CanonicalTuple(0, 3),
+                    state = "searching",
+                    reason = "initial_acquisition"
+                )
+            )
+        }
+        repository.admitRecorder("entry:front-door:$name")
+        val before = databaseSnapshot()
+        val failure = runCatching { action(repository) }.exceptionOrNull()
+        return DirectFrontDoorOutcome(name, failure, before, databaseSnapshot())
+    }
+
     private suspend fun recordingRepository(): WorkoutSessionRepository {
         val repository = emptyCanonicalRepository()
         repository.startHeartRateRecording(
@@ -564,6 +729,13 @@ class WorkoutSessionRecorderGuardedWriteTest {
             }
         }
     }
+
+    private data class DirectFrontDoorOutcome(
+        val name: String,
+        val failure: Throwable?,
+        val before: List<String>,
+        val after: List<String>
+    )
 
     private companion object {
         const val SESSION_ID = "canonical-session"
