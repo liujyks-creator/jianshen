@@ -8,13 +8,14 @@
 
 E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产保留。E18 → E19 → E20 → E21 → E22 的五组成果、24 个 Story、42 条唯一依赖已通过第四轮独立规划审查且获用户接受；力量与跟练分别接入、分别验收。技术根与数据依赖不改变成果验收顺序。
 
-本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。文档候选在 Review / 集成前为 `DOCS_IMPLEMENTED_CANDIDATE_AWAITING_REVIEW`。E18-S01 只进入准备，其 F8 执行绑定与代码实施尚未完成；未来运行、设备、依赖解析、性能和主观体验门禁不因规划接受而通过。
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。本次修订候选在 fresh 完整复审 / 集成前为 `DOCS_REPAIR_CANDIDATE_AWAITING_FRESH_RE_REVIEW`。E18-S01 只进入准备，其 F8 执行绑定与代码实施尚未完成；未来运行、设备、依赖解析、性能和主观体验门禁不因规划接受而通过。
 
 **审查与接受身份：** V2 F.40 记录 F9 attempt=4、independence=VALID、overall / SPEC / QUALITY / EVIDENCE=PASS，审查对象为写前 V2（442883 bytes，SHA256=`CA8C9EE5894F6361D8E0496E354B011E237B0D53BFACE1257F7D6E5AE7684DCD`），报告 SHA256=`3CE2750B8FD418B70B1EF8A42D3BC0B7175002A52BE3930365E0DCF875416D30`。用户随后接受已展示规划并授权正式落地与 S01 实施准备；该 PASS 不覆盖后续 V2 状态更新或本次七文档转录 candidate。P003 已关闭，P001/P002 无回退；N001 已仅将 kind 索引计数更正为九，literal 值不变，不重开这些 finding。
 
 **当前导航：**
 
 - [F.37 当前 Story selector](#f37-当前候选包与手工规划审查入口) 是 24 个当前 Story 的唯一入口；F.26 是当前 42 边 DAG，F.36 是逐项 capacity。各 Story 同时消费 F.37 指明的 typed / AC / oracle / consumer 补充合同。
+- F.37 的 **E22-S02 与 E22-S03 同时消费[已接受 UX 约束补充（DOCS-P001）](#accepted-ux-supplement)**：S02/K01/K02/K04 承接 [UX-SUP-01](#ux-sup-01)，S02/K02 与 S03 既有读取错误呈现承接 [UX-SUP-02](#ux-sup-02)，S02/K03 与 S03/V11 承接 [UX-SUP-03](#ux-sup-03)。该补充与 F.17、F.18.2、F.20 同读；F.37 保全行中的 E22 selector 经本条导航取得完整补充合同。
 - B–D 与 F.1 保留需求、资产、成果与非目标；F.20、F.22–F.35 保留 UX、字段、union、NULL、ordering、atomicity、retry、接线及证据义务。不得用本页导航替代完整正文。
 - [保全正文](#accepted-contract)中的旧 DRAFT、NOT_READY、候选、待审、下一步、角色、派发和执行权限文字均保留其原始语境，不是当前操作指令；F.38/F.39 是修正历史，F.2/F.3 的旧拆分及旧 CS-06 不复活。F.37 中关于原 artifact、A、F.40–F.42、G/H 或后部历史快照的引用，定位原 V2 的来源/管理记录；当前状态与正式入口由本节承接，不要求重启旧 Review 或寻找另一任务。
 - [来源到正文映射](#source-map)用于核对承接。App 比较/长期分析/进阶、App AI、低空间功能、HIIT 次数及新库均不因落地新增；真实写入失败、原始错误、事务回滚、诚实保存和释放状态保持。
@@ -29,14 +30,17 @@ E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产�
 
 ### 本地来源身份
 
-下列机器路径仅记录原始输入 provenance；有效规划义务由本文件正文或上述 pinned-main 合同承接，不依赖读者持有这些本地文件。报告仅保存身份和证据限界，不复制附件全文。
+下列机器路径仅记录原始输入 provenance；有效规划义务由本文件保全正文、[已接受 UX 约束补充](#accepted-ux-supplement)或上述 pinned-main 合同承接，不依赖读者持有这些本地文件。报告仅保存身份和证据限界，不复制附件全文。原转录输入与本次 Repair 输入分别登记，旧审查不覆盖新版输入或本次修订。
 
 | 来源 | 原始 literal 路径 | SHA256 / 身份 |
 |---|---|---|
-| 本次 immutable V2 | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 452781 bytes；`DAC9FBE8CCED971D3D503B81D6D1091AB6E218D29B99026F6AE18F98659E2E6D` |
+| 原转录 immutable V2 | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 452781 bytes；`DAC9FBE8CCED971D3D503B81D6D1091AB6E218D29B99026F6AE18F98659E2E6D` |
+| 本次 Repair immutable V2，F.43 授权与合同 | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 462703 bytes；`312527BBC18449A1023C687DA6CCFB10BFB2C326FE62E8895C670EED13994B87`；UTF-8，无 BOM，LF |
 | 分层讨论保全 | `C:/Users/25073/Desktop/jianshen/.local/planning/E17-CLEAN-SHEET-DISCUSSION-SALVAGE.md` | `66086CBEF35E6FD6BCFED8D9DA3439E59B0CB10B622040ACD7706FBD4296DD80` |
 | D5 已接受行为保证 | `C:/Users/25073/Desktop/jianshen/.local/planning/E17-CS-06-CORRECT-COURSE-D-REPAIR-5-CANDIDATE.md` | `D2908408FC620BBC69CF3B4884286F0FB2B4AB07361E626A73BC34AF6CBDA46A` |
 | F9 attempt=4 完整报告 | `C:/Users/25073/.codex/attachments/98ecb8b1-1c5e-4ad0-9fba-91dc064df695/pasted-text.txt` | `3CE2750B8FD418B70B1EF8A42D3BC0B7175002A52BE3930365E0DCF875416D30`；仅证明上述旧 V2 的规划审查 |
+
+**文档 Repair 来源与审查边界：** 原文档 reviewed candidate / 本次 Repair 起点为 `abbfa48af13d8325d9f8bd56b2d141320d8390c8`，tree=`acecc72311eb9fd2433a88750bf128d1f69217bf`，唯一 parent=`d2c9ac48027177389092d56c208c64447a3c6a93`，原正式计划 Git blob=`fcf1d7103654379cbad5fc5a29c76d11fc6ef084`。文档 Review attempt=1 为 `CHANGES_REQUESTED`，完整 must-fix batch 只有 DOCS-P001。V2 F.43 记录用户已批准 `DOCS-P001-PORTABLE-UX-SUPPLEMENT`：只在保全区外补入既有 UX 条款并修订本文件导航与映射，不改变原 F9 规划接受。主管理处置及本次 Writer 转录均不等于独立复审通过；修订后的完整七文档 candidate 仍须另一名 fresh Reviewer 完成本节点完整复审，不能只复查 DOCS-P001。
 
 **转录边界：** 以下从 B 标题至 F.39 末尾保全 V2 正文；不复制 A/G/H、F.40–F.42 完整管理记录及原历史后缀。唯一已获用户明确批准的格式例外：V2 第 952 行（F.15.1 两段之间）四个 ASCII 空格在本文件中删除，空行保留，V2 原件不改；其他保全正文不变。此例外不改变规划语义，也不构成其他格式或 scope 扩张授权。
 
@@ -2643,19 +2647,57 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 写后核验exact delta、UTF-8/LF/无BOM、后缀、F26图未变及Git保护态。新版全文身份在外部核验绑定，不填自引用hash。当前P003=`MANAGEMENT_REPAIR_RECORDED_INDEPENDENT_CLOSURE_PENDING`。下一唯一门禁是由用户手工交另一名fresh Reviewer执行完整F9 attempt=4，覆盖当前候选全部适用轴、P003及同根因/直接消费者，并检查P001/P002保留；不是只勾选一条finding。后续用户最终规划接受、F8和Writer解锁仍未完成。
 
 
+<a id="accepted-ux-supplement"></a>
+
+## 已接受 UX 约束补充（DOCS-P001）
+
+本区按已批准的 `DOCS-P001-PORTABLE-UX-SUPPLEMENT` 补齐既有要求。接受来源是页首绑定的 salvage（241614 bytes，SHA256=`66086CBEF35E6FD6BCFED8D9DA3439E59B0CB10B622040ACD7706FBD4296DD80`）§13.6 第 356/361 行、§14.31 / AD-U-025 第 1078 行及其直接限定；Repair 授权来源为另列新版 V2 F.43。本区承载可直接消费的正文，读者无需打开 `.local` 文件取得以下要求。
+
+**消费入口：** 从[页首当前导航](#current-status)进入 [F.37](#f37-当前候选包与手工规划审查入口) 的 E22-S02/S03 时，必须同时读取本区。E22-S02 的 K01/K02/K03/K04 与 E22-S03 的既有读取错误呈现、V11 分别按以下条款消费；F.17、F.18.2、F.20 及 pinned-main 的原始分析、严格读取合同继续适用。这里不新增 Story、UX 选择、统计 owner 或实现机制。
+
+<a id="ux-sup-01"></a>
+
+### UX-SUP-01 — S4 HR 卡顺序与返回失败隔离
+
+- S4 recap 的 HR 卡信息顺序固定为：**状态/覆盖短句 → 已观察平均/最高 → “查看心率分析”**。无 HR identity 时整卡不出现；zero-sample 显示事实但不画空图。平均/最高的覆盖限定同时按 UX-SUP-03 消费。
+- **已保存且 RELEASED 的结果页上，HR 卡失败不能阻塞底部“返回训练首页”**；HR 卡读取失败时仍可使用该返回入口。此隔离不放宽 F.11/L04 的保存与释放门禁：正常返回、恢复推荐、回训练主页仍只在 RELEASED 后移除训练入口；终结或释放尚未成功不能以 HR 卡失败为由绕过，也不能声称已保存。HR 读取失败不转成 zero-sample。
+- 直接消费者为 **E22-S02/K01/K02/K04**，覆盖既有计时、力量、跟练三模式的 persisted recap 与返回入口；完成、放弃、历史继续读取同一持久化结果，不以当前参数改写历史。
+
+<a id="ux-sup-02"></a>
+
+### UX-SUP-02 — HR 读取错误提示与用户重试
+
+- HR 读取错误显示固定提示 **“暂时无法读取本次心率数据”**，并提供 **“重试”**。直接消费者为 **E22-S02/K02 与 E22-S03 既有读取错误呈现**，二者使用同一严格历史输入。
+- 读取错误与 `not_recorded`、`zero_samples`、`no_eligible`、`no_zones` 等合法结果保持区别；三正交轴、no-eligible 优先级及 coverage 判定沿既有合同，不以错误提示替代合法状态，也不把错误降级为合法空结果。
+- 这里只承接已接受的用户重试，不决定自动重试、定时器、重试次数、缓存 fallback 或新 owner。原始错误、typed 拒绝及删除失效继续按 F.20/UX-DATA-09、AE-UX-07 和严格读取合同处理；不得用旧 read/cache 继续显示或导出已删除 session。
+
+<a id="ux-sup-03"></a>
+
+### UX-SUP-03 — S4/S5 固定标题与主要统计范围
+
+- **S4 卡标题固定为“主要训练心率”**，由 **E22-S02/K03** 承接；**S5 指标区标题为“主要训练统计”**，由 **E22-S03/V11** 承接。两个 surface 的标题不能混同。
+- S4 指标为“平均/最高”；salvage §13.6 第 361–362 行的 coverage 限定继续适用：`<80%` 时平均/最高标签必须写“已记录片段平均/最高”，`>=80%` 才可使用无条件“平均/最高”。Partial/insufficient 保留“仅基于已记录片段”或已接受等义文案；partial 的原提示为“本次心率记录不完整，以下结果仅基于已记录片段。”，insufficient 的原提示为“本次有效心率覆盖不足 50%，暂不生成自动摘要。”。阈值与零分母判断消费原始分析，不以显示取整后的百分比重算。
+- S5 主图唯一最高点 anchor 标签仍为 **“训练最高”**；excluded point scrub 明确 **“不计入主要训练统计”**。完整 canonical 曲线中的 prepare/pause/opt-out 等 excluded raw 高值仍展示，不删除、压低、clamp 或冒充 primary observed max；完整曲线 raw 与主要训练统计是不同范围。原覆盖限定、训练最高事实、统计数值、算法及 CS-05 原始分析 owner 均不改变。
+
+**文档判定与未来证据：** 仅持有仓库及 pinned base 的读者，沿页首 → F.37 的 E22-S02/S03 → 本区，即可排除卡顺序错误、S4/S5 标题混同、HR 卡错误阻塞已保存且 RELEASED 后返回、读取错误没有“重试”等实现。此为文档可判定性；真实三模式入口、UI 状态矩阵与用户视觉证据仍归原 E22 Story 门禁，本次文档 Repair 不报告运行或用户体验通过，也不授予 S01 READY 或代码 Writer 权限。
+
 <a id="source-map"></a>
 
 ## 来源到正式正文的转录核对
 
-此表只定位已接受条款及其窄替代，不新增合同，也不以摘要替代正文。原 V1 / salvage 的旧编号作为 lineage 保留；当前分类及 owner / consumer 以 F.24 和 F.37 选择的完整合同为准。候选建议、旧容量、旧派发状态与废弃机制不升级为 authority。
+此表只定位已接受条款及其窄替代，不新增合同，也不以摘要替代正文。原 V1 / salvage 的旧编号作为 lineage 保留；当前分类及 owner / consumer 以 F.24、F.37 及页首为 E22-S02/S03 绑定的[已接受 UX 约束补充](#accepted-ux-supplement)为准。候选建议、旧容量、旧派发状态与废弃机制不升级为 authority。
 
 | 直接来源条款 / 来源族 | 本文件正式正文 selector | 承接与窄替代边界 |
 |---|---|---|
 | V2 B–D、F.1 | 同名 B–D、F.1；当前状态见页首，Story 见 F.37 | E17 封口、保留资产、五成果顺序；力量与跟练分别接入验收；需求保留/暂缓/排除不改 |
 | V2 F.4–F.39 | 同名原文；F.37 → 当前 24 Story，F.26 → 42 边 | 全部 Story / AC / typed / oracle / owner / consumer / capacity 原文转录；F.38/F.39 为修正 chronology |
 | V2 F.40–F.42 | 页首当前状态、来源身份、路径解释及本表；六份旧文档当前入口 | 仅承接已核实审查/用户接受、文档 candidate 与条件式 landing、S01 F8 锁定；管理合同不全文复制 |
-| salvage §2–§5、§12–§13 的已接受产品与 UX；UG / AD-P / AD-U / CAP / RES lineage | B、D、F.1、F.14–F.18、F.20、F.24、F.30.2；当前 owner 按 F.37 | 单场事实、三模式、图表/导出/无障碍义务保留；比较/进阶等 residual 按 B/F.24 当前处置，旧 Epic 编号不恢复 |
-| salvage §14.2、§14.5–§14.31 的已接受 time / raw / original snapshot / axes / typed / owner 保证 | C、F.4–F.9、F.11、F.14、F.22–F.25、F.29–F.35 | 单调坐标、已知/未知时间、raw 与派生分离、状态/原因/NULL/partition/order、唯一 owner；继承的数学与 schema 仍指向 pinned-main E17 remainder §3–§7 |
+| salvage §2–§5、§12–§13 的已接受产品与 UX；UG / AD-P / AD-U / CAP / RES lineage | B、D、F.1、F.14–F.18、F.20、F.24、F.30.2；§13.6 补充见下列 UX-SUP-01/02/03；当前 owner 按 F.37 | 单场事实、三模式、图表/导出/无障碍义务保留；比较/进阶等 residual 按 B/F.24 当前处置，旧 Epic 编号不恢复 |
+| salvage §14.2、§14.5–§14.31 的已接受 time / raw / original snapshot / axes / typed / owner 保证 | C、F.4–F.9、F.11、F.14、F.22–F.25、F.29–F.35；§14.31 固定标题及统计范围另见 UX-SUP-03 | 单调坐标、已知/未知时间、raw 与派生分离、状态/原因/NULL/partition/order、唯一 owner；继承的数学与 schema 仍指向 pinned-main E17 remainder §3–§7 |
+| salvage §13.6 第 356 行；V2 F.43/UX-SUP-01 | [UX-SUP-01](#ux-sup-01)；页首 → F.37/E22-S02/K01/K02/K04 | S4 卡顺序完整承载；HR 卡失败不阻塞已保存且 RELEASED 后的底部返回，保留 F.11/L04 前置 |
+| salvage §13.6 第 361 行；V2 F.43/UX-SUP-02 | [UX-SUP-02](#ux-sup-02)；页首 → F.37/E22-S02/K02、E22-S03 读取错误呈现 | 固定读取错误提示及用户“重试”；合法状态、原始错误、typed 拒绝和删除失效分开，不新增重试机制 |
+| salvage §14.31 / AD-U-025 第 1078–1079 行及 §13.6 第 361–362 行；V2 F.43/UX-SUP-03 | [UX-SUP-03](#ux-sup-03)；页首 → F.37/E22-S02/K03、E22-S03/V11 | S4“主要训练心率”与 S5“主要训练统计”分别承接；coverage、训练最高、excluded raw 与主要统计范围保持 |
+| 本次 Repair V2 F.43 | 页首 Repair 输入身份 / 审查边界、[补充正文](#accepted-ux-supplement)及本表 | 仅承接已授权的 DOCS-P001 单文件窄修订；原转录 / 原 F9 身份保留，完整 candidate 仍待 fresh 完整复审与集成 |
 | salvage §14.32、§14.35–§14.39 的有效性能、export、失败与隐私义务 | D、F.16、F.17、F.23、F.27、F.29、F.34、F.35 | 自描述 v2、完整生成与真实 I/O 失败、独立 consumer、平台外部副本限界；旧 lease / 清理机制只按 D/F.27 窄替代，不恢复旧容量 |
 | D5 §4.1、§5.1–§5.2 | E18-S02/F.5+F.19+F.35.3；E18-S05/F.8 | 无 backlog、同值 notify 不折叠、receipt/snapshot、binding disposition、exact unbind、原始失败；不采用04C实现 |
 | D5 §4.2–§4.3、§5.3–§5.8 | E18-S03/F.6、S04/F.7、S05/F.8、S06/F.9 | Start 全事务、commit-result loss完整 graph、终结幂等、cache/释放顺序、PENDING/BLOCKED、stale token、owner-clear barrier及失败保持 |
