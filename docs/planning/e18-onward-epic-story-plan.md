@@ -8,7 +8,7 @@
 
 E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产保留。E18 → E19 → E20 → E21 → E22 的五组成果、24 个 Story、42 条唯一依赖已通过第四轮独立规划审查且获用户接受；力量与跟练分别接入、分别验收。技术根与数据依赖不改变成果验收顺序。
 
-本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。本次修订候选在 fresh 完整复审 / 集成前为 `DOCS_REPAIR_CANDIDATE_AWAITING_FRESH_RE_REVIEW`。E18-S01 只进入准备，其 F8 执行绑定与代码实施尚未完成；未来运行、设备、依赖解析、性能和主观体验门禁不因规划接受而通过。
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。DOCS-P001 三组已由文档 Review attempt=2 独立关闭；本次 DOCS-P002 五组补充候选在 fresh 复审 / 集成前为 `DOCS_REPAIR_CANDIDATE_AWAITING_FRESH_RE_REVIEW`，不自行宣称 DOCS-P002 独立关闭。E18-S01 只进入准备，其 F8 执行绑定与代码实施尚未完成；未来运行、设备、依赖解析、性能和主观体验门禁不因规划接受而通过。
 
 **审查与接受身份：** V2 F.40 记录 F9 attempt=4、independence=VALID、overall / SPEC / QUALITY / EVIDENCE=PASS，审查对象为写前 V2（442883 bytes，SHA256=`CA8C9EE5894F6361D8E0496E354B011E237B0D53BFACE1257F7D6E5AE7684DCD`），报告 SHA256=`3CE2750B8FD418B70B1EF8A42D3BC0B7175002A52BE3930365E0DCF875416D30`。用户随后接受已展示规划并授权正式落地与 S01 实施准备；该 PASS 不覆盖后续 V2 状态更新或本次七文档转录 candidate。P003 已关闭，P001/P002 无回退；N001 已仅将 kind 索引计数更正为九，literal 值不变，不重开这些 finding。
 
@@ -16,6 +16,7 @@ E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产�
 
 - [F.37 当前 Story selector](#f37-当前候选包与手工规划审查入口) 是 24 个当前 Story 的唯一入口；F.26 是当前 42 边 DAG，F.36 是逐项 capacity。各 Story 同时消费 F.37 指明的 typed / AC / oracle / consumer 补充合同。
 - F.37 的 **E22-S02 与 E22-S03 同时消费[已接受 UX 约束补充（DOCS-P001）](#accepted-ux-supplement)**：S02/K01/K02/K04 承接 [UX-SUP-01](#ux-sup-01)，S02/K02 与 S03 既有读取错误呈现承接 [UX-SUP-02](#ux-sup-02)，S02/K03 与 S03/V11 承接 [UX-SUP-03](#ux-sup-03)。该补充与 F.17、F.18.2、F.20 同读；F.37 保全行中的 E22 selector 经本条导航取得完整补充合同。
+- F.37 的 **E22-S01–S04 同时消费[已接受 UX 约束补充（DOCS-P002）](#accepted-ux-supplement-p002)**：S01/Q02/Q06 承接 [UX-SUP-08](#ux-sup-08)；S02/K02 承接 [UX-SUP-05](#ux-sup-05)，并保留 F.18.2 的质量状态直接消费；S03 承接 [UX-SUP-04](#ux-sup-04) 的 S5 排列、[UX-SUP-05](#ux-sup-05) 的 V01/V04/V08/V09 状态文案、[UX-SUP-06](#ux-sup-06) 的 V08 质量详情、[UX-SUP-07](#ux-sup-07) 的 V02 按钮/手势及 [UX-SUP-08](#ux-sup-08) 的图表样式/全程入口/时间；S04 承接 [UX-SUP-07](#ux-sup-07) 的 W01 与 [UX-SUP-08](#ux-sup-08) 的 S6 保留内容。阅读路径为本页 → F.37 的 E22 行 → F.17/F.18.2/F.20 及上述对应补充；F.37 原文和 DOCS-P001 正文不改。
 - B–D 与 F.1 保留需求、资产、成果与非目标；F.20、F.22–F.35 保留 UX、字段、union、NULL、ordering、atomicity、retry、接线及证据义务。不得用本页导航替代完整正文。
 - [保全正文](#accepted-contract)中的旧 DRAFT、NOT_READY、候选、待审、下一步、角色、派发和执行权限文字均保留其原始语境，不是当前操作指令；F.38/F.39 是修正历史，F.2/F.3 的旧拆分及旧 CS-06 不复活。F.37 中关于原 artifact、A、F.40–F.42、G/H 或后部历史快照的引用，定位原 V2 的来源/管理记录；当前状态与正式入口由本节承接，不要求重启旧 Review 或寻找另一任务。
 - [来源到正文映射](#source-map)用于核对承接。App 比较/长期分析/进阶、App AI、低空间功能、HIIT 次数及新库均不因落地新增；真实写入失败、原始错误、事务回滚、诚实保存和释放状态保持。
@@ -30,17 +31,20 @@ E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产�
 
 ### 本地来源身份
 
-下列机器路径仅记录原始输入 provenance；有效规划义务由本文件保全正文、[已接受 UX 约束补充](#accepted-ux-supplement)或上述 pinned-main 合同承接，不依赖读者持有这些本地文件。报告仅保存身份和证据限界，不复制附件全文。原转录输入与本次 Repair 输入分别登记，旧审查不覆盖新版输入或本次修订。
+下列机器路径仅记录原始输入 provenance；有效规划义务由本文件保全正文、[DOCS-P001 补充](#accepted-ux-supplement)、[DOCS-P002 补充](#accepted-ux-supplement-p002)或上述 pinned-main 合同承接，不依赖读者持有这些本地文件。本次五组的完整要求直接写入 UX-SUP-04–08；本轮验证不声称重新证明全部本地来源无遗漏。报告仅保存身份和证据限界，不复制附件全文。原转录、Repair 1 与 Repair 2 输入分别登记，旧审查不覆盖新版输入或本次修订。
 
 | 来源 | 原始 literal 路径 | SHA256 / 身份 |
 |---|---|---|
 | 原转录 immutable V2 | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 452781 bytes；`DAC9FBE8CCED971D3D503B81D6D1091AB6E218D29B99026F6AE18F98659E2E6D` |
-| 本次 Repair immutable V2，F.43 授权与合同 | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 462703 bytes；`312527BBC18449A1023C687DA6CCFB10BFB2C326FE62E8895C670EED13994B87`；UTF-8，无 BOM，LF |
+| Repair 1 immutable V2，F.43 授权与合同（历史 provenance） | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 462703 bytes；`312527BBC18449A1023C687DA6CCFB10BFB2C326FE62E8895C670EED13994B87`；UTF-8，无 BOM，LF |
+| 本次 Repair 2 immutable V2，F.44 五组授权与窄验证合同 | `C:/Users/25073/Desktop/jianshen/.local/planning/E18-ONWARD-REQUIREMENTS-AND-ASSET-INVENTORY-V2.md` | 475124 bytes；`77B6C1FDA368A0AF6590D33A1662026A0D613EDA8C48E151D5FB92F5F0E979A8`；UTF-8，无 BOM，LF |
 | 分层讨论保全 | `C:/Users/25073/Desktop/jianshen/.local/planning/E17-CLEAN-SHEET-DISCUSSION-SALVAGE.md` | `66086CBEF35E6FD6BCFED8D9DA3439E59B0CB10B622040ACD7706FBD4296DD80` |
 | D5 已接受行为保证 | `C:/Users/25073/Desktop/jianshen/.local/planning/E17-CS-06-CORRECT-COURSE-D-REPAIR-5-CANDIDATE.md` | `D2908408FC620BBC69CF3B4884286F0FB2B4AB07361E626A73BC34AF6CBDA46A` |
 | F9 attempt=4 完整报告 | `C:/Users/25073/.codex/attachments/98ecb8b1-1c5e-4ad0-9fba-91dc064df695/pasted-text.txt` | `3CE2750B8FD418B70B1EF8A42D3BC0B7175002A52BE3930365E0DCF875416D30`；仅证明上述旧 V2 的规划审查 |
 
-**文档 Repair 来源与审查边界：** 原文档 reviewed candidate / 本次 Repair 起点为 `abbfa48af13d8325d9f8bd56b2d141320d8390c8`，tree=`acecc72311eb9fd2433a88750bf128d1f69217bf`，唯一 parent=`d2c9ac48027177389092d56c208c64447a3c6a93`，原正式计划 Git blob=`fcf1d7103654379cbad5fc5a29c76d11fc6ef084`。文档 Review attempt=1 为 `CHANGES_REQUESTED`，完整 must-fix batch 只有 DOCS-P001。V2 F.43 记录用户已批准 `DOCS-P001-PORTABLE-UX-SUPPLEMENT`：只在保全区外补入既有 UX 条款并修订本文件导航与映射，不改变原 F9 规划接受。主管理处置及本次 Writer 转录均不等于独立复审通过；修订后的完整七文档 candidate 仍须另一名 fresh Reviewer 完成本节点完整复审，不能只复查 DOCS-P001。
+**文档 Repair 1 来源与审查历史：** 原文档 reviewed candidate / Repair 1 起点为 `abbfa48af13d8325d9f8bd56b2d141320d8390c8`，tree=`acecc72311eb9fd2433a88750bf128d1f69217bf`，唯一 parent=`d2c9ac48027177389092d56c208c64447a3c6a93`，原正式计划 Git blob=`fcf1d7103654379cbad5fc5a29c76d11fc6ef084`。文档 Review attempt=1 为 `CHANGES_REQUESTED`，完整 must-fix batch 只有 DOCS-P001。V2 F.43 记录用户已批准 `DOCS-P001-PORTABLE-UX-SUPPLEMENT`；该三组补充在文档 Review attempt=2 中独立关闭，正文及 anchors 保留，不改变原 F9 规划接受。
+
+**本次 Repair 2 来源与审查边界：** 文档 Review attempt=2 为 `CHANGES_REQUESTED`，完整 must-fix batch 为 DOCS-P002 五组。reviewed candidate / 本次 repairStart=`745dd9fa40f7cc9cf97f8f3f149d2673597743b1`，tree=`2f93fce9116ca4f413e236830d31e9233da3f8a2`，唯一 parent=`abbfa48af13d8325d9f8bd56b2d141320d8390c8`；正式计划 blob=`8011e0311468da503af4c3ac2ebfd9755956a4d4`，428402 bytes，SHA256=`03972D3C543C694441F54298FE0FDCE11BF5136B5EB518DC63E2AF103309B444`。V2 F.44 记录用户已批准 `DOCS-P002-PORTABLE-UX-SUPPLEMENT`，只补本文件五组及必要导航/映射。主管理处置及 Writer 转录不等于独立复审通过。后续 fresh Reviewer 只重新检查五组及直接影响，对 B–F39、DOCS-P001 与另六份未变文档核对身份和前次已完成审查证据的适用性；不重审 E18–E21、E22 未受影响内容或整套规划。原 F9 接受、24 Story、42 边、owner、数据与未来运行门禁保持，S01 代码 Writer 不解锁，CS04C 保持 HELD。
 
 **转录边界：** 以下从 B 标题至 F.39 末尾保全 V2 正文；不复制 A/G/H、F.40–F.42 完整管理记录及原历史后缀。唯一已获用户明确批准的格式例外：V2 第 952 行（F.15.1 两段之间）四个 ASCII 空格在本文件中删除，空行保留，V2 原件不改；其他保全正文不变。此例外不改变规划语义，也不构成其他格式或 scope 扩张授权。
 
@@ -2681,23 +2685,86 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 
 **文档判定与未来证据：** 仅持有仓库及 pinned base 的读者，沿页首 → F.37 的 E22-S02/S03 → 本区，即可排除卡顺序错误、S4/S5 标题混同、HR 卡错误阻塞已保存且 RELEASED 后返回、读取错误没有“重试”等实现。此为文档可判定性；真实三模式入口、UI 状态矩阵与用户视觉证据仍归原 E22 Story 门禁，本次文档 Repair 不报告运行或用户体验通过，也不授予 S01 READY 或代码 Writer 权限。
 
+<a id="accepted-ux-supplement-p002"></a>
+
+## 已接受 UX 约束补充（DOCS-P002）
+
+本区按 `DOCS-P002-PORTABLE-UX-SUPPLEMENT` 转录五组已接受要求。接受源为页首绑定的 salvage（241614 bytes，SHA256=`66086CBEF35E6FD6BCFED8D9DA3439E59B0CB10B622040ACD7706FBD4296DD80`）AD-U-003/007/009/010/013/014、§13.3 第 326–327 行、§13.6 第 357–358/361–362 行及直接限定 AD-U-020 / §13.6 第 364 行；授权及验证边界为 Repair 2 V2 F.44。本区直接提供要求，不以本地文件链接或 source-map 摘要代替正文。
+
+**消费入口：** 从[页首](#current-status)进入 [F.37](#f37-当前候选包与手工规划审查入口) 的 E22-S01–S04，按页首逐 Story 绑定读取本区及 F.17/F.18.2/F.20。DOCS-P001 的[既有三组](#accepted-ux-supplement)继续同读；本区不新增 Story、运行 AC、UX 设计、数据字段、owner 或实现机制。
+
+<a id="ux-sup-04"></a>
+
+### UX-SUP-04 — S5 排列与提前结束标记
+
+- **E22-S03 的 S5 竖屏从上到下固定为：session identity/terminal 状态 → 关键指标 → 主曲线与“横屏查看” → 阶段/结构导航 → 数据质量一行与折叠详情 → 六区间/未覆盖 → 事实摘要 → “导出本次数据”。** `abandoned` 在标题区持续标记 **“提前结束”**，不能只在折叠详情或短暂提示中出现。
+- 本排列与 [UX-SUP-03](#ux-sup-03) 的 S5“主要训练统计”标题、[UX-SUP-05](#ux-sup-05) 的合法状态和 [UX-SUP-06](#ux-sup-06) 的质量卡同读。没有相应合法结果时沿原合同呈现，不为填满排列生成空图、区间或摘要，也不把读取失败伪装成合法零样本。
+- “导出本次数据”仍由当前 **E21 统一导出能力**承接，保持 F.16 的单场/批量统一版本、知情保存/系统分享和完整交付条件；此处不恢复旧导出 owner、十分钟 lease 或旧清理机制。
+
+<a id="ux-sup-05"></a>
+
+### UX-SUP-05 — 中途启用、零样本、无区间与暂停文案
+
+| 条件 / surface | 固定呈现 | 直接消费者与限定 |
+|---|---|---|
+| 中途启用前的完整 session 时间轴空白 | **“心率记录尚未开始”** | E22-S03/V01/V04；X 轴仍从真实开始 0 到可信终点，不裁掉启用前时段，不把该空白解释为启用后的零样本或读取错误 |
+| 原三轴及 priority 判定为合法 zero-sample 的状态 | **“已开启心率记录，但本次未获得有效心率数据。”** | E22-S02/K02、E22-S03/V04；与 not_recorded、no_eligible、no_zones、读取错误分开，不因 samples=0 越过 no-eligible 优先级；S4 不画空图的既有条件保持 |
+| no-zone 状态 | **“本次未设置最大心率，无法计算区间。”** | E22-S02/K02、E22-S03/V09；有合法结果时仍可显示 bpm、均值、最高和阶段；不补默认最大心率，不因后来设置 max 而给历史补 zones |
+| 暂停详情 | **“暂停期间心率已记录，但不计入训练区间分布和阶段摘要。”** | E22-S03/V08；暂停仍为真实阶段带/tooltip 事实，实测 bpm 线保持真实样本样式，不把暂停、额外休息、用户排除和设备缺口混为同一原因 |
+
+本组按 source 原文呈现，不用固定句子伪造不存在的合法结果或原始事实。三轴、no-eligible 优先级、coverage 精确阈值及原始分析/冻结参数快照保持；partial/insufficient 与平均/最高的 coverage 限定继续消费 [UX-SUP-03](#ux-sup-03)，读取错误继续消费 [UX-SUP-02](#ux-sup-02) 的原提示和“重试”，不降级原始错误或 typed 拒绝。仅在**后续视觉真机证明文案溢出**时，沿 salvage §13.6 第 364 行允许等义缩短，不得改变 coverage、非医疗、optional HR 或隐私语义；本次不取得自由改写文案的权限。
+
+<a id="ux-sup-06"></a>
+
+### UX-SUP-06 — 质量卡位置、展开字段与未知事实
+
+- **E22-S03/V08** 在图表附近显示一行简短质量状态，并提供**一张独立、默认折叠的数据质量卡**。展开后显示 **起止、时长、原因、阶段、统计影响**；这是用户可理解的结构化详情，不是开发者原始日志。F.18.2 中 E22-S02/K02 对质量状态的直接消费保持，不把整张 S5 详情卡移入 S4。
+- **重大不足必须直接、持续可见**，不能全部藏进折叠卡。密集短缺口仍按 F.20/AE-UX-02 保留整场 `<80%` 持续不足提示，不能因曲线可以画视觉虚线而隐藏覆盖不足。
+- 字段只呈现当前 typed 已知/未知事实：unknown 窗口**不伪造起止或时长**，未知不能写成 0、估算边界或宽度百分比；已知事实按原事实显示。原因、阶段、统计影响消费原始分析及严格读取结果，不从断线猜原因，不新增日志、持久化字段、分类或 owner。暂停详情同时消费 [UX-SUP-05](#ux-sup-05)。
+
+<a id="ux-sup-07"></a>
+
+### UX-SUP-07 — 横屏按钮与曲线手势分工
+
+- **E22-S03/V02、E22-S04/W01**：竖屏图表**右上角**提供明确的 **“横屏查看/展开”按钮**；S5 主曲线的“横屏查看”入口按该按钮方案呈现。**点击整个图表不触发旋转**，曲线点击/拖动保留给选择与 scrub。
+- AD-U-020 的直接限定保持：竖屏点击阶段只选中并显示详情，**不立即改变时间轴**；通过明确横屏按钮进入放大聚焦，拖动仍是 scrub。沿既有 tap/drag 区分和顺序导航，不新增手势算法或自由缩放。
+- 横屏仍为同一 Activity、同一数据/projector；方向政策或大屏不执行方向请求时仍可用，不能假报横屏已生效。竖屏可完成必要信息访问，横屏不是大字/TalkBack 的必经路径；返回恢复及删除失效继续按 F.17/W02–W04、F.18.2/W06 和 F.20 同读，不新增页面状态 owner。
+
+<a id="ux-sup-08"></a>
+
+### UX-SUP-08 — 线条样式、全程入口、S6 内容与时间格式
+
+- **E22-S01/Q02/Q06 的投影/显示格式及 E22-S03、E22-S04 的图表消费者同读本组。** 主图以一条实测 bpm 折线为主，阶段带、**平均虚线**与最高 marker 为辅助；区间分布独立呈现，无连续面积填充或连续 zone 背景。平均/最高仍取原主要训练统计，不计算聚焦后的第二份 analysis；暂停阶段的实测 bpm 保持真实样本样式。
+- **同一 phase 且不超过 20 秒**的短缺口，仅用**细、低对比、中性灰虚线**作视觉连接；超过 20 秒或跨 phase 明确断线。该画法不生成估算点、不参与统计，raw/scrub 不插值，虚线处 scrub 显示未记录，图例保留“虚线期间没有记录”。20 秒视觉规则与 **2500ms 统计有效期**分别消费，不互换，也不以可连虚线推断统计充分性。本次不指定新灰色值、线宽或 ticks 数值。
+- 图表**默认全程**，提供明确的 **“查看全程”**入口；拖动查看 canonical 原始点。AD-U-009 的阶段聚焦同读 [UX-SUP-07](#ux-sup-07) / AD-U-020：竖屏阶段点击先选中/详情，不立即改轴，由明确横屏按钮进入放大聚焦；自由缩放仍留后续。
+- **S6 横屏保留：返回、session/聚焦标题、全宽主曲线/阶段带、阶段前后顺序导航、“查看全程”、scrubber 与当前点信息。** 不复制六区间、长摘要、质量详情或导出；不成为第二个分析页面 owner。与 S5 共用图表事实及格式，返回时沿原合同恢复竖屏滚动位置、view/focus/selection/scrub。
+- **时间默认 `m:ss`，超过 `59:59` 显示 `h:mm:ss`**；bpm 为整数，coverage 显示整数百分比，详情时长显示秒或人类可读分秒。locale/format 仅为显示层，export 仍保存明确基础单位；不以显示取整结果重新判断 coverage 或改变原始毫秒事实。
+
+**本轮文档 oracle 与证据边界：** 沿页首 → F.37 的对应 E22 Story → UX-SUP-04–08，可直接判定 S5 顺序/持续终态标记、四种文案的条件、质量卡六项字段、按钮位置/手势分工、线条样式、S6 内容及时间格式，不需要本地接受源副本。五组及直接影响用 source 语义核对；未变内容用与 repairStart 的精确正文/anchor/blob 保全承接前次有效审查证据，不将本轮结论扩大为全 UX 或 E18–E22 重新全审。未来真实 UI、方向政策、大字/TalkBack、设备与用户视觉证据仍归原 E22 实施门禁，文档核验不代替它们。
+
 <a id="source-map"></a>
 
 ## 来源到正式正文的转录核对
 
-此表只定位已接受条款及其窄替代，不新增合同，也不以摘要替代正文。原 V1 / salvage 的旧编号作为 lineage 保留；当前分类及 owner / consumer 以 F.24、F.37 及页首为 E22-S02/S03 绑定的[已接受 UX 约束补充](#accepted-ux-supplement)为准。候选建议、旧容量、旧派发状态与废弃机制不升级为 authority。
+此表只定位已接受条款及其窄替代，不新增合同，也不以摘要替代正文。原 V1 / salvage 的旧编号作为 lineage 保留；当前分类及 owner / consumer 以 F.24、F.37 及页首绑定的 [DOCS-P001 补充](#accepted-ux-supplement)和 [DOCS-P002 五组补充](#accepted-ux-supplement-p002)为准。五组须实际读取 UX-SUP-04–08 正文；本轮映射核对不声称全部历史来源重新无遗漏。候选建议、旧容量、旧派发状态与废弃机制不升级为 authority。
 
 | 直接来源条款 / 来源族 | 本文件正式正文 selector | 承接与窄替代边界 |
 |---|---|---|
 | V2 B–D、F.1 | 同名 B–D、F.1；当前状态见页首，Story 见 F.37 | E17 封口、保留资产、五成果顺序；力量与跟练分别接入验收；需求保留/暂缓/排除不改 |
 | V2 F.4–F.39 | 同名原文；F.37 → 当前 24 Story，F.26 → 42 边 | 全部 Story / AC / typed / oracle / owner / consumer / capacity 原文转录；F.38/F.39 为修正 chronology |
 | V2 F.40–F.42 | 页首当前状态、来源身份、路径解释及本表；六份旧文档当前入口 | 仅承接已核实审查/用户接受、文档 candidate 与条件式 landing、S01 F8 锁定；管理合同不全文复制 |
-| salvage §2–§5、§12–§13 的已接受产品与 UX；UG / AD-P / AD-U / CAP / RES lineage | B、D、F.1、F.14–F.18、F.20、F.24、F.30.2；§13.6 补充见下列 UX-SUP-01/02/03；当前 owner 按 F.37 | 单场事实、三模式、图表/导出/无障碍义务保留；比较/进阶等 residual 按 B/F.24 当前处置，旧 Epic 编号不恢复 |
+| salvage §2–§5、§12–§13 的已接受产品与 UX；UG / AD-P / AD-U / CAP / RES lineage | B、D、F.1、F.14–F.18、F.20、F.24、F.30.2；具体补充见下列 UX-SUP-01–08；当前 owner 按 F.37 及页首消费绑定 | 单场事实、三模式、图表/导出/无障碍义务保留；DOCS-P002 五组细目由新增正文直接承载；比较/进阶等 residual 按 B/F.24 当前处置，旧 Epic 编号不恢复 |
 | salvage §14.2、§14.5–§14.31 的已接受 time / raw / original snapshot / axes / typed / owner 保证 | C、F.4–F.9、F.11、F.14、F.22–F.25、F.29–F.35；§14.31 固定标题及统计范围另见 UX-SUP-03 | 单调坐标、已知/未知时间、raw 与派生分离、状态/原因/NULL/partition/order、唯一 owner；继承的数学与 schema 仍指向 pinned-main E17 remainder §3–§7 |
 | salvage §13.6 第 356 行；V2 F.43/UX-SUP-01 | [UX-SUP-01](#ux-sup-01)；页首 → F.37/E22-S02/K01/K02/K04 | S4 卡顺序完整承载；HR 卡失败不阻塞已保存且 RELEASED 后的底部返回，保留 F.11/L04 前置 |
 | salvage §13.6 第 361 行；V2 F.43/UX-SUP-02 | [UX-SUP-02](#ux-sup-02)；页首 → F.37/E22-S02/K02、E22-S03 读取错误呈现 | 固定读取错误提示及用户“重试”；合法状态、原始错误、typed 拒绝和删除失效分开，不新增重试机制 |
 | salvage §14.31 / AD-U-025 第 1078–1079 行及 §13.6 第 361–362 行；V2 F.43/UX-SUP-03 | [UX-SUP-03](#ux-sup-03)；页首 → F.37/E22-S02/K03、E22-S03/V11 | S4“主要训练心率”与 S5“主要训练统计”分别承接；coverage、训练最高、excluded raw 与主要统计范围保持 |
-| 本次 Repair V2 F.43 | 页首 Repair 输入身份 / 审查边界、[补充正文](#accepted-ux-supplement)及本表 | 仅承接已授权的 DOCS-P001 单文件窄修订；原转录 / 原 F9 身份保留，完整 candidate 仍待 fresh 完整复审与集成 |
+| Repair 1 V2 F.43（历史 provenance） | 页首 Repair 1 输入身份 / 审查历史、[DOCS-P001 正文](#accepted-ux-supplement)及本表 | DOCS-P001 三组已由 Review attempt=2 独立关闭，正文与 anchors 原样保留；原转录 / 原 F9 身份保留 |
+| salvage §13.6 第 357 行；V2 F.44/UX-SUP-04 | [UX-SUP-04](#ux-sup-04)；页首 → F.37/E22-S03 | S5 八段顺序、标题区持续“提前结束”；合法空状态不造结果，导出消费当前 E21 统一能力 |
+| salvage AD-U-003 第 69 行、§13.6 第 361–362/364 行；V2 F.44/UX-SUP-05 | [UX-SUP-05](#ux-sup-05)；E22-S02/K02、E22-S03/V01/V04/V08/V09 | late-start、zero-sample、no-zone、暂停四种文案按条件/surface 分开；三轴优先级、coverage/快照与视觉真机溢出时等义缩短限定保持 |
+| salvage AD-U-014 第 80 行；V2 F.44/UX-SUP-06 | [UX-SUP-06](#ux-sup-06)；E22-S03/V08，保留 F.18.2 的 S02/K02 状态消费 | 图旁一行、独立默认折叠卡及起止/时长/原因/阶段/统计影响完整字段；重大不足持续可见，unknown 不伪造数据，不新增日志或 owner |
+| salvage AD-U-010 第 76 行及 AD-U-020 第 86 行直接限定；V2 F.44/UX-SUP-07 | [UX-SUP-07](#ux-sup-07)；E22-S03/V02、E22-S04/W01 | 右上角明确按钮，整图点击不旋转，曲线选择/scrub；阶段先选中/详情，同 Activity、方向受限及无障碍路径保持 |
+| salvage AD-U-007/009/013 第 73/75/79 行、§13.3 第 326–327 行、§13.6 第 358 行；V2 F.44/UX-SUP-08 | [UX-SUP-08](#ux-sup-08)；E22-S01/Q02/Q06、E22-S03、E22-S04 | 平均虚线、同 phase ≤20s 细低对比中性灰虚线；默认全程/“查看全程”、S6 保留项与 m:ss/h:mm:ss；2500ms 统计独立，不新增视觉数值或插值 |
+| 本次 Repair 2 V2 F.44 | 页首 Repair 2 输入身份 / 审查边界、[DOCS-P002 正文](#accepted-ux-supplement-p002)及本表 | 五组及必要单文件导航/映射的窄修订；fresh 复审只重新检查五组与直接影响，未变部分核对身份及既有证据，不重开 F9 或解锁 S01 |
 | salvage §14.32、§14.35–§14.39 的有效性能、export、失败与隐私义务 | D、F.16、F.17、F.23、F.27、F.29、F.34、F.35 | 自描述 v2、完整生成与真实 I/O 失败、独立 consumer、平台外部副本限界；旧 lease / 清理机制只按 D/F.27 窄替代，不恢复旧容量 |
 | D5 §4.1、§5.1–§5.2 | E18-S02/F.5+F.19+F.35.3；E18-S05/F.8 | 无 backlog、同值 notify 不折叠、receipt/snapshot、binding disposition、exact unbind、原始失败；不采用04C实现 |
 | D5 §4.2–§4.3、§5.3–§5.8 | E18-S03/F.6、S04/F.7、S05/F.8、S06/F.9 | Start 全事务、commit-result loss完整 graph、终结幂等、cache/释放顺序、PENDING/BLOCKED、stale token、owner-clear barrier及失败保持 |
