@@ -1,5 +1,20 @@
 # TrainFlow 决策日志
 
+<!-- E18-E22-PLAN-LANDING:BEGIN -->
+## E18–E22 已接受规划的窄替代记录（2026-09-06）
+
+当前详细入口：[E18–E22 正式计划](e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
+
+| ID | 状态 | 决策 | 说明 |
+|---|---|---|---|
+| D-085 | Accepted | 记录用户已接受的 E18–E22 五组规划与正式文档入口。 | E17 胶囊封口，已合并 CS-03/CS-04A/CS-05/CS-04B 保留；E18 → E19 → E20 → E21 → E22，共24 Story、42条唯一依赖，力量与跟练分别接入和验收。只记录已接受内容，不新增产品或架构决定。 |
+
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+
+D-079–D-084 的历史接受事实与有效保证保持；旧 E17/CS 编号、分解、实施顺序和当前派发状态在冲突范围内由正式计划 B–D、F.1、F.37 窄替代。D-082 的 owner/eligibility、普通通知/FGS、M1/final 证据责任继续按新 selector 承接；不恢复 D-078、04C 或旧 CS-06。N001 只更正 kind 数量为九，literal 不变；不重开 P001–P003。
+<!-- E18-E22-PLAN-LANDING:END -->
+
+
 **状态:** 活跃产品决策记录
 **开始日期:** 2026-05-21
 

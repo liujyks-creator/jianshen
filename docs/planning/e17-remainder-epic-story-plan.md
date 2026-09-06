@@ -1,5 +1,18 @@
 # E17 Remainder Epic & Story Plan
 
+<!-- E18-E22-PLAN-LANDING:BEGIN -->
+## E18–E22 当前入口与本文件保留边界（2026-09-06）
+
+当前详细入口：[E18–E22 正式计划](e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
+
+本文件旧 E17/CS 编号、Story分解、实施顺序、root/DAG、待审与下一步文字，在当前派发意义上由 E18–E22 正式计划 B–D/F.1/F.37 及 F.26 的24节点/42边替代。E17胶囊封口，CS-03/CS-04A/CS-05/CS-04B与胶囊资产保留；04C仍HELD，旧CS-06不恢复。
+
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+
+下方原正文保留。§3–§9的schema、数学、typed/NULL/union/order、original analysis、owner及证据合同按新计划明确继承范围继续消费；export v2 root/时间/选择、系统授权与24h清理等只按新计划D/F.23/F.27的窄替代，不能因旧编号退出就删除技术保证，也不能把本文件旧lease/容量或等待Review文字升级为当前操作。
+<!-- E18-E22-PLAN-LANDING:END -->
+
+
 本文件是 E17 remainder 的唯一 tracked canonical 详细计划。详细合同来自 exact V11，除本文件新增的 canonical 状态说明、原候选标题降级和历史 ledger 标注外，不重新规划、不改写 AC，也不改变 Story、owner、schema、DAG 或产品范围。
 
 ## 当前 canonical 身份与门禁

@@ -23,6 +23,19 @@ stepsCompleted:
 
 # TrainFlow 实现准备检查报告
 
+<!-- E18-E22-PLAN-LANDING:BEGIN -->
+## E18–E22 文档落地与 E18-S01 F8 当前门禁（2026-09-06）
+
+当前详细入口：[E18–E22 正式计划](planning/e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
+
+第四轮独立规划 Review PASS 和用户接受已完成；正式文档 candidate 的独立 Review / 集成、E18-S01 的 F8 执行身份与证据绑定是后续门禁。S01 合同为正式计划 F.4/T01–T06、F.27.2及F.37，仅准备 Room v5→v6 四列承载/迁移/映射与旧数据保全；本 docs-only 任务未开始代码实现。
+
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+
+本页旧 CS-03/V11 candidate gate、旧 E17 序列及待审/解锁状态只保留当时语境，不构成当前派发，不重开已通过的规划 Review。E17已合并资产继续保留。规划 PASS、源代码可读或依赖已声明均不等于未来运行、实际依赖解析、AVD/Band、性能或主观体验门禁通过；不得批量标记 Story READY/DONE。
+<!-- E18-E22-PLAN-LANDING:END -->
+
+
 ## E17-CS-03 candidate gate（当前 authoritative）
 
 - 唯一 detailed authority：`docs/planning/e17-remainder-epic-story-plan.md`；source=`INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`，`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`。

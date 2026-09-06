@@ -1,5 +1,18 @@
 # TrainFlow 项目状态
 
+<!-- E18-E22-PLAN-LANDING:BEGIN -->
+## E18–E22 当前规划与交付入口（2026-09-06）
+
+当前详细入口：[E18–E22 正式计划](planning/e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
+
+E17 以胶囊封口；已合并 CS-03、CS-04A、CS-05、CS-04B 及胶囊资产保留。五 Epic / 24 Story / 42 条唯一依赖的规划已通过 F9 attempt=4 且获用户接受，成果顺序为 E18 → E19 → E20 → E21 → E22；力量与跟练分别接入、分别验收。
+
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+
+本页下方 E17/V11/CS-03 等旧编号、旧实施顺序、current / next / 待审及解锁措辞只在与本入口冲突的范围内为历史，不生成旧任务或重开旧规划 Review；已合并事实、保留资产和其余技术边界不变。04C 保持 HELD，不采用旧 CS-06。
+<!-- E18-E22-PLAN-LANDING:END -->
+
+
 **状态日期:** 2026-08-07
 **仓库:** `liujyks-creator/jianshen`
 **主分支:** `main`
