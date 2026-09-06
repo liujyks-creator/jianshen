@@ -41,7 +41,7 @@ import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
         HeartRateSampleEntity::class,
         HeartRateAnalysisSnapshotEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class TrainFlowDatabase : RoomDatabase() {
@@ -59,7 +59,7 @@ abstract class TrainFlowDatabase : RoomDatabase() {
                 context = context.applicationContext,
                 klass = TrainFlowDatabase::class.java,
                 name = DATABASE_NAME
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
         }
 
@@ -118,6 +118,15 @@ abstract class TrainFlowDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_timed_rest_extension_records_step_id ON timed_rest_extension_records(step_id)"
                 )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workout_sessions ADD COLUMN start_local_date TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE workout_sessions ADD COLUMN start_zone_id TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE workout_sessions ADD COLUMN start_utc_offset_seconds INTEGER DEFAULT NULL")
+                db.execSQL("ALTER TABLE workout_sessions ADD COLUMN time_metadata_source_contract_version INTEGER DEFAULT NULL")
             }
         }
 

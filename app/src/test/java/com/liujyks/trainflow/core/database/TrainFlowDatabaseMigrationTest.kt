@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.core.database
 
 import android.content.Context
+import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
@@ -142,6 +143,98 @@ class TrainFlowDatabaseMigrationTest {
             assertTrue("round_index" in names)
             assertTrue("previous_stage_title" in names)
             assertTrue("cumulative_extra_rest_sec" in names)
+        }
+    }
+
+    @Test
+    fun versionFiveUpgradeAndFreshInstallHaveIdenticalVersionSixSchema() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val path = context.getDatabasePath(TrainFlowDatabase.DATABASE_NAME).absolutePath
+        helper.createDatabase(path, 5).close()
+
+        val upgraded = TrainFlowDatabase.create(context)
+        val fresh = Room.inMemoryDatabaseBuilder(context, TrainFlowDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val sql = upgraded.openHelper.writableDatabase
+            assertEquals(6, sql.version)
+            val freshSql = fresh.openHelper.writableDatabase
+            assertEquals(6, freshSql.version)
+            sql.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('android_metadata', 'room_master_table') ORDER BY name").use { tables ->
+                var count = 0
+                while (tables.moveToNext()) {
+                    val name = tables.getString(0)
+                    val schemaQuery = "SELECT type, name, sql FROM sqlite_master WHERE tbl_name='$name' ORDER BY type, name"
+                    val expected = freshSql.query(schemaQuery).use { cursor ->
+                        buildList { while (cursor.moveToNext()) add(listOf(cursor.getString(0), cursor.getString(1), cursor.getString(2)?.replace("`", ""))) }
+                    }
+                    val actual = sql.query(schemaQuery).use { cursor ->
+                        buildList { while (cursor.moveToNext()) add(listOf(cursor.getString(0), cursor.getString(1), cursor.getString(2)?.replace("`", ""))) }
+                    }
+                    assertEquals("table, constraints and indexes: $name", expected, actual)
+                    count++
+                }
+                assertEquals(13, count)
+            }
+            val columns = sql.query("PRAGMA table_info(workout_sessions)").use { cursor ->
+                buildMap {
+                    while (cursor.moveToNext()) put(cursor.getString(1), listOf(cursor.getString(2), cursor.getString(3), cursor.getString(4)))
+                }
+            }
+            listOf(
+                "start_local_date" to "TEXT",
+                "start_zone_id" to "TEXT",
+                "start_utc_offset_seconds" to "INTEGER",
+                "time_metadata_source_contract_version" to "INTEGER"
+            ).forEach { (name, type) ->
+                val column = requireNotNull(columns[name])
+                assertEquals(listOf(type, "0", "NULL"), column)
+            }
+        } finally {
+            upgraded.close()
+            fresh.close()
+        }
+    }
+
+    @Test
+    fun versionOneFullProductionUpgradeReachesSixAndKeepsLegacyValuesUnknown() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val path = context.getDatabasePath(TrainFlowDatabase.DATABASE_NAME).absolutePath
+        helper.createDatabase(path, 1).apply {
+            insertVersion1WorkoutSession()
+            insertVersion1StepRecord()
+            insertVersion1StrengthSetRecord()
+            close()
+        }
+        val upgraded = TrainFlowDatabase.create(context)
+        try {
+            val sql = upgraded.openHelper.writableDatabase
+            assertEquals(6, sql.version)
+            sql.query("SELECT id, plan_snapshot_json, started_at, ended_at, start_local_date, start_zone_id, start_utc_offset_seconds, time_metadata_source_contract_version FROM workout_sessions").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("session-v1", cursor.getString(0))
+                assertEquals("{\"title\":\"Legacy Strength\",\"mode\":\"strength\"}", cursor.getString(1))
+                assertEquals("2026-06-07T10:00:00Z", cursor.getString(2))
+                assertEquals("2026-06-07T10:10:00Z", cursor.getString(3))
+                for (column in 4..7) assertTrue(cursor.isNull(column))
+                assertEquals(1, cursor.count)
+            }
+            sql.query("SELECT id, step_id, actual_duration_sec FROM session_step_records").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("step-v1", cursor.getString(0))
+                assertEquals("", cursor.getString(1))
+                assertEquals(30, cursor.getInt(2))
+                assertEquals(1, cursor.count)
+            }
+            sql.query("SELECT id, planned_json, actual_json FROM strength_set_records").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("set-v1", cursor.getString(0))
+                assertEquals("weight=60.0,kg|rep=range,8,12", cursor.getString(1))
+                assertEquals("weight=60.0,kg|reps=8", cursor.getString(2))
+                assertEquals(1, cursor.count)
+            }
+        } finally {
+            upgraded.close()
         }
     }
 

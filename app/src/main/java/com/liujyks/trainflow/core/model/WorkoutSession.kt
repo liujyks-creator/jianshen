@@ -15,7 +15,11 @@ data class WorkoutSession(
     val stepHistory: List<SessionStepRecord> = emptyList(),
     val timedRestExtensionRecords: List<TimedRestExtensionRecord> = emptyList(),
     val strengthSetRecords: List<StrengthSetRecord> = emptyList(),
-    val userFeedback: SessionFeedback? = null
+    val userFeedback: SessionFeedback? = null,
+    val startLocalDate: String? = null,
+    val startZoneId: String? = null,
+    val startUtcOffsetSeconds: Long? = null,
+    val timeMetadataSourceContractVersion: Long? = null
 )
 
 enum class SessionStatus(val contractValue: String) {

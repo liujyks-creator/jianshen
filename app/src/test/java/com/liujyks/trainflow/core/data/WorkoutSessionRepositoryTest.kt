@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.PlanPreferences
@@ -57,6 +58,120 @@ class WorkoutSessionRepositoryTest {
     @After
     fun closeDatabase() {
         database.close()
+    }
+
+    @Test
+    fun timeMetadataWrittenByRepositorySurvivesDatabaseCloseAndReopen() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database.close()
+        database = TrainFlowDatabase.create(context)
+        repository = WorkoutSessionRepository(database)
+        val expected = listOf(
+            listOf(null, null, null, null),
+            listOf("2026-01-01", "UTC", "0", "1"),
+            listOf("2026-01-02", "Asia/Kathmandu", "20700", "1")
+        )
+        expected.forEachIndexed { index, values ->
+            repository.upsertSession(
+                timedSession("time-$index", SessionStatus.COMPLETED, 75, 60, 15).copy(
+                    startedAt = "2026-01-01T20:30:00Z",
+                    startLocalDate = values[0],
+                    startZoneId = values[1],
+                    startUtcOffsetSeconds = values[2]?.toLong(),
+                    timeMetadataSourceContractVersion = values[3]?.toLong()
+                )
+            )
+        }
+        database.close()
+        database = TrainFlowDatabase.create(context)
+        repository = WorkoutSessionRepository(database)
+
+        val entities = database.workoutSessionDao().sessionsForRecorderGate()
+        assertEquals(3, entities.size)
+        entities.forEachIndexed { index, entity ->
+            assertEquals("time-$index", entity.id)
+            assertEquals(expected[index], listOf(
+                entity.startLocalDate, entity.startZoneId,
+                entity.startUtcOffsetSeconds?.toString(),
+                entity.timeMetadataSourceContractVersion?.toString()
+            ))
+        }
+        val sessions = repository.getSessions().sortedBy { it.id }
+        assertEquals(3, sessions.size)
+        sessions.forEachIndexed { index, session ->
+            assertEquals(expected[index], listOf(
+                session.startLocalDate, session.startZoneId,
+                session.startUtcOffsetSeconds?.toString(),
+                session.timeMetadataSourceContractVersion?.toString()
+            ))
+        }
+    }
+
+    @Test
+    fun entityTimeMetadataReadsThroughRepositoryAfterDatabaseReopen() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database.close()
+        database = TrainFlowDatabase.create(context)
+        val expected = listOf(
+            listOf(null, null, null, null),
+            listOf("2026-01-01", "UTC", "0", "1"),
+            listOf("2026-01-02", "Asia/Kathmandu", "20700", "1")
+        )
+        expected.forEachIndexed { index, values ->
+            assertTrue(database.workoutSessionDao().insertSession(WorkoutSessionEntity(
+                id = "entity-$index", mode = "timed", status = "completed",
+                planSnapshotJson = "{\"title\":\"Old plan\",\"mode\":\"timed\",\"blocks\":[]}",
+                startedAt = "2026-01-01T20:30:00Z",
+                startLocalDate = values[0], startZoneId = values[1],
+                startUtcOffsetSeconds = values[2]?.toLong(),
+                timeMetadataSourceContractVersion = values[3]?.toLong()
+            )) != -1L)
+        }
+        database.close()
+        database = TrainFlowDatabase.create(context)
+        repository = WorkoutSessionRepository(database)
+        val sessions = repository.getSessions().sortedBy { it.id }
+        assertEquals(3, sessions.size)
+        sessions.forEachIndexed { index, session ->
+            assertEquals("entity-$index", session.id)
+            assertEquals(expected[index], listOf(
+                session.startLocalDate, session.startZoneId,
+                session.startUtcOffsetSeconds?.toString(),
+                session.timeMetadataSourceContractVersion?.toString()
+            ))
+        }
+    }
+
+    @Test
+    fun legacyUpdatePreservesFrozenTimeMetadataAndUpdatesExecutionFields() = runBlocking {
+        val original = timedSession("frozen-time", SessionStatus.ACTIVE, 75, 60, 15).copy(
+            startLocalDate = "2026-01-02", startZoneId = "Asia/Kathmandu",
+            startUtcOffsetSeconds = 20700L, timeMetadataSourceContractVersion = 1L
+        )
+        repository.upsertSession(original)
+        repository.upsertSession(original.copy(
+            status = SessionStatus.COMPLETED, endedAt = "2026-01-02T00:00:00Z",
+            totalElapsedSec = 90, effectiveElapsedSec = 70, pausedElapsedSec = 20,
+            stepHistory = original.stepHistory.take(1),
+            startLocalDate = "2026-01-01", startZoneId = "UTC",
+            startUtcOffsetSeconds = 0L, timeMetadataSourceContractVersion = null
+        ))
+        val entity = database.workoutSessionDao().sessionsForRecorderGate().single()
+        assertEquals("2026-01-02", entity.startLocalDate)
+        assertEquals("Asia/Kathmandu", entity.startZoneId)
+        assertEquals(20700L, entity.startUtcOffsetSeconds)
+        assertEquals(1L, entity.timeMetadataSourceContractVersion)
+        val saved = repository.getSessions().single()
+        assertEquals("2026-01-02", saved.startLocalDate)
+        assertEquals("Asia/Kathmandu", saved.startZoneId)
+        assertEquals(20700L, saved.startUtcOffsetSeconds)
+        assertEquals(1L, saved.timeMetadataSourceContractVersion)
+        assertEquals(SessionStatus.COMPLETED, saved.status)
+        assertEquals("2026-01-02T00:00:00Z", saved.endedAt)
+        assertEquals(90, saved.totalElapsedSec)
+        assertEquals(70, saved.effectiveElapsedSec)
+        assertEquals(20, saved.pausedElapsedSec)
+        assertEquals(original.stepHistory.take(1), saved.stepHistory)
     }
 
     @Test
@@ -317,6 +432,9 @@ class WorkoutSessionRepositoryTest {
             totalElapsedSec = 75,
             effectiveElapsedSec = 60,
             pausedElapsedSec = 15
+        ).copy(
+            startLocalDate = "2026-06-07", startZoneId = "UTC",
+            startUtcOffsetSeconds = 0L, timeMetadataSourceContractVersion = 1L
         )
         repository.upsertSession(original)
         val sql = database.openHelper.writableDatabase
@@ -368,11 +486,36 @@ class WorkoutSessionRepositoryTest {
             """.trimIndent()
         )
 
+        val tables = listOf("workout_sessions", "session_step_records", "strength_set_records",
+            "timed_rest_extension_records", "workout_phase_intervals", "heart_rate_recordings",
+            "heart_rate_acquisition_intervals", "heart_rate_samples", "heart_rate_analysis_snapshots")
+        val before = tables.associateWith { table ->
+            sql.query("SELECT * FROM $table ORDER BY 1, 2").use { cursor ->
+                buildList { while (cursor.moveToNext()) add((0 until cursor.columnCount).map { cursor.getType(it) to cursor.getString(it) }) }
+            }
+        }
         val rewrite = runCatching {
-            repository.upsertSession(original.copy(status = SessionStatus.ABANDONED))
+            repository.upsertSession(original.copy(
+                status = SessionStatus.ABANDONED, stepHistory = emptyList(),
+                startLocalDate = null, startZoneId = null,
+                startUtcOffsetSeconds = null, timeMetadataSourceContractVersion = null
+            ))
         }
 
         assertTrue(rewrite.exceptionOrNull() is IllegalStateException)
+        assertEquals("Legacy workout-session write rejected for canonical session canonical-protected",
+            rewrite.exceptionOrNull()?.message)
+        tables.forEach { table ->
+            val after = sql.query("SELECT * FROM $table ORDER BY 1, 2").use { cursor ->
+                buildList { while (cursor.moveToNext()) add((0 until cursor.columnCount).map { cursor.getType(it) to cursor.getString(it) }) }
+            }
+            assertEquals("rejected transaction preserves every column and child: $table", before.getValue(table), after)
+        }
+        val entity = database.workoutSessionDao().sessionsForRecorderGate().single()
+        assertEquals("2026-06-07", entity.startLocalDate)
+        assertEquals("UTC", entity.startZoneId)
+        assertEquals(0L, entity.startUtcOffsetSeconds)
+        assertEquals(1L, entity.timeMetadataSourceContractVersion)
         val header = sql.query(
             """
             SELECT status, timeline_version, last_durable_offset_ms,
