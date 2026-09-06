@@ -19,6 +19,19 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
+<!-- E18-E22-PLAN-LANDING:BEGIN -->
+## E18–E22 已接受架构的当前入口（2026-09-06）
+
+当前详细入口：[E18–E22 正式计划](planning/e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
+
+当前新增记录/读取/通知/导出/复盘的完整 Architecture、typed合同与消费者按正式计划 C/D、F.37及其指向的 F.4–F.35 消费。保留 Application 唯一 BLE owner、mode engine 训练行为、session-scoped Recorder 串行记录、repository 持久化/准入/释放，以及严格历史读取、original analysis、投影与导出的责任边界；新时间元数据、生命周期、export v2及系统授权/24h清理只按已接受正文的窄增量承接。
+
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+
+下方 V11/早期E17的旧编号、分解、顺序和当前候选/派发措辞在冲突范围内由新入口替代。原schema/数学/typed定义与CS-03/CS-04A/CS-05/CS-04B等已合并资产保留；旧lease机制只按正式计划 D/F.27 窄替代，不恢复04C、旧CS-06或第二owner。真实写入失败、原始错误、事务全回滚、诚实保存与释放状态不删除；M1/final证据链保持。
+<!-- E18-E22-PLAN-LANDING:END -->
+
+
 ## E17 remainder V11 accepted Architecture（当前 planning authority）
 
 `docs/planning/e17-remainder-epic-story-plan.md` 是 E17 remainder 唯一 detailed Architecture / schema / owner / lifecycle authority。其 exact V11 source（`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`）已通过 re-Planning Review Attempt 5（`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`PASS`）和 scoped Consistency re-Audit Attempt 2（`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`PASS / CONSISTENCY=PASS`）。

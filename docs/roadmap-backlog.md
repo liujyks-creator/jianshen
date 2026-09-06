@@ -18,6 +18,27 @@ stepsCompleted:
 
 # TrainFlow 路线图与 MVP Backlog
 
+<!-- E18-E22-PLAN-LANDING:BEGIN -->
+## E18–E22 当前成果路线（2026-09-06）
+
+当前详细入口：[E18–E22 正式计划](planning/e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
+
+| Epic | 已接受成果 | 当前 Story 数 |
+|---|---|---|
+| E18 | 计时训练真实记录与可信保存 | 12 |
+| E19 | 力量与跟练真实记录接入，分别验收 | 2 |
+| E20 | 训练通知、锁屏与后台心率 | 2 |
+| E21 | 日历选择与完整数据导出 | 4 |
+| E22 | 单场复盘与心率图表 | 4 |
+
+成果验收顺序为 E18 → E19 → E20 → E21 → E22。F.26 的42条唯一依赖约束实现前置，技术根不改变成果验收顺序；F.37 给出24个当前 Story selector，本表不复制或改写 AC。
+
+本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+
+下方 V11 的12节点/28边、旧 root/next 与旧 E17实施顺序保留为历史；它们不生成当前任务，不恢复04C/旧CS-06。已合并 CS-03/CS-04A/CS-05/CS-04B 和胶囊资产保持。HIIT次数、App比较/长期分析/进阶、App AI、低空间或新库不因本次落地新增，保留/暂缓/排除以正式计划 B/F.24 为准。
+<!-- E18-E22-PLAN-LANDING:END -->
+
+
 
 ## 2026-07-26 E17 历史交付序列（non-operative / historical / superseded）
 
