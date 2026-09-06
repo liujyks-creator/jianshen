@@ -33,7 +33,15 @@ data class WorkoutSessionEntity(
     @ColumnInfo(name = "display_metadata_contract_version", defaultValue = "NULL")
     val displayMetadataContractVersion: Int? = null,
     @ColumnInfo(name = "session_display_metadata_json", defaultValue = "NULL")
-    val sessionDisplayMetadataJson: String? = null
+    val sessionDisplayMetadataJson: String? = null,
+    @ColumnInfo(name = "start_local_date", defaultValue = "NULL")
+    val startLocalDate: String? = null,
+    @ColumnInfo(name = "start_zone_id", defaultValue = "NULL")
+    val startZoneId: String? = null,
+    @ColumnInfo(name = "start_utc_offset_seconds", defaultValue = "NULL")
+    val startUtcOffsetSeconds: Long? = null,
+    @ColumnInfo(name = "time_metadata_source_contract_version", defaultValue = "NULL")
+    val timeMetadataSourceContractVersion: Long? = null
 )
 
 @Entity(

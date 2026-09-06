@@ -8,8 +8,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -30,6 +35,133 @@ class CanonicalSchemaMigrationTest {
         emptyList(),
         FrameworkSQLiteOpenHelperFactory()
     )
+
+    @Test
+    fun versionFiveMigrationPreservesLegacyRowsAndValidCanonicalGraphsWithoutBackfill() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val path = context.getDatabasePath(TrainFlowDatabase.DATABASE_NAME).absolutePath
+        val old = helper.createDatabase(path, 5)
+        listOf("timed", "strength", "follow_along").forEachIndexed { index, mode ->
+            old.insertLegacySession("legacy-$index", "completed")
+            old.execSQL(
+                "UPDATE workout_sessions SET mode=?, plan_snapshot_json=?, started_at=?, ended_at=? WHERE id=?",
+                arrayOf(mode, "{ \"title\":\"旧记录 $mode\", \"mode\":\"$mode\", \"blocks\":[] }",
+                    "2026-01-01T20:30:00Z", "2026-01-01T20:31:00Z", "legacy-$index")
+            )
+        }
+        old.execSQL("INSERT INTO session_step_records(id, session_id, step_id, kind, started_at, skipped) VALUES('step', 'legacy-0', 'work', 'timed_work', '2026-01-01T20:30:00Z', 0)")
+        old.execSQL("INSERT INTO strength_set_records(id, session_id, exercise_id, set_order, set_kind, planned_json, actual_json) VALUES('set', 'legacy-1', 'squat', 1, 'working', 'weight=60.0,kg|rep=range,8,12', 'weight=60.0,kg|reps=8')")
+        old.execSQL("INSERT INTO timed_rest_extension_records(id, session_id, step_id, step_index, rest_stage_title, added_sec, planned_rest_sec, rest_elapsed_before_extension_sec, extension_at_remaining_sec, cumulative_extra_rest_sec, event_elapsed_sec) VALUES('rest', 'legacy-0', 'rest-step', 1, '休息', 15, 30, 5, 25, 15, 35)")
+
+        val planJson = """{"planSnapshotStorageContractVersion":1,"planId":null,"title":"Timed","mode":"timed","blocks":[{"id":"block","kind":"timed_composition","order":0,"compositionVersion":2,"warmupSec":10,"cooldownSec":0,"rounds":1,"restBetweenRoundsSec":0,"stageGroups":[]}],"preferences":null,"followAlong":null}"""
+        val displayJson = """{"displayMetadataContractVersion":1,"entries":[]}"""
+        val phaseJson = """{"phaseIdentityContractVersion":1,"family":"timed_composition_v2","payloadVersion":2,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855"},"payload":{"variant":"warmup","compositionVersion":2,"compositionBlockId":"block","timelineStageId":"block:warmup","timelineStageKind":"warmup","stageGroupId":"block:warmup","targetId":"block:warmup:target","targetKind":"warmup","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}}"""
+        for (terminal in listOf(false, true)) {
+            val id = if (terminal) "terminal" else "active"
+            val endOffset = if (terminal) 100L else null
+            val endSequence = if (terminal) 4L else null
+            val open = if (terminal) null else 1
+            val session = WorkoutSessionEntity(
+                id = id, mode = "timed", status = if (terminal) "completed" else "active",
+                planSnapshotJson = planJson, startedAt = "2026-01-01T20:30:00Z",
+                endedAt = if (terminal) "2026-01-01T20:30:00.100Z" else null,
+                timelineVersion = 1, lastDurableOffsetMs = 100, lastMutationSequence = 4,
+                trustedEndOffsetMs = endOffset, terminalReason = if (terminal) "completed" else null,
+                displayMetadataContractVersion = 1, sessionDisplayMetadataJson = displayJson
+            )
+            val phase = WorkoutPhaseIntervalEntity(
+                id = "phase-$id", sessionId = id, sequence = 0,
+                startOffsetMs = 0, endOffsetMs = endOffset, startMutationSequence = 0,
+                endMutationSequence = endSequence, openMarker = open,
+                phaseKind = "timed_work", phaseIdentityJson = phaseJson
+            )
+            val recording = HeartRateRecordingEntity(
+                recordingId = "recording-$id", sessionId = id,
+                status = if (terminal) "terminal" else "active",
+                startedOffsetMs = 0, startedMutationSequence = 0,
+                endedOffsetMs = endOffset, endedMutationSequence = endSequence,
+                sourceContractVersion = 1, sourceKind = "ble_hrs", acquisitionContractVersion = 1,
+                parameterSnapshotVersion = 1, originalAnalysisVersion = if (terminal) 1 else null
+            )
+            val acquisition = HeartRateAcquisitionIntervalEntity(
+                id = "acquisition-$id", recordingId = recording.recordingId, sequence = 0,
+                startOffsetMs = 0, endOffsetMs = endOffset, startMutationSequence = 0,
+                endMutationSequence = endSequence, openMarker = open,
+                recordingIntent = "expected_recording", intentReason = null,
+                deviceState = "live", deviceReason = null
+            )
+            val sample = HeartRateSampleEntity(recording.recordingId, 0, 0, 0, 120)
+            val input = CanonicalSessionGraphV1(session, listOf(phase), recording, listOf(acquisition), listOf(sample), emptyList())
+            // Existing analysis builds the historical fixture; preservation is judged against its pre-migration bytes.
+            val snapshots = if (terminal) listOf(CanonicalAnalysisV1.derive(input, "2026-01-01T20:30:01Z")) else emptyList()
+            assertEquals(CanonicalValidationResult.Valid, CanonicalSessionGraphV1Validator.validate(input.copy(snapshots = snapshots)))
+            old.execSQL(
+                "INSERT INTO workout_sessions(id, mode, status, plan_snapshot_json, started_at, ended_at, timeline_version, last_durable_offset_ms, last_mutation_sequence, trusted_end_offset_ms, terminal_reason, display_metadata_contract_version, session_display_metadata_json) VALUES(?, ?, ?, ?, ?, ?, 1, 100, 4, ?, ?, 1, ?)",
+                arrayOf<Any?>(id, session.mode, session.status, planJson, session.startedAt, session.endedAt, endOffset, session.terminalReason, displayJson)
+            )
+            old.execSQL("INSERT INTO workout_phase_intervals VALUES(?, ?, 0, 0, ?, 0, ?, ?, 'timed_work', ?)",
+                arrayOf<Any?>(phase.id, id, endOffset, endSequence, open, phaseJson))
+            old.execSQL("INSERT INTO heart_rate_recordings VALUES(?, ?, ?, 0, 0, ?, ?, 1, 'ble_hrs', 1, 1, NULL, NULL, NULL, NULL, NULL, NULL, ?)",
+                arrayOf<Any?>(recording.recordingId, id, recording.status, endOffset, endSequence, recording.originalAnalysisVersion))
+            old.execSQL("INSERT INTO heart_rate_acquisition_intervals VALUES(?, ?, 0, 0, ?, 0, ?, ?, 'expected_recording', NULL, 'live', NULL)",
+                arrayOf<Any?>(acquisition.id, recording.recordingId, endOffset, endSequence, open))
+            old.execSQL("INSERT INTO heart_rate_samples VALUES(?, 0, 0, 0, 120)", arrayOf(recording.recordingId))
+            snapshots.forEach { s ->
+                old.execSQL("INSERT INTO heart_rate_analysis_snapshots VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any?>(s.recordingId, s.analysisVersion, s.createdAt, s.inputLastMutationSequence,
+                        s.sampleStatus, s.coverageStatus, s.zoneStatus, s.canonicalSampleCount, s.primaryPointSampleCount,
+                        s.eligibleDurationMs, s.coveredDurationMs, s.coverageBasisPoints, s.weightedBpmMs,
+                        s.observedAvgBpm, s.observedMaxBpm, s.highestOffsetMs, s.highestMutationSequence, s.highestSampleSequence,
+                        s.analysisConfigJson, s.zoneDurationsJson, s.phaseAggregatesJson, s.durationBreakdownJson, s.qualityReasonsJson))
+            }
+        }
+        val tables = old.tableNames() - setOf("android_metadata", "room_master_table", "sqlite_sequence")
+        assertEquals(13, tables.size)
+        val originalColumns = tables.associateWith { old.columnNames(it).toList() }
+        val before = originalColumns.mapValues { (table, columns) ->
+            old.query("SELECT ${columns.joinToString(",")} FROM $table ORDER BY 1, 2").use { cursor ->
+                buildList { while (cursor.moveToNext()) add(columns.indices.map { cursor.getType(it) to cursor.getString(it) }) }
+            }
+        }
+        assertEquals(5, before.getValue("workout_sessions").size)
+        assertEquals(2, before.getValue("heart_rate_samples").size)
+        assertEquals(1, before.getValue("heart_rate_analysis_snapshots").size)
+        old.close()
+        helper.runMigrationsAndValidate(path, 6, true, TrainFlowDatabase.MIGRATION_5_6).close()
+        val upgraded = TrainFlowDatabase.create(context)
+        try {
+            val sql = upgraded.openHelper.writableDatabase
+            assertEquals(6, sql.version)
+            originalColumns.forEach { (table, columns) ->
+                val after = sql.query("SELECT ${columns.joinToString(",")} FROM $table ORDER BY 1, 2").use { cursor ->
+                    buildList { while (cursor.moveToNext()) add(columns.indices.map { cursor.getType(it) to cursor.getString(it) }) }
+                }
+                assertEquals("all original logical rows, raw JSON and bindings: $table", before.getValue(table), after)
+            }
+            sql.query("SELECT start_local_date, start_zone_id, start_utc_offset_seconds, time_metadata_source_contract_version FROM workout_sessions").use { cursor ->
+                assertEquals(5, cursor.count)
+                while (cursor.moveToNext()) for (column in 0..3) assertTrue(cursor.isNull(column))
+            }
+            for (id in listOf("active", "terminal")) {
+                val rows = requireNotNull(upgraded.canonicalTimelineHeartRateDao().canonicalGraphRows(id))
+                val recording = rows.recordings.single()
+                assertEquals(CanonicalValidationResult.Valid, CanonicalSessionGraphV1Validator.validate(
+                    CanonicalSessionGraphV1(rows.session, rows.phases, recording.recording,
+                        recording.acquisitions, recording.samples, recording.snapshots)
+                ))
+            }
+            val sessions = WorkoutSessionRepository(upgraded).getSessions()
+            assertEquals(5, sessions.size)
+            sessions.forEach { session ->
+                assertEquals(null, session.startLocalDate)
+                assertEquals(null, session.startZoneId)
+                assertEquals(null, session.startUtcOffsetSeconds)
+                assertEquals(null, session.timeMetadataSourceContractVersion)
+            }
+        } finally {
+            upgraded.close()
+        }
+    }
 
     @Test
     fun versionFourRowsAcrossAllStatusesKeepCanonicalHeaderNull() {
@@ -125,8 +257,11 @@ class CanonicalSchemaMigrationTest {
     }
 
     @Test
-    fun freshVersionFiveAndRealVersionFourMigrationUseIdenticalCanonicalDdl() {
-        val migrated = migrateEmptyVersionFour("schema-equivalence")
+    fun freshVersionSixAndRealVersionFourUpgradeUseIdenticalCanonicalSchema() {
+        migrateEmptyVersionFour("schema-equivalence").close()
+        val migrated = helper.runMigrationsAndValidate(
+            testDatabasePath("schema-equivalence"), 6, true, TrainFlowDatabase.MIGRATION_5_6
+        )
         val context = ApplicationProvider.getApplicationContext<Context>()
         val fresh = Room.inMemoryDatabaseBuilder(context, TrainFlowDatabase::class.java)
             .allowMainThreadQueries()
@@ -134,7 +269,11 @@ class CanonicalSchemaMigrationTest {
 
         try {
             val freshSchema = fresh.openHelper.writableDatabase.canonicalSchemaSql()
-            assertEquals(migrated.canonicalSchemaSql(), freshSchema)
+            // SQLite preserves ADD COLUMN identifier quoting; all other DDL remains exact.
+            assertEquals(
+                migrated.canonicalSchemaSql().mapValues { (_, sql) -> sql?.replace("`", "") },
+                freshSchema.mapValues { (_, sql) -> sql?.replace("`", "") }
+            )
         } finally {
             fresh.close()
         }
