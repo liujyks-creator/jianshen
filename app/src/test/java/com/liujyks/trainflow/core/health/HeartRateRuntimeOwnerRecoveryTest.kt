@@ -55,6 +55,92 @@ class HeartRateRuntimeOwnerRecoveryTest {
     }
 
     @Test
+    fun observationRecoveryPreservesFailureWaitingSearchAndAutomaticAttemptOrder() {
+        val ledger = mutableListOf<HeartRateObservation>()
+        owner.bindObservations(HeartRateObservationBindingId(), ledger::add)
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        idleFor(SCAN_WINDOW_MS)
+        idleFor(RECOVERY_INTERVAL_MS)
+        val target = scanResult(TARGET, "Saved Band")
+        shadowScanner.scanCallbacks.single().onScanResult(0, target)
+        idleMain()
+        val gatt = Shadow.extract<ShadowBluetoothDevice>(requireNotNull(target.device)).bluetoothGatts.single()
+        val shadowGatt = Shadow.extract<ShadowBluetoothGatt>(gatt)
+        val service = android.bluetooth.BluetoothGattService(java.util.UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb"), 0)
+        val characteristic = android.bluetooth.BluetoothGattCharacteristic(java.util.UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb"), 16, 1)
+        characteristic.addDescriptor(android.bluetooth.BluetoothGattDescriptor(java.util.UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"), 16))
+        service.addCharacteristic(characteristic)
+        shadowGatt.addDiscoverableService(service)
+        shadowGatt.allowCharacteristicNotification(characteristic)
+        shadowGatt.gattCallback.onConnectionStateChange(gatt, 0, BluetoothProfile.STATE_CONNECTED)
+        shadowGatt.gattCallback.onConnectionStateChange(gatt, 0, BluetoothProfile.STATE_DISCONNECTED)
+        assertEquals(
+            listOf(HeartRateObservationCause.RECOVERY_WAITING, HeartRateObservationCause.RECOVERY_SEARCH,
+                HeartRateObservationCause.SOURCE_UNAVAILABLE, HeartRateObservationCause.RECOVERY_WAITING,
+                HeartRateObservationCause.RECOVERY_SEARCH, HeartRateObservationCause.RECOVERY_CONNECT,
+                HeartRateObservationCause.RECOVERY_WAIT, HeartRateObservationCause.UNEXPECTED_DISCONNECT,
+                HeartRateObservationCause.RECOVERY_WAITING),
+            ledger.map { (it.payload as HeartRateObservationPayload.RuntimeTransition).cause }
+        )
+        assertEquals((1L..9L).toList(), ledger.map { it.receipt })
+        assertEquals(ledger[2].elapsedRealtimeMs, ledger[3].elapsedRealtimeMs)
+        assertEquals(ledger[7].elapsedRealtimeMs, ledger[8].elapsedRealtimeMs)
+    }
+
+    @Test
+    @Config(shadows = [E17ScannerShadow::class])
+    fun explicitEligibilityStopsKeepTheirCauseDespiteCleanupPermissionFailure() {
+        val cases = listOf(
+            eligibleInput().copy(optedIn = false) to HeartRateObservationCause.NOT_OBSERVING,
+            eligibleInput().copy(manuallySuppressed = true) to HeartRateObservationCause.NOT_OBSERVING,
+            eligibleInput().copy(savedTargetIdentifier = null) to HeartRateObservationCause.NO_SOURCE_SELECTED,
+            eligibleInput().copy(permissionGranted = false) to HeartRateObservationCause.PERMISSION_REVOKED,
+            eligibleInput().copy(bluetoothEnabled = false) to HeartRateObservationCause.BLUETOOTH_OFF,
+            eligibleInput().copy(appVisible = false) to HeartRateObservationCause.DISCONNECTED
+        )
+        cases.forEach { (input, expected) ->
+            E17ScannerShadow.resetFailures()
+            owner = HeartRateRuntimeOwner(application, scanWindowMillis = SCAN_WINDOW_MS, recoveryIntervalMillis = RECOVERY_INTERVAL_MS)
+            val ledger = mutableListOf<HeartRateObservation>()
+            owner.bindObservations(HeartRateObservationBindingId(), ledger::add)
+            owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+            idleMain()
+            E17ScannerShadow.throwStopSecurity = true
+            owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(input))
+            idleMain()
+            assertEquals(input.toString(), expected, (ledger.last().payload as HeartRateObservationPayload.RuntimeTransition).cause)
+            val before = ledger.toList()
+            idleFor(SCAN_WINDOW_MS + RECOVERY_INTERVAL_MS)
+            assertEquals(before, ledger)
+        }
+        E17ScannerShadow.resetFailures()
+    }
+
+    @Test
+    fun observationScanFailureAndManualTargetTimeoutPreserveFailureBeforeRecovery() {
+        val ledger = mutableListOf<HeartRateObservation>()
+        owner.bindObservations(HeartRateObservationBindingId(), ledger::add)
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        shadowScanner.scanCallbacks.single().onScanFailed(ScanCallback.SCAN_FAILED_INTERNAL_ERROR)
+        assertEquals(listOf(HeartRateObservationCause.RECOVERY_WAITING, HeartRateObservationCause.RECOVERY_SEARCH,
+            HeartRateObservationCause.PLATFORM_FAILURE, HeartRateObservationCause.RECOVERY_WAITING),
+            ledger.map { (it.payload as HeartRateObservationPayload.RuntimeTransition).cause })
+        assertEquals(ledger[2].elapsedRealtimeMs, ledger[3].elapsedRealtimeMs)
+        owner.submit(HeartRateRuntimeAction.StartScan)
+        idleMain()
+        val before = ledger.toList()
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        assertEquals(before, ledger)
+        idleFor(SCAN_WINDOW_MS)
+        assertEquals(listOf(HeartRateObservationCause.INITIAL_SEARCH, HeartRateObservationCause.SOURCE_UNAVAILABLE,
+            HeartRateObservationCause.RECOVERY_WAITING), ledger.takeLast(3).map { (it.payload as HeartRateObservationPayload.RuntimeTransition).cause })
+        assertEquals((1L..ledger.size.toLong()).toList(), ledger.map { it.receipt })
+    }
+
+    @Test
     fun eligibleContextStartsFiniteWindowAndRemainsArmedAcrossRepeatedMisses() {
         owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
         idleMain()

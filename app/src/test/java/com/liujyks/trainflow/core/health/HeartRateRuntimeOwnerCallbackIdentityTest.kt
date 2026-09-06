@@ -37,6 +37,7 @@ import org.robolectric.shadows.ShadowBluetoothGatt
 class HeartRateRuntimeOwnerCallbackIdentityTest {
     private lateinit var application: Application
     private lateinit var owner: HeartRateRuntimeOwner
+    private val observationLedger = mutableListOf<HeartRateObservation>()
 
     @Before
     fun setUp() {
@@ -47,6 +48,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         )
         shadowOf(application.getSystemService(BluetoothManager::class.java).adapter).setEnabled(true)
         owner = HeartRateRuntimeOwner(application)
+        owner.bindObservations(HeartRateObservationBindingId(), observationLedger::add)
     }
 
     @Test
@@ -148,6 +150,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         owner.submit(HeartRateRuntimeAction.Connect(device.address))
         idleMain()
         val connecting = owner.heartRateState.value
+        val observationsBefore = observationLedger.toList()
 
         callback.onServicesDiscovered(gatt, BluetoothGatt.GATT_SUCCESS)
         callback.onDescriptorWrite(
@@ -159,6 +162,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
 
         assertEquals(HeartRateFact.CONNECTING, connecting.fact)
         assertEquals(connecting, owner.heartRateState.value)
+        assertEquals(observationsBefore, observationLedger)
         assertFalse(Shadow.extract<ShadowBluetoothGatt>(gatt).isClosed)
     }
 
@@ -168,6 +172,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         val secondDevice = scanDevice("AA:BB:CC:DD:EE:05", "Second")
         val second = connectWaiting(secondDevice)
         val before = owner.heartRateState.value
+        val observationsBefore = observationLedger.toList()
 
         first.callback.onServicesDiscovered(first.gatt, BluetoothGatt.GATT_FAILURE)
         first.callback.onCharacteristicChanged(
@@ -183,6 +188,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         )
 
         assertEquals(before, owner.heartRateState.value)
+        assertEquals(observationsBefore, observationLedger)
         assertFalse(Shadow.extract<ShadowBluetoothGatt>(second.gatt).isClosed)
         assertTrue(Shadow.extract<ShadowBluetoothGatt>(wrongGatt).isClosed)
     }
@@ -194,6 +200,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         owner.submit(HeartRateRuntimeAction.BackgroundCleanup)
         idleMain()
         val terminal = owner.heartRateState.value
+        val observationsBefore = observationLedger.toList()
 
         connected.callback.onServicesDiscovered(connected.gatt, BluetoothGatt.GATT_SUCCESS)
         connected.callback.onDescriptorWrite(
@@ -213,6 +220,7 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         )
 
         assertEquals(terminal, owner.heartRateState.value)
+        assertEquals(observationsBefore, observationLedger)
         assertEquals(HeartRateFact.INTENTIONAL_STOP, owner.heartRateState.value.fact)
         assertTrue(Shadow.extract<ShadowBluetoothGatt>(connected.gatt).isClosed)
     }

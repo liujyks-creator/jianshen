@@ -18,6 +18,63 @@ import kotlinx.coroutines.flow.StateFlow
  */
 internal object HeartRateBoundary
 
+/** Minted by the admitting caller; the runtime only compares this opaque identity. */
+internal class HeartRateObservationBindingId
+
+/** Stable acquisition facts, without source identifiers or platform diagnostics. */
+internal enum class HeartRateObservationCause {
+    NOT_OBSERVING,
+    NO_SOURCE_SELECTED,
+    PERMISSION_MISSING,
+    PERMISSION_REVOKED,
+    BLUETOOTH_OFF,
+    PLATFORM_UNAVAILABLE,
+    INITIAL_SEARCH,
+    RECOVERY_SEARCH,
+    INITIAL_CONNECT,
+    RECOVERY_CONNECT,
+    INITIAL_WAIT,
+    RECOVERY_WAIT,
+    LIVE,
+    FIRST_SAMPLE_TIMEOUT,
+    SAMPLE_STALE_TIMEOUT,
+    RECOVERY_WAITING,
+    DISCONNECTED,
+    SOURCE_UNAVAILABLE,
+    UNEXPECTED_DISCONNECT,
+    MEASUREMENT_STREAM_UNAVAILABLE,
+    PLATFORM_FAILURE
+}
+
+internal sealed interface HeartRateObservationPayload {
+    data class CurrentSnapshot(val cause: HeartRateObservationCause) : HeartRateObservationPayload
+    data class RuntimeTransition(val cause: HeartRateObservationCause) : HeartRateObservationPayload
+    data class ValidMeasurement(val bpm: Int) : HeartRateObservationPayload
+}
+
+internal data class HeartRateObservation(
+    val bindingId: HeartRateObservationBindingId,
+    val receipt: Long,
+    val elapsedRealtimeMs: Long,
+    val payload: HeartRateObservationPayload
+)
+
+internal data class HeartRateObservationBinding(
+    val bindingId: HeartRateObservationBindingId,
+    val anchorElapsedRealtimeMs: Long,
+    val snapshot: HeartRateObservation
+)
+
+internal sealed interface HeartRateBindingDisposition {
+    data object KnownAbsent : HeartRateBindingDisposition
+    data class MatchingInstalled(val binding: HeartRateObservationBinding) : HeartRateBindingDisposition
+    data class ConflictingInstalled(
+        val observedBindingId: HeartRateObservationBindingId
+    ) : HeartRateBindingDisposition
+}
+
+internal enum class HeartRateUnbindDisposition { REMOVED, KNOWN_ABSENT, CONFLICTING_INSTALLED }
+
 internal interface HeartRateProvider {
     val heartRateState: Flow<HeartRateState>
 }
