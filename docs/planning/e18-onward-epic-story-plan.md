@@ -625,7 +625,7 @@ old→new：独立的 session 开始和 HR 初始化写入入口 → 一次不�
 
 #### F.7.1 终结请求与事务分支
 
-同一 session 的终结请求冻结 predecessor expected tuple、finalOffset、terminal status/reason、真实已知 ended_at、执行结果/append-only metadata最终值及适用 recording identity。S01 开始信息原样保留。request semantic identity沿D5：session/recording/status/reason/finalOffset/predecessor及derived final sequence；实际结束时间和执行结果是该请求不可替换的 payload。同一 semantic identity 但这些 payload 不同是冲突，不能在重试时覆盖。snapshotCreatedAt 仍为首次写入 metadata，不作为更换分析/重试身份的理由。
+同一 session 的终结请求冻结 predecessor expected tuple、finalOffset、terminal status/reason、真实已知 ended_at、执行结果/append-only metadata最终值及适用 recording identity。S01 开始信息原样保留。首次终结仍严格检查完整 predecessor expected tuple。已成功保存后的 request semantic identity 沿 D5 §4.3：session/recording/status/reason/finalOffset/predecessor mutation sequence 及 derived final sequence；实际结束时间和完整持久化执行结果是该请求不可替换的 payload。同一 semantic identity 但这些 payload 不同是冲突，不能在重试时覆盖。仅旧 predecessor offset 不同、其余身份和完整持久化结果相同的合法终态重试返回原成功，不改写历史；不新增完整 predecessor tuple 存储。snapshotCreatedAt 仍为首次写入 metadata，不作为更换分析/重试身份的理由。
 
 | 分支 | 同一外层 Room 事务内动作 | 不变量 |
 |---|---|---|
@@ -644,8 +644,8 @@ old→new：独立的 session 开始和 HR 初始化写入入口 → 一次不�
 | T01 recording整体终结 | 已验证active graph + 冻结终结请求 → 执行事实/实际结束、closed graph、唯一original analysis同次提交。 | production外层repository+真实Room；直接读取所有相关表，沿CS-05 oracle；S06/S08 |
 | T02 no-HR终结 | completed/user_abandoned/owner_cleared、含zero-duration phase → 合法terminal且HR/snapshot表无本场行。 | 独立no-HR三类fixture，既有validator；S06/S08 |
 | T03 嵌套回滚 | 执行写、CS-05 guard/insert/binding、末次readback失败 → 整个外层恢复pre-terminal图，原错误保留。 | 实际Room事务与现有测试SQL trigger方法；框架源码仅证明机制，不代替此oracle |
-| T04 同请求重试 | result-loss或清理失败后再调同请求 → 原结果，唯一snapshot，所有首次时间和执行值不变。 | 真实persisted graph比对；不同ended_at/执行字段/tuple/reason故意冲突，均不得改历史 |
-| T05 晚到与竞争 | terminal后append、错误predecessor或不同终结意图 → 拒绝且完整terminal图不变。 | 生产仓库并发 + 真实Room；S05/S06分别证owner竞争 |
+| T04 同请求重试 | result-loss或清理失败后再调同请求 → 原结果，唯一snapshot，所有首次时间和执行值不变；仅旧predecessor offset不同而其余身份及完整结果相同的合法请求也返回原成功。 | 真实persisted graph比对；不同ended_at/执行字段/predecessor sequence/finalOffset/reason均为冲突，不得改历史；snapshotCreatedAt仅首次metadata |
+| T05 晚到与竞争 | 首次终结的错误完整predecessor tuple、terminal后append或不同终结身份/payload → 拒绝且持久化图不变；终态offset-only合法重试沿T04返回原成功。 | 生产仓库并发 + 真实Room；S05/S06分别证owner竞争 |
 | T06 原分析与时间来源 | 改当前计划/参数、晚重试或process restart → 不重算original，不填未知wall end、不擦除冻结开始元数据。 | 独立原始绑定/时间 fixture + 既有fresh-process资产回归；S08/导出 |
 
 生产位置沿F.6列明的三个现有文件；终结原算法/语义validator保持复用。验证沿现有 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionRecorderReconciliationTest.kt` 及 guarded-write 测试，正式合同仍须精确绑定新增fixture归属/evidence literal paths。没有修改或运行它们。S04不接管S05释放、S06终结意图冻结、模式实际值采集、S08严格历史/legacy读取或E22呈现。
