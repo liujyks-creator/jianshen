@@ -227,6 +227,80 @@ interface WorkoutSessionDao {
     @Query(
         """
         UPDATE workout_sessions
+        SET ended_at = :endedAt,
+            total_elapsed_sec = :totalElapsedSec,
+            effective_elapsed_sec = :effectiveElapsedSec,
+            paused_elapsed_sec = :pausedElapsedSec,
+            session_display_metadata_json = :displayMetadataJson
+        WHERE id = :sessionId AND timeline_version = 1
+          AND status = :expectedStatus
+          AND last_durable_offset_ms = :expectedOffsetMs
+          AND last_mutation_sequence = :expectedMutationSequence
+          AND trusted_end_offset_ms IS NULL AND terminal_reason IS NULL
+          AND EXISTS (SELECT 1 FROM workout_phase_intervals
+              WHERE id = :expectedOpenPhaseId AND session_id = :sessionId
+                AND end_offset_ms IS NULL AND end_mutation_sequence IS NULL AND open_marker = 1)
+          AND ((:recordingId IS NULL AND :expectedOpenAcquisitionId IS NULL
+                AND NOT EXISTS (SELECT 1 FROM heart_rate_recordings WHERE session_id = :sessionId))
+            OR EXISTS (SELECT 1 FROM heart_rate_recordings AS recording
+                JOIN heart_rate_acquisition_intervals AS acquisition
+                  ON acquisition.recording_id = recording.recording_id
+                WHERE recording.session_id = :sessionId AND recording.recording_id = :recordingId
+                  AND recording.status = 'active' AND recording.original_analysis_version IS NULL
+                  AND acquisition.id = :expectedOpenAcquisitionId
+                  AND acquisition.end_offset_ms IS NULL
+                  AND acquisition.end_mutation_sequence IS NULL AND acquisition.open_marker = 1))
+        """
+    )
+    suspend fun writeCanonicalExecutionHeader(
+        sessionId: String,
+        expectedStatus: String,
+        expectedOffsetMs: Long,
+        expectedMutationSequence: Long,
+        expectedOpenPhaseId: String,
+        recordingId: String?,
+        expectedOpenAcquisitionId: String?,
+        endedAt: String?,
+        totalElapsedSec: Int?,
+        effectiveElapsedSec: Int?,
+        pausedElapsedSec: Int?,
+        displayMetadataJson: String
+    ): Int
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET status = :terminalStatus, terminal_reason = :terminalReason,
+            trusted_end_offset_ms = :finalOffsetMs
+        WHERE id = :sessionId AND timeline_version = 1 AND status = :expectedStatus
+          AND last_durable_offset_ms = :finalOffsetMs
+          AND last_mutation_sequence = :finalMutationSequence
+          AND trusted_end_offset_ms IS NULL AND terminal_reason IS NULL
+          AND NOT EXISTS (SELECT 1 FROM heart_rate_recordings WHERE session_id = :sessionId)
+          AND EXISTS (SELECT 1 FROM workout_phase_intervals
+              WHERE id = :closedPhaseId AND session_id = :sessionId AND open_marker IS NULL
+                AND end_offset_ms = :finalOffsetMs AND end_mutation_sequence = :finalMutationSequence)
+        """
+    )
+    suspend fun finalizeSessionWithoutRecording(
+        sessionId: String,
+        expectedStatus: String,
+        closedPhaseId: String,
+        finalOffsetMs: Long,
+        finalMutationSequence: Long,
+        terminalStatus: String,
+        terminalReason: String
+    ): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCanonicalStepRecords(records: List<SessionStepRecordEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCanonicalStrengthSetRecords(records: List<StrengthSetRecordEntity>)
+
+    @Query(
+        """
+        UPDATE workout_sessions
         SET plan_id = :planId,
             mode = :mode,
             status = :status,

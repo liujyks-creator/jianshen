@@ -172,6 +172,37 @@ internal data class RecordingFinalizationResult(
     val analysisVersion: Int
 )
 
+/** Immutable values captured by the caller at the original terminal cut. */
+internal class FrozenCanonicalFinalizationRequest(
+    val expected: RecorderExpectedState,
+    val finalOffsetMs: Long,
+    val terminalStatus: String,
+    val terminalReason: String,
+    val endedAt: String?,
+    val totalElapsedSec: Int?,
+    val effectiveElapsedSec: Int?,
+    val pausedElapsedSec: Int?,
+    val sessionDisplayMetadataJson: String,
+    stepRecords: List<SessionStepRecordEntity>,
+    restExtensions: List<TimedRestExtensionRecordEntity>,
+    strengthSets: List<StrengthSetRecordEntity>,
+    val snapshotCreatedAt: String?
+) {
+    val stepRecords: List<SessionStepRecordEntity> = java.util.Collections.unmodifiableList(stepRecords.sortedBy { it.id })
+    val restExtensions: List<TimedRestExtensionRecordEntity> = java.util.Collections.unmodifiableList(restExtensions.sortedBy { it.id })
+    val strengthSets: List<StrengthSetRecordEntity> = java.util.Collections.unmodifiableList(strengthSets.sortedBy { it.id })
+}
+
+/** Durable only; admission, unbinding and RELEASED belong to the caller's release protocol. */
+internal data class CanonicalFinalizationResult(
+    val sessionId: String,
+    val recordingId: String?,
+    val finalTuple: CanonicalTuple,
+    val analysisVersion: Int?
+)
+
+internal class CanonicalFinalizationConflictException : IllegalStateException("conflicting_terminal_request")
+
 internal class WorkoutSessionRepository(
     private val database: TrainFlowDatabase
 ) {
@@ -185,6 +216,96 @@ internal class WorkoutSessionRepository(
 
     val sessions: Flow<List<WorkoutSession>> = dao.observeSessionsWithRecords()
         .map { rows -> rows.map { row -> row.toDomain() } }
+
+    suspend fun finalizeCanonicalSession(request: FrozenCanonicalFinalizationRequest): CanonicalFinalizationResult {
+        validateFinalizationRequest(request)
+        val expected = request.expected
+        val finalTuple = CanonicalTuple(request.finalOffsetMs,
+            Math.addExact(expected.durableTuple.mutationSequence, 1))
+        return database.withTransaction {
+            val graph = loadCanonicalGraph(expected.sessionId)
+                ?: throw CanonicalFinalizationConflictException()
+            validateSessionTimeMetadata(graph.session)
+            requireValidGraph(graph)
+            val steps = dao.stepRecordsForSession(expected.sessionId)
+            val extensions = dao.restExtensionRecordsForSession(expected.sessionId)
+            val sets = dao.strengthSetRecordsForSession(expected.sessionId)
+            if (graph.session.status in setOf("completed", "abandoned")) {
+                // D5 identity retains the predecessor sequence, not the overwritten old offset.
+                if (graph.session != request.terminalSession(graph.session, finalTuple) ||
+                    graph.recording?.recordingId != expected.recordingId ||
+                    graph.phases.last().id != expected.openPhaseId ||
+                    graph.acquisitions.lastOrNull()?.id != expected.openAcquisitionId ||
+                    steps != request.stepRecords || extensions != request.restExtensions || sets != request.strengthSets) {
+                    throw CanonicalFinalizationConflictException()
+                }
+                graph.snapshots.singleOrNull()?.let { snapshot ->
+                    requireValidation(AnalysisSnapshotV1Validator.validate(graph, snapshot), "invalid_analysis_snapshot_v1")
+                }
+            } else {
+                validatedExpectedGraph(expected)
+                requireValidation(SessionDisplayMetadataV1Validator.validateTransition(
+                    requireNotNull(graph.session.sessionDisplayMetadataJson), request.sessionDisplayMetadataJson,
+                    terminal = false), "invalid_session_display_metadata_contract")
+                // Previously appended execution facts must remain exact; never REPLACE another row's identity.
+                if (!request.stepRecords.containsAll(steps) || !request.restExtensions.containsAll(extensions) ||
+                    !request.strengthSets.containsAll(sets)) {
+                    throw CanonicalFinalizationConflictException()
+                }
+                requireExactlyOne("write_canonical_execution_header", dao.writeCanonicalExecutionHeader(
+                    expected.sessionId, expected.status, expected.durableTuple.offsetMs,
+                    expected.durableTuple.mutationSequence, expected.openPhaseId, expected.recordingId,
+                    expected.openAcquisitionId, request.endedAt, request.totalElapsedSec,
+                    request.effectiveElapsedSec, request.pausedElapsedSec, request.sessionDisplayMetadataJson))
+                dao.insertCanonicalStepRecords(request.stepRecords - steps.toSet())
+                dao.insertCanonicalStrengthSetRecords(request.strengthSets - sets.toSet())
+                (request.restExtensions - extensions.toSet()).forEach {
+                    requireInserted("insert_terminal_rest_extension", canonicalDao.insertRestExtension(it))
+                }
+                if (expected.recordingId != null) {
+                    // Room inherits this outer transaction. CS-05 remains the only analysis producer.
+                    finalizeRecordingSession(RecordingFinalizationRequest(
+                        expected.sessionId, expected.recordingId, expected.status, expected.durableTuple,
+                        request.finalOffsetMs, request.terminalStatus, request.terminalReason,
+                        requireNotNull(request.snapshotCreatedAt)))
+                } else {
+                    advanceHeader(expected, finalTuple)
+                    requireExactlyOne("close_terminal_phase_without_recording", canonicalDao.closeOpenPhase(
+                        expected.sessionId, expected.status, expected.openPhaseId,
+                        finalTuple.offsetMs, finalTuple.mutationSequence))
+                    requireExactlyOne("finalize_session_without_recording", dao.finalizeSessionWithoutRecording(
+                        expected.sessionId, expected.status, expected.openPhaseId, finalTuple.offsetMs,
+                        finalTuple.mutationSequence, request.terminalStatus, request.terminalReason))
+                }
+                val persisted = loadCanonicalGraph(expected.sessionId)
+                    ?: throw RecorderGuardedWriteException("terminal_post_write_session", 0)
+                validateSessionTimeMetadata(persisted.session)
+                requireValidGraph(persisted)
+                val terminalGraph = graph.copy(
+                    session = request.terminalSession(graph.session, finalTuple),
+                    phases = graph.phases.dropLast(1) + graph.phases.last().copy(
+                        endOffsetMs = finalTuple.offsetMs, endMutationSequence = finalTuple.mutationSequence, openMarker = null),
+                    recording = graph.recording?.copy(status = "terminal", endedOffsetMs = finalTuple.offsetMs,
+                        endedMutationSequence = finalTuple.mutationSequence, originalAnalysisVersion = 1),
+                    acquisitions = if (graph.recording == null) emptyList() else
+                        graph.acquisitions.dropLast(1) + graph.acquisitions.last().copy(
+                            endOffsetMs = finalTuple.offsetMs, endMutationSequence = finalTuple.mutationSequence, openMarker = null),
+                    snapshots = persisted.snapshots
+                )
+                persisted.snapshots.singleOrNull()?.let { snapshot ->
+                    requireValidation(AnalysisSnapshotV1Validator.validate(persisted, snapshot), "invalid_analysis_snapshot_v1")
+                }
+                if (persisted != terminalGraph || dao.stepRecordsForSession(expected.sessionId) != request.stepRecords ||
+                    dao.restExtensionRecordsForSession(expected.sessionId) != request.restExtensions ||
+                    dao.strengthSetRecordsForSession(expected.sessionId) != request.strengthSets ||
+                    (expected.recordingId != null && persisted.snapshots.single().createdAt != request.snapshotCreatedAt)) {
+                    throw RecorderValidationException("terminal_graph_changed_during_write")
+                }
+            }
+            CanonicalFinalizationResult(expected.sessionId, expected.recordingId, finalTuple,
+                if (expected.recordingId == null) null else 1)
+        }
+    }
 
     internal suspend fun finalizeRecordingSession(
         request: RecordingFinalizationRequest
@@ -1208,6 +1329,71 @@ internal class WorkoutSessionRepository(
         const val RECONCILIATION_CONTRACT_VERSION = 1
         const val DISPLAY_METADATA_CONTRACT_VERSION = 1
         val LEGACY_NONTERMINAL_STATUSES = setOf("ready", "active", "paused")
+    }
+}
+
+private fun FrozenCanonicalFinalizationRequest.terminalSession(
+    original: WorkoutSessionEntity,
+    finalTuple: CanonicalTuple
+) = original.copy(
+    status = terminalStatus, terminalReason = terminalReason,
+    lastDurableOffsetMs = finalTuple.offsetMs, lastMutationSequence = finalTuple.mutationSequence,
+    trustedEndOffsetMs = finalTuple.offsetMs, endedAt = endedAt,
+    totalElapsedSec = totalElapsedSec, effectiveElapsedSec = effectiveElapsedSec,
+    pausedElapsedSec = pausedElapsedSec, sessionDisplayMetadataJson = sessionDisplayMetadataJson
+)
+
+private fun validateFinalizationRequest(request: FrozenCanonicalFinalizationRequest) {
+    val expected = request.expected
+    if (!validTerminalPair(request.terminalStatus, request.terminalReason) ||
+        request.terminalReason == "process_interrupted") {
+        throw RecorderValidationException("invalid_terminal_status_reason_v1")
+    }
+    if (expected.status !in setOf("active", "paused") || expected.durableTuple.offsetMs < 0 ||
+        expected.durableTuple.mutationSequence < 0 || request.finalOffsetMs < expected.durableTuple.offsetMs ||
+        (expected.recordingId == null) != (expected.openAcquisitionId == null)) {
+        throw RecorderValidationException("invalid_final_tuple_v1")
+    }
+    if (expected.recordingId != null && request.snapshotCreatedAt.isNullOrEmpty()) {
+        throw RecorderValidationException("invalid_snapshot_created_at_v1")
+    }
+    request.endedAt?.let(Instant::parse)
+    requireValidation(CanonicalStorageJsonV1Validators.validateSessionDisplayMetadata(
+        request.sessionDisplayMetadataJson), "invalid_session_display_metadata_contract")
+    if (listOfNotNull(request.totalElapsedSec, request.effectiveElapsedSec, request.pausedElapsedSec).any { it < 0 }) {
+        throw RecorderValidationException("invalid_terminal_execution_values")
+    }
+    listOf(request.stepRecords.map { it.id to it.sessionId }, request.restExtensions.map { it.id to it.sessionId },
+        request.strengthSets.map { it.id to it.sessionId }).forEach { keys ->
+        if (keys.any { (id, sessionId) -> id.isEmpty() || sessionId != expected.sessionId } ||
+            keys.map { it.first }.distinct().size != keys.size) {
+            throw RecorderValidationException("invalid_terminal_execution_identity")
+        }
+    }
+    request.stepRecords.forEach { step ->
+        if (step.stepId.isEmpty() || SessionStepKind.entries.none { it.contractValue == step.kind } ||
+            listOfNotNull(step.actualDurationSec, step.plannedDurationSec).any { it < 0 }) {
+            throw RecorderValidationException("invalid_terminal_step_record")
+        }
+        Instant.parse(step.startedAt)
+        step.endedAt?.let(Instant::parse)
+    }
+    request.restExtensions.forEach { extension ->
+        if (extension.stepId.isEmpty() || extension.restStageTitle.isEmpty() || extension.stepIndex < 0 ||
+            (extension.roundIndex != null && extension.roundIndex <= 0) || extension.addedSec <= 0 ||
+            extension.plannedRestSec <= 0 || extension.restElapsedBeforeExtensionSec < 0 ||
+            extension.extensionAtRemainingSec < 0 || extension.cumulativeExtraRestSec < extension.addedSec ||
+            extension.eventElapsedSec < 0) {
+            throw RecorderValidationException("invalid_timed_rest_extension")
+        }
+    }
+    request.strengthSets.forEach { set ->
+        if (set.exerciseId.isEmpty() || set.setOrder < 0 || StrengthSetKind.entries.none { it.contractValue == set.setKind } ||
+            (set.side != null && ExerciseSide.entries.none { it.contractValue == set.side }) ||
+            (set.effort != null && SetEffort.entries.none { it.contractValue == set.effort }) ||
+            listOfNotNull(set.activeDurationSec, set.actualRestAfterSec).any { it < 0 }) {
+            throw RecorderValidationException("invalid_terminal_strength_set")
+        }
     }
 }
 
