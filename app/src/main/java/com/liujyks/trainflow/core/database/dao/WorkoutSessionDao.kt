@@ -64,7 +64,10 @@ interface WorkoutSessionDao {
         """
         UPDATE workout_sessions
         SET last_durable_offset_ms = :nextOffsetMs,
-            last_mutation_sequence = :nextMutationSequence
+            last_mutation_sequence = :nextMutationSequence,
+            status = :nextStatus,
+            session_display_metadata_json = CASE WHEN :nextDisplayMetadataJson IS NULL
+                THEN session_display_metadata_json ELSE :nextDisplayMetadataJson END
         WHERE id = :sessionId
           AND status = :expectedStatus
           AND timeline_version = 1
@@ -81,7 +84,8 @@ interface WorkoutSessionDao {
                 AND open_marker = 1
           )
           AND (
-              (:expectedRecordingId IS NULL AND :expectedOpenAcquisitionId IS NULL)
+              (:expectedRecordingId IS NULL AND :expectedOpenAcquisitionId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM heart_rate_recordings WHERE session_id = :sessionId))
               OR EXISTS (
                   SELECT 1
                   FROM heart_rate_recordings AS recording
@@ -107,7 +111,9 @@ interface WorkoutSessionDao {
         expectedRecordingId: String?,
         expectedOpenAcquisitionId: String?,
         nextOffsetMs: Long,
-        nextMutationSequence: Long
+        nextMutationSequence: Long,
+        nextStatus: String = expectedStatus,
+        nextDisplayMetadataJson: String? = null
     ): Int
 
     @Query(
@@ -255,6 +261,15 @@ interface WorkoutSessionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertStepRecords(records: List<SessionStepRecordEntity>)
+
+    @Query("SELECT * FROM session_step_records WHERE session_id = :sessionId ORDER BY id")
+    suspend fun stepRecordsForSession(sessionId: String): List<SessionStepRecordEntity>
+
+    @Query("SELECT * FROM timed_rest_extension_records WHERE session_id = :sessionId ORDER BY id")
+    suspend fun restExtensionRecordsForSession(sessionId: String): List<TimedRestExtensionRecordEntity>
+
+    @Query("SELECT * FROM strength_set_records WHERE session_id = :sessionId ORDER BY id")
+    suspend fun strengthSetRecordsForSession(sessionId: String): List<StrengthSetRecordEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertStrengthSetRecords(records: List<StrengthSetRecordEntity>)

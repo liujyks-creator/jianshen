@@ -2,6 +2,7 @@ package com.liujyks.trainflow.core.data
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1Validator
@@ -13,14 +14,31 @@ import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
+import com.liujyks.trainflow.core.health.HeartRateObservation
+import com.liujyks.trainflow.core.health.HeartRateObservationBinding
+import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
+import com.liujyks.trainflow.core.health.HeartRateObservationCause
+import com.liujyks.trainflow.core.health.HeartRateObservationPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.CoroutineContext
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,6 +61,529 @@ class WorkoutSessionRecorderGuardedWriteTest {
     @After
     fun closeDatabase() {
         database.close()
+    }
+
+    @Test
+    fun frozenStartCommitsEveryReceiptAndNeverSamplesSnapshotOrLaterInput() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val bindingId = HeartRateObservationBindingId()
+        val binding = HeartRateObservationBinding(
+            bindingId, 500,
+            HeartRateObservation(bindingId, 0, 500,
+                HeartRateObservationPayload.CurrentSnapshot(HeartRateObservationCause.INITIAL_WAIT))
+        )
+        val receipts = mutableListOf(
+            HeartRateObservation(bindingId, 1, 500,
+                HeartRateObservationPayload.RuntimeTransition(HeartRateObservationCause.LIVE)),
+            HeartRateObservation(bindingId, 2, 500, HeartRateObservationPayload.ValidMeasurement(88)),
+            HeartRateObservation(bindingId, 3, 500, HeartRateObservationPayload.ValidMeasurement(88))
+        )
+        val request = FrozenCanonicalStartRequest(
+            collectedSession(), initialPhase(), binding, receipts,
+            activeRecording().copy(startedMutationSequence = 0)
+        )
+        receipts += HeartRateObservation(bindingId, 4, 501, HeartRateObservationPayload.ValidMeasurement(99))
+
+        repository.startCanonicalSession(request)
+
+        val graph = requireGraph(SESSION_ID)
+        assertEquals(request.recording, graph.recording)
+        assertEquals(request.session.copy(lastMutationSequence = 3), graph.session)
+        assertEquals(listOf(initialPhase()), graph.phases)
+        assertEquals(listOf(
+            acquisition("$RECORDING_ID:acquisition:0", 0, CanonicalTuple(0, 0), "waiting_first_sample", "initial_acquisition")
+                .copy(endOffsetMs = 0, endMutationSequence = 1, openMarker = null),
+            acquisition("$RECORDING_ID:acquisition:1", 1, CanonicalTuple(0, 1), "live", null)
+        ), graph.acquisitions)
+        assertEquals(listOf(
+            HeartRateSampleEntity(RECORDING_ID, 0, 0, 2, 88),
+            HeartRateSampleEntity(RECORDING_ID, 1, 0, 3, 88)
+        ), graph.samples)
+        assertTrue(graph.snapshots.isEmpty())
+        assertEquals(CanonicalValidationResult.Valid, CanonicalSessionGraphV1Validator.validate(graph))
+    }
+
+    @Test
+    fun combinedActivityCommitsStatusPhaseAcquisitionAndMetadataAtOneCut() = runBlocking {
+        val repository = recordingRepository()
+        val recording = requireGraph(SESSION_ID).recording
+        val cut = CanonicalTuple(0, 4)
+        repository.applyCanonicalActivity(CanonicalActivityRequest(
+            expected(CanonicalTuple(0, 3), recordingId = RECORDING_ID, openAcquisitionId = ACQUISITION_0_ID),
+            cut, nextStatus = "paused",
+            nextPhase = pausedPhase().copy(startMutationSequence = 4),
+            nextAcquisition = acquisition(ACQUISITION_1_ID, 1, cut, "live", null),
+            nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY
+        ))
+        val graph = requireGraph(SESSION_ID)
+        assertEquals("paused", graph.session.status)
+        assertEquals(DISPLAY_METADATA_WITH_ENTRY, graph.session.sessionDisplayMetadataJson)
+        assertEquals(recording, graph.recording)
+        assertEquals(listOf(
+            initialPhase().copy(endOffsetMs = 0, endMutationSequence = 4, openMarker = null),
+            pausedPhase().copy(startMutationSequence = 4)
+        ), graph.phases)
+        assertEquals(listOf(
+            acquisition(ACQUISITION_0_ID, 0, CanonicalTuple(0, 3), "searching", "initial_acquisition")
+                .copy(endOffsetMs = 0, endMutationSequence = 4, openMarker = null),
+            acquisition(ACQUISITION_1_ID, 1, cut, "live", null)
+        ), graph.acquisitions)
+        assertEquals(CanonicalValidationResult.Valid, CanonicalSessionGraphV1Validator.validate(graph))
+    }
+
+    @Test
+    fun startResolutionRejectsSameTupleGraphWithChangedSessionValue() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val request = frozenRequest()
+        val operation = launch { repository.startCanonicalSession(request) }
+        operation.join()
+        database.openHelper.writableDatabase.execSQL("UPDATE workout_sessions SET plan_id='changed' WHERE id='$SESSION_ID'")
+        assertEquals(CanonicalStartResolution.ConflictingGraph,
+            repository.resolveCanonicalStart(request, operation))
+    }
+
+    @Test
+    fun noHeartRateAndEnabledZeroSampleStartsHaveExactFrozenRows() = runBlocking {
+        for (enabled in listOf(false, true)) {
+            val request = frozenRequest(enabled)
+            val repository = WorkoutSessionRepository(database)
+            repository.startCanonicalSession(request)
+            val graph = requireGraph(SESSION_ID)
+            assertEquals(request.session, graph.session)
+            assertEquals(listOf(initialPhase()), graph.phases)
+            assertEquals(request.recording, graph.recording)
+            assertEquals(if (enabled) listOf(acquisition("$RECORDING_ID:acquisition:0", 0,
+                CanonicalTuple(0, 0), "live", null)) else emptyList<HeartRateAcquisitionIntervalEntity>(),
+                graph.acquisitions)
+            assertTrue(graph.samples.isEmpty())
+            assertTrue(graph.snapshots.isEmpty())
+            assertTrue(database.workoutSessionDao().stepRecordsForSession(SESSION_ID).isEmpty())
+            assertTrue(database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID).isEmpty())
+            assertTrue(database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID).isEmpty())
+            repository.deleteAllSessions()
+        }
+    }
+
+    @Test
+    fun startFailuresAtCandidateInsertGuardAndReadbackRollbackAllNineTables() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        repository.prepareRecorder()
+        val base = frozenRequest(true)
+        val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, base.binding,
+            listOf(HeartRateObservation(base.binding.bindingId, 1, 500, HeartRateObservationPayload.ValidMeasurement(88)),
+                HeartRateObservation(base.binding.bindingId, 2, 500, HeartRateObservationPayload.ValidMeasurement(88))),
+            base.recording)
+        val invalid = FrozenCanonicalStartRequest(request.session.copy(planSnapshotJson = "{}"),
+            request.initialPhase, request.binding, request.receipts, request.recording)
+        val before = databaseSnapshot()
+        val validation = runCatching { repository.startCanonicalSession(invalid) }.exceptionOrNull()
+        assertTrue(validation is RecorderValidationException)
+        assertEquals(before, databaseSnapshot())
+        val triggers = listOf(
+            "BEFORE INSERT ON heart_rate_acquisition_intervals BEGIN SELECT RAISE(ABORT, 'start_insert_original'); END",
+            "BEFORE INSERT ON workout_sessions BEGIN SELECT RAISE(IGNORE); END",
+            "AFTER INSERT ON heart_rate_acquisition_intervals BEGIN UPDATE workout_phase_intervals SET start_offset_ms=1; END",
+            "AFTER INSERT ON heart_rate_acquisition_intervals BEGIN UPDATE workout_sessions SET plan_id='unexpected'; END",
+            "AFTER INSERT ON heart_rate_acquisition_intervals BEGIN INSERT INTO session_step_records(id,session_id,step_id,kind,started_at,skipped) VALUES('extra','$SESSION_ID','step','work','2026-09-06T16:30:00Z',0); END",
+            "BEFORE INSERT ON heart_rate_samples WHEN NEW.sample_sequence=1 BEGIN SELECT RAISE(ABORT, 'start_insert_original'); END"
+        )
+        triggers.forEachIndexed { index, body ->
+            database.openHelper.writableDatabase.execSQL("CREATE TRIGGER start_failure $body")
+            try {
+                val failure = runCatching { repository.startCanonicalSession(request) }.exceptionOrNull()
+                assertNotNull("stage $index must fail", failure)
+                when (index) {
+                    0, 5 -> {
+                        assertTrue(failure is android.database.sqlite.SQLiteConstraintException)
+                        assertTrue(failure!!.message!!.contains("start_insert_original"))
+                    }
+                    1 -> {
+                        assertTrue(failure is RecorderGuardedWriteException)
+                        assertEquals(0, (failure as RecorderGuardedWriteException).actualRowCount)
+                    }
+                    else -> assertTrue(failure is RecorderValidationException)
+                }
+                assertEquals("stage $index", before, databaseSnapshot())
+            } finally {
+                database.openHelper.writableDatabase.execSQL("DROP TRIGGER start_failure")
+            }
+        }
+    }
+
+    @Test
+    fun completeStartGraphRecognitionRejectsMissingExtraAndChangedRows() = runBlocking {
+        val mutations = listOf(
+            "UPDATE workout_sessions SET started_at='2026-09-06T16:30:01Z'",
+            "UPDATE workout_sessions SET start_local_date='2026-09-08'",
+            "UPDATE workout_sessions SET start_zone_id='UTC'",
+            "UPDATE workout_sessions SET start_utc_offset_seconds=0",
+            "UPDATE workout_sessions SET time_metadata_source_contract_version=2",
+            "UPDATE workout_sessions SET plan_snapshot_json=plan_snapshot_json || ' '",
+            "UPDATE workout_sessions SET session_display_metadata_json=session_display_metadata_json || ' '",
+            "UPDATE workout_phase_intervals SET phase_identity_json=phase_identity_json || ' '",
+            "DELETE FROM workout_phase_intervals",
+            "UPDATE heart_rate_recordings SET alert_threshold_bpm=180",
+            "DELETE FROM heart_rate_acquisition_intervals",
+            "UPDATE heart_rate_acquisition_intervals SET device_state='stale'",
+            "UPDATE heart_rate_samples SET bpm=89",
+            "DELETE FROM heart_rate_samples WHERE sample_sequence=0",
+            "INSERT INTO heart_rate_samples(recording_id,sample_sequence,offset_ms,mutation_sequence,bpm) VALUES('$RECORDING_ID',2,0,2,88)",
+            "INSERT INTO heart_rate_analysis_snapshots(recording_id,analysis_version,created_at,input_last_mutation_sequence,sample_status,coverage_status,zone_status,canonical_sample_count,primary_point_sample_count,analysis_config_json,phase_aggregates_json,duration_breakdown_json,quality_reasons_json) VALUES('$RECORDING_ID',1,'2026-09-06T16:30:00Z',2,'samples_present','sufficient','no_zones',2,2,'{}','{}','{}','{}')",
+            "INSERT INTO session_step_records(id,session_id,step_id,kind,started_at,skipped) VALUES('extra','$SESSION_ID','step','work','2026-09-06T16:30:00Z',0)",
+            "INSERT INTO strength_set_records(id,session_id,exercise_id,set_order,set_kind) VALUES('extra','$SESSION_ID','exercise',0,'working')",
+            "INSERT INTO timed_rest_extension_records(id,session_id,step_id,step_index,rest_stage_title,added_sec,planned_rest_sec,rest_elapsed_before_extension_sec,extension_at_remaining_sec,cumulative_extra_rest_sec,event_elapsed_sec) VALUES('extra','$SESSION_ID','step',0,'Rest',1,5,1,4,1,1)"
+        )
+        for (mutation in mutations) {
+            val repository = WorkoutSessionRepository(database)
+            val base = frozenRequest(true)
+            val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, base.binding,
+                listOf(HeartRateObservation(base.binding.bindingId, 1, 500, HeartRateObservationPayload.ValidMeasurement(88)),
+                    HeartRateObservation(base.binding.bindingId, 2, 500, HeartRateObservationPayload.ValidMeasurement(88))),
+                base.recording)
+            val operation = launch { repository.startCanonicalSession(request) }
+            operation.join()
+            val expected = expected(CanonicalTuple(0, 2), recordingId = RECORDING_ID,
+                openAcquisitionId = "$RECORDING_ID:acquisition:0")
+            assertEquals(CanonicalStartResolution.Committed(expected), repository.resolveCanonicalStart(request, operation))
+            database.openHelper.writableDatabase.execSQL(mutation)
+            val changed = databaseSnapshot()
+            assertEquals(mutation, CanonicalStartResolution.ConflictingGraph,
+                repository.resolveCanonicalStart(request, operation))
+            assertEquals(changed, databaseSnapshot())
+            repository.deleteAllSessions()
+        }
+    }
+
+    @Test
+    fun lostStartDeliveryRecognizesCommittedRowsWithoutReinserting() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        repository.prepareRecorder()
+        val request = frozenRequest(true)
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        var delivered = false
+        val operation = async(dispatcher) { repository.startCanonicalSession(request); delivered = true }
+        requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        val committed = databaseSnapshot()
+        assertEquals(request.recording, requireGraph(SESSION_ID).recording)
+        assertFalse(delivered)
+        val original = CancellationException("start_delivery_lost")
+        operation.cancel(original)
+        delivery.run()
+        val failure = runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals(original.message, failure?.message)
+        assertFalse(delivered)
+        assertTrue(repository.resolveCanonicalStart(request, operation) is CanonicalStartResolution.Committed)
+        assertEquals(committed, databaseSnapshot())
+    }
+
+    @Test
+    fun unfinishedStartIsUnresolvedAndOnlyEndedRollbackCanBeAbsent() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val blockOnce = AtomicBoolean(true)
+        database.close()
+        database = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), TrainFlowDatabase::class.java)
+            .allowMainThreadQueries()
+            .setQueryCallback(RoomDatabase.QueryCallback { query, _ ->
+                if (query.contains("INSERT OR IGNORE INTO `workout_sessions`") && blockOnce.compareAndSet(true, false)) {
+                    entered.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                }
+            }, Executor { it.run() }).build()
+        val repository = WorkoutSessionRepository(database)
+        repository.prepareRecorder()
+        val request = frozenRequest(true)
+        val operation = async(Dispatchers.IO) { repository.startCanonicalSession(request) }
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(request, operation))
+            operation.cancel(CancellationException("start_rolled_back"))
+        } finally {
+            release.countDown()
+        }
+        val failure = runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals("start_rolled_back", failure?.message)
+        assertEquals(CanonicalStartResolution.RolledBack, repository.resolveCanonicalStart(request, operation))
+        assertTrue(databaseSnapshot().isEmpty())
+        database.openHelper.writableDatabase.execSQL("INSERT INTO session_step_records(id,session_id,step_id,kind,started_at,skipped) VALUES('orphan','$SESSION_ID','step','work','2026-09-06T16:30:00Z',0)")
+        assertEquals(CanonicalStartResolution.ConflictingGraph, repository.resolveCanonicalStart(request, operation))
+    }
+
+    @Test
+    fun frozenStartRejectsMissingRecordingForExpectedIntentAndInvalidTimeSources() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val base = frozenRequest()
+        val missingRecording = FrozenCanonicalStartRequest(base.session, base.initialPhase,
+            base.binding, emptyList(), recording = null, heartRateEnabledAtStart = true)
+        val before = databaseSnapshot()
+        assertTrue("expected intent needs the initial recording in the same commit",
+            runCatching { repository.startCanonicalSession(missingRecording) }.isFailure)
+        val invalidSessions = listOf(
+            canonicalSession(),
+            collectedSession().copy(startedAt = null),
+            collectedSession().copy(startedAt = "invalid"),
+            collectedSession().copy(startLocalDate = null),
+            collectedSession().copy(startLocalDate = "2026-9-7"),
+            collectedSession().copy(startLocalDate = "2026-09-06"),
+            collectedSession().copy(startZoneId = "not/a/zone"),
+            collectedSession().copy(startUtcOffsetSeconds = Long.MAX_VALUE),
+            collectedSession().copy(timeMetadataSourceContractVersion = null),
+            collectedSession().copy(timeMetadataSourceContractVersion = 6),
+            collectedSession().copy(timelineVersion = 2)
+        )
+        invalidSessions.forEach { session ->
+            val request = FrozenCanonicalStartRequest(session, base.initialPhase, base.binding,
+                emptyList())
+            assertTrue(session.toString(), runCatching { repository.startCanonicalSession(request) }.isFailure)
+            assertEquals(before, databaseSnapshot())
+        }
+    }
+
+    @Test
+    fun lateEnableOffOnResumeAndSameMillisecondSamplesKeepOneRecordingAndFrozenTime() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        repository.startCanonicalSession(frozenRequest())
+        val recording = activeRecording().copy(startedOffsetMs = 20, startedMutationSequence = 1)
+        val first = acquisition(ACQUISITION_0_ID, 0, CanonicalTuple(20, 1), "live", null)
+        var confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+            expected(CanonicalTuple(0, 0)), CanonicalTuple(20, 1), newRecording = recording, nextAcquisition = first))
+        assertEquals(recording, requireGraph(SESSION_ID).recording)
+        val afterEnable = databaseSnapshot()
+        val second = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+            confirmed, CanonicalTuple(20, 2), newRecording = recording.copy(recordingId = "second"),
+            nextAcquisition = first.copy(id = "second", recordingId = "second"))) }
+        assertTrue(second.exceptionOrNull() is RecorderGuardedWriteException)
+        assertEquals(afterEnable, databaseSnapshot())
+        confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+            confirmed, CanonicalTuple(20, 2), nextStatus = "paused",
+            nextPhase = pausedPhase().copy(startOffsetMs = 20, startMutationSequence = 2),
+            nextAcquisition = acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(20, 2), "live", null)
+                .copy(recordingIntent = "user_excluded", intentReason = "user_turned_off")))
+        confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+            confirmed, CanonicalTuple(20, 3), nextStatus = "active",
+            nextPhase = initialPhase().copy(id = "$SESSION_ID:phase:2", sequence = 2,
+                startOffsetMs = 20, startMutationSequence = 3),
+            nextAcquisition = acquisition("$RECORDING_ID:acquisition:2", 2, CanonicalTuple(20, 3), "live", null)))
+        for (index in 0L..1L) {
+            confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+                confirmed, CanonicalTuple(20, 4 + index),
+                sample = HeartRateSampleEntity(RECORDING_ID, index, 20, 4 + index, 88)))
+        }
+        val graph = requireGraph(SESSION_ID)
+        assertEquals(collectedSession().copy(lastDurableOffsetMs = 20, lastMutationSequence = 5), graph.session)
+        assertEquals(recording, graph.recording)
+        assertEquals(listOf(first.copy(endOffsetMs = 20, endMutationSequence = 2, openMarker = null),
+            acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(20, 2), "live", null).copy(
+                endOffsetMs = 20, endMutationSequence = 3, openMarker = null,
+                recordingIntent = "user_excluded", intentReason = "user_turned_off"),
+            acquisition("$RECORDING_ID:acquisition:2", 2, CanonicalTuple(20, 3), "live", null)), graph.acquisitions)
+        assertEquals(listOf(HeartRateSampleEntity(RECORDING_ID, 0, 20, 4, 88),
+            HeartRateSampleEntity(RECORDING_ID, 1, 20, 5, 88)), graph.samples)
+        assertEquals(CanonicalValidationResult.Valid, CanonicalSessionGraphV1Validator.validate(graph))
+    }
+
+    @Test
+    fun activityStaleGuardsAndSqlFailureNeverReturnAnAdvancedConfirmation() = runBlocking {
+        val repository = recordingRepository()
+        val confirmed = expected(CanonicalTuple(0, 3), recordingId = RECORDING_ID, openAcquisitionId = ACQUISITION_0_ID)
+        val before = databaseSnapshot()
+        val staleStates = listOf(
+            confirmed.copy(sessionId = "missing"), confirmed.copy(status = "paused"),
+            confirmed.copy(durableTuple = CanonicalTuple(1, 3)),
+            confirmed.copy(openPhaseId = "missing"), confirmed.copy(recordingId = "missing"),
+            confirmed.copy(openAcquisitionId = "missing")
+        )
+        for (stale in staleStates) {
+            val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(stale,
+                CanonicalTuple(1, 4), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY)) }.exceptionOrNull()
+            assertTrue(failure is RecorderGuardedWriteException)
+            assertEquals(before, databaseSnapshot())
+        }
+        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_activity BEFORE INSERT ON heart_rate_acquisition_intervals BEGIN SELECT RAISE(ABORT, 'activity_original_failure'); END")
+        val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+            confirmed, CanonicalTuple(1, 4), nextStatus = "paused",
+            nextPhase = pausedPhase().copy(startOffsetMs = 1, startMutationSequence = 4),
+            nextAcquisition = acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(1, 4), "live", null),
+            nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY)) }.exceptionOrNull()
+        assertTrue(failure is android.database.sqlite.SQLiteConstraintException)
+        assertTrue(failure!!.message!!.contains("activity_original_failure"))
+        assertEquals(before, databaseSnapshot())
+        assertEquals(CanonicalTuple(0, 3), confirmed.durableTuple)
+    }
+
+    @Test
+    fun lostActivityDeliveryDoesNotPublishNextConfirmedTuple() = runBlocking {
+        val repository = recordingRepository()
+        val confirmed = expected(CanonicalTuple(0, 3), recordingId = RECORDING_ID, openAcquisitionId = ACQUISITION_0_ID)
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        var published = confirmed
+        val operation = async(dispatcher) {
+            published = repository.applyCanonicalActivity(CanonicalActivityRequest(
+                confirmed, CanonicalTuple(1, 4), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY))
+        }
+        requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertEquals(4L, requireGraph(SESSION_ID).session.lastMutationSequence)
+        operation.cancel(CancellationException("activity_delivery_lost"))
+        delivery.run()
+        val failure = runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals("activity_delivery_lost", failure?.message)
+        assertEquals(confirmed, published)
+    }
+
+    @Test
+    fun extraRestMetadataAppendsAtTheActivityCutAndDuplicateFailureRollsBackEverything() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val start = repository.startCanonicalSession(frozenRequest())
+        val extension = TimedRestExtensionRecordEntity(
+            id = "extension-1", sessionId = SESSION_ID, stepId = "rest-step", stepIndex = 1,
+            roundIndex = 1, restStageId = "rest", restStageTitle = "Rest",
+            addedSec = 15, plannedRestSec = 30, restElapsedBeforeExtensionSec = 5,
+            extensionAtRemainingSec = 25, cumulativeExtraRestSec = 15, eventElapsedSec = 5
+        )
+        val beforeInvalid = databaseSnapshot()
+        for (invalid in listOf(extension.copy(sessionId = "other-session"), extension.copy(addedSec = 0))) {
+            assertTrue(runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+                start, CanonicalTuple(5_000, 1), restExtension = invalid)) }.exceptionOrNull() is RecorderValidationException)
+            assertEquals(beforeInvalid, databaseSnapshot())
+        }
+        val confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+            start, CanonicalTuple(5_000, 1), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY,
+            restExtension = extension))
+        assertEquals(listOf(extension), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+        assertEquals(CanonicalTuple(5_000, 1), confirmed.durableTuple)
+        val before = databaseSnapshot()
+        val duplicate = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+            confirmed, CanonicalTuple(5_000, 2), nextStatus = "paused",
+            nextPhase = pausedPhase().copy(startOffsetMs = 5_000), restExtension = extension)) }
+        assertTrue(duplicate.exceptionOrNull() is android.database.sqlite.SQLiteConstraintException)
+        assertEquals(before, databaseSnapshot())
+        assertEquals(CanonicalTuple(5_000, 1), confirmed.durableTuple)
+    }
+
+    @Test
+    fun initializationNoOpsAndNoHeartRateReceiptsKeepIndependentMutationSequences() = runBlocking {
+        for (enabled in listOf(false, true)) {
+            val repository = WorkoutSessionRepository(database)
+            val base = frozenRequest(enabled)
+            val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, base.binding, listOf(
+                HeartRateObservation(base.binding.bindingId, 1, 500,
+                    HeartRateObservationPayload.RuntimeTransition(HeartRateObservationCause.LIVE)),
+                HeartRateObservation(base.binding.bindingId, 2, 501, HeartRateObservationPayload.ValidMeasurement(88)),
+                HeartRateObservation(base.binding.bindingId, 3, 501,
+                    HeartRateObservationPayload.RuntimeTransition(HeartRateObservationCause.LIVE)),
+                HeartRateObservation(base.binding.bindingId, 4, 501, HeartRateObservationPayload.ValidMeasurement(88))
+            ), base.recording)
+            val confirmed = repository.startCanonicalSession(request)
+            val graph = requireGraph(SESSION_ID)
+            assertEquals(if (enabled) CanonicalTuple(1, 2) else CanonicalTuple(0, 0), confirmed.durableTuple)
+            assertEquals(if (enabled) listOf(HeartRateSampleEntity(RECORDING_ID, 0, 1, 1, 88),
+                HeartRateSampleEntity(RECORDING_ID, 1, 1, 2, 88)) else emptyList<HeartRateSampleEntity>(), graph.samples)
+            assertEquals(if (enabled) 1 else 0, graph.acquisitions.size)
+            repository.deleteAllSessions()
+        }
+    }
+
+    @Test
+    fun invalidFrozenSnapshotReceiptOrderAndRecordingVersionWriteNothing() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val base = frozenRequest(true)
+        val measurement = HeartRateObservation(base.binding.bindingId, 1, 500, HeartRateObservationPayload.ValidMeasurement(88))
+        val invalidBatches = listOf(
+            listOf(measurement.copy(receipt = 2)),
+            listOf(measurement, measurement),
+            listOf(measurement.copy(bindingId = HeartRateObservationBindingId())),
+            listOf(measurement.copy(elapsedRealtimeMs = 499)),
+            listOf(measurement.copy(payload = HeartRateObservationPayload.CurrentSnapshot(HeartRateObservationCause.LIVE)))
+        )
+        for (batch in invalidBatches) {
+            val failure = runCatching { repository.startCanonicalSession(FrozenCanonicalStartRequest(
+                base.session, base.initialPhase, base.binding, batch, base.recording)) }.exceptionOrNull()
+            assertTrue(failure is RecorderValidationException)
+            assertTrue(databaseSnapshot().isEmpty())
+        }
+        for (binding in listOf(base.binding.copy(anchorElapsedRealtimeMs = 499),
+            base.binding.copy(snapshot = base.binding.snapshot.copy(receipt = 1)),
+            base.binding.copy(snapshot = base.binding.snapshot.copy(payload = HeartRateObservationPayload.ValidMeasurement(88))))) {
+            assertTrue(runCatching { repository.startCanonicalSession(FrozenCanonicalStartRequest(
+                base.session, base.initialPhase, binding, emptyList(), base.recording)) }.exceptionOrNull() is RecorderValidationException)
+            assertTrue(databaseSnapshot().isEmpty())
+        }
+        assertTrue(runCatching { repository.startCanonicalSession(FrozenCanonicalStartRequest(
+            base.session, base.initialPhase, base.binding, emptyList(),
+            requireNotNull(base.recording).copy(sourceContractVersion = 2))) }.exceptionOrNull() is RecorderValidationException)
+        assertTrue(databaseSnapshot().isEmpty())
+    }
+
+    @Test
+    fun combinedActivityGuardRowCountsZeroAndTwoRestoreThePriorCompleteGraph() = runBlocking {
+        val repository = recordingRepository()
+        rebuildPhaseTableWithoutConstraints()
+        val confirmed = expected(CanonicalTuple(0, 3), recordingId = RECORDING_ID, openAcquisitionId = ACQUISITION_0_ID)
+        val before = databaseSnapshot()
+        for (rowCount in listOf(0, 2)) {
+            val mutation = if (rowCount == 0) "DELETE FROM workout_phase_intervals WHERE id='$PHASE_0_ID';"
+                else "INSERT INTO workout_phase_intervals SELECT * FROM workout_phase_intervals WHERE id='$PHASE_0_ID' LIMIT 1;"
+            database.openHelper.writableDatabase.execSQL("CREATE TRIGGER activity_guard AFTER UPDATE OF last_durable_offset_ms ON workout_sessions BEGIN $mutation END")
+            try {
+                val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+                    confirmed, CanonicalTuple(1, 4), nextStatus = "paused",
+                    nextPhase = pausedPhase().copy(startOffsetMs = 1, startMutationSequence = 4),
+                    nextAcquisition = acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(1, 4), "live", null),
+                    nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY)) }.exceptionOrNull()
+                assertTrue(failure is RecorderGuardedWriteException)
+                assertEquals(rowCount, (failure as RecorderGuardedWriteException).actualRowCount)
+                assertEquals(before, databaseSnapshot())
+            } finally {
+                database.openHelper.writableDatabase.execSQL("DROP TRIGGER activity_guard")
+            }
+        }
+    }
+
+    @Test
+    fun sharedTimeContractAcceptsUtcAndFixedSecondOffsetsAndRejectsCorruptActivityTime() = runBlocking {
+        val sessions = listOf(
+            collectedSession().copy(startedAt = "2026-09-07T00:00:00Z", startZoneId = "UTC", startUtcOffsetSeconds = 0),
+            collectedSession().copy(startedAt = "2026-09-06T23:59:40Z", startZoneId = "+00:00:30", startUtcOffsetSeconds = 30)
+        )
+        for (session in sessions) {
+            val repository = WorkoutSessionRepository(database)
+            val base = frozenRequest()
+            val confirmed = repository.startCanonicalSession(FrozenCanonicalStartRequest(
+                session, base.initialPhase, base.binding, emptyList()))
+            validateSessionTimeMetadata(requireGraph(SESSION_ID).session)
+            assertEquals(session, requireGraph(SESSION_ID).session)
+            database.openHelper.writableDatabase.execSQL("UPDATE workout_sessions SET time_metadata_source_contract_version=2")
+            val before = databaseSnapshot()
+            val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+                confirmed, CanonicalTuple(0, 1), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY)) }.exceptionOrNull()
+            assertTrue(failure is RecorderValidationException)
+            assertEquals(before, databaseSnapshot())
+            repository.deleteAllSessions()
+        }
+        validateSessionTimeMetadata(canonicalSession())
+        assertTrue(databaseSnapshot().isEmpty())
+    }
+
+    @Test
+    fun malformedCollectedTimeIsRejectedBeforeCanonicalStart() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val before = databaseSnapshot()
+        val result = runCatching {
+            repository.startCanonicalSession(collectedSession().copy(startUtcOffsetSeconds = 0), initialPhase())
+        }
+        assertTrue("offset must match the frozen instant and zone", result.isFailure)
+        assertEquals(before, databaseSnapshot())
     }
 
     @Test
@@ -362,6 +903,24 @@ class WorkoutSessionRecorderGuardedWriteTest {
         sessionDisplayMetadataJson = VALID_DISPLAY_METADATA
     )
 
+    private fun collectedSession() = canonicalSession().copy(
+        startedAt = "2026-09-06T16:30:00Z",
+        startLocalDate = "2026-09-07",
+        startZoneId = "Asia/Shanghai",
+        startUtcOffsetSeconds = 28800,
+        timeMetadataSourceContractVersion = 1
+    )
+
+    private fun frozenRequest(recording: Boolean = false): FrozenCanonicalStartRequest {
+        val bindingId = HeartRateObservationBindingId()
+        return FrozenCanonicalStartRequest(
+            collectedSession(), initialPhase(),
+            HeartRateObservationBinding(bindingId, 500, HeartRateObservation(bindingId, 0, 500,
+                HeartRateObservationPayload.CurrentSnapshot(HeartRateObservationCause.LIVE))),
+            emptyList(), if (recording) activeRecording().copy(startedMutationSequence = 0) else null
+        )
+    }
+
     private fun initialPhase() = WorkoutPhaseIntervalEntity(
         id = PHASE_0_ID,
         sessionId = SESSION_ID,
@@ -507,7 +1066,10 @@ class WorkoutSessionRecorderGuardedWriteTest {
             "heart_rate_recordings" to "recording_id",
             "heart_rate_acquisition_intervals" to "id, sequence",
             "heart_rate_samples" to "recording_id, sample_sequence",
-            "heart_rate_analysis_snapshots" to "recording_id, analysis_version"
+            "heart_rate_analysis_snapshots" to "recording_id, analysis_version",
+            "session_step_records" to "session_id, id",
+            "timed_rest_extension_records" to "session_id, id",
+            "strength_set_records" to "session_id, id"
         ).flatMap { (table, orderBy) ->
             sql.query("SELECT * FROM $table ORDER BY $orderBy").use { cursor ->
                 buildList {

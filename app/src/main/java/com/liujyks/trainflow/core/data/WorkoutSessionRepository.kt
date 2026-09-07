@@ -26,6 +26,9 @@ import com.liujyks.trainflow.core.database.entity.StrengthSetRecordEntity
 import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.health.HeartRateObservation
+import com.liujyks.trainflow.core.health.HeartRateObservationBinding
+import com.liujyks.trainflow.core.health.HeartRateObservationPayload
 import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.SessionStatus
@@ -41,8 +44,11 @@ import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutSession
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -116,6 +122,37 @@ internal data class RecorderExpectedState(
     val recordingId: String? = null,
     val openAcquisitionId: String? = null
 )
+
+/** Values captured at the original Start cut; later receipts cannot extend this batch. */
+internal class FrozenCanonicalStartRequest(
+    val session: WorkoutSessionEntity,
+    val initialPhase: WorkoutPhaseIntervalEntity,
+    val binding: HeartRateObservationBinding,
+    receipts: List<HeartRateObservation>,
+    val recording: HeartRateRecordingEntity? = null,
+    val heartRateEnabledAtStart: Boolean = recording != null
+) {
+    val receipts: List<HeartRateObservation> = java.util.Collections.unmodifiableList(receipts.toList())
+}
+
+internal data class CanonicalActivityRequest(
+    val expected: RecorderExpectedState,
+    val nextTuple: CanonicalTuple,
+    val nextStatus: String = expected.status,
+    val nextPhase: WorkoutPhaseIntervalEntity? = null,
+    val nextAcquisition: HeartRateAcquisitionIntervalEntity? = null,
+    val newRecording: HeartRateRecordingEntity? = null,
+    val nextDisplayMetadataJson: String? = null,
+    val sample: HeartRateSampleEntity? = null,
+    val restExtension: TimedRestExtensionRecordEntity? = null
+)
+
+internal sealed interface CanonicalStartResolution {
+    data class Committed(val confirmedState: RecorderExpectedState) : CanonicalStartResolution
+    data object RolledBack : CanonicalStartResolution
+    data object ConflictingGraph : CanonicalStartResolution
+    data object Unresolved : CanonicalStartResolution
+}
 
 internal data class RecordingFinalizationRequest(
     val sessionId: String,
@@ -360,9 +397,161 @@ internal class WorkoutSessionRepository(
     }
 
     suspend fun startCanonicalSession(
+        request: FrozenCanonicalStartRequest
+    ): RecorderExpectedState {
+        val candidate = frozenStartGraph(request)
+        requireRecorderGateSucceeded()
+        database.withTransaction {
+            if (!startExecutionRowsAreEmpty(request.session.id)) {
+                throw RecorderValidationException("start_has_execution_rows")
+            }
+            requireInserted("insert_canonical_session", dao.insertSession(candidate.session))
+            candidate.phases.forEach { requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(it)) }
+            candidate.recording?.let { requireInserted("insert_recording", canonicalDao.insertRecording(it)) }
+            candidate.acquisitions.forEach {
+                requireInserted("insert_initial_acquisition", canonicalDao.insertAcquisitionInterval(it))
+            }
+            candidate.samples.forEach { requireInserted("insert_initial_sample", canonicalDao.insertSample(it)) }
+            val persisted = requireNotNull(loadCanonicalGraph(request.session.id))
+            requireValidGraph(persisted)
+            if (persisted != candidate || !startExecutionRowsAreEmpty(request.session.id)) {
+                throw RecorderValidationException("start_graph_changed_during_write")
+            }
+        }
+        return candidate.confirmedState()
+    }
+
+    /** The caller supplies the exact original Start job, never a replacement or a later retry. */
+    suspend fun resolveCanonicalStart(
+        request: FrozenCanonicalStartRequest,
+        startOperation: Job
+    ): CanonicalStartResolution {
+        if (!startOperation.isCompleted) return CanonicalStartResolution.Unresolved
+        val candidate = frozenStartGraph(request)
+        return database.withTransaction {
+            val rows = canonicalDao.canonicalGraphRows(request.session.id)
+            val executionEmpty = startExecutionRowsAreEmpty(request.session.id)
+            if (rows == null) {
+                if (executionEmpty && canonicalDao.phaseIntervals(request.session.id).isEmpty() &&
+                    canonicalDao.recordingsForSession(request.session.id).isEmpty()) {
+                    CanonicalStartResolution.RolledBack
+                } else CanonicalStartResolution.ConflictingGraph
+            } else if (executionEmpty && rows.toCanonicalGraphOrNull() == candidate) {
+                CanonicalStartResolution.Committed(candidate.confirmedState())
+            } else CanonicalStartResolution.ConflictingGraph
+        }
+    }
+
+    private suspend fun startExecutionRowsAreEmpty(sessionId: String): Boolean =
+        dao.stepRecordsForSession(sessionId).isEmpty() &&
+            dao.restExtensionRecordsForSession(sessionId).isEmpty() &&
+            dao.strengthSetRecordsForSession(sessionId).isEmpty()
+
+    suspend fun applyCanonicalActivity(request: CanonicalActivityRequest): RecorderExpectedState {
+        requireRecorderGateSucceeded()
+        val expected = request.expected
+        val cut = request.nextTuple
+        return database.withTransaction {
+            val graph = validatedExpectedGraph(expected)
+            val previousExtensions = dao.restExtensionRecordsForSession(expected.sessionId)
+            requireNextTuple(expected.durableTuple, cut)
+            if (cut.mutationSequence != Math.addExact(expected.durableTuple.mutationSequence, 1) ||
+                request.nextStatus !in setOf("active", "paused")) {
+                throw RecorderValidationException("invalid_activity_cut")
+            }
+            if (request.nextStatus != expected.status && request.nextPhase == null) {
+                throw RecorderValidationException("status_change_requires_phase_cut")
+            }
+            val phases = request.nextPhase?.let { next ->
+                if (CanonicalTuple(next.startOffsetMs, next.startMutationSequence) != cut) {
+                    throw RecorderValidationException("phase_tuple_must_equal_next_input_cut")
+                }
+                graph.phases.dropLast(1) + graph.phases.last().copy(
+                    endOffsetMs = cut.offsetMs, endMutationSequence = cut.mutationSequence, openMarker = null
+                ) + next
+            } ?: graph.phases
+            val recording = request.newRecording ?: graph.recording
+            if (request.newRecording != null && (graph.recording != null || request.nextAcquisition == null ||
+                    CanonicalTuple(request.newRecording.startedOffsetMs,
+                        request.newRecording.startedMutationSequence) != cut)) {
+                throw RecorderGuardedWriteException("expected_first_recording_at_input_cut", 0)
+            }
+            val acquisitions = request.nextAcquisition?.let { next ->
+                if (CanonicalTuple(next.startOffsetMs, next.startMutationSequence) != cut) {
+                    throw RecorderValidationException("acquisition_tuple_must_equal_next_input_cut")
+                }
+                if (request.newRecording != null) listOf(next) else {
+                    if (graph.recording == null) throw RecorderGuardedWriteException("expected_recording", 0)
+                    graph.acquisitions.dropLast(1) + graph.acquisitions.last().copy(
+                        endOffsetMs = cut.offsetMs, endMutationSequence = cut.mutationSequence, openMarker = null
+                    ) + next
+                }
+            } ?: graph.acquisitions
+            request.nextDisplayMetadataJson?.let { nextJson ->
+                requireValidation(SessionDisplayMetadataV1Validator.validateTransition(
+                    requireNotNull(graph.session.sessionDisplayMetadataJson), nextJson, terminal = false
+                ), "invalid_session_display_metadata_contract")
+            }
+            request.sample?.let { sample ->
+                if (CanonicalTuple(sample.offsetMs, sample.mutationSequence) != cut) {
+                    throw RecorderValidationException("sample_tuple_must_equal_next_input_cut")
+                }
+            }
+            request.restExtension?.let { extension ->
+                if (graph.session.mode != "timed" || extension.sessionId != expected.sessionId ||
+                    extension.id.isEmpty() || extension.stepId.isEmpty() || extension.restStageTitle.isEmpty() ||
+                    extension.stepIndex < 0 || (extension.roundIndex != null && extension.roundIndex <= 0) ||
+                    extension.addedSec <= 0 || extension.plannedRestSec <= 0 ||
+                    extension.restElapsedBeforeExtensionSec < 0 || extension.extensionAtRemainingSec < 0 ||
+                    extension.cumulativeExtraRestSec < extension.addedSec || extension.eventElapsedSec < 0) {
+                    throw RecorderValidationException("invalid_timed_rest_extension")
+                }
+            }
+            val candidate = graph.copy(
+                session = graph.session.copy(status = request.nextStatus,
+                    lastDurableOffsetMs = cut.offsetMs, lastMutationSequence = cut.mutationSequence,
+                    sessionDisplayMetadataJson = request.nextDisplayMetadataJson ?: graph.session.sessionDisplayMetadataJson),
+                phases = phases, recording = recording, acquisitions = acquisitions,
+                samples = request.sample?.let { graph.samples + it } ?: graph.samples
+            )
+            requireValidGraph(candidate)
+            requireExactlyOne("advance_canonical_header", dao.advanceCanonicalHeader(
+                expected.sessionId, expected.status, expected.durableTuple.offsetMs,
+                expected.durableTuple.mutationSequence, expected.openPhaseId, expected.recordingId,
+                expected.openAcquisitionId, cut.offsetMs, cut.mutationSequence,
+                request.nextStatus, request.nextDisplayMetadataJson
+            ))
+            request.nextPhase?.let { next ->
+                requireExactlyOne("close_open_phase", canonicalDao.closeOpenPhase(
+                    expected.sessionId, request.nextStatus, expected.openPhaseId, cut.offsetMs, cut.mutationSequence))
+                requireInserted("insert_next_phase", canonicalDao.insertPhaseInterval(next))
+            }
+            request.newRecording?.let { requireInserted("insert_recording", canonicalDao.insertRecording(it)) }
+            request.nextAcquisition?.let { next ->
+                if (request.newRecording == null) {
+                    requireExactlyOne("close_open_acquisition", canonicalDao.closeOpenAcquisition(
+                        requireNotNull(expected.recordingId), request.nextStatus,
+                        requireNotNull(expected.openAcquisitionId), cut.offsetMs, cut.mutationSequence))
+                }
+                requireInserted("insert_next_acquisition", canonicalDao.insertAcquisitionInterval(next))
+            }
+            request.sample?.let { requireInserted("insert_sample", canonicalDao.insertSample(it)) }
+            request.restExtension?.let { requireInserted("insert_rest_extension", canonicalDao.insertRestExtension(it)) }
+            val persisted = requireNotNull(loadCanonicalGraph(expected.sessionId))
+            requireValidGraph(persisted)
+            val expectedExtensions = (previousExtensions + listOfNotNull(request.restExtension)).sortedBy { it.id }
+            if (persisted != candidate || dao.restExtensionRecordsForSession(expected.sessionId) != expectedExtensions) {
+                throw RecorderValidationException("activity_graph_changed_during_write")
+            }
+            candidate.confirmedState()
+        }
+    }
+
+    suspend fun startCanonicalSession(
         session: WorkoutSessionEntity,
         initialPhase: WorkoutPhaseIntervalEntity
     ): RecorderReconciliationResult.Succeeded {
+        validateSessionTimeMetadata(session)
         val gate = requireRecorderGateSucceeded()
         val candidate = CanonicalSessionGraphV1(
             session = session,
@@ -582,6 +771,7 @@ internal class WorkoutSessionRepository(
     ): CanonicalSessionGraphV1 {
         val graph = loadCanonicalGraph(expected.sessionId)
             ?: throw RecorderGuardedWriteException("expected_session", 0)
+        validateSessionTimeMetadata(graph.session)
         requireValidGraph(graph)
         val sessionTuple = CanonicalTuple(
             graph.session.lastDurableOffsetMs
@@ -1216,6 +1406,108 @@ private sealed interface RecorderGateClassification {
     data class Failure(
         val failure: RecorderManualResolutionFailure
     ) : RecorderGateClassification
+}
+
+/** S03 write and S08B read boundary share this definition; old uncollected rows stay legal. */
+internal fun validateSessionTimeMetadata(session: WorkoutSessionEntity, requireCollected: Boolean = false) {
+    val values = listOf(session.startLocalDate, session.startZoneId,
+        session.startUtcOffsetSeconds, session.timeMetadataSourceContractVersion)
+    if (values.all { it == null } && !requireCollected) return
+    if (values.any { it == null }) throw RecorderValidationException("incomplete_start_time_metadata")
+    if (session.timeMetadataSourceContractVersion != 1L) {
+        throw RecorderValidationException("unsupported_time_metadata_source_contract_version")
+    }
+    val instant = Instant.parse(requireNotNull(session.startedAt))
+    val zone = ZoneId.of(requireNotNull(session.startZoneId))
+    val date = LocalDate.parse(requireNotNull(session.startLocalDate))
+    val zoned = instant.atZone(zone)
+    if (date.toString() != session.startLocalDate || date != zoned.toLocalDate() ||
+        zoned.offset.totalSeconds.toLong() != session.startUtcOffsetSeconds) {
+        throw RecorderValidationException("start_time_metadata_source_mismatch")
+    }
+}
+
+private fun CanonicalSessionGraphV1.confirmedState() = RecorderExpectedState(
+    session.id, session.status,
+    CanonicalTuple(requireNotNull(session.lastDurableOffsetMs), requireNotNull(session.lastMutationSequence)),
+    phases.last().id, recording?.recordingId, acquisitions.lastOrNull()?.id
+)
+
+private fun frozenStartGraph(request: FrozenCanonicalStartRequest): CanonicalSessionGraphV1 {
+    validateSessionTimeMetadata(request.session, requireCollected = true)
+    val binding = request.binding
+    val snapshot = binding.snapshot
+    if (snapshot.bindingId !== binding.bindingId || snapshot.receipt != 0L ||
+        snapshot.elapsedRealtimeMs != binding.anchorElapsedRealtimeMs ||
+        snapshot.payload !is HeartRateObservationPayload.CurrentSnapshot) {
+        throw RecorderValidationException("invalid_start_snapshot")
+    }
+    if (request.session.status != "active" || request.session.lastDurableOffsetMs != 0L ||
+        request.session.lastMutationSequence != 0L || request.initialPhase.startMutationSequence != 0L ||
+        request.session.endedAt != null || request.session.totalElapsedSec != null ||
+        request.session.effectiveElapsedSec != null || request.session.pausedElapsedSec != null) {
+        throw RecorderValidationException("invalid_start_cut")
+    }
+    val recording = request.recording
+    if (request.heartRateEnabledAtStart != (recording != null)) {
+        throw RecorderValidationException("initial_recording_intent_identity_mismatch")
+    }
+    if (recording != null && (recording.startedOffsetMs != 0L || recording.startedMutationSequence != 0L ||
+            recording.sessionId != request.session.id)) {
+        throw RecorderValidationException("invalid_initial_recording_cut")
+    }
+    var device = CanonicalHeartRateObservationMapper.map(snapshot.payload.cause)
+    val acquisitions = mutableListOf<HeartRateAcquisitionIntervalEntity>()
+    val samples = mutableListOf<HeartRateSampleEntity>()
+    fun acquisition(sequence: Int, tuple: CanonicalTuple) = HeartRateAcquisitionIntervalEntity(
+        id = "${requireNotNull(recording).recordingId}:acquisition:$sequence",
+        recordingId = recording.recordingId, sequence = sequence,
+        startOffsetMs = tuple.offsetMs, endOffsetMs = null,
+        startMutationSequence = tuple.mutationSequence, endMutationSequence = null,
+        openMarker = 1, recordingIntent = "expected_recording", intentReason = null,
+        deviceState = device.deviceState, deviceReason = device.deviceReason
+    )
+    var tuple = CanonicalTuple(0, 0)
+    if (recording != null) acquisitions += acquisition(0, tuple)
+    var receipt = 0L
+    var elapsed = binding.anchorElapsedRealtimeMs
+    for (observation in request.receipts) {
+        receipt = Math.addExact(receipt, 1)
+        if (observation.bindingId !== binding.bindingId || observation.receipt != receipt ||
+            observation.elapsedRealtimeMs < elapsed) {
+            throw RecorderValidationException("invalid_initialization_receipt_order")
+        }
+        elapsed = observation.elapsedRealtimeMs
+        val offset = Math.subtractExact(elapsed, binding.anchorElapsedRealtimeMs)
+        when (val payload = observation.payload) {
+            is HeartRateObservationPayload.CurrentSnapshot ->
+                throw RecorderValidationException("snapshot_only_at_receipt_zero")
+            is HeartRateObservationPayload.RuntimeTransition -> {
+                val nextDevice = CanonicalHeartRateObservationMapper.map(payload.cause)
+                if (device != nextDevice) {
+                    device = nextDevice
+                    if (recording != null) {
+                        tuple = CanonicalTuple(offset, Math.addExact(tuple.mutationSequence, 1))
+                        val previous = acquisitions.removeAt(acquisitions.lastIndex)
+                        acquisitions += previous.copy(endOffsetMs = offset,
+                            endMutationSequence = tuple.mutationSequence, openMarker = null)
+                        acquisitions += acquisition(Math.addExact(previous.sequence, 1), tuple)
+                    }
+                }
+            }
+            is HeartRateObservationPayload.ValidMeasurement -> if (recording != null) {
+                tuple = CanonicalTuple(offset, Math.addExact(tuple.mutationSequence, 1))
+                samples += HeartRateSampleEntity(recording.recordingId, samples.size.toLong(),
+                    offset, tuple.mutationSequence, payload.bpm)
+            }
+        }
+    }
+    return CanonicalSessionGraphV1(
+        session = request.session.copy(lastDurableOffsetMs = tuple.offsetMs,
+            lastMutationSequence = tuple.mutationSequence),
+        phases = listOf(request.initialPhase), recording = recording,
+        acquisitions = acquisitions, samples = samples
+    ).also(::requireValidGraph)
 }
 
 private fun CanonicalSessionGraphRows.toCanonicalGraphOrNull(): CanonicalSessionGraphV1? {

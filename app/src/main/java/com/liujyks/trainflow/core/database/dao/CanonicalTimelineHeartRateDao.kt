@@ -11,6 +11,7 @@ import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 
 @Dao
 interface CanonicalTimelineHeartRateDao {
@@ -25,6 +26,9 @@ interface CanonicalTimelineHeartRateDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSample(sample: HeartRateSampleEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRestExtension(record: TimedRestExtensionRecordEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAnalysisSnapshot(snapshot: HeartRateAnalysisSnapshotEntity)
