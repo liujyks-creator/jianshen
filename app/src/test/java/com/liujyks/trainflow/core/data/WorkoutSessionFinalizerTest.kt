@@ -44,6 +44,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertSame
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
 import org.junit.Before
 import org.junit.Test
 import org.junit.Rule
@@ -76,6 +79,199 @@ class WorkoutSessionFinalizerTest {
     @After
     fun closeDatabase() {
         database.close()
+    }
+
+    @Test
+    fun preflightRejectionsRemainUnclaimedButRealFailureAfterStartCannotUseClearException() = runBlocking {
+        val (repository, token) = admittedFinalizer()
+        val header = WorkoutSessionEntity(SESSION_ID, mode = "timed", status = "active", planSnapshotJson = VALID_PLAN_SNAPSHOT,
+            timelineVersion = 1, lastDurableOffsetMs = 0, lastMutationSequence = 0,
+            displayMetadataContractVersion = 1, sessionDisplayMetadataJson = VALID_DISPLAY_METADATA)
+        val phase = WorkoutPhaseIntervalEntity(PHASE_ID, SESSION_ID, 0, 0, null, 0, null, 1, "timed_work", VALID_PHASE_IDENTITY)
+        repository.startCanonicalSession(token, header, phase)
+        val expected = RecorderExpectedState(SESSION_ID, "active", CanonicalTuple(0, 0), PHASE_ID)
+        val invalid = terminalRequest(expected = expected, status = "active", steps = emptyList(), snapshotCreatedAt = null)
+        assertTrue(runCatching { repository.finalizeCanonicalSession(token, invalid) }
+            .exceptionOrNull() is RecorderValidationException)
+        val stale = terminalRequest(expected = expected.copy(durableTuple = CanonicalTuple(0, 1)),
+            steps = emptyList(), snapshotCreatedAt = null)
+        assertTrue(runCatching { repository.finalizeCanonicalSession(token, stale) }
+            .exceptionOrNull() is RecorderGuardedWriteException)
+        val active = repository.applyCanonicalActivity(token, CanonicalActivityRequest(expected, CanonicalTuple(1, 1)))
+        val frozen = FrozenCanonicalFinalizationRequest(active, 2, "completed", "completed",
+            null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null)
+        val before = databaseSnapshot()
+        guardedUpdateMutation = { sql ->
+            if (sql.startsWith("SELECT * FROM workout_sessions WHERE id")) {
+                guardedUpdateMutation = null
+                database.openHelper.writableDatabase.execSQL("ALTER TABLE workout_sessions RENAME TO unavailable_started_session")
+            }
+        }
+        val original = requireNotNull(runCatching { repository.finalizeCanonicalSession(token, frozen) }.exceptionOrNull())
+        assertTrue(original is android.database.sqlite.SQLiteException)
+        assertSame(original, runCatching { repository.applyCanonicalActivity(token,
+            CanonicalActivityRequest(active, CanonicalTuple(2, 2))) }.exceptionOrNull())
+        repository.beginOwnerClearHandoff(token)
+        assertSame(original, runCatching { repository.finalizeCanonicalSession(token, frozen) }.exceptionOrNull())
+        assertEquals(before, databaseSnapshot())
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED,
+            (runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException).disposition)
+    }
+
+    @Test
+    fun terminalPreClaimReadFailurePreservesIntentAndEarliestErrorAcrossClear() = runBlocking {
+        for (recordingEntry in listOf(false, true)) for (clear in listOf("none", "before", "after")) {
+            resetDatabase()
+            val (repository, token) = admittedFinalizer()
+            seedActiveRecording()
+            freezeStartMetadata()
+            val frozen = terminalRequest()
+            val before = databaseSnapshot()
+            if (clear == "before") repository.beginOwnerClearHandoff(token)
+            val readReached = AtomicBoolean(false)
+            guardedUpdateMutation = { sql ->
+                if (sql.startsWith("SELECT * FROM workout_sessions WHERE id")) {
+                    readReached.set(true)
+                    guardedUpdateMutation = null
+                    database.openHelper.writableDatabase.execSQL("ALTER TABLE workout_sessions RENAME TO unavailable_terminal_sessions")
+                }
+            }
+            val original = requireNotNull(runCatching {
+                if (recordingEntry) repository.finalizeRecordingSession(token, request())
+                else repository.finalizeCanonicalSession(token, frozen)
+            }.exceptionOrNull())
+            assertTrue(readReached.get())
+            assertTrue(original is android.database.sqlite.SQLiteException)
+            assertTrue(original.message.orEmpty().contains("no such table: workout_sessions"))
+            guardedUpdateMutation = null
+            assertEquals(before, databaseSnapshot())
+            if (clear == "after") repository.beginOwnerClearHandoff(token)
+            val conflict = runCatching {
+                if (recordingEntry) repository.finalizeRecordingSession(token, request(finalOffsetMs = 2_001))
+                else repository.finalizeCanonicalSession(token, terminalRequest(finalOffsetMs = 2_001))
+            }.exceptionOrNull()
+            assertTrue("a real pre-claim failure must retain the original intent: $conflict",
+                conflict is CanonicalFinalizationConflictException)
+            assertTrue(runCatching { repository.applyCanonicalActivity(token,
+                CanonicalActivityRequest(frozen.expected, CanonicalTuple(1_001, 4))) }.isFailure)
+            assertEquals(before, databaseSnapshot())
+            if (clear == "none") {
+                guardedUpdateMutation = { sql ->
+                    if (sql.startsWith("SELECT * FROM workout_sessions WHERE id")) {
+                        guardedUpdateMutation = null
+                        database.openHelper.writableDatabase.execSQL("ALTER TABLE heart_rate_recordings RENAME TO unavailable_terminal_recordings")
+                    }
+                }
+                val later = runCatching {
+                    if (recordingEntry) repository.finalizeRecordingSession(token, request())
+                    else repository.finalizeCanonicalSession(token, frozen)
+                }.exceptionOrNull()
+                assertSame(original, later)
+                assertTrue(original.suppressed.isNotEmpty())
+                guardedUpdateMutation = null
+                if (recordingEntry) repository.finalizeRecordingSession(token, request())
+                else repository.finalizeCanonicalSession(token, frozen)
+                assertEquals("completed", requireGraph().session.status)
+            } else {
+                val retry = runCatching {
+                    if (recordingEntry) repository.finalizeRecordingSession(token, request())
+                    else repository.finalizeCanonicalSession(token, frozen)
+                }.exceptionOrNull()
+                assertSame(original, retry)
+                assertEquals(before, databaseSnapshot())
+                assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED,
+                    (runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException).disposition)
+            }
+        }
+    }
+
+    @Test
+    fun currentOwnerCannotRecoverAnotherSessionsTerminalOrAcquireItsReleaseEligibility() = runBlocking {
+        val (repository, oldToken) = admittedFinalizer()
+        seedActiveRecording()
+        freezeStartMetadata()
+        val frozen = terminalRequest()
+        repository.finalizeCanonicalSession(oldToken, frozen)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        repository.releaseRecorderAfterTerminal(oldToken, runtime)
+        val currentSession = requireGraph().session.copy(id = "current-session", status = "active",
+            endedAt = null, totalElapsedSec = null, effectiveElapsedSec = null, pausedElapsedSec = null,
+            lastDurableOffsetMs = 0, lastMutationSequence = 0, trustedEndOffsetMs = null, terminalReason = null)
+        val currentPhase = requireGraph().phases.single().copy(id = "current-phase", sessionId = currentSession.id,
+            endOffsetMs = null, endMutationSequence = null, openMarker = 1)
+        val current = repository.admitRecorder("current", currentSession, currentPhase)
+        runtime.bindObservations(current.bindingId) {}
+        repository.startCanonicalSession(current.ownerToken, currentSession, currentPhase)
+        val before = databaseSnapshot()
+        val calls: List<suspend () -> Unit> = listOf(
+            { repository.finalizeCanonicalSession(current.ownerToken, frozen) },
+            { repository.finalizeRecordingSession(current.ownerToken, request()) })
+        calls.forEach { call ->
+            val failure = runCatching { call() }.exceptionOrNull()
+            assertTrue("historical terminal cannot authorize current owner release: $failure", failure is RecorderValidationException)
+            assertEquals("owner_session_mismatch", (failure as RecorderValidationException).code)
+            assertTrue(runCatching { repository.releaseRecorderAfterTerminal(current.ownerToken, runtime) }
+                .exceptionOrNull() is RecorderCleanupUnresolvedException)
+            assertSame(current, repository.admitRecorder("current", currentSession, currentPhase))
+            assertTrue(runtime.queryObservationBinding(current.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+            assertEquals(before, databaseSnapshot())
+        }
+        repository.applyCanonicalActivity(current.ownerToken, CanonicalActivityRequest(
+            RecorderExpectedState(currentSession.id, "active", CanonicalTuple(0, 0), currentPhase.id), CanonicalTuple(1, 1)))
+        assertEquals(1L, database.canonicalTimelineHeartRateDao().sessionById(currentSession.id)?.lastMutationSequence)
+    }
+
+    @Test
+    fun recordingCommitDeliveryLossRecoversOnlyOriginalOwnerWithoutWritingAgain() = runBlocking {
+        for (clear in listOf(false, true)) {
+            resetDatabase()
+            val (repository, token) = admittedFinalizer()
+            val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+            val header = WorkoutSessionEntity(SESSION_ID, mode = "timed", status = "active", planSnapshotJson = VALID_PLAN_SNAPSHOT,
+                timelineVersion = 1, lastDurableOffsetMs = 0, lastMutationSequence = 0,
+                displayMetadataContractVersion = 1, sessionDisplayMetadataJson = VALID_DISPLAY_METADATA)
+            val phase = WorkoutPhaseIntervalEntity(PHASE_ID, SESSION_ID, 0, 0, null, 0, null, 1, "timed_work", VALID_PHASE_IDENTITY)
+            val admission = repository.admitRecorder("terminal-entry", header, phase)
+            runtime.bindObservations(admission.bindingId) {}
+            seedActiveRecording()
+            val frozen = request()
+            val dispatches = LinkedBlockingQueue<Runnable>()
+            val dispatcher = object : CoroutineDispatcher() {
+                override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+            }
+            var delivered = false
+            val operation = async(dispatcher) { repository.finalizeRecordingSession(token, frozen); delivered = true }
+            requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+            val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+            val durable = requireGraph()
+            assertEquals("completed", durable.session.status)
+            assertEquals(1, durable.recording?.originalAnalysisVersion)
+            assertEquals(1, durable.snapshots.size)
+            assertFalse(delivered)
+            if (clear) repository.beginOwnerClearHandoff(token)
+            operation.cancel(CancellationException("recording_commit_delivery_lost"))
+            delivery.run()
+            assertTrue(runCatching { operation.await() }.exceptionOrNull() is CancellationException)
+            val committed = databaseSnapshot()
+            database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER forbid_recording_rewrite
+                BEFORE UPDATE ON heart_rate_recordings BEGIN SELECT RAISE(ABORT,'recording_rewritten'); END""")
+            database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER forbid_repeated_analysis
+                BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'analysis_repeated'); END""")
+            assertTrue(runCatching { repository.finalizeRecordingSession(token, frozen.copy(finalOffsetMs = 2_001)) }
+                .exceptionOrNull() is CanonicalFinalizationConflictException)
+            assertTrue(runCatching { repository.releaseRecorderAfterTerminal(token, runtime) }
+                .exceptionOrNull() is RecorderCleanupUnresolvedException)
+            val result = repository.finalizeRecordingSession(token, frozen.copy(snapshotCreatedAt = "later_metadata"))
+            assertEquals(CanonicalTuple(2_000, 4), result.finalTuple)
+            assertEquals(durable, requireGraph())
+            assertEquals(committed, databaseSnapshot())
+            assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+            repository.releaseRecorderAfterTerminal(token, runtime)
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            assertTrue(repository.prepareRecorder() is RecorderReconciliationResult.Succeeded)
+            assertEquals(committed, databaseSnapshot())
+            assertTrue(repository.admitRecorder("next", header, phase).ownerToken !== token)
+        }
     }
 
     @Test
@@ -642,13 +838,13 @@ class WorkoutSessionFinalizerTest {
 
 
     /** Each fixture uses the real admission gate before its active rows are installed. */
-    private suspend fun admittedFinalizer(): Pair<WorkoutSessionRepository, RecorderOwnerToken> {
+    private suspend fun admittedFinalizer(sessionId: String = SESSION_ID): Pair<WorkoutSessionRepository, RecorderOwnerToken> {
         val repository = WorkoutSessionRepository(database)
         val admission = repository.admitRecorder("terminal-entry",
-            WorkoutSessionEntity(SESSION_ID, mode = "timed", status = "active", planSnapshotJson = VALID_PLAN_SNAPSHOT,
+            WorkoutSessionEntity(sessionId, mode = "timed", status = "active", planSnapshotJson = VALID_PLAN_SNAPSHOT,
                 timelineVersion = 1, lastDurableOffsetMs = 0, lastMutationSequence = 0,
                 displayMetadataContractVersion = 1, sessionDisplayMetadataJson = VALID_DISPLAY_METADATA),
-            WorkoutPhaseIntervalEntity(PHASE_ID, SESSION_ID, 0, 0, null, 0, null, 1, "timed_work", VALID_PHASE_IDENTITY))
+            WorkoutPhaseIntervalEntity(PHASE_ID, sessionId, 0, 0, null, 0, null, 1, "timed_work", VALID_PHASE_IDENTITY))
         return repository to admission.ownerToken
     }
 
@@ -769,7 +965,8 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun identityStatusAndTupleSubstitutionsFailBeforeFirstWriteWithExactNoMutation() = runBlocking {
-        val writers = List(5) { admittedFinalizer() }
+        // Preserve the missing-session storage guard behind a matching, independently admitted owner.
+        val writers = List(5) { admittedFinalizer(if (it == 0) "other-session" else SESSION_ID) }
         seedActiveRecording()
         val before = databaseSnapshot()
         val substitutions = listOf(

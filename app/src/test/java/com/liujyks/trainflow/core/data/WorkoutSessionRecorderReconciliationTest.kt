@@ -70,6 +70,58 @@ class WorkoutSessionRecorderReconciliationTest {
     }
 
     @Test
+    fun delayedAdmissionRescansAfterAnotherOwnerLifecycleAndJoinsTheCurrentScan() = runBlocking {
+        val scanDispatches = LinkedBlockingQueue<Runnable>()
+        val admissionDispatches = LinkedBlockingQueue<Runnable>()
+        val scanDispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { scanDispatches.add(block) }
+        }
+        val admissionDispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { admissionDispatches.add(block) }
+        }
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val session = canonicalHeader("delayed-entry").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        supervisorScope {
+            val initialScan = async(scanDispatcher) { repository.prepareRecorder() }
+            requireNotNull(scanDispatches.poll(5, TimeUnit.SECONDS)).run()
+            val initialDelivery = requireNotNull(scanDispatches.poll(5, TimeUnit.SECONDS))
+            val delayed = async(admissionDispatcher) { repository.admitRecorder("delayed", session, phase) }
+            requireNotNull(admissionDispatches.poll(5, TimeUnit.SECONDS)).run()
+            initialDelivery.run()
+            val oldScan = initialScan.await()
+            val oldDelivery = requireNotNull(admissionDispatches.poll(5, TimeUnit.SECONDS))
+            val otherSession = session.copy(id = "intervening-owner")
+            val otherPhase = openPhase(otherSession.id)
+            val other = repository.admitRecorder("other", otherSession, otherPhase)
+            runtime.bindObservations(other.bindingId) {}
+            repository.startCanonicalSession(other.ownerToken, otherSession, otherPhase)
+            repository.finalizeCanonicalSession(other.ownerToken, FrozenCanonicalFinalizationRequest(
+                RecorderExpectedState(otherSession.id, "active", CanonicalTuple(0, 0), otherPhase.id),
+                1, "completed", "completed", null, null, null, null,
+                VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null))
+            repository.releaseRecorderAfterTerminal(other.ownerToken, runtime)
+            val refreshed = async(scanDispatcher) { runCatching { repository.prepareRecorder() } }
+            requireNotNull(scanDispatches.poll(5, TimeUnit.SECONDS)).run()
+            val refreshDelivery = requireNotNull(scanDispatches.poll(5, TimeUnit.SECONDS))
+            oldDelivery.run()
+            val admittedBeforeFreshScan = delayed.isCompleted
+            refreshDelivery.run()
+            if (!delayed.isCompleted) requireNotNull(admissionDispatches.poll(5, TimeUnit.SECONDS)).run()
+            val admission = delayed.await()
+            val freshScan = refreshed.await()
+            assertEquals("the old scan must not admit across a complete owner lifecycle", false, admittedBeforeFreshScan)
+            assertTrue(freshScan.isSuccess)
+            assertTrue(oldScan !== freshScan.getOrThrow())
+            runtime.bindObservations(admission.bindingId) {}
+            assertSame(freshScan.getOrThrow(), repository.startCanonicalSession(admission.ownerToken, session, phase))
+            assertEquals("active", database.canonicalTimelineHeartRateDao().sessionById(session.id)?.status)
+            assertEquals("completed", database.canonicalTimelineHeartRateDao().sessionById(otherSession.id)?.status)
+        }
+    }
+
+    @Test
     fun clearAfterActivityFailureKeepsTheOriginalCauseAndBindingUntilFreshProcess() = runBlocking {
         val repository = WorkoutSessionRepository(database)
         val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())

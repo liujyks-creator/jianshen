@@ -66,6 +66,118 @@ class WorkoutSessionRecorderGuardedWriteTest {
     }
 
     @Test
+    fun currentOwnerCannotApplyAnyActivityToAnotherSession() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val ownSession = canonicalSession().copy(id = "current-owner")
+        val ownPhase = initialPhase().copy(id = "current-phase", sessionId = ownSession.id)
+        val admission = repository.admitRecorder("current", ownSession, ownPhase)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        runtime.bindObservations(admission.bindingId) {}
+        repository.startCanonicalSession(admission.ownerToken, ownSession, ownPhase)
+        database.workoutSessionDao().insertSession(canonicalSession())
+        database.canonicalTimelineHeartRateDao().insertPhaseInterval(initialPhase())
+        val foreign = expected(CanonicalTuple(0, 0))
+        val cut = CanonicalTuple(1, 1)
+        val actions: List<suspend () -> Unit> = listOf(
+            { repository.applyCanonicalActivity(admission.ownerToken, CanonicalActivityRequest(foreign, cut)) },
+            { repository.appendSessionDisplayMetadata(admission.ownerToken, foreign, cut, VALID_DISPLAY_METADATA) },
+            { repository.transitionPhase(admission.ownerToken, foreign, cut, nextPhase("foreign-next", 1, 1)) },
+            { repository.startHeartRateRecording(admission.ownerToken, foreign, cut,
+                activeRecording().copy(startedOffsetMs = 1, startedMutationSequence = 1),
+                acquisition(ACQUISITION_0_ID, 0, cut, "live", null)) })
+        val before = databaseSnapshot()
+        actions.forEach { action ->
+            val failure = runCatching { action() }.exceptionOrNull()
+            assertTrue("foreign activity must fail owner/session authorization: $failure", failure is RecorderValidationException)
+            assertEquals("owner_session_mismatch", (failure as RecorderValidationException).code)
+            assertEquals(before, databaseSnapshot())
+        }
+        database.canonicalTimelineHeartRateDao().insertRecording(activeRecording().copy(startedMutationSequence = 0))
+        database.canonicalTimelineHeartRateDao().insertAcquisitionInterval(
+            acquisition(ACQUISITION_0_ID, 0, CanonicalTuple(0, 0), "live", null))
+        val withRecording = foreign.copy(recordingId = RECORDING_ID, openAcquisitionId = ACQUISITION_0_ID)
+        val recordingBefore = databaseSnapshot()
+        val recordingActions: List<suspend () -> Unit> = listOf(
+            { repository.transitionAcquisition(admission.ownerToken, withRecording, cut,
+                acquisition("foreign-next-acquisition", 1, cut, "live", null)) },
+            { repository.appendHeartRateSample(admission.ownerToken, withRecording, cut,
+                HeartRateSampleEntity(RECORDING_ID, 0, 1, 1, 90)) })
+        recordingActions.forEach { action ->
+            val failure = runCatching { action() }.exceptionOrNull()
+            assertTrue(failure is RecorderValidationException)
+            assertEquals("owner_session_mismatch", (failure as RecorderValidationException).code)
+            assertEquals(recordingBefore, databaseSnapshot())
+        }
+        assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        assertTrue(runCatching { repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime) }
+            .exceptionOrNull() is RecorderCleanupUnresolvedException)
+        repository.appendSessionDisplayMetadata(admission.ownerToken,
+            RecorderExpectedState(ownSession.id, "active", CanonicalTuple(0, 0), ownPhase.id), cut, VALID_DISPLAY_METADATA)
+        assertEquals(1L, requireGraph(ownSession.id).session.lastMutationSequence)
+    }
+
+    @Test
+    fun confirmedStartCannotClearAnIndependentCleanupFailure() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val token = owner(repository)
+        val request = frozenRequest(repository)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val original = kotlinx.coroutines.withContext(Dispatchers.Default) {
+            requireNotNull(runCatching { runtime.bindObservations(request.binding.bindingId) {} }.exceptionOrNull())
+        }
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        val operation = async(dispatcher) { repository.startCanonicalSession(token, request) }
+        requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(token, request, operation))
+        assertTrue(runCatching { repository.releaseRecorderBeforeStart(token, runtime, original) }.exceptionOrNull() === original)
+        assertTrue(original.suppressed.single() is RecorderCleanupUnresolvedException)
+        delivery.run()
+        operation.await()
+        val committed = repository.resolveCanonicalStart(token, request, operation) as CanonicalStartResolution.Committed
+        val before = databaseSnapshot()
+        val activity = runCatching { repository.applyCanonicalActivity(token,
+            CanonicalActivityRequest(committed.confirmedState, CanonicalTuple(1, 1))) }.exceptionOrNull()
+        assertTrue(activity is RecorderOwnerBusyException)
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, (activity as RecorderOwnerBusyException).disposition)
+        assertEquals(before, databaseSnapshot())
+        assertTrue(runCatching { repository.admitRecorder("new", request.session, request.initialPhase) }
+            .exceptionOrNull() is RecorderOwnerBusyException)
+    }
+
+    @Test
+    fun unresolvedStartWithoutClearResumesActivityOnlyAfterOriginalCommitIsConfirmed() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val ownerToken = owner(repository)
+        val request = frozenRequest(repository)
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        val operation = async(dispatcher) { repository.startCanonicalSession(ownerToken, request) }
+        requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(ownerToken, request, operation))
+        val blocked = runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, blocked.disposition)
+        delivery.run()
+        operation.await()
+        val resolution = repository.resolveCanonicalStart(ownerToken, request, operation) as CanonicalStartResolution.Committed
+        assertTrue(runCatching { repository.admitRecorder("other", request.session, request.initialPhase) }
+            .exceptionOrNull() is RecorderOwnerBusyException)
+        val active = repository.applyCanonicalActivity(ownerToken,
+            CanonicalActivityRequest(resolution.confirmedState, CanonicalTuple(1, 1)))
+        val result = repository.finalizeCanonicalSession(ownerToken, FrozenCanonicalFinalizationRequest(
+            active, 2, "completed", "completed", null, null, null, null,
+            requireNotNull(request.session.sessionDisplayMetadataJson), emptyList(), emptyList(), emptyList(), null))
+        assertEquals(CanonicalTuple(2, 2), result.finalTuple)
+        assertEquals("completed", requireGraph(SESSION_ID).session.status)
+    }
+
+    @Test
     fun frozenStartRejectsAnotherAdmissionBindingWithoutCreatingRows() = runBlocking {
         val repository = WorkoutSessionRepository(database)
         val other = WorkoutSessionRepository(database)
