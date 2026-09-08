@@ -20,6 +20,8 @@ import com.liujyks.trainflow.core.health.HeartRateObservationBinding
 import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
 import com.liujyks.trainflow.core.health.HeartRateObservationCause
 import com.liujyks.trainflow.core.health.HeartRateObservationPayload
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -64,9 +66,26 @@ class WorkoutSessionRecorderGuardedWriteTest {
     }
 
     @Test
+    fun frozenStartRejectsAnotherAdmissionBindingWithoutCreatingRows() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val other = WorkoutSessionRepository(database)
+        val admission = repository.admitRecorder("guarded-entry", canonicalSession(), initialPhase())
+        val foreign = other.admitRecorder("foreign-entry", canonicalSession(), initialPhase())
+        val binding = HeartRateObservationBinding(foreign.bindingId, 500,
+            HeartRateObservation(foreign.bindingId, 0, 500,
+                HeartRateObservationPayload.CurrentSnapshot(HeartRateObservationCause.NOT_OBSERVING)))
+        val request = FrozenCanonicalStartRequest(collectedSession(), initialPhase(), binding, emptyList())
+        val before = databaseSnapshot()
+        val failure = runCatching { repository.startCanonicalSession(admission.ownerToken, request) }.exceptionOrNull()
+        assertTrue("a different admission's binding must be rejected: $failure", failure is RecorderValidationException)
+        assertEquals("owner_binding_mismatch", (failure as RecorderValidationException).code)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
     fun frozenStartCommitsEveryReceiptAndNeverSamplesSnapshotOrLaterInput() = runBlocking {
         val repository = WorkoutSessionRepository(database)
-        val bindingId = HeartRateObservationBindingId()
+        val bindingId = repository.admitRecorder("guarded-entry", canonicalSession(), initialPhase()).bindingId
         val binding = HeartRateObservationBinding(
             bindingId, 500,
             HeartRateObservation(bindingId, 0, 500,
@@ -84,7 +103,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         )
         receipts += HeartRateObservation(bindingId, 4, 501, HeartRateObservationPayload.ValidMeasurement(99))
 
-        repository.startCanonicalSession(request)
+        repository.startCanonicalSession(owner(repository), request)
 
         val graph = requireGraph(SESSION_ID)
         assertEquals(request.recording, graph.recording)
@@ -108,7 +127,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val repository = recordingRepository()
         val recording = requireGraph(SESSION_ID).recording
         val cut = CanonicalTuple(0, 4)
-        repository.applyCanonicalActivity(CanonicalActivityRequest(
+        repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             expected(CanonicalTuple(0, 3), recordingId = RECORDING_ID, openAcquisitionId = ACQUISITION_0_ID),
             cut, nextStatus = "paused",
             nextPhase = pausedPhase().copy(startMutationSequence = 4),
@@ -134,20 +153,20 @@ class WorkoutSessionRecorderGuardedWriteTest {
     @Test
     fun startResolutionRejectsSameTupleGraphWithChangedSessionValue() = runBlocking {
         val repository = WorkoutSessionRepository(database)
-        val request = frozenRequest()
-        val operation = launch { repository.startCanonicalSession(request) }
+        val request = frozenRequest(repository)
+        val operation = launch { repository.startCanonicalSession(owner(repository), request) }
         operation.join()
         database.openHelper.writableDatabase.execSQL("UPDATE workout_sessions SET plan_id='changed' WHERE id='$SESSION_ID'")
         assertEquals(CanonicalStartResolution.ConflictingGraph,
-            repository.resolveCanonicalStart(request, operation))
+            repository.resolveCanonicalStart(owner(repository), request, operation))
     }
 
     @Test
     fun noHeartRateAndEnabledZeroSampleStartsHaveExactFrozenRows() = runBlocking {
         for (enabled in listOf(false, true)) {
-            val request = frozenRequest(enabled)
             val repository = WorkoutSessionRepository(database)
-            repository.startCanonicalSession(request)
+            val request = frozenRequest(repository, enabled)
+            repository.startCanonicalSession(owner(repository), request)
             val graph = requireGraph(SESSION_ID)
             assertEquals(request.session, graph.session)
             assertEquals(listOf(initialPhase()), graph.phases)
@@ -168,7 +187,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
     fun startFailuresAtCandidateInsertGuardAndReadbackRollbackAllNineTables() = runBlocking {
         val repository = WorkoutSessionRepository(database)
         repository.prepareRecorder()
-        val base = frozenRequest(true)
+        val base = frozenRequest(repository, true)
         val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, base.binding,
             listOf(HeartRateObservation(base.binding.bindingId, 1, 500, HeartRateObservationPayload.ValidMeasurement(88)),
                 HeartRateObservation(base.binding.bindingId, 2, 500, HeartRateObservationPayload.ValidMeasurement(88))),
@@ -176,7 +195,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val invalid = FrozenCanonicalStartRequest(request.session.copy(planSnapshotJson = "{}"),
             request.initialPhase, request.binding, request.receipts, request.recording)
         val before = databaseSnapshot()
-        val validation = runCatching { repository.startCanonicalSession(invalid) }.exceptionOrNull()
+        val validation = runCatching { repository.startCanonicalSession(owner(repository), invalid) }.exceptionOrNull()
         assertTrue(validation is RecorderValidationException)
         assertEquals(before, databaseSnapshot())
         val triggers = listOf(
@@ -190,7 +209,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         triggers.forEachIndexed { index, body ->
             database.openHelper.writableDatabase.execSQL("CREATE TRIGGER start_failure $body")
             try {
-                val failure = runCatching { repository.startCanonicalSession(request) }.exceptionOrNull()
+                val failure = runCatching { repository.startCanonicalSession(owner(repository), request) }.exceptionOrNull()
                 assertNotNull("stage $index must fail", failure)
                 when (index) {
                     0, 5 -> {
@@ -235,20 +254,20 @@ class WorkoutSessionRecorderGuardedWriteTest {
         )
         for (mutation in mutations) {
             val repository = WorkoutSessionRepository(database)
-            val base = frozenRequest(true)
+            val base = frozenRequest(repository, true)
             val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, base.binding,
                 listOf(HeartRateObservation(base.binding.bindingId, 1, 500, HeartRateObservationPayload.ValidMeasurement(88)),
                     HeartRateObservation(base.binding.bindingId, 2, 500, HeartRateObservationPayload.ValidMeasurement(88))),
                 base.recording)
-            val operation = launch { repository.startCanonicalSession(request) }
+            val operation = launch { repository.startCanonicalSession(owner(repository), request) }
             operation.join()
             val expected = expected(CanonicalTuple(0, 2), recordingId = RECORDING_ID,
                 openAcquisitionId = "$RECORDING_ID:acquisition:0")
-            assertEquals(CanonicalStartResolution.Committed(expected), repository.resolveCanonicalStart(request, operation))
+            assertEquals(CanonicalStartResolution.Committed(expected), repository.resolveCanonicalStart(owner(repository), request, operation))
             database.openHelper.writableDatabase.execSQL(mutation)
             val changed = databaseSnapshot()
             assertEquals(mutation, CanonicalStartResolution.ConflictingGraph,
-                repository.resolveCanonicalStart(request, operation))
+                repository.resolveCanonicalStart(owner(repository), request, operation))
             assertEquals(changed, databaseSnapshot())
             repository.deleteAllSessions()
         }
@@ -258,13 +277,14 @@ class WorkoutSessionRecorderGuardedWriteTest {
     fun lostStartDeliveryRecognizesCommittedRowsWithoutReinserting() = runBlocking {
         val repository = WorkoutSessionRepository(database)
         repository.prepareRecorder()
-        val request = frozenRequest(true)
+        val ownerToken = owner(repository)
+        val request = frozenRequest(repository, true)
         val dispatches = LinkedBlockingQueue<Runnable>()
         val dispatcher = object : CoroutineDispatcher() {
             override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
         }
         var delivered = false
-        val operation = async(dispatcher) { repository.startCanonicalSession(request); delivered = true }
+        val operation = async(dispatcher) { repository.startCanonicalSession(ownerToken, request); delivered = true }
         requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
         val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
         val committed = databaseSnapshot()
@@ -277,8 +297,52 @@ class WorkoutSessionRecorderGuardedWriteTest {
         assertTrue(failure is CancellationException)
         assertEquals(original.message, failure?.message)
         assertFalse(delivered)
-        assertTrue(repository.resolveCanonicalStart(request, operation) is CanonicalStartResolution.Committed)
+        val resolution = repository.resolveCanonicalStart(ownerToken, request, operation)
+        assertTrue(resolution is CanonicalStartResolution.Committed)
         assertEquals(committed, databaseSnapshot())
+    }
+
+    @Test
+    fun clearDuringLostStartDeliveryResolvesCommitThenTerminalizesAndReleases() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        repository.prepareRecorder()
+        val ownerToken = owner(repository)
+        val base = frozenRequest(repository, true)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val installed = runtime.bindObservations(base.binding.bindingId) {} as HeartRateBindingDisposition.MatchingInstalled
+        val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, installed.binding, emptyList(), base.recording)
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        var delivered = false
+        val operation = async(dispatcher) { repository.startCanonicalSession(ownerToken, request); delivered = true }
+        requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        val committed = databaseSnapshot()
+        assertEquals(request.recording, requireGraph(SESSION_ID).recording)
+        assertFalse(delivered)
+        repository.beginOwnerClearHandoff(ownerToken)
+        assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(ownerToken, request, operation))
+        val original = CancellationException("start_delivery_lost")
+        operation.cancel(original)
+        delivery.run()
+        val failure = runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals(original.message, failure?.message)
+        assertFalse(delivered)
+        val resolution = repository.resolveCanonicalStart(ownerToken, request, operation)
+        assertTrue(resolution is CanonicalStartResolution.Committed)
+        assertEquals(committed, databaseSnapshot())
+        val terminal = repository.finalizeCanonicalSession(ownerToken, FrozenCanonicalFinalizationRequest(
+            (resolution as CanonicalStartResolution.Committed).confirmedState, 1, "abandoned", "owner_cleared",
+            null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), "2026-09-07T00:00:00Z"))
+        assertEquals(CanonicalTuple(1, 1), terminal.finalTuple)
+        assertEquals("owner_cleared", requireGraph(SESSION_ID).session.terminalReason)
+        repository.releaseRecorderAfterTerminal(ownerToken, runtime)
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(base.binding.bindingId))
+        assertTrue(repository.prepareRecorder() is RecorderReconciliationResult.Succeeded)
     }
 
     @Test
@@ -297,11 +361,12 @@ class WorkoutSessionRecorderGuardedWriteTest {
             }, Executor { it.run() }).build()
         val repository = WorkoutSessionRepository(database)
         repository.prepareRecorder()
-        val request = frozenRequest(true)
-        val operation = async(Dispatchers.IO) { repository.startCanonicalSession(request) }
+        val ownerToken = owner(repository)
+        val request = frozenRequest(repository, true)
+        val operation = async(Dispatchers.IO) { repository.startCanonicalSession(ownerToken, request) }
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS))
-            assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(request, operation))
+            assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(ownerToken, request, operation))
             operation.cancel(CancellationException("start_rolled_back"))
         } finally {
             release.countDown()
@@ -309,21 +374,58 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val failure = runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull()
         assertTrue(failure is CancellationException)
         assertEquals("start_rolled_back", failure?.message)
-        assertEquals(CanonicalStartResolution.RolledBack, repository.resolveCanonicalStart(request, operation))
+        assertEquals(CanonicalStartResolution.RolledBack, repository.resolveCanonicalStart(ownerToken, request, operation))
         assertTrue(databaseSnapshot().isEmpty())
         database.openHelper.writableDatabase.execSQL("INSERT INTO session_step_records(id,session_id,step_id,kind,started_at,skipped) VALUES('orphan','$SESSION_ID','step','work','2026-09-06T16:30:00Z',0)")
-        assertEquals(CanonicalStartResolution.ConflictingGraph, repository.resolveCanonicalStart(request, operation))
+        assertEquals(CanonicalStartResolution.ConflictingGraph, repository.resolveCanonicalStart(ownerToken, request, operation))
+    }
+
+    @Test
+    fun clearDuringUnfinishedStartKeepsAdmissionBlockedUntilRollbackIsResolved() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val blockOnce = AtomicBoolean(true)
+        database.close()
+        database = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), TrainFlowDatabase::class.java)
+            .allowMainThreadQueries()
+            .setQueryCallback(RoomDatabase.QueryCallback { query, _ ->
+                if (query.contains("INSERT OR IGNORE INTO `workout_sessions`") && blockOnce.compareAndSet(true, false)) {
+                    entered.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                }
+            }, Executor { it.run() }).build()
+        val repository = WorkoutSessionRepository(database)
+        repository.prepareRecorder()
+        val ownerToken = owner(repository)
+        val request = frozenRequest(repository, true)
+        val operation = async(Dispatchers.IO) { repository.startCanonicalSession(ownerToken, request) }
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            repository.beginOwnerClearHandoff(ownerToken)
+            assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+            assertEquals(CanonicalStartResolution.Unresolved, repository.resolveCanonicalStart(ownerToken, request, operation))
+            operation.cancel(CancellationException("start_rolled_back"))
+        } finally {
+            release.countDown()
+        }
+        val failure = runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals("start_rolled_back", failure?.message)
+        assertEquals(CanonicalStartResolution.RolledBack, repository.resolveCanonicalStart(ownerToken, request, operation))
+        assertTrue(databaseSnapshot().isEmpty())
+        database.openHelper.writableDatabase.execSQL("INSERT INTO session_step_records(id,session_id,step_id,kind,started_at,skipped) VALUES('orphan','$SESSION_ID','step','work','2026-09-06T16:30:00Z',0)")
+        assertEquals(CanonicalStartResolution.ConflictingGraph, repository.resolveCanonicalStart(ownerToken, request, operation))
     }
 
     @Test
     fun frozenStartRejectsMissingRecordingForExpectedIntentAndInvalidTimeSources() = runBlocking {
         val repository = WorkoutSessionRepository(database)
-        val base = frozenRequest()
+        val base = frozenRequest(repository)
         val missingRecording = FrozenCanonicalStartRequest(base.session, base.initialPhase,
             base.binding, emptyList(), recording = null, heartRateEnabledAtStart = true)
         val before = databaseSnapshot()
         assertTrue("expected intent needs the initial recording in the same commit",
-            runCatching { repository.startCanonicalSession(missingRecording) }.isFailure)
+            runCatching { repository.startCanonicalSession(owner(repository), missingRecording) }.isFailure)
         val invalidSessions = listOf(
             canonicalSession(),
             collectedSession().copy(startedAt = null),
@@ -340,7 +442,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         invalidSessions.forEach { session ->
             val request = FrozenCanonicalStartRequest(session, base.initialPhase, base.binding,
                 emptyList())
-            assertTrue(session.toString(), runCatching { repository.startCanonicalSession(request) }.isFailure)
+            assertTrue(session.toString(), runCatching { repository.startCanonicalSession(owner(repository), request) }.isFailure)
             assertEquals(before, databaseSnapshot())
         }
     }
@@ -348,30 +450,30 @@ class WorkoutSessionRecorderGuardedWriteTest {
     @Test
     fun lateEnableOffOnResumeAndSameMillisecondSamplesKeepOneRecordingAndFrozenTime() = runBlocking {
         val repository = WorkoutSessionRepository(database)
-        repository.startCanonicalSession(frozenRequest())
+        repository.startCanonicalSession(owner(repository), frozenRequest(repository))
         val recording = activeRecording().copy(startedOffsetMs = 20, startedMutationSequence = 1)
         val first = acquisition(ACQUISITION_0_ID, 0, CanonicalTuple(20, 1), "live", null)
-        var confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+        var confirmed = repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             expected(CanonicalTuple(0, 0)), CanonicalTuple(20, 1), newRecording = recording, nextAcquisition = first))
         assertEquals(recording, requireGraph(SESSION_ID).recording)
         val afterEnable = databaseSnapshot()
-        val second = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+        val second = runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             confirmed, CanonicalTuple(20, 2), newRecording = recording.copy(recordingId = "second"),
             nextAcquisition = first.copy(id = "second", recordingId = "second"))) }
         assertTrue(second.exceptionOrNull() is RecorderGuardedWriteException)
         assertEquals(afterEnable, databaseSnapshot())
-        confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+        confirmed = repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             confirmed, CanonicalTuple(20, 2), nextStatus = "paused",
             nextPhase = pausedPhase().copy(startOffsetMs = 20, startMutationSequence = 2),
             nextAcquisition = acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(20, 2), "live", null)
                 .copy(recordingIntent = "user_excluded", intentReason = "user_turned_off")))
-        confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+        confirmed = repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             confirmed, CanonicalTuple(20, 3), nextStatus = "active",
             nextPhase = initialPhase().copy(id = "$SESSION_ID:phase:2", sequence = 2,
                 startOffsetMs = 20, startMutationSequence = 3),
             nextAcquisition = acquisition("$RECORDING_ID:acquisition:2", 2, CanonicalTuple(20, 3), "live", null)))
         for (index in 0L..1L) {
-            confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+            confirmed = repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
                 confirmed, CanonicalTuple(20, 4 + index),
                 sample = HeartRateSampleEntity(RECORDING_ID, index, 20, 4 + index, 88)))
         }
@@ -400,13 +502,13 @@ class WorkoutSessionRecorderGuardedWriteTest {
             confirmed.copy(openAcquisitionId = "missing")
         )
         for (stale in staleStates) {
-            val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(stale,
+            val failure = runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(stale,
                 CanonicalTuple(1, 4), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY)) }.exceptionOrNull()
             assertTrue(failure is RecorderGuardedWriteException)
             assertEquals(before, databaseSnapshot())
         }
         database.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_activity BEFORE INSERT ON heart_rate_acquisition_intervals BEGIN SELECT RAISE(ABORT, 'activity_original_failure'); END")
-        val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+        val failure = runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             confirmed, CanonicalTuple(1, 4), nextStatus = "paused",
             nextPhase = pausedPhase().copy(startOffsetMs = 1, startMutationSequence = 4),
             nextAcquisition = acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(1, 4), "live", null),
@@ -427,7 +529,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         }
         var published = confirmed
         val operation = async(dispatcher) {
-            published = repository.applyCanonicalActivity(CanonicalActivityRequest(
+            published = repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
                 confirmed, CanonicalTuple(1, 4), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY))
         }
         requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
@@ -444,7 +546,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
     @Test
     fun extraRestMetadataAppendsAtTheActivityCutAndDuplicateFailureRollsBackEverything() = runBlocking {
         val repository = WorkoutSessionRepository(database)
-        val start = repository.startCanonicalSession(frozenRequest())
+        val start = repository.startCanonicalSession(owner(repository), frozenRequest(repository))
         val extension = TimedRestExtensionRecordEntity(
             id = "extension-1", sessionId = SESSION_ID, stepId = "rest-step", stepIndex = 1,
             roundIndex = 1, restStageId = "rest", restStageTitle = "Rest",
@@ -453,17 +555,17 @@ class WorkoutSessionRecorderGuardedWriteTest {
         )
         val beforeInvalid = databaseSnapshot()
         for (invalid in listOf(extension.copy(sessionId = "other-session"), extension.copy(addedSec = 0))) {
-            assertTrue(runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+            assertTrue(runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
                 start, CanonicalTuple(5_000, 1), restExtension = invalid)) }.exceptionOrNull() is RecorderValidationException)
             assertEquals(beforeInvalid, databaseSnapshot())
         }
-        val confirmed = repository.applyCanonicalActivity(CanonicalActivityRequest(
+        val confirmed = repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             start, CanonicalTuple(5_000, 1), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY,
             restExtension = extension))
         assertEquals(listOf(extension), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
         assertEquals(CanonicalTuple(5_000, 1), confirmed.durableTuple)
         val before = databaseSnapshot()
-        val duplicate = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+        val duplicate = runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
             confirmed, CanonicalTuple(5_000, 2), nextStatus = "paused",
             nextPhase = pausedPhase().copy(startOffsetMs = 5_000), restExtension = extension)) }
         assertTrue(duplicate.exceptionOrNull() is android.database.sqlite.SQLiteConstraintException)
@@ -475,7 +577,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
     fun initializationNoOpsAndNoHeartRateReceiptsKeepIndependentMutationSequences() = runBlocking {
         for (enabled in listOf(false, true)) {
             val repository = WorkoutSessionRepository(database)
-            val base = frozenRequest(enabled)
+            val base = frozenRequest(repository, enabled)
             val request = FrozenCanonicalStartRequest(base.session, base.initialPhase, base.binding, listOf(
                 HeartRateObservation(base.binding.bindingId, 1, 500,
                     HeartRateObservationPayload.RuntimeTransition(HeartRateObservationCause.LIVE)),
@@ -484,7 +586,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
                     HeartRateObservationPayload.RuntimeTransition(HeartRateObservationCause.LIVE)),
                 HeartRateObservation(base.binding.bindingId, 4, 501, HeartRateObservationPayload.ValidMeasurement(88))
             ), base.recording)
-            val confirmed = repository.startCanonicalSession(request)
+            val confirmed = repository.startCanonicalSession(owner(repository), request)
             val graph = requireGraph(SESSION_ID)
             assertEquals(if (enabled) CanonicalTuple(1, 2) else CanonicalTuple(0, 0), confirmed.durableTuple)
             assertEquals(if (enabled) listOf(HeartRateSampleEntity(RECORDING_ID, 0, 1, 1, 88),
@@ -497,7 +599,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
     @Test
     fun invalidFrozenSnapshotReceiptOrderAndRecordingVersionWriteNothing() = runBlocking {
         val repository = WorkoutSessionRepository(database)
-        val base = frozenRequest(true)
+        val base = frozenRequest(repository, true)
         val measurement = HeartRateObservation(base.binding.bindingId, 1, 500, HeartRateObservationPayload.ValidMeasurement(88))
         val invalidBatches = listOf(
             listOf(measurement.copy(receipt = 2)),
@@ -507,7 +609,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
             listOf(measurement.copy(payload = HeartRateObservationPayload.CurrentSnapshot(HeartRateObservationCause.LIVE)))
         )
         for (batch in invalidBatches) {
-            val failure = runCatching { repository.startCanonicalSession(FrozenCanonicalStartRequest(
+            val failure = runCatching { repository.startCanonicalSession(owner(repository), FrozenCanonicalStartRequest(
                 base.session, base.initialPhase, base.binding, batch, base.recording)) }.exceptionOrNull()
             assertTrue(failure is RecorderValidationException)
             assertTrue(databaseSnapshot().isEmpty())
@@ -515,11 +617,11 @@ class WorkoutSessionRecorderGuardedWriteTest {
         for (binding in listOf(base.binding.copy(anchorElapsedRealtimeMs = 499),
             base.binding.copy(snapshot = base.binding.snapshot.copy(receipt = 1)),
             base.binding.copy(snapshot = base.binding.snapshot.copy(payload = HeartRateObservationPayload.ValidMeasurement(88))))) {
-            assertTrue(runCatching { repository.startCanonicalSession(FrozenCanonicalStartRequest(
+            assertTrue(runCatching { repository.startCanonicalSession(owner(repository), FrozenCanonicalStartRequest(
                 base.session, base.initialPhase, binding, emptyList(), base.recording)) }.exceptionOrNull() is RecorderValidationException)
             assertTrue(databaseSnapshot().isEmpty())
         }
-        assertTrue(runCatching { repository.startCanonicalSession(FrozenCanonicalStartRequest(
+        assertTrue(runCatching { repository.startCanonicalSession(owner(repository), FrozenCanonicalStartRequest(
             base.session, base.initialPhase, base.binding, emptyList(),
             requireNotNull(base.recording).copy(sourceContractVersion = 2))) }.exceptionOrNull() is RecorderValidationException)
         assertTrue(databaseSnapshot().isEmpty())
@@ -536,7 +638,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
                 else "INSERT INTO workout_phase_intervals SELECT * FROM workout_phase_intervals WHERE id='$PHASE_0_ID' LIMIT 1;"
             database.openHelper.writableDatabase.execSQL("CREATE TRIGGER activity_guard AFTER UPDATE OF last_durable_offset_ms ON workout_sessions BEGIN $mutation END")
             try {
-                val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+                val failure = runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
                     confirmed, CanonicalTuple(1, 4), nextStatus = "paused",
                     nextPhase = pausedPhase().copy(startOffsetMs = 1, startMutationSequence = 4),
                     nextAcquisition = acquisition(ACQUISITION_1_ID, 1, CanonicalTuple(1, 4), "live", null),
@@ -558,14 +660,14 @@ class WorkoutSessionRecorderGuardedWriteTest {
         )
         for (session in sessions) {
             val repository = WorkoutSessionRepository(database)
-            val base = frozenRequest()
-            val confirmed = repository.startCanonicalSession(FrozenCanonicalStartRequest(
+            val base = frozenRequest(repository)
+            val confirmed = repository.startCanonicalSession(owner(repository), FrozenCanonicalStartRequest(
                 session, base.initialPhase, base.binding, emptyList()))
             validateSessionTimeMetadata(requireGraph(SESSION_ID).session)
             assertEquals(session, requireGraph(SESSION_ID).session)
             database.openHelper.writableDatabase.execSQL("UPDATE workout_sessions SET time_metadata_source_contract_version=2")
             val before = databaseSnapshot()
-            val failure = runCatching { repository.applyCanonicalActivity(CanonicalActivityRequest(
+            val failure = runCatching { repository.applyCanonicalActivity(owner(repository), CanonicalActivityRequest(
                 confirmed, CanonicalTuple(0, 1), nextDisplayMetadataJson = DISPLAY_METADATA_WITH_ENTRY)) }.exceptionOrNull()
             assertTrue(failure is RecorderValidationException)
             assertEquals(before, databaseSnapshot())
@@ -580,7 +682,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val repository = WorkoutSessionRepository(database)
         val before = databaseSnapshot()
         val result = runCatching {
-            repository.startCanonicalSession(collectedSession().copy(startUtcOffsetSeconds = 0), initialPhase())
+            repository.startCanonicalSession(owner(repository), collectedSession().copy(startUtcOffsetSeconds = 0), initialPhase())
         }
         assertTrue("offset must match the frozen instant and zone", result.isFailure)
         assertEquals(before, databaseSnapshot())
@@ -590,20 +692,20 @@ class WorkoutSessionRecorderGuardedWriteTest {
     fun protectedWritesAcceptZeroDurationAndSameOffsetSequenceThroughTheRealGraphValidator() = runBlocking {
         database.workoutSessionDao().insertSession(legacySession("legacy-active", "active"))
         val repository = WorkoutSessionRepository(database)
-        val gate = repository.startCanonicalSession(canonicalSession(), initialPhase())
+        val gate = repository.startCanonicalSession(owner(repository), canonicalSession(), initialPhase())
 
         assertEquals(listOf("legacy-active"), gate.legacyResiduals.map { it.sessionId })
-        repository.appendSessionDisplayMetadata(
+        repository.appendSessionDisplayMetadata(owner(repository),
             expected = expected(tuple = CanonicalTuple(0, 0)),
             nextTuple = CanonicalTuple(0, 1),
             nextJson = DISPLAY_METADATA_WITH_ENTRY
         )
-        repository.transitionPhase(
+        repository.transitionPhase(owner(repository),
             expected = expected(tuple = CanonicalTuple(0, 1)),
             nextTuple = CanonicalTuple(0, 2),
             nextPhase = pausedPhase()
         )
-        repository.startHeartRateRecording(
+        repository.startHeartRateRecording(owner(repository),
             expected = expected(tuple = CanonicalTuple(0, 2), openPhaseId = PHASE_1_ID),
             nextTuple = CanonicalTuple(0, 3),
             recording = activeRecording(),
@@ -615,7 +717,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
                 reason = "initial_acquisition"
             )
         )
-        repository.transitionAcquisition(
+        repository.transitionAcquisition(owner(repository),
             expected = expected(
                 tuple = CanonicalTuple(0, 3),
                 openPhaseId = PHASE_1_ID,
@@ -631,7 +733,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
                 reason = null
             )
         )
-        repository.appendHeartRateSample(
+        repository.appendHeartRateSample(owner(repository),
             expected = expected(
                 tuple = CanonicalTuple(0, 4),
                 openPhaseId = PHASE_1_ID,
@@ -670,7 +772,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val beforeInvalidPair = databaseSnapshot()
 
         val invalidPair = runCatching {
-            repository.transitionAcquisition(
+            repository.transitionAcquisition(owner(repository),
                 expected = expected(
                     tuple = CanonicalTuple(0, 3),
                     openPhaseId = PHASE_0_ID,
@@ -693,7 +795,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
 
         val beforeAfterCut = databaseSnapshot()
         val afterCut = runCatching {
-            repository.appendHeartRateSample(
+            repository.appendHeartRateSample(owner(repository),
                 expected = expected(
                     tuple = CanonicalTuple(0, 3),
                     openPhaseId = PHASE_0_ID,
@@ -711,6 +813,8 @@ class WorkoutSessionRecorderGuardedWriteTest {
             )
         }
         assertTrue(afterCut.exceptionOrNull() is RecorderValidationException)
+        assertEquals("sample_tuple_must_equal_next_input_cut",
+            (afterCut.exceptionOrNull() as RecorderValidationException).code)
         assertEquals(beforeAfterCut, databaseSnapshot())
     }
 
@@ -725,7 +829,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         ).forEach { invalidPhase ->
             val before = databaseSnapshot()
             val result = runCatching {
-                repository.transitionPhase(
+                repository.transitionPhase(owner(repository),
                     expected = expected,
                     nextTuple = CanonicalTuple(10, 1),
                     nextPhase = invalidPhase
@@ -737,7 +841,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
 
         val staleBefore = databaseSnapshot()
         val stale = runCatching {
-            repository.appendSessionDisplayMetadata(
+            repository.appendSessionDisplayMetadata(owner(repository),
                 expected = expected.copy(durableTuple = CanonicalTuple(1, 0)),
                 nextTuple = CanonicalTuple(1, 1),
                 nextJson = DISPLAY_METADATA_WITH_ENTRY
@@ -762,7 +866,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         )
         val nonTailBefore = databaseSnapshot()
         val nonTail = runCatching {
-            repository.appendSessionDisplayMetadata(
+            repository.appendSessionDisplayMetadata(owner(repository),
                 expected = expected,
                 nextTuple = CanonicalTuple(0, 1),
                 nextJson = DISPLAY_METADATA_WITH_ENTRY
@@ -789,7 +893,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val before = databaseSnapshot()
 
         val result = runCatching {
-            repository.transitionPhase(
+            repository.transitionPhase(owner(repository),
                 expected = expected(tuple = CanonicalTuple(0, 0)),
                 nextTuple = CanonicalTuple(1, 1),
                 nextPhase = nextPhase(PHASE_1_ID, startOffset = 1, startMutation = 1)
@@ -821,7 +925,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val before = databaseSnapshot()
 
         val result = runCatching {
-            repository.transitionPhase(
+            repository.transitionPhase(owner(repository),
                 expected = expected(tuple = CanonicalTuple(0, 0)),
                 nextTuple = CanonicalTuple(1, 1),
                 nextPhase = nextPhase(PHASE_1_ID, startOffset = 1, startMutation = 1)
@@ -843,7 +947,7 @@ class WorkoutSessionRecorderGuardedWriteTest {
         val results = coroutineScope {
             val append = async(Dispatchers.IO) {
                 runCatching {
-                    writer.appendSessionDisplayMetadata(
+                    writer.appendSessionDisplayMetadata(owner(writer),
                         expected = expected(tuple = CanonicalTuple(0, 0)),
                         nextTuple = CanonicalTuple(0, 1),
                         nextJson = DISPLAY_METADATA_WITH_ENTRY
@@ -868,15 +972,18 @@ class WorkoutSessionRecorderGuardedWriteTest {
         )
     }
 
+    private suspend fun owner(repository: WorkoutSessionRepository): RecorderOwnerToken =
+        repository.admitRecorder("guarded-entry", canonicalSession(), initialPhase()).ownerToken
+
     private suspend fun emptyCanonicalRepository(): WorkoutSessionRepository {
         val repository = WorkoutSessionRepository(database)
-        repository.startCanonicalSession(canonicalSession(), initialPhase())
+        repository.startCanonicalSession(owner(repository), canonicalSession(), initialPhase())
         return repository
     }
 
     private suspend fun recordingRepository(): WorkoutSessionRepository {
         val repository = emptyCanonicalRepository()
-        repository.startHeartRateRecording(
+        repository.startHeartRateRecording(owner(repository),
             expected = expected(tuple = CanonicalTuple(0, 0)),
             nextTuple = CanonicalTuple(0, 3),
             recording = activeRecording(),
@@ -911,8 +1018,8 @@ class WorkoutSessionRecorderGuardedWriteTest {
         timeMetadataSourceContractVersion = 1
     )
 
-    private fun frozenRequest(recording: Boolean = false): FrozenCanonicalStartRequest {
-        val bindingId = HeartRateObservationBindingId()
+    private suspend fun frozenRequest(repository: WorkoutSessionRepository, recording: Boolean = false): FrozenCanonicalStartRequest {
+        val bindingId = repository.admitRecorder("guarded-entry", canonicalSession(), initialPhase()).bindingId
         return FrozenCanonicalStartRequest(
             collectedSession(), initialPhase(),
             HeartRateObservationBinding(bindingId, 500, HeartRateObservation(bindingId, 0, 500,

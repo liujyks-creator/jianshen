@@ -13,9 +13,16 @@ import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
+import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
+import com.liujyks.trainflow.core.health.HeartRateObservation
+import com.liujyks.trainflow.core.health.HeartRateObservationPayload
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -41,6 +49,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.coroutines.CoroutineContext
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -58,6 +67,570 @@ class WorkoutSessionRecorderReconciliationTest {
     @After
     fun closeDatabase() {
         database.close()
+    }
+
+    @Test
+    fun clearAfterActivityFailureKeepsTheOriginalCauseAndBindingUntilFreshProcess() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val session = canonicalHeader("active-clear-failure").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val admission = repository.admitRecorder("entry", session, phase)
+        runtime.bindObservations(admission.bindingId) {}
+        repository.startCanonicalSession(admission.ownerToken, session, phase)
+        val expected = RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id)
+        val before = databaseSnapshot()
+        database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER fail_activity_before_clear
+            BEFORE UPDATE ON workout_sessions BEGIN SELECT RAISE(ABORT,'activity_before_clear'); END""")
+        val original = runCatching { repository.appendSessionDisplayMetadata(admission.ownerToken,
+            expected, CanonicalTuple(1, 1), VALID_DISPLAY_METADATA) }.exceptionOrNull()
+        assertTrue(original is android.database.sqlite.SQLiteConstraintException)
+        assertTrue(requireNotNull(original).message.orEmpty().contains("activity_before_clear"))
+        repository.reportRecorderActivityFailure(admission.ownerToken, original)
+        database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_activity_before_clear")
+        repository.beginOwnerClearHandoff(admission.ownerToken)
+        assertSame(original, runCatching { repository.finalizeCanonicalSession(admission.ownerToken,
+            FrozenCanonicalFinalizationRequest(expected, 1, "abandoned", "owner_cleared",
+                null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null)) }.exceptionOrNull())
+        assertSame(original, runCatching { repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, original) }.exceptionOrNull())
+        assertTrue(original.suppressed.single() is RecorderCleanupUnresolvedException)
+        val busy = runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, busy.disposition)
+        assertTrue(runCatching { repository.admitRecorder("next", session, phase) }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
+    fun cancelledPreRoomCleanupCannotGuessBindingAbsentAndOnlyMatchingRetryReleases() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val cached = repository.prepareRecorder()
+        val session = canonicalHeader("unresolved-cleanup").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val admission = repository.admitRecorder("entry", session, phase)
+        val original = withContext(Dispatchers.Default) {
+            requireNotNull(runCatching { runtime.bindObservations(admission.bindingId) {} }.exceptionOrNull())
+        }
+        runtime.bindObservations(admission.bindingId) {}
+        val before = databaseSnapshot()
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        val thrownByCleanup = AtomicReference<Throwable>()
+        supervisorScope {
+            val cleanup = async(dispatcher) {
+                try {
+                    repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, original)
+                } catch (cause: Throwable) {
+                    thrownByCleanup.set(cause)
+                    throw cause
+                }
+            }
+            withContext(Dispatchers.Default) {
+                assertTrue(android.os.Looper.myLooper() !== android.os.Looper.getMainLooper())
+                requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+                // Deliver the Room absence result off Main, stopping at the real runtime query dispatch.
+                requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+            }
+            assertEquals(false, cleanup.isCompleted)
+            assertEquals(false, org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).isIdle)
+            assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+            cleanup.cancel(CancellationException("cleanup_query_not_delivered"))
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+            val delivered = requireNotNull(runCatching { cleanup.await() }.exceptionOrNull())
+            assertSame(original, thrownByCleanup.get())
+            assertTrue(delivered === original || delivered.cause === original)
+        }
+        assertTrue(original.suppressed.single() is CancellationException)
+        assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        assertEquals(before, databaseSnapshot())
+        val busy = runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, busy.disposition)
+        assertTrue(runCatching { repository.admitRecorder("next", session, phase) }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertSame(original, repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, original))
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+        assertSame(cached, repository.prepareRecorder())
+        assertEquals(before, databaseSnapshot())
+        assertTrue(repository.admitRecorder("next", session, phase).ownerToken !== admission.ownerToken)
+    }
+
+    @Test
+    fun differentEntriesRaceForOneAdmissionAndInvalidEntryCannotDisturbTheWinner() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val session = canonicalHeader("race").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val before = databaseSnapshot()
+        val ready = CountDownLatch(2)
+        val start = CompletableDeferred<Unit>()
+        val results = coroutineScope {
+            listOf("first", "second").map { entry -> async(Dispatchers.Default) {
+                ready.countDown()
+                start.await()
+                runCatching { repository.admitRecorder(entry, session, phase) }
+            } }.let { jobs ->
+                assertTrue(ready.await(5, TimeUnit.SECONDS))
+                start.complete(Unit)
+                jobs.map { it.await() }
+            }
+        }
+        assertEquals(1, results.count { it.isSuccess })
+        assertTrue(results.single { it.isFailure }.exceptionOrNull() is RecorderOwnerBusyException)
+        val winner = results.single { it.isSuccess }.getOrThrow()
+        assertSame(winner, repository.admitRecorder(winner.entryId, session, phase))
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(winner.bindingId))
+        assertEquals(before, databaseSnapshot())
+        runtime.bindObservations(winner.bindingId) {}
+        assertTrue(runCatching { repository.admitRecorder("", session, phase) }.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runtime.queryObservationBinding(winner.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        assertSame(winner, repository.admitRecorder(winner.entryId, session, phase))
+        repository.startCanonicalSession(winner.ownerToken, session, phase)
+        assertEquals("active", database.canonicalTimelineHeartRateDao().sessionById(session.id)?.status)
+        assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+    }
+
+    @Test
+    fun staleCallbacksCannotChangeTheNextOwnerAndFreshRepositoryUsesOnlyDurableFacts() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val cached = repository.prepareRecorder()
+        val session = canonicalHeader("next-owner").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val old = repository.admitRecorder("old", session, phase)
+        val original = withContext(Dispatchers.Default) {
+            requireNotNull(runCatching { runtime.bindObservations(old.bindingId) {} }.exceptionOrNull())
+        }
+        repository.releaseRecorderBeforeStart(old.ownerToken, runtime, original)
+        assertSame(cached, repository.prepareRecorder())
+        val next = repository.admitRecorder("next", session, phase)
+        runtime.bindObservations(next.bindingId) {}
+        repository.startCanonicalSession(next.ownerToken, session, phase)
+        val expected = RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id)
+        val terminal = FrozenCanonicalFinalizationRequest(expected, 1, "completed", "completed",
+            null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null)
+        val before = databaseSnapshot()
+        val callbacks: List<suspend () -> Unit> = listOf(
+            { repository.beginOwnerClearHandoff(old.ownerToken) },
+            { repository.reportRecorderActivityFailure(old.ownerToken, original) },
+            { repository.startCanonicalSession(old.ownerToken, session, phase) },
+            { repository.appendSessionDisplayMetadata(old.ownerToken, expected, CanonicalTuple(1, 1), VALID_DISPLAY_METADATA) },
+            { repository.finalizeCanonicalSession(old.ownerToken, terminal) },
+            { repository.releaseRecorderBeforeStart(old.ownerToken, runtime, original) },
+            { repository.releaseRecorderAfterTerminal(old.ownerToken, runtime) })
+        callbacks.forEach { callback ->
+            assertTrue(runCatching { callback() }.exceptionOrNull() is RecorderStaleOwnerException)
+            assertSame(next, repository.admitRecorder("next", session, phase))
+            assertTrue(runtime.queryObservationBinding(next.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+            assertEquals(before, databaseSnapshot())
+        }
+        repository.appendSessionDisplayMetadata(next.ownerToken, expected, CanonicalTuple(1, 1), VALID_DISPLAY_METADATA)
+        val fresh = WorkoutSessionRepository(database)
+        val freshRuntime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        assertTrue(runCatching { fresh.beginOwnerClearHandoff(next.ownerToken) }.exceptionOrNull() is RecorderStaleOwnerException)
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, freshRuntime.queryObservationBinding(next.bindingId))
+        assertTrue(fresh.prepareRecorder() is RecorderReconciliationResult.Succeeded)
+        val persisted = requireNotNull(database.canonicalTimelineHeartRateDao().sessionById(session.id))
+        assertEquals("abandoned", persisted.status)
+        assertEquals("process_interrupted", persisted.terminalReason)
+        val freshAdmission = fresh.admitRecorder("next", session, phase)
+        assertTrue(freshAdmission.ownerToken !== next.ownerToken)
+        assertTrue(freshAdmission.bindingId !== next.bindingId)
+    }
+
+    @Test
+    fun failedTerminalThenClearRetainsOriginalFailureAndCannotRetryWritesOrRelease() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val session = canonicalHeader("terminal-clear-failure").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val admission = repository.admitRecorder("entry", session, phase)
+        runtime.bindObservations(admission.bindingId) {}
+        repository.startCanonicalSession(admission.ownerToken, session, phase)
+        val expected = RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id)
+        val terminal = FrozenCanonicalFinalizationRequest(expected, 1, "completed", "completed",
+            null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null)
+        val before = databaseSnapshot()
+        database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER fail_terminal_before_clear
+            BEFORE UPDATE ON workout_sessions BEGIN SELECT RAISE(ABORT,'terminal_before_clear'); END""")
+        val original = runCatching { repository.finalizeCanonicalSession(admission.ownerToken, terminal) }.exceptionOrNull()
+        assertTrue(original is android.database.sqlite.SQLiteConstraintException)
+        assertTrue(requireNotNull(original).message.orEmpty().contains("terminal_before_clear"))
+        assertEquals(before, databaseSnapshot())
+        database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_terminal_before_clear")
+        repository.beginOwnerClearHandoff(admission.ownerToken)
+        assertSame(original, runCatching { repository.finalizeCanonicalSession(admission.ownerToken, terminal) }.exceptionOrNull())
+        assertSame(original, runCatching { repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, original) }.exceptionOrNull())
+        assertTrue(runCatching { repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime) }
+            .exceptionOrNull() is RecorderCleanupUnresolvedException)
+        val busy = runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, busy.disposition)
+        assertTrue(runCatching { repository.admitRecorder("next", session, phase) }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
+    fun lostBindDeliveryIsResolvedByReservedIdentityBeforeCachePreservingRelease() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val cached = repository.prepareRecorder()
+        val session = canonicalHeader("lost-bind").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val admission = repository.admitRecorder("entry", session, openPhase(session.id))
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        var delivered = false
+        val operation = async(dispatcher) {
+            withContext(Dispatchers.Main.immediate) { runtime.bindObservations(admission.bindingId) {} }
+            delivered = true
+        }
+        withContext(Dispatchers.Default) {
+            assertTrue(android.os.Looper.myLooper() !== android.os.Looper.getMainLooper())
+            requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        }
+        assertEquals(false, operation.isCompleted)
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(false, operation.isCompleted)
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        assertEquals(false, delivered)
+        operation.cancel(CancellationException("bind_result_lost"))
+        delivery.run()
+        val original = runCatching { operation.await() }.exceptionOrNull()
+        assertTrue(original is CancellationException)
+        assertEquals("bind_result_lost", original?.message)
+        assertSame(original, repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, requireNotNull(original)))
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+        assertSame(cached, repository.prepareRecorder())
+        assertEquals(null, database.canonicalTimelineHeartRateDao().sessionById(session.id))
+        assertTrue(repository.admitRecorder("next-entry", session, openPhase(session.id)).ownerToken !== admission.ownerToken)
+    }
+
+    @Test
+    fun receiptValidationAndRoomRollbackReleaseWithoutFabricatingATerminal() = runBlocking {
+        for (roomFailure in listOf(false, true)) {
+            val repository = WorkoutSessionRepository(database)
+            val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+            val cached = repository.prepareRecorder()
+            val session = canonicalHeader("rollback-$roomFailure").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0,
+                startedAt = "2026-09-08T00:00:00Z", startLocalDate = "2026-09-08", startZoneId = "UTC",
+                startUtcOffsetSeconds = 0, timeMetadataSourceContractVersion = 1)
+            val phase = openPhase(session.id)
+            val admission = repository.admitRecorder("entry", session, phase)
+            val binding = (runtime.bindObservations(admission.bindingId) {} as HeartRateBindingDisposition.MatchingInstalled).binding
+            val receipts = if (roomFailure) emptyList() else listOf(HeartRateObservation(admission.bindingId, 2,
+                binding.anchorElapsedRealtimeMs, HeartRateObservationPayload.ValidMeasurement(80)))
+            val request = FrozenCanonicalStartRequest(session, phase, binding, receipts)
+            val before = databaseSnapshot()
+            if (roomFailure) database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER fail_start_phase
+                BEFORE INSERT ON workout_phase_intervals BEGIN SELECT RAISE(ABORT,'original_start_rollback'); END""")
+            val original = runCatching { repository.startCanonicalSession(admission.ownerToken, request) }.exceptionOrNull()
+            if (roomFailure) {
+                assertTrue(original is android.database.sqlite.SQLiteConstraintException)
+                assertTrue(original?.message.orEmpty().contains("original_start_rollback"))
+                database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_start_phase")
+            } else {
+                assertTrue(original is RecorderValidationException)
+                assertEquals("invalid_initialization_receipt_order", (original as RecorderValidationException).code)
+            }
+            assertEquals(before, databaseSnapshot())
+            repository.beginOwnerClearHandoff(admission.ownerToken)
+            assertSame(original, repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, requireNotNull(original)))
+            assertEquals(before, databaseSnapshot())
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            assertSame(cached, repository.prepareRecorder())
+            val next = repository.admitRecorder("next-entry", session, phase)
+            assertTrue(next.ownerToken !== admission.ownerToken)
+        }
+    }
+
+    @Test
+    fun conflictingBindingNeverGetsUnboundAndOnlySameOwnerCleanupMayRetry() = runBlocking {
+        for (terminal in listOf(false, true)) {
+            val repository = WorkoutSessionRepository(database)
+            val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+            val cached = repository.prepareRecorder()
+            val session = canonicalHeader("conflict-$terminal").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+            val phase = openPhase(session.id)
+            val admission = repository.admitRecorder("entry", session, phase)
+            // A second real repository supplies the competing binding identity before any active fixture exists.
+            val foreign = WorkoutSessionRepository(database).admitRecorder("foreign", session, phase)
+            runtime.bindObservations(foreign.bindingId) {}
+            val original = withContext(Dispatchers.Default) {
+                runCatching { runtime.bindObservations(admission.bindingId) {} }.exceptionOrNull()
+            }
+            if (terminal) {
+                repository.startCanonicalSession(admission.ownerToken, session, phase)
+                repository.finalizeCanonicalSession(admission.ownerToken, FrozenCanonicalFinalizationRequest(
+                    RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id), 1, "completed", "completed",
+                    null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null))
+            }
+            val before = databaseSnapshot()
+            val failure = runCatching {
+                if (terminal) repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime)
+                else repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, requireNotNull(original))
+            }.exceptionOrNull()
+            if (terminal) assertTrue(failure is RecorderBindingConflictException)
+            else {
+                assertSame(original, failure)
+                assertTrue(requireNotNull(original).suppressed.single() is RecorderBindingConflictException)
+            }
+            assertTrue(runtime.queryObservationBinding(foreign.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+            val busy = runCatching { repository.prepareRecorder() }.exceptionOrNull()
+            assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, (busy as RecorderOwnerBusyException).disposition)
+            assertTrue(runCatching { repository.admitRecorder("next", session, phase) }.exceptionOrNull() is RecorderOwnerBusyException)
+            assertTrue(runCatching { repository.releaseRecorderAfterTerminal(foreign.ownerToken, runtime) }
+                .exceptionOrNull() is RecorderStaleOwnerException)
+            assertEquals(before, databaseSnapshot())
+            runtime.unbindObservations(foreign.bindingId)
+            if (terminal) repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime)
+            else assertSame(original, repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, requireNotNull(original)))
+            val refreshed = repository.prepareRecorder()
+            if (terminal) assertTrue(cached !== refreshed) else assertSame(cached, refreshed)
+            assertEquals(before, databaseSnapshot())
+            repository.admitRecorder("next", session, phase)
+        }
+    }
+
+    @Test
+    fun lostUnbindDeliveryKeepsTerminalBlockedUntilCleanupRetryWithoutWritingAgain() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+        val session = canonicalHeader("lost-unbind").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val admission = repository.admitRecorder("entry", session, phase)
+        runtime.bindObservations(admission.bindingId) {}
+        repository.startCanonicalSession(admission.ownerToken, session, phase)
+        val result = repository.finalizeCanonicalSession(admission.ownerToken, FrozenCanonicalFinalizationRequest(
+            RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id), 1, "completed", "completed",
+            null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null))
+        val before = databaseSnapshot()
+        database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER forbid_repeat_terminal
+            BEFORE UPDATE ON workout_sessions BEGIN SELECT RAISE(ABORT,'terminal_repeated'); END""")
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        val operation = async(dispatcher) { repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime) }
+        withContext(Dispatchers.Default) {
+            assertTrue(android.os.Looper.myLooper() !== android.os.Looper.getMainLooper())
+            requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        }
+        assertEquals(false, operation.isCompleted)
+        assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(false, operation.isCompleted)
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+        assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+        operation.cancel(CancellationException("unbind_delivery_lost"))
+        delivery.run()
+        val failure = runCatching { operation.await() }.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        val busy = runCatching { repository.prepareRecorder() }.exceptionOrNull()
+        assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, (busy as RecorderOwnerBusyException).disposition)
+        assertEquals(CanonicalTuple(1, 1), result.finalTuple)
+        assertEquals(before, databaseSnapshot())
+        repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime)
+        assertTrue(repository.prepareRecorder() is RecorderReconciliationResult.Succeeded)
+        assertEquals(before, databaseSnapshot())
+        assertTrue(repository.admitRecorder("next", session, phase).ownerToken !== admission.ownerToken)
+    }
+
+    @Test
+    fun terminalReleaseInvalidatesCacheOnlyAfterCommitAndUnbindsBeforeNextOwner() = runBlocking {
+        for (clear in listOf(false, true)) {
+            val repository = WorkoutSessionRepository(database)
+            val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+            val cached = repository.prepareRecorder()
+            val session = canonicalHeader("terminal-$clear").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+            val phase = openPhase(session.id)
+            val admission = repository.admitRecorder("entry", session, phase)
+            runtime.bindObservations(admission.bindingId) {}
+            repository.startCanonicalSession(admission.ownerToken, session, phase)
+            if (clear) repository.beginOwnerClearHandoff(admission.ownerToken)
+            val result = repository.finalizeCanonicalSession(admission.ownerToken,
+                FrozenCanonicalFinalizationRequest(
+                    RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id),
+                    1, "abandoned", if (clear) "owner_cleared" else "user_abandoned",
+                    null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null))
+            assertEquals(CanonicalTuple(1, 1), result.finalTuple)
+            assertTrue(runtime.queryObservationBinding(admission.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+            assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+            val committed = databaseSnapshot()
+            repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime)
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            val refreshed = repository.prepareRecorder()
+            assertTrue(refreshed is RecorderReconciliationResult.Succeeded)
+            assertTrue(cached !== refreshed)
+            assertEquals(committed, databaseSnapshot())
+            val next = repository.admitRecorder("next-entry", session, phase)
+            runtime.bindObservations(next.bindingId) {}
+            assertTrue(runCatching { repository.releaseRecorderAfterTerminal(admission.ownerToken, runtime) }
+                .exceptionOrNull() is RecorderStaleOwnerException)
+            assertTrue(runtime.queryObservationBinding(next.bindingId) is HeartRateBindingDisposition.MatchingInstalled)
+            assertSame(next, repository.admitRecorder("next-entry", session, phase))
+            assertEquals(committed, databaseSnapshot())
+            runtime.unbindObservations(next.bindingId)
+        }
+    }
+
+    @Test
+    fun absentAndInstalledPreRoomFailuresReleaseOnlyTheMatchingBindingAndPreserveCache() = runBlocking {
+        for (installed in listOf(false, true)) {
+            val repository = WorkoutSessionRepository(database)
+            val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext())
+            val cached = repository.prepareRecorder()
+            val session = canonicalHeader("pre-room").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+            val phase = openPhase(session.id)
+            val admission = repository.admitRecorder("entry", session, phase)
+            val original = withContext(Dispatchers.Default) {
+                runCatching { runtime.bindObservations(admission.bindingId) {} }.exceptionOrNull()
+            }
+            assertTrue(original is IllegalStateException)
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            if (installed) assertTrue(runtime.bindObservations(admission.bindingId) {} is HeartRateBindingDisposition.MatchingInstalled)
+            repository.beginOwnerClearHandoff(admission.ownerToken)
+            val before = databaseSnapshot()
+            assertSame(original, repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, requireNotNull(original)))
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            assertEquals(before, databaseSnapshot())
+            assertSame(cached, repository.prepareRecorder())
+            val next = repository.admitRecorder("next-entry", session, phase)
+            assertTrue(next.ownerToken !== admission.ownerToken)
+            assertTrue(runCatching { repository.releaseRecorderBeforeStart(admission.ownerToken, runtime, original) }
+                .exceptionOrNull() is RecorderStaleOwnerException)
+            assertSame(next, repository.admitRecorder("next-entry", session, phase))
+        }
+    }
+
+    @Test
+    fun clearHandoffSynchronouslyRejectsStartAndActiveWritesBeforeReturning() = runBlocking {
+        for (started in listOf(false, true)) {
+            val repository = WorkoutSessionRepository(database)
+            val session = canonicalHeader("clear-$started").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+            val phase = openPhase(session.id)
+            val admission = repository.admitRecorder("entry-$started", session, phase)
+            if (started) repository.startCanonicalSession(admission.ownerToken, session, phase)
+            val before = databaseSnapshot()
+            repository.beginOwnerClearHandoff(admission.ownerToken)
+            val prepare = runCatching { repository.prepareRecorder() }.exceptionOrNull()
+            assertTrue(prepare is RecorderOwnerBusyException)
+            assertEquals(RecorderOwnerDisposition.OWNER_CLEAR_PENDING, (prepare as RecorderOwnerBusyException).disposition)
+            val write = runCatching {
+                if (started) repository.appendSessionDisplayMetadata(admission.ownerToken,
+                    RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id),
+                    CanonicalTuple(1, 1), VALID_DISPLAY_METADATA)
+                else repository.startCanonicalSession(admission.ownerToken, session, phase)
+            }.exceptionOrNull()
+            assertTrue(write is RecorderOwnerBusyException)
+            assertEquals(RecorderOwnerDisposition.OWNER_CLEAR_PENDING, (write as RecorderOwnerBusyException).disposition)
+            assertTrue(runCatching { repository.admitRecorder("next-entry", session, phase) }
+                .exceptionOrNull() is RecorderOwnerBusyException)
+            assertEquals(before, databaseSnapshot())
+        }
+    }
+
+    @Test
+    fun activeOwnerRejectsCachedPrepareWithoutReconcilingItsSession() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val cached = repository.prepareRecorder()
+        assertSame(cached, repository.prepareRecorder())
+        val admission = repository.admitRecorder("owned-entry", canonicalHeader("owned"), openPhase("owned"))
+        insertCanonicalRunningSession("owned")
+        val before = databaseSnapshot()
+
+        val failure = runCatching { repository.prepareRecorder() }.exceptionOrNull()
+        assertTrue("an owned repository must reject prepare before consulting its cache: $failure",
+            failure is RecorderOwnerBusyException)
+        assertEquals(RecorderOwnerDisposition.ACTIVE_OWNER, (failure as RecorderOwnerBusyException).disposition)
+        assertSame(admission,
+            repository.admitRecorder("owned-entry", canonicalHeader("owned"), openPhase("owned")))
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
+    fun concurrentSameEntryAdmissionReturnsTheOriginalTupleAfterSharedScan() = runBlocking {
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        val repository = WorkoutSessionRepository(database)
+        supervisorScope {
+            val first = async(dispatcher) {
+                repository.admitRecorder("entry", canonicalHeader("owned"), openPhase("owned"))
+            }
+            val second = async(dispatcher) {
+                repository.admitRecorder("entry", canonicalHeader("owned"), openPhase("owned"))
+            }
+            requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+            requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+            while (!first.isCompleted || !second.isCompleted) {
+                requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+            }
+            assertSame(first.await(), second.await())
+            assertEquals(null, database.canonicalTimelineHeartRateDao().sessionById("owned"))
+        }
+    }
+
+    @Test
+    fun matchingOwnerStartsAndAdvancesWithoutEnteringTheNewAdmissionGate() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val session = canonicalHeader("owned").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase("owned")
+        val admission = repository.admitRecorder("owned-entry", session, phase)
+
+        repository.startCanonicalSession(admission.ownerToken, session, phase)
+        repository.appendSessionDisplayMetadata(
+            admission.ownerToken,
+            RecorderExpectedState("owned", "active", CanonicalTuple(0, 0), phase.id),
+            CanonicalTuple(1, 1), VALID_DISPLAY_METADATA)
+
+        val persisted = requireNotNull(database.canonicalTimelineHeartRateDao().sessionById("owned"))
+        assertEquals("active", persisted.status)
+        assertEquals(1L, persisted.lastDurableOffsetMs)
+        assertEquals(1L, persisted.lastMutationSequence)
+        assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+    }
+
+    @Test
+    fun activeSqlFailureRetainsOwnerAndRejectsLaterWritesWithTheOriginalCause() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val session = canonicalHeader("failed-owner").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0)
+        val phase = openPhase(session.id)
+        val admission = repository.admitRecorder("failed-entry", session, phase)
+        repository.startCanonicalSession(admission.ownerToken, session, phase)
+        val expected = RecorderExpectedState(session.id, "active", CanonicalTuple(0, 0), phase.id)
+        val before = databaseSnapshot()
+        database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER fail_owner_write
+            BEFORE UPDATE ON workout_sessions BEGIN SELECT RAISE(ABORT,'active_original_failure'); END""")
+        val original = runCatching { repository.appendSessionDisplayMetadata(
+            admission.ownerToken, expected, CanonicalTuple(1, 1), VALID_DISPLAY_METADATA) }.exceptionOrNull()
+        assertTrue(original is android.database.sqlite.SQLiteConstraintException)
+        assertTrue(requireNotNull(original).message.orEmpty().contains("active_original_failure"))
+        assertEquals(before, databaseSnapshot())
+        repository.reportRecorderActivityFailure(admission.ownerToken, original)
+        database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_owner_write")
+
+        val later = runCatching { repository.appendSessionDisplayMetadata(
+            admission.ownerToken, expected, CanonicalTuple(1, 1), VALID_DISPLAY_METADATA) }.exceptionOrNull()
+        assertSame(original, later)
+        assertEquals(before, databaseSnapshot())
+        assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertTrue(runCatching { repository.admitRecorder("other-entry", session, phase) }
+            .exceptionOrNull() is RecorderOwnerBusyException)
+        val terminalFailure = runCatching { repository.finalizeCanonicalSession(
+            admission.ownerToken,
+            FrozenCanonicalFinalizationRequest(expected, 1, "abandoned", "owner_cleared",
+                null, null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null)
+        ) }.exceptionOrNull()
+        assertSame("a failed owner cannot fabricate a successful terminal", original, terminalFailure)
+        assertEquals(before, databaseSnapshot())
     }
 
     @Test
@@ -96,6 +669,7 @@ class WorkoutSessionRecorderReconciliationTest {
         assertEquals(before, databaseSnapshot())
 
         val started = repository.startCanonicalSession(
+            repository.admitRecorder("canonical-new", canonicalHeader("canonical-new"), openPhase("canonical-new")).ownerToken,
             canonicalHeader("canonical-new"),
             openPhase("canonical-new")
         )
@@ -924,6 +1498,8 @@ class WorkoutSessionRecorderReconciliationTest {
         assertSame(result, repository.prepareRecorder())
         assertEquals(afterFinalization, databaseSnapshot())
         val protectedStart = repository.startCanonicalSession(
+            repository.admitRecorder("canonical-after-finalization", canonicalHeader("canonical-after-finalization"),
+                openPhase("canonical-after-finalization")).ownerToken,
             canonicalHeader("canonical-after-finalization"),
             openPhase("canonical-after-finalization")
         )
@@ -967,6 +1543,8 @@ class WorkoutSessionRecorderReconciliationTest {
 
         val protectedFailure = runCatching {
             repository.appendSessionDisplayMetadata(
+                ownerToken = repository.admitRecorder("binding-failure", canonicalHeader("binding-failure"),
+                    openPhase("binding-failure")).ownerToken,
                 expected = RecorderExpectedState(
                     sessionId = "binding-failure",
                     status = "active",
