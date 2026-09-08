@@ -82,6 +82,79 @@ class WorkoutSessionFinalizerTest {
     }
 
     @Test
+    fun persistedTerminalValidationFailureRetainsIntentAndRollsBackBeforeAnyClearRecovery() = runBlocking {
+        for (source in listOf("canonical_time", "canonical_graph", "recording_graph")) {
+            for (clear in listOf("none", "before", "after")) {
+                resetDatabase()
+                val (repository, token) = admittedFinalizer()
+                seedActiveRecording()
+                freezeStartMetadata()
+                val frozen = terminalRequest()
+                val before = databaseSnapshot()
+                if (clear == "before") repository.beginOwnerClearHandoff(token)
+                val reached = AtomicBoolean(false)
+                guardedUpdateMutation = { sql ->
+                    if (sql.startsWith("SELECT * FROM workout_sessions WHERE id")) {
+                        guardedUpdateMutation = null
+                        reached.set(true)
+                        database.openHelper.writableDatabase.execSQL(if (source == "canonical_time")
+                            "UPDATE workout_sessions SET start_zone_id='UTC'" else
+                            "UPDATE workout_phase_intervals SET phase_identity_json='{}'")
+                    }
+                }
+                val original = requireNotNull(runCatching {
+                    if (source == "recording_graph") repository.finalizeRecordingSession(token, request())
+                    else repository.finalizeCanonicalSession(token, frozen)
+                }.exceptionOrNull())
+                assertTrue(reached.get())
+                assertTrue("$source: $original", original is RecorderValidationException)
+                assertEquals(before, databaseSnapshot())
+                if (clear == "after") repository.beginOwnerClearHandoff(token)
+                val conflict = runCatching {
+                    if (source == "recording_graph") repository.finalizeRecordingSession(token, request(finalOffsetMs = 2_001))
+                    else repository.finalizeCanonicalSession(token, terminalRequest(finalOffsetMs = 2_001))
+                }.exceptionOrNull()
+                assertTrue("$source/$clear must retain intent: $conflict", conflict is CanonicalFinalizationConflictException)
+                assertTrue(runCatching { repository.applyCanonicalActivity(token,
+                    CanonicalActivityRequest(frozen.expected, CanonicalTuple(1_001, 4))) }.isFailure)
+                assertEquals(before, databaseSnapshot())
+                assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+                if (clear == "none") {
+                    if (source == "recording_graph") repository.finalizeRecordingSession(token, request())
+                    else repository.finalizeCanonicalSession(token, frozen)
+                    assertEquals("completed", requireGraph().session.status)
+                    assertEquals(1, requireGraph().snapshots.size)
+                } else {
+                    val retry = runCatching {
+                        if (source == "recording_graph") repository.finalizeRecordingSession(token, request())
+                        else repository.finalizeCanonicalSession(token, frozen)
+                    }.exceptionOrNull()
+                    assertSame(original, retry)
+                    assertEquals(before, databaseSnapshot())
+                    assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED,
+                        (runCatching { repository.prepareRecorder() }.exceptionOrNull() as RecorderOwnerBusyException).disposition)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun recordingPreflightAndExpectedRejectionsLeaveTheSameOwnerWritable() = runBlocking {
+        val (repository, token) = admittedFinalizer()
+        seedActiveRecording()
+        val before = databaseSnapshot()
+        assertTrue(runCatching { repository.finalizeRecordingSession(token,
+            request(terminalStatus = "active")) }.exceptionOrNull() is RecorderValidationException)
+        assertGuard(runCatching { repository.finalizeRecordingSession(token,
+            request(expectedTuple = CanonicalTuple(1_001, 3))) }.exceptionOrNull(), "finalization_expected_state", 0)
+        assertEquals(before, databaseSnapshot())
+        repository.appendHeartRateSample(token, terminalRequest().expected, CanonicalTuple(1_001, 4),
+            HeartRateSampleEntity(RECORDING_ID, 1, 1_001, 4, 125))
+        assertEquals(2, requireGraph().samples.size)
+        assertEquals(1_001L, requireGraph().session.lastDurableOffsetMs)
+    }
+
+    @Test
     fun preflightRejectionsRemainUnclaimedButRealFailureAfterStartCannotUseClearException() = runBlocking {
         val (repository, token) = admittedFinalizer()
         val header = WorkoutSessionEntity(SESSION_ID, mode = "timed", status = "active", planSnapshotJson = VALID_PLAN_SNAPSHOT,
@@ -287,6 +360,10 @@ class WorkoutSessionFinalizerTest {
         assertTrue(requireNotNull(original).message.orEmpty().contains("original_terminal_failure"))
         assertEquals(before, databaseSnapshot())
         database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_frozen_terminal")
+        val offsetOnly = terminalRequest(expected = frozen.expected.copy(durableTuple = CanonicalTuple(1_500, 3)))
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, offsetOnly) }
+            .exceptionOrNull() is CanonicalFinalizationConflictException)
+        assertEquals(before, databaseSnapshot())
         val conflict = runCatching { repository.finalizeCanonicalSession(ownerToken,
             terminalRequest(status = "abandoned", reason = "user_abandoned")) }.exceptionOrNull()
         assertTrue("different intent must not replace a failed terminal: $conflict", conflict is CanonicalFinalizationConflictException)
@@ -410,6 +487,8 @@ class WorkoutSessionFinalizerTest {
         val committed = databaseSnapshot()
         val offsetOnly = terminalRequest(expected = frozen.expected.copy(durableTuple = CanonicalTuple(6_000, 3)),
             finalOffsetMs = 10_000, snapshotCreatedAt = "2099-01-01T00:00:00Z")
+        assertEquals(result, repository.finalizeCanonicalSession(ownerToken, offsetOnly))
+        assertEquals(committed, databaseSnapshot())
         assertEquals(result, admittedFinalizer().let { (retry, retryToken) -> retry.finalizeCanonicalSession(retryToken, offsetOnly) })
         assertEquals(committed, databaseSnapshot())
         val conflicts = listOf(
@@ -529,6 +608,9 @@ class WorkoutSessionFinalizerTest {
         val committed = databaseSnapshot()
         database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER no_repeat_analysis
             BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'analysis_repeated'); END""")
+        val offsetOnly = terminalRequest(expected = frozen.expected.copy(durableTuple = CanonicalTuple(1_500, 3)))
+        assertEquals(CanonicalTuple(2_000, 4), repository.finalizeCanonicalSession(ownerToken, offsetOnly).finalTuple)
+        assertEquals(committed, databaseSnapshot())
         val result = repository.finalizeCanonicalSession(ownerToken, frozen)
         assertEquals(CanonicalTuple(2_000, 4), result.finalTuple)
         assertEquals(committed, databaseSnapshot())
@@ -567,6 +649,9 @@ class WorkoutSessionFinalizerTest {
         val committed = databaseSnapshot()
         database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER no_repeat_analysis
             BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'analysis_repeated'); END""")
+        val offsetOnly = terminalRequest(expected = frozen.expected.copy(durableTuple = CanonicalTuple(1_500, 3)))
+        assertEquals(CanonicalTuple(2_000, 4), repository.finalizeCanonicalSession(ownerToken, offsetOnly).finalTuple)
+        assertEquals(committed, databaseSnapshot())
         val result = repository.finalizeCanonicalSession(ownerToken, frozen)
         assertEquals(CanonicalTuple(2_000, 4), result.finalTuple)
         assertEquals(committed, databaseSnapshot())
