@@ -524,6 +524,7 @@ internal class WorkoutSessionRepository(
                         val sets = dao.strengthSetRecordsForSession(expected.sessionId)
                         recorderStage(RecorderStage.REQUEST)
                         if (graph.session.status in setOf("completed", "abandoned")) {
+                            readOnly = true
                             // D5 identity retains the predecessor sequence, not the overwritten old offset.
                             if (graph.session != request.terminalSession(graph.session, finalTuple) ||
                                 graph.recording?.recordingId != expected.recordingId ||
