@@ -4,17 +4,19 @@
 
 ## 当前状态、来源与阅读规则
 
-**规划状态：已接受。文档落地状态按下述条件判定；本文件不授予代码 Writer 权限。**
+**当前节点：E18-CC-P01 文档候选待独立 Planning Review；实时记录收窄决定已获用户接受，修订候选不等于实现 READY。**
 
-E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产保留。E18 → E19 → E20 → E21 → E22 的五组成果、24 个 Story、42 条唯一依赖已通过第四轮独立规划审查且获用户接受；力量与跟练分别接入、分别验收。技术根与数据依赖不改变成果验收顺序。
+E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产保留。E18 → E19 → E20 → E21 → E22 的五组成果顺序保持；原 24 Story / 42 边属于此前已审版本，本次受影响拆分以 F.26/F.37 为准，其容量与独立审查不沿用旧 PASS。力量与跟练分别接入、分别验收。
 
-本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。DOCS-P001 三组已由文档 Review attempt=2 独立关闭；本次 DOCS-P002 五组补充候选在 fresh 复审 / 集成前为 `DOCS_REPAIR_CANDIDATE_AWAITING_FRESH_RE_REVIEW`，不自行宣称 DOCS-P002 独立关闭。E18-S01 只进入准备，其 F8 执行绑定与代码实施尚未完成；未来运行、设备、依赖解析、性能和主观体验门禁不因规划接受而通过。
+本轮 accepted base 为 `74c25fac9c728baf2aa44b9e05b5f7bece615fca`，tree=`73982bda551b8bf164b3a0849f7ba5fec4938fd6`，本文件修改前 blob=`37104fdb36a1e5a06fa5deef5077801cc5e1de42`。该 base 已包含正式文档落地及 S01–S04：`122ba2ad9524242cd9c0e0b6b5b149c80d7f3ec0`、`4c2fa62c42eaf567fadc83bb2d0fa091a92b12ad`、`82bd2c110b286bb2248b98da3c044fbea5abc414`、`af4d9a9f129e08856069d9e5be30666408794b2b` 均为其祖先，保留这些实现与既有证据的原范围。S05 候选 `ecdf73419d7611ad5f4cf92cc6ad932af0a22dc7` 仍未 PASS/未合并，仅供必要只读定位，不是本轮 parent。文档候选通过独立审查并成为同步 main 祖先前，本轮文档门禁未完成；即使完成，也须主管理另行关闭 F.36/F.37 缺口并绑定 exact READY 合同，不能自动解锁 S05 merge 或后续 Writer。Review3/4 原额度上限不刷新，CS04C=HELD。
+
+本轮来源为 immutable V2 F.69.2/P01–P08 及其直接引用 F.67.6–F.67.8、F.68、F.69.1：757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`，literal 路径沿下方本地来源表。F.68/F.69 已窄替代 F.67 的旧“等待方向确认”。用户接受正常训练持续实时提交、正常结束冻结真实截止点并保存；程序停止后不续录、不补造，重开只按 durable 事实处理。这是当前产品 authority；旧恢复/清理承诺的准确替代见 F.8.4，不是仅以优先级声明保留相反 AC。原错误、事务正确性、身份隔离、原数据关联及历史 D5/testing 报告不改。
 
 **审查与接受身份：** V2 F.40 记录 F9 attempt=4、independence=VALID、overall / SPEC / QUALITY / EVIDENCE=PASS，审查对象为写前 V2（442883 bytes，SHA256=`CA8C9EE5894F6361D8E0496E354B011E237B0D53BFACE1257F7D6E5AE7684DCD`），报告 SHA256=`3CE2750B8FD418B70B1EF8A42D3BC0B7175002A52BE3930365E0DCF875416D30`。用户随后接受已展示规划并授权正式落地与 S01 实施准备；该 PASS 不覆盖后续 V2 状态更新或本次七文档转录 candidate。P003 已关闭，P001/P002 无回退；N001 已仅将 kind 索引计数更正为九，literal 值不变，不重开这些 finding。
 
 **当前导航：**
 
-- [F.37 当前 Story selector](#f37-当前候选包与手工规划审查入口) 是 24 个当前 Story 的唯一入口；F.26 是当前 42 边 DAG，F.36 是逐项 capacity。各 Story 同时消费 F.37 指明的 typed / AC / oracle / consumer 补充合同。
+- [F.37 当前 Story selector](#f37-当前候选包与手工规划审查入口) 是当前单元的唯一入口；F.26 是对应 DAG，F.36 是逐项 capacity/缺口。各单元同时消费 F.37 指明的 typed / AC / oracle / consumer 补充合同；S06 和旧 S07B 合同不再作为未拆分的派发包。
 - F.37 的 **E22-S02 与 E22-S03 同时消费[已接受 UX 约束补充（DOCS-P001）](#accepted-ux-supplement)**：S02/K01/K02/K04 承接 [UX-SUP-01](#ux-sup-01)，S02/K02 与 S03 既有读取错误呈现承接 [UX-SUP-02](#ux-sup-02)，S02/K03 与 S03/V11 承接 [UX-SUP-03](#ux-sup-03)。该补充与 F.17、F.18.2、F.20 同读；F.37 保全行中的 E22 selector 经本条导航取得完整补充合同。
 - F.37 的 **E22-S01–S04 同时消费[已接受 UX 约束补充（DOCS-P002）](#accepted-ux-supplement-p002)**：S01/Q02/Q06 承接 [UX-SUP-08](#ux-sup-08)；S02/K02 承接 [UX-SUP-05](#ux-sup-05)，并保留 F.18.2 的质量状态直接消费；S03 承接 [UX-SUP-04](#ux-sup-04) 的 S5 排列、[UX-SUP-05](#ux-sup-05) 的 V01/V04/V08/V09 状态文案、[UX-SUP-06](#ux-sup-06) 的 V08 质量详情、[UX-SUP-07](#ux-sup-07) 的 V02 按钮/手势及 [UX-SUP-08](#ux-sup-08) 的图表样式/全程入口/时间；S04 承接 [UX-SUP-07](#ux-sup-07) 的 W01 与 [UX-SUP-08](#ux-sup-08) 的 S6 保留内容。阅读路径为本页 → F.37 的 E22 行 → F.17/F.18.2/F.20 及上述对应补充；F.37 原文和 DOCS-P001 正文不改。
 - B–D 与 F.1 保留需求、资产、成果与非目标；F.20、F.22–F.35 保留 UX、字段、union、NULL、ordering、atomicity、retry、接线及证据义务。不得用本页导航替代完整正文。
@@ -23,7 +25,7 @@ E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产�
 
 ### Immutable main 与路径解释
 
-所有 main 直接来源均固定为 Git commit `d2c9ac48027177389092d56c208c64447a3c6a93`，tree=`c621b8385726a2b1b65097f337ab08134e4aed56`。以该 commit 的 repo 内路径读取正文，不以分支名或漂移工作区替代 Git 对象。主要技术来源是 [E17 remainder 合同](e17-remainder-epic-story-plan.md)的 §3–§9，按 B–D / F.37 的窄继承与替代规则消费；同文件在本次只新增入口，旧技术正文保持。
+原转录中的 main 直接来源固定为 Git commit `d2c9ac48027177389092d56c208c64447a3c6a93`，tree=`c621b8385726a2b1b65097f337ab08134e4aed56`；本轮 S01–S04 已合并事实与 docs parent 使用页首 `74c25fac9c728baf2aa44b9e05b5f7bece615fca`，两者不混为同一时点。以对应 commit 的 repo 内路径读取，不以漂移工作区替代 Git 对象。主要技术来源是 [E17 remainder 合同](e17-remainder-epic-story-plan.md)的 §3–§9，按 B–D / F.37 的窄继承与替代消费；本轮不修改该文件。
 
 保全区中的 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/` 及其反斜杠等价前缀仅是原始 provenance / base locator。去掉此前缀后的 `docs/...`、`DESIGN.md`、`app/...` 等是 repo 内路径：已有输入解析为上述 commit 的 Git 对象；F.28 等明确拟新增的路径只表示未来 Story 的输出定位，不能冒充已存在输入。该解释不授权在 Integration 工作区写入，也不允许推导或替换未提供的本地文件。
 
@@ -46,7 +48,7 @@ E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产�
 
 **本次 Repair 2 来源与审查边界：** 文档 Review attempt=2 为 `CHANGES_REQUESTED`，完整 must-fix batch 为 DOCS-P002 五组。reviewed candidate / 本次 repairStart=`745dd9fa40f7cc9cf97f8f3f149d2673597743b1`，tree=`2f93fce9116ca4f413e236830d31e9233da3f8a2`，唯一 parent=`abbfa48af13d8325d9f8bd56b2d141320d8390c8`；正式计划 blob=`8011e0311468da503af4c3ac2ebfd9755956a4d4`，428402 bytes，SHA256=`03972D3C543C694441F54298FE0FDCE11BF5136B5EB518DC63E2AF103309B444`。V2 F.44 记录用户已批准 `DOCS-P002-PORTABLE-UX-SUPPLEMENT`，只补本文件五组及必要导航/映射。主管理处置及 Writer 转录不等于独立复审通过。后续 fresh Reviewer 只重新检查五组及直接影响，对 B–F39、DOCS-P001 与另六份未变文档核对身份和前次已完成审查证据的适用性；不重审 E18–E21、E22 未受影响内容或整套规划。原 F9 接受、24 Story、42 边、owner、数据与未来运行门禁保持，S01 代码 Writer 不解锁，CS04C 保持 HELD。
 
-**转录边界：** 以下从 B 标题至 F.39 末尾保全 V2 正文；不复制 A/G/H、F.40–F.42 完整管理记录及原历史后缀。唯一已获用户明确批准的格式例外：V2 第 952 行（F.15.1 两段之间）四个 ASCII 空格在本文件中删除，空行保留，V2 原件不改；其他保全正文不变。此例外不改变规划语义，也不构成其他格式或 scope 扩张授权。
+**转录与修订边界：** B–F.39 原为 V2 保全转录；本次 E18-CC-P01 仅按 F.69.2/F.67.8 修订相冲突的当前合同及直接索引，不改历史 F.38/F.39、D5、testing 或管理 V2。原转录的空白例外及其他未受影响正文保持。下方旧 Repair 身份与审查记录只证明各自历史版本，不限制本轮已授权的窄修订。
 
 <a id="accepted-contract"></a>
 
@@ -79,6 +81,7 @@ E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产�
 
 - 胶囊与现有参数/前台恢复；普通通知唯一协调；D-082 合法 active/paused 后台心率及 exact target 有界恢复；同一 Application BLE owner、ID `7200` 单 writer。不能以 E17 封口冒称这些未交付部分完成。
 - 计时、力量、跟练的实际阶段与差异；开始/中途启用、pause、off/on、缺口、诚实终结、配置变化保留、进程死亡不续跑。D5 的无损观测、开始原子性、准确终态、陈旧请求隔离、原始失败与清理未确定时不放行新写保证保留。
+- 原 App 的同一 session、plan snapshot、实际执行值、休息延长和恢复建议关联保持。一次原子初始化确认后开始，正常训练持续实时提交；不改为整场只在内存缓存、基础记录降级或新 outcome/schema。正常 terminal 冻结真实截止点；Saved/read-ready 以终态事务成功及完整读回为据，正常导航不等待 Released。故障后不在同进程恢复该场写资格；clear 同步停止新输入/新写，不再补发 owner_cleared；在途事务仍全提交/全回滚，重开仅读已落盘事实，未提交输入不得称已保存。没有空间预检、故障向导或第二数据库/owner。
 - 单场 recap/历史入口、HR 卡及分析页；raw 实测曲线、阶段带、平均/最高、六区间、raw scrub、结构聚焦、显式横屏/返回恢复、大字/TalkBack/非颜色编码。
 - 既有 2500ms 统计有效期、同阶段不超过 20s 的纯视觉虚线、80%/50%/70% 精确充分性、整数分析规则、三个正交状态轴、no-eligible 优先级，以及 prepare/pause 排除主要统计但保留 raw。后续不重新计算已绑定的原始分析。
 - 本地优先、用户主动导出、不自动上传；无设备地址/GATT/原始内部诊断进入导出；旧 notes/user feedback 排除条款未被本次静默扩大。
@@ -96,11 +99,11 @@ RES-01–03 的新增 App 内跨场比较和 RES-04 窄进阶提示当前暂缓�
 |---|---|---|
 | BLE 和无损规范化观测 | 现有 `HeartRateRuntimeOwner`，`core/health/HeartRateRuntimeOwner.kt` | Application 唯一创建；串行 main-looper facts；同值 BPM 的多次 notify 不折叠。现有显示 StateFlow 不是无损记录输入；不新增第二 GATT owner。 |
 | 训练行为与入口 | 现有三模式 engine + 各模式 Activity-retained ViewModel；MainActivity/TrainFlowApp/shell 接入 | 页面只发命令/观察。活动计划入口、engine、时钟与 Recorder 一起跨配置变化保留；真实退出与 process death 分开。每场真实 Start 时固定时间信息。 |
-| canonical 排序和本场收尾 | session-scoped `WorkoutSessionTimelineRecorder`，拟创建点沿已讨论的 `core/data/WorkoutSessionTimelineRecorder.kt` | 阶段、规范化观测、记录意图和终结进入同一顺序；不推进 engine、不扫描 BLE、不计算图表。onCleared 同步交接先锁住本场，再由 Recorder-owned 工作收尾；不能在已取消的 viewModelScope 中补做最后保存。 |
+| canonical 排序和正常终态 | session-scoped `WorkoutSessionTimelineRecorder`，拟创建点沿已讨论的 `core/data/WorkoutSessionTimelineRecorder.kt` | 阶段、规范化观测、记录意图和正常终结进入同一顺序；不推进 engine、不扫描 BLE、不计算图表。clear 返回前同步停止接收/新写并封闭 matching owner，不创建另一 scope 补终结；已在途事务维持全提交/全回滚。S06A 活动采集与 S06B 终态接合是同 owner 的两个交付单元，语义接口预先固定于 F.9。 |
 | 正常化设备状态映射 | `core/data/CanonicalHeartRateObservationMapper.kt` 的单一 mapper 责任 | 保留 accepted state/reason matrix、receipt 与源边界；不合成生产不可达的 watchdog timeout；不把内部诊断落库。上述新文件名来自旧设计定位，不授权采用 04C 候选内容。 |
-| 持久化、准入与事务 | 现有 `WorkoutSessionRepository` + `WorkoutSessionDao` / `CanonicalTimelineHeartRateDao` | D5 准入/释放、原始错误、开始原子性、准确清理、旧 token 隔离保证保留；不另建 registry/manager。现有通用 upsert 拒绝覆盖 canonical；三模式必须正式接入新路径，不删除该 guard。 |
+| 持久化、准入与事务 | 现有 `WorkoutSessionRepository` + `WorkoutSessionDao` / `CanonicalTimelineHeartRateDao` | 唯一准入边界；新准入扫描与安装在同一序列边界，无共享 completed gate/cache；active/pending/blocked 时不得扫描或放行新场。原始错误、开始原子性、exact 清理及旧 token 隔离保留；Saved 与 Released 分别返回，清理未定不开放冲突写。通用 upsert 继续拒绝 canonical；仅已迁移模式同时切换 Start 与终态，未迁移模式保持旧保存链。 |
 | 终结与原始分析 | 现有 CS-05 `finalizeRecordingSession` / `CanonicalAnalysisV1` / 已有 validators | 同一仓库外层事务可把必要执行/结束信息和已有终结调用一并提交；不复制或重新实现分析/终结 owner。准确同一请求重试识别既有结果。CS-04B 继续负责新进程 durable 封口。 |
-| 时间数据与日历归属 | 现有数据库/entity 增量扩展，仓库写入与严格读取 | 当前 DB v5；新时间元数据需要后续增量迁移。开始信息贯通 entity/domain/read/export，不被结束或旧更新覆盖。日历、筛选、按日删除使用同一冻结日期规则。旧记录未知不回填。 |
+| 时间数据与日历归属 | 现有数据库/entity 增量扩展，仓库写入与严格读取 | 页首 base 已合并 S01 的时间字段增量；不再要求重复迁移。开始信息贯通 entity/domain/read/export，不被结束或旧更新覆盖。日历、筛选、按日删除使用同一冻结日期规则。旧记录未知不回填。 |
 | 历史/原始分析读取 | 同一仓库提供 version-aware terminal read；复用已有 validator 和 original binding | 新图表/导出不直接用含 fallbackMode 的旧通用读取构造真值。只从当时快照解析名称/结构；每场一致读取，不创建持久化 export snapshot 或第二套原始事实。 |
 | 图表投影和页面状态 | 既有 accepted 纯 `HeartRateChartProjector` 责任 + analysis ViewModel/SavedState | canonical 分析仍由 CS-05；竖/横/聚焦共用投影、raw scrub 查真实点；同 Activity 显式横屏，不新增横屏 Activity。大屏方向政策限制仍需对应 UI 证据。 |
 | 普通通知/FGS | 现有 `ActiveWorkoutNotificationController` contract 的 Application 唯一协调实例 + connectedDevice Service | 同一 session identity、ID 7200、单 writer 有序交接；Service 不接管 engine/GATT。D-082 有资格的后台断联保留 FGS 并恢复；START_NOT_STICKY，合法启动边界与通知拒绝分支保持。 |
@@ -112,8 +115,8 @@ RES-01–03 的新增 App 内跨场比较和 RES-04 窄进阶提示当前暂缓�
 
 ### C.2 退出核对的证据层与限制
 
-- 源码证明现有 main 是 Room v5；通用 upsert 明确拒绝 canonical；current finalizer/reconciliation 保存可信相对终点，不意味着保存了实际观察到的 wall end。三模式的生产记录接入尚未实现。
-- AndroidX Activity 1.12.3 源码证明配置变化保留 ViewModelStore，真正销毁时清除；Lifecycle ViewModel 2.9.4 源码证明资源/scope 在 onCleared 前清理。因此必须沿既有 D5 的同步 barrier + Recorder-owned handoff，不能靠 onCleared 启动 viewModelScope 收尾。
+- 原规划 pinned-main 源码为 Room v5；本轮 base 已包含 S01 增量；通用 upsert 明确拒绝 canonical；原 finalizer/reconciliation 保存可信相对终点，不意味着保存了实际观察到的 wall end。三模式的生产记录接入尚未实现。
+- AndroidX Activity 1.12.3 源码证明配置变化保留 ViewModelStore，真正销毁时清除；Lifecycle ViewModel 2.9.4 源码证明资源/scope 在 onCleared 前清理。本轮只保留 clear 同步停接输入/新写的 barrier；不依赖已取消 scope，也不新增 Recorder-owned 后台补终结工作。源码只证明框架机制，实际 clear/在途事务竞态仍需后续匹配证据。
 - Room Android 2.8.4 源码证明 nested suspend transaction 继承同一事务上下文；这是复用同一终结 owner 的机制依据，不是项目原子性测试通过。
 - Android FileProvider 临时权限不提供固定十分钟有效期；采用系统授权是用户已接受的保证调整。JsonReader/JsonWriter 从 API 11 提供，当前 minSdk26 支持；不据此声称输出正确或性能达标。
 - 当前源码与外部官方来源证明方法/API 边界；实际 dependency resolution、项目接入、Activity/Service 行为、完整字典独立解释、性能、真实 Band/RF/GATT 与 UI 仍各需对应 implementation/evidence gate。
@@ -291,7 +294,9 @@ E19 同组理由澄清：两者共享 E18 的 session 时间坐标、原始 HR�
 
 用户再次回复“ok，接受”，确认 E19 共用记录基础、力量与跟练分别接入/验收；五成果组不再重问。本节是该接受之后产生的技术分解候选，不能追溯为用户已经接受的 Story 合同。ID `E18-S01` 等是本工作稿内的候选标签，尚不是 immutable 可派发 Story。普通技术拆分不逐项创建新的产品确认门禁。
 
-#### F.3.1 E18：计时训练真实记录的九个责任单元
+#### F.3.1 E18：计时训练责任沿革与本轮拆分
+
+本轮 P01–P08 的当前单元定义在 F.8/F.9/F.11/F.25，唯一 DAG/selector 为 F.26/F.37。下表 S01–S04 保留历史任务说明及已合并行为；S06 拆为 S06A/S06B，原 S07B 拆出配置保留 S07L 后由 S07B 承担生产切换，S08 仍按 S08A/B/C 分层。原 S07/S08 合称不额外派发。
 
 | 候选 | 因果完整的 old→new 与唯一主要责任 | 来源义务及独立验收边界 | 候选直接前置 |
 |---|---|---|---|
@@ -299,15 +304,16 @@ E19 同组理由澄清：两者共享 E18 的 session 时间坐标、原始 HR�
 | E18-S02 无损规范化心率观测 | 现有显示 StateFlow 不保证每次同值测量都被消费 → 同一 HeartRateRuntimeOwner 提供 D5 绑定/receipt/snapshot 观测，并按已接受矩阵正常化。 | CT-09、E17-ARCH-18/19；D5 §4.1。无 backlog、相同 BPM 多次 notify 不折叠、receipt 顺序、exact bind/unbind disposition、无设备内部标识落入载荷；不改变 BLE owner、恢复/freshness policy 或添加 watchdog。runtime+纯映射是同一规范化观测输出边界，不包括 Room/Recorder。 | 已合并 main 资产 |
 | E18-S03 原子开始与活动持久化 | 现有 startCanonicalSession 只插 session/initial phase，既有 guarded append 分散存在 → 一次 Start 事务容纳冻结初始化批次与可选 HR，活动批次按 expected tuple 原子提交。 | CT-01/03/09、D5 §4.2、E17-CAP-04/07–10；真实 Room 证明全提交/全回滚、相同请求结果丢失后的完整 row graph 识别、同毫秒顺序、phase/intent/acquisition partition、zero-sample 阶段。沿现有 DAO/validator，不另造 digest/schema 或获取 runtime owner。 | E18-S01、E18-S02 的数据/receipt 合同 |
 | E18-S04 可信终结持久化接合 | 已有 CS-05 管理 recording graph 与 original analysis 终结，但未完整承接本次执行结果/实际结束时间；普通 no-recording terminal 也需补齐 → 仓库同一外层事务提交执行结果/已知结束信息及适用终结分支。 | CT-10、E17-CAP-12/13、E18-R07/16、D5 §4.3；有 HR 调用原 CS-05，无 HR 不造 HR/snapshot 行；expected tuple/rowCount、readback、全回滚、同请求幂等、晚到请求不能改历史。实际结束信息来自冻结的终结请求；重试不重新采时写成新的结束时刻。process_interrupted 仍由已合并 CS-04A/04B 按 durable 事实处理，不补未知 wall end。 | E18-S01；已合并 CS-05/04B |
-| E18-S05 唯一仓库准入与释放 | 当前 prepareRecorder 直接复用已完成 cache，尚无 D5 完整单场 ownership gate → 现有 repository gate 管理独占 token、PENDING/BLOCKED 与 cache 释放顺序。 | CT-10/11、D5 §5–6.1；OPEN/ACTIVE/PENDING/BLOCKED、抢占前 cache 检查、真实 Room 回滚/终结结果、binding 明确 absent/installed/conflict/unresolved、exact unbind 后才能释放、原始失败和 stale token 不扰动新场。只管理既有仓库准入/释放，不创建 Recorder/Activity owner；生产方法直接并发证据不能冒称 Android 生命周期证据。 | E18-S02、E18-S03、E18-S04 |
-| E18-S06 单场串行 Recorder | runtime/engine 的事实尚无生产串行记录 owner → session-scoped Recorder 串行接合上述生产能力，保存 canonical 顺序并独立承接退出收尾。 | CT-09/10/11、E17-ARCH-05/08/17/20、D5 §4–6.1；冻结 receipt cut、post-cut 排队、late enable 真实边界、off/on 同 identity、ACTIVE_PERSISTENCE_FAILED 不驱动 engine、on-clear 同步 barrier 后 Recorder-owned 收尾、terminal/clear 竞争与 stale request。只编排调用，不重复定义 DB 事务、准入状态机或分析算法。 | E18-S05（传递包含 S02/03/04） |
+| E18-S05 收窄仓库协议 | 一次准入、全部 canonical 消费者 exact 授权，无共享扫描 cache；原错误/原子性/隔离保留 | F.8/G01–G17；失败不可恢复 block，Saved 与 Released 独立；真 Room/绑定证据不冒充 Android | E18-CC-P01、E18-S02、E18-S03、E18-S04 |
+| E18-S06A 活动采集 | 一个 Recorder 接 S02→有序队列→S03；冻结 cut、late enable/off-on、停输入/停写与原错误 | F.9/R01–R04、R06/R08 活动部分；不接 UI、不补终结、不恢复，真实 producer/Room ledger | E18-S05、E18-S02、E18-S03、E18-S07A |
+| E18-S06B 正常终态接合 | 同 Recorder 冻结执行结果→S04→Saved，exact 清理另报 | F.9/R05/R07、R06/R08 终态部分；不启 UI、不建立第二 owner 或跨 scope 补存 | E18-S06A、E18-S04 |
 | E18-S07 计时模式生产接入 | 计时 session/engine/clock 仍由 Route remember 持有，terminal 走普通 legacy mapper/write → Activity-retained 计时状态在真实 Start 接入 Recorder、canonical phase/metadata 和冻结参数，结束后保留真实持久化结果。 | E17-CAP-02/04/07–13、E17-ARCH-22/23/25、CT-04/05/11、E18-R03/07；legacy_timed/composition 的精确 family/index/真实 work-rest predicate、pause/extra-rest、Start gate、配置保持、真实退出及 fresh-process gate。真实 Activity/生产调用证明，不以 helper/barrier 测试代替；不新增动作次数。保留既有倒计时、提醒、音振和终态体验的直接回归。 | E18-S06 |
 | E18-S08 严格历史读取 | 当前通用记录读取含宽松 domain decode，未提供完整 version-aware terminal graph/original binding 读取 → 同一仓库提供 canonical/legacy 严格读取，供历史、导出、图表共同消费。 | E17-CAP-13/21/23、CT-02/03/12、E18-R08/16；canonical 复用已有 strict validator，legacy 保留真实 NULL version且不 fallback/default/mapNotNull 丢项，original binding 不回退 latest、不重算、不回写。每场一致读取、缺失/非法显式区分，删除后不能返回已缓存完整旧 graph。列表不能为展示摘要无条件加载全部历史 raw samples。 | E18-S01、E18-S04；已合并 validator/snapshot 资产 |
 | E18-S09 计时记录历史入口闭合 | 新链记录不能仅证明数据库里有数据 → 现有历史/结束后入口消费严格持久化结果，可查看本场已知时间、执行事实及可信终态；当前计划修改不污染结果。 | E18 的 done、E17-CAP-21/23、E18-R07/08/16；真实生产计时结果进入页面、冻结日期归组与按日删除一致、未知日期不冒充准确当地日、删除后 detail 失效、既有非 HR 趋势与其他模式旧记录保留。这里只补 E18 必需的可用入口，不提前实现 E22 HR 卡/分析曲线。 | E18-S07、E18-S08 |
 
 S03 与 S04 分别承担开始/活动事务和终结事务；S05 承担其外侧的准入/释放状态，S06 消费这些结果并编排。**不能为了更少节点把 S02–S06 再合成一个共享底座 Story。** 同样不能只按文件把一个原子 Start transaction 拆成多次独立提交；冻结初始化 cut 内的插入与观测折叠是 S03 单一事务义务。
 
-旧 D5 的开始/清理/终结保证完整保留，旧 12-path、单 Story、capacity PASS 和 Route A 先后不作为新结构约束。S05 中 rollback、bind result-loss、clear race、cache/release 的完整矩阵仍需在自己的合同一次闭合；若十项 capacity 证明还存在多个独立状态/证据责任，继续拆分，不因本表已经写成九项就锁死数量。
+旧 D5 的事务/原始错误/隔离保证保留，恢复与 cache/clear 补终结承诺按 F.8.4 逐条替代；旧 12-path、单 Story、capacity PASS 和 Route A 不作为新约束。S05 全部写授权边界仍须一次闭合；同 Recorder 的活动、正常终态和原会话配置保留可沿 F.9/F.11 独立交付，但未完整切换前不启用新 UI。未证明容量的单元保持 NOT_READY。
 
 #### F.3.2 E19–E22 的消费者候选
 
@@ -594,7 +600,7 @@ old→new：独立的 session 开始和 HR 初始化写入入口 → 一次不�
 
 #### F.6.2 提交结果不确定与活动失败
 
-同一 Start 的 commit-result 丢失只能以冻结请求确定产生的**完整持久化 row graph**识别：session全部合同字段、时间/快照原文、phase、recording、acquisition、sample及应为空的 snapshot/执行子记录。比较稳定键和合同顺序，不依赖查询自然顺序；缺行、多行、任何值冲突均不能认成功。完全不存在且事务已结束/确认回滚才是 rolled-back；无法确认则 unresolved。不得以仅存在 sessionId、最终 tuple 相同或记录条数相同代替完整比较。确定提交成功后不重复插入，清理 disposition 归 S05；同一请求尚未确定前 S06 不放行 >N，所以不能把“已经有后续活动写入”猜成这个初始化图。
+同一 Start 的 commit-result 丢失只能以冻结请求确定产生的**完整持久化 row graph**识别：session全部合同字段、时间/快照原文、phase、recording、acquisition、sample及应为空的 snapshot/执行子记录。比较稳定键和合同顺序，不依赖查询自然顺序；缺行、多行、任何值冲突均不能认成功。完全不存在且事务已结束/确认回滚才是 rolled-back；无法确认则 unresolved。不得以仅存在 sessionId、最终 tuple 相同或记录条数相同代替完整比较。S03 已合并的完整图识别与不重复插入资产保留；本轮撤销 S05/S06 调用层在故障后恢复 ACTIVE 的承诺，未定即停写/BLOCKED。同一请求未确认前 S06A 不消费 >N，不能猜已发生后续活动；新进程沿 CS-04B 仅读 durable 事实，不续录。
 
 普通活动写入的首次失败：S03 返回原错误和未推进的确认边界，S06 进入 `ACTIVE_PERSISTENCE_FAILED`，之后不继续 canonical 写入、不伪造设备故障/用户排除/成功终态，不改变 engine；S05 仍保留 owner。活动 commit-result 不确定同样不能凭内存判回滚或推进，保持失败/未确定并禁止新写；不新增活动通用重放日志。fresh-process 的 durable reconciliation 沿 CS-04B，当前进程不能借用 process_interrupted 解除阻塞。
 
@@ -635,7 +641,7 @@ old→new：独立的 session 开始和 HR 初始化写入入口 → 一次不�
 | conflicting/missing/invalid graph | 返回typed冲突或原始持久化/validation错误。 | 不降级legacy、不绕guard upsert、不把冲突当幂等成功。 |
 | fresh-process遗留 | CS-04A/04B按最后durable offset调用适用已有分支。 | S04不在当前进程调用process_interrupted；实际wall end未知保持未知，不用重启时间冒充结束时间。 |
 
-正常 terminal cut 后不再追加样本/阶段掩盖终结失败；仅保留exact同意图重试。终结失败不对用户声称已保存。事务成功后何时 invalidate cache、unbind 和释放唯一owner由S05负责；durable成功与RELEASED/read-ready是不同结果，清理失败不得重做分析。记录失败后保留 confirmed durable图的规则沿D5，S04不制造用于“成功结束”的假行。
+正常 terminal cut 后不再追加样本/阶段掩盖终结失败。S04 已合并的 exact 同请求幂等识别保持，但 S05/S06B/UI 不再承诺故障后的同进程重试恢复。终结事务成功且完整读回即 Saved/read-ready，正常导航不等待 exact unbind/Released；清理另由 S05 负责，未定阻塞新冲突写，清理失败不重做分析。失败保留原错/冻结截止点和 confirmed durable 图，不造“成功结束”假行；clear 不新增 owner_cleared 请求，S04 已有该分支的底层语义不撤除。
 
 #### F.7.2 AC、路径与消费者
 
@@ -644,7 +650,7 @@ old→new：独立的 session 开始和 HR 初始化写入入口 → 一次不�
 | T01 recording整体终结 | 已验证active graph + 冻结终结请求 → 执行事实/实际结束、closed graph、唯一original analysis同次提交。 | production外层repository+真实Room；直接读取所有相关表，沿CS-05 oracle；S06/S08 |
 | T02 no-HR终结 | completed/user_abandoned/owner_cleared、含zero-duration phase → 合法terminal且HR/snapshot表无本场行。 | 独立no-HR三类fixture，既有validator；S06/S08 |
 | T03 嵌套回滚 | 执行写、CS-05 guard/insert/binding、末次readback失败 → 整个外层恢复pre-terminal图，原错误保留。 | 实际Room事务与现有测试SQL trigger方法；框架源码仅证明机制，不代替此oracle |
-| T04 同请求重试 | result-loss或清理失败后再调同请求 → 原结果，唯一snapshot，所有首次时间和执行值不变；仅旧predecessor offset不同而其余身份及完整结果相同的合法请求也返回原成功。 | 真实persisted graph比对；不同ended_at/执行字段/predecessor sequence/finalOffset/reason均为冲突，不得改历史；snapshotCreatedAt仅首次metadata |
+| T04 同请求识别资产保留 | S04 边界收到同一合法请求仍识别原结果、唯一 snapshot、首次时间/执行值不变；旧 predecessor offset 不同而其余身份及完整结果相同仍合法。此 AC 不要求 S05/S06B/UI 在故障后发起重试。 | 真 persisted graph 对比；不同 ended_at/执行字段/predecessor sequence/finalOffset/reason 为冲突；snapshotCreatedAt 仅首次 metadata。Saved/read-ready 不依赖 cleanup，消费见 G10–G12/R05/R07/L04/H01 |
 | T05 晚到与竞争 | 首次终结的错误完整predecessor tuple、terminal后append或不同终结身份/payload → 拒绝且持久化图不变；终态offset-only合法重试沿T04返回原成功。 | 生产仓库并发 + 真实Room；S05/S06分别证owner竞争 |
 | T06 原分析与时间来源 | 改当前计划/参数、晚重试或process restart → 不重算original，不填未知wall end、不擦除冻结开始元数据。 | 独立原始绑定/时间 fixture + 既有fresh-process资产回归；S08/导出 |
 
@@ -652,89 +658,113 @@ old→new：独立的 session 开始和 HR 初始化写入入口 → 一次不�
 
 状态：`DRAFT_1_TERMINAL_BOUNDARIES_DEFINED / NOT_REVIEWED / NOT_READY`。S01 future prerequisite尚未实现；这里的拟定合同和官方nested-transaction机制不等于集成或运行PASS。
 
-### F.8 E18-S05 唯一仓库准入/释放 DRAFT-1
+### F.8 E18-S05 收窄的唯一仓库准入/释放合同
 
-来源：C、F.3/S05，D5完整§5.1–5.8/§6.1及F.5–F.7接口。已有repository的 `prepareRecorder()` 在进入mutex前直接返回 `completedRecorderGate`；现有canonical写入口会重新调用prepare。因此S05必须同时改正cache前检查和已准入写消费者，不能只加一个busy字段而让自己的活动写入被prepare拒绝，也不能保留另一条无token canonical入口绕过准入。
+来源：本轮 P01–P04/P07、F.67.6 的 G01–G17 处置，以及已合并 S02/S03/S04。旧 D5 仅按 F.8.4 窄替代；不采用未合并 S05 候选，不回退原子事务、完整图识别或终态幂等资产。
 
-#### F.8.1 一个状态authority和两个调用层
+#### F.8.1 一个状态 authority 和一次准入
 
-现有 `WorkoutSessionRepository` 唯一拥有进程内 `OPEN / ACTIVE_OWNER / OWNER_CLEAR_PENDING / OWNER_BLOCKED` 状态、entryId/ownerToken/bindingId及匹配清理身份，语义完整继承D5。runtime只消费binding；ViewModel/Recorder不各建一套仓库准入真值。ordinary prepare/admit在读取cached success之前以及实际准入线性化点核对OPEN；一个entry赢得原子准入，重复同entry只取得原结果，不同entry busy，不抢占。
+现有 `WorkoutSessionRepository` 唯一拥有进程内 `OPEN / ACTIVE_OWNER / OWNER_CLEAR_PENDING / OWNER_BLOCKED`、entryId/ownerToken/bindingId 与 exact 清理身份。ViewModel/Recorder 只消费授权，不复制准入真值。新准入在同一序列边界检查 OPEN、执行原 validator/reconciliation 扫描并安装唯一 owner；不保存或复用共享 completedRecorderGate/完成扫描 cache。ACTIVE/PENDING/BLOCKED 先拒绝新准入，不先 scan；同 entry 正常重复不新开场，不同 entry 不抢占。
 
-S03/S04已准入事务的入口消费exact owner授权，不能走“新训练prepare”路径。仓库区分新准入、matching owner的活动操作、matching pending的已冻结Start/terminal收尾及fresh-process reconciliation；blocked不允许新canonical活动写，只有同token的确定性核对/清理，不能凭token解除已发生的持久化失败。旧通用upsert仍拒绝canonical。所有直接canonical consumer及tests迁移到唯一授权入口；不对生产保留一个供测试调用的无token旁路。
+S03/S04 全部生产 canonical 入口和直接测试消费者同时适配 exact owner 授权，不能各留一半，也不留无 token 测试旁路。已准入活动写不重新 prepare；fresh-process reconciliation 仍归原 CS-04B。当前进程的失败/未定状态不能靠重新 scan、same-token resolve、换入口或调用 process_interrupted 恢复写资格。
 
-`beginOwnerClearHandoff`为非挂起、线性化状态转换：返回前matching ACTIVE→PENDING已成立。具体同步原语留给Writer在既有repository单状态实现；不能拿挂起Mutex/launch的未来任务冒充同步barrier，也不能在main阻塞等待Room。其他gate/cache操作必须在发布结果前再核对同一状态/owner，不能被已完成cache、正在scan的旧结果或晚到callback反向打开。reconciliation结果属于扫描缓存，不是session所有权；实际新Start总需独占准入。
+clear 是非挂起、返回前成立的停写边界：matching owner 先进入 PENDING，关闭新输入/新写；随后按下表只处理已在途操作与已知安全清理，不启动新 Start/活动/备用终态。PENDING 不授予清理任务补写资格。未定或真实清理失败进入 BLOCKED，在本进程内不可重新打开；只允许进程结束后由新 repository 按 durable 事实处理。不能在 main 阻塞等待 Room，也不能以未来 launch 冒充同步停写。
 
-#### F.8.2 全部释放/阻塞分支与顺序
+Saved 与 Released 是独立结果：S04 终态事务提交且完整读回就是 Saved/read-ready；exact unbind/释放成功才是 Released/OPEN。前者允许正常导航，后者决定能否开启冲突新写；不得合并为一个成功布尔，也不得为发布 Saved 等待清理。清理只处理 matching binding，不控制 Application BLE 生命周期。原错误为 primary，后续清理错误为 secondary；无前错时清理错误为 primary。
 
-下表是D5各分支的新primary disposition，不重启旧Repair。`ACTIVE/PENDING`均指exact matching token，失败cause保留最早原始错误，清理错误只作secondary；没有先前错误时首次清理错误为primary。
+#### F.8.2 G01–G17 完整处置与当前 AC
 
-| 分支ID / 真实边界 | 持久化与binding证据 | 最终状态与cache处理 |
+| 分支ID / 真实边界 | 持久化与 binding 证据 | 当前结果及后续准入 |
 |---|---|---|
-| G01 准入前验证失败/另entry竞争 | 未准入；原owner、Room、binding不变 | 不改状态/cache，不执行清理 |
-| G02 准入后bind known absent | 确定bind不会随后安装；未运行Start，无本场行 | 保留cache，exact ACTIVE/PENDING→OPEN；不请求terminal/unbind |
-| G03 matching installed，含bind结果丢失 | 查到原binding；未运行Start，无本场行；丢弃未提交buffer；exact unbind成功 | 保留cache，再exact ACTIVE/PENDING→OPEN |
-| G04 bind后snapshot/receipt/mapper验证失败 | 与G03相同，但primary是原validation错误 | exact清理后保留cache并OPEN；不造owner_cleared终态 |
-| G05 conflict/unresolved/bind清理或token释放失败 | 不解绑别人；不能证明安全不存在就不猜absent | OWNER_BLOCKED；禁止cache捷径和新Start；仅same-token确定性resolution/cleanup或进程终止结束该block |
-| G06 Room Start确定全回滚 | 全部start行不存在，且原binding exact unbind成功 | 保留cache，再exact ACTIVE/PENDING→OPEN；旧entry/token stale，后续显式Start新准入 |
-| G07 Start回滚/提交结果仍不确定 | F.6完整graph核对尚未得到确定答案，或清理失败 | OWNER_BLOCKED；既不发布Start成功，也不释放到OPEN |
-| G08 Start成功、正常active | 原owner持续；配置重建复用同entry/Recorder；设备transition不释放 | ACTIVE；新entry busy；不得为每个sample重新prepare |
-| G09 active首次持久化失败 | 本项回滚或commit disposition不确定，保留已确认事实/原错误 | owner仍占用，禁止后续canonical写；clear转PENDING后不能假terminal成功，按D5阻塞，fresh-process仅读durable事实 |
-| G10 normal terminal成功 | F.7提交且全量readback→Recorder记原结果→仓库invalidate cache→exact unbind→exact ACTIVE/PENDING→OPEN | 仅顺序全部完成才RELEASED/read-ready；下次prepare重新scan；不再finalize |
-| G11 terminal事务失败，owner仍在 | 无可信terminal结果；保留exact terminal intent/primary | ACTIVE，不开放准入；只允许原意图终结重试；若clear已成立则BLOCKED |
-| G12 durable terminal成功，清理失败 | 保存原terminal成功供识别；不重复snapshot/执行写 | BLOCKED；retry仅完成未完成的exact invalidate/unbind/release，全部成功才OPEN |
-| G13 completed/user_abandoned与clear竞争 | clear沿同token安装PENDING；保留已有terminal intent，成功走G10，失败走G11/12 | 不新发owner_cleared、不第二次终结 |
-| G14 STARTING期间clear | 同步PENDING先成立；未进Room走G02–05；回滚走G06；若Start最终提交则收尾owner_cleared | 未确定/清理失败不放新Start；已提交才有可终结session |
-| G15 ACTIVE期间clear | 同步PENDING→Recorder按原顺序冻结owner_cleared intent并收尾 | 成功走G10，否则BLOCKED；不从已取消viewModelScope启动收尾 |
-| G16 released/stale/重复清理 | RELEASED ViewModel本地no-op；旧token到达仓库返回typed stale；不同binding不改 | 新owner/cache/binding原样；仓库不保留第二份released-result缓存 |
-| G17 fresh process | 原token/binding/queue不复活；原CS-04B扫描durable graph | 仅新repository处理process_interrupted；legacy residual不是当前owner |
+| G01 验证失败/双 entry 竞争（保留） | 未准入不改 Room/binding；正常同 entry 重复不另开，不同 owner 不能写别人 | 原 owner 保持，不清理他人；无 cache 捷径 |
+| G02 bind known absent（简化） | 确定不会随后安装，未运行 Start、无本场行 | 安全 absent 可 exact 释放 OPEN；不 unbind/造 terminal，无 cache 保留义务 |
+| G03 installed 或 bind 结果丢失（保留 exact 边界） | 一次 exact 查询确认原 binding，未 Start；只解绑 matching | 已知安全且清理成功可 OPEN；冲突/未定转 G05，不建立多次恢复循环 |
+| G04 snapshot/receipt/mapper 失败（保留校验） | 原 validation 错误；无 Room 行不造 owner_cleared/基础记录 | 已知安全可一次 exact 清理再 OPEN，否则 BLOCKED；不降级成功 |
+| G05 conflict/unresolved/清理失败（撤恢复） | 不解绑别人、不猜 absent；保留 exact 身份及原错 | BLOCKED，只由进程结束解除；无 same-token resolution/cleanup 重开入口 |
+| G06 Start 确定全回滚（保留原子性） | 全部 Start 行不存在且在途事务已结束；一次安全 exact 清理 | 未 clear 且清理成功可 OPEN，显式新 Start 需新准入；无 cache 复用。已 clear 的在途 Start 按 G14 保持封闭 |
+| G07 Start 结果未定（撤恢复 ACTIVE） | 未确认提交/全回滚，不以 sessionId/tuple/行数猜完整结果 | BLOCKED；不发布 Start 成功、不消费 >N；S03 完整图识别资产保留，不借它恢复活动写 |
+| G08 正常 active/配置保留（保留） | 已确认 Start，expected tuple、同 sink/owner/session 连续有序 | ACTIVE，新 entry busy；不为每点 prepare；旋转不重新 Start |
+| G09 active 首次持久化失败（保留最小边界） | 原错和最后 confirmed 图保留；当前在途事务仍全提交/全回滚 | 停止后续 canonical 写，BLOCKED；不控制 engine、不伪造设备缺口/terminal，fresh process 仅读 durable |
+| G10 正常 terminal 成功（分离结果） | S04 提交并完整读回即 Saved/read-ready；随后分别尝试 exact unbind/释放 | 正常导航可消费 Saved；清理成功 Released/OPEN，否则按 G12。无 cache 失效步骤，不再次 finalize |
+| G11 terminal 失败（撤同进程重试流程） | 冻结原 intent/截止点/执行值，保留 primary；不冒称保存 | BLOCKED，不继续活动、不恢复写资格、不新增 UI 重试流程；S04 同请求识别底层资产保留，不重新采时 |
+| G12 durable 成功、清理失败（撤恢复 OPEN） | 保留 Saved 和唯一 original analysis，清理失败单独可诊断 | BLOCKED 至进程结束；正常返回不被阻止；不以 retry 重新分析/写执行值或恢复 OPEN |
+| G13 terminal 与 clear 竞争（保留一次 cut） | 正常 terminal 已在途可完成自身，clear 同步停接新输入/写 | 不替换 intent，不补 owner_cleared、不第二次终结；成功与清理仍分开，晚回调不移除新 entry，未定不放行 |
+| G14 STARTING clear（撤自动补终结） | 返回前停接/停写；已在途 Start 全提交或全回滚，提交不再触发 owner_cleared | 保持封闭；在途 Start 结束后 BLOCKED，不以结果判定恢复或补终结。新进程只看实际 durable 图；未进 Room 且已知安全可沿 G02–G04 清理 |
+| G15 ACTIVE clear（撤后台终结） | 同步关闭接收/新写资格；已有在途事务仍原子完成 | BLOCKED，保留 durable 前缀；不新开 scope、终结 intent 或后台补存任务 |
+| G16 stale/released/重复清理（保留） | exact token/session/binding；已释放本地 no-op，旧 token 返回 stale | 新 owner/binding 不变，不建 released-result 第二缓存，不把迟到输入写入新场 |
+| G17 fresh process（保留） | 旧 engine/token/binding/queue 不复活；CS-04B 仅读持久化事实 | 已有 terminal 读取原结果；未终结按最后 durable offset 诚实封口，不用重开时间补结束，不续录 |
 
-G02–G07中若clear已安装PENDING，改变的只是matching最终状态，不能因为有clear就给不存在session伪造terminal。成功terminal后的cache失效是受序列化保护的内存更新，不设计虚构IO失败；真实unbind/release不确定仍必须fail closed。
+G14/G15 撤销的是 clear 后的新写/补终结承诺；不是取消底层事务的全提交/全回滚义务。未交付给调用者的在途结果不能冒称“全部点已保存”。一次已知安全的正常清理不等于故障后重新开放的恢复流程；一旦 BLOCKED，本进程不再解除。
 
-#### F.8.3 AC与证据边界
+#### F.8.3 AC、证据与精确直接消费者
 
-G01–G17每行同时作为本Story AC，执行oracle为真实repository生产调用、现有Room数据库、S02真实binding边界及独立预期state/row/cache结果。并发至少覆盖：双准入；clear先于Room；Start提交/回滚与clear；terminal与clear；cache命中与新Start；旧token晚到新owner；cleanup失败后的新Start。每个分支断言当下结果以及**后续prepare/start确实放行或拒绝且无意外写入**。仅验证private字段或mock成功返回不能证明准入安全。
+G01–G17 每行都是当前 AC。未来 oracle 为生产 repository + 真 Room + S02 真实 binding 边界，独立核对行、结果与后续准入：双准入/跨 session、取消时在途全提交或全回滚/零残留、Saved 全读回与 cleanup 未定时仍可读、clear 后无新写、terminal/clear 竞争、旧 callback 不扰动新 owner。无共享 cache 是源合同检查，不再要求 cache 命中/失效/复用动态场景。取消证据不宣称日常设备存在已知崩溃。
 
-测试编排只用测试端协调、真实coroutine调用结果交付、已有Room SQL trigger或实际生产边界可达失败；不能为暂停流程新增production hook/wrapper/owner。若届时某个claim无法在授权生产边界独立证明，记录具体证据缺口，不能靠注释、反射或更低层模拟宣布PASS。仓库测试不证明Android调用了onCleared；该消费者由S07/E19模式合同承担。
+数据边界必须一次闭合：`WorkoutSessionRepository.kt` 的全部 S03/S04 canonical 直接消费者，与 `WorkoutSessionRecorderGuardedWriteTest.kt`、`WorkoutSessionRecorderReconciliationTest.kt`、`WorkoutSessionFinalizerTest.kt`、`E17FinalizerPerformanceContractTest.kt` 四个直接测试同一候选适配；生产/测试 literal 归属沿 F.6/F.7/F.28。第四项是原 finalizer 完整性能窗口消费者，适配授权入口不改规模/计量/预算、不冒称已执行新性能证据。不得为了测试增 production seam、第二 owner、schema 或旁路。S06A/S06B、S08B、S07B 的结果消费见各节；本轮只定义合同，未修改上述代码。
 
-计划生产主路径是F.6中的 `WorkoutSessionRepository.kt`，仅为同一gate授权贯通而调整S03/S04调用合同；S02已提供的query/unbind接口直接消费，不反向增加runtime新owner。验证沿F.6/F.7已列两个现有测试路径；新测试/evidence exact路径在formal合同绑定。没有Activity/Service/通知/图表/导出/schema改动。本合同状态 `DRAFT_1_ALL_D5_GATE_BRANCHES_DISPOSITIONED / NOT_REVIEWED / NOT_READY`；分支被列明不等于证据执行或十维capacity通过。
+状态 `NOT_READY`：新 S05 的 exact 公共调用签名/全消费者授权 envelope、在途取消与同步停写的真实可判定证据、单 Writer/Reviewer capacity 须由主管理在后续有界 F8 合同固定并独立判定，不把这些缺口交给代码 Writer 临场设计。S01–S04 原语义资产继续保留。
 
-### F.9 E18-S06 单场串行Recorder DRAFT-1
+#### F.8.4 D5 窄 supersession、来源与非目标
 
-来源：C的已接受session-scoped owner、D5 §4–6、salvage §14.38及F.5–F.8。唯一拟新增生产位置为此前明确定位的 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\data\WorkoutSessionTimelineRecorder.kt`。这是本场输入排序和异步收尾owner，不新增engine/GATT/仓库authority。
+| 原条款 | 本轮 old→new 与当前消费者 |
+|---|---|
+| D5 §4.2 | S03 冻结批次、完整图识别与原子性保留；撤调用层结果恢复后继续 ACTIVE 的义务 → F.6.2、G07、S06A/R01 |
+| D5 §5.1 | 独占准入保留；撤 completed gate/scan cache 跨 owner 复用 → F.8.1、G01/G08 |
+| D5 §5.2 | absent/installed/exact 查询解绑、原错保留；撤 bind 失败后的多次恢复入口 → G02–G05、S06A/R01/R04 |
+| D5 §5.3 | 全提交/全回滚/未定不放新写保留；撤 rollback cache 保留与 result-loss 恢复 ACTIVE → G06/G07/G14 |
+| D5 §5.4 | 正常 active/配置保留/单场排序继续；首次持久化失败后停写不恢复 → G08/G09、S06A/R02–R04 |
+| D5 §5.5 | 终态原子提交与 exact 原结果识别保留；Saved/read-ready 不等于 Released；撤终态/清理故障后的同进程重试恢复及 cache 失效 → G10–G12、F.7/T04、S06B/R05/R07、S07B/L04、S08B/H01、S09/U01 |
+| D5 §5.6 | terminal/clear 只保留一个既有请求/cut，在途事务原子性不变；撤 clear 备用终结 → G13、S06B/R06 |
+| D5 §5.7 | 迟到 identity、stale/重复请求隔离保留，无第二 released 缓存 → G16、S06B/R07、S07B/L04 |
+| D5 §5.8 | 撤 STARTING/ACTIVE clear 后判结果补 owner_cleared/后台收尾；同步停止新输入/新写，重开只按 durable 处理 → G14/G15/G17、S06A/S06B R06/R08、S07B/L05/L06 |
+| D5 §6.1 / §6.2 | 原正确性 oracle 随上述保留项继续；已撤场景不再是执行 AC，仓库/Recorder/真实 Android 分层证据仍各自负责 → F.8.3/F.9/F.11/F.28/F.34；旧 12-path、单 Story 与旧 capacity 不恢复 |
 
-#### F.9.1 一场一次初始化和有序输入
+历史 D5 原文、S05 旧 Review findings/verdict 与 testing 报告不改；撤承诺不叫“旧 finding 已修复”。F.8/F.9/F.11 的当前 AC 已同步替换，不把恢复逻辑改名藏入 Recorder。Review3/4 上限不刷新；本候选只交文档门禁。
 
-- 一个已接受entry/session创建一个Recorder；预先准备同一sink，完成S05准入，再通过S02绑定取得原anchor/snapshot0。确定性输入在准入前验证；绑定后的失败按F.8相应行处理，不留隐式第二个Start路径。
-- Recorder冻结初始化snapshot0…N和原请求；>N只进入本场队列。S03 commit成功前不作为活动写入，不重新切N；结果不确定按完整graph恢复原结果，不能靠当前显示BPM重建。Start前无HR时只记最新设备事实于内存；初次开启时从真实命令cut创建recording，不回填之前测量。
-- phase facts、用户记录意图、normalized设备事实、每个有效measurement、实际extra-rest/append-only metadata、终结进入同一serialized顺序。单调offset沿本场anchor，允许同毫秒多个输入；canonical mutation sequence checked递增，设备receipt仅证明其自身交接顺序。不得对事件重新按BPM/墙钟排序、clamp倒退或把不同轴sequence混用。
-- runtime接收端只作非阻塞入队；不在main回调同步Room IO，不使用conflated/drop-oldest/sample节流，不新增另一个后台总线或可重播日志。真正已明确记录失败后不能继续声称所有点已保存。若后续实施/性能证据表明现有责任内无法保持无损，应返回真实可行性门禁，不能静默丢点。
-- 没有recording时仅保留最近设备状态，不持续存raw；第一次enable使用该命令前最新事实。off/on保持同一recording与参数快照；user_excluded原因来自真实用户动作。pause仍保留适用raw/设备事实，eligible由已有分析phase规则确定，不由Recorder凭BPM推断。
-- phase family/index、strength/follow实际事实由各mode producer给出；Recorder不猜engine阶段或读取当前计划修补。设备cause规范化唯一调用S02 mapper；严格事务和原始分析分别调用S03/S04，不重复实现。
+P08 方案理由复用 F.69.1 的 OpenTracks 历史实现对照，固定 commit `3c23a9f5400c7b5b914a221469d76cc019a18296`（该 GitHub 仓库已 archived，非现维护版本）。[TrackRecordingService.java:166–178/222–237](https://github.com/OpenTracksApp/OpenTracks/blob/3c23a9f5400c7b5b914a221469d76cc019a18296/src/main/java/de/dennisguse/opentracks/services/TrackRecordingService.java#L166) 明确开始记录、结束记录、停止传感器的顺序；[TrackRecordingManager.java:68–85/109–116/247–252](https://github.com/OpenTracksApp/OpenTracks/blob/3c23a9f5400c7b5b914a221469d76cc019a18296/src/main/java/de/dennisguse/opentracks/services/TrackRecordingManager.java#L68) 展示同 track 持续落点和结束标记；[CSVTrackExporter.java:90–138](https://github.com/OpenTracksApp/OpenTracks/blob/3c23a9f5400c7b5b914a221469d76cc019a18296/src/main/java/de/dennisguse/opentracks/io/file/exporter/CSVTrackExporter.java#L90) 从持久化 iterator 流式导出，支持记录/导出分离的方案理由。TrackPointCreator.java:73–85 的 Bluetooth-only 点、ContentProviderUtils.java:771–789 的 trackId/时间关联可作结构参考；但 TrackRecordingManager.java:177–186 的无 location/distance 时 10 秒过滤违反本产品逐观测 raw 保留，因此不采纳其采样策略，也不复制 GPS、FGS/resume、ContentProvider 存储栈、CSV 格式或 BLE parser。现 S02/Room/S04 与自描述 JSON 合同继续负责；无代码复制、依赖或第二 owner。外部源码只证明结构，不是产品 authority、容量或运行/性能 PASS。
 
-#### F.9.2 失败、终结和退出
+### F.9 E18-S06 活动采集与正常终态的两个交付单元
 
-首次活动持久化/不变量失败停在 `ACTIVE_PERSISTENCE_FAILED`，保留原cause与confirmed tuple，之后canonical命令失败返回同cause，不驱动engine暂停、结束或回退，也不造成功保存/设备故障。训练行为和记录结果分别可观察；具体页面消费由S07/E19完成。
+原 S06 不再作为一个派发包。S06A（F.67.7/C）与 S06B（T）继续使用同一个 session-scoped `WorkoutSessionTimelineRecorder`，literal 生产路径沿 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\data\WorkoutSessionTimelineRecorder.kt`。同 owner 不要求同 Story；拆分不引入第二队列、第二事务 authority 或新持久化结构。两者集成并通过生产切换门禁前，均不启用新训练 UI。
 
-第一次正常terminal命令冻结意图、offset、已知wall end和执行结果；该cut后的sample/phase不得进入终结图。重复同请求复用本场结果，不同意图拒绝，不刷新结束时刻。terminal事务失败进入可诊断failed状态，仅exact请求可重试；durable成功后继续S05清理，全部完成才向模式发布RELEASED。
+#### F.9.1 S06A 一场一次初始化与活动输入
 
-真实owner clear入口在返回前同步调用S05 barrier，随后由**Recorder自己持有、可完成收尾的工作生命周期**执行F.8矩阵；不得依赖已取消的viewModelScope。STARTING后提交才可owner_cleared终结，rollback则零行清理；已有completed/user_abandoned intent不被clear替换。终结/清理成功后关闭本场队列/工作资源；BLOCKED保留必要cause和exact cleanup身份，不转成一个自动重启训练/重连设备的全局服务。配置重建不触发clear；process death不重播队列、不恢复运行态，仅CS-04B读取durable事实。
+独立结果：S02→单场有序队列→S03 的初始化/活动事务可被真实 producer 独立验证。前置为收窄 S05、已合并 S02/S03、S07A 事实合同；直接消费者为 S06B 和最终 S07B/E19，尚不是完整用户交付。非目标是终态接合、UI 切换、engine 改写、后台补存和任何恢复流程。
 
-#### F.9.3 AC与消费者
+- 一个 entry/session 一个 Recorder/sink；确定性输入先验证，S05 准入后 S02 bind 取得 anchor/snapshot0；绑定失败按 G02–G05 一次处理。
+- 冻结 snapshot0…N 的同一初始化请求，>N 只排入本场队列；S03 一次原子提交确认后才开始消费活动输入。未定/失败不重切 N、不重放、不借完整图识别恢复 ACTIVE。没有 HR 时仅保留最近设备事实，首次 enable 以真实命令 cut 开始，不回填旧测量。
+- phase/intent/device/measurement/实际 extra-rest/append-only metadata 进入同一 serialized 顺序，checked mutation sequence 和 receipt 各守自身含义，同毫秒同值测量不丢。runtime 接收只非阻塞入队，无 conflation/drop-oldest/节流或重播日志；不在 main 回调执行 Room IO。
+- off/on 同 recording/冻结参数；pause 保留适用 raw，统计 eligibility 仍由已有 phase/算法定义。S07A/各模式提供事实，Recorder 不猜 engine 或当前计划。
+- 首次持久化/真实不变量失败关闭新写资格，保留原 cause 与 confirmed tuple；不驱动 engine、不造设备故障、terminal 或基础记录成功。clear 同步停接新输入/新写，已在途事务维持原子性，不新开工作 scope。
 
-| AC | 输入条件 → observable结果 | oracle / 责任界线 |
+#### F.9.2 S06A → S06B → 模式的相邻语义接口
+
+本表固定定义层责任，不宣布已存在的新 Kotlin public API；exact 签名与取消证据由 F.36 的规划 owner 在 Writer 前绑定。没有此门禁不 READY。
+
+| 边界 | producer / 不可变输入与结果 | consumer 与失败/生命周期规则 |
 |---|---|---|
-| R01 一场与初始化cut | bind返回前后多个通知、snapshot0已有live、同毫秒同BPM → 初始化与post-cut边界准确，无重复/漏接/旧点回填。 | S02真实producer→Recorder→S03真实Room的固定ledger；不以UI StateFlow证明 |
-| R02 四类事实合流 | phase/intent/device/sample夹杂以及pause/extra-rest → 顺序和durable图按相同cut闭合。 | 独立逐项预期tuple、phase/acquisition/sample行；各mode实际发出事实仍归后续 |
-| R03 late enable/off-on | 先无recording、再启用/关闭/重开 → 仅一recording，冻结参数不换，启用前无样本补写，intent与设备缺口正交。 | actual Recorder调用+Room，固定enable前后样本与零样本时段 |
-| R04 active失败独立性 | 首次真实持久化失败 → 原cause、confirmed tuple保留，后续不写、不修改engine或制造terminal。 | 实际Room失败和后续命令的DB不变；source依赖方向无engine控制；mode另证UI/engine继续 |
-| R05 terminal freeze | 完成/放弃与晚到notify/重复terminal竞争 → 一次exact终结、唯一original、冻结wall end不漂移，失败仅same-intent重试。 | S04真实外层事务+Recorder端结果观察 |
-| R06 on-clear前置barrier | 直接调用clear后立刻另entry prepare/start → 已PENDING而拒绝；STARTING/ACTIVE/TERMINATING/FAILED/RELEASED各走F.8对应行。 | 真实repository/Recorder并发，不宣称Android lifecycle；S07负责framework调用 |
-| R07 清理与stale | 清理成功才RELEASED；旧entry、已释放callback和错误binding不影响后来训练。 | 两场顺序/并发真实生产调用及DB/binding/cache结果 |
-| R08 进程及边界 | 取消原调用scope仍可按barrier收尾；新repository只见durable事实、不见旧队列/owner；解绑不关BLE。 | Recorder自有收尾边界+原reconciliation资产；force-stop/设备另由mode/E20承担 |
+| 初始化与活动授权 | S06A 持同一 entry/session/token、anchor、冻结批次及最后 confirmed tuple，单队列接收已接受事实 | S06B 复用同一实例/队列；不能重新 bind、Start、换参数或建立另一排序 owner；失败后只暴露原 cause，不恢复活动 |
+| 正常 terminal cut | 模式在实际完成/用户放弃 cut 提供同 session 的冻结执行结果和真实已知 wall end；S06B 在同一队列冻结唯一意图/offset/predecessor，关闭 cut 后输入 | 调 S04 一次正常终态；cut 前已接受输入按原顺序完成，失败则不绕失败写 terminal。重复正常请求观察同一在途/已确认结果，不刷新结束时间；故障后不发起重试 |
+| 保存事实 | S04 提交并完整读回后 S06B 发布 Saved，绑定原 session/terminal 结果/original analysis；失败/未定保留原错误 | S07B/L04 允许原正常返回/恢复建议关联；S08B/H01 可严格读取。engine completed 本身不等于 Saved，保存失败不伪装成功 |
+| 资源释放 | S06B 消费 S05 exact 清理，独立暴露 Released 或 cleanup failure；Saved 不被覆盖 | S05 单独决定新准入；cleanup 未定/失败 BLOCKED，但不阻止已 Saved 的正常导航，不重新计算分析 |
+| 真正 clear | S06A 停接输入/新写，S05 同步封闭 matching 身份；S06B 只观察此前已在途 terminal 的原结果 | 不创建新终态/新 scope；STARTING/ACTIVE 保留 durable 前缀，既有在途 terminal 可完成自身；迟到结果不得移除新 entry。新进程沿 CS-04B，不续录/补造 |
 
-拟验证位置采用D5已经明确给出的 literal path：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionTimelineRecorderTest.kt`（尚未创建，未读取04C候选）。可复用既有真实Room fixture但不得为测试加生产seam。正式allowed paths仍需按S05后base绑定必要repository typed消费，不默认扩展到Activity、mode、Service、schema、export或算法。
+S06B 独立结果是已有 Recorder 的冻结终态→S04→Saved 与独立清理结果；前置 S06A、S04；直接消费者 S07B、S08B/S09 及 E19。非目标是 UI 启用、原事务/分析重写、同进程恢复、clear 后补 owner_cleared。C/T 全链完成前不提供只有 canonical Start 却以 legacy upsert 结束的半套能力。
 
-状态：`DRAFT_1_RECORDER_ORDER_AND_HANDOFF_DEFINED / NOT_REVIEWED / NOT_READY`。S05前置及S02完整production mapping仍未成为已实现证据；本节不宣称capacity PASS。下一主管理工作是mode生产接线与必要历史消费者，并检查尚未确定的真实UX取舍；不是要求用户再次批准S03–S06每个普通细节。
+#### F.9.3 R01–R08 当前 AC 与最小证据
+
+| AC / primary 单元 | 输入条件 → 可观察结果 | oracle / 边界 |
+|---|---|---|
+| R01 / S06A | snapshot0、bind 前后 receipt、同毫秒同 BPM → cut 正确、初始化原子、无补写；失败/未定停写不恢复 | S02 真 producer→Recorder→S03 真 Room 固定 ledger，不能以 StateFlow 证明 |
+| R02 / S06A | phase/intent/device/sample/pause/extra-rest 合流 → 原序与 durable 图一致 | 独立逐项 tuple/interval/sample 预期；真实模式事实由 S07A/S07B/E19 证明 |
+| R03 / S06A | late enable/off-on → 一 recording、冻结参数、启用前不补样本，user intent 与设备缺口正交 | 实际 Recorder+Room，含无 HR/zero-sample，不扩状态模型 |
+| R04 / S06A | 首次真实写失败 → 原 cause/confirmed 图，后续不写、不控制 engine、不伪造 terminal | 真 Room 失败及后续 DB 不变；最终模式另证最小错误呈现与训练独立 |
+| R05 / S06B | 正常 terminal、晚到 notify、重复命令 → 一冻结 cut/请求、唯一 original，Saved 与 cleanup 独立；失败不重试恢复 | S04 真外层事务+完整持久化读回+Recorder 结果消费，首次时间/实际值不漂移 |
+| R06 / S06A 停写；S06B 终态竞争 | clear 返回即封闭新输入/写；STARTING/ACTIVE 不补终结，已有在途 terminal 不被替换 | 真 repository/Recorder 并发，逐项全 commit/rollback；Android 是否调用由 S07B/L05 证明 |
+| R07 / S06B | Saved 可先发布、cleanup 未定不放新 Start；stale/错误 binding 不影响后来 owner | 两场真实调用、DB 与 binding；不要求共享 cache/故障后恢复 OPEN |
+| R08 / S06A 输入取消；S06B 在途终态 | 调用 scope 真正取消后不新发写入/收尾；在途事务保持原子性，新进程只见 durable 图 | 真实取消边界+原 reconciliation；不制造自有跨 scope 补存，不以模拟替代 Android/process 证据 |
+
+共同测试 literal 为 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionTimelineRecorderTest.kt`；按上述 AC 分阶段交付及回归，不新建测试 owner。状态均 `NOT_READY`：S06A 的 cut/停止输入与在途提交证据、S06B 的 terminal/clear 取消顺序和独立结果发布、两者各自 capacity/envelope 仍须后续规划关闭。原性能规模/窗口/预算保持，未有新源码与性能证据，不自评 PASS。
 
 ### F.10 E18-S07 入口核对与 UX-SPACE-01 决定记录（已关闭）
 
@@ -762,7 +792,7 @@ G01–G17每行同时作为本Story AC，执行oracle为真实repository生产�
 
 - F.6/S03：8条AC，冻结Start、完整graph结果识别、活动事务和原始错误边界已形成草案。
 - F.7/S04：6条AC，existing CS-05外层接合、no-HR、exact终结payload、回滚/重试边界已形成草案。
-- F.8/S05：17条D5准入/释放分支均有新primary disposition，注明cache/owner/已准入消费者不能绕过或自阻塞；没有宣称测试执行。
+- F.8/S05：G01–G17 当前 disposition 已按本轮 F69.2 更新；独占 owner 与全部写消费者授权保持，撤共享 cache 与故障恢复/clear补终结；没有宣称测试执行。
 - F.9/S06：8条AC，snapshot cut、合流、late enable、失败独立性、terminal/clear及stale边界已形成草案。
 - 上述写后曾回验：V2为152025 bytes，SHA256=`9C6321DE7726732E137955A14B557BDAB0C2963932D4DB8ED62A96DE7E7E401B`；UTF-8无BOM/LF、原19520-byte历史后缀身份一致；Primary49条status逐项与本场基线一致、Integration clean且main未变。此为加入F.10前身份，不是本文件最终hash。
 - 剩余：S02完整production cause→pair映射；S07完整模式合同（UX-SPACE-01已关闭）；S08严格读取、S09历史入口；E19–E22其余候选正式边界；完整subclause双向coverage、exact生产/测试/evidence路径、immutable前置及十维capacity；正式规划审查/接受/readiness仍未执行。21标签/34边只证明已有候选图，尚不证明全义务coverage或正式DAG。
@@ -814,32 +844,35 @@ old→new：现有engine/adapter的阶段和执行记录没有完整canonical id
 
 候选生产位置采用D5已经定位的 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedCanonicalFactsV1.kt`（拟新增，未创建/未读取04C）；直接mapping消费者为同目录已存在 `WorkoutSessionRecordMappers.kt`。现有 `core/engine/TimedWorkoutEngine.kt` 和 `core/model/TimedCompositionTimelineAdapter.kt` 是只读输入边界，除非发现现有真实事件无法表达合同事实且已明确批准因果范围，不默认重写engine/adapter。正式新增测试literal path与所有variant逐条索引仍须F7绑定。
 
-#### F.11.2 E18-S07B 计时Activity-retained生产接入
+#### F.11.2 配置保留 S07L 与计时生产切换 S07B
 
-old→new：Route的remember持有engine/session/time，shell的remember持有active plan，退出直接移除入口 → 同一Activity内真实训练entry及当时plan/engine/clock/Recorder由既有决定中的计时ViewModel保留，Route仅发命令/展示，真实退出先完成或交接S06收尾。
+F.67.7/L 固定为 `E18-S07L`，I 保留标签 `E18-S07B` 但收窄为完整生产切换；旧 S07B 合同中保留原会话与切换记录链不再必须同一 Story。两者仍使用同 Activity retained ViewModel 和同一原 session/plan/engine/clock，不按文件拆 owner。以下接口在实现前已经固定，不由 Writer 猜测新数据职责。
 
-本轮直接源码事实：MainActivity已取Application唯一repository，但通过 `onRecordWorkoutSession` 调通用upsert；TrainFlowApp多个结束回调直接finishTimedSession移除activePlan；Route终态使用 `TerminalWorkoutSessionRecordWriter` 的attemptedSessionId标记和异常message。该旧helper不能证明canonical exact重试、原cause或可靠RELEASED。因此S07B要把计时生产链整体接到S06/S04结果，不调用旧helper再次保存同一canonical场次；保留E19尚未接入的模式旧路径，不用空回调让功能看起来通过。
-
-| AC | 条件 → 生产可见行为 | oracle |
+| 单元 | 独立结果/前置 | 非目标/直接消费者/最小证据 |
 |---|---|---|
-| L01 真实开始 | ready gate显式Start先走已接受reconciliation/准入与冻结初始化，成功后是一场唯一训练；重复点击不换entry。开始采集真实wall/zone/date与本场单调anchor，前台HR不可用不阻止无样本合法记录。 | 真实Activity点击→ViewModel→Recorder→Room，冻结值/唯一graph；失败按S05 disposition，不造成功开始/无主记录 |
-| L02 配置保留 | 旋转/Activity配置重建及训练内打开设置再返回 → 同一entry/engine/clock/Recorder/token/plan，pause状态、阶段和倒计时不重新Start。 | ActivityScenario真实recreate+生产identity/状态/DB；不能只测ViewModel工厂或helper |
-| L03 计时phase接线 | 实际engine tick/命令产生的全部phase/意图/extra-rest事实进入S07A/S06，zero-sample照样完整；时钟不由recomposition重置。 | 两family实际训练序列与Room行；同毫秒输入及pause/额外休息；不从最终engine状态跳过中间事件 |
-| L04 结束与入口移除 | completed/user_abandoned先冻结唯一终结请求；正常返回/恢复推荐/回训练主页只在RELEASED后移除该训练入口。终结失败保留原意图、可见保存失败与exact重试；没有“已保存”假成功。 | 三条真实shell callback与Room/read-ready状态；失败/晚到callback不能重新终结或移除新场 |
-| L05 真实退出 | Activity finish/真正ViewModel clear在返回前调用S06同步barrier，随后Recorder-owned工作收尾；STARTING/ACTIVE/TERMINATING/FAILED/RELEASED逐状态沿F.8。 | 实际onCleared派发+并发新Activity/Start在PENDING下拒绝；不在取消的viewModelScope中补保存 |
-| L06 进程中断 | 两阶段force-stop/relaunch不复活engine/token/queue，必须调用原CS-04B，仅读durable事实封口。 | 新进程实际persistent DB证据；重启时间不伪造ended_at，旧APK证据不沿用 |
-| L07 原始失败与训练独立 | 真实活动记录失败在界面明确显示，engine不被Recorder停止；HR掉线沿设备状态表达，不混成数据库失败。 | 真实生产失败consumer和后续engine命令；显示层不吞为“本次无数据”、不泄漏异常堆栈/设备标识 |
-| L08 既有体验与边界 | ready gate、倒计时、音振/提醒、暂停、extra-rest、完成/提前结束的已接受体验保持；不新增HIIT次数和E18-R18低空间功能。 | 直接受影响UI/音振回归和用户体验验收；不提前承诺E20后台HR或统一通知已完成 |
+| S07L 原会话配置保留 | P 与既有 App 为前置；原 entry/plan/engine/clock/原保存状态迁到既定 Activity-retained ViewModel，仍以原保存链完成训练 | 不接 canonical Start/Recorder，不改三模式 engine/UI/原存储错误策略；输出同 session 的命令/事件/时间/保存状态供 S07B。真 Activity recreate、训练内设置往返、同 session 倒计时/暂停及原保存完整；MainActivity/shell/Route/ViewModel 同一单元闭合 |
+| S07B 计时生产切换 | S07L、S07A、S06A、S06B、S08B 为前置；同一模式的真实 Start/事实流/终态和 read-ready 消费一次接通 | 仅已迁移计时场次以 S04 替换旧 upsert 终态；未迁移力量/跟练沿旧链。保留原 recap、正常返回、恢复建议 session 关联；不新增故障向导/重试恢复。真 Activity→engine→S02→Room→历史；两 family/no-HR/zero-sample、clear/relaunch、原停止确认与 UI 用户验收 |
 
-生产定位：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\app\MainActivity.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\ui\shell\official\TrainFlowApp.kt`、同目录 `OfficialShellState.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionRoute.kt`，以及D5已定位的新 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModel.kt`。依赖使用已存在Activity/Lifecycle能力；只在actual resolved graph证明必要时才提精确依赖变更，不安装/升级环境。
+S07L 输出的真实 entry identity 不因重组/配置重建替换；S07B 在同命令 cut 捕获 before/result/events/after 和单调时刻，交 S07A/S06A；终态冻结原实际结果交 S06B，不从 UI 最终状态反推。S07B 必须同时替换本场 MainActivity 的通用 upsert 回调、Route 的 `TerminalWorkoutSessionRecordWriter` 消费及 shell 的入口移除条件，不保留 canonical Start + legacy terminal 的条件性冲突，不用空回调伪装接通。未迁移模式继续使用旧 writer，不全局删除。
 
-L01–08是本Story验证范围，Android与真实BLE/UI evidence各自负责，不把Robolectric当实机。正式androidTest/test/evidence paths及设备身份仍须F7绑定。S07B是现有UI/runtime生命周期的一次因果完整接线；不能再仅按MainActivity/Route文件拆成多个各自无法保留entry的变更。若完整AC核对发现仍有独立owner或未接受UX，保持capacity未通过并返回对应边界。
+| AC / primary | 条件 → 生产可见行为 | oracle |
+|---|---|---|
+| L01 / S07B | 显式 Start 一次准入/原子初始化确认后才成为已开始新链训练；原 session/anchor/时间冻结，重复正常点击不另开；无 HR/无样本合法 | 真 Activity→ViewModel→Recorder→Room；失败按 G02–G07，不伪成功 |
+| L02 / S07L；S07B 补新链回归 | recreate/训练内设置往返保留同 entry/plan/engine/clock/暂停/原保存状态；切换后再保留同 Recorder/token，不重复 Start | 真 ActivityScenario 和生产 identity/状态/Room；不以工厂测试冒充生命周期 |
+| L03 / S07B | 实际 engine tick/命令的 phase/intent/extra-rest 接 S07A/S06A，zero-sample 也完整 | 两 family 真实轨迹/同毫秒/暂停/额外休息→完整 Room 行；不重写 engine |
+| L04 / S07B | completed/user_abandoned 冻结一次真实 cut；S06B Saved 后原正常返回/恢复建议/回训练主页可移除该 entry，不等待 Released。engine 完成不等于已保存；失败诚实显示，不提供同进程写恢复/重试流程 | 三条 shell 真实 callback、Room/read-ready；Saved 后 cleanup 失败不阻导航，新冲突 Start 仍被 gate 拒绝；late callback 不移除新场 |
+| L05 / S07B | 真正 Activity finish/ViewModel clear 返回前同步停止输入/新写；STARTING/ACTIVE 不补终结，原在途 terminal 可完成自身 | 实际 onCleared 与并发新 Activity/Start；PENDING/BLOCKED 下拒绝新写；不在取消 scope 或新增 scope 补存 |
+| L06 / S07B | force-stop/relaunch 不复活 engine/token/queue；已 terminal 读取原结果，未终结由 CS-04B 按最后 durable 图处理 | 两阶段新进程 persistent DB，重开时间不作 ended_at；旧 APK 证据不复用 |
+| L07 / S07B | 真实记录失败以现有页面最小失败提示表达，保留原 cause；engine 不被 Recorder 控制；掉线与数据库失败分开 | 真失败 consumer/后续 engine 命令；不吞为“本次无数据”/保存成功、不泄露堆栈/设备标识、不加空间/抽象采集故障页面 |
+| L08 / S07L 原链；S07B 切换回归 | 旧 ready gate、倒计时、音振/提醒、暂停、extra-rest、完成/提前结束及停止确认保持 | 各候选直接受影响回归及 UI 人工验收；不加 HIIT 次数/低空间、不冒称 E20 后台或通知已交付 |
 
-#### F.11.3 拆分后的依赖与剩余风险
+两个单元的生产 literal 均沿已定位文件：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\app\MainActivity.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\ui\shell\official\TrainFlowApp.kt`、同目录 `OfficialShellState.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionRoute.kt`、已明确拟新增的 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModel.kt` 及同目录既有 `WorkoutSessionRecordMappers.kt`。S07L 先迁原保留状态，S07B 后切同场链；没有第二 ViewModel、依赖/SDK 升级授权。测试定位沿 F.28，真实工作区/证据身份须后续 exact 合同绑定。
 
-S07A根于已合并canonical snapshot/validator及真实engine/adapter；S07B依赖S07A和S06。S08结构严格解析/true-work-rest直接依赖S07A，S09依赖S07B和S08；E20通知消费S07B运行identity，E22投影消费S07A predicate。这修正F.3中S08缺少明确predicate前置的候选边，不改变用户交付顺序。旧21节点标签图作为历史证明保留；更新后的完整候选图另行机械核对，不能把旧34边count套到新图。
+#### F.11.3 依赖、责任与尚未通过的门禁
 
-当前状态 `S07_SPLIT_DRAFT_2 / S07A_FACTS_AC_DEFINED / S07B_LIFECYCLE_AC_DEFINED / NOT_REVIEWED / NOT_READY`。没有创建新的实现分支/文件，没有自动派发。S07A/S07B的完整variant ledger、最终路径和evidence能力仍需闭合；候选标签不是用户已接受的正式Story数量。
+S07A（F）以 P 与原 schema/engine 为前置，独立输出两 family 事实/predicate；S07L（L）以 P 为前置保留原链；窄 S05+S07A→S06A（C）→S06B（T）；L+F+C+T+S08B→S07B（I）；S07B+S08B/C→S09。S08C 与 E22 仍消费唯一 S07A predicate；E20 消费最终 S07B 稳定运行 identity。S08B 仅读已保存图不依赖 Recorder 清理，也不依赖 I，避免循环。
+
+所有本次受影响单元为 `NOT_READY`。定义层结果/前置/消费者/非目标/最小 oracle 已在本节及 F.9 固定；主管理仍须在后续 F8 关闭 S07L 的原保存状态跨 recreate 精确 envelope、S07B 的全部 Start/终态回调替换与 clear 取消证据、分别单 Writer/Reviewer 容量及 exact handoff 身份。独立 Planning Review 尚未执行，不能沿旧 S07B capacity 的 P 宣布新拆分可实施；不把缺口下放给代码 Writer。
 
 ### F.12 E18-S08 严格历史读取与 S09 必要历史入口 DRAFT-1
 
@@ -851,7 +884,7 @@ old→new：通用 `WorkoutSessionWithRecords.toDomain()` 会使用fallbackMode�
 
 | AC | 条件 → 可观察结果 | oracle / primary来源 |
 |---|---|---|
-| H01 canonical完整读取 | 合法terminal/no-HR或有recording → 每场一致的同cut graph，保留原始plan/display JSON和S01时间值，raw稳定排序。 | production repository+真实Room；main§4.2/§4.3/§7、E18-R09/10/16 |
+| H01 canonical完整读取 | 已提交并完整读回的合法 terminal/no-HR 或有 recording → 每场一致同 cut graph，保留原始 plan/display JSON、S01 时间与 raw 顺序；不检查 token/binding 是否 Released 作为可读前置。 | production repository+真 Room；覆盖 Saved 但 cleanup 未定仍可读、未提交不能伪装 terminal；main§4.2/§4.3/§7、E18-R09/10/16 |
 | H02 original唯一绑定 | originalVersion指向具体snapshot → 只读该row和其合法input cut，不回退latest、不重算/回写；缺失/非法明确typed失败。 | 有其他版本/错误binding/当前参数变化的独立fixtures；CS-05已有validator |
 | H03 legacy无损读取 | 合法旧无version root及三mode子结构 → 原值/原NULL完整读取，timeline与snapshotStorage版本仍未知；legacy nonterminal独立标记，不能导出为terminal。 | main§4.4的legacy正反矩阵；旧writer nullable省略与真正缺失required分别验证 |
 | H04 非法不降级 | unknown version/mode、corrupt JSON、错误元素/执行字段或legacy+recording → typed unavailable/失败，不default、element drop、重写原行或冒充not_recorded。 | 独立bad fixtures；坏单场不从列表静默消失，导出该场按整份失败规则 |
@@ -872,7 +905,7 @@ old→new：现有history仅消费通用 `WorkoutSession` / 原日期前缀 → 
 
 | AC | 条件 → 页面/存储可见结果 | oracle |
 |---|---|---|
-| U01 真实闭环 | S07B完成或用户提前结束并RELEASED → 真实持久化本场可从已有历史/结束后入口查看，重开App仍一致。 | 真实生产计时→Room→history UI，两个family/no-HR/zero-sample |
+| U01 真实闭环 | S07B 完成/用户提前结束且 Saved → 已有历史/结束后入口可查看本场，正常返回不等待 Released，重开仍一致；未终结则按 durable 事实诚实处理。 | 真生产计时→Room→history UI，两 family/no-HR/zero-sample；含 Saved 后 cleanup 未定，不冒充新场可准入 |
 | U02 实际与计划分清 | 计划之后修改/删除或参数改变 → 当时名称、执行与时间不改；计划阶段、实际完成/跳过/休息分别呈现。 | 固定旧场再改计划的生产UI；禁止detail读current plan补数 |
 | U03 统一日期 | 跨午夜、UTC日期不同于本地开始日、后来时区变化 → 固定开始日分组/按日删除同一集合；未知旧记录独立显示。 | 页面选日→真实DAO删除→完整related rows核对；不得substring替代新日期合同 |
 | U04 删除失效 | 当前选中记录被合法清理 → detail失效且无旧cache可继续当真实数据查看；关联raw/snapshot随session cascade。 | 真实删除回调、Room关系和UI刷新；不新增“旧导出勾选还在”的场景 |
@@ -928,7 +961,7 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 | S02 实际组结果 | 已有确认UI提交实际重量/次数/effort、左右侧及替换/跳过 → 当场执行结果进入S04/历史，0与未填不同，不用计划数覆盖实际。 | 实际控件输入→ConfirmStrengthSet等生产命令→持久化→strict history；含form_breakdown，不据此推断未记录动作质量 |
 | S03 raw与统计职责 | prepare/pause保留raw、完整零样本阶段，主要统计排除仍由既有分析合同判断；不由UI/Recorder删点。 | 原始行与original analysis读取分开断言；不重做CS-05数学 |
 | S04 生命周期 | 配置重建保留entry/engine/Recorder及未提交确认输入；真实退出/terminal/clear/新进程按L01–L08，晚到旧组确认不改新场。 | 力量真实Activity/控件/Room/两阶段进程证据，不以计时fixture替代 |
-| S05 既有交互闭环 | 实际组确认、自动/手动休息结束、替换/跳过、音振和结束保存/失败重试、历史呈现保持真实含义。 | 模式生产回归和用户UI验收；不新增自动进阶、动作次数识别或医疗推断 |
+| S05 既有交互闭环 | 实际组确认、自动/手动休息结束、替换/跳过、音振和结束保存/失败诚实呈现（新链不提供同进程写恢复/重试）、历史呈现保持真实含义。 | 模式生产回归和用户UI验收；不新增自动进阶、动作次数识别或医疗推断 |
 
 主生产位置为 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionRoute.kt`、F.11列明的MainActivity/TrainFlowApp/shell及existing WorkoutSessionRecordMappers；新力量ViewModel/事实转换的精确源/test/evidence路径须在formal合同逐条指定。真实engine是 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\engine\StrengthWorkoutEngine.kt`，不是新runtime owner。
 
@@ -940,7 +973,7 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 |---|---|---|
 | F01 完整family | main§6.4的circuit/non-circuit action/rest-after、between-round、block-rest、boundary、paused → exact Required/NULL/missing/index。 | 真实preset/snapshot+TimedWorkoutEngine展开与每行独立literal预期；不沿timed family默认映射 |
 | F02 真正Start与实际轨迹 | 当场单次准入Start固定时间/参数，pause/resume/skip、结束和零样本阶段进入Recorder；重组页面不再Start。 | 跟练实际页面/engine→Room；当前计划改变不污染snapshot |
-| F03 生命周期与收尾 | 同L01–L08的配置保留、进入设置返回、onClear barrier、terminal/RELEASED、fresh-process中断，分别绑定跟练实际入口。 | 跟练Activity和persistent DB证据；不得以力量/计时测试替代 |
+| F03 生命周期与停止 | 同L01–L08的配置保留、进入设置返回、onClear同步停输入/停写、不补终结、terminal Saved与Released分离、fresh-process中断，分别绑定跟练实际入口。 | 跟练Activity和persistent DB证据；不得以力量/计时测试替代 |
 | F04 保存与历史 | 完成/提前结束/no-HR/失败 → 历史读取跟练当时动作/轮次/休息，失败不伪报保存成功；无新力量确认或动作次数录入。 | 真实history consumer+UI验收，旧跟练preset/控制保留 |
 
 主生产位置为 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionRoute.kt` 及F.11相同shell入口，engine仍复用existing TimedWorkoutEngine。新跟练ViewModel/事实转换精确路径同样在formal合同绑定，不能偷偷创建公共三模式engine wrapper。
@@ -969,7 +1002,7 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 
 S02接入FGS时，N01/N05–N09的workout producer identity仍独立存在；不能将它复用为handoffGeneration。coordinator对真实脱离的有界处置只关闭通知提交/发布权，不伪造workout completed/abandoned，不替Recorder保存、释放或停止engine/BLE。S02负责将这些最新身份/目标状态消费到F.15.3/B09–B11：当前FGS或release未确认时，不由ordinary路径旁路cancel7200或恢复notify；清理诉求由既有交接协议处理，Service release ack后coordinator只记相应NONE，不重复clear。合法active/paused后台意外BLE断连不等于producer detach，仍按D-082保持FGS并恢复。
 
-retained架构下的窄适用：F.11.2/L02及F.14已保证配置重建保留producer，N06不能把旧Route-owned承载方式恢复回来。真实owner clear沿L05同步barrier/Recorder收尾，通知producer解除须同步交给现有coordinator，不能依赖已取消viewModelScope后续发送；已知terminal走N05，其余确有pending重接的脱离按N06收束。N07是受控同场替换的既有协议保证，不要求增加用户可触发的替换功能。有限窗口的具体本地数值/任务组织属于既有coordinator内可逆实现细节，必须可确定结束并可测；不能借此新建owner、心跳服务或scheduler接口。若实际接线需要改变上述已接受生命周期或撤销保证，先回主管理与用户讨论，不由Writer自行决定。
+retained架构下的窄适用：F.11.2/L02及F.14已保证配置重建保留producer，N06不能把旧Route-owned承载方式恢复回来。真实owner clear沿L05同步停止Recorder输入/新写（不补终结），通知producer解除须同步交给现有coordinator，不能依赖已取消viewModelScope后续发送；已知terminal走N05，其余确有pending重接的脱离按N06收束。N07是受控同场替换的既有协议保证，不要求增加用户可触发的替换功能。有限窗口的具体本地数值/任务组织属于既有coordinator内可逆实现细节，必须可确定结束并可测；不能借此新建owner、心跳服务或scheduler接口。若实际接线需要改变上述已接受生命周期或撤销保证，先回主管理与用户讨论，不由Writer自行决定。
 
 定位：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\notifications\AndroidActiveWorkoutNotifications.kt`、同目录 `ActiveWorkoutNotificationContracts.kt`、Application及三mode生产consumer。复用existing contract；此Story不实现Service/Manifest FGS、BLE策略、Recorder或history/export。
 
@@ -1386,7 +1419,7 @@ Source universe为已确认V2历史§5指定的V1各表（AS7、CAP24、AD-P19�
 | E17-CAP-09 | PRESERVE | S06/R03/R04→S03/B06；user intent独立 |
 | E17-CAP-10 | ADAPT | AS-02设备恢复；S02/O07、S06；E22/Q02虚线 |
 | E17-CAP-11 | ADAPT | AS-04/06；S07B/L07与E19各Android新consumer |
-| E17-CAP-12 | ADAPT | S04/T01–T06；S06/R05/R07终结 |
+| E17-CAP-12 | ADAPT | S04/T01–T06；S06B/R05/R07终结，Saved允许读/导航，Released仅控制新准入 |
 | E17-CAP-13 | ADAPT | S03/S04生产冻结；S08/H01/H02/H07严格读 |
 | E17-CAP-14 | PRESERVE | E22-S02/K01/K02/K04 |
 | E17-CAP-15 | PRESERVE | E22-S03/V01/V04/V05；S08同源 |
@@ -1467,7 +1500,7 @@ Source universe为已确认V2历史§5指定的V1各表（AS7、CAP24、AD-P19�
 | E17-ARCH-22 | ADAPT | F22 PH32行；四family/pause/extra-rest语义 |
 | E17-ARCH-23 | ADAPT | S03/B04、S07A/M04、E19/S01替换metadata |
 | E17-ARCH-24 | ADAPT | AS-03 header/sample字段；S02规范化输出→E21/J05隐私 |
-| E17-ARCH-25 | ADAPT | S07B/L01–L08、E19各真实lifecycle；D5取代旧entry假设 |
+| E17-ARCH-25 | ADAPT | S07L原会话配置保留、S07B/L01–L08与E19真实lifecycle；D5仅按F8.4保留/替代，不恢复clear补终结 |
 | E17-ARCH-26 | ADAPT | E21/P05与E22/Q04；无产品时长上限/无损 |
 | E17-ARCH-27 | ADAPT | E21/J01–J05、F23字典，original绑定不回退 |
 | CT-01 | ADAPT | AS-03/04/05/06依赖，S01增量、S03/S04、S08消费者 |
@@ -1480,7 +1513,7 @@ Source universe为已确认V2历史§5指定的V1各表（AS7、CAP24、AD-P19�
 | CT-08 | ADAPT | AS-05已合并证据不重算；E22/Q04与E21/P05新候选证据 |
 | CT-09 | ADAPT | S02/O01–O08、S03/B01–B08、S06/R01–R04，F19细分 |
 | CT-10 | ADAPT | S04/T01–T06、S05/G01–G17、S06终结，不恢复旧04C聚合 |
-| CT-11 | ADAPT | S05/S06 barrier与S07B/E19 Android调用分层证明 |
+| CT-11 | ADAPT | S05/G13–G17、S06A/B R06/R08同步停输入/新写和在途原子性，S07B/E19真实Android调用；撤D5跨scope补终结，F8.4追踪 |
 | CT-12 | ADAPT | S08/H05/H06、E21/P04/D04；普通训练无TTL/降raw |
 | RES-01 | DEFERRED | R02暂缓App跨场比较，未来新用户决定才重访 |
 | RES-02 | DEFERRED | R02暂缓可比性算法；现存快照/版本数据继续保存 |
@@ -1512,6 +1545,8 @@ F7展开PL21个schema族及strict transaction/identity/resolver后，原S08存�
 
 S08C仍是C已经接受的无状态resolver责任，不新增独立仓库、registry或中心manager；repository facade可组合它，消费者不直接重读另一个数据源。S08A的common parsing复用只在既有strict职责内实现，不让legacy结果调用“补version1”办法穿过canonical byte-identity验证。S08B不拥有显示label回退算法。
 
+本轮 S08B 另外直接供 S07B 生产切换消费：Saved/read-ready 不等待 token/binding 释放，前置增加收窄 S05 的结果边界，原 S01/S03/S04/S08A 前置保留。最小 oracle 增加终态已提交且 cleanup 未定时可一致读取；非法/未终态仍沿原 typed 分支，不能以可导航为由伪装 valid graph。S08A 旧快照 parser、S08C 冻结显示/唯一 predicate 的非目标与 H 分责保持。
+
 新的精确AC沿用对应H编号并在新Story内按分支限定：S08A/H03/H04，S08B/H01/H02/H03-terminal/H04/H05/H06/H08，S08C/H07。其他章节旧`S08/Hxx`均是历史合称，必须按本表重定向，不能将S08保留为第25个隐藏节点或重复派发。F24父索引的classification不变，只改变实现child路由。
 
 Read失败与display unresolved分层：unknown/corrupt plan/header/graph不能为展示label而被降级成valid terminal export；resolver的`unresolved_missing_metadata/unresolved_invalid_metadata/unresolved_invalid_identity/unsupported_identity_version`是main§7.3允许的显示分类，不自动证明它们在每一种严格读取成功结果都production可达。正式证据逐分支标明真实可达性，schema合法但已被前层拒绝的分支不制造production bypass；UI应消费typed unavailable，E21对未知version/坏graph仍整体失败。
@@ -1522,32 +1557,35 @@ Read失败与display unresolved分层：unknown/corrupt plan/header/graph不能�
 - S08B：F.6现有`WorkoutSessionRepository.kt`及两DAO；typed读取合同可留同一repo文件，不新增read coordinator。必要时间语义校验仍沿S03选定的唯一validator由S08B调用。
 - S08C：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\data\WorkoutSessionHistoricalResolver.kt`，调用F.11的`TimedCanonicalFactsV1.kt`，不复制predicate或修改已合并分析。
 
-以上是规划新文件名的明确literal声明，不是从任务ID生成evidence文件，更不是在Integration执行写入。未来正式handoff必须将允许工作区完整literal路径绑定到用户实际指定的Story worktree；当前仍仅V2可写。
+以上是规划新文件名的明确literal声明，不是从任务ID生成evidence文件，更不是在Integration执行写入。未来正式handoff必须将允许工作区完整literal路径绑定到用户实际指定的Story worktree；本轮仅封闭六文档可写，无代码授权。
 
 本拆分不改变E18完成值：计时记录必须经过完整读取与历史入口后才算E18交付。不会把力量/跟练或E20后台提前塞入E18，也不会由于多拆两个Story增加用户操作。其他候选capacity仍需十维结果，不能由此宣布已完成全体capacity。
 
-### F.26 候选DAG DRAFT-3与机械边界
+### F.26 本轮直接依赖 DAG 与门禁
 
-S08拆分并补齐F.34时间validator前置后的唯一当前标签图：24节点、42条唯一边、无self/unknown endpoint、可拓扑排序。此前24/41、F.13的22/36及更早21/34保留作历史，不再作为当前count。仍是planning标签图，无未来implementation SHA、不等于已满足前置或READY。
+本图是 E18-CC-P01 的当前定义层 DAG，包含本轮文档门禁 P 与其受影响拆分；S01–S04 的已合并身份见页首。P 不是新增产品能力，其完成不自动把下游标 READY。原 24/42、F.13 的 22/36 和更早 21/34 只作历史；技术图不改变五 Epic 成果顺序。新单元尚无 accepted implementation SHA，必须按 F.36/F.37 绑定后才可 handoff。
 
 | 节点 | 直接前置候选 |
 |---|---|
+| E18-CC-P01 | —（本轮文档门禁） |
 | E18-S01 | —（已合并资产） |
 | E18-S02 | —（已合并资产） |
 | E18-S03 | E18-S01、E18-S02 |
 | E18-S04 | E18-S01 |
-| E18-S05 | E18-S02、E18-S03、E18-S04 |
-| E18-S06 | E18-S05 |
-| E18-S07A | —（已合并资产） |
-| E18-S07B | E18-S06、E18-S07A |
+| E18-S05 | E18-CC-P01、E18-S02、E18-S03、E18-S04 |
+| E18-S06A | E18-S05、E18-S02、E18-S03、E18-S07A |
+| E18-S06B | E18-S06A、E18-S04 |
+| E18-S07A | E18-CC-P01 |
+| E18-S07L | E18-CC-P01 |
+| E18-S07B | E18-S07L、E18-S07A、E18-S06A、E18-S06B、E18-S08B |
 | E18-S08A | —（已合并资产） |
-| E18-S08B | E18-S01、E18-S03、E18-S04、E18-S08A |
+| E18-S08B | E18-S01、E18-S03、E18-S04、E18-S05、E18-S08A |
 | E18-S08C | E18-S08B、E18-S07A |
 | E18-S09 | E18-S07B、E18-S08B、E18-S08C |
 | E19-S01 | E18-S09 |
 | E19-S02 | E18-S09 |
 | E20-S01 | E18-S07B、E19-S01、E19-S02 |
-| E20-S02 | E20-S01、E18-S06 |
+| E20-S02 | E20-S01、E18-S06B |
 | E21-S01 | E18-S08B、E18-S08C |
 | E21-S02 | E21-S01 |
 | E21-S03 | E18-S09、E19-S01、E19-S02 |
@@ -1558,6 +1596,8 @@ S08拆分并补齐F.34时间validator前置后的唯一当前标签图：24节�
 | E22-S04 | E22-S03 |
 
 S08B输出真实一致graph，S08C输出同源显示/结构；S09/E21-S01/E22-S01同时消费两者，所以拆分后各明确两条边。E22-S01保留对S07A predicate的直接来源依赖。五Epic用户顺序仍E18→E19→E20→E21→E22；图上的技术根可独立核对，不授权改变用户成果验收次序或提前派发后Epic。
+
+当前机械规模为 27 节点（26 个实现单元 + P 文档门禁）、54 条唯一边。S08B 增加窄 S05 的 Saved/read-ready 直接边界前置；C/T 合链后由 I 一次接通 Start 与终态。E20-S02 的旧 S06 依赖重定向到 S06B（传递包含 S06A），其产品/FGS/证据义务不变。
 
 ### F.27 文件生命周期、权限与最终证据责任 DRAFT-1
 
@@ -1588,8 +1628,8 @@ S03/B07拥有仓库边界四项时间完整性/来源语义的单一校验定义
 
 #### F.27.3 证据分类与final source要求不能漏掉
 
-- S01/S03/S04/S05/S08B：真实SQLite/Room schema、事务、guard、readback、ordering、rollback；S02真实production owner+Robolectric平台回调；S06合流/clear使用production API和真实coroutine/Room。不得为省测试增加production hook或由fake成功结果替代。
-- S07B与E19各自：Activity-retained实际入口、配置保留、真正onCleared同步barrier及两阶段进程证据；Recorder直接clear测试不证明framework调用。计时、力量、跟练互不代替实际consumer evidence。两阶段force-stop/relaunch由外部测试编排控制，不能在被kill的instrumentation里声称后半段仍执行。
+- S01/S03/S04/S05/S08B：真实SQLite/Room schema、事务、guard、readback、ordering、rollback；S02真实production owner+Robolectric平台回调；S06A/B合流/正常终态与clear停写使用production API和真实coroutine/Room。不得为省测试增加production hook或由fake成功结果替代。
+- S07L原配置保留、S07B新链接入与E19各自：Activity-retained实际入口、配置保留、真正onCleared同步barrier及两阶段进程证据；Recorder直接clear测试不证明framework调用。计时、力量、跟练互不代替实际consumer evidence。两阶段force-stop/relaunch由外部测试编排控制，不能在被kill的instrumentation里声称后半段仍执行。
 - E20：普通notification和connectedDevice FGS分别有平台证据；B09–B11包括release未确认、独立generation与visibility/consumer矩阵；B12–B15固定shared-owner observer→measurement APK/M1→final freshness→final APK及受影响gate重跑。Band9未断链保持与断链新attempt恢复各自有final-source证据，AVD不能代替Band/RF。E20-S02承担此完整链，不能只填写通用identity schema或推到E22；Manifest只增加必要FOREGROUND_SERVICE/FOREGROUND_SERVICE_CONNECTED_DEVICE和非exported Service，Service不新增BLE/engine owner。
 - E21-S02/P05：完整数据库读取到流式文件验证的时间/PSS窗口，单场和100场同总量；E22-S01/Q04：pure projector窗口。类名沿main§9.3的`E17ExportPerformanceContractTest`与`E17ProjectorPerformanceContractTest`，新Epic编号不授权改名后偷换计量。已有`E17FinalizerPerformanceContractTest`为已合并资产。
 - main§9.4原“最终整合candidate重建、安装并重跑三项performance contract”的最终source要求没有被用户决定删除。当前把它放在**E22成果最终整合验收门禁**（由最后交付的acceptance package明确承接），不新增末尾代码Story、不让末尾测试替代前面各Story证据。最后源码影响相关测量时需finalizer/projector/export三项同final source证据；源码/APK/installed identity、原指定AVD/JDK与测量规则保持。不得仅拼接三个旧candidate PASS。
@@ -1597,15 +1637,17 @@ S03/B07拥有仓库边界四项时间完整性/来源语义的单一校验定义
 
 ### F.28 当前候选生产与测试literal定位补齐（base路径，不是派发授权）
 
-以下新文件均为**拟新增、未创建、未读取任何04C副本**；已存在路径只沿同一main读取定位。为避免重复长路径导致第二套边界，S01/F4、S02/F5+F19、S03/F6、S04/F7、S05/F8、S06/F9、S07A/B/F11、S08A/B/C/F25、S09/F12已有完整base路径继续适用。此节补足此前仅有类名的路径；不把源文件数量用作capacity结果。每条测试只能证明列明边界。
+以下 literal 定位沿原合同保留；S01–S04 已存在/已合并资产按页首 base 消费，其余明确拟新增文件仍不代表已实现，未读取任何04C副本。S01/F4、S02/F5+F19、S03/F6、S04/F7、S05/F8、S06A/B/F9、S07A/L/B/F11、S08A/B/C/F25、S09/F12 的完整 base 路径继续适用。S06A/B 共用原 Recorder 文件与测试；S07L/B 共用已定位的 ViewModel/Activity/Route/shell 测试，按各 AC 分阶段验收，不以文件数证明 capacity。exact Writer worktree/envelope 仍须后续绑定。
 
 #### F.28.1 E18直接新增测试与实际生命周期
 
+S05 第四个直接 canonical consumer 为 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\core\data\E17FinalizerPerformanceContractTest.kt`，与下列三个仓库测试一起适配 exact 授权；原完整 finalizer 测量窗口/fixture/预算不变，本轮不运行。该定位来自 F.67.10 的当前 S05 元数据对照，不采纳其候选实现。
+
 - S02 observation：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\health\HeartRateRuntimeObservationTest.kt`；mapper：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\CanonicalHeartRateObservationMapperTest.kt`。两者名称沿D5，不沿旧12-path恢复04C范围；平台与recovery真实调用仍用F19已有测试。
 - S05实际gate/事务证据复用现有 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionRecorderGuardedWriteTest.kt` 和 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionRecorderReconciliationTest.kt`；S04 outer transaction还可扩展现有 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionFinalizerTest.kt` 的真实Room fixture，不修改已合并数学算法。
-- S06：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionTimelineRecorderTest.kt`；串行、receipt、terminal和clear生产编排，不能在此声称Activity已调用clear。
+- S06A/S06B：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionTimelineRecorderTest.kt`；R01–R08按F9.3分责：活动串行/receipt、正常terminal/Saved与独立清理、clear停写/在途原子性，不能在此声称Activity已调用clear。
 - S07A：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\TimedCanonicalFactsV1Test.kt`；F22/PH/PF/FI及existing engine真实展开。FI精确focus需要补明确`M07 Focus identity` AC，不把它错误塞到只管实际phase轨迹的M04或执行结果的M05；M07由本节明确新增为既有main§6.6的下游义务，无新产品行为。
-- S07B生产：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModel.kt`；pure retained状态测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModelTest.kt`；实际Activity：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionLifecycleContractTest.kt`。
+- S07L/S07B生产：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModel.kt`；pure retained状态测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModelTest.kt`；实际Activity：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionLifecycleContractTest.kt`。
 - S08A：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\LegacyUnversionedPlanSnapshotReaderTest.kt`；S08B复用F4的WorkoutSessionRepositoryTest；S08C：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionHistoricalResolverTest.kt`。
 - S09实际历史接线：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\history\WorkoutHistoryContractTest.kt`；已有HistoryUiStateTest只证明纯呈现，不冒充Activity/Room生命周期。
 
@@ -1650,7 +1692,7 @@ S03/B07拥有仓库边界四项时间完整性/来源语义的单一校验定义
 | DB-ORDER / §3.2/3.4/3.5、§4.2.3 | REFERENCE：显式DAO排序；sample按offset/mutation/sample，phase/acquisition按sequence；same-ms允许有序多个事实 | S08B/H01/H08→E21/J02、E22/Q03 | 故意非插入顺序的真实rows，断言production读取顺序；测试端不得先sort掩盖DAO遗漏 |
 | DB-PARTITION / §4.2.2/§5.7 | REFERENCE：真实相邻interval连续、唯一open/terminalclosed；intent、phase、device正交、合法零时长不丢 | S03/B04/B05→S06；S08B/H01 | 真实close/open事务前后比较，gap/overlap/duplicate/open marker single mutation |
 | DB-ORIGINAL / §3.6/§4.2/§7.4 | REFERENCE：originalVersion精确绑定同recording snapshot与inputLastMutation；不是latest | S08B/H02→E21/J01、E22/K02 | 同recording第二版本、错误recording binding、缺snapshot、tuple漂移；不重算修复 |
-| DB-TERMINAL / D5§4.3/§5.5–5.8 | ADAPT：完整terminal请求identity/payload、no-HR、exact重试与清理/RELEASED分开 | S04/T01–T06、S05/G→S06/模式UI | 完整row graph、changed endedAt/执行值冲突、结果取消、迟到clear与新token并发 |
+| DB-TERMINAL / D5§4.3/§5.5–5.8 | ADAPT：冻结 terminal identity/payload、no-HR、S04 exact 识别资产保持；Saved/read-ready 与 Released 分离，无同进程故障重试或 clear 补终结 | S04/T01–T06、S05/G→S06B/R05/R07、S07B/L04、S08B/H01 | 完整 row graph、changed endedAt/执行值冲突、在途取消/late clear、新 token 隔离；不重跑旧算法证明 |
 | JS-CLOSED / §5共同规则、§7.1 | PRESERVE：八storage对象/export新对象每一个key presence/type/literal；known-version extra/missing/错NULL失败；embedded plan例外按F22 | S08B/H02/H04调用原validators；E21/J01/J05 | 每named member single mutation；错误定位须指出object path/member及原typed失败，不能吞成not_recorded |
 | JS-DISPLAY / §5.1 | REFERENCE：display metadata stableId唯一、首次引用排序、active append-only、terminal不可变 | S03/B04、S07A/M04、E19-S01/S01→S08C/H07 | 重复/改旧entry/终态追加拒绝；实际替换动作与original计划label分别固定 |
 | JS-ZONE / §3.3/§5.2 | REFERENCE：六zone固定order/ID/bounds，effective与recording typed columns同源，alert非第七zone | S08B/H02→E21/J01/J03、E22/V07/V09 | 每zone上下界/顺序/缺项mutation、effective mismatch、no-effective max，原NULL不补默认 |
@@ -2328,7 +2370,7 @@ Root phaseIdentity.payload的各field由PH32个source variant行逐key R/N/M/lit
 
 ### F.34 真实接线、读取可达性与失败证据收口
 
-本节是主管理可行性/合同细化，绑定A的immutable main；没有运行代码、独立Review或新设备验证。F.26的S08B新增对S03的直接前置：F.27.2已将时间元数据唯一语义校验归S03，S08B必须消费它，不能在没有该前置时另写一个validator。当前标签图因此为24节点/42唯一边；旧41边是修正前定位。
+本节原可行性/合同细化绑定历史 immutable main，未运行代码或新设备验证。时间元数据唯一语义 validator 仍归已合并 S03，S08B 直接消费，不新建 validator。本轮图以 F.26 的 27 节点/54 边为准；本节 S06 与 S07B 的直接消费者按 F.37 分责重定向。
 
 #### F.34.1 engine → 模式producer → Recorder
 
@@ -2373,7 +2415,7 @@ Root phaseIdentity.payload的各field由PH32个source variant行逐key R/N/M/lit
 | 边界 / primary AC | 可判定证据 | 明确限界与原错误规则 |
 |---|---|---|
 | Room Start/active/terminal，S03/B02/B05、S04/T03 | 在测试库沿既有SQL trigger/constraint/guard触发真实事务失败，逐表比较全回滚；正常嵌套事务及结果取消单独覆盖 | SQL失败不自称真实磁盘耗尽；源码检查没有吞错/清库。原异常保留，cleanup错误为secondary |
-| 同请求结果交付取消，S03/B03、S04/T04、S05/G | 用测试端coroutine调度及真实持久化已提交graph，随后调用生产查询/重试，核对完整payload及后续准入 | 不用mock commit成功代替DB结果；无法控制的时序不报告已跑过 |
+| 同请求结果交付取消，S03/B03、S04/T04、S05/G | S03/S04 已合并完整图/同请求识别资产保持；新 S05 以真实在途事务及交付取消证明全提交/全回滚、未定停写、Saved 与清理独立；不要求新调用层故障后重试恢复 | 测试端 coroutine/真持久化图与后续准入断言；不能用 mock commit 替代、无法控制的时序不称已跑过，不冒称真实设备已发生故障 |
 | 私有文件创建/发布/清理，E21-S02/P02/P04 | 测试专用目录中以目标被普通文件占用、发布目标冲突、存在残留及实际删除结果等公共文件操作触发可达结果；正常输出完整JSON读回与字节identity | 用真实操作证明相应失败类，不能以一个create失败声称flush/sync/close各点都动态覆盖；清理失败不误报已删除 |
 | write/flush/sync/close，E21-S02/P01/P02 | 对实际生产资源生命周期作精确source检查：所有操作成功前无READY；异常沿同一失败出口，finally/use关闭且不掩盖primary；结合真实成功IO和公共可达失败证据 | 框架资源/异常传播保证属于其本层证据，不是逐点运行证据。若Writer必须加入新factory/interface才可证明某claim，停止并报告exact gap，不自行扩展生产边界 |
 | 系统文档provider，E21-S04/D02 | 实际Android CreateDocument/外部URI打开、完整复制、返回取消/失败以及外部读取字节；可在测试端独立provider制造真实平台错误 | 测试provider证明content resolver协议，不能冒称用户具体云盘均已成功；外部半成品不可撤回必须诚实说明 |
@@ -2438,9 +2480,9 @@ E20-S02额外按F.15.3/B12–B15使用measurement和final两套身份及先后�
 
 完整dictionary实例属于E21-S01实现交付，规划在F.23定义其closed表示、逐字段覆盖、IC/NUM独立oracle即可判定该交付。实例尚未生成及consumer尚未执行，不等于缺少新产品决定；不得由主管理模拟一份“已经验证通过”的导出。正式Planning Review需要独立检查F.23能否承载source全部语义。
 
-### F.36 24候选十维capacity主管理判定
+### F.36 当前 capacity、历史判定与受影响缺口
 
-方法为已核验BMAD F6十项结构判据。本表是候选规划的主管理逐项判断，**不是fresh独立Planning Review、用户接受或READY**。每个P表示本候选在该结构判据上PASS，引用行尾合同及下方限定；不是运行测试PASS。未来实现身份尚不存在，D5的P仅表示前置已明确绑定到候选包并阻塞下游，绝不表示已经合并。
+本表保留未受影响单元的历史规划判断；P/R 只证明原绑定版本，不是本轮独立 PASS 或运行证据。本次 E18 受影响单元用 U 表示 NOT_READY/尚未证明，不能凭同 owner、文件数或已列 AC 自动判容量通过。P01 文档候选本身待独立 Planning Review，不在此制造实现容量 PASS。
 
 十列依次为：D1单一价值；D2义务闭合；D3owner稳定；D4生命周期一致；D5依赖闭合/明确阻塞；D6精确生产边界可绑定；D7匹配层证据；D8单Writer可实施；D9单Reviewer可判定；D10失败恢复闭合。
 
@@ -2450,14 +2492,16 @@ E20-S02额外按F.15.3/B12–B15使用measurement和final两套身份及先后�
 | E18-S02 | P | P | P | P | P | P | P | P | P | P | F5、F19、F35.3：同runtime有序无损观测出口，bind/snapshot/receipt/cause属于这个输出合同；不含仓库/Recorder，owner回调→S03/S05/S06 |
 | E18-S03 | P | P | P | P | P | P | P | P | P | P | F6/B01–08、F27.2：Start/active是同一canonical写入边界；冻结批次、expected tuple与完整row graph原子性不可拆成部分提交；真实Room→S05/S06/S08B |
 | E18-S04 | P | P | P | P | P | P | P | P | P | P | F7/T01–06：终结外层事务同一冻结请求，有/无HR分支，CS-05复用；不含gate释放或UI，真实回滚/重试→S05/S06/S08B |
-| E18-S05 | P | P | P | P | P | P | P | P | P | P | F8/G01–17：唯一仓库准入状态机及全部直接写消费者授权；cache/token/PENDING/清理顺序是同一个排他不变量，不可分别允许新Start→S06 |
-| E18-S06 | P | P | P | P | P | P | P | P | P | P | F9/R01–08：同场合流与terminal/clear handoff；DB/绑定/分析语义均来自前置，不增第二owner；队列+真实仓库→三模式 |
-| E18-S07A | P | P | P | P | P | P | P | P | P | P | F11/M01–07、F22/PH/PF/FI、F33/F34：唯一timed事实/predicate/focus输出，无Activity生命周期；独立原表fixtures→S07B/S08C/E22 |
-| E18-S07B | P | P | P | P | P | P | P | P | P | P | F11/L01–08、F34：同一计时Activity-retained entry生产接线；MainActivity/shell/Route共同维护该entry，拆文件不能独立保留生命周期→S09/E20 |
-| E18-S08A | P | P | P | P | P | P | P | P | P | P | F25、F22/F30 PL：legacy外部JSON严格接受，无Room/label/UI；required与旧optional分别可测，原文不升级→S08B |
-| E18-S08B | P | P | P | P | P | P | P | P | P | P | F25/H01–06/H08、F29/F34/F35：同一事务一致terminal read，版本/执行/original/time是同一结果合法性；补S03前置，复用validators→S08C/S09/E21/E22 |
-| E18-S08C | P | P | P | P | P | P | P | P | P | P | F25/H07、F30/F34：冻结历史显示/结构，无数据库mutation或当前计划回填；格式合法性与read失败层分开，resolved/unresolved证据需注明入口→S09/E21/E22 |
-| E18-S09 | P | P | P | P | P | P | P | P | P | P | F12/U：必要历史入口与同源日期/删除失效；不做日历选择或HR图表；实际计时结果→已有history/UI，闭合E18完成值 |
+| E18-S05 | U | U | U | U | U | U | U | U | U | U | NOT_READY；F8 全写授权签名/四个直接测试与消费者 envelope、一次准入及取消/clear 真实 oracle 未绑定；主管理 F8 关闭 D2/D4/D6–D10 后独立判定→S06A/S08B |
+| E18-S06A | U | U | U | U | U | U | U | U | U | U | NOT_READY；F9 活动 cut/停止输入与在途事务取消证据、S07A→队列接口 exact 签名、活动性能窗口及独立容量未证明；主管理固定→S06B/S07B |
+| E18-S06B | U | U | U | U | U | U | U | U | U | U | NOT_READY；F9 冻结 cut 前输入与终态/clear 顺序、Saved 独立发布/cleanup 证据及单 Writer/Reviewer envelope 未证明；主管理固定→S07B/S08B/S09 |
+| E18-S07A | U | U | U | U | U | U | U | U | U | U | NOT_READY；原 F11 M01–07/PH/PF/FI/predicate 保留；新增 C 的直接消费边界与 exact 当前前置/输入/单元容量需主管理 F8 绑定；不把旧 P 升级为新 PASS→S06A/S07B/S08C/E22 |
+| E18-S07L | U | U | U | U | U | U | U | U | U | U | NOT_READY；F11.2 原 entry/engine/clock/原保存状态的 retained 迁移 envelope、真实 recreate/原保存 oracle 与单 Writer 容量需主管理固定→S07B |
+| E18-S07B | U | U | U | U | U | U | U | U | U | U | NOT_READY；F11.2 Start/终态全部回调及原恢复建议关联必须一次闭合；S06A/B+S08B 结果消费、clear/lifecycle 与两 family/UI 门禁、精确 envelope/容量待主管理固定→S09/E20 |
+| E18-S08A | U | U | U | U | U | U | U | U | U | U | NOT_READY；F25 原 legacy parser 边界保持；尚无 exact 实现前置/fixture 身份及本单元 handoff，不凭本轮文档宣称可派发→S08B |
+| E18-S08B | U | U | U | U | U | U | U | U | U | U | NOT_READY；F25/H01 新增 Saved 不等 Released 的读取 oracle 与窄 S05 前置，真 Room 并发/绑定/时间校验复用和 exact envelope 待主管理 F8 固定→S07B/S08C/S09/E21/E22 |
+| E18-S08C | U | U | U | U | U | U | U | U | U | U | NOT_READY；F25/H07 原无状态 resolver 保留；F/S08B 新前置与可达/不可达 fixture 身份及 handoff 待主管理固定→S09/E21/E22 |
+| E18-S09 | U | U | U | U | U | U | U | U | U | U | NOT_READY；F12/U01 必须以 Saved 进入历史及原同日期删除集合，新的 I/B/C 前置、真实 UI/Room evidence 与 exact envelope 待主管理固定；不增加日期/删除能力 |
 | E19-S01 | P | P | P | P | P | P | P | P | P | P | F14/S01–05、F34：同一个力量模式接入，既有事实转换是其生产命令链步骤，不新建共享predicate authority；prepare/confirm/实际组值与生命周期同场验证→history/E20/E21 |
 | E19-S02 | P | P | P | P | P | P | P | P | P | P | F14/F01–04、F34：同一个跟练模式接入，无力量前置、无视频扩张；原engine适配与retained调用端同一因果链→history/E20/E21 |
 | E20-S01 | P | R | P | R | P | P | R | R | R | R | attempt=3否定D2/D4/D7/D8/D9/D10；R为F39管理修正重评，待fresh F9。F15/N01–09闭合同一coordinator的producer生命周期、版本、新进程清理；三模式及S02为必要消费者，无新owner |
@@ -2476,33 +2520,32 @@ E20-S02额外按F.15.3/B12–B15使用measurement和final两套身份及先后�
 1. D1/D4不是按“都有关”合并：schema迁移、observations、Room写/终结、仓库gate、Recorder、strict legacy/read/resolver、UI/文件/投影已经分开。被同一原子性或同一页面entry约束的直接调用链保留在本Story；没有再扩大04C。
 2. D2沿F24父项处置、F20的UX子项、F22–33 typed ledger、F35 QR/DA及B的accepted delta判定为候选映射闭合。主实现与direct consumer不同；REFERENCE不重做已合并资产，EXCLUDE/DEFER不悄悄恢复。**这不证明fresh source-first语义审查通过**，独立审查必须重建source universe而非相信本表P。
 3. D3沿C的accepted owner/lifecycle map；F23/27的序列化及目录表达仍是候选技术表示，需正式规划接受，不因本表通过而授权Writer选择另一套结构。未发现需用户新增产品或核心ownership决定。
-4. D5采用F26+F34当前24/42标签图，四个root依A已合并资产，其余前置明确未实现/未满足。按F6“已满足或明确阻塞”评估规划结构P；所有implementation prerequisite仍须届时full SHA/ancestry证明。
+4. D5采用F26 当前 27 节点/54 边图；S01–S04 依页首 immutable 祖先事实，受影响单元的新前置仍未满足。按F6“已满足或明确阻塞”评估规划结构P；所有implementation prerequisite仍须届时full SHA/ancestry证明。
 5. D6基于F4–F19/F25/F28的完整Integration base路径和限定delta，能在正式handoff绑定exact实际worktree；当前不允许在Integration实施。没有actual worktree/validation artifact不是可忽略项，仍属F8必须完成的执行身份门禁。
 6. D7沿F34/35 matching-layer证据合同；人工UI、Band、平台外部结果仍有明确人机边界。未来证据未执行不是当前冒认PASS的理由，也不要求规划阶段运行项目测试。无法执行时保持对应Story NOT_READY/证据缺口，不降低层级。
-7. D8/D9根据固定来源、AC、owner、paths与oracle可由一个角色判断，不用文件数、token或估点证明。E19两模式各自独立，不能因为都复用公共链合成一个Writer；E18-S07A因跨历史/投影共享predicate有独立consumer，和E19局部模式转换不同，不机械复制拆分数量。
+7. 未受影响行原 D8/D9 根据当时固定来源、AC、owner、paths 与 oracle 判断；本次 U 行须由主管理逐项关闭新缺口，不用文件数、token或估点证明。E19两模式各自独立，不能因为都复用公共链合成一个Writer；E18-S07A因跨历史/投影共享predicate有独立consumer，和E19局部模式转换不同，不机械复制拆分数量。
 8. D10的rollback/retry/migration与consumer失败已经在F4–F9、F12–17、F27/F34分层；尤其durable saved不等于RELEASED、系统dispatch不等于外部保存、source-only不等于每IO点运行，均有禁止伪成功规则。
 
-attempt=3在F39所绑定版本判定23个Story结构成立，E20-S01六维失败；P001/P002已关闭，F38的pending陈述仅为当时历史。当前E20-S01的R列为F39管理修正重评，不能消除独立NON-PASS；未改行的P也不升级为新版独立PASS。24节点/42边不变，完整新版等待fresh F9 attempt=4，不新增正式Story、implementation candidate或Writer解锁。
+历史 attempt=3/F39 与后续 attempt=4 的结果仅对各自原版本有效，未改的 E19–E22 判定不在本轮重审；本轮直接依赖重定向不证明其未来实现。所有 U 行的定义层边界已由 F8/F9/F11/F25 固定，但 remaining exact API/envelope、取消证据与 capacity 由主管理/后续规划门禁承担，代码 Writer 不补承重设计。原 D.4、原 finalizer/projector/导出测量规模、完整窗口与预算保持；本轮未运行，不伪造新性能 PASS。
 
 ### F.37 当前候选包与手工规划审查入口
 
-本候选的唯一artifact是本exact V2，身份使用写后回验的全文SHA256，不在正文填自身hash。审阅者按本文A/B/C/D的authority层次、以下精确selector消费合同，不将F2、F3原S07/S08或后部历史快照当作当前任务。section anchor与StoryId组成候选selector；它们不是implementation commit或已接受Story。
+当前 artifact 为本文件在 E18-CC-P01 普通 docs commit 中的 Git blob，candidate/tree/sole parent 由 Writer 报告绑定，不在正文填自引用 hash。accepted base 及 immutable V2 F69.2 身份见页首。当前唯一节点是 P 文档候选待独立审查；以下 selector 是定义层路由，所有受影响实现单元 NOT_READY，不是代码派发权限。
 
-| Epic / 数量 | 当前候选selector与主要合同 |
+| Epic / 数量 | 当前 selector 与主要合同 |
 |---|---|
-| E18 / 12 | S01/F4；S02/F5+F19+F35.3；S03/F6；S04/F7；S05/F8；S06/F9；S07A/F11.1+M07/F28；S07B/F11.2；S08A/S08B/S08C均按F25分别限定；S09/F12.2 |
-| E19 / 2 | S01/F14.1；S02/F14.2；模式差异及实际接线沿F30/F34 |
-| E20 / 2 | S01/F15.1/N01–N09及retained/FGS消费者；S02/F15.2+F15.3/B01–B15；F38为attempt=2修正史，F39为attempt=3完整batch及当前修正/capacity；D-082、F27.3/F28.3/F35.4的measurement/final边界共同适用 |
+| P / 1 文档门禁 | E18-CC-P01：页首/B.1/C、F8.4/P01–P08传播、F26/F36/F37；独立 Planning Review 后回主管理 |
+| E18 / 14 实现单元 | S01/F4；S02/F5+F19+F35.3；S03/F6；S04/F7（均已合并原资产）；S05/F8；S06A/F9.1+F9.2+R01–04及R06/R08活动部分；S06B/F9.2+R05/R07及R06/R08终态部分；S07A/F11.1+M07/F28；S07L/F11.2原配置/保存链；S07B/F11.2最终生产切换；S08A/F25/H03-plan/H04-parse；S08B/F25/H01–06/H08；S08C/F25/H07；S09/F12.2 |
+| E19 / 2 | S01/F14.1；S02/F14.2；模式差异及实际接线沿F30/F34，新写链/clear/Saved消费本轮F8/F9/F11，原范围不扩张 |
+| E20 / 2 | S01/F15.1/N01–N09及retained/FGS消费者；S02/F15.2+F15.3/B01–B15，旧S06前置重定向S06B；D-082/F27.3/F28.3/F35.4 measurement/final边界不变 |
 | E21 / 4 | S01/F16.1+F23；S02/F16.2+F27；S03/F16.3；S04/F16.4+F27；F34 IO限界必读 |
-| E22 / 4 | S01–S04/F17；F18.2与F20补Q06/V06–11/W05–06，F30限定非timed导航；F27.3最终整合performance gate保留 |
+| E22 / 4 | S01–S04/F17；F18.2/F20/F30与页首DOCS-P001/P002补充同读；F27.3最终整合performance gate保留 |
 
-共享义务索引：F20 UX子项；F24全127父索引分类；F22/23/29–33/35的field、union、variant、required-iff、duration与reason；F28 production/test完整base路径；F34接线/strict/IO；F26当前42边；F36逐项capacity。旧Story合称的子AC只按F11/F25新primary路由，不重复认领。E18-R18低空间为EXCLUDE；App比较/进阶/AI与其他residual按B/F24，不从候选包中删除其来源。
+共享索引 F20/F24、F22/23/29–33/35 的字段、union、variant、required-iff、duration/reason 保持；F28 是 literal 定位，F34 是接线/strict/IO，F26 是唯一 27 节点/54 边 DAG，F36 是当前容量缺口。旧 S06/R01–04 路由 S06A，R05/R07 路由 S06B，R06/R08 按 F9.3 分责；无细分 R 的旧 S06 合称指 A+B 完整链，不另派原 S06。旧 S07B/L02 原链保留路由 S07L，新链回归与 L01/L03–L08 仍由最终 S07B 承担；旧 S07/S08 合称沿 F11/F25。该规则也适用于 F24/F31–35 的直接消费者，不改字段数学或另建 owner。
 
-管理自检已完成可审阅的候选规划及当前已知缺口处置；**不宣称全source语义独立审查通过**。正式Planning Reviewer必须从accepted source世界反向重建expected obligations，对本包的classification/丢失/owner/AC/oracle/capacity及可达性作独立判定，发现一个finding后仍完成剩余适用轴并一次交完整batch。不能把本包的父项数、字数、hash、P列或管理结论当作独立证明。
+P 文档候选独立审查尚未发生。若审查通过且文档 candidate 成为同步 main 祖先，只完成本轮合同门禁；主管理随后仍须关闭 F36 指定缺口、验证 exact accepted prerequisite full SHA、绑定真实工作区/证据与完整手工合同，才可能选择一个 exact READY 单元。S05 旧候选仍未 PASS/未合并，不以本次修订关闭旧 finding，Review3/4 原上限不刷新，S06及后续 Writer 未解锁。
 
-第四轮独立规划审查及用户最终接受均已完成，精确身份见F40；本入口不再派attempt=4。下一手工门禁为F41正式计划文档落地Writer，S01代码Writer仍须完成F8。
-
-沿已有持续推进与手工审查授权，绑定写后全文artifact hash和全部实际inputDocuments身份/分类数目，提供一份完整可手工复制的规划审查任务。不得从本索引派生其他本地artifact路径、套Code Review的实现/集成权限或让审查者改V2/merge/push。独立审查结果回传后主管理处置；正式Story/worktree/evidence身份、用户最终接受与F8 readiness仍须逐项通过。当前模型/模式不自动切换，04C继续HELD。
+本 Writer 不承担独立 Reviewer，不派下一角色、不 merge；只把报告交回主管理。CS04C=HELD，S01–S04 不回退，历史 D5/testing/V2 不改。E19–E23 无关范围、旧 UI/非 HR 趋势/独立恢复建议、原数据与性能合同继续保留。
 
 ### F.38 F9完整finding batch处置与bounded planning Repair（2026-09-06）
 
@@ -2664,7 +2707,7 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 ### UX-SUP-01 — S4 HR 卡顺序与返回失败隔离
 
 - S4 recap 的 HR 卡信息顺序固定为：**状态/覆盖短句 → 已观察平均/最高 → “查看心率分析”**。无 HR identity 时整卡不出现；zero-sample 显示事实但不画空图。平均/最高的覆盖限定同时按 UX-SUP-03 消费。
-- **已保存且 RELEASED 的结果页上，HR 卡失败不能阻塞底部“返回训练首页”**；HR 卡读取失败时仍可使用该返回入口。此隔离不放宽 F.11/L04 的保存与释放门禁：正常返回、恢复推荐、回训练主页仍只在 RELEASED 后移除训练入口；终结或释放尚未成功不能以 HR 卡失败为由绕过，也不能声称已保存。HR 读取失败不转成 zero-sample。
+- **已 Saved 的结果页上，HR 卡失败不能阻塞底部“返回训练首页”**；HR 卡读取失败时仍可使用该返回入口。按本轮 P03/F.11/L04，Saved 由终态事务与完整读回证明，正常返回/恢复推荐/回训练主页不等待 Released；binding 清理未定只阻塞新冲突写。终态未确认不能以 HR 卡失败冒称已保存，HR 读取失败也不转成 zero-sample。
 - 直接消费者为 **E22-S02/K01/K02/K04**，覆盖既有计时、力量、跟练三模式的 persisted recap 与返回入口；完成、放弃、历史继续读取同一持久化结果，不以当前参数改写历史。
 
 <a id="ux-sup-02"></a>
@@ -2683,7 +2726,7 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 - S4 指标为“平均/最高”；salvage §13.6 第 361–362 行的 coverage 限定继续适用：`<80%` 时平均/最高标签必须写“已记录片段平均/最高”，`>=80%` 才可使用无条件“平均/最高”。Partial/insufficient 保留“仅基于已记录片段”或已接受等义文案；partial 的原提示为“本次心率记录不完整，以下结果仅基于已记录片段。”，insufficient 的原提示为“本次有效心率覆盖不足 50%，暂不生成自动摘要。”。阈值与零分母判断消费原始分析，不以显示取整后的百分比重算。
 - S5 主图唯一最高点 anchor 标签仍为 **“训练最高”**；excluded point scrub 明确 **“不计入主要训练统计”**。完整 canonical 曲线中的 prepare/pause/opt-out 等 excluded raw 高值仍展示，不删除、压低、clamp 或冒充 primary observed max；完整曲线 raw 与主要训练统计是不同范围。原覆盖限定、训练最高事实、统计数值、算法及 CS-05 原始分析 owner 均不改变。
 
-**文档判定与未来证据：** 仅持有仓库及 pinned base 的读者，沿页首 → F.37 的 E22-S02/S03 → 本区，即可排除卡顺序错误、S4/S5 标题混同、HR 卡错误阻塞已保存且 RELEASED 后返回、读取错误没有“重试”等实现。此为文档可判定性；真实三模式入口、UI 状态矩阵与用户视觉证据仍归原 E22 Story 门禁，本次文档 Repair 不报告运行或用户体验通过，也不授予 S01 READY 或代码 Writer 权限。
+**文档判定与未来证据：** 仅持有仓库及 pinned base 的读者，沿页首 → F.37 的 E22-S02/S03 → 本区，即可排除卡顺序错误、S4/S5 标题混同、HR 卡错误阻塞已 Saved 后正常返回、读取错误没有“重试”等实现。此为文档可判定性；真实三模式入口、UI 状态矩阵与用户视觉证据仍归原 E22 Story 门禁，本轮文档候选 不报告运行或用户体验通过，也不授予受影响实现单元 READY 或代码 Writer 权限。
 
 <a id="accepted-ux-supplement-p002"></a>
 
@@ -2751,14 +2794,14 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 | 直接来源条款 / 来源族 | 本文件正式正文 selector | 承接与窄替代边界 |
 |---|---|---|
 | V2 B–D、F.1 | 同名 B–D、F.1；当前状态见页首，Story 见 F.37 | E17 封口、保留资产、五成果顺序；力量与跟练分别接入验收；需求保留/暂缓/排除不改 |
-| V2 F.4–F.39 | 同名原文；F.37 → 当前 24 Story，F.26 → 42 边 | 全部 Story / AC / typed / oracle / owner / consumer / capacity 原文转录；F.38/F.39 为修正 chronology |
+| V2 F.4–F.39（原转录）；本轮 F.69.2 | 同名合同按 F.67.8 直接修订；F.37 当前 selector、F.26 当前 27 节点/54 边 | S01–S04 成果与未受影响字段/数学保持；本轮 F8/F9/F11/F12、DAG/capacity/直接引用按 P01–P08 收窄，F.38/F.39 历史不改 |
 | V2 F.40–F.42 | 页首当前状态、来源身份、路径解释及本表；六份旧文档当前入口 | 仅承接已核实审查/用户接受、文档 candidate 与条件式 landing、S01 F8 锁定；管理合同不全文复制 |
 | salvage §2–§5、§12–§13 的已接受产品与 UX；UG / AD-P / AD-U / CAP / RES lineage | B、D、F.1、F.14–F.18、F.20、F.24、F.30.2；具体补充见下列 UX-SUP-01–08；当前 owner 按 F.37 及页首消费绑定 | 单场事实、三模式、图表/导出/无障碍义务保留；DOCS-P002 五组细目由新增正文直接承载；比较/进阶等 residual 按 B/F.24 当前处置，旧 Epic 编号不恢复 |
 | salvage §14.2、§14.5–§14.31 的已接受 time / raw / original snapshot / axes / typed / owner 保证 | C、F.4–F.9、F.11、F.14、F.22–F.25、F.29–F.35；§14.31 固定标题及统计范围另见 UX-SUP-03 | 单调坐标、已知/未知时间、raw 与派生分离、状态/原因/NULL/partition/order、唯一 owner；继承的数学与 schema 仍指向 pinned-main E17 remainder §3–§7 |
-| salvage §13.6 第 356 行；V2 F.43/UX-SUP-01 | [UX-SUP-01](#ux-sup-01)；页首 → F.37/E22-S02/K01/K02/K04 | S4 卡顺序完整承载；HR 卡失败不阻塞已保存且 RELEASED 后的底部返回，保留 F.11/L04 前置 |
+| salvage §13.6 第 356 行；V2 F.43/UX-SUP-01 | [UX-SUP-01](#ux-sup-01)；页首 → F.37/E22-S02/K01/K02/K04 | S4 卡顺序完整承载；HR 卡失败不阻塞已 Saved 后的底部返回；本轮 P03 窄替代释放门禁，消费当前 F.11/L04 |
 | salvage §13.6 第 361 行；V2 F.43/UX-SUP-02 | [UX-SUP-02](#ux-sup-02)；页首 → F.37/E22-S02/K02、E22-S03 读取错误呈现 | 固定读取错误提示及用户“重试”；合法状态、原始错误、typed 拒绝和删除失效分开，不新增重试机制 |
 | salvage §14.31 / AD-U-025 第 1078–1079 行及 §13.6 第 361–362 行；V2 F.43/UX-SUP-03 | [UX-SUP-03](#ux-sup-03)；页首 → F.37/E22-S02/K03、E22-S03/V11 | S4“主要训练心率”与 S5“主要训练统计”分别承接；coverage、训练最高、excluded raw 与主要统计范围保持 |
-| Repair 1 V2 F.43（历史 provenance） | 页首 Repair 1 输入身份 / 审查历史、[DOCS-P001 正文](#accepted-ux-supplement)及本表 | DOCS-P001 三组已由 Review attempt=2 独立关闭，正文与 anchors 原样保留；原转录 / 原 F9 身份保留 |
+| Repair 1 V2 F.43（历史 provenance） | 页首 Repair 1 输入身份 / 审查历史、[DOCS-P001 正文](#accepted-ux-supplement)及本表 | DOCS-P001 三组已由 Review attempt=2 独立关闭，anchors 与未受影响正文保留，UX-SUP-01 返回门禁由本轮 P03 窄替代；原转录 / 原 F9 身份保留 |
 | salvage §13.6 第 357 行；V2 F.44/UX-SUP-04 | [UX-SUP-04](#ux-sup-04)；页首 → F.37/E22-S03 | S5 八段顺序、标题区持续“提前结束”；合法空状态不造结果，导出消费当前 E21 统一能力 |
 | salvage AD-U-003 第 69 行、§13.6 第 361–362/364 行；V2 F.44/UX-SUP-05 | [UX-SUP-05](#ux-sup-05)；E22-S02/K02、E22-S03/V01/V04/V08/V09 | late-start、zero-sample、no-zone、暂停四种文案按条件/surface 分开；三轴优先级、coverage/快照与视觉真机溢出时等义缩短限定保持 |
 | salvage AD-U-014 第 80 行；V2 F.44/UX-SUP-06 | [UX-SUP-06](#ux-sup-06)；E22-S03/V08，保留 F.18.2 的 S02/K02 状态消费 | 图旁一行、独立默认折叠卡及起止/时长/原因/阶段/统计影响完整字段；重大不足持续可见，unknown 不伪造数据，不新增日志或 owner |
@@ -2767,7 +2810,7 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 | 本次 Repair 2 V2 F.44 | 页首 Repair 2 输入身份 / 审查边界、[DOCS-P002 正文](#accepted-ux-supplement-p002)及本表 | 五组及必要单文件导航/映射的窄修订；fresh 复审只重新检查五组与直接影响，未变部分核对身份及既有证据，不重开 F9 或解锁 S01 |
 | salvage §14.32、§14.35–§14.39 的有效性能、export、失败与隐私义务 | D、F.16、F.17、F.23、F.27、F.29、F.34、F.35 | 自描述 v2、完整生成与真实 I/O 失败、独立 consumer、平台外部副本限界；旧 lease / 清理机制只按 D/F.27 窄替代，不恢复旧容量 |
 | D5 §4.1、§5.1–§5.2 | E18-S02/F.5+F.19+F.35.3；E18-S05/F.8 | 无 backlog、同值 notify 不折叠、receipt/snapshot、binding disposition、exact unbind、原始失败；不采用04C实现 |
-| D5 §4.2–§4.3、§5.3–§5.8 | E18-S03/F.6、S04/F.7、S05/F.8、S06/F.9 | Start 全事务、commit-result loss完整 graph、终结幂等、cache/释放顺序、PENDING/BLOCKED、stale token、owner-clear barrier及失败保持 |
+| D5 §4.2–§4.3、§5.3–§5.8 | E18-S03/F.6、S04/F.7、S05/F.8、S06A/B/F.9；逐条替代 F.8.4 | 保留 Start 全事务、完整图识别、终态幂等资产、PENDING/BLOCKED/exact隔离/原失败；撤 cache 复用、同进程恢复和 clear 补终结；Saved/read-ready 不等 Released |
 | D5 §6.1 及 lifecycle 证据分层；salvage §14.30、§14.38 | F.8–F.9、F.11、F.14、F.25、F.28、F.34 | repository/Recorder直接并发证据与真实 mode ViewModel/Activity生命周期证据分别归属；旧CS-04C/CS-06编号及12-path envelope不恢复 |
 | pinned-main `docs/planning/e17-remainder-epic-story-plan.md` §3–§9 | D、F.22–F.23、F.25、F.27、F.29–F.35 | 保留引用的完整schema/数学/closed JSON/phase/export字段、正交轴、owner与性能合同；v2 root/时间/选择/系统授权和24h清理仅按已接受窄替代消费 |
 | pinned-main D-079–D-084；自动恢复 Correct-course §3/§6/§7；architecture 当前覆盖；E17-3 owner / identity；E17-4 当前矩阵及其绑定的 M1 / release 协议 | B/C/F.1、F.15、F.27.3、F.28.3、F.35.4；F.38/F.39 修正说明 | 胶囊与已合并资产保留；普通/FGS唯一writer、generation分离、release ack/ReleaseUnconfirmed、shared-owner M1→final身份链仍有效；旧编号/顺序不是派发入口 |

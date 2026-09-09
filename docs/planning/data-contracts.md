@@ -13,7 +13,13 @@ stepsCompleted:
 
 # TrainFlow 数据与接口标准草案
 
-## E17 remainder V11 accepted data contract（当前 planning authority）
+## E18 实时记录当前合同入口（E18-CC-P01）
+
+当前产品合同为 [E18 正式计划](e18-onward-epic-story-plan.md#current-status)，本轮 accepted base=`74c25fac9c728baf2aa44b9e05b5f7bece615fca`，已包含 S01–S04。V2 F.69.2/P01–P08（757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`）承载已接受的新决定；相冲突的 D5 恢复/cache/clear 补终结承诺按正式计划 F.8.4 逐条窄替代，旧历史不改。原字段、版本、时间来源、实际值、原子事务和原始错误继续保留，本轮无 outcome/schema/migration 或第二数据库。
+
+一次原子初始化确认后开始，同 session 持续实时写；正常终态冻结真实截止点/原执行结果，提交并完整读回即 Saved/read-ready，与 Released 分开。正常返回不等待 binding 清理，清理未定仍禁新冲突写。停止后不续录/补造，clear 同步停接新输入/新写、不补 owner_cleared；在途事务维持全提交/全回滚，重开只按 durable：已终态读取原结果，未终态沿 CS-04B 最后已提交图处理。故障后不在同进程恢复写资格。文档候选待独立审查，不证明实现 READY，S05 未 PASS/未合并，后续 Writer 不解锁。
+
+## E17 remainder V11 accepted data contract（历史来源，按当前入口窄继承）
 
 E17 remainder 的唯一 detailed data contract 是 `docs/planning/e17-remainder-epic-story-plan.md`。其 source=`INLINE-E17-REMAINDER-EPIC-STORY-PLAN-V11`（`SHA-256=6A92D46A835B637DDFBB9DEC09A661D72736768C07FD16866F88AAF62EAB8736`），已通过 re-Planning Review Attempt 5（`SHA-256=92C11E019EFEBA016C9E3DFCC0FECCADD2B902A8FD785A9048D850A9CAD8570B`，`PASS`）和 scoped Consistency re-Audit Attempt 2（`SHA-256=39FB55004A24A331BAB078BF02D546CDC749836DCCDF7830B5F58E25DF7C8541`，`PASS / CONSISTENCY=PASS`）。
 
@@ -740,7 +746,7 @@ interface FollowAlongPlanMeta {
 
 ### 9.1 计划与会话分离
 
-执行训练时应生成 `WorkoutSession`：
+执行训练时应生成同一 `WorkoutSession`，保留 plan snapshot、原实际执行记录及恢复建议的 session 关联。已迁移模式一次原子初始化后持续写本场，正常终态同一次事务提交执行/结束信息及适用 original analysis；不会另建基础记录降级结果。下列早期接口的历史字段不替代页首 canonical 合同，未知实际结束时间不能用重开时间补写：
 
 ```ts
 interface WorkoutSession {
@@ -793,7 +799,7 @@ E10.4 约定：
 - `totalElapsedSec` 表示本次训练从 `startedAt` 到 `endedAt` 的 wall-clock 总耗时，包含准备、确认、休息、正式组和暂停。
 - `effectiveElapsedSec` 表示训练执行的有效推进时间，不包含暂停。计时训练使用引擎 active elapsed；力量训练当前使用引擎 `sessionElapsedSec`，包含正式组与休息推进，不把 prepare / confirm 停留时间计入 effective。
 - `pausedElapsedSec` 单独保存暂停累计时间；计时训练来自 `TimedWorkoutEngineState.pausedElapsedSec`，力量训练暂停时不推进组耗时或休息倒计时。
-- 计时、力量和基础跟练在 completed / abandoned 终态都可以写入本地真实 `WorkoutSession`；终态写入使用一次性 guard 和异常吞并边界，避免重组重复插入或 Room 异常直接 crash UI。
+- 计时、力量和基础跟练 completed / abandoned 写入原同 session；E10.4 的一次性 guard/错误呈现仅继续服务未迁移模式。迁移模式必须同时切换 Start 与终态直接消费者，终态沿 S04 冻结请求/原错/原子事务及完整读回，不再调用旧 upsert，也不把失败吞为保存成功；不改变其他模式旧保存或历史数据。
 - E10.4 仍只是本地 Room MVP 记录闭环；统计图表、趋势分析、删除清理、心率数据、云同步、账号体系和后台可靠计时仍留给后续 story。
 
 E10.14 约定：
@@ -1112,9 +1118,9 @@ E16-3 之后的未来 UI 边界：
 - 超过用户设置上限时仅做深红视觉提示，不触发声音、震动、强制暂停、医疗警报或训练中断。
 - 浮动胶囊不得遮挡 TimerDial、力量训练主按钮、confirm-record 输入 / 感受选择、完成页固定返回等核心操作；E16-3a 必须先用 `huashu-design` 做 HTML 高保真与 overlap / drag / snap 评审。
 
-### 12.3 V11 accepted 持久化与分析边界；旧候选接口（non-operative / historical）
+### 12.3 持久化与分析边界；V11/E16 旧接口沿革
 
-Accepted base production 仍是 Room v4；本 CS-03 分支只形成尚待 Review / merge 的 Room v5 持久化与 validator candidate，分析、runtime recording 与 export 仍未实现。V11 已接受的唯一 schema / lifecycle / owner / validator / export 合同位于 `docs/planning/e17-remainder-epic-story-plan.md`，只能由 CS-01 至 CS-12 按 material DAG 实现。下方 `WorkoutSessionHeartRateSummary` / `HeartRateSample` 是 E16 阶段的旧候选草图，现为 `non-operative / historical`：不得把它作为 V11 production schema、不得据此改写 V11 的五表 DDL、analysis snapshot、recording identity、source / parameter snapshot、canonical order、input cut、version 或 export 合同，也不得把 candidate 写成 reviewed / merged 事实。
+本轮 base 已含 S01 时间字段持久化、S02 观测、S03 原子 Start/活动事务及 S04 可信终态；原 V11 的物理/语义 validator、original analysis 绑定与原始字段合同按当前 E18 入口继承。终态事务成功且完整读回才能 Saved/read-ready；不以 token 释放作为读取前置，不因清理错误重新生成 analysis。S03 完整图识别、S04 exact 同请求幂等资产保留，但不形成故障后同进程恢复或 UI 重试承诺；clear 不新发终结，新进程仅由原 CS-04B 按 durable 事实处理。S05 及 runtime/UI 接入仍未因文档候选而完成，当前 DAG 见正式计划 F.26/F.37，不恢复旧 CS-01–12 派发顺序。下方 `WorkoutSessionHeartRateSummary` / `HeartRateSample` 是 E16 的 `non-operative / historical` 草图，不得据此改 schema、analysis snapshot、recording identity、参数快照、canonical order/input cut/version 或导出合同。
 
 ```ts
 interface WorkoutSessionHeartRateSummary {
