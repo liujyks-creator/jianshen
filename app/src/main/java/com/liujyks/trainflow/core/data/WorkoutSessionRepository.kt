@@ -27,6 +27,10 @@ import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.health.HeartRateObservation
+import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
+import com.liujyks.trainflow.core.health.HeartRateUnbindDisposition
 import com.liujyks.trainflow.core.health.HeartRateObservationBinding
 import com.liujyks.trainflow.core.health.HeartRateObservationPayload
 import com.liujyks.trainflow.core.model.ExerciseSide
@@ -46,9 +50,8 @@ import com.liujyks.trainflow.core.model.WorkoutSession
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -201,7 +204,28 @@ internal data class CanonicalFinalizationResult(
     val analysisVersion: Int?
 )
 
-internal class CanonicalFinalizationConflictException : IllegalStateException("conflicting_terminal_request")
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+internal class CanonicalFinalizationConflictException : IllegalStateException("conflicting_terminal_request"),
+    kotlinx.coroutines.CopyableThrowable<CanonicalFinalizationConflictException> {
+    // The Room body/return boundary uses the original rejection's identity.
+    override fun createCopy(): CanonicalFinalizationConflictException? = null
+}
+
+internal class RecorderOwnerToken
+
+internal data class RecorderAdmission(
+    val entryId: String,
+    val sessionId: String,
+    val ownerToken: RecorderOwnerToken,
+    val bindingId: HeartRateObservationBindingId
+)
+
+internal enum class RecorderOwnerDisposition { ACTIVE_OWNER, OWNER_CLEAR_PENDING, OWNER_BLOCKED }
+internal class RecorderOwnerBusyException(val disposition: RecorderOwnerDisposition) :
+    IllegalStateException("Recorder admission is $disposition")
+internal class RecorderStaleOwnerException : IllegalStateException("stale_recorder_owner")
+internal class RecorderCleanupUnresolvedException : IllegalStateException("recorder_cleanup_unresolved")
+internal class RecorderBindingConflictException : IllegalStateException("recorder_binding_conflict")
 
 internal class WorkoutSessionRepository(
     private val database: TrainFlowDatabase
@@ -210,106 +234,421 @@ internal class WorkoutSessionRepository(
     private val canonicalDao = database.canonicalTimelineHeartRateDao()
     private val recorderGateMutex = Mutex()
 
-    @Volatile
-    private var completedRecorderGate: RecorderReconciliationResult? = null
-    private var recorderGateInFlight: CompletableDeferred<RecorderReconciliationResult>? = null
+    private val recorderStateLock = Any()
+    private var recorderOwner: RecorderOwner? = null
+
+    private enum class RecorderOperation { START, ACTIVITY, CANONICAL_TERMINAL, RECORDING_TERMINAL }
+    private enum class RecorderStage { REQUEST, PERSISTED, MUTATION }
+
+    private class RecorderOwner(val admission: RecorderAdmission) {
+        var disposition = RecorderOwnerDisposition.ACTIVE_OWNER
+        var clearRequested = false
+        var primaryCause: Throwable? = null
+        var inFlight: RecorderOperation? = null
+        var stage = RecorderStage.REQUEST
+        var mutated = false
+        var startOperation: Job? = null
+        var startCandidate: CanonicalSessionGraphV1? = null
+        var startRollbackConfirmed = false
+        var canonicalTerminalIntent: FrozenCanonicalFinalizationRequest? = null
+        var recordingTerminalIntent: RecordingFinalizationRequest? = null
+        var terminalConfirmed = false
+        var cleanupAttempted = false
+    }
 
     val sessions: Flow<List<WorkoutSession>> = dao.observeSessionsWithRecords()
         .map { rows -> rows.map { row -> row.toDomain() } }
 
-    suspend fun finalizeCanonicalSession(request: FrozenCanonicalFinalizationRequest): CanonicalFinalizationResult {
+    suspend fun admitRecorder(
+        entryId: String, session: WorkoutSessionEntity, initialPhase: WorkoutPhaseIntervalEntity
+    ): RecorderAdmission {
+        val callerContext = currentCoroutineContext()
+        if (entryId.isBlank()) throw RecorderValidationException("invalid_recorder_entry")
+        validateSessionTimeMetadata(session)
+        requireValidGraph(CanonicalSessionGraphV1(session, listOf(initialPhase)))
+        return recorderGateMutex.withLock {
+            synchronized(recorderStateLock) {
+                recorderOwner?.let { owner ->
+                    if (owner.admission.entryId == entryId) {
+                        if (owner.admission.sessionId != session.id) throw RecorderValidationException("owner_session_mismatch")
+                        if (owner.disposition == RecorderOwnerDisposition.ACTIVE_OWNER && !owner.clearRequested &&
+                            owner.canonicalTerminalIntent == null && owner.recordingTerminalIntent == null) {
+                            return@withLock owner.admission
+                        }
+                    }
+                    throw RecorderOwnerBusyException(owner.disposition)
+                }
+            }
+            when (val result = runRecorderReconciliation()) {
+                is RecorderReconciliationResult.ManualResolutionRequired -> throw RecorderGateBlockedException(result)
+                is RecorderReconciliationResult.Succeeded -> Unit
+            }
+            currentCoroutineContext().ensureActive()
+            synchronized(recorderStateLock) {
+                callerContext.ensureActive()
+                val admission = RecorderAdmission(entryId, session.id, RecorderOwnerToken(), HeartRateObservationBindingId())
+                recorderOwner = RecorderOwner(admission)
+                admission
+            }
+        }
+    }
+
+    private fun matchingOwner(ownerToken: RecorderOwnerToken, sessionId: String): RecorderOwner =
+        synchronized(recorderStateLock) {
+            val owner = recorderOwner
+            if (owner == null || owner.admission.ownerToken !== ownerToken) throw RecorderStaleOwnerException()
+            if (owner.admission.sessionId != sessionId) throw RecorderValidationException("owner_session_mismatch")
+            owner
+        }
+
+    private fun requireWritableOwner(ownerToken: RecorderOwnerToken, sessionId: String): RecorderOwner =
+        synchronized(recorderStateLock) {
+            val owner = matchingOwner(ownerToken, sessionId)
+            if (owner.disposition != RecorderOwnerDisposition.ACTIVE_OWNER || owner.clearRequested ||
+                owner.inFlight == RecorderOperation.START ||
+                owner.canonicalTerminalIntent != null || owner.recordingTerminalIntent != null) {
+                throw owner.primaryCause ?: RecorderOwnerBusyException(owner.disposition)
+            }
+            owner
+        }
+
+    private fun requireCanonicalOwner(ownerToken: RecorderOwnerToken,
+        request: FrozenCanonicalFinalizationRequest): RecorderOwner = synchronized(recorderStateLock) {
+        val owner = matchingOwner(ownerToken, request.expected.sessionId)
+        val prior = owner.canonicalTerminalIntent
+        if (prior != null) {
+            if (!sameTerminalRequest(prior, request)) throw CanonicalFinalizationConflictException()
+        } else {
+            requireWritableOwner(ownerToken, request.expected.sessionId)
+        }
+        owner
+    }
+
+    private fun enterRecorderWrite(owner: RecorderOwner, operation: RecorderOperation) {
+        synchronized(recorderStateLock) {
+            requireWritableOwner(owner.admission.ownerToken, owner.admission.sessionId)
+            if (operation == RecorderOperation.START && owner.startOperation != null) {
+                throw RecorderValidationException("canonical_start_already_attempted")
+            }
+            check(owner.inFlight == null)
+            owner.inFlight = operation
+            owner.stage = RecorderStage.PERSISTED
+            owner.mutated = false
+        }
+    }
+
+    // Only the serialized original operation sets its error phase. A REQUEST rejection after
+    // a mutation is still a persistence failure; nested CS-05 cannot erase outer S04 writes.
+    private fun recorderStage(stage: RecorderStage) {
+        synchronized(recorderStateLock) {
+            recorderOwner?.takeIf { it.inFlight != null }?.let { owner ->
+                owner.stage = stage
+                if (stage == RecorderStage.MUTATION) owner.mutated = true
+            }
+        }
+    }
+
+    private fun blockRecorderOwner(owner: RecorderOwner, cause: Throwable): Throwable =
+        synchronized(recorderStateLock) {
+            val primary = owner.primaryCause ?: cause
+            if (primary !== cause && primary.suppressed.none { it === cause }) primary.addSuppressed(cause)
+            owner.primaryCause = primary
+            owner.disposition = RecorderOwnerDisposition.OWNER_BLOCKED
+            primary
+        }
+
+    private fun finishRecorderWrite(owner: RecorderOwner) {
+        synchronized(recorderStateLock) {
+            if (owner.clearRequested && !owner.terminalConfirmed) owner.disposition = RecorderOwnerDisposition.OWNER_BLOCKED
+            owner.inFlight = null
+        }
+    }
+
+    private fun failRecorderWrite(owner: RecorderOwner, cause: Throwable, bodyFailure: Throwable?): Throwable =
+        synchronized(recorderStateLock) {
+            val operation = owner.inFlight ?: return@synchronized (
+                if (bodyFailure === cause) cause else blockRecorderOwner(owner, cause))
+            val fatal = owner.mutated || owner.stage != RecorderStage.REQUEST || bodyFailure !== cause
+            if (bodyFailure != null && bodyFailure !== cause) blockRecorderOwner(owner, bodyFailure)
+            val result = if (operation == RecorderOperation.START) {
+                if (!owner.clearRequested && owner.disposition != RecorderOwnerDisposition.OWNER_BLOCKED &&
+                    bodyFailure === cause) {
+                    owner.startRollbackConfirmed = true
+                    owner.primaryCause = owner.primaryCause ?: cause
+                    owner.disposition = RecorderOwnerDisposition.OWNER_CLEAR_PENDING
+                    cause
+                } else blockRecorderOwner(owner, cause)
+            } else if (fatal || owner.disposition == RecorderOwnerDisposition.OWNER_BLOCKED) {
+                blockRecorderOwner(owner, cause)
+            } else {
+                if (!owner.terminalConfirmed && !owner.clearRequested) {
+                    owner.canonicalTerminalIntent = null
+                    owner.recordingTerminalIntent = null
+                }
+                cause
+            }
+            finishRecorderWrite(owner)
+            result
+        }
+
+    fun beginOwnerClearHandoff(ownerToken: RecorderOwnerToken, sessionId: String) {
+        synchronized(recorderStateLock) {
+            val owner = matchingOwner(ownerToken, sessionId)
+            owner.clearRequested = true
+            if (owner.disposition != RecorderOwnerDisposition.OWNER_BLOCKED) {
+                owner.disposition = if (owner.startOperation != null && owner.inFlight == null && !owner.terminalConfirmed)
+                    RecorderOwnerDisposition.OWNER_BLOCKED else RecorderOwnerDisposition.OWNER_CLEAR_PENDING
+            }
+        }
+    }
+
+    fun reportRecorderActivityFailure(ownerToken: RecorderOwnerToken, sessionId: String, cause: Throwable) {
+        synchronized(recorderStateLock) { blockRecorderOwner(matchingOwner(ownerToken, sessionId), cause) }
+    }
+
+    suspend fun releaseRecorderBeforeStart(ownerToken: RecorderOwnerToken, sessionId: String,
+        runtime: HeartRateRuntimeOwner, cause: Throwable): Throwable {
+        val owner = synchronized(recorderStateLock) {
+            val current = matchingOwner(ownerToken, sessionId)
+            if (current.disposition == RecorderOwnerDisposition.OWNER_BLOCKED) {
+                throw current.primaryCause ?: RecorderCleanupUnresolvedException()
+            }
+            current.primaryCause = current.primaryCause ?: cause
+            if (current.cleanupAttempted || current.inFlight != null || current.terminalConfirmed ||
+                current.canonicalTerminalIntent != null || current.recordingTerminalIntent != null ||
+                (current.startOperation != null && (!current.startRollbackConfirmed || current.clearRequested))) {
+                throw blockRecorderOwner(current, RecorderCleanupUnresolvedException())
+            }
+            current.cleanupAttempted = true
+            current.disposition = RecorderOwnerDisposition.OWNER_CLEAR_PENDING
+            current
+        }
+        try {
+            recorderGateMutex.withLock {
+                val absent = database.withTransaction {
+                    val recordingId = owner.startCandidate?.recording?.recordingId
+                    canonicalDao.canonicalGraphRows(sessionId) == null &&
+                        startExecutionRowsAreEmpty(sessionId) &&
+                        canonicalDao.phaseIntervals(sessionId).isEmpty() &&
+                        canonicalDao.recordingsForSession(sessionId).isEmpty() &&
+                        (recordingId == null || (canonicalDao.acquisitionsInSequence(recordingId).isEmpty() &&
+                            canonicalDao.samplesInCanonicalOrder(recordingId).isEmpty() &&
+                            canonicalDao.snapshotsInVersionOrder(recordingId).isEmpty()))
+                }
+                if (!absent) throw RecorderCleanupUnresolvedException()
+                releaseObservationBinding(owner, runtime)
+            }
+        } catch (cleanup: Throwable) {
+            throw blockRecorderOwner(owner, cleanup)
+        }
+        return requireNotNull(owner.primaryCause)
+    }
+
+    suspend fun releaseRecorderAfterTerminal(ownerToken: RecorderOwnerToken, sessionId: String,
+        runtime: HeartRateRuntimeOwner) {
+        val owner = synchronized(recorderStateLock) {
+            val current = matchingOwner(ownerToken, sessionId)
+            if (current.disposition == RecorderOwnerDisposition.OWNER_BLOCKED) {
+                throw current.primaryCause ?: RecorderCleanupUnresolvedException()
+            }
+            if (!current.terminalConfirmed || current.cleanupAttempted || current.inFlight != null) {
+                throw blockRecorderOwner(current, RecorderCleanupUnresolvedException())
+            }
+            current.cleanupAttempted = true
+            current.disposition = RecorderOwnerDisposition.OWNER_CLEAR_PENDING
+            current
+        }
+        try {
+            recorderGateMutex.withLock { releaseObservationBinding(owner, runtime) }
+        } catch (cleanup: Throwable) {
+            throw blockRecorderOwner(owner, cleanup)
+        }
+    }
+
+    private suspend fun releaseObservationBinding(owner: RecorderOwner, runtime: HeartRateRuntimeOwner) {
+        withContext(Dispatchers.Main.immediate) {
+            synchronized(recorderStateLock) {
+                matchingOwner(owner.admission.ownerToken, owner.admission.sessionId)
+                if (owner.disposition == RecorderOwnerDisposition.OWNER_BLOCKED) {
+                    throw owner.primaryCause ?: RecorderCleanupUnresolvedException()
+                }
+                when (runtime.queryObservationBinding(owner.admission.bindingId)) {
+                    HeartRateBindingDisposition.KnownAbsent -> Unit
+                    is HeartRateBindingDisposition.ConflictingInstalled -> throw RecorderBindingConflictException()
+                    is HeartRateBindingDisposition.MatchingInstalled ->
+                        if (runtime.unbindObservations(owner.admission.bindingId) == HeartRateUnbindDisposition.CONFLICTING_INSTALLED) {
+                            throw RecorderBindingConflictException()
+                        }
+                }
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        synchronized(recorderStateLock) {
+            matchingOwner(owner.admission.ownerToken, owner.admission.sessionId)
+            if (owner.disposition == RecorderOwnerDisposition.OWNER_BLOCKED) {
+                throw owner.primaryCause ?: RecorderCleanupUnresolvedException()
+            }
+            recorderOwner = null
+        }
+    }
+
+    suspend fun finalizeCanonicalSession(ownerToken: RecorderOwnerToken, request: FrozenCanonicalFinalizationRequest): CanonicalFinalizationResult {
+        val owner = requireCanonicalOwner(ownerToken, request)
         validateFinalizationRequest(request)
         val expected = request.expected
         val finalTuple = CanonicalTuple(request.finalOffsetMs,
             Math.addExact(expected.durableTuple.mutationSequence, 1))
-        return database.withTransaction {
-            val graph = loadCanonicalGraph(expected.sessionId)
-                ?: throw CanonicalFinalizationConflictException()
-            validateSessionTimeMetadata(graph.session)
-            requireValidGraph(graph)
-            val steps = dao.stepRecordsForSession(expected.sessionId)
-            val extensions = dao.restExtensionRecordsForSession(expected.sessionId)
-            val sets = dao.strengthSetRecordsForSession(expected.sessionId)
-            if (graph.session.status in setOf("completed", "abandoned")) {
-                // D5 identity retains the predecessor sequence, not the overwritten old offset.
-                if (graph.session != request.terminalSession(graph.session, finalTuple) ||
-                    graph.recording?.recordingId != expected.recordingId ||
-                    graph.phases.last().id != expected.openPhaseId ||
-                    graph.acquisitions.lastOrNull()?.id != expected.openAcquisitionId ||
-                    steps != request.stepRecords || extensions != request.restExtensions || sets != request.strengthSets) {
-                    throw CanonicalFinalizationConflictException()
+        return recorderGateMutex.withLock {
+            var readOnly = false
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        synchronized(recorderStateLock) {
+                            requireCanonicalOwner(ownerToken, request)
+                            readOnly = owner.canonicalTerminalIntent != null
+                            if (!readOnly) owner.canonicalTerminalIntent = request
+                            check(owner.inFlight == null)
+                            owner.inFlight = RecorderOperation.CANONICAL_TERMINAL
+                            owner.stage = RecorderStage.PERSISTED
+                            owner.mutated = false
+                        }
+                        val graph = loadCanonicalGraph(expected.sessionId) ?: run {
+                            recorderStage(RecorderStage.REQUEST)
+                            throw owner.primaryCause ?: CanonicalFinalizationConflictException()
+                        }
+                        validateSessionTimeMetadata(graph.session)
+                        requireValidGraph(graph)
+                        val steps = dao.stepRecordsForSession(expected.sessionId)
+                        val extensions = dao.restExtensionRecordsForSession(expected.sessionId)
+                        val sets = dao.strengthSetRecordsForSession(expected.sessionId)
+                        recorderStage(RecorderStage.REQUEST)
+                        if (graph.session.status in setOf("completed", "abandoned")) {
+                            readOnly = true
+                            // D5 identity retains the predecessor sequence, not the overwritten old offset.
+                            if (graph.session != request.terminalSession(graph.session, finalTuple) ||
+                                graph.recording?.recordingId != expected.recordingId ||
+                                graph.phases.last().id != expected.openPhaseId ||
+                                graph.acquisitions.lastOrNull()?.id != expected.openAcquisitionId ||
+                                steps != request.stepRecords || extensions != request.restExtensions || sets != request.strengthSets) {
+                                throw CanonicalFinalizationConflictException()
+                            }
+                            graph.snapshots.singleOrNull()?.let { snapshot ->
+                                recorderStage(RecorderStage.PERSISTED)
+                                requireValidation(AnalysisSnapshotV1Validator.validate(graph, snapshot), "invalid_analysis_snapshot_v1")
+                                recorderStage(RecorderStage.REQUEST)
+                            }
+                        } else {
+                            if (readOnly) throw owner.primaryCause ?: CanonicalFinalizationConflictException()
+                            validatedExpectedGraph(expected)
+                            requireValidation(SessionDisplayMetadataV1Validator.validateTransition(
+                                requireNotNull(graph.session.sessionDisplayMetadataJson), request.sessionDisplayMetadataJson,
+                                terminal = false), "invalid_session_display_metadata_contract")
+                            // Previously appended execution facts must remain exact; never REPLACE another row's identity.
+                            if (!request.stepRecords.containsAll(steps) || !request.restExtensions.containsAll(extensions) ||
+                                !request.strengthSets.containsAll(sets)) {
+                                throw CanonicalFinalizationConflictException()
+                            }
+                            recorderStage(RecorderStage.MUTATION)
+                            requireExactlyOne("write_canonical_execution_header", dao.writeCanonicalExecutionHeader(
+                                expected.sessionId, expected.status, expected.durableTuple.offsetMs,
+                                expected.durableTuple.mutationSequence, expected.openPhaseId, expected.recordingId,
+                                expected.openAcquisitionId, request.endedAt, request.totalElapsedSec,
+                                request.effectiveElapsedSec, request.pausedElapsedSec, request.sessionDisplayMetadataJson))
+                            dao.insertCanonicalStepRecords(request.stepRecords - steps.toSet())
+                            dao.insertCanonicalStrengthSetRecords(request.strengthSets - sets.toSet())
+                            (request.restExtensions - extensions.toSet()).forEach {
+                                requireInserted("insert_terminal_rest_extension", canonicalDao.insertRestExtension(it))
+                            }
+                            if (expected.recordingId != null) {
+                                // Room inherits this outer transaction. CS-05 remains the only analysis producer.
+                                finalizeRecordingTransaction(RecordingFinalizationRequest(
+                                    expected.sessionId, expected.recordingId, expected.status, expected.durableTuple,
+                                    request.finalOffsetMs, request.terminalStatus, request.terminalReason,
+                                    requireNotNull(request.snapshotCreatedAt)))
+                            } else {
+                                advanceHeader(expected, finalTuple)
+                                requireExactlyOne("close_terminal_phase_without_recording", canonicalDao.closeOpenPhase(
+                                    expected.sessionId, expected.status, expected.openPhaseId,
+                                    finalTuple.offsetMs, finalTuple.mutationSequence))
+                                requireExactlyOne("finalize_session_without_recording", dao.finalizeSessionWithoutRecording(
+                                    expected.sessionId, expected.status, expected.openPhaseId, finalTuple.offsetMs,
+                                    finalTuple.mutationSequence, request.terminalStatus, request.terminalReason))
+                            }
+                            val persisted = loadCanonicalGraph(expected.sessionId)
+                                ?: throw RecorderGuardedWriteException("terminal_post_write_session", 0)
+                            validateSessionTimeMetadata(persisted.session)
+                            requireValidGraph(persisted)
+                            val terminalGraph = graph.copy(
+                                session = request.terminalSession(graph.session, finalTuple),
+                                phases = graph.phases.dropLast(1) + graph.phases.last().copy(
+                                    endOffsetMs = finalTuple.offsetMs, endMutationSequence = finalTuple.mutationSequence, openMarker = null),
+                                recording = graph.recording?.copy(status = "terminal", endedOffsetMs = finalTuple.offsetMs,
+                                    endedMutationSequence = finalTuple.mutationSequence, originalAnalysisVersion = 1),
+                                acquisitions = if (graph.recording == null) emptyList() else
+                                    graph.acquisitions.dropLast(1) + graph.acquisitions.last().copy(
+                                        endOffsetMs = finalTuple.offsetMs, endMutationSequence = finalTuple.mutationSequence, openMarker = null),
+                                snapshots = persisted.snapshots
+                            )
+                            persisted.snapshots.singleOrNull()?.let { snapshot ->
+                                requireValidation(AnalysisSnapshotV1Validator.validate(persisted, snapshot), "invalid_analysis_snapshot_v1")
+                            }
+                            if (persisted != terminalGraph || dao.stepRecordsForSession(expected.sessionId) != request.stepRecords ||
+                                dao.restExtensionRecordsForSession(expected.sessionId) != request.restExtensions ||
+                                dao.strengthSetRecordsForSession(expected.sessionId) != request.strengthSets ||
+                                (expected.recordingId != null && persisted.snapshots.single().createdAt != request.snapshotCreatedAt)) {
+                                throw RecorderValidationException("terminal_graph_changed_during_write")
+                            }
+                        }
+                        CanonicalFinalizationResult(expected.sessionId, expected.recordingId, finalTuple,
+                            if (expected.recordingId == null) null else 1)
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
                 }
-                graph.snapshots.singleOrNull()?.let { snapshot ->
-                    requireValidation(AnalysisSnapshotV1Validator.validate(graph, snapshot), "invalid_analysis_snapshot_v1")
-                }
-            } else {
-                validatedExpectedGraph(expected)
-                requireValidation(SessionDisplayMetadataV1Validator.validateTransition(
-                    requireNotNull(graph.session.sessionDisplayMetadataJson), request.sessionDisplayMetadataJson,
-                    terminal = false), "invalid_session_display_metadata_contract")
-                // Previously appended execution facts must remain exact; never REPLACE another row's identity.
-                if (!request.stepRecords.containsAll(steps) || !request.restExtensions.containsAll(extensions) ||
-                    !request.strengthSets.containsAll(sets)) {
-                    throw CanonicalFinalizationConflictException()
-                }
-                requireExactlyOne("write_canonical_execution_header", dao.writeCanonicalExecutionHeader(
-                    expected.sessionId, expected.status, expected.durableTuple.offsetMs,
-                    expected.durableTuple.mutationSequence, expected.openPhaseId, expected.recordingId,
-                    expected.openAcquisitionId, request.endedAt, request.totalElapsedSec,
-                    request.effectiveElapsedSec, request.pausedElapsedSec, request.sessionDisplayMetadataJson))
-                dao.insertCanonicalStepRecords(request.stepRecords - steps.toSet())
-                dao.insertCanonicalStrengthSetRecords(request.strengthSets - sets.toSet())
-                (request.restExtensions - extensions.toSet()).forEach {
-                    requireInserted("insert_terminal_rest_extension", canonicalDao.insertRestExtension(it))
-                }
-                if (expected.recordingId != null) {
-                    // Room inherits this outer transaction. CS-05 remains the only analysis producer.
-                    finalizeRecordingSession(RecordingFinalizationRequest(
-                        expected.sessionId, expected.recordingId, expected.status, expected.durableTuple,
-                        request.finalOffsetMs, request.terminalStatus, request.terminalReason,
-                        requireNotNull(request.snapshotCreatedAt)))
-                } else {
-                    advanceHeader(expected, finalTuple)
-                    requireExactlyOne("close_terminal_phase_without_recording", canonicalDao.closeOpenPhase(
-                        expected.sessionId, expected.status, expected.openPhaseId,
-                        finalTuple.offsetMs, finalTuple.mutationSequence))
-                    requireExactlyOne("finalize_session_without_recording", dao.finalizeSessionWithoutRecording(
-                        expected.sessionId, expected.status, expected.openPhaseId, finalTuple.offsetMs,
-                        finalTuple.mutationSequence, request.terminalStatus, request.terminalReason))
-                }
-                val persisted = loadCanonicalGraph(expected.sessionId)
-                    ?: throw RecorderGuardedWriteException("terminal_post_write_session", 0)
-                validateSessionTimeMetadata(persisted.session)
-                requireValidGraph(persisted)
-                val terminalGraph = graph.copy(
-                    session = request.terminalSession(graph.session, finalTuple),
-                    phases = graph.phases.dropLast(1) + graph.phases.last().copy(
-                        endOffsetMs = finalTuple.offsetMs, endMutationSequence = finalTuple.mutationSequence, openMarker = null),
-                    recording = graph.recording?.copy(status = "terminal", endedOffsetMs = finalTuple.offsetMs,
-                        endedMutationSequence = finalTuple.mutationSequence, originalAnalysisVersion = 1),
-                    acquisitions = if (graph.recording == null) emptyList() else
-                        graph.acquisitions.dropLast(1) + graph.acquisitions.last().copy(
-                            endOffsetMs = finalTuple.offsetMs, endMutationSequence = finalTuple.mutationSequence, openMarker = null),
-                    snapshots = persisted.snapshots
-                )
-                persisted.snapshots.singleOrNull()?.let { snapshot ->
-                    requireValidation(AnalysisSnapshotV1Validator.validate(persisted, snapshot), "invalid_analysis_snapshot_v1")
-                }
-                if (persisted != terminalGraph || dao.stepRecordsForSession(expected.sessionId) != request.stepRecords ||
-                    dao.restExtensionRecordsForSession(expected.sessionId) != request.restExtensions ||
-                    dao.strengthSetRecordsForSession(expected.sessionId) != request.strengthSets ||
-                    (expected.recordingId != null && persisted.snapshots.single().createdAt != request.snapshotCreatedAt)) {
-                    throw RecorderValidationException("terminal_graph_changed_during_write")
-                }
+                currentCoroutineContext().ensureActive()
+                if (!readOnly) synchronized(recorderStateLock) { owner.terminalConfirmed = true }
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
             }
-            CanonicalFinalizationResult(expected.sessionId, expected.recordingId, finalTuple,
-                if (expected.recordingId == null) null else 1)
         }
     }
 
     internal suspend fun finalizeRecordingSession(
+        ownerToken: RecorderOwnerToken,
         request: RecordingFinalizationRequest
     ): RecordingFinalizationResult {
+        val owner = requireWritableOwner(ownerToken, request.sessionId)
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.RECORDING_TERMINAL)
+                        synchronized(recorderStateLock) { owner.recordingTerminalIntent = request }
+                        finalizeRecordingTransaction(request)
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                synchronized(recorderStateLock) { owner.terminalConfirmed = true }
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
+            }
+        }
+    }
+
+    private suspend fun finalizeRecordingTransaction(
+        request: RecordingFinalizationRequest
+    ): RecordingFinalizationResult {
+        recorderStage(RecorderStage.REQUEST)
         if (!validTerminalPair(request.terminalStatus, request.terminalReason)) {
             throw RecorderValidationException("invalid_terminal_status_reason_v1")
         }
@@ -320,8 +659,11 @@ internal class WorkoutSessionRepository(
             throw RecorderValidationException("invalid_final_tuple_v1")
         }
         return database.withTransaction {
-            val graph = loadCanonicalGraph(request.sessionId)
-                ?: throw RecorderGuardedWriteException("finalization_expected_session", 0)
+            recorderStage(RecorderStage.PERSISTED)
+            val graph = loadCanonicalGraph(request.sessionId) ?: run {
+                recorderStage(RecorderStage.REQUEST)
+                throw RecorderGuardedWriteException("finalization_expected_session", 0)
+            }
             requireValidGraph(graph)
             val sessionTuple = CanonicalTuple(
                 graph.session.lastDurableOffsetMs
@@ -334,6 +676,7 @@ internal class WorkoutSessionRepository(
             val openAcquisition = graph.acquisitions.singleOrNull { interval ->
                 interval.openMarker == 1
             }
+            recorderStage(RecorderStage.REQUEST)
             if (
                 graph.session.id != request.sessionId ||
                 graph.session.status != request.expectedStatus ||
@@ -389,6 +732,7 @@ internal class WorkoutSessionRepository(
                 "invalid_analysis_snapshot_v1"
             )
 
+            recorderStage(RecorderStage.MUTATION)
             requireExactlyOne(
                 "finalize_close_open_phase",
                 canonicalDao.finalizeCloseOpenPhase(
@@ -478,78 +822,77 @@ internal class WorkoutSessionRepository(
         }
     }
 
-    suspend fun prepareRecorder(): RecorderReconciliationResult {
-        completedRecorderGate?.let { result -> return result }
-        val (flight, ownsFlight) = recorderGateMutex.withLock {
-            completedRecorderGate?.let { result -> return result }
-            recorderGateInFlight?.let { existing -> existing to false }
-                ?: CompletableDeferred<RecorderReconciliationResult>().let { created ->
-                    recorderGateInFlight = created
-                    created to true
-                }
+    suspend fun prepareRecorder(): RecorderReconciliationResult = recorderGateMutex.withLock {
+        synchronized(recorderStateLock) {
+            recorderOwner?.let { throw RecorderOwnerBusyException(it.disposition) }
         }
-        if (!ownsFlight) return flight.await()
-
-        var outcome: Result<RecorderReconciliationResult>? = null
-        return try {
-            val result = runRecorderReconciliation()
-            currentCoroutineContext().ensureActive()
-            outcome = Result.success(result)
-            result
-        } catch (cause: Throwable) {
-            outcome = Result.failure(cause)
-            throw cause
-        } finally {
-            val completedOutcome = checkNotNull(outcome)
-            withContext(NonCancellable) {
-                recorderGateMutex.withLock {
-                    check(recorderGateInFlight === flight)
-                    completedOutcome.getOrNull()?.let { result ->
-                        completedRecorderGate = result
-                    }
-                    recorderGateInFlight = null
-                    completedOutcome.fold(
-                        onSuccess = flight::complete,
-                        onFailure = flight::completeExceptionally
-                    )
-                }
-            }
-        }
+        runRecorderReconciliation().also { currentCoroutineContext().ensureActive() }
     }
 
     suspend fun startCanonicalSession(
+        ownerToken: RecorderOwnerToken,
         request: FrozenCanonicalStartRequest
     ): RecorderExpectedState {
+        val owner = requireWritableOwner(ownerToken, request.session.id)
+        if (request.binding.bindingId !== owner.admission.bindingId) throw RecorderValidationException("owner_binding_mismatch")
         val candidate = frozenStartGraph(request)
-        requireRecorderGateSucceeded()
-        database.withTransaction {
-            if (!startExecutionRowsAreEmpty(request.session.id)) {
-                throw RecorderValidationException("start_has_execution_rows")
-            }
-            requireInserted("insert_canonical_session", dao.insertSession(candidate.session))
-            candidate.phases.forEach { requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(it)) }
-            candidate.recording?.let { requireInserted("insert_recording", canonicalDao.insertRecording(it)) }
-            candidate.acquisitions.forEach {
-                requireInserted("insert_initial_acquisition", canonicalDao.insertAcquisitionInterval(it))
-            }
-            candidate.samples.forEach { requireInserted("insert_initial_sample", canonicalDao.insertSample(it)) }
-            val persisted = requireNotNull(loadCanonicalGraph(request.session.id))
-            requireValidGraph(persisted)
-            if (persisted != candidate || !startExecutionRowsAreEmpty(request.session.id)) {
-                throw RecorderValidationException("start_graph_changed_during_write")
+        val originalJob = requireNotNull(currentCoroutineContext()[Job])
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.START)
+                        synchronized(recorderStateLock) {
+                            owner.startOperation = originalJob
+                            owner.startCandidate = candidate
+                        }
+                        if (!startExecutionRowsAreEmpty(request.session.id)) {
+                            throw RecorderValidationException("start_has_execution_rows")
+                        }
+                        recorderStage(RecorderStage.MUTATION)
+                        requireInserted("insert_canonical_session", dao.insertSession(candidate.session))
+                        candidate.phases.forEach { requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(it)) }
+                        candidate.recording?.let { requireInserted("insert_recording", canonicalDao.insertRecording(it)) }
+                        candidate.acquisitions.forEach {
+                            requireInserted("insert_initial_acquisition", canonicalDao.insertAcquisitionInterval(it))
+                        }
+                        candidate.samples.forEach { requireInserted("insert_initial_sample", canonicalDao.insertSample(it)) }
+                        val persisted = requireNotNull(loadCanonicalGraph(request.session.id))
+                        requireValidGraph(persisted)
+                        if (persisted != candidate || !startExecutionRowsAreEmpty(request.session.id)) {
+                            throw RecorderValidationException("start_graph_changed_during_write")
+                        }
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                candidate.confirmedState()
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
             }
         }
-        return candidate.confirmedState()
     }
 
-    /** The caller supplies the exact original Start job, never a replacement or a later retry. */
     suspend fun resolveCanonicalStart(
+        ownerToken: RecorderOwnerToken,
         request: FrozenCanonicalStartRequest,
         startOperation: Job
     ): CanonicalStartResolution {
-        if (!startOperation.isCompleted) return CanonicalStartResolution.Unresolved
+        val owner = matchingOwner(ownerToken, request.session.id)
+        if (request.binding.bindingId !== owner.admission.bindingId) throw RecorderValidationException("owner_binding_mismatch")
         val candidate = frozenStartGraph(request)
-        return database.withTransaction {
+        synchronized(recorderStateLock) {
+            if (owner.startOperation !== startOperation) throw RecorderValidationException("start_operation_mismatch")
+            if (owner.startCandidate != candidate) throw RecorderValidationException("start_candidate_mismatch")
+        }
+        if (!startOperation.isCompleted) return CanonicalStartResolution.Unresolved
+        return recorderGateMutex.withLock {
+            matchingOwner(ownerToken, request.session.id)
+            database.withTransaction {
             val rows = canonicalDao.canonicalGraphRows(request.session.id)
             val executionEmpty = startExecutionRowsAreEmpty(request.session.id)
             if (rows == null) {
@@ -560,6 +903,7 @@ internal class WorkoutSessionRepository(
             } else if (executionEmpty && rows.toCanonicalGraphOrNull() == candidate) {
                 CanonicalStartResolution.Committed(candidate.confirmedState())
             } else CanonicalStartResolution.ConflictingGraph
+            }
         }
     }
 
@@ -568,330 +912,452 @@ internal class WorkoutSessionRepository(
             dao.restExtensionRecordsForSession(sessionId).isEmpty() &&
             dao.strengthSetRecordsForSession(sessionId).isEmpty()
 
-    suspend fun applyCanonicalActivity(request: CanonicalActivityRequest): RecorderExpectedState {
-        requireRecorderGateSucceeded()
+    suspend fun applyCanonicalActivity(ownerToken: RecorderOwnerToken, request: CanonicalActivityRequest): RecorderExpectedState {
+        val owner = requireWritableOwner(ownerToken, request.expected.sessionId)
         val expected = request.expected
         val cut = request.nextTuple
-        return database.withTransaction {
-            val graph = validatedExpectedGraph(expected)
-            val previousExtensions = dao.restExtensionRecordsForSession(expected.sessionId)
-            requireNextTuple(expected.durableTuple, cut)
-            if (cut.mutationSequence != Math.addExact(expected.durableTuple.mutationSequence, 1) ||
-                request.nextStatus !in setOf("active", "paused")) {
-                throw RecorderValidationException("invalid_activity_cut")
-            }
-            if (request.nextStatus != expected.status && request.nextPhase == null) {
-                throw RecorderValidationException("status_change_requires_phase_cut")
-            }
-            val phases = request.nextPhase?.let { next ->
-                if (CanonicalTuple(next.startOffsetMs, next.startMutationSequence) != cut) {
-                    throw RecorderValidationException("phase_tuple_must_equal_next_input_cut")
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.ACTIVITY)
+                        val graph = validatedExpectedGraph(expected)
+                        recorderStage(RecorderStage.PERSISTED)
+                        val previousExtensions = dao.restExtensionRecordsForSession(expected.sessionId)
+                        recorderStage(RecorderStage.REQUEST)
+                        requireNextTuple(expected.durableTuple, cut)
+                        if (cut.mutationSequence != Math.addExact(expected.durableTuple.mutationSequence, 1) ||
+                            request.nextStatus !in setOf("active", "paused")) {
+                            throw RecorderValidationException("invalid_activity_cut")
+                        }
+                        if (request.nextStatus != expected.status && request.nextPhase == null) {
+                            throw RecorderValidationException("status_change_requires_phase_cut")
+                        }
+                        val phases = request.nextPhase?.let { next ->
+                            if (CanonicalTuple(next.startOffsetMs, next.startMutationSequence) != cut) {
+                                throw RecorderValidationException("phase_tuple_must_equal_next_input_cut")
+                            }
+                            graph.phases.dropLast(1) + graph.phases.last().copy(
+                                endOffsetMs = cut.offsetMs, endMutationSequence = cut.mutationSequence, openMarker = null
+                            ) + next
+                        } ?: graph.phases
+                        val recording = request.newRecording ?: graph.recording
+                        if (request.newRecording != null && (graph.recording != null || request.nextAcquisition == null ||
+                                CanonicalTuple(request.newRecording.startedOffsetMs,
+                                    request.newRecording.startedMutationSequence) != cut)) {
+                            throw RecorderGuardedWriteException("expected_first_recording_at_input_cut", 0)
+                        }
+                        val acquisitions = request.nextAcquisition?.let { next ->
+                            if (CanonicalTuple(next.startOffsetMs, next.startMutationSequence) != cut) {
+                                throw RecorderValidationException("acquisition_tuple_must_equal_next_input_cut")
+                            }
+                            if (request.newRecording != null) listOf(next) else {
+                                if (graph.recording == null) throw RecorderGuardedWriteException("expected_recording", 0)
+                                graph.acquisitions.dropLast(1) + graph.acquisitions.last().copy(
+                                    endOffsetMs = cut.offsetMs, endMutationSequence = cut.mutationSequence, openMarker = null
+                                ) + next
+                            }
+                        } ?: graph.acquisitions
+                        request.nextDisplayMetadataJson?.let { nextJson ->
+                            requireValidation(SessionDisplayMetadataV1Validator.validateTransition(
+                                requireNotNull(graph.session.sessionDisplayMetadataJson), nextJson, terminal = false
+                            ), "invalid_session_display_metadata_contract")
+                        }
+                        request.sample?.let { sample ->
+                            if (CanonicalTuple(sample.offsetMs, sample.mutationSequence) != cut) {
+                                throw RecorderValidationException("sample_tuple_must_equal_next_input_cut")
+                            }
+                        }
+                        request.restExtension?.let { extension ->
+                            if (graph.session.mode != "timed" || extension.sessionId != expected.sessionId ||
+                                extension.id.isEmpty() || extension.stepId.isEmpty() || extension.restStageTitle.isEmpty() ||
+                                extension.stepIndex < 0 || (extension.roundIndex != null && extension.roundIndex <= 0) ||
+                                extension.addedSec <= 0 || extension.plannedRestSec <= 0 ||
+                                extension.restElapsedBeforeExtensionSec < 0 || extension.extensionAtRemainingSec < 0 ||
+                                extension.cumulativeExtraRestSec < extension.addedSec || extension.eventElapsedSec < 0) {
+                                throw RecorderValidationException("invalid_timed_rest_extension")
+                            }
+                        }
+                        val candidate = graph.copy(
+                            session = graph.session.copy(status = request.nextStatus,
+                                lastDurableOffsetMs = cut.offsetMs, lastMutationSequence = cut.mutationSequence,
+                                sessionDisplayMetadataJson = request.nextDisplayMetadataJson ?: graph.session.sessionDisplayMetadataJson),
+                            phases = phases, recording = recording, acquisitions = acquisitions,
+                            samples = request.sample?.let { graph.samples + it } ?: graph.samples
+                        )
+                        requireValidGraph(candidate)
+                        recorderStage(RecorderStage.MUTATION)
+                        requireExactlyOne("advance_canonical_header", dao.advanceCanonicalHeader(
+                            expected.sessionId, expected.status, expected.durableTuple.offsetMs,
+                            expected.durableTuple.mutationSequence, expected.openPhaseId, expected.recordingId,
+                            expected.openAcquisitionId, cut.offsetMs, cut.mutationSequence,
+                            request.nextStatus, request.nextDisplayMetadataJson
+                        ))
+                        request.nextPhase?.let { next ->
+                            requireExactlyOne("close_open_phase", canonicalDao.closeOpenPhase(
+                                expected.sessionId, request.nextStatus, expected.openPhaseId, cut.offsetMs, cut.mutationSequence))
+                            requireInserted("insert_next_phase", canonicalDao.insertPhaseInterval(next))
+                        }
+                        request.newRecording?.let { requireInserted("insert_recording", canonicalDao.insertRecording(it)) }
+                        request.nextAcquisition?.let { next ->
+                            if (request.newRecording == null) {
+                                requireExactlyOne("close_open_acquisition", canonicalDao.closeOpenAcquisition(
+                                    requireNotNull(expected.recordingId), request.nextStatus,
+                                    requireNotNull(expected.openAcquisitionId), cut.offsetMs, cut.mutationSequence))
+                            }
+                            requireInserted("insert_next_acquisition", canonicalDao.insertAcquisitionInterval(next))
+                        }
+                        request.sample?.let { requireInserted("insert_sample", canonicalDao.insertSample(it)) }
+                        request.restExtension?.let { requireInserted("insert_rest_extension", canonicalDao.insertRestExtension(it)) }
+                        val persisted = requireNotNull(loadCanonicalGraph(expected.sessionId))
+                        requireValidGraph(persisted)
+                        val expectedExtensions = (previousExtensions + listOfNotNull(request.restExtension)).sortedBy { it.id }
+                        if (persisted != candidate || dao.restExtensionRecordsForSession(expected.sessionId) != expectedExtensions) {
+                            throw RecorderValidationException("activity_graph_changed_during_write")
+                        }
+                        candidate.confirmedState()
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
                 }
-                graph.phases.dropLast(1) + graph.phases.last().copy(
-                    endOffsetMs = cut.offsetMs, endMutationSequence = cut.mutationSequence, openMarker = null
-                ) + next
-            } ?: graph.phases
-            val recording = request.newRecording ?: graph.recording
-            if (request.newRecording != null && (graph.recording != null || request.nextAcquisition == null ||
-                    CanonicalTuple(request.newRecording.startedOffsetMs,
-                        request.newRecording.startedMutationSequence) != cut)) {
-                throw RecorderGuardedWriteException("expected_first_recording_at_input_cut", 0)
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
             }
-            val acquisitions = request.nextAcquisition?.let { next ->
-                if (CanonicalTuple(next.startOffsetMs, next.startMutationSequence) != cut) {
-                    throw RecorderValidationException("acquisition_tuple_must_equal_next_input_cut")
-                }
-                if (request.newRecording != null) listOf(next) else {
-                    if (graph.recording == null) throw RecorderGuardedWriteException("expected_recording", 0)
-                    graph.acquisitions.dropLast(1) + graph.acquisitions.last().copy(
-                        endOffsetMs = cut.offsetMs, endMutationSequence = cut.mutationSequence, openMarker = null
-                    ) + next
-                }
-            } ?: graph.acquisitions
-            request.nextDisplayMetadataJson?.let { nextJson ->
-                requireValidation(SessionDisplayMetadataV1Validator.validateTransition(
-                    requireNotNull(graph.session.sessionDisplayMetadataJson), nextJson, terminal = false
-                ), "invalid_session_display_metadata_contract")
-            }
-            request.sample?.let { sample ->
-                if (CanonicalTuple(sample.offsetMs, sample.mutationSequence) != cut) {
-                    throw RecorderValidationException("sample_tuple_must_equal_next_input_cut")
-                }
-            }
-            request.restExtension?.let { extension ->
-                if (graph.session.mode != "timed" || extension.sessionId != expected.sessionId ||
-                    extension.id.isEmpty() || extension.stepId.isEmpty() || extension.restStageTitle.isEmpty() ||
-                    extension.stepIndex < 0 || (extension.roundIndex != null && extension.roundIndex <= 0) ||
-                    extension.addedSec <= 0 || extension.plannedRestSec <= 0 ||
-                    extension.restElapsedBeforeExtensionSec < 0 || extension.extensionAtRemainingSec < 0 ||
-                    extension.cumulativeExtraRestSec < extension.addedSec || extension.eventElapsedSec < 0) {
-                    throw RecorderValidationException("invalid_timed_rest_extension")
-                }
-            }
-            val candidate = graph.copy(
-                session = graph.session.copy(status = request.nextStatus,
-                    lastDurableOffsetMs = cut.offsetMs, lastMutationSequence = cut.mutationSequence,
-                    sessionDisplayMetadataJson = request.nextDisplayMetadataJson ?: graph.session.sessionDisplayMetadataJson),
-                phases = phases, recording = recording, acquisitions = acquisitions,
-                samples = request.sample?.let { graph.samples + it } ?: graph.samples
-            )
-            requireValidGraph(candidate)
-            requireExactlyOne("advance_canonical_header", dao.advanceCanonicalHeader(
-                expected.sessionId, expected.status, expected.durableTuple.offsetMs,
-                expected.durableTuple.mutationSequence, expected.openPhaseId, expected.recordingId,
-                expected.openAcquisitionId, cut.offsetMs, cut.mutationSequence,
-                request.nextStatus, request.nextDisplayMetadataJson
-            ))
-            request.nextPhase?.let { next ->
-                requireExactlyOne("close_open_phase", canonicalDao.closeOpenPhase(
-                    expected.sessionId, request.nextStatus, expected.openPhaseId, cut.offsetMs, cut.mutationSequence))
-                requireInserted("insert_next_phase", canonicalDao.insertPhaseInterval(next))
-            }
-            request.newRecording?.let { requireInserted("insert_recording", canonicalDao.insertRecording(it)) }
-            request.nextAcquisition?.let { next ->
-                if (request.newRecording == null) {
-                    requireExactlyOne("close_open_acquisition", canonicalDao.closeOpenAcquisition(
-                        requireNotNull(expected.recordingId), request.nextStatus,
-                        requireNotNull(expected.openAcquisitionId), cut.offsetMs, cut.mutationSequence))
-                }
-                requireInserted("insert_next_acquisition", canonicalDao.insertAcquisitionInterval(next))
-            }
-            request.sample?.let { requireInserted("insert_sample", canonicalDao.insertSample(it)) }
-            request.restExtension?.let { requireInserted("insert_rest_extension", canonicalDao.insertRestExtension(it)) }
-            val persisted = requireNotNull(loadCanonicalGraph(expected.sessionId))
-            requireValidGraph(persisted)
-            val expectedExtensions = (previousExtensions + listOfNotNull(request.restExtension)).sortedBy { it.id }
-            if (persisted != candidate || dao.restExtensionRecordsForSession(expected.sessionId) != expectedExtensions) {
-                throw RecorderValidationException("activity_graph_changed_during_write")
-            }
-            candidate.confirmedState()
         }
     }
 
     suspend fun startCanonicalSession(
+        ownerToken: RecorderOwnerToken,
         session: WorkoutSessionEntity,
         initialPhase: WorkoutPhaseIntervalEntity
-    ): RecorderReconciliationResult.Succeeded {
+    ): Unit {
+        val owner = requireWritableOwner(ownerToken, session.id)
         validateSessionTimeMetadata(session)
-        val gate = requireRecorderGateSucceeded()
         val candidate = CanonicalSessionGraphV1(
             session = session,
             phases = listOf(initialPhase)
         )
         requireValidGraph(candidate)
-        database.withTransaction {
-            requireInserted("insert_canonical_session", dao.insertSession(session))
-            requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(initialPhase))
-            requireValidGraph(requireNotNull(loadCanonicalGraph(session.id)))
+        val originalJob = requireNotNull(currentCoroutineContext()[Job])
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.START)
+                        synchronized(recorderStateLock) {
+                            owner.startOperation = originalJob
+                            owner.startCandidate = candidate
+                        }
+                        recorderStage(RecorderStage.MUTATION)
+                        requireInserted("insert_canonical_session", dao.insertSession(session))
+                        requireInserted("insert_initial_phase", canonicalDao.insertPhaseInterval(initialPhase))
+                        requireValidGraph(requireNotNull(loadCanonicalGraph(session.id)))
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                Unit
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
+            }
         }
-        return gate
     }
 
     suspend fun appendSessionDisplayMetadata(
+        ownerToken: RecorderOwnerToken,
         expected: RecorderExpectedState,
         nextTuple: CanonicalTuple,
         nextJson: String
-    ): RecorderReconciliationResult.Succeeded {
-        val gate = requireRecorderGateSucceeded()
-        database.withTransaction {
-            val graph = validatedExpectedGraph(expected)
-            requireNextTuple(expected.durableTuple, nextTuple)
-            requireValidation(
-                SessionDisplayMetadataV1Validator.validateTransition(
-                    previousJson = requireNotNull(graph.session.sessionDisplayMetadataJson),
-                    nextJson = nextJson,
-                    terminal = false
-                ),
-                "invalid_session_display_metadata_contract"
-            )
-            requireValidGraph(
-                graph.copy(
-                    session = graph.session.copy(
-                        lastDurableOffsetMs = nextTuple.offsetMs,
-                        lastMutationSequence = nextTuple.mutationSequence,
-                        sessionDisplayMetadataJson = nextJson
-                    )
-                )
-            )
-            val rowCount = dao.appendCanonicalDisplayMetadata(
-                sessionId = expected.sessionId,
-                expectedStatus = expected.status,
-                expectedOffsetMs = expected.durableTuple.offsetMs,
-                expectedMutationSequence = expected.durableTuple.mutationSequence,
-                expectedOpenPhaseId = expected.openPhaseId,
-                expectedRecordingId = expected.recordingId,
-                expectedOpenAcquisitionId = expected.openAcquisitionId,
-                nextOffsetMs = nextTuple.offsetMs,
-                nextMutationSequence = nextTuple.mutationSequence,
-                nextDisplayMetadataJson = nextJson
-            )
-            requireExactlyOne("append_display_metadata", rowCount)
-            requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+    ): Unit {
+        val owner = requireWritableOwner(ownerToken, expected.sessionId)
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.ACTIVITY)
+                        val graph = validatedExpectedGraph(expected)
+                        requireNextTuple(expected.durableTuple, nextTuple)
+                        requireValidation(
+                            SessionDisplayMetadataV1Validator.validateTransition(
+                                previousJson = requireNotNull(graph.session.sessionDisplayMetadataJson),
+                                nextJson = nextJson,
+                                terminal = false
+                            ),
+                            "invalid_session_display_metadata_contract"
+                        )
+                        requireValidGraph(
+                            graph.copy(
+                                session = graph.session.copy(
+                                    lastDurableOffsetMs = nextTuple.offsetMs,
+                                    lastMutationSequence = nextTuple.mutationSequence,
+                                    sessionDisplayMetadataJson = nextJson
+                                )
+                            )
+                        )
+                        recorderStage(RecorderStage.MUTATION)
+                        val rowCount = dao.appendCanonicalDisplayMetadata(
+                            sessionId = expected.sessionId,
+                            expectedStatus = expected.status,
+                            expectedOffsetMs = expected.durableTuple.offsetMs,
+                            expectedMutationSequence = expected.durableTuple.mutationSequence,
+                            expectedOpenPhaseId = expected.openPhaseId,
+                            expectedRecordingId = expected.recordingId,
+                            expectedOpenAcquisitionId = expected.openAcquisitionId,
+                            nextOffsetMs = nextTuple.offsetMs,
+                            nextMutationSequence = nextTuple.mutationSequence,
+                            nextDisplayMetadataJson = nextJson
+                        )
+                        requireExactlyOne("append_display_metadata", rowCount)
+                        requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
+            }
         }
-        return gate
     }
 
     suspend fun transitionPhase(
+        ownerToken: RecorderOwnerToken,
         expected: RecorderExpectedState,
         nextTuple: CanonicalTuple,
         nextPhase: WorkoutPhaseIntervalEntity
-    ): RecorderReconciliationResult.Succeeded {
-        val gate = requireRecorderGateSucceeded()
-        database.withTransaction {
-            val graph = validatedExpectedGraph(expected)
-            requireNextTuple(expected.durableTuple, nextTuple)
-            val openPhase = graph.phases.single { phase -> phase.id == expected.openPhaseId }
-            val candidatePhases = graph.phases.dropLast(1) +
-                openPhase.copy(
-                    endOffsetMs = nextTuple.offsetMs,
-                    endMutationSequence = nextTuple.mutationSequence,
-                    openMarker = null
-                ) + nextPhase
-            requireValidGraph(
-                graph.copy(
-                    session = graph.session.copy(
-                        lastDurableOffsetMs = nextTuple.offsetMs,
-                        lastMutationSequence = nextTuple.mutationSequence
-                    ),
-                    phases = candidatePhases
-                )
-            )
-            advanceHeader(expected, nextTuple)
-            val closeRowCount = canonicalDao.closeOpenPhase(
-                sessionId = expected.sessionId,
-                expectedStatus = expected.status,
-                expectedOpenRowId = expected.openPhaseId,
-                endOffsetMs = nextTuple.offsetMs,
-                endMutationSequence = nextTuple.mutationSequence
-            )
-            requireExactlyOne("close_open_phase", closeRowCount)
-            requireInserted("insert_next_phase", canonicalDao.insertPhaseInterval(nextPhase))
-            requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+    ): Unit {
+        val owner = requireWritableOwner(ownerToken, expected.sessionId)
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.ACTIVITY)
+                        val graph = validatedExpectedGraph(expected)
+                        requireNextTuple(expected.durableTuple, nextTuple)
+                        val openPhase = graph.phases.single { phase -> phase.id == expected.openPhaseId }
+                        val candidatePhases = graph.phases.dropLast(1) +
+                            openPhase.copy(
+                                endOffsetMs = nextTuple.offsetMs,
+                                endMutationSequence = nextTuple.mutationSequence,
+                                openMarker = null
+                            ) + nextPhase
+                        requireValidGraph(
+                            graph.copy(
+                                session = graph.session.copy(
+                                    lastDurableOffsetMs = nextTuple.offsetMs,
+                                    lastMutationSequence = nextTuple.mutationSequence
+                                ),
+                                phases = candidatePhases
+                            )
+                        )
+                        recorderStage(RecorderStage.MUTATION)
+                        advanceHeader(expected, nextTuple)
+                        val closeRowCount = canonicalDao.closeOpenPhase(
+                            sessionId = expected.sessionId,
+                            expectedStatus = expected.status,
+                            expectedOpenRowId = expected.openPhaseId,
+                            endOffsetMs = nextTuple.offsetMs,
+                            endMutationSequence = nextTuple.mutationSequence
+                        )
+                        requireExactlyOne("close_open_phase", closeRowCount)
+                        requireInserted("insert_next_phase", canonicalDao.insertPhaseInterval(nextPhase))
+                        requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
+            }
         }
-        return gate
     }
 
     suspend fun startHeartRateRecording(
+        ownerToken: RecorderOwnerToken,
         expected: RecorderExpectedState,
         nextTuple: CanonicalTuple,
         recording: HeartRateRecordingEntity,
         initialAcquisition: HeartRateAcquisitionIntervalEntity
-    ): RecorderReconciliationResult.Succeeded {
-        val gate = requireRecorderGateSucceeded()
-        database.withTransaction {
-            val graph = validatedExpectedGraph(expected)
-            requireNextTuple(expected.durableTuple, nextTuple)
-            if (expected.recordingId != null || expected.openAcquisitionId != null) {
-                throw RecorderGuardedWriteException("expected_no_recording", 0)
+    ): Unit {
+        val owner = requireWritableOwner(ownerToken, expected.sessionId)
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.ACTIVITY)
+                        val graph = validatedExpectedGraph(expected)
+                        requireNextTuple(expected.durableTuple, nextTuple)
+                        if (expected.recordingId != null || expected.openAcquisitionId != null) {
+                            throw RecorderGuardedWriteException("expected_no_recording", 0)
+                        }
+                        requireValidGraph(
+                            graph.copy(
+                                session = graph.session.copy(
+                                    lastDurableOffsetMs = nextTuple.offsetMs,
+                                    lastMutationSequence = nextTuple.mutationSequence
+                                ),
+                                recording = recording,
+                                acquisitions = listOf(initialAcquisition)
+                            )
+                        )
+                        recorderStage(RecorderStage.MUTATION)
+                        advanceHeader(expected, nextTuple)
+                        requireInserted("insert_recording", canonicalDao.insertRecording(recording))
+                        requireInserted(
+                            "insert_initial_acquisition",
+                            canonicalDao.insertAcquisitionInterval(initialAcquisition)
+                        )
+                        requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
             }
-            requireValidGraph(
-                graph.copy(
-                    session = graph.session.copy(
-                        lastDurableOffsetMs = nextTuple.offsetMs,
-                        lastMutationSequence = nextTuple.mutationSequence
-                    ),
-                    recording = recording,
-                    acquisitions = listOf(initialAcquisition)
-                )
-            )
-            advanceHeader(expected, nextTuple)
-            requireInserted("insert_recording", canonicalDao.insertRecording(recording))
-            requireInserted(
-                "insert_initial_acquisition",
-                canonicalDao.insertAcquisitionInterval(initialAcquisition)
-            )
-            requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     suspend fun transitionAcquisition(
+        ownerToken: RecorderOwnerToken,
         expected: RecorderExpectedState,
         nextTuple: CanonicalTuple,
         nextAcquisition: HeartRateAcquisitionIntervalEntity
-    ): RecorderReconciliationResult.Succeeded {
-        val gate = requireRecorderGateSucceeded()
-        database.withTransaction {
-            val graph = validatedExpectedGraph(expected)
-            requireNextTuple(expected.durableTuple, nextTuple)
-            val openAcquisitionId = requireNotNull(expected.openAcquisitionId)
-            val recordingId = requireNotNull(expected.recordingId)
-            val openAcquisition = graph.acquisitions.single { acquisition ->
-                acquisition.id == openAcquisitionId
+    ): Unit {
+        val owner = requireWritableOwner(ownerToken, expected.sessionId)
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.ACTIVITY)
+                        val graph = validatedExpectedGraph(expected)
+                        requireNextTuple(expected.durableTuple, nextTuple)
+                        val openAcquisitionId = requireNotNull(expected.openAcquisitionId)
+                        val recordingId = requireNotNull(expected.recordingId)
+                        val openAcquisition = graph.acquisitions.single { acquisition ->
+                            acquisition.id == openAcquisitionId
+                        }
+                        val candidateAcquisitions = graph.acquisitions.dropLast(1) +
+                            openAcquisition.copy(
+                                endOffsetMs = nextTuple.offsetMs,
+                                endMutationSequence = nextTuple.mutationSequence,
+                                openMarker = null
+                            ) + nextAcquisition
+                        requireValidGraph(
+                            graph.copy(
+                                session = graph.session.copy(
+                                    lastDurableOffsetMs = nextTuple.offsetMs,
+                                    lastMutationSequence = nextTuple.mutationSequence
+                                ),
+                                acquisitions = candidateAcquisitions
+                            )
+                        )
+                        recorderStage(RecorderStage.MUTATION)
+                        advanceHeader(expected, nextTuple)
+                        val closeRowCount = canonicalDao.closeOpenAcquisition(
+                            recordingId = recordingId,
+                            expectedSessionStatus = expected.status,
+                            expectedOpenRowId = openAcquisitionId,
+                            endOffsetMs = nextTuple.offsetMs,
+                            endMutationSequence = nextTuple.mutationSequence
+                        )
+                        requireExactlyOne("close_open_acquisition", closeRowCount)
+                        requireInserted(
+                            "insert_next_acquisition",
+                            canonicalDao.insertAcquisitionInterval(nextAcquisition)
+                        )
+                        requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
             }
-            val candidateAcquisitions = graph.acquisitions.dropLast(1) +
-                openAcquisition.copy(
-                    endOffsetMs = nextTuple.offsetMs,
-                    endMutationSequence = nextTuple.mutationSequence,
-                    openMarker = null
-                ) + nextAcquisition
-            requireValidGraph(
-                graph.copy(
-                    session = graph.session.copy(
-                        lastDurableOffsetMs = nextTuple.offsetMs,
-                        lastMutationSequence = nextTuple.mutationSequence
-                    ),
-                    acquisitions = candidateAcquisitions
-                )
-            )
-            advanceHeader(expected, nextTuple)
-            val closeRowCount = canonicalDao.closeOpenAcquisition(
-                recordingId = recordingId,
-                expectedSessionStatus = expected.status,
-                expectedOpenRowId = openAcquisitionId,
-                endOffsetMs = nextTuple.offsetMs,
-                endMutationSequence = nextTuple.mutationSequence
-            )
-            requireExactlyOne("close_open_acquisition", closeRowCount)
-            requireInserted(
-                "insert_next_acquisition",
-                canonicalDao.insertAcquisitionInterval(nextAcquisition)
-            )
-            requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
 
     suspend fun appendHeartRateSample(
+        ownerToken: RecorderOwnerToken,
         expected: RecorderExpectedState,
         nextTuple: CanonicalTuple,
         sample: HeartRateSampleEntity
-    ): RecorderReconciliationResult.Succeeded {
-        val gate = requireRecorderGateSucceeded()
-        database.withTransaction {
-            val graph = validatedExpectedGraph(expected)
-            requireNextTuple(expected.durableTuple, nextTuple)
-            if (CanonicalTuple(sample.offsetMs, sample.mutationSequence) != nextTuple) {
-                throw RecorderValidationException("sample_tuple_must_equal_next_input_cut")
+    ): Unit {
+        val owner = requireWritableOwner(ownerToken, expected.sessionId)
+        return recorderGateMutex.withLock {
+            var bodyFailure: Throwable? = null
+            try {
+                val result = database.withTransaction {
+                    try {
+                        enterRecorderWrite(owner, RecorderOperation.ACTIVITY)
+                        val graph = validatedExpectedGraph(expected)
+                        requireNextTuple(expected.durableTuple, nextTuple)
+                        if (CanonicalTuple(sample.offsetMs, sample.mutationSequence) != nextTuple) {
+                            throw RecorderValidationException("sample_tuple_must_equal_next_input_cut")
+                        }
+                        requireValidGraph(
+                            graph.copy(
+                                session = graph.session.copy(
+                                    lastDurableOffsetMs = nextTuple.offsetMs,
+                                    lastMutationSequence = nextTuple.mutationSequence
+                                ),
+                                samples = graph.samples + sample
+                            )
+                        )
+                        recorderStage(RecorderStage.MUTATION)
+                        advanceHeader(expected, nextTuple)
+                        requireInserted("insert_sample", canonicalDao.insertSample(sample))
+                        requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
+                    } catch (cause: Throwable) {
+                        bodyFailure = cause
+                        throw cause
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                finishRecorderWrite(owner)
+                result
+            } catch (cause: Throwable) {
+                throw failRecorderWrite(owner, cause, bodyFailure)
             }
-            requireValidGraph(
-                graph.copy(
-                    session = graph.session.copy(
-                        lastDurableOffsetMs = nextTuple.offsetMs,
-                        lastMutationSequence = nextTuple.mutationSequence
-                    ),
-                    samples = graph.samples + sample
-                )
-            )
-            advanceHeader(expected, nextTuple)
-            requireInserted("insert_sample", canonicalDao.insertSample(sample))
-            requireValidGraph(requireNotNull(loadCanonicalGraph(expected.sessionId)))
         }
-        return gate
     }
-
-    private suspend fun requireRecorderGateSucceeded(): RecorderReconciliationResult.Succeeded =
-        when (val result = prepareRecorder()) {
-            is RecorderReconciliationResult.Succeeded -> result
-            is RecorderReconciliationResult.ManualResolutionRequired ->
-                throw RecorderGateBlockedException(result)
-        }
 
     private suspend fun validatedExpectedGraph(
         expected: RecorderExpectedState
     ): CanonicalSessionGraphV1 {
-        val graph = loadCanonicalGraph(expected.sessionId)
-            ?: throw RecorderGuardedWriteException("expected_session", 0)
+        recorderStage(RecorderStage.PERSISTED)
+        val graph = loadCanonicalGraph(expected.sessionId) ?: run {
+            recorderStage(RecorderStage.REQUEST)
+            throw RecorderGuardedWriteException("expected_session", 0)
+        }
         validateSessionTimeMetadata(graph.session)
         requireValidGraph(graph)
         val sessionTuple = CanonicalTuple(
@@ -905,6 +1371,7 @@ internal class WorkoutSessionRepository(
         val openAcquisition = graph.acquisitions.singleOrNull { acquisition ->
             acquisition.openMarker == 1
         }
+        recorderStage(RecorderStage.REQUEST)
         if (
             graph.session.status != expected.status || sessionTuple != expected.durableTuple ||
             openPhase?.id != expected.openPhaseId || recording?.recordingId != expected.recordingId ||
@@ -975,7 +1442,7 @@ internal class WorkoutSessionRepository(
                 if (recording == null) {
                     reconcileCanonicalCandidate(candidate)
                 } else {
-                    val finalized = finalizeRecordingSession(
+                    val finalized = finalizeRecordingTransaction(
                         RecordingFinalizationRequest(
                             sessionId = candidate.session.id,
                             recordingId = recording.recordingId,
@@ -1331,6 +1798,15 @@ internal class WorkoutSessionRepository(
         val LEGACY_NONTERMINAL_STATUSES = setOf("ready", "active", "paused")
     }
 }
+
+private fun sameTerminalRequest(first: FrozenCanonicalFinalizationRequest, next: FrozenCanonicalFinalizationRequest): Boolean =
+    first.expected.copy(durableTuple = CanonicalTuple(0, first.expected.durableTuple.mutationSequence)) ==
+        next.expected.copy(durableTuple = CanonicalTuple(0, next.expected.durableTuple.mutationSequence)) &&
+        first.finalOffsetMs == next.finalOffsetMs && first.terminalStatus == next.terminalStatus &&
+        first.terminalReason == next.terminalReason && first.endedAt == next.endedAt &&
+        first.totalElapsedSec == next.totalElapsedSec && first.effectiveElapsedSec == next.effectiveElapsedSec &&
+        first.pausedElapsedSec == next.pausedElapsedSec && first.sessionDisplayMetadataJson == next.sessionDisplayMetadataJson &&
+        first.stepRecords == next.stepRecords && first.restExtensions == next.restExtensions && first.strengthSets == next.strengthSets
 
 private fun FrozenCanonicalFinalizationRequest.terminalSession(
     original: WorkoutSessionEntity,

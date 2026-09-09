@@ -2,6 +2,10 @@ package com.liujyks.trainflow.core.data
 
 import android.content.Context
 import android.database.Cursor
+import android.os.Looper
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
+import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
@@ -28,11 +32,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -41,6 +45,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -58,6 +64,181 @@ class WorkoutSessionRecorderReconciliationTest {
     @After
     fun closeDatabase() {
         database.close()
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    fun cleanupConflictOrCancelledDispatchPermanentlyBlocksOwner() = runBlocking {
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        val repository = WorkoutSessionRepository(database)
+        val admission = repository.admitRecorder("A", canonicalHeader("A"), openPhase("A"))
+        val foreign = HeartRateObservationBindingId()
+        val installed = runtime.bindObservations(foreign) {}
+        val primary = IllegalArgumentException("original_prestart_failure")
+        assertSame(primary, runCatching { repository.releaseRecorderBeforeStart(admission.ownerToken, "A", runtime, primary) }.exceptionOrNull())
+        assertTrue(primary.suppressed.single() is RecorderBindingConflictException)
+        assertEquals(installed, runtime.queryObservationBinding(foreign))
+        assertSame(primary, runCatching { repository.releaseRecorderBeforeStart(admission.ownerToken, "A", runtime, primary) }.exceptionOrNull())
+        assertTrue(runCatching { repository.admitRecorder("new", canonicalHeader("new"), openPhase("new")) }.isFailure)
+
+        val savedRepository = WorkoutSessionRepository(database)
+        val saved = savedRepository.admitRecorder("saved", canonicalHeader("saved"), openPhase("saved"))
+        val savedRuntime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        val savedBinding = savedRuntime.bindObservations(saved.bindingId) {}
+        insertCanonicalRunningSessionWithActiveRecording("saved")
+        savedRepository.finalizeRecordingSession(saved.ownerToken, RecordingFinalizationRequest(
+            "saved", "saved:recording", "active", CanonicalTuple(100, 4), 100,
+            "completed", "completed", "2026-09-07T00:00:00Z"))
+        val durable = databaseSnapshot()
+        supervisorScope {
+            val releaseScope = this
+            val cleanup = withContext(Dispatchers.Default) {
+                releaseScope.async(start = CoroutineStart.UNDISPATCHED) {
+                    savedRepository.releaseRecorderAfterTerminal(saved.ownerToken, "saved", savedRuntime)
+                }
+            }
+            assertTrue(!shadowOf(Looper.getMainLooper()).isIdle)
+            assertEquals(savedBinding, savedRuntime.queryObservationBinding(saved.bindingId))
+            val cancellation = CancellationException("cleanup_main_not_delivered")
+            cleanup.cancel(cancellation)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(runCatching { cleanup.await() }.exceptionOrNull() is CancellationException)
+        }
+        assertEquals(savedBinding, savedRuntime.queryObservationBinding(saved.bindingId))
+        assertEquals(durable, databaseSnapshot())
+        assertTrue(runCatching { savedRepository.releaseRecorderAfterTerminal(saved.ownerToken, "saved", savedRuntime) }
+            .exceptionOrNull() is CancellationException)
+        assertTrue(runCatching { savedRepository.admitRecorder("new", canonicalHeader("new"), openPhase("new")) }.isFailure)
+        assertEquals(installed, runtime.queryObservationBinding(foreign))
+    }
+
+    @Test
+    fun uncachedAdmissionAndPrepareNeverScanAnOwnedSession() = runBlocking {
+        val scans = AtomicInteger()
+        database.close()
+        database = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), TrainFlowDatabase::class.java)
+            .allowMainThreadQueries().setQueryCallback(RoomDatabase.QueryCallback { sql, _ ->
+                if (sql.lowercase().contains("from workout_sessions") && sql.lowercase().contains("order by id")) scans.incrementAndGet()
+            }, Executor { it.run() }).build()
+        val repository = WorkoutSessionRepository(database)
+        repository.prepareRecorder()
+        insertSession(legacySession("later", "active"))
+        assertEquals(listOf("later"), (repository.prepareRecorder() as RecorderReconciliationResult.Succeeded).legacyResiduals.map { it.sessionId })
+        val admission = repository.admitRecorder("entry", canonicalHeader("owned"), openPhase("owned"))
+        val admittedScans = scans.get()
+        repository.startCanonicalSession(admission.ownerToken, canonicalHeader("owned"), openPhase("owned"))
+        repository.appendSessionDisplayMetadata(admission.ownerToken,
+            RecorderExpectedState("owned", "active", CanonicalTuple(100, 4), "owned:phase:0"),
+            CanonicalTuple(100, 5), VALID_DISPLAY_METADATA)
+        assertTrue(runCatching { repository.prepareRecorder() }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertTrue(runCatching { repository.admitRecorder("other", canonicalHeader("other"), openPhase("other")) }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertSame(admission, repository.admitRecorder("entry", canonicalHeader("owned"), openPhase("owned")))
+        assertEquals(admittedScans, scans.get())
+        assertEquals("active", database.canonicalTimelineHeartRateDao().sessionById("owned")?.status)
+    }
+
+    @Test
+    fun staleCallbacksCannotChangeTheNextOwnerAndFreshRepositoryUsesOnlyDurableFacts() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        val first = repository.admitRecorder("first", canonicalHeader("same"), openPhase("same"))
+        runtime.bindObservations(first.bindingId) {}
+        repository.startCanonicalSession(first.ownerToken, canonicalHeader("same"), openPhase("same"))
+        val frozen = FrozenCanonicalFinalizationRequest(RecorderExpectedState("same", "active",
+            CanonicalTuple(100, 4), "same:phase:0"), 100, "completed", "completed", null,
+            null, null, null, VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(), null)
+        repository.finalizeCanonicalSession(first.ownerToken, frozen)
+        repository.releaseRecorderAfterTerminal(first.ownerToken, "same", runtime)
+        val next = repository.admitRecorder("next", canonicalHeader("same"), openPhase("same"))
+        assertNotSame(first.ownerToken, next.ownerToken)
+        val binding = runtime.bindObservations(next.bindingId) {}
+        val before = databaseSnapshot()
+        val calls: List<suspend () -> Unit> = listOf(
+            { repository.beginOwnerClearHandoff(first.ownerToken, "same") },
+            { repository.reportRecorderActivityFailure(first.ownerToken, "same", IllegalStateException("late")) },
+            { repository.releaseRecorderAfterTerminal(first.ownerToken, "same", runtime) },
+            { repository.releaseRecorderBeforeStart(first.ownerToken, "same", runtime, IllegalStateException("late")); Unit },
+            { repository.finalizeCanonicalSession(first.ownerToken, frozen); Unit },
+            { repository.appendSessionDisplayMetadata(first.ownerToken, frozen.expected, CanonicalTuple(100, 5), VALID_DISPLAY_METADATA) }
+        )
+        calls.forEach { call -> assertTrue(runCatching { call() }.exceptionOrNull() is RecorderStaleOwnerException) }
+        val fresh = WorkoutSessionRepository(database)
+        assertTrue((fresh.prepareRecorder() as RecorderReconciliationResult.Succeeded).reconciledSessions.isEmpty())
+        assertTrue(runCatching { fresh.finalizeCanonicalSession(next.ownerToken, frozen) }.exceptionOrNull() is RecorderStaleOwnerException)
+        assertEquals(before, databaseSnapshot())
+        assertEquals(binding, runtime.queryObservationBinding(next.bindingId))
+    }
+
+    @Test
+    fun differentEntriesRaceForOneAdmissionAndInvalidEntryCannotDisturbTheWinner() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val before = databaseSnapshot()
+        val results = coroutineScope {
+            listOf("A", "B").map { entry -> async(Dispatchers.IO) {
+                runCatching { repository.admitRecorder(entry, canonicalHeader("session"), openPhase("session")) }
+            } }.map { it.await() }
+        }
+        assertEquals(1, results.count { it.isSuccess })
+        assertTrue(results.single { it.isFailure }.exceptionOrNull() is RecorderOwnerBusyException)
+        val admission = results.single { it.isSuccess }.getOrThrow()
+        assertSame(admission, repository.admitRecorder(admission.entryId, canonicalHeader("session"), openPhase("session")))
+        val mismatch = runCatching { repository.admitRecorder(admission.entryId,
+            canonicalHeader("other"), openPhase("other")) }.exceptionOrNull()
+        assertEquals("owner_session_mismatch", (mismatch as RecorderValidationException).code)
+        assertTrue(runCatching { repository.admitRecorder("", canonicalHeader("session"), openPhase("session")) }
+            .exceptionOrNull() is RecorderValidationException)
+        assertEquals(before, databaseSnapshot())
+        assertSame(admission, repository.admitRecorder(admission.entryId, canonicalHeader("session"), openPhase("session")))
+        repository.reportRecorderActivityFailure(admission.ownerToken, "session", IllegalStateException("reported_failure"))
+        for (entry in listOf(admission.entryId, "next")) {
+            val failure = runCatching { repository.admitRecorder(entry, canonicalHeader("session"), openPhase("session")) }.exceptionOrNull()
+            assertTrue(failure is RecorderOwnerBusyException)
+            assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, (failure as RecorderOwnerBusyException).disposition)
+        }
+    }
+
+    @Test
+    fun preStartFailuresReleaseOnlyKnownSafeMatchingBinding() = runBlocking {
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        val repository = WorkoutSessionRepository(database)
+        val before = databaseSnapshot()
+        for (installed in listOf(true, false)) {
+            val admission = repository.admitRecorder("entry", canonicalHeader("safe"), openPhase("safe"))
+            if (installed) assertTrue(runtime.bindObservations(admission.bindingId) {} is HeartRateBindingDisposition.MatchingInstalled)
+            val cause = IllegalArgumentException("before_start")
+            assertSame(cause, repository.releaseRecorderBeforeStart(admission.ownerToken, "safe", runtime, cause))
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            assertEquals(before, databaseSnapshot())
+            assertTrue(runCatching { repository.beginOwnerClearHandoff(admission.ownerToken, "safe") }
+                .exceptionOrNull() is RecorderStaleOwnerException)
+        }
+        val session = canonicalHeader("receipt").copy(lastDurableOffsetMs = 0, lastMutationSequence = 0,
+            startedAt = "2026-09-06T16:30:00Z", startLocalDate = "2026-09-07",
+            startZoneId = "Asia/Shanghai", startUtcOffsetSeconds = 28800, timeMetadataSourceContractVersion = 1)
+        val phase = openPhase("receipt")
+        val admission = repository.admitRecorder("receipt-entry", session, phase)
+        val binding = (runtime.bindObservations(admission.bindingId) {} as HeartRateBindingDisposition.MatchingInstalled).binding
+        val invalid = FrozenCanonicalStartRequest(session, phase, binding, listOf(binding.snapshot.copy(receipt = 2)))
+        val cause = runCatching { repository.startCanonicalSession(admission.ownerToken, invalid) }.exceptionOrNull()
+        assertEquals("invalid_initialization_receipt_order", (cause as RecorderValidationException).code)
+        assertSame(cause, repository.releaseRecorderBeforeStart(admission.ownerToken, session.id, runtime, cause))
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+        assertNotSame(admission.ownerToken, repository.admitRecorder("next", session, phase).ownerToken)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
+    fun openPrepareScansNewDurableRowsInsteadOfReturningCompletedCache() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val first = repository.prepareRecorder() as RecorderReconciliationResult.Succeeded
+        assertTrue(first.legacyResiduals.isEmpty())
+        insertSession(legacySession("arrived-after-scan", "active"))
+        val before = databaseSnapshot()
+
+        val second = repository.prepareRecorder() as RecorderReconciliationResult.Succeeded
+
+        assertEquals(listOf("arrived-after-scan"), second.legacyResiduals.map { it.sessionId })
+        assertEquals(before, databaseSnapshot())
     }
 
     @Test
@@ -95,12 +276,12 @@ class WorkoutSessionRecorderReconciliationTest {
         assertTrue(result.reconciledSessions.isEmpty())
         assertEquals(before, databaseSnapshot())
 
-        val started = repository.startCanonicalSession(
+        val admission = repository.admitRecorder("entry", canonicalHeader("canonical-new"), openPhase("canonical-new"))
+        repository.startCanonicalSession(admission.ownerToken,
             canonicalHeader("canonical-new"),
             openPhase("canonical-new")
         )
 
-        assertSame(result, started)
         assertEquals(
             "active",
             database.canonicalTimelineHeartRateDao().sessionById("canonical-new")?.status
@@ -187,8 +368,8 @@ class WorkoutSessionRecorderReconciliationTest {
             result.failures.associate { failure -> failure.sessionId to failure.code }
         )
         assertEquals(before, databaseSnapshot())
-        assertEquals(null, inFlightOrNull(repository))
-        assertSame(result, repository.prepareRecorder())
+
+        assertEquals(result, repository.prepareRecorder())
     }
 
     @Test
@@ -695,52 +876,24 @@ class WorkoutSessionRecorderReconciliationTest {
             .build()
         insertSession(legacySession("legacy-active", "active"))
         val repository = WorkoutSessionRepository(database)
-        val mutexProbe = GateMutexProbe()
-        replaceGateMutex(repository, mutexProbe)
         val ownerCancellation = CancellationException("owner_cancelled")
         val owner = async(Dispatchers.IO) { repository.prepareRecorder() }
-        assertTrue(queryEntered.await(5, TimeUnit.SECONDS))
-        val flight = inFlight(repository)
-        val completionCause = AtomicReference<Throwable?>()
-        val flightCompleted = CountDownLatch(1)
-        flight.invokeOnCompletion { cause ->
-            completionCause.set(cause)
-            flightCompleted.countDown()
-        }
-        val waiter = async(start = CoroutineStart.UNDISPATCHED) {
-            repository.prepareRecorder()
-        }
-        mutexProbe.lockForTest()
         try {
+            assertTrue(queryEntered.await(5, TimeUnit.SECONDS))
+            val waiter = async(start = CoroutineStart.UNDISPATCHED) { repository.prepareRecorder() }
             owner.cancel(ownerCancellation)
             releaseQuery.countDown()
-            assertTrue(queryReleased.await(5, TimeUnit.SECONDS))
-            assertTrue(mutexProbe.cleanupLockAttempt.await(5, TimeUnit.SECONDS))
+            val ownerFailure = runCatching { withTimeout(5_000) { owner.await() } }.exceptionOrNull()
+            assertTrue(ownerFailure is CancellationException)
+            assertEquals(ownerCancellation.message, ownerFailure?.message)
+            val result = withTimeout(5_000) { waiter.await() } as RecorderReconciliationResult.Succeeded
+            assertEquals(listOf("legacy-active"), result.legacyResiduals.map { it.sessionId })
+            insertSession(legacySession("after-cancel", "paused"))
+            val retry = repository.prepareRecorder() as RecorderReconciliationResult.Succeeded
+            assertEquals(listOf("after-cancel", "legacy-active"), retry.legacyResiduals.map { it.sessionId })
         } finally {
-            mutexProbe.unlockForTest()
+            releaseQuery.countDown()
         }
-
-        val ownerFailure = withTimeout(5_000) {
-            runCatching { owner.await() }.exceptionOrNull()
-        }
-        val waiterFailure = withTimeoutOrNull(5_000) {
-            runCatching { waiter.await() }.exceptionOrNull()
-        }
-
-        assertTrue(flightCompleted.await(5, TimeUnit.SECONDS))
-        val propagatedCause = requireNotNull(completionCause.get())
-        assertTrue(propagatedCause is CancellationException)
-        assertEquals(ownerCancellation.message, propagatedCause.message)
-        assertTrue(ownerFailure is CancellationException)
-        assertNotNull(waiterFailure)
-        assertTrue(waiterFailure is CancellationException)
-        assertEquals(propagatedCause.message, ownerFailure?.message)
-        assertEquals(ownerCancellation.message, waiterFailure?.message)
-        assertEquals(null, inFlightOrNull(repository))
-        val retry = withTimeout(5_000) { repository.prepareRecorder() }
-        assertTrue(retry is RecorderReconciliationResult.Succeeded)
-        retry as RecorderReconciliationResult.Succeeded
-        assertEquals(listOf("legacy-active"), retry.legacyResiduals.map { residual -> residual.sessionId })
     }
 
     @Test
@@ -780,40 +933,25 @@ class WorkoutSessionRecorderReconciliationTest {
         )
         val before = databaseSnapshot()
         val repository = WorkoutSessionRepository(database)
-        val completionCause = AtomicReference<Throwable?>()
-        val flightCompleted = CountDownLatch(1)
         val (ownerFailure, waiterFailure) = supervisorScope {
             val owner = async(Dispatchers.IO) { repository.prepareRecorder() }
-            assertTrue(queryEntered.await(5, TimeUnit.SECONDS))
-            val flight = inFlight(repository)
-            flight.invokeOnCompletion { cause ->
-                completionCause.set(cause)
-                flightCompleted.countDown()
+            try {
+                assertTrue(queryEntered.await(5, TimeUnit.SECONDS))
+                val waiter = async(start = CoroutineStart.UNDISPATCHED) { repository.prepareRecorder() }
+                releaseQuery.countDown()
+                runCatching { withTimeout(5_000) { owner.await() } }.exceptionOrNull() to
+                    runCatching { withTimeout(5_000) { waiter.await() } }.exceptionOrNull()
+            } finally {
+                releaseQuery.countDown()
             }
-            val waiter = async(start = CoroutineStart.UNDISPATCHED) {
-                repository.prepareRecorder()
-            }
-
-            releaseQuery.countDown()
-            val ownerCause = withTimeout(5_000) {
-                runCatching { owner.await() }.exceptionOrNull()
-            }
-            val waiterCause = withTimeout(5_000) {
-                runCatching { waiter.await() }.exceptionOrNull()
-            }
-            ownerCause to waiterCause
         }
-
-        assertTrue(flightCompleted.await(5, TimeUnit.SECONDS))
-        val propagatedCause = requireNotNull(completionCause.get())
-        assertTrue(propagatedCause is RecorderGuardedWriteException)
-        propagatedCause as RecorderGuardedWriteException
-        assertEquals("close_process_interrupted_phase", propagatedCause.guard)
-        assertEquals(0, propagatedCause.actualRowCount)
-        assertSame(propagatedCause, ownerFailure)
-        assertSame(propagatedCause, waiterFailure)
+        listOf(ownerFailure, waiterFailure).forEach { failure ->
+            assertTrue(failure is RecorderGuardedWriteException)
+            assertEquals("close_process_interrupted_phase", (failure as RecorderGuardedWriteException).guard)
+            assertEquals(0, failure.actualRowCount)
+        }
+        assertNotSame(ownerFailure, waiterFailure)
         assertEquals(before, databaseSnapshot())
-        assertEquals(null, inFlightOrNull(repository))
 
         database.openHelper.writableDatabase.execSQL(
             "DROP TRIGGER invalidate_exceptional_flight_phase_guard"
@@ -921,19 +1059,19 @@ class WorkoutSessionRecorderReconciliationTest {
         assertTrue(!createdAt.isAfter(callFinishedAt.plusSeconds(10)))
 
         val afterFinalization = databaseSnapshot()
-        assertSame(result, repository.prepareRecorder())
+        assertTrue((repository.prepareRecorder() as RecorderReconciliationResult.Succeeded).reconciledSessions.isEmpty())
         assertEquals(afterFinalization, databaseSnapshot())
-        val protectedStart = repository.startCanonicalSession(
+        val admission = repository.admitRecorder("entry", canonicalHeader("canonical-after-finalization"), openPhase("canonical-after-finalization"))
+        repository.startCanonicalSession(admission.ownerToken,
             canonicalHeader("canonical-after-finalization"),
             openPhase("canonical-after-finalization")
         )
-        assertSame(result, protectedStart)
         assertEquals(
             "active",
             database.canonicalTimelineHeartRateDao()
                 .sessionById("canonical-after-finalization")?.status
         )
-        assertEquals(null, inFlightOrNull(repository))
+
     }
 
     @Test
@@ -962,11 +1100,12 @@ class WorkoutSessionRecorderReconciliationTest {
             assertEquals("bind_original_analysis", failure.guard)
             assertEquals(0, failure.actualRowCount)
             assertEquals(before, databaseSnapshot())
-            assertEquals(null, inFlightOrNull(repository))
+
         }
 
         val protectedFailure = runCatching {
-            repository.appendSessionDisplayMetadata(
+            val admission = repository.admitRecorder("entry", canonicalHeader("binding-failure"), openPhase("binding-failure"))
+            repository.appendSessionDisplayMetadata(admission.ownerToken,
                 expected = RecorderExpectedState(
                     sessionId = "binding-failure",
                     status = "active",
@@ -1060,12 +1199,12 @@ class WorkoutSessionRecorderReconciliationTest {
             ).map { deferred -> deferred.await() }
         }
 
-        assertSame(concurrent[0], concurrent[1])
+        assertNotSame(concurrent[0], concurrent[1])
         assertTrue(concurrent[0] is RecorderReconciliationResult.Succeeded)
-        val succeeded = concurrent[0] as RecorderReconciliationResult.Succeeded
+        val succeeded = concurrent.map { it as RecorderReconciliationResult.Succeeded }
         assertEquals(
             listOf("canonical-with-recording"),
-            succeeded.reconciledSessions.map { session -> session.sessionId }
+            succeeded.flatMap { it.reconciledSessions }.map { session -> session.sessionId }
         )
         val recordingRows = requireNotNull(
             database.canonicalTimelineHeartRateDao()
@@ -1073,8 +1212,8 @@ class WorkoutSessionRecorderReconciliationTest {
         ).recordings.single()
         assertEquals(1, recordingRows.snapshots.size)
         assertEquals(1, recordingRows.recording.originalAnalysisVersion)
-        assertSame(concurrent[0], repository.prepareRecorder())
-        assertEquals(null, inFlightOrNull(repository))
+        assertTrue((repository.prepareRecorder() as RecorderReconciliationResult.Succeeded).reconciledSessions.isEmpty())
+
     }
 
     @Test
@@ -1091,12 +1230,12 @@ class WorkoutSessionRecorderReconciliationTest {
         insertSession(legacySession("legacy-after-gate", "paused"))
         val cached = repository.prepareRecorder()
 
-        assertSame(results[0], results[1])
-        assertSame(results[0], cached)
+        assertNotSame(results[0], results[1])
+        assertNotSame(results[0], cached)
         assertTrue(cached is RecorderReconciliationResult.Succeeded)
         cached as RecorderReconciliationResult.Succeeded
-        assertEquals(listOf("legacy-active"), cached.legacyResiduals.map { it.sessionId })
-        assertEquals(null, inFlightOrNull(repository))
+        assertEquals(listOf("legacy-active", "legacy-after-gate"), cached.legacyResiduals.map { it.sessionId })
+
     }
 
     private suspend fun insertCanonicalRunningSession(
@@ -1311,47 +1450,6 @@ class WorkoutSessionRecorderReconciliationTest {
             "INSERT INTO recovery_recommendations VALUES (?, ?, ?, ?, ?)",
             arrayOf<Any?>("sentinel-recovery", sessionId, "[]", "[\"sentinel-area\"]", null)
         )
-    }
-
-    private fun inFlight(
-        repository: WorkoutSessionRepository
-    ): CompletableDeferred<RecorderReconciliationResult> = requireNotNull(
-        inFlightOrNull(repository)
-    )
-
-    @Suppress("UNCHECKED_CAST")
-    private fun inFlightOrNull(
-        repository: WorkoutSessionRepository
-    ): CompletableDeferred<RecorderReconciliationResult>? {
-        val field = WorkoutSessionRepository::class.java.getDeclaredField("recorderGateInFlight")
-        field.isAccessible = true
-        return field.get(repository) as CompletableDeferred<RecorderReconciliationResult>?
-    }
-
-    private fun replaceGateMutex(repository: WorkoutSessionRepository, mutex: Mutex) {
-        val field = WorkoutSessionRepository::class.java.getDeclaredField("recorderGateMutex")
-        field.isAccessible = true
-        field.set(repository, mutex)
-    }
-
-    private class GateMutexProbe(
-        private val delegate: Mutex = Mutex()
-    ) : Mutex by delegate {
-        private val lockAttempts = AtomicInteger()
-        val cleanupLockAttempt = CountDownLatch(1)
-
-        override suspend fun lock(owner: Any?) {
-            if (lockAttempts.incrementAndGet() == 3) cleanupLockAttempt.countDown()
-            delegate.lock(owner)
-        }
-
-        suspend fun lockForTest() {
-            delegate.lock()
-        }
-
-        fun unlockForTest() {
-            delegate.unlock()
-        }
     }
 
     private fun canonicalHeader(sessionId: String) = WorkoutSessionEntity(
