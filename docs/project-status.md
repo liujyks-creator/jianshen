@@ -1,13 +1,17 @@
 # TrainFlow 项目状态
 
 <!-- E18-E22-PLAN-LANDING:BEGIN -->
-## E18–E22 当前规划与交付入口（2026-09-06）
+## E18–E22 当前规划与交付入口（E18-CC-P01，2026-09-09）
 
 当前详细入口：[E18–E22 正式计划](planning/e18-onward-epic-story-plan.md#current-status)；唯一 Story selector 为其 F.37，source identities 与原 F9 PASS 的证据限界见该计划页首。正式来源基线为 `d2c9ac48027177389092d56c208c64447a3c6a93`，旧正文不以漂移工作区替代。
 
-E17 以胶囊封口；已合并 CS-03、CS-04A、CS-05、CS-04B 及胶囊资产保留。五 Epic / 24 Story / 42 条唯一依赖的规划已通过 F9 attempt=4 且获用户接受，成果顺序为 E18 → E19 → E20 → E21 → E22；力量与跟练分别接入、分别验收。
+E17 以胶囊封口；已合并 CS-03、CS-04A、CS-05、CS-04B 及胶囊资产保留。原五 Epic / 24 Story / 42 边规划的 F9 attempt=4 接受属于原版本；本轮只改变实时记录的直接合同与拆分，成果顺序仍为 E18 → E19 → E20 → E21 → E22，力量与跟练分别接入、分别验收。
 
-本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+本轮 accepted base=`74c25fac9c728baf2aa44b9e05b5f7bece615fca`，tree=`73982bda551b8bf164b3a0849f7ba5fec4938fd6`；正式文档落地以及 S01 `122ba2ad9524242cd9c0e0b6b5b149c80d7f3ec0`、S02 `4c2fa62c42eaf567fadc83bb2d0fa091a92b12ad`、S03 `82bd2c110b286bb2248b98da3c044fbea5abc414`、S04 `af4d9a9f129e08856069d9e5be30666408794b2b` 均已包含于该 base，不重新证明其旧运行证据。S05 `ecdf73419d7611ad5f4cf92cc6ad932af0a22dc7` 仍未 PASS/未合并，非本候选 parent。
+
+用户已接受 F.68/F.69 的实时记录收窄，不再等待方向确认：正常持续落盘，一次原子初始化，正常结束冻结真实截止点；停止后不续录/补造，重开仅读 durable。Saved/read-ready 允许正常返回，不等 binding 释放；清理未定仍禁新冲突写。撤故障后同进程恢复、clear 后补终结与共享完成扫描 cache，保留原错误/事务/隔离。来源 V2 F.69.2，757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`；逐条正式承接见计划 F.8.4。
+
+当前状态为 `DOCS_CANDIDATE_AWAITING_INDEPENDENT_PLANNING_REVIEW`。本轮 E18-CC-P01 通过独立审查且成为同步 main 祖先后只关闭文档门禁；新 selector/DAG 的实施使用仍须主管理关闭 F.36 指定的 exact 接口、envelope、取消证据及 capacity 缺口并完成 F8。S06A/S06B/S07L/S07B 等受影响单元均 NOT_READY，不自动派发；S05 merge、S06及后续 Writer 未解锁，Review3/4 原上限不刷新。没有生产测试/APK/设备/人工 gate 在本轮执行；未来真实门禁保留。下一责任是将文档候选报告交回主管理，不自行派 Review。
 
 本页下方 E17/V11/CS-03 等旧编号、旧实施顺序、current / next / 待审及解锁措辞只在与本入口冲突的范围内为历史，不生成旧任务或重开旧规划 Review；已合并事实、保留资产和其余技术边界不变。04C 保持 HELD，不采用旧 CS-06。
 <!-- E18-E22-PLAN-LANDING:END -->

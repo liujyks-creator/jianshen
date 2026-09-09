@@ -9,7 +9,14 @@
 |---|---|---|---|
 | D-085 | Accepted | 记录用户已接受的 E18–E22 五组规划与正式文档入口。 | E17 胶囊封口，已合并 CS-03/CS-04A/CS-05/CS-04B 保留；E18 → E19 → E20 → E21 → E22，共24 Story、42条唯一依赖，力量与跟练分别接入和验收。只记录已接受内容，不新增产品或架构决定。 |
 
-本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+原文档落地及 S01–S04 已包含于 accepted base `74c25fac9c728baf2aa44b9e05b5f7bece615fca`；下述收窄是新文档候选，尚待独立 Planning Review，不沿用原 24 Story/42 边的容量 PASS。当前 DAG/selector 以正式计划 F.26/F.37 为准。
+
+| ID | 状态 | 决策 | 说明 |
+|---|---|---|---|
+| D-086 | Accepted（用户决定；文档候选待独立审查） | 实时保存不撤：同 session 的一次原子初始化确认后开始，训练持续提交，正常结束冻结真实截止点与原实际执行结果。 | 来源 V2 F.68/F.69/F.69.2/P01–P08，757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`；正式计划页首与 F.8.4 完整承接。程序停止后不续录、不补造；重开只按 durable 事实处理。 |
+| D-087 | Accepted（用户决定；文档候选待独立审查） | Saved/read-ready 由终态事务成功与完整读回证明；正常返回不等待 binding 清理/Released，清理未定仍禁止新冲突写。 | 撤故障后的同进程写资格恢复、clear 后自动补 owner_cleared、共享完成扫描 cache/复用；保留在途事务全提交/全回滚、原始错误、exact 身份隔离和 CS-04B durable 处理。无低空间预检、基础记录降级、outcome/schema、第二数据库/owner或故障向导。 |
+
+本轮只窄替代 D5/F8/F9/F11 的冲突条款及其直接消费者，准确 old→new 见正式计划 F.8.4；D-008/D-013/D-014/D-051/D-059 等历史记录不重写。原 UI、三模式 engine、同场实际值/plan/恢复建议关联、旧历史与非 HR 趋势保持。仅已迁移模式同时切换 Start 与终态，未迁移模式沿旧保存。OpenTracks 固定源码对照仅用于记录/导出分离及同场点序列理由，不引入其过滤/GPS/恢复/存储栈或依赖。S05 旧候选未 PASS/未合并，Review3/4 上限不刷新；文档通过后仍须主管理完成 exact readiness，后续 Writer 不自动解锁。
 
 D-079–D-084 的历史接受事实与有效保证保持；旧 E17/CS 编号、分解、实施顺序和当前派发状态在冲突范围内由正式计划 B–D、F.1、F.37 窄替代。D-082 的 owner/eligibility、普通通知/FGS、M1/final 证据责任继续按新 selector 承接；不恢复 D-078、04C 或旧 CS-06。N001 只更正 kind 数量为九，literal 不变；不重开 P001–P003。
 <!-- E18-E22-PLAN-LANDING:END -->

@@ -26,7 +26,7 @@ stepsCompleted:
 
 当前新增记录/读取/通知/导出/复盘的完整 Architecture、typed合同与消费者按正式计划 C/D、F.37及其指向的 F.4–F.35 消费。保留 Application 唯一 BLE owner、mode engine 训练行为、session-scoped Recorder 串行记录、repository 持久化/准入/释放，以及严格历史读取、original analysis、投影与导出的责任边界；新时间元数据、生命周期、export v2及系统授权/24h清理只按已接受正文的窄增量承接。
 
-本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。
+本轮 accepted base `74c25fac9c728baf2aa44b9e05b5f7bece615fca` 已包含正式文档及 S01–S04。用户已接受实时记录收窄，来源 V2 F.69.2/P01–P08（757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`），当前冲突条款按正式计划 F.8.4 窄替代；历史正文不追改。单 session 一次原子初始化、持续实时提交、正常终态真实 cut 保留；停止后不续录/补造，重开只处理 durable。Saved/read-ready 与 Released 独立，正常导航不等 binding 清理；clear 只同步停接输入/新写，不再拥有后台补终结职责。Repository 唯一准入，无共享完成扫描 cache，故障后不恢复同进程写资格；原事务/原错/exact 隔离保持。本 docs 候选待独立 Planning Review，S05 未 PASS/未合并，后续 Writer 不解锁。
 
 下方 V11/早期E17的旧编号、分解、顺序和当前候选/派发措辞在冲突范围内由新入口替代。原schema/数学/typed定义与CS-03/CS-04A/CS-05/CS-04B等已合并资产保留；旧lease机制只按正式计划 D/F.27 窄替代，不恢复04C、旧CS-06或第二owner。真实写入失败、原始错误、事务全回滚、诚实保存与释放状态不删除；M1/final证据链保持。
 <!-- E18-E22-PLAN-LANDING:END -->
@@ -242,7 +242,7 @@ WorkoutEngine
 
 - Compose 页面只展示 `UiState` 并发出用户意图。
 - 训练中按钮不直接改 session 数据，而是发 `WorkoutCommand`。
-- 训练执行页必须从引擎状态恢复，不把关键状态只存在 ViewModel 内存。
+- 配置重建从同一 retained entry/engine/clock/保存状态恢复 UI；进程停止不恢复 engine 续跑。新增记录持续提交到同 session，重开只读取 durable 事实，不以重开时间补结束。
 
 ### 5.2 Domain 层
 
@@ -258,6 +258,7 @@ WorkoutEngine
 ### 5.3 Data 层
 
 - Repository 输出 domain model，不把 Room entity 暴露给 UI。
+- 新记录链为原 mode engine 的真实事实→同 session Recorder→既有 Repository/Room：一次原子初始化确认后活动提交，正常 cut 冻结实际结束与执行结果→S04 原子终态。Saved 需完整读回，exact unbind/释放单独决定新准入；清理失败不重做分析，不阻止已 Saved 的正常返回。clear 不新发终态，已在途事务仍全提交/全回滚，不添加跨 scope 补存、降级记录或第二 owner。
 - 首版允许对 `PlanBlock`、`WorkoutPlanSnapshot` 使用 JSON 字段保存，以降低多态结构早期建模成本；关键查询字段仍应单独列化。
 - 后续若需要复杂统计，再把 blocks 和 session steps 进一步规范化。
 
@@ -288,7 +289,7 @@ WorkoutEngine
 - CS-03 candidate 的新 canonical session 使用 literal `planSnapshotStorageContractVersion=1`、七个固定 root keys 和稳定 UTF-8 JSON；strict parse 后重序列化必须与 persisted bytes 完全一致。`Migration(4,5)` 不改写既有 unversioned snapshot，legacy strict reader 仍由 CS-09 独占。
 - 后续编辑计划不影响历史会话。
 - 力量组记录保存计划值与实际值，不能只保存差异。
-- E10.4 起，计时、力量和基础跟练 completed / abandoned 终态通过 repository 写入本地 Room session records；记录页从该真实本地源读取。终态写入使用一次性 guard 和异常吞并边界，避免 route 重组重复插入或 Room 异常直接 crash UI。
+- E10.4 原链的 completed / abandoned 终态通过 repository 写入 Room，原一次性 guard/错误呈现只适用于未迁移模式。迁移模式的同一场次必须同时接通 canonical Start 与 S04 终态，替换其旧 upsert consumer；新链保留原错误，不吞为成功。记录页仍读原同 session 数据源，plan/实际步骤/组/休息延长与恢复建议关联不改；未迁移模式保留旧保存。
 - E10.4 的时长口径为：`total_elapsed_sec` 优先来自 startedAt 到 endedAt 的 wall clock，包含准备、确认、休息、正式组和暂停；`effective_elapsed_sec` 不包含暂停，力量训练当前只包含正式组与休息推进，不把 prepare / confirm 停留时间计入 effective；`paused_elapsed_sec` 单独保存暂停累计。
 - E10.4 只前置本地 Room 记录闭环，不实现统计图表、历史删除、云同步、账号体系、后台可靠计时、心率设备或语音能力。
 - E10.14 起，计时训练 `+15秒` 额外休息通过 `timed_rest_extension_records` 保存为 actual session record。该记录不修改原计划或 plan snapshot，不计入 `paused_elapsed_sec`，供 E12 后续统计哪些轮次、阶段或前序工作 / 自定义阶段后更常需要额外休息。
