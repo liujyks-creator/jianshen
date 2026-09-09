@@ -3,6 +3,10 @@ package com.liujyks.trainflow.core.data
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteConstraintException
+import android.os.Looper
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
+import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -39,6 +43,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -51,6 +58,9 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
+import org.robolectric.Shadows.shadowOf
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.LinkedBlockingQueue
@@ -79,12 +89,156 @@ class WorkoutSessionFinalizerTest {
     }
 
     @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    fun savedIsReadableBeforeMatchingCleanupCompletes() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val admission = admitFinalizer(repository)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        val binding = runtime.bindObservations(admission.bindingId) {}
+        seedActiveRecording()
+        freezeStartMetadata()
+        val frozen = terminalRequest()
+        val saved = repository.finalizeCanonicalSession(admission.ownerToken, frozen)
+        assertEquals(CanonicalTuple(2_000, 4), saved.finalTuple)
+        val graph = requireGraph()
+        assertEquals("completed", graph.session.status)
+        assertEquals(frozen.stepRecords, database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+        assertEquals(1, graph.snapshots.size)
+        val durable = databaseSnapshot()
+        assertTrue(runCatching { admitFinalizer(repository, "next", "next-entry") }.exceptionOrNull() is RecorderOwnerBusyException)
+        supervisorScope {
+            val releaseScope = this
+            val cleanup = withContext(Dispatchers.Default) {
+                releaseScope.async(start = CoroutineStart.UNDISPATCHED) {
+                    repository.releaseRecorderAfterTerminal(admission.ownerToken, SESSION_ID, runtime)
+                }
+            }
+            assertFalse(cleanup.isCompleted)
+            assertFalse(shadowOf(Looper.getMainLooper()).isIdle)
+            assertEquals(binding, runtime.queryObservationBinding(admission.bindingId))
+            assertEquals(durable, databaseSnapshot())
+            shadowOf(Looper.getMainLooper()).idle()
+            cleanup.await()
+        }
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+        val next = admitFinalizer(repository, "next", "next-entry")
+        assertTrue(next.ownerToken !== admission.ownerToken)
+        assertEquals(durable, databaseSnapshot())
+    }
+
+    @Test
+    fun savedSurvivesCleanupFailureWithoutReopeningAdmission() = runBlocking {
+        val repository = WorkoutSessionRepository(database)
+        val admission = admitFinalizer(repository)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        runtime.bindObservations(admission.bindingId) {}
+        seedActiveRecording()
+        val frozen = terminalRequest()
+        val saved = repository.finalizeCanonicalSession(admission.ownerToken, frozen)
+        val durable = databaseSnapshot()
+        runtime.unbindObservations(admission.bindingId)
+        val foreign = HeartRateObservationBindingId()
+        val binding = runtime.bindObservations(foreign) {}
+        val cleanup = runCatching { repository.releaseRecorderAfterTerminal(admission.ownerToken, SESSION_ID, runtime) }.exceptionOrNull()
+        assertTrue(cleanup is RecorderBindingConflictException)
+        assertEquals(binding, runtime.queryObservationBinding(foreign))
+        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER no_repeat_analysis BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'analysis_repeated'); END")
+        assertEquals(saved, repository.finalizeCanonicalSession(admission.ownerToken, frozen))
+        assertTrue(runCatching { repository.releaseRecorderAfterTerminal(admission.ownerToken, SESSION_ID, runtime) }.exceptionOrNull() === cleanup)
+        assertTrue(runCatching { admitFinalizer(repository) }.exceptionOrNull() is RecorderOwnerBusyException)
+        assertEquals(durable, databaseSnapshot())
+        assertEquals(binding, runtime.queryObservationBinding(foreign))
+    }
+
+    @Test
+    fun clearDuringTerminalAllowsOnlyOriginalCommitOrRollback() = runBlocking {
+        for (rollback in listOf(false, true)) {
+            if (rollback) resetDatabase()
+            val repository = WorkoutSessionRepository(database)
+            val admission = admitFinalizer(repository)
+            val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+            runtime.bindObservations(admission.bindingId) {}
+            seedActiveRecording()
+            val frozen = terminalRequest()
+            val before = databaseSnapshot()
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val armed = AtomicBoolean(true)
+            if (rollback) database.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_terminal_clear BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'terminal_clear_rollback'); END")
+            guardedUpdateMutation = { sql ->
+                if (sql.lowercase().contains("update workout_sessions") && sql.lowercase().contains("set ended_at =") && armed.compareAndSet(true, false)) {
+                    entered.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                }
+            }
+            val original = async(Dispatchers.IO) { runCatching { repository.finalizeCanonicalSession(admission.ownerToken, frozen) } }
+            try {
+                assertTrue(entered.await(5, TimeUnit.SECONDS))
+                repository.beginOwnerClearHandoff(admission.ownerToken, SESSION_ID)
+                val replacement = async(start = CoroutineStart.UNDISPATCHED) {
+                    runCatching { repository.finalizeCanonicalSession(admission.ownerToken,
+                        terminalRequest(status = "abandoned", reason = "owner_cleared")) }
+                }
+                assertTrue(replacement.isCompleted)
+                assertTrue(replacement.await().exceptionOrNull() is CanonicalFinalizationConflictException)
+                val activity = async(start = CoroutineStart.UNDISPATCHED) {
+                    runCatching { repository.appendHeartRateSample(admission.ownerToken, frozen.expected,
+                        CanonicalTuple(2_001, 5), HeartRateSampleEntity(RECORDING_ID, 1, 2_001, 5, 125)) }
+                }
+                assertTrue(activity.isCompleted)
+                assertTrue(activity.await().isFailure)
+            } finally {
+                release.countDown()
+            }
+            val result = original.await()
+            guardedUpdateMutation = null
+            if (rollback) {
+                assertTrue(result.exceptionOrNull() is SQLiteConstraintException)
+                assertEquals(before, databaseSnapshot())
+                assertTrue(runCatching { repository.releaseRecorderAfterTerminal(admission.ownerToken, SESSION_ID, runtime) }.exceptionOrNull() === result.exceptionOrNull())
+            } else {
+                assertEquals(CanonicalTuple(2_000, 4), result.getOrThrow().finalTuple)
+                assertEquals("completed", requireGraph().session.terminalReason)
+                assertEquals(1, requireGraph().snapshots.size)
+                repository.releaseRecorderAfterTerminal(admission.ownerToken, SESSION_ID, runtime)
+                assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(admission.bindingId))
+            }
+        }
+    }
+
+    @Test
+    fun failedTerminalNeverRestoresWritesOrCleanupEligibility() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
+        seedActiveRecording()
+        freezeStartMetadata()
+        val frozen = terminalRequest()
+        val before = databaseSnapshot()
+        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_terminal BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT, 'original_terminal_failure'); END")
+        val primary = runCatching { repository.finalizeCanonicalSession(ownerToken, frozen) }.exceptionOrNull()
+        assertTrue(primary is SQLiteConstraintException)
+        assertEquals(before, databaseSnapshot())
+        database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_terminal")
+        val repeated = runCatching { repository.finalizeCanonicalSession(ownerToken, frozen) }.exceptionOrNull()
+        assertTrue("failed terminal must never regain the active write branch", repeated === primary)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        assertTrue(runCatching { repository.finalizeRecordingSession(ownerToken, request()) }.exceptionOrNull() === primary)
+        assertTrue(runCatching { repository.releaseRecorderAfterTerminal(ownerToken, SESSION_ID, runtime) }.exceptionOrNull() === primary)
+        assertTrue(runCatching { repository.releaseRecorderBeforeStart(ownerToken, SESSION_ID, runtime, requireNotNull(primary)) }.exceptionOrNull() === primary)
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, terminalRequest(totalElapsedSec = 99)) }
+            .exceptionOrNull() is CanonicalFinalizationConflictException)
+        repository.beginOwnerClearHandoff(ownerToken, SESSION_ID)
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, frozen) }.exceptionOrNull() === primary)
+        assertEquals(before, databaseSnapshot())
+    }
+
+    @Test
     fun frozenExecutionAndObservedEndCommitWithOriginalRecordingGraph() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         freezeStartMetadata()
         val before = requireGraph()
         val frozen = terminalRequest()
-        val result = WorkoutSessionRepository(database).finalizeCanonicalSession(frozen)
+        val result = repository.finalizeCanonicalSession(ownerToken, frozen)
         val graph = requireGraph()
         assertEquals("2026-09-07T16:00:02Z", graph.session.endedAt)
         assertEquals(12, graph.session.totalElapsedSec)
@@ -116,6 +270,7 @@ class WorkoutSessionFinalizerTest {
         listOf("completed" to "completed", "abandoned" to "user_abandoned",
             "abandoned" to "owner_cleared").forEachIndexed { index, (status, reason) ->
             if (index > 0) resetDatabase()
+            val (repository, ownerToken) = admittedFinalizer()
             seedActiveRecording()
             freezeStartMetadata()
             val sql = database.openHelper.writableDatabase
@@ -131,8 +286,7 @@ class WorkoutSessionFinalizerTest {
                 predecessor, PHASE_ID), finalOffsetMs = finalOffset, status = status, reason = reason,
                 steps = emptyList(), totalElapsedSec = 0, effectiveElapsedSec = 0, pausedElapsedSec = 0,
                 snapshotCreatedAt = null)
-            val repository = WorkoutSessionRepository(database)
-            val result = repository.finalizeCanonicalSession(frozen)
+            val result = repository.finalizeCanonicalSession(ownerToken, frozen)
             val graph = requireGraph()
             assertEquals(before.copy(session = before.session.copy(status = status, terminalReason = reason,
                 lastDurableOffsetMs = finalOffset, lastMutationSequence = finalSequence, trustedEndOffsetMs = finalOffset,
@@ -147,12 +301,12 @@ class WorkoutSessionFinalizerTest {
             assertEquals(emptyList<TimedRestExtensionRecordEntity>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
             assertEquals(emptyList<StrengthSetRecordEntity>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
             val committed = databaseSnapshot()
-            assertEquals(result, WorkoutSessionRepository(database).finalizeCanonicalSession(frozen))
+            assertEquals(result, admittedFinalizer().let { (fresh, token) -> fresh.finalizeCanonicalSession(token, frozen) })
             if (index > 0) {
                 val offsetOnly = terminalRequest(expected = frozen.expected.copy(durableTuple = CanonicalTuple(6_000, 3)),
                     finalOffsetMs = finalOffset, status = status, reason = reason, steps = emptyList(),
                     totalElapsedSec = 0, effectiveElapsedSec = 0, pausedElapsedSec = 0, snapshotCreatedAt = null)
-                assertEquals(result, WorkoutSessionRepository(database).finalizeCanonicalSession(offsetOnly))
+                assertEquals(result, admittedFinalizer().let { (fresh, token) -> fresh.finalizeCanonicalSession(token, offsetOnly) })
             }
             assertEquals(committed, databaseSnapshot())
         }
@@ -160,15 +314,15 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun terminalRetryUsesSequenceAndFullPayloadAllowsOnlyLegalOldOffsetDifference() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         freezeStartMetadata()
         val frozen = terminalRequest(finalOffsetMs = 10_000)
-        val repository = WorkoutSessionRepository(database)
-        val result = repository.finalizeCanonicalSession(frozen)
+        val result = repository.finalizeCanonicalSession(ownerToken, frozen)
         val committed = databaseSnapshot()
         val offsetOnly = terminalRequest(expected = frozen.expected.copy(durableTuple = CanonicalTuple(6_000, 3)),
             finalOffsetMs = 10_000, snapshotCreatedAt = "2099-01-01T00:00:00Z")
-        assertEquals(result, WorkoutSessionRepository(database).finalizeCanonicalSession(offsetOnly))
+        assertEquals(result, admittedFinalizer().let { (fresh, token) -> fresh.finalizeCanonicalSession(token, offsetOnly) })
         assertEquals(committed, databaseSnapshot())
         val conflicts = listOf(
             terminalRequest(finalOffsetMs = 10_000, endedAt = "2026-09-07T16:00:03Z"),
@@ -181,13 +335,13 @@ class WorkoutSessionFinalizerTest {
             terminalRequest(finalOffsetMs = 10_000, expected = frozen.expected.copy(recordingId = "another-recording")),
             terminalRequest(finalOffsetMs = 10_000, expected = frozen.expected.copy(openPhaseId = "another-phase")))
         conflicts.forEach { conflict ->
-            val failure = runCatching { repository.finalizeCanonicalSession(conflict) }.exceptionOrNull()
+            val failure = runCatching { repository.finalizeCanonicalSession(ownerToken, conflict) }.exceptionOrNull()
             assertTrue("unexpected $failure", failure is CanonicalFinalizationConflictException)
             assertEquals(committed, databaseSnapshot())
         }
         val invalid = terminalRequest(finalOffsetMs = 10_000,
             expected = frozen.expected.copy(durableTuple = CanonicalTuple(10_001, 3)))
-        assertTrue(runCatching { repository.finalizeCanonicalSession(invalid) }.exceptionOrNull() is RecorderValidationException)
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, invalid) }.exceptionOrNull() is RecorderValidationException)
         assertEquals(committed, databaseSnapshot())
     }
 
@@ -210,12 +364,13 @@ class WorkoutSessionFinalizerTest {
         )
         cases.forEachIndexed { index, (sql, signal) ->
             if (index > 0) resetDatabase()
+            val (repository, ownerToken) = admittedFinalizer()
             seedActiveRecording()
             freezeStartMetadata()
             database.openHelper.writableDatabase.execSQL(sql)
             val before = databaseSnapshot()
             val failure = runCatching {
-                WorkoutSessionRepository(database).finalizeCanonicalSession(terminalRequest())
+                repository.finalizeCanonicalSession(ownerToken, terminalRequest())
             }.exceptionOrNull()
             when (signal) {
                 "finalize_close_open_phase", "bind_original_analysis" -> assertGuard(failure, signal, 0)
@@ -231,6 +386,7 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun outerLastExecutionReadbackDetectsMutationAndRollsBackCommittedInnerWork() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         freezeStartMetadata()
         val before = databaseSnapshot()
@@ -246,7 +402,7 @@ class WorkoutSessionFinalizerTest {
             }
         }
         val failure = runCatching {
-            WorkoutSessionRepository(database).finalizeCanonicalSession(terminalRequest())
+            repository.finalizeCanonicalSession(ownerToken, terminalRequest())
         }.exceptionOrNull()
         assertTrue(fired.get())
         assertTrue(failure is RecorderValidationException)
@@ -256,18 +412,18 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun cancelledTerminalDeliveryRetriesTheDurableGraphWithoutAnotherSnapshot() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         freezeStartMetadata()
-        val repository = WorkoutSessionRepository(database)
         val frozen = terminalRequest()
         val dispatches = LinkedBlockingQueue<Runnable>()
         val dispatcher = object : CoroutineDispatcher() {
             override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
         }
         var delivered = false
-        val operation = async(dispatcher) { repository.finalizeCanonicalSession(frozen); delivered = true }
-        requireNotNull(dispatches.poll(5, TimeUnit.SECONDS)).run()
+        val operation = async(dispatcher, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { repository.finalizeCanonicalSession(ownerToken, frozen); delivered = true }
         val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertFalse(operation.isCompleted)
         val durable = requireGraph()
         assertEquals("completed", durable.session.status)
         assertEquals(frozen.endedAt, durable.session.endedAt)
@@ -285,15 +441,49 @@ class WorkoutSessionFinalizerTest {
         val committed = databaseSnapshot()
         database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER no_repeat_analysis
             BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'analysis_repeated'); END""")
-        val result = repository.finalizeCanonicalSession(frozen)
+        val result = repository.finalizeCanonicalSession(ownerToken, frozen)
         assertEquals(CanonicalTuple(2_000, 4), result.finalTuple)
         assertEquals(committed, databaseSnapshot())
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        assertTrue(runCatching { repository.releaseRecorderAfterTerminal(ownerToken, SESSION_ID, runtime) }
+            .exceptionOrNull() is CancellationException)
+        assertTrue(runCatching { admitFinalizer(repository) }.exceptionOrNull() is RecorderOwnerBusyException)
+    }
+
+    @Test
+    fun cancelledReadonlyTerminalDeliveryCannotGrantNormalConfirmationOrCleanup() = runBlocking {
+        val (writer, writerToken) = admittedFinalizer()
+        seedActiveRecording()
+        freezeStartMetadata()
+        val frozen = terminalRequest()
+        writer.finalizeCanonicalSession(writerToken, frozen)
+        val (repository, ownerToken) = admittedFinalizer()
+        val dispatches = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { dispatches.add(block) }
+        }
+        val operation = async(dispatcher, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            repository.finalizeCanonicalSession(ownerToken, frozen)
+        }
+        val delivery = requireNotNull(dispatches.poll(5, TimeUnit.SECONDS))
+        assertFalse(operation.isCompleted)
+        val durable = databaseSnapshot()
+        assertEquals("completed", requireGraph().session.status)
+        operation.cancel(CancellationException("readonly_terminal_delivery_lost"))
+        delivery.run()
+        assertTrue(runCatching { withTimeout(5_000) { operation.await() } }.exceptionOrNull() is CancellationException)
+        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER no_repeat_analysis BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'analysis_repeated'); END")
+        assertEquals(CanonicalTuple(2_000, 4), repository.finalizeCanonicalSession(ownerToken, frozen).finalTuple)
+        val runtime = HeartRateRuntimeOwner(ApplicationProvider.getApplicationContext<Context>())
+        assertTrue(runCatching { repository.releaseRecorderAfterTerminal(ownerToken, SESSION_ID, runtime) }
+            .exceptionOrNull() is CancellationException)
+        assertEquals(durable, databaseSnapshot())
     }
 
     @Test
     fun fullActivePredecessorIsGuardedAndConcurrentTerminalIntentCannotOverwriteWinner() = runBlocking {
-        val writer = WorkoutSessionRepository(database)
-        writer.prepareRecorder()
+        val (writer, writerToken) = admittedFinalizer()
+        val contenders = List(2) { admittedFinalizer() }
         seedActiveRecording()
         freezeStartMetadata()
         val frozen = terminalRequest()
@@ -301,15 +491,15 @@ class WorkoutSessionFinalizerTest {
         listOf(frozen.expected.copy(durableTuple = CanonicalTuple(1_001, 3)),
             frozen.expected.copy(status = "paused"), frozen.expected.copy(openPhaseId = "wrong"),
             frozen.expected.copy(openAcquisitionId = "wrong")).forEach { stale ->
-            val failure = runCatching { writer.finalizeCanonicalSession(terminalRequest(expected = stale)) }.exceptionOrNull()
+            val failure = runCatching { writer.finalizeCanonicalSession(writerToken, terminalRequest(expected = stale)) }.exceptionOrNull()
             assertGuard(failure, "expected_state", 0)
             assertEquals(before, databaseSnapshot())
         }
         val abandoned = terminalRequest(status = "abandoned", reason = "user_abandoned", totalElapsedSec = 14)
         val requests = listOf(frozen, abandoned)
         val results = coroutineScope {
-            requests.map { request -> async(Dispatchers.IO) {
-                runCatching { WorkoutSessionRepository(database).finalizeCanonicalSession(request) }
+            requests.mapIndexed { index, request -> async(Dispatchers.IO) {
+                runCatching { contenders[index].first.finalizeCanonicalSession(contenders[index].second, request) }
             } }.map { it.await() }
         }
         assertEquals(1, results.count { it.isSuccess })
@@ -326,14 +516,14 @@ class WorkoutSessionFinalizerTest {
         val committed = databaseSnapshot()
         val repeats = coroutineScope {
             (1..2).map { async(Dispatchers.IO) {
-                WorkoutSessionRepository(database).finalizeCanonicalSession(winner)
+                admittedFinalizer().let { (fresh, token) -> fresh.finalizeCanonicalSession(token, winner) }
             } }.map { it.await() }
         }
         assertEquals(listOf(results[winnerIndex].getOrThrow(), results[winnerIndex].getOrThrow()), repeats)
-        val sampleFailure = runCatching { writer.appendHeartRateSample(frozen.expected, CanonicalTuple(2_001, 5),
+        val sampleFailure = runCatching { writer.appendHeartRateSample(writerToken, frozen.expected, CanonicalTuple(2_001, 5),
             HeartRateSampleEntity(RECORDING_ID, 1, 2_001, 5, 125)) }.exceptionOrNull()
         assertGuard(sampleFailure, "expected_state", 0)
-        val phaseFailure = runCatching { writer.transitionPhase(frozen.expected, CanonicalTuple(2_001, 5),
+        val phaseFailure = runCatching { writer.transitionPhase(writerToken, frozen.expected, CanonicalTuple(2_001, 5),
             graph.phases.single().copy(id = "late-phase", sequence = 1, startOffsetMs = 2_001,
                 startMutationSequence = 5, endOffsetMs = null, endMutationSequence = null, openMarker = 1)) }.exceptionOrNull()
         assertGuard(phaseFailure, "expected_state", 0)
@@ -342,27 +532,28 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun executionHeaderGuardRejectsTwoRowsAndRestFactsRemainAppendOnly() = runBlocking {
+        val (guardWriter, guardToken) = admittedFinalizer()
         seedActiveRecording()
         rebuildTableWithoutConstraints("workout_sessions")
         val before = databaseSnapshot("workout_sessions")
         val fired = armDuplicateBeforeGuardedUpdate(GuardRowCountTwoCase("workout_sessions",
             "set ended_at =", "id='$SESSION_ID'", "write_canonical_execution_header"))
         val failure = runCatching {
-            WorkoutSessionRepository(database).finalizeCanonicalSession(terminalRequest())
+            guardWriter.finalizeCanonicalSession(guardToken, terminalRequest())
         }.exceptionOrNull()
         assertTrue(fired.get())
         assertGuard(failure, "write_canonical_execution_header", 2)
         assertEquals(before, databaseSnapshot("workout_sessions"))
 
         resetDatabase()
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         val extension = TimedRestExtensionRecordEntity("extension-1", SESSION_ID, "rest-step", 1, 1,
             "rest", "Rest at first reference", "work", "Work at first reference", 15, 30, 5, 25, 15, 5)
         database.canonicalTimelineHeartRateDao().insertRestExtension(extension)
-        val repository = WorkoutSessionRepository(database)
         val prior = databaseSnapshot()
         listOf(emptyList(), listOf(extension.copy(restStageTitle = "Changed"))).forEach { changed ->
-            assertTrue(runCatching { repository.finalizeCanonicalSession(terminalRequest(extensions = changed)) }
+            assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, terminalRequest(extensions = changed)) }
                 .exceptionOrNull() is CanonicalFinalizationConflictException)
             assertEquals(prior, databaseSnapshot())
         }
@@ -370,16 +561,16 @@ class WorkoutSessionFinalizerTest {
             extensionAtRemainingSec = 39, cumulativeExtraRestSec = 30, eventElapsedSec = 6)
         val metadata = """{"displayMetadataContractVersion":1,"entries":[{"entityKind":"exercise","stableId":"squat","displayNameAtFirstReference":"深蹲","customNameAtFirstReference":null,"resolutionSource":"runtime_substitution"}]}"""
         val frozen = terminalRequest(extensions = listOf(added, extension), metadata = metadata)
-        repository.finalizeCanonicalSession(frozen)
+        repository.finalizeCanonicalSession(ownerToken, frozen)
         assertEquals(listOf(extension, added), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
         assertEquals(metadata, requireGraph().session.sessionDisplayMetadataJson)
         val committed = databaseSnapshot()
-        assertEquals(CanonicalTuple(2_000, 4), repository.finalizeCanonicalSession(frozen).finalTuple)
+        assertEquals(CanonicalTuple(2_000, 4), repository.finalizeCanonicalSession(ownerToken, frozen).finalTuple)
         assertEquals(committed, databaseSnapshot())
-        assertTrue(runCatching { repository.finalizeCanonicalSession(terminalRequest(
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, terminalRequest(
             extensions = listOf(extension.copy(eventElapsedSec = 6), added), metadata = metadata)) }
             .exceptionOrNull() is CanonicalFinalizationConflictException)
-        assertTrue(runCatching { repository.finalizeCanonicalSession(terminalRequest(
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, terminalRequest(
             extensions = listOf(extension, added), metadata = metadata + " ")) }
             .exceptionOrNull() is CanonicalFinalizationConflictException)
         assertEquals(committed, databaseSnapshot())
@@ -387,6 +578,7 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun firstSnapshotMetadataMustMatchFrozenCreationTimeOrOuterTransactionRollsBack() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         val before = databaseSnapshot()
         database.openHelper.writableDatabase.execSQL("""CREATE TRIGGER change_snapshot_time
@@ -394,7 +586,7 @@ class WorkoutSessionFinalizerTest {
             WHEN NEW.original_analysis_version=1
             BEGIN UPDATE heart_rate_analysis_snapshots SET created_at='2099-01-01T00:00:00Z'; END""")
         val failure = runCatching {
-            WorkoutSessionRepository(database).finalizeCanonicalSession(terminalRequest())
+            repository.finalizeCanonicalSession(ownerToken, terminalRequest())
         }.exceptionOrNull()
         assertTrue("first creation metadata was not preserved: $failure", failure is RecorderValidationException)
         assertEquals("terminal_graph_changed_during_write", (failure as RecorderValidationException).code)
@@ -403,6 +595,7 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun noRecordingLateGuardFailureRollsBackExecutionAndPhaseTogether() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         freezeStartMetadata()
         val sql = database.openHelper.writableDatabase
@@ -414,13 +607,14 @@ class WorkoutSessionFinalizerTest {
         val before = databaseSnapshot()
         val frozen = terminalRequest(expected = RecorderExpectedState(SESSION_ID, "active",
             CanonicalTuple(1_000, 3), PHASE_ID), snapshotCreatedAt = null)
-        val failure = runCatching { WorkoutSessionRepository(database).finalizeCanonicalSession(frozen) }.exceptionOrNull()
+        val failure = runCatching { repository.finalizeCanonicalSession(ownerToken, frozen) }.exceptionOrNull()
         assertGuard(failure, "finalize_session_without_recording", 0)
         assertEquals(before, databaseSnapshot())
     }
 
     @Test
     fun frozenStrengthExecutionRetainsEveryFieldAndRejectsChangedOrExtraRows() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording()
         freezeStartMetadata()
         val snapshot = WorkoutPlanSnapshot(title = "Strength", mode = WorkoutMode.STRENGTH,
@@ -444,8 +638,7 @@ class WorkoutSessionFinalizerTest {
         val frozen = terminalRequest(steps = steps, sets = sets)
         steps.clear()
         sets.clear()
-        val repository = WorkoutSessionRepository(database)
-        repository.finalizeCanonicalSession(frozen)
+        repository.finalizeCanonicalSession(ownerToken, frozen)
         assertEquals(listOf(step), database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
         assertEquals(listOf(set), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
         val committed = databaseSnapshot()
@@ -454,11 +647,11 @@ class WorkoutSessionFinalizerTest {
             set.copy(actualRestAfterSec = 31), set.copy(side = "left"), set.copy(effort = "easy"),
             set.copy(substitutedFromExerciseId = "another"))
         variants.forEach { changed ->
-            assertTrue(runCatching { repository.finalizeCanonicalSession(terminalRequest(steps = listOf(step), sets = listOf(changed))) }
+            assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, terminalRequest(steps = listOf(step), sets = listOf(changed))) }
                 .exceptionOrNull() is CanonicalFinalizationConflictException)
             assertEquals(committed, databaseSnapshot())
         }
-        assertTrue(runCatching { repository.finalizeCanonicalSession(terminalRequest(steps = listOf(step),
+        assertTrue(runCatching { repository.finalizeCanonicalSession(ownerToken, terminalRequest(steps = listOf(step),
             sets = listOf(set, set.copy(id = "extra-set", setOrder = 1)))) }.exceptionOrNull() is CanonicalFinalizationConflictException)
         assertEquals(committed, databaseSnapshot())
     }
@@ -475,6 +668,7 @@ class WorkoutSessionFinalizerTest {
             scope = CoroutineScope(preferencesJob + Dispatchers.IO),
             produceFile = { File(temporaryFolder.root, "current.preferences_pb") }))
         try {
+            val (repository, ownerToken) = admittedFinalizer()
             seedActiveRecording()
             freezeStartMetadata()
             database.openHelper.writableDatabase.execSQL("UPDATE workout_sessions SET plan_id='current-plan'")
@@ -485,7 +679,7 @@ class WorkoutSessionFinalizerTest {
             preferences.setHeartRatePersonalParameters(40, 180, 170)
             assertEquals(180, preferences.preferences.first().heartRatePersonalMaxBpm)
             val frozen = terminalRequest(endedAt = null, status = "abandoned", reason = "owner_cleared")
-            val result = WorkoutSessionRepository(database).finalizeCanonicalSession(frozen)
+            val result = repository.finalizeCanonicalSession(ownerToken, frozen)
             val terminal = requireGraph()
             assertEquals(original.session.planSnapshotJson, terminal.session.planSnapshotJson)
             assertEquals(original.recording!!.copy(status = "terminal", endedOffsetMs = 2_000,
@@ -505,7 +699,8 @@ class WorkoutSessionFinalizerTest {
             database.close()
             database = Room.databaseBuilder(context, TrainFlowDatabase::class.java, file.absolutePath)
                 .allowMainThreadQueries().build()
-            assertEquals(result, WorkoutSessionRepository(database).finalizeCanonicalSession(
+            val (fresh, freshToken) = admittedFinalizer()
+            assertEquals(result, fresh.finalizeCanonicalSession(freshToken,
                 terminalRequest(endedAt = null, status = "abandoned", reason = "owner_cleared",
                     snapshotCreatedAt = "2099-01-01T00:00:00Z")))
             assertEquals(terminal, requireGraph())
@@ -517,6 +712,8 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun invalidFrozenPayloadAndForeignExecutionPrimaryKeyNeverChangeAnySession() = runBlocking {
+        val invalidWriters = List(6) { admittedFinalizer() }
+        val (foreignWriter, foreignToken) = admittedFinalizer()
         seedActiveRecording()
         val frozen = terminalRequest()
         val before = databaseSnapshot()
@@ -526,8 +723,8 @@ class WorkoutSessionFinalizerTest {
             terminalRequest(steps = frozen.stepRecords.map { it.copy(kind = "invented") }),
             terminalRequest(metadata = "{}"),
             terminalRequest(status = "abandoned", reason = "process_interrupted"))
-        invalid.forEach { request ->
-            assertTrue(runCatching { WorkoutSessionRepository(database).finalizeCanonicalSession(request) }
+        invalid.forEachIndexed { index, request ->
+            assertTrue(runCatching { invalidWriters[index].first.finalizeCanonicalSession(invalidWriters[index].second, request) }
                 .exceptionOrNull() is RecorderValidationException)
             assertEquals(before, databaseSnapshot())
         }
@@ -535,10 +732,23 @@ class WorkoutSessionFinalizerTest {
             planSnapshotJson = VALID_PLAN_SNAPSHOT))
         database.workoutSessionDao().upsertStepRecords(frozen.stepRecords.map { it.copy(sessionId = "other") })
         val foreign = databaseSnapshot()
-        assertTrue(runCatching { WorkoutSessionRepository(database).finalizeCanonicalSession(frozen) }
+        assertTrue(runCatching { foreignWriter.finalizeCanonicalSession(foreignToken, frozen) }
             .exceptionOrNull() is SQLiteConstraintException)
         assertEquals(foreign, databaseSnapshot())
     }
+
+    private suspend fun admittedFinalizer(sessionId: String = SESSION_ID): Pair<WorkoutSessionRepository, RecorderOwnerToken> {
+        val repository = WorkoutSessionRepository(database)
+        return repository to admitFinalizer(repository, sessionId).ownerToken
+    }
+
+    private suspend fun admitFinalizer(repository: WorkoutSessionRepository, sessionId: String = SESSION_ID,
+        entryId: String = "terminal-entry"): RecorderAdmission =
+        repository.admitRecorder(entryId,
+            WorkoutSessionEntity(sessionId, mode = "timed", status = "active", planSnapshotJson = VALID_PLAN_SNAPSHOT,
+                timelineVersion = 1, lastDurableOffsetMs = 0, lastMutationSequence = 0,
+                displayMetadataContractVersion = 1, sessionDisplayMetadataJson = VALID_DISPLAY_METADATA),
+            WorkoutPhaseIntervalEntity(PHASE_ID, sessionId, 0, 0, null, 0, null, 1, "timed_work", VALID_PHASE_IDENTITY))
 
     private fun freezeStartMetadata() {
         database.openHelper.writableDatabase.execSQL("""
@@ -574,6 +784,9 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun requestPreflightAcceptsOnlyFourPairsAndRejectsInvalidFieldsBeforeWrites() = runBlocking {
+        val invalidWriters = List(4) { admittedFinalizer() }
+        val (emptyWriter, emptyToken) = admittedFinalizer()
+        val (backwardsWriter, backwardsToken) = admittedFinalizer()
         seedActiveRecording()
         val before = databaseSnapshot()
         val invalidRequests = listOf(
@@ -582,9 +795,9 @@ class WorkoutSessionFinalizerTest {
             request(terminalStatus = "active", terminalReason = "completed"),
             request(terminalStatus = "abandoned", terminalReason = "other")
         )
-        invalidRequests.forEach { invalid ->
+        invalidRequests.forEachIndexed { index, invalid ->
             val failure = runCatching {
-                WorkoutSessionRepository(database).finalizeRecordingSession(invalid)
+                invalidWriters[index].first.finalizeRecordingSession(invalidWriters[index].second, invalid)
             }.exceptionOrNull()
             assertTrue(failure is RecorderValidationException)
             assertEquals("invalid_terminal_status_reason_v1", (failure as RecorderValidationException).code)
@@ -592,14 +805,14 @@ class WorkoutSessionFinalizerTest {
         }
 
         val emptyCreatedAt = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(request(snapshotCreatedAt = ""))
+            emptyWriter.finalizeRecordingSession(emptyToken, request(snapshotCreatedAt = ""))
         }.exceptionOrNull()
         assertTrue(emptyCreatedAt is RecorderValidationException)
         assertEquals("invalid_snapshot_created_at_v1", (emptyCreatedAt as RecorderValidationException).code)
         assertEquals(before, databaseSnapshot())
 
         val backwards = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(request(finalOffsetMs = 999))
+            backwardsWriter.finalizeRecordingSession(backwardsToken, request(finalOffsetMs = 999))
         }.exceptionOrNull()
         assertTrue(backwards is RecorderValidationException)
         assertEquals("invalid_final_tuple_v1", (backwards as RecorderValidationException).code)
@@ -616,8 +829,9 @@ class WorkoutSessionFinalizerTest {
         )
         pairs.forEachIndexed { index, (status, reason) ->
             if (index > 0) resetDatabase()
+            val (repository, ownerToken) = admittedFinalizer()
             seedActiveRecording()
-            val result = WorkoutSessionRepository(database).finalizeRecordingSession(
+            val result = repository.finalizeRecordingSession(ownerToken,
                 request(terminalStatus = status, terminalReason = reason)
             )
 
@@ -653,6 +867,7 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun identityStatusAndTupleSubstitutionsFailBeforeFirstWriteWithExactNoMutation() = runBlocking {
+        val writers = List(5) { admittedFinalizer(if (it == 0) "other-session" else SESSION_ID) }
         seedActiveRecording()
         val before = databaseSnapshot()
         val substitutions = listOf(
@@ -664,7 +879,7 @@ class WorkoutSessionFinalizerTest {
         )
         substitutions.forEachIndexed { index, substituted ->
             val failure = runCatching {
-                WorkoutSessionRepository(database).finalizeRecordingSession(substituted)
+                writers[index].first.finalizeRecordingSession(writers[index].second, substituted)
             }.exceptionOrNull()
             assertTrue("substitution $index returned $failure", failure is RecorderGuardedWriteException)
             assertEquals(before, databaseSnapshot())
@@ -673,6 +888,7 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun everyLateFailureRollsBackAllThirteenRoomTablesAndPreservesItsTypedSignal() = runBlocking {
+        val (repository1, ownerToken1) = admittedFinalizer()
         seedActiveRecording()
         database.openHelper.writableDatabase.execSQL(
             """
@@ -690,12 +906,13 @@ class WorkoutSessionFinalizerTest {
         )
         var before = databaseSnapshot()
         var failure = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(request())
+            repository1.finalizeRecordingSession(ownerToken1, request())
         }.exceptionOrNull()
         assertTrue(failure is SQLiteConstraintException)
         assertEquals(before, databaseSnapshot())
 
         resetDatabase()
+        val (repository2, ownerToken2) = admittedFinalizer()
         seedActiveRecording()
         database.openHelper.writableDatabase.execSQL(
             """
@@ -710,12 +927,13 @@ class WorkoutSessionFinalizerTest {
         )
         before = databaseSnapshot()
         failure = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(request())
+            repository2.finalizeRecordingSession(ownerToken2, request())
         }.exceptionOrNull()
         assertGuard(failure, "bind_original_analysis", 0)
         assertEquals(before, databaseSnapshot())
 
         resetDatabase()
+        val (repository3, ownerToken3) = admittedFinalizer()
         seedActiveRecording()
         database.openHelper.writableDatabase.execSQL(
             """
@@ -731,7 +949,7 @@ class WorkoutSessionFinalizerTest {
         )
         before = databaseSnapshot()
         failure = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(request())
+            repository3.finalizeRecordingSession(ownerToken3, request())
         }.exceptionOrNull()
         assertTrue(failure is RecorderValidationException)
         assertEquals(before, databaseSnapshot())
@@ -767,11 +985,12 @@ class WorkoutSessionFinalizerTest {
         )
         cases.forEachIndexed { index, (trigger, guard) ->
             if (index > 0) resetDatabase()
+            val (repository, ownerToken) = admittedFinalizer()
             seedActiveRecording()
             database.openHelper.writableDatabase.execSQL(trigger)
             val before = databaseSnapshot()
             val failure = runCatching {
-                WorkoutSessionRepository(database).finalizeRecordingSession(request())
+                repository.finalizeRecordingSession(ownerToken, request())
             }.exceptionOrNull()
             assertGuard(failure, guard, 0)
             assertEquals("guard $guard mutated rows", before, databaseSnapshot())
@@ -815,13 +1034,14 @@ class WorkoutSessionFinalizerTest {
 
         cases.forEachIndexed { index, case ->
             if (index > 0) resetDatabase()
+            val (repository, ownerToken) = admittedFinalizer()
             seedActiveRecording()
             rebuildTableWithoutConstraints(case.table)
             val mutationFired = armDuplicateBeforeGuardedUpdate(case)
             val before = databaseSnapshot(allowMissingPrimaryKeyFor = case.table)
 
             val failure = runCatching {
-                WorkoutSessionRepository(database).finalizeRecordingSession(request())
+                repository.finalizeRecordingSession(ownerToken, request())
             }.exceptionOrNull()
 
             assertTrue("${case.guard} did not reach its real Room UPDATE", mutationFired.get())
@@ -836,13 +1056,15 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun twoRepositoriesHaveExactlyOneCommitWinnerAndFreshReentryCannotDuplicateBinding() = runBlocking {
+        val (firstWriter, firstToken) = admittedFinalizer()
+        val (secondWriter, secondToken) = admittedFinalizer()
         seedActiveRecording()
         val results = coroutineScope {
             val first = async(Dispatchers.IO) {
-                runCatching { WorkoutSessionRepository(database).finalizeRecordingSession(request()) }
+                runCatching { firstWriter.finalizeRecordingSession(firstToken, request()) }
             }
             val second = async(Dispatchers.IO) {
-                runCatching { WorkoutSessionRepository(database).finalizeRecordingSession(request()) }
+                runCatching { secondWriter.finalizeRecordingSession(secondToken, request()) }
             }
             listOf(first.await(), second.await())
         }
@@ -857,8 +1079,9 @@ class WorkoutSessionFinalizerTest {
         assertEquals(1, database.canonicalTimelineHeartRateDao().analysisSnapshotCount())
         assertEquals(1, requireGraph().recording?.originalAnalysisVersion)
 
+        val (freshWriter, freshToken) = admittedFinalizer()
         val reentry = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(request())
+            freshWriter.finalizeRecordingSession(freshToken, request())
         }.exceptionOrNull()
         assertTrue(reentry is RecorderGuardedWriteException || reentry is RecorderValidationException)
         assertEquals(committed, databaseSnapshot())
@@ -867,10 +1090,11 @@ class WorkoutSessionFinalizerTest {
 
     @Test
     fun finalTupleSequenceOverflowPropagatesArithmeticExceptionAndRollsBack() = runBlocking {
+        val (repository, ownerToken) = admittedFinalizer()
         seedActiveRecording(expectedSequence = Long.MAX_VALUE)
         val before = databaseSnapshot()
         val failure = runCatching {
-            WorkoutSessionRepository(database).finalizeRecordingSession(
+            repository.finalizeRecordingSession(ownerToken,
                 request(expectedTuple = CanonicalTuple(1_000, Long.MAX_VALUE))
             )
         }.exceptionOrNull()

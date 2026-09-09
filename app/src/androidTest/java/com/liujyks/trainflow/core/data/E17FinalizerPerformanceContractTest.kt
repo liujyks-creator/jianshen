@@ -11,6 +11,8 @@ import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1Validator
 import com.liujyks.trainflow.core.database.CanonicalTuple
 import com.liujyks.trainflow.core.database.CanonicalValidationResult
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.runBlocking
@@ -25,12 +27,15 @@ import org.junit.runner.RunWith
 class E17FinalizerPerformanceContractTest {
     private lateinit var context: Context
     private lateinit var database: TrainFlowDatabase
+    private lateinit var repository: WorkoutSessionRepository
+    private lateinit var ownerToken: RecorderOwnerToken
 
     @Before
     fun createFixedProfile() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(TrainFlowDatabase.DATABASE_NAME)
         database = TrainFlowDatabase.create(context)
+        runBlocking { admitCandidate() }
         seedPBalancedV2()
     }
 
@@ -82,7 +87,7 @@ class E17FinalizerPerformanceContractTest {
         )
         sampler.start()
         val startNanos = SystemClock.elapsedRealtimeNanos()
-        val result = WorkoutSessionRepository(database).finalizeRecordingSession(REQUEST)
+        val result = repository.finalizeRecordingSession(ownerToken, REQUEST)
         val endNanos = SystemClock.elapsedRealtimeNanos()
         pssSamplesKb += currentTotalPssKb()
         sampling.set(false)
@@ -359,7 +364,19 @@ class E17FinalizerPerformanceContractTest {
         return start to end
     }
 
+    private suspend fun admitCandidate() {
+        repository = WorkoutSessionRepository(database)
+        ownerToken = repository.admitRecorder("performance-entry",
+            WorkoutSessionEntity(SESSION_ID, mode = "strength", status = "active",
+                planSnapshotJson = STRENGTH_PLAN_SNAPSHOT, timelineVersion = 1,
+                lastDurableOffsetMs = 0, lastMutationSequence = 0,
+                displayMetadataContractVersion = 1, sessionDisplayMetadataJson = DISPLAY_METADATA),
+            WorkoutPhaseIntervalEntity("$SESSION_ID:phase:0", SESSION_ID, 0, 0, null, 0, null, 1,
+                "strength_prepare_set", STRENGTH_PREPARE_IDENTITY)).ownerToken
+    }
+
     private suspend fun resetCandidate() {
+        admitCandidate()
         val sql = database.openHelper.writableDatabase
         sql.beginTransaction()
         try {
