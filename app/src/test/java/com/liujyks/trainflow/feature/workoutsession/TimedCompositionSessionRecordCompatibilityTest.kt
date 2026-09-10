@@ -3,8 +3,13 @@ package com.liujyks.trainflow.feature.workoutsession
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.data.toPlanSnapshot
+import com.liujyks.trainflow.core.data.toStorageJson
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.database.parseCanonicalJson
 import com.liujyks.trainflow.core.engine.TimedSessionStepKind
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
@@ -201,7 +206,13 @@ class TimedCompositionSessionRecordCompatibilityTest {
     @Test
     fun legacyTimedSessionRecordShapeRemainsUnchanged() {
         val plan = legacyTimedPlan()
+        val snapshot = (PlanSnapshotStorageV1Validator.prepare(
+            plan.toPlanSnapshot().toStorageJson(), plan.mode
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
         val activeRest = activeStateAt(plan, "legacy-circuit-r1-legacy-work-rest")
+        val blockSteps = activeRest.steps.filter { it.blockId == "legacy-circuit" }
+        val workFacts = legacyCircuitStepFactsV1(snapshot, blockSteps[0], blockStepIndex0 = 0)
+        val restFacts = legacyCircuitStepFactsV1(snapshot, blockSteps[1], blockStepIndex0 = 1)
         val abandoned = TimedWorkoutEngine.dispatch(
             TimedWorkoutEngine.dispatch(
                 activeRest,
@@ -221,6 +232,51 @@ class TimedCompositionSessionRecordCompatibilityTest {
         assertEquals("legacy-work", record.previousStageId)
         assertEquals(15, record.addedSec)
         assertTrue(session.planSnapshot.blocks.single() is TimedCircuitBlock)
+
+        assertEquals("legacy-circuit-r1-legacy-work-work", workFacts.sourceStepId)
+        assertEquals("legacy-circuit-r1-legacy-work-rest", restFacts.sourceStepId)
+        assertEquals("timed_work", workFacts.phaseKind)
+        assertEquals("timed_rest", restFacts.phaseKind)
+        assertEquals(5000L, workFacts.plannedDurationMs)
+        assertEquals(4000L, restFacts.plannedDurationMs)
+        val digest = snapshot.orderedStructureDigestHexLowercase()
+        assertEquals(
+            parseCanonicalJson("""{
+                "phaseIdentityContractVersion":1,
+                "family":"legacy_timed_v1",
+                "payloadVersion":1,
+                "mode":"timed",
+                "phaseKind":"timed_work",
+                "orderedStructureSignature":{
+                    "signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"
+                },
+                "payload":{
+                    "variant":"circuit_item_work","blockId":"legacy-circuit","stepIndex0":0,
+                    "legacyBlockKind":"timed_circuit","legacyStageType":"work",
+                    "itemId":"legacy-work","exerciseId":null,"roundIndex0":0
+                }
+            }"""),
+            parseCanonicalJson(workFacts.phaseIdentityJson)
+        )
+        assertEquals(
+            parseCanonicalJson("""{
+                "phaseIdentityContractVersion":1,
+                "family":"legacy_timed_v1",
+                "payloadVersion":1,
+                "mode":"timed",
+                "phaseKind":"timed_rest",
+                "orderedStructureSignature":{
+                    "signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"
+                },
+                "payload":{
+                    "variant":"circuit_rest_after_item","blockId":"legacy-circuit","stepIndex0":1,
+                    "legacyBlockKind":"timed_circuit","legacyStageType":"rest",
+                    "itemId":"legacy-work","exerciseId":null,"roundIndex0":0
+                }
+            }"""),
+            parseCanonicalJson(restFacts.phaseIdentityJson)
+        )
+        assertEquals(restFacts.sourceStepId, record.stepId)
     }
 
     @Test
