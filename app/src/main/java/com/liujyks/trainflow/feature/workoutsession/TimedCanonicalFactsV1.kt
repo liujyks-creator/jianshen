@@ -69,7 +69,7 @@ internal fun legacyBoundaryBlockStepFactsV1(
 ): TimedCanonicalStepFactsV1 {
     val block = snapshot.phaseBindingBlocks().singleOrNull { it.id == step.blockId }
         ?: throw RecorderValidationException("invalid_phase_identity")
-    if (block.kind !in setOf("warmup", "cooldown") || block.items.isNotEmpty() ||
+    if (block.kind !in setOf("warmup", "cooldown", "stretch") || block.items.isNotEmpty() ||
         step.kind != TimedSessionStepKind.WORK || step.itemId != null || step.round != null
     ) {
         throw RecorderValidationException("invalid_phase_identity")
@@ -79,7 +79,7 @@ internal fun legacyBoundaryBlockStepFactsV1(
         "blockId" to CanonicalJsonValue.Str(block.id),
         "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
         "legacyBlockKind" to CanonicalJsonValue.Str(block.kind),
-        "legacyStageType" to CanonicalJsonValue.Str(block.kind),
+        "legacyStageType" to CanonicalJsonValue.Str(if (block.kind == "stretch") "cooldown" else block.kind),
         "itemId" to CanonicalJsonValue.Null,
         "exerciseId" to CanonicalJsonValue.Null,
         "roundIndex0" to CanonicalJsonValue.Null
