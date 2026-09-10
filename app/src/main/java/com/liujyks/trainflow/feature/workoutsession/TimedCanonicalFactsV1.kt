@@ -23,9 +23,14 @@ internal fun legacyCircuitStepFactsV1(
 ): TimedCanonicalStepFactsV1 {
     val block = snapshot.phaseBindingBlocks().singleOrNull { it.id == step.blockId }
         ?: throw RecorderValidationException("invalid_phase_identity")
-    val item = block.items.singleOrNull { it.id == step.itemId }
-        ?: throw RecorderValidationException("invalid_phase_identity")
-    if (block.kind != "timed_circuit" || item.stageType !in setOf("work", "custom")) {
+    val item = step.itemId?.let { itemId ->
+        block.items.singleOrNull { it.id == itemId }
+            ?: throw RecorderValidationException("invalid_phase_identity")
+    }
+    if (block.kind != "timed_circuit" ||
+        (item != null && item.stageType !in setOf("work", "custom", "rest")) ||
+        (item == null && step.kind == TimedSessionStepKind.WORK)
+    ) {
         throw RecorderValidationException("invalid_phase_identity")
     }
     val round = step.round ?: throw RecorderValidationException("invalid_phase_identity")
@@ -35,7 +40,11 @@ internal fun legacyCircuitStepFactsV1(
     }
     val variant = when (step.kind) {
         TimedSessionStepKind.WORK -> "circuit_item_work"
-        TimedSessionStepKind.REST -> "circuit_rest_after_item"
+        TimedSessionStepKind.REST -> when {
+            item == null -> "between_round_rest"
+            item.stageType == "rest" -> "circuit_item_rest"
+            else -> "circuit_rest_after_item"
+        }
     }
     val identity = CanonicalJsonValue.Obj(linkedMapOf(
         "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
@@ -54,10 +63,11 @@ internal fun legacyCircuitStepFactsV1(
             "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
             "legacyBlockKind" to CanonicalJsonValue.Str(block.kind),
             "legacyStageType" to CanonicalJsonValue.Str(
-                if (step.kind == TimedSessionStepKind.WORK) item.stageType else "rest"
+                if (step.kind == TimedSessionStepKind.WORK) item!!.stageType else "rest"
             ),
-            "itemId" to CanonicalJsonValue.Str(item.id),
-            "exerciseId" to (item.exerciseId?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
+            "itemId" to (item?.id?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
+            "exerciseId" to (if (item?.stageType == "rest") CanonicalJsonValue.Null
+                else item?.exerciseId?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
             "roundIndex0" to CanonicalJsonValue.Num((round - 1).toBigDecimal())
         ))
     )).renderCanonicalJson()
