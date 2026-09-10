@@ -12,6 +12,7 @@ import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepKind
+import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedStageType
@@ -30,6 +31,50 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimedWorkoutEngineTest {
+    @Test
+    fun plainStretchBlockProducesCanonicalBoundaryFacts() {
+        val plan = plan(
+            blocks = listOf(
+                StretchBlock(id = "stretch", order = 1, title = "拉伸", durationSec = 3, items = emptyList())
+            )
+        )
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            plan.toSnapshot().toStorageJson(), WorkoutMode.TIMED
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val result = TimedWorkoutEngine.dispatch(TimedWorkoutEngine.create(plan), WorkoutCommand.StartSession)
+        val step = requireNotNull(result.state.currentStep)
+        val facts = legacyBoundaryBlockStepFactsV1(prepared, step, 0)
+
+        assertEquals("stretch-work", facts.sourceStepId)
+        assertEquals("timed_work", facts.phaseKind)
+        assertEquals(3000L, facts.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_work"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_block_work"),
+                    "blockId" to CanonicalJsonValue.Str("stretch"),
+                    "stepIndex0" to CanonicalJsonValue.Num(0.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("stretch"),
+                    "legacyStageType" to CanonicalJsonValue.Str("cooldown"),
+                    "itemId" to CanonicalJsonValue.Null,
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(facts.phaseIdentityJson)
+        )
+    }
+
     @Test
     fun pureIntervalStagesAdvanceWithoutExerciseLibraryActions() {
         val plan = plan(
