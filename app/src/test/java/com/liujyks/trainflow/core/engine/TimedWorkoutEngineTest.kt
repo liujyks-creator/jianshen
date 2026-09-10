@@ -1,5 +1,10 @@
 package com.liujyks.trainflow.core.engine
 
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.database.CanonicalJsonValue
+import com.liujyks.trainflow.core.database.parseCanonicalJson
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
@@ -17,6 +22,7 @@ import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.feature.workoutsession.legacyCircuitStepFactsV1
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -39,6 +45,9 @@ class TimedWorkoutEngineTest {
                 CooldownBlock(id = "cooldown", order = 3, title = "放松", durationSec = 2)
             )
         )
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            plan.toSnapshot().toStorageJson(), WorkoutMode.TIMED
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
         var result = TimedWorkoutEngine.dispatch(TimedWorkoutEngine.create(plan), WorkoutCommand.StartSession)
 
         assertEquals("warmup-work", result.state.currentStep?.id)
@@ -56,6 +65,35 @@ class TimedWorkoutEngineTest {
         assertEquals("circuit-r1-rest-rest", result.state.currentStep?.id)
         assertEquals(TimedSessionStepKind.REST, result.state.currentStep?.kind)
         assertEquals("休息", result.state.currentStep?.title)
+        val facts = legacyCircuitStepFactsV1(prepared, requireNotNull(result.state.currentStep), 1)
+        assertEquals("circuit-r1-rest-rest", facts.sourceStepId)
+        assertEquals("timed_rest", facts.phaseKind)
+        assertEquals(2000L, facts.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_rest"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("circuit_item_rest"),
+                    "blockId" to CanonicalJsonValue.Str("circuit"),
+                    "stepIndex0" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("timed_circuit"),
+                    "legacyStageType" to CanonicalJsonValue.Str("rest"),
+                    "itemId" to CanonicalJsonValue.Str("rest"),
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Num(0.toBigDecimal())
+                ))
+            )),
+            parseCanonicalJson(facts.phaseIdentityJson)
+        )
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 5)
         assertEquals("cooldown-work", result.state.currentStep?.id)
@@ -81,6 +119,9 @@ class TimedWorkoutEngineTest {
             )
         ).toSnapshot()
 
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            snapshot.toStorageJson(), WorkoutMode.TIMED
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
         var result = TimedWorkoutEngine.dispatch(
             state = TimedWorkoutEngine.create(snapshot, sessionId = "session-timed"),
             command = WorkoutCommand.StartSession
@@ -101,6 +142,35 @@ class TimedWorkoutEngineTest {
         result = TimedWorkoutEngine.tick(result.state, seconds = 5)
         assertEquals("circuit-r1-round-rest", result.state.currentStep?.id)
         assertEquals(3, result.state.remainingSec)
+        val facts = legacyCircuitStepFactsV1(prepared, requireNotNull(result.state.currentStep), 3)
+        assertEquals("circuit-r1-round-rest", facts.sourceStepId)
+        assertEquals("timed_rest", facts.phaseKind)
+        assertEquals(3000L, facts.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_rest"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("between_round_rest"),
+                    "blockId" to CanonicalJsonValue.Str("circuit"),
+                    "stepIndex0" to CanonicalJsonValue.Num(3.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("timed_circuit"),
+                    "legacyStageType" to CanonicalJsonValue.Str("rest"),
+                    "itemId" to CanonicalJsonValue.Null,
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Num(0.toBigDecimal())
+                ))
+            )),
+            parseCanonicalJson(facts.phaseIdentityJson)
+        )
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 12)
         assertEquals(SessionStatus.COMPLETED, result.state.status)
