@@ -10,12 +10,15 @@ import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.FollowAlongPlanMeta
 import com.liujyks.trainflow.core.model.PlanPreferences
 import com.liujyks.trainflow.core.model.PlanBlock
+import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.StretchBlock
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
 import com.liujyks.trainflow.core.model.TimedStageType
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WarmupBlock
 import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.WorkoutCommand
@@ -26,12 +29,172 @@ import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.feature.workoutsession.legacyBoundaryBlockStepFactsV1
 import com.liujyks.trainflow.feature.workoutsession.legacyBoundaryItemStepFactsV1
 import com.liujyks.trainflow.feature.workoutsession.legacyCircuitStepFactsV1
+import com.liujyks.trainflow.feature.workoutsession.legacyTimedTransitionFactsV1
+import com.liujyks.trainflow.feature.workoutsession.TimedCanonicalPhaseFactsV1
+import com.liujyks.trainflow.feature.workoutsession.TimedCanonicalStepFactsV1
+import com.liujyks.trainflow.feature.workoutsession.toWorkoutSessionRecord
+import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimedWorkoutEngineTest {
+    @Test
+    fun legacyTimedClosureFactsFollowRealEngineTransitions() {
+        val workoutPlan = plan(
+            blocks = listOf(
+                circuit(
+                    rounds = 1,
+                    items = listOf(
+                        item("first", "jumping-jacks", workSec = 1),
+                        item("middle", "bodyweight-squat", workSec = 1),
+                        item("last", "jumping-jacks", workSec = 2)
+                    )
+                ),
+                RestBlock(id = "standalone", order = 2, durationSec = 3)
+            )
+        )
+        val snapshot = workoutPlan.toSnapshot()
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            snapshot.toStorageJson(), WorkoutMode.TIMED
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val startedAt = Instant.parse("2026-09-11T00:00:00Z")
+
+        val beforeStart = TimedWorkoutEngine.create(snapshot, sessionId = "session-legacy-final")
+        val start = TimedWorkoutEngine.dispatch(beforeStart, WorkoutCommand.StartSession)
+        val startFacts = legacyTimedTransitionFactsV1(prepared, beforeStart, start, startedAt)
+
+        val beforeAdvance = start.state
+        val advance = TimedWorkoutEngine.tick(beforeAdvance, seconds = 2)
+        val advanceFacts = legacyTimedTransitionFactsV1(prepared, beforeAdvance, advance, startedAt)
+
+        val beforePause = advance.state
+        val pause = TimedWorkoutEngine.dispatch(beforePause, WorkoutCommand.PauseSession)
+        val pauseFacts = legacyTimedTransitionFactsV1(prepared, beforePause, pause, startedAt)
+
+        val beforePausedTick = pause.state
+        val pausedTick = TimedWorkoutEngine.tick(beforePausedTick, seconds = 1)
+        val pausedTickFacts = legacyTimedTransitionFactsV1(prepared, beforePausedTick, pausedTick, startedAt)
+
+        val beforeResume = pausedTick.state
+        val resume = TimedWorkoutEngine.dispatch(beforeResume, WorkoutCommand.ResumeSession)
+        val resumeFacts = legacyTimedTransitionFactsV1(prepared, beforeResume, resume, startedAt)
+
+        val beforeSkip = resume.state
+        val skip = TimedWorkoutEngine.dispatch(beforeSkip, WorkoutCommand.SkipStep)
+        val skipFacts = legacyTimedTransitionFactsV1(prepared, beforeSkip, skip, startedAt)
+
+        val beforeExtension = skip.state
+        val extension = TimedWorkoutEngine.dispatch(beforeExtension, WorkoutCommand.ExtendRest(seconds = 15))
+        val extensionFacts = legacyTimedTransitionFactsV1(prepared, beforeExtension, extension, startedAt)
+
+        val beforeRestTick = extension.state
+        val restTick = TimedWorkoutEngine.tick(beforeRestTick, seconds = 1)
+        val restTickFacts = legacyTimedTransitionFactsV1(prepared, beforeRestTick, restTick, startedAt)
+
+        val beforeEnd = restTick.state
+        val end = TimedWorkoutEngine.dispatch(beforeEnd, WorkoutCommand.EndSession(reason = "user_requested"))
+        val endFacts = legacyTimedTransitionFactsV1(prepared, beforeEnd, end, startedAt)
+
+        val transitions = listOf(
+            startFacts, advanceFacts, pauseFacts, pausedTickFacts, resumeFacts,
+            skipFacts, extensionFacts, restTickFacts, endFacts
+        )
+        val digest = prepared.orderedStructureDigestHexLowercase()
+        val expectedIdentities = listOf(
+            """{"phaseIdentityContractVersion":1,"family":"legacy_timed_v1","payloadVersion":1,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},"payload":{"variant":"circuit_item_work","blockId":"circuit","stepIndex0":0,"legacyBlockKind":"timed_circuit","legacyStageType":"work","itemId":"first","exerciseId":"jumping-jacks","roundIndex0":0}}""",
+            """{"phaseIdentityContractVersion":1,"family":"legacy_timed_v1","payloadVersion":1,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},"payload":{"variant":"circuit_item_work","blockId":"circuit","stepIndex0":1,"legacyBlockKind":"timed_circuit","legacyStageType":"work","itemId":"middle","exerciseId":"bodyweight-squat","roundIndex0":0}}""",
+            """{"phaseIdentityContractVersion":1,"family":"legacy_timed_v1","payloadVersion":1,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},"payload":{"variant":"circuit_item_work","blockId":"circuit","stepIndex0":2,"legacyBlockKind":"timed_circuit","legacyStageType":"work","itemId":"last","exerciseId":"jumping-jacks","roundIndex0":0}}""",
+            """{"phaseIdentityContractVersion":1,"family":"legacy_timed_v1","payloadVersion":1,"mode":"timed","phaseKind":"paused","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},"payload":{"variant":"paused","blockId":null,"stepIndex0":null,"legacyBlockKind":null,"legacyStageType":null,"itemId":null,"exerciseId":null,"roundIndex0":null}}""",
+            """{"phaseIdentityContractVersion":1,"family":"legacy_timed_v1","payloadVersion":1,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},"payload":{"variant":"circuit_item_work","blockId":"circuit","stepIndex0":2,"legacyBlockKind":"timed_circuit","legacyStageType":"work","itemId":"last","exerciseId":"jumping-jacks","roundIndex0":0}}""",
+            """{"phaseIdentityContractVersion":1,"family":"legacy_timed_v1","payloadVersion":1,"mode":"timed","phaseKind":"timed_rest","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},"payload":{"variant":"standalone_rest","blockId":"standalone","stepIndex0":0,"legacyBlockKind":"rest","legacyStageType":"rest","itemId":null,"exerciseId":null,"roundIndex0":null}}"""
+        )
+        val phases = transitions.flatMap { it.phaseStarts }
+        assertEquals(
+            listOf("circuit-r1-first-work", "circuit-r1-middle-work", "circuit-r1-last-work",
+                null, "circuit-r1-last-work", "standalone-rest"),
+            phases.map { it.sourceStep?.id }
+        )
+        assertEquals(
+            listOf(
+                TimedCanonicalPhaseFactsV1(beforeStart.steps[0], "timed_work", 1000L, expectedIdentities[0]),
+                TimedCanonicalPhaseFactsV1(beforeStart.steps[1], "timed_work", 1000L, expectedIdentities[1]),
+                TimedCanonicalPhaseFactsV1(beforeStart.steps[2], "timed_work", 2000L, expectedIdentities[2]),
+                TimedCanonicalPhaseFactsV1(null, "paused", null, expectedIdentities[3]),
+                TimedCanonicalPhaseFactsV1(beforeStart.steps[2], "timed_work", 2000L, expectedIdentities[4]),
+                TimedCanonicalPhaseFactsV1(beforeStart.steps[3], "timed_rest", 3000L, expectedIdentities[5])
+            ),
+            phases
+        )
+        assertEquals(listOf(1, 2, 1, 0, 1, 1, 0, 0, 0), transitions.map { it.phaseStarts.size })
+
+        val expectedRecords = listOf(
+            SessionStepRecord(
+                stepId = "circuit-r1-first-work", kind = SessionStepKind.TIMED_WORK,
+                startedAt = "2026-09-11T00:00:00Z", endedAt = "2026-09-11T00:00:01Z",
+                skipped = false, actualDurationSec = 1
+            ),
+            SessionStepRecord(
+                stepId = "circuit-r1-middle-work", kind = SessionStepKind.TIMED_WORK,
+                startedAt = "2026-09-11T00:00:01Z", endedAt = "2026-09-11T00:00:02Z",
+                skipped = false, actualDurationSec = 1
+            ),
+            SessionStepRecord(
+                stepId = "circuit-r1-last-work", kind = SessionStepKind.TIMED_WORK,
+                startedAt = "2026-09-11T00:00:02Z", endedAt = "2026-09-11T00:00:02Z",
+                skipped = true, actualDurationSec = 0
+            ),
+            SessionStepRecord(
+                stepId = "standalone-rest", kind = SessionStepKind.TIMED_REST,
+                startedAt = "2026-09-11T00:00:02Z", endedAt = "2026-09-11T00:00:03Z",
+                skipped = false, actualDurationSec = 1
+            )
+        )
+        val completedSteps = transitions.flatMap { it.completedSteps }
+        assertEquals(expectedRecords, completedSteps.map { it.record })
+        assertEquals(
+            listOf(
+                TimedCanonicalStepFactsV1("circuit-r1-first-work", "timed_work", 1000L, expectedIdentities[0]),
+                TimedCanonicalStepFactsV1("circuit-r1-middle-work", "timed_work", 1000L, expectedIdentities[1]),
+                TimedCanonicalStepFactsV1("circuit-r1-last-work", "timed_work", 2000L, expectedIdentities[2]),
+                TimedCanonicalStepFactsV1("standalone-rest", "timed_rest", 3000L, expectedIdentities[5])
+            ),
+            completedSteps.map { it.stepFacts }
+        )
+        val expectedExtension = TimedRestExtensionRecord(
+            id = "timed-rest-extension-1",
+            stepId = "standalone-rest",
+            stepIndex = 3,
+            roundIndex = null,
+            restStageId = "standalone",
+            restStageTitle = "Rest",
+            previousStageId = "last",
+            previousStageTitle = "jumping-jacks",
+            addedSec = 15,
+            plannedRestSec = 3,
+            restElapsedBeforeExtensionSec = 0,
+            extensionAtRemainingSec = 3,
+            cumulativeExtraRestSec = 15,
+            eventElapsedSec = 2
+        )
+        val extensions = transitions.flatMap { it.restExtensions }
+        assertEquals(listOf(expectedExtension), extensions.map { it.record })
+        assertEquals(
+            listOf(TimedCanonicalStepFactsV1("standalone-rest", "timed_rest", 3000L, expectedIdentities[5])),
+            extensions.map { it.restStepFacts }
+        )
+        assertEquals(
+            listOf(null, null, null, null, null, null, null, null, SessionStatus.ABANDONED),
+            transitions.map { it.terminalStatus }
+        )
+        val legacyRecord = end.state.toWorkoutSessionRecord(
+            workoutPlan, startedAt, Instant.parse("2026-09-11T00:00:04Z")
+        )
+        assertEquals(legacyRecord.stepHistory, completedSteps.map { it.record })
+        assertEquals(legacyRecord.timedRestExtensionRecords, extensions.map { it.record })
+    }
+
     @Test
     fun boundaryItemsProduceCanonicalStepFacts() {
         val snapshot = plan(

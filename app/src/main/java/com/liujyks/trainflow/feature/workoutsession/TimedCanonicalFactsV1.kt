@@ -8,6 +8,13 @@ import com.liujyks.trainflow.core.database.PhaseIdentityV1Validator
 import com.liujyks.trainflow.core.database.renderCanonicalJson
 import com.liujyks.trainflow.core.engine.TimedSessionStep
 import com.liujyks.trainflow.core.engine.TimedSessionStepKind
+import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
+import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
+import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SessionStepRecord
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
+import com.liujyks.trainflow.core.model.WorkoutEvent
+import java.time.Instant
 
 internal data class TimedCanonicalStepFactsV1(
     val sourceStepId: String,
@@ -15,6 +22,118 @@ internal data class TimedCanonicalStepFactsV1(
     val plannedDurationMs: Long,
     val phaseIdentityJson: String
 )
+
+internal data class TimedCanonicalPhaseFactsV1(
+    val sourceStep: TimedSessionStep?,
+    val phaseKind: String,
+    val plannedDurationMs: Long?,
+    val phaseIdentityJson: String
+)
+
+internal data class LegacyTimedCompletedStepFactsV1(
+    val record: SessionStepRecord,
+    val stepFacts: TimedCanonicalStepFactsV1
+)
+
+internal data class LegacyTimedRestExtensionFactsV1(
+    val record: TimedRestExtensionRecord,
+    val restStepFacts: TimedCanonicalStepFactsV1
+)
+
+internal data class LegacyTimedTransitionFactsV1(
+    val phaseStarts: List<TimedCanonicalPhaseFactsV1>,
+    val completedSteps: List<LegacyTimedCompletedStepFactsV1>,
+    val restExtensions: List<LegacyTimedRestExtensionFactsV1>,
+    val terminalStatus: SessionStatus?
+)
+
+internal fun legacyTimedTransitionFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    before: TimedWorkoutEngineState,
+    result: TimedWorkoutEngineResult,
+    startedAt: Instant
+): LegacyTimedTransitionFactsV1 {
+    val state = result.state
+    val phaseStarts = result.events.mapNotNull { event ->
+        val stepId = when (event) {
+            is WorkoutEvent.TimedWorkStarted -> event.stepId
+            is WorkoutEvent.RestStarted -> event.stepId
+            is WorkoutEvent.SessionResumed -> state.currentStep!!.id
+            is WorkoutEvent.SessionPaused -> {
+                val payload = CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("paused"),
+                    "blockId" to CanonicalJsonValue.Null,
+                    "stepIndex0" to CanonicalJsonValue.Null,
+                    "legacyBlockKind" to CanonicalJsonValue.Null,
+                    "legacyStageType" to CanonicalJsonValue.Null,
+                    "itemId" to CanonicalJsonValue.Null,
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+                return@mapNotNull TimedCanonicalPhaseFactsV1(
+                    sourceStep = null,
+                    phaseKind = "paused",
+                    plannedDurationMs = null,
+                    phaseIdentityJson = validatedLegacyIdentityJsonV1(snapshot, "paused", payload)
+                )
+            }
+            else -> return@mapNotNull null
+        }
+        val step = state.steps.single { it.id == stepId }
+        val facts = legacyTimedStepFactsV1(snapshot, state.steps, step)
+        TimedCanonicalPhaseFactsV1(step, facts.phaseKind, facts.plannedDurationMs, facts.phaseIdentityJson)
+    }
+    val completedSteps = state.toTimedSessionStepRecords(startedAt)
+        .drop(before.stepHistory.count { it.actualDurationSec != null })
+        .map { record ->
+            val step = state.steps.single { it.id == record.stepId }
+            LegacyTimedCompletedStepFactsV1(record, legacyTimedStepFactsV1(snapshot, state.steps, step))
+        }
+    val restExtensions = state.toTimedRestExtensionRecords()
+        .drop(before.restExtensionHistory.size)
+        .map { record ->
+            val step = state.steps[record.stepIndex]
+            LegacyTimedRestExtensionFactsV1(record, legacyTimedStepFactsV1(snapshot, state.steps, step))
+        }
+    return LegacyTimedTransitionFactsV1(
+        phaseStarts = phaseStarts,
+        completedSteps = completedSteps,
+        restExtensions = restExtensions,
+        terminalStatus = state.status.takeIf { state.isTerminal && !before.isTerminal }
+    )
+}
+
+private fun legacyTimedStepFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    steps: List<TimedSessionStep>,
+    step: TimedSessionStep
+): TimedCanonicalStepFactsV1 {
+    val block = snapshot.phaseBindingBlocks().singleOrNull { it.id == step.blockId }
+        ?: throw RecorderValidationException("invalid_phase_identity")
+    val blockStepIndex0 = steps.filter { it.blockId == step.blockId }.indexOf(step)
+    return when (block.kind) {
+        "timed_circuit" -> legacyCircuitStepFactsV1(snapshot, step, blockStepIndex0)
+        "warmup", "stretch", "cooldown" -> if (block.items.isEmpty()) {
+            legacyBoundaryBlockStepFactsV1(snapshot, step, blockStepIndex0)
+        } else {
+            legacyBoundaryItemStepFactsV1(snapshot, step, blockStepIndex0)
+        }
+        "rest" -> {
+            val payload = CanonicalJsonValue.Obj(linkedMapOf(
+                "variant" to CanonicalJsonValue.Str("standalone_rest"),
+                "blockId" to CanonicalJsonValue.Str(block.id),
+                "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
+                "legacyBlockKind" to CanonicalJsonValue.Str("rest"),
+                "legacyStageType" to CanonicalJsonValue.Str("rest"),
+                "itemId" to CanonicalJsonValue.Null,
+                "exerciseId" to CanonicalJsonValue.Null,
+                "roundIndex0" to CanonicalJsonValue.Null
+            ))
+            validatedLegacyStepFactsV1(snapshot, step, "timed_rest", payload)
+        }
+        else -> throw RecorderValidationException("invalid_phase_identity")
+    }
+}
 
 internal fun legacyCircuitStepFactsV1(
     snapshot: PreparedPlanSnapshotStorageV1,
@@ -130,6 +249,19 @@ private fun validatedLegacyStepFactsV1(
     phaseKind: String,
     payload: CanonicalJsonValue.Obj
 ): TimedCanonicalStepFactsV1 {
+    return TimedCanonicalStepFactsV1(
+        sourceStepId = step.id,
+        phaseKind = phaseKind,
+        plannedDurationMs = step.durationSec.toLong() * 1000L,
+        phaseIdentityJson = validatedLegacyIdentityJsonV1(snapshot, phaseKind, payload)
+    )
+}
+
+private fun validatedLegacyIdentityJsonV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    phaseKind: String,
+    payload: CanonicalJsonValue.Obj
+): String {
     val identity = CanonicalJsonValue.Obj(linkedMapOf(
         "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
         "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
@@ -146,10 +278,5 @@ private fun validatedLegacyStepFactsV1(
     if (PhaseIdentityV1Validator.validate(identity, snapshot.storage(), phaseKind) != CanonicalValidationResult.Valid) {
         throw RecorderValidationException("invalid_phase_identity")
     }
-    return TimedCanonicalStepFactsV1(
-        sourceStepId = step.id,
-        phaseKind = phaseKind,
-        plannedDurationMs = step.durationSec.toLong() * 1000L,
-        phaseIdentityJson = identity
-    )
+    return identity
 }

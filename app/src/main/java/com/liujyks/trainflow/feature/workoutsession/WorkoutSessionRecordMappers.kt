@@ -34,38 +34,48 @@ internal fun TimedWorkoutEngineState.toWorkoutSessionRecord(
         effectiveElapsedSec = activeElapsedSec,
         pausedElapsedSec = pausedElapsedSec,
         currentStep = currentSessionStep,
-        stepHistory = stepHistory.mapNotNull { record ->
-            val duration = record.actualDurationSec ?: return@mapNotNull null
-            SessionStepRecord(
-                stepId = record.stepId,
-                kind = record.kind,
-                startedAt = startedAt.plusSeconds(record.startedAtElapsedSec.toLong()).toString(),
-                endedAt = record.endedAtElapsedSec?.let { endedSec ->
-                    startedAt.plusSeconds(endedSec.toLong()).toString()
-                },
-                skipped = record.status == TimedSessionStepHistoryStatus.SKIPPED,
-                actualDurationSec = duration
-            )
-        },
-        timedRestExtensionRecords = restExtensionHistory.mapIndexed { index, record ->
-            TimedRestExtensionRecord(
-                id = "timed-rest-extension-${index + 1}",
-                stepId = record.stepId,
-                stepIndex = record.stepIndex,
-                roundIndex = record.roundIndex,
-                restStageId = record.restStageId,
-                restStageTitle = record.title,
-                previousStageId = record.previousStageId,
-                previousStageTitle = record.previousStageTitle,
-                addedSec = record.addedSec,
-                plannedRestSec = record.plannedRestSec,
-                restElapsedBeforeExtensionSec = record.restElapsedBeforeExtensionSec,
-                extensionAtRemainingSec = record.extensionAtRemainingSec,
-                cumulativeExtraRestSec = record.cumulativeAddedSec,
-                eventElapsedSec = record.elapsedSec
-            )
-        }
+        stepHistory = toTimedSessionStepRecords(startedAt),
+        timedRestExtensionRecords = toTimedRestExtensionRecords()
     )
+}
+
+internal fun TimedWorkoutEngineState.toTimedSessionStepRecords(
+    startedAt: Instant
+): List<SessionStepRecord> {
+    return stepHistory.mapNotNull { record ->
+        val duration = record.actualDurationSec ?: return@mapNotNull null
+        SessionStepRecord(
+            stepId = record.stepId,
+            kind = record.kind,
+            startedAt = startedAt.plusSeconds(record.startedAtElapsedSec.toLong()).toString(),
+            endedAt = record.endedAtElapsedSec?.let { endedSec ->
+                startedAt.plusSeconds(endedSec.toLong()).toString()
+            },
+            skipped = record.status == TimedSessionStepHistoryStatus.SKIPPED,
+            actualDurationSec = duration
+        )
+    }
+}
+
+internal fun TimedWorkoutEngineState.toTimedRestExtensionRecords(): List<TimedRestExtensionRecord> {
+    return restExtensionHistory.mapIndexed { index, record ->
+        TimedRestExtensionRecord(
+            id = "timed-rest-extension-${index + 1}",
+            stepId = record.stepId,
+            stepIndex = record.stepIndex,
+            roundIndex = record.roundIndex,
+            restStageId = record.restStageId,
+            restStageTitle = record.title,
+            previousStageId = record.previousStageId,
+            previousStageTitle = record.previousStageTitle,
+            addedSec = record.addedSec,
+            plannedRestSec = record.plannedRestSec,
+            restElapsedBeforeExtensionSec = record.restElapsedBeforeExtensionSec,
+            extensionAtRemainingSec = record.extensionAtRemainingSec,
+            cumulativeExtraRestSec = record.cumulativeAddedSec,
+            eventElapsedSec = record.elapsedSec
+        )
+    }
 }
 
 internal fun StrengthWorkoutEngineState.toWorkoutSessionRecord(
