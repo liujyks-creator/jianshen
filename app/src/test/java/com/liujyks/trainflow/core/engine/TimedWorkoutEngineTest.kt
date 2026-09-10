@@ -24,6 +24,7 @@ import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.feature.workoutsession.legacyBoundaryBlockStepFactsV1
+import com.liujyks.trainflow.feature.workoutsession.legacyBoundaryItemStepFactsV1
 import com.liujyks.trainflow.feature.workoutsession.legacyCircuitStepFactsV1
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,6 +32,208 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimedWorkoutEngineTest {
+    @Test
+    fun boundaryItemsProduceCanonicalStepFacts() {
+        val snapshot = plan(
+            blocks = listOf(
+                WarmupBlock(
+                    id = "warm-items",
+                    order = 1,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "warm-action",
+                            exerciseId = "jumping-jacks",
+                            stageType = TimedStageType.WARMUP,
+                            workDurationSec = 3,
+                            restAfterSec = 2
+                        ),
+                        TimedExerciseItem(
+                            id = "warm-rest",
+                            stageType = TimedStageType.REST,
+                            workDurationSec = 2
+                        )
+                    )
+                ),
+                StretchBlock(
+                    id = "stretch-items",
+                    order = 2,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "stretch-action",
+                            stageType = TimedStageType.CUSTOM,
+                            workDurationSec = 4
+                        )
+                    )
+                ),
+                CooldownBlock(
+                    id = "cool-items",
+                    order = 3,
+                    items = listOf(
+                        TimedExerciseItem(
+                            id = "cool-action",
+                            stageType = TimedStageType.COOLDOWN,
+                            workDurationSec = 3
+                        )
+                    )
+                )
+            )
+        ).toSnapshot()
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            snapshot.toStorageJson(), WorkoutMode.TIMED
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val steps = TimedWorkoutEngine.create(snapshot, sessionId = "session-boundary-items").steps
+
+        val warmWork = legacyBoundaryItemStepFactsV1(prepared, steps[0], 0)
+        assertEquals("warm-items-warm-action-work", warmWork.sourceStepId)
+        assertEquals("timed_work", warmWork.phaseKind)
+        assertEquals(3000L, warmWork.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_work"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_item_work"),
+                    "blockId" to CanonicalJsonValue.Str("warm-items"),
+                    "stepIndex0" to CanonicalJsonValue.Num(0.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("warmup"),
+                    "legacyStageType" to CanonicalJsonValue.Str("warmup"),
+                    "itemId" to CanonicalJsonValue.Str("warm-action"),
+                    "exerciseId" to CanonicalJsonValue.Str("jumping-jacks"),
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(warmWork.phaseIdentityJson)
+        )
+
+        val warmRestAfter = legacyBoundaryItemStepFactsV1(prepared, steps[1], 1)
+        assertEquals("warm-items-warm-action-rest", warmRestAfter.sourceStepId)
+        assertEquals("timed_rest", warmRestAfter.phaseKind)
+        assertEquals(2000L, warmRestAfter.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_rest"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_rest_after_item"),
+                    "blockId" to CanonicalJsonValue.Str("warm-items"),
+                    "stepIndex0" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("warmup"),
+                    "legacyStageType" to CanonicalJsonValue.Str("rest"),
+                    "itemId" to CanonicalJsonValue.Str("warm-action"),
+                    "exerciseId" to CanonicalJsonValue.Str("jumping-jacks"),
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(warmRestAfter.phaseIdentityJson)
+        )
+
+        val warmRest = legacyBoundaryItemStepFactsV1(prepared, steps[2], 2)
+        assertEquals("warm-items-warm-rest-rest", warmRest.sourceStepId)
+        assertEquals("timed_rest", warmRest.phaseKind)
+        assertEquals(2000L, warmRest.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_rest"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_item_rest"),
+                    "blockId" to CanonicalJsonValue.Str("warm-items"),
+                    "stepIndex0" to CanonicalJsonValue.Num(2.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("warmup"),
+                    "legacyStageType" to CanonicalJsonValue.Str("rest"),
+                    "itemId" to CanonicalJsonValue.Str("warm-rest"),
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(warmRest.phaseIdentityJson)
+        )
+
+        val stretchWork = legacyBoundaryItemStepFactsV1(prepared, steps[3], 0)
+        assertEquals("stretch-items-stretch-action-work", stretchWork.sourceStepId)
+        assertEquals("timed_work", stretchWork.phaseKind)
+        assertEquals(4000L, stretchWork.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_work"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_item_work"),
+                    "blockId" to CanonicalJsonValue.Str("stretch-items"),
+                    "stepIndex0" to CanonicalJsonValue.Num(0.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("stretch"),
+                    "legacyStageType" to CanonicalJsonValue.Str("custom"),
+                    "itemId" to CanonicalJsonValue.Str("stretch-action"),
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(stretchWork.phaseIdentityJson)
+        )
+
+        val coolWork = legacyBoundaryItemStepFactsV1(prepared, steps[4], 0)
+        assertEquals("cool-items-cool-action-work", coolWork.sourceStepId)
+        assertEquals("timed_work", coolWork.phaseKind)
+        assertEquals(3000L, coolWork.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_work"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_item_work"),
+                    "blockId" to CanonicalJsonValue.Str("cool-items"),
+                    "stepIndex0" to CanonicalJsonValue.Num(0.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("cooldown"),
+                    "legacyStageType" to CanonicalJsonValue.Str("cooldown"),
+                    "itemId" to CanonicalJsonValue.Str("cool-action"),
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(coolWork.phaseIdentityJson)
+        )
+    }
+
     @Test
     fun plainStretchBlockProducesCanonicalBoundaryFacts() {
         val plan = plan(
