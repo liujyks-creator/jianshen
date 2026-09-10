@@ -87,6 +87,43 @@ internal fun legacyBoundaryBlockStepFactsV1(
     return validatedLegacyStepFactsV1(snapshot, step, "timed_work", payload)
 }
 
+internal fun legacyBoundaryItemStepFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    step: TimedSessionStep,
+    blockStepIndex0: Int
+): TimedCanonicalStepFactsV1 {
+    val block = snapshot.phaseBindingBlocks().singleOrNull { it.id == step.blockId }
+        ?: throw RecorderValidationException("invalid_phase_identity")
+    val item = block.items.singleOrNull { it.id == step.itemId }
+        ?: throw RecorderValidationException("invalid_phase_identity")
+    if (block.kind !in setOf("warmup", "stretch", "cooldown") || step.round != null) {
+        throw RecorderValidationException("invalid_phase_identity")
+    }
+    val phaseKind = when (step.kind) {
+        TimedSessionStepKind.WORK -> "timed_work"
+        TimedSessionStepKind.REST -> "timed_rest"
+    }
+    val variant = when (step.kind) {
+        TimedSessionStepKind.WORK -> "boundary_item_work"
+        TimedSessionStepKind.REST ->
+            if (item.stageType == "rest") "boundary_item_rest" else "boundary_rest_after_item"
+    }
+    val payload = CanonicalJsonValue.Obj(linkedMapOf(
+        "variant" to CanonicalJsonValue.Str(variant),
+        "blockId" to CanonicalJsonValue.Str(block.id),
+        "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
+        "legacyBlockKind" to CanonicalJsonValue.Str(block.kind),
+        "legacyStageType" to CanonicalJsonValue.Str(
+            if (step.kind == TimedSessionStepKind.WORK) item.stageType else "rest"
+        ),
+        "itemId" to CanonicalJsonValue.Str(item.id),
+        "exerciseId" to (if (item.stageType == "rest") CanonicalJsonValue.Null
+            else item.exerciseId?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
+        "roundIndex0" to CanonicalJsonValue.Null
+    ))
+    return validatedLegacyStepFactsV1(snapshot, step, phaseKind, payload)
+}
+
 private fun validatedLegacyStepFactsV1(
     snapshot: PreparedPlanSnapshotStorageV1,
     step: TimedSessionStep,
