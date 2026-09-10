@@ -22,6 +22,7 @@ import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.feature.workoutsession.legacyBoundaryBlockStepFactsV1
 import com.liujyks.trainflow.feature.workoutsession.legacyCircuitStepFactsV1
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -54,6 +55,35 @@ class TimedWorkoutEngineTest {
         assertEquals("热身", result.state.currentStep?.title)
         assertEquals(null, result.state.currentStep?.exerciseId)
         assertEquals(TimedStageType.WARMUP, result.state.currentStep?.stageType)
+        val warmupFacts = legacyBoundaryBlockStepFactsV1(prepared, requireNotNull(result.state.currentStep), 0)
+        assertEquals("warmup-work", warmupFacts.sourceStepId)
+        assertEquals("timed_work", warmupFacts.phaseKind)
+        assertEquals(3000L, warmupFacts.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_work"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_block_work"),
+                    "blockId" to CanonicalJsonValue.Str("warmup"),
+                    "stepIndex0" to CanonicalJsonValue.Num(0.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("warmup"),
+                    "legacyStageType" to CanonicalJsonValue.Str("warmup"),
+                    "itemId" to CanonicalJsonValue.Null,
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(warmupFacts.phaseIdentityJson)
+        )
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 3)
         assertEquals("circuit-r1-work-work", result.state.currentStep?.id)
@@ -98,6 +128,35 @@ class TimedWorkoutEngineTest {
         result = TimedWorkoutEngine.tick(result.state, seconds = 5)
         assertEquals("cooldown-work", result.state.currentStep?.id)
         assertEquals(TimedStageType.COOLDOWN, result.state.currentStep?.stageType)
+        val cooldownFacts = legacyBoundaryBlockStepFactsV1(prepared, requireNotNull(result.state.currentStep), 0)
+        assertEquals("cooldown-work", cooldownFacts.sourceStepId)
+        assertEquals("timed_work", cooldownFacts.phaseKind)
+        assertEquals(2000L, cooldownFacts.plannedDurationMs)
+        assertEquals(
+            CanonicalJsonValue.Obj(linkedMapOf(
+                "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
+                "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                "mode" to CanonicalJsonValue.Str("timed"),
+                "phaseKind" to CanonicalJsonValue.Str("timed_work"),
+                "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+                    "algorithm" to CanonicalJsonValue.Str("sha256"),
+                    "digestHexLowercase" to CanonicalJsonValue.Str(prepared.orderedStructureDigestHexLowercase())
+                )),
+                "payload" to CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("boundary_block_work"),
+                    "blockId" to CanonicalJsonValue.Str("cooldown"),
+                    "stepIndex0" to CanonicalJsonValue.Num(0.toBigDecimal()),
+                    "legacyBlockKind" to CanonicalJsonValue.Str("cooldown"),
+                    "legacyStageType" to CanonicalJsonValue.Str("cooldown"),
+                    "itemId" to CanonicalJsonValue.Null,
+                    "exerciseId" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null
+                ))
+            )),
+            parseCanonicalJson(cooldownFacts.phaseIdentityJson)
+        )
 
         result = TimedWorkoutEngine.tick(result.state, seconds = 2)
         assertEquals(SessionStatus.COMPLETED, result.state.status)
