@@ -46,6 +46,53 @@ internal fun legacyCircuitStepFactsV1(
             else -> "circuit_rest_after_item"
         }
     }
+    val payload = CanonicalJsonValue.Obj(linkedMapOf(
+        "variant" to CanonicalJsonValue.Str(variant),
+        "blockId" to CanonicalJsonValue.Str(block.id),
+        "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
+        "legacyBlockKind" to CanonicalJsonValue.Str(block.kind),
+        "legacyStageType" to CanonicalJsonValue.Str(
+            if (step.kind == TimedSessionStepKind.WORK) item!!.stageType else "rest"
+        ),
+        "itemId" to (item?.id?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
+        "exerciseId" to (if (item?.stageType == "rest") CanonicalJsonValue.Null
+            else item?.exerciseId?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
+        "roundIndex0" to CanonicalJsonValue.Num((round - 1).toBigDecimal())
+    ))
+    return validatedLegacyStepFactsV1(snapshot, step, phaseKind, payload)
+}
+
+internal fun legacyBoundaryBlockStepFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    step: TimedSessionStep,
+    blockStepIndex0: Int
+): TimedCanonicalStepFactsV1 {
+    val block = snapshot.phaseBindingBlocks().singleOrNull { it.id == step.blockId }
+        ?: throw RecorderValidationException("invalid_phase_identity")
+    if (block.kind !in setOf("warmup", "cooldown") || block.items.isNotEmpty() ||
+        step.kind != TimedSessionStepKind.WORK || step.itemId != null || step.round != null
+    ) {
+        throw RecorderValidationException("invalid_phase_identity")
+    }
+    val payload = CanonicalJsonValue.Obj(linkedMapOf(
+        "variant" to CanonicalJsonValue.Str("boundary_block_work"),
+        "blockId" to CanonicalJsonValue.Str(block.id),
+        "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
+        "legacyBlockKind" to CanonicalJsonValue.Str(block.kind),
+        "legacyStageType" to CanonicalJsonValue.Str(block.kind),
+        "itemId" to CanonicalJsonValue.Null,
+        "exerciseId" to CanonicalJsonValue.Null,
+        "roundIndex0" to CanonicalJsonValue.Null
+    ))
+    return validatedLegacyStepFactsV1(snapshot, step, "timed_work", payload)
+}
+
+private fun validatedLegacyStepFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    step: TimedSessionStep,
+    phaseKind: String,
+    payload: CanonicalJsonValue.Obj
+): TimedCanonicalStepFactsV1 {
     val identity = CanonicalJsonValue.Obj(linkedMapOf(
         "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
         "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
@@ -57,19 +104,7 @@ internal fun legacyCircuitStepFactsV1(
             "algorithm" to CanonicalJsonValue.Str("sha256"),
             "digestHexLowercase" to CanonicalJsonValue.Str(snapshot.orderedStructureDigestHexLowercase())
         )),
-        "payload" to CanonicalJsonValue.Obj(linkedMapOf(
-            "variant" to CanonicalJsonValue.Str(variant),
-            "blockId" to CanonicalJsonValue.Str(block.id),
-            "stepIndex0" to CanonicalJsonValue.Num(blockStepIndex0.toBigDecimal()),
-            "legacyBlockKind" to CanonicalJsonValue.Str(block.kind),
-            "legacyStageType" to CanonicalJsonValue.Str(
-                if (step.kind == TimedSessionStepKind.WORK) item!!.stageType else "rest"
-            ),
-            "itemId" to (item?.id?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
-            "exerciseId" to (if (item?.stageType == "rest") CanonicalJsonValue.Null
-                else item?.exerciseId?.let { CanonicalJsonValue.Str(it) } ?: CanonicalJsonValue.Null),
-            "roundIndex0" to CanonicalJsonValue.Num((round - 1).toBigDecimal())
-        ))
+        "payload" to payload
     )).renderCanonicalJson()
     if (PhaseIdentityV1Validator.validate(identity, snapshot.storage(), phaseKind) != CanonicalValidationResult.Valid) {
         throw RecorderValidationException("invalid_phase_identity")
