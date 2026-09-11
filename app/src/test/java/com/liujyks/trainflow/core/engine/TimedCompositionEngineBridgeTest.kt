@@ -1,5 +1,17 @@
 package com.liujyks.trainflow.core.engine
 
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
+import com.liujyks.trainflow.core.data.RecorderValidationException
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.database.parseCanonicalJson
+import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.feature.workoutsession.TimedCanonicalStepFactsV1
+import com.liujyks.trainflow.feature.workoutsession.compositionTimedTransitionFactsV1
+import com.liujyks.trainflow.feature.workoutsession.toTimedRestExtensionRecords
+import com.liujyks.trainflow.feature.workoutsession.toTimedSessionStepRecords
+import java.time.Instant
+
 import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.PlanBlock
 import com.liujyks.trainflow.core.model.SessionStatus
@@ -224,6 +236,300 @@ class TimedCompositionEngineBridgeTest {
         assertTrue(requireNotNull(detail).canEditPlan)
         assertTrue(detail.canStartTraining)
         assertEquals("开始计时训练", detail.startStatus)
+    }
+
+
+    @Test
+    fun compositionCanonicalFactsPreserveOrderedExecutionAndRestExtensions() {
+        val prefix = bridgedCompositionBlock(
+            warmupSec = 0, cooldownSec = 0, rounds = 1, restBetweenRoundsSec = 0,
+            stageGroups = listOf(stageGroup(
+                id = "group-p",
+                targets = listOf(actionTarget(id = "target-p", durationSec = 1))
+            ))
+        ).copy(id = "composition-prefix")
+        val block = bridgedCompositionBlock(
+            warmupSec = 2, cooldownSec = 2, rounds = 2, restBetweenRoundsSec = 3,
+            stageGroups = listOf(
+                stageGroup(id = "group-a", targets = listOf(
+                    actionTarget(id = "a", durationSec = 4),
+                    customTarget(id = "c", order = 2, durationSec = 3),
+                    restTarget(id = "r", order = 3, durationSec = 2)
+                )),
+                stageGroup(id = "group-b", order = 2, targets = listOf(
+                    actionTarget(id = "b", durationSec = 1)
+                ))
+            )
+        ).copy(order = 2)
+        val plan = workoutPlan(prefix, block)
+        val frozen = WorkoutPlanSnapshot(
+            planId = plan.id, title = plan.title, mode = plan.mode, blocks = plan.blocks,
+            preferences = plan.preferences, followAlong = plan.followAlong
+        )
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            frozen.toStorageJson(), frozen.mode
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val timelines = frozen.blocks.filterIsInstance<TimedCompositionBlock>()
+            .map(TimedCompositionTimelineAdapter::expand)
+        val startedAt = Instant.parse("2026-09-11T00:00:00Z")
+        val initial = TimedWorkoutEngine.create(frozen, sessionId = "a2-ordered")
+        val start = TimedWorkoutEngine.dispatch(initial, WorkoutCommand.StartSession)
+        val startFacts = compositionTimedTransitionFactsV1(prepared, timelines, initial, start, startedAt)
+        val firstTick = TimedWorkoutEngine.tick(start.state, 10)
+        val firstTickFacts = compositionTimedTransitionFactsV1(prepared, timelines, start.state, firstTick, startedAt)
+        val firstExtension = TimedWorkoutEngine.dispatch(firstTick.state, WorkoutCommand.ExtendRest(5))
+        val firstExtensionFacts = compositionTimedTransitionFactsV1(
+            prepared, timelines, firstTick.state, firstExtension, startedAt
+        )
+        val secondTick = TimedWorkoutEngine.tick(firstExtension.state, 8)
+        val secondTickFacts = compositionTimedTransitionFactsV1(
+            prepared, timelines, firstExtension.state, secondTick, startedAt
+        )
+        val secondExtension = TimedWorkoutEngine.dispatch(secondTick.state, WorkoutCommand.ExtendRest(4))
+        val secondExtensionFacts = compositionTimedTransitionFactsV1(
+            prepared, timelines, secondTick.state, secondExtension, startedAt
+        )
+        val finish = TimedWorkoutEngine.tick(secondExtension.state, 19)
+        val finishFacts = compositionTimedTransitionFactsV1(
+            prepared, timelines, secondExtension.state, finish, startedAt
+        )
+        val cuts = listOf(startFacts, firstTickFacts, firstExtensionFacts, secondTickFacts, secondExtensionFacts, finishFacts)
+        assertEquals(listOf(1, 4, 0, 2, 0, 5), cuts.map { it.phaseStarts.size })
+        assertEquals(listOf(0, 4, 0, 2, 0, 6), cuts.map { it.completedSteps.size })
+        assertEquals(listOf(0, 0, 1, 0, 1, 0), cuts.map { it.restExtensions.size })
+        assertEquals(listOf(null, null, null, null, null, SessionStatus.COMPLETED), cuts.map { it.terminalStatus })
+        assertEquals(37, finish.state.activeElapsedSec)
+        assertEquals(null, finish.state.currentStep)
+
+        val expectedStepIds = listOf(
+            "composition-prefix:r1:g1:group-p:t1:target-p",
+            "composition-bridge:warmup:t1",
+            "composition-bridge:r1:g1:group-a:t1:a",
+            "composition-bridge:r1:g1:group-a:t2:c",
+            "composition-bridge:r1:g1:group-a:t3:r",
+            "composition-bridge:r1:g2:group-b:t1:b",
+            "composition-bridge:r1:between-round-rest:t1",
+            "composition-bridge:r2:g1:group-a:t1:a",
+            "composition-bridge:r2:g1:group-a:t2:c",
+            "composition-bridge:r2:g1:group-a:t3:r",
+            "composition-bridge:r2:g2:group-b:t1:b",
+            "composition-bridge:cooldown:t1"
+        )
+        val expectedKinds = listOf(
+            "timed_work", "timed_work", "timed_work", "timed_work", "timed_rest", "timed_work",
+            "timed_rest", "timed_work", "timed_work", "timed_rest", "timed_work", "timed_work"
+        )
+        val plannedMs = listOf(1000L, 2000L, 4000L, 3000L, 2000L, 1000L, 3000L, 4000L, 3000L, 2000L, 1000L, 2000L)
+        // F101.11 literal matrix: block-local indexes are independent of engine indexes.
+        val expectedPayloads = listOf(
+            """{"compositionVersion":2,"variant":"stage_group_action","compositionBlockId":"composition-prefix","timelineStageId":"composition-prefix:r1:g1:group-p","timelineStageKind":"stage_group","stageGroupId":"group-p","targetId":"target-p","targetKind":"action","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}""",
+            """{"compositionVersion":2,"variant":"warmup","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:warmup","timelineStageKind":"warmup","stageGroupId":"composition-bridge:warmup","targetId":"composition-bridge:warmup:target","targetKind":"warmup","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}""",
+            """{"compositionVersion":2,"variant":"stage_group_action","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"a","targetKind":"action","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":0,"stageInstanceIndex0":1,"targetInstanceIndex0":1,"stepIndex0":1}""",
+            """{"compositionVersion":2,"variant":"stage_group_custom","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"c","targetKind":"custom","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":1,"stageInstanceIndex0":1,"targetInstanceIndex0":2,"stepIndex0":2}""",
+            """{"compositionVersion":2,"variant":"stage_group_rest","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"r","targetKind":"rest","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":2,"stageInstanceIndex0":1,"targetInstanceIndex0":3,"stepIndex0":3}""",
+            """{"compositionVersion":2,"variant":"stage_group_action","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g2:group-b","timelineStageKind":"stage_group","stageGroupId":"group-b","targetId":"b","targetKind":"action","roundIndex0":0,"stageGroupIndex0":1,"targetIndex0":0,"stageInstanceIndex0":2,"targetInstanceIndex0":4,"stepIndex0":4}""",
+            """{"compositionVersion":2,"variant":"between_round_rest","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:between-round-rest","timelineStageKind":"between_round_rest","stageGroupId":"composition-bridge:r1:between-round-rest","targetId":"composition-bridge:r1:between-round-rest:target","targetKind":"between_round_rest","roundIndex0":0,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":3,"targetInstanceIndex0":5,"stepIndex0":5}""",
+            """{"compositionVersion":2,"variant":"stage_group_action","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r2:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"a","targetKind":"action","roundIndex0":1,"stageGroupIndex0":0,"targetIndex0":0,"stageInstanceIndex0":4,"targetInstanceIndex0":6,"stepIndex0":6}""",
+            """{"compositionVersion":2,"variant":"stage_group_custom","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r2:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"c","targetKind":"custom","roundIndex0":1,"stageGroupIndex0":0,"targetIndex0":1,"stageInstanceIndex0":4,"targetInstanceIndex0":7,"stepIndex0":7}""",
+            """{"compositionVersion":2,"variant":"stage_group_rest","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r2:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"r","targetKind":"rest","roundIndex0":1,"stageGroupIndex0":0,"targetIndex0":2,"stageInstanceIndex0":4,"targetInstanceIndex0":8,"stepIndex0":8}""",
+            """{"compositionVersion":2,"variant":"stage_group_action","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r2:g2:group-b","timelineStageKind":"stage_group","stageGroupId":"group-b","targetId":"b","targetKind":"action","roundIndex0":1,"stageGroupIndex0":1,"targetIndex0":0,"stageInstanceIndex0":5,"targetInstanceIndex0":9,"stepIndex0":9}""",
+            """{"compositionVersion":2,"variant":"cooldown","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:cooldown","timelineStageKind":"cooldown","stageGroupId":"composition-bridge:cooldown","targetId":"composition-bridge:cooldown:target","targetKind":"cooldown","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":6,"targetInstanceIndex0":10,"stepIndex0":10}"""
+        )
+        val digest = prepared.orderedStructureDigestHexLowercase()
+        val phases = cuts.flatMap { it.phaseStarts }
+        phases.forEachIndexed { index, phase ->
+            val phaseKind = expectedKinds[index]
+            val payload = expectedPayloads[index]
+            val expectedIdentity = """
+                {"phaseIdentityContractVersion":1,"family":"timed_composition_v2","payloadVersion":2,
+                 "mode":"timed","phaseKind":"$phaseKind",
+                 "orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},
+                 "payload":$payload}
+            """.trimIndent()
+            assertEquals(expectedStepIds[index], phase.sourceStep!!.id)
+            assertEquals(finish.state.steps[index], phase.sourceStep)
+            assertEquals(phaseKind, phase.phaseKind)
+            assertEquals(plannedMs[index], phase.plannedDurationMs)
+            assertEquals(parseCanonicalJson(expectedIdentity), parseCanonicalJson(phase.phaseIdentityJson))
+        }
+        val completed = cuts.flatMap { it.completedSteps }
+        assertEquals(finish.state.toTimedSessionStepRecords(startedAt), completed.map { it.record })
+        assertEquals(expectedStepIds, completed.map { it.record.stepId })
+        assertEquals(listOf(1, 2, 4, 3, 7, 1, 7, 4, 3, 2, 1, 2), completed.map { it.record.actualDurationSec })
+        assertEquals(List(12) { false }, completed.map { it.record.skipped })
+        assertEquals(expectedKinds, completed.map { it.record.kind.contractValue })
+        val startSeconds = listOf(0L, 1L, 3L, 7L, 10L, 17L, 18L, 25L, 29L, 32L, 34L, 35L)
+        val endSeconds = listOf(1L, 3L, 7L, 10L, 17L, 18L, 25L, 29L, 32L, 34L, 35L, 37L)
+        assertEquals(startSeconds.map { startedAt.plusSeconds(it).toString() }, completed.map { it.record.startedAt })
+        assertEquals(endSeconds.map { startedAt.plusSeconds(it).toString() }, completed.map { it.record.endedAt })
+        completed.forEachIndexed { index, facts ->
+            assertEquals(TimedCanonicalStepFactsV1(
+                expectedStepIds[index], expectedKinds[index], plannedMs[index], phases[index].phaseIdentityJson
+            ), facts.stepFacts)
+        }
+
+        val extensions = cuts.flatMap { it.restExtensions }
+        assertEquals(finish.state.toTimedRestExtensionRecords(), extensions.map { it.record })
+        assertEquals(listOf("timed-rest-extension-1", "timed-rest-extension-2"), extensions.map { it.record.id })
+        assertEquals(listOf(
+            "composition-bridge:r1:g1:group-a:t3:r", "composition-bridge:r1:between-round-rest:t1"
+        ), extensions.map { it.record.stepId })
+        assertEquals(listOf(4, 6), extensions.map { it.record.stepIndex })
+        assertEquals(listOf(1, 1), extensions.map { it.record.roundIndex })
+        assertEquals(listOf("r", "composition-bridge:r1:between-round-rest:target"), extensions.map { it.record.restStageId })
+        assertEquals(listOf("c", "b"), extensions.map { it.record.previousStageId })
+        assertEquals(listOf(5, 4), extensions.map { it.record.addedSec })
+        assertEquals(listOf(2, 3), extensions.map { it.record.plannedRestSec })
+        assertEquals(listOf(0, 0), extensions.map { it.record.restElapsedBeforeExtensionSec })
+        assertEquals(listOf(2, 3), extensions.map { it.record.extensionAtRemainingSec })
+        assertEquals(listOf(5, 4), extensions.map { it.record.cumulativeExtraRestSec })
+        assertEquals(listOf(10, 18), extensions.map { it.record.eventElapsedSec })
+        assertEquals(listOf(completed[4].stepFacts, completed[6].stepFacts), extensions.map { it.restStepFacts })
+    }
+
+    @Test
+    fun compositionCanonicalFactsPreservePauseResumeSkipAndEarlyEnd() {
+        val block = bridgedCompositionBlock(
+            warmupSec = 2, cooldownSec = 2, rounds = 1, restBetweenRoundsSec = 0,
+            stageGroups = listOf(
+                stageGroup(id = "group-a", targets = listOf(
+                    actionTarget(id = "a", durationSec = 4),
+                    customTarget(id = "c", order = 2, durationSec = 3),
+                    restTarget(id = "r", order = 3, durationSec = 2)
+                )),
+                stageGroup(id = "group-b", order = 2, targets = listOf(
+                    actionTarget(id = "b", durationSec = 1)
+                ))
+            )
+        )
+        val plan = workoutPlan(block)
+        val frozen = WorkoutPlanSnapshot(
+            planId = plan.id, title = plan.title, mode = plan.mode, blocks = plan.blocks,
+            preferences = plan.preferences, followAlong = plan.followAlong
+        )
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            frozen.toStorageJson(), frozen.mode
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val timelines = frozen.blocks.filterIsInstance<TimedCompositionBlock>()
+            .map(TimedCompositionTimelineAdapter::expand)
+        val startedAt = Instant.parse("2026-09-11T00:00:00Z")
+        val initial = TimedWorkoutEngine.create(frozen, sessionId = "a2-controls")
+        val start = TimedWorkoutEngine.dispatch(initial, WorkoutCommand.StartSession)
+        val startFacts = compositionTimedTransitionFactsV1(prepared, timelines, initial, start, startedAt)
+        val warmupTick = TimedWorkoutEngine.tick(start.state, 1)
+        val warmupTickFacts = compositionTimedTransitionFactsV1(prepared, timelines, start.state, warmupTick, startedAt)
+        val pause = TimedWorkoutEngine.dispatch(warmupTick.state, WorkoutCommand.PauseSession)
+        val pauseFacts = compositionTimedTransitionFactsV1(prepared, timelines, warmupTick.state, pause, startedAt)
+        val pausedTick = TimedWorkoutEngine.tick(pause.state, 5)
+        val pausedTickFacts = compositionTimedTransitionFactsV1(prepared, timelines, pause.state, pausedTick, startedAt)
+        val resume = TimedWorkoutEngine.dispatch(pausedTick.state, WorkoutCommand.ResumeSession)
+        val resumeFacts = compositionTimedTransitionFactsV1(prepared, timelines, pausedTick.state, resume, startedAt)
+        val skipWarmup = TimedWorkoutEngine.dispatch(resume.state, WorkoutCommand.SkipStep)
+        val skipWarmupFacts = compositionTimedTransitionFactsV1(prepared, timelines, resume.state, skipWarmup, startedAt)
+        val actionTick = TimedWorkoutEngine.tick(skipWarmup.state, 1)
+        val actionTickFacts = compositionTimedTransitionFactsV1(prepared, timelines, skipWarmup.state, actionTick, startedAt)
+        val skipAction = TimedWorkoutEngine.dispatch(actionTick.state, WorkoutCommand.SkipStep)
+        val skipActionFacts = compositionTimedTransitionFactsV1(prepared, timelines, actionTick.state, skipAction, startedAt)
+        val skipCustom = TimedWorkoutEngine.dispatch(skipAction.state, WorkoutCommand.SkipStep)
+        val skipCustomFacts = compositionTimedTransitionFactsV1(prepared, timelines, skipAction.state, skipCustom, startedAt)
+        val restTick = TimedWorkoutEngine.tick(skipCustom.state, 1)
+        val restTickFacts = compositionTimedTransitionFactsV1(prepared, timelines, skipCustom.state, restTick, startedAt)
+        val end = TimedWorkoutEngine.dispatch(restTick.state, WorkoutCommand.EndSession(reason = "a2-test"))
+        val endFacts = compositionTimedTransitionFactsV1(prepared, timelines, restTick.state, end, startedAt)
+        val cuts = listOf(
+            startFacts, warmupTickFacts, pauseFacts, pausedTickFacts, resumeFacts, skipWarmupFacts,
+            actionTickFacts, skipActionFacts, skipCustomFacts, restTickFacts, endFacts
+        )
+        val warmupId = "composition-bridge:warmup:t1"
+        val actionId = "composition-bridge:r1:g1:group-a:t1:a"
+        val customId = "composition-bridge:r1:g1:group-a:t2:c"
+        val restId = "composition-bridge:r1:g1:group-a:t3:r"
+        assertEquals(listOf(
+            listOf(warmupId), emptyList(), listOf(null), emptyList(), listOf(warmupId),
+            listOf(actionId), emptyList(), listOf(customId), listOf(restId), emptyList(), emptyList()
+        ), cuts.map { cut -> cut.phaseStarts.map { it.sourceStep?.id } })
+        assertEquals(listOf(0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1), cuts.map { it.completedSteps.size })
+        assertEquals(List(11) { 0 }, cuts.map { it.restExtensions.size })
+        assertEquals(List(10) { null } + SessionStatus.ABANDONED, cuts.map { it.terminalStatus })
+        assertEquals(3, end.state.activeElapsedSec)
+        assertEquals(5, end.state.pausedElapsedSec)
+
+        val expectedPayloads = listOf(
+            """{"compositionVersion":2,"variant":"warmup","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:warmup","timelineStageKind":"warmup","stageGroupId":"composition-bridge:warmup","targetId":"composition-bridge:warmup:target","targetKind":"warmup","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}""",
+            """{"variant":"paused","compositionVersion":2,"compositionBlockId":null,"timelineStageId":null,"timelineStageKind":null,"stageGroupId":null,"targetId":null,"targetKind":null,"roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":null,"stageInstanceIndex0":null,"targetInstanceIndex0":null,"stepIndex0":null}""",
+            """{"compositionVersion":2,"variant":"warmup","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:warmup","timelineStageKind":"warmup","stageGroupId":"composition-bridge:warmup","targetId":"composition-bridge:warmup:target","targetKind":"warmup","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}""",
+            """{"compositionVersion":2,"variant":"stage_group_action","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"a","targetKind":"action","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":0,"stageInstanceIndex0":1,"targetInstanceIndex0":1,"stepIndex0":1}""",
+            """{"compositionVersion":2,"variant":"stage_group_custom","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"c","targetKind":"custom","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":1,"stageInstanceIndex0":1,"targetInstanceIndex0":2,"stepIndex0":2}""",
+            """{"compositionVersion":2,"variant":"stage_group_rest","compositionBlockId":"composition-bridge","timelineStageId":"composition-bridge:r1:g1:group-a","timelineStageKind":"stage_group","stageGroupId":"group-a","targetId":"r","targetKind":"rest","roundIndex0":0,"stageGroupIndex0":0,"targetIndex0":2,"stageInstanceIndex0":1,"targetInstanceIndex0":3,"stepIndex0":3}"""
+        )
+        val expectedKinds = listOf("timed_work", "paused", "timed_work", "timed_work", "timed_work", "timed_rest")
+        val plannedMs = listOf(2000L, null, 2000L, 4000L, 3000L, 2000L)
+        val stepIndexes = listOf(0, null, 0, 1, 2, 3)
+        val digest = prepared.orderedStructureDigestHexLowercase()
+        val phases = cuts.flatMap { it.phaseStarts }
+        phases.forEachIndexed { index, phase ->
+            val phaseKind = expectedKinds[index]
+            val payload = expectedPayloads[index]
+            val expectedIdentity = """
+                {"phaseIdentityContractVersion":1,"family":"timed_composition_v2","payloadVersion":2,
+                 "mode":"timed","phaseKind":"$phaseKind",
+                 "orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"$digest"},
+                 "payload":$payload}
+            """.trimIndent()
+            assertEquals(stepIndexes[index]?.let { end.state.steps[it] }, phase.sourceStep)
+            assertEquals(phaseKind, phase.phaseKind)
+            assertEquals(plannedMs[index], phase.plannedDurationMs)
+            assertEquals(parseCanonicalJson(expectedIdentity), parseCanonicalJson(phase.phaseIdentityJson))
+        }
+        assertEquals(phases[0].phaseIdentityJson, phases[2].phaseIdentityJson)
+        val completed = cuts.flatMap { it.completedSteps }
+        assertEquals(end.state.toTimedSessionStepRecords(startedAt), completed.map { it.record })
+        assertEquals(listOf(warmupId, actionId, customId, restId), completed.map { it.record.stepId })
+        assertEquals(listOf(1, 1, 0, 1), completed.map { it.record.actualDurationSec })
+        assertEquals(listOf(true, true, true, false), completed.map { it.record.skipped })
+        assertEquals(listOf("timed_work", "timed_work", "timed_work", "timed_rest"), completed.map { it.record.kind.contractValue })
+        assertEquals(listOf(0L, 1L, 2L, 2L).map { startedAt.plusSeconds(it).toString() }, completed.map { it.record.startedAt })
+        assertEquals(listOf(1L, 2L, 2L, 3L).map { startedAt.plusSeconds(it).toString() }, completed.map { it.record.endedAt })
+        val completedPhaseIndexes = listOf(0, 3, 4, 5)
+        completed.forEachIndexed { index, facts ->
+            val phaseIndex = completedPhaseIndexes[index]
+            assertEquals(TimedCanonicalStepFactsV1(
+                listOf(warmupId, actionId, customId, restId)[index],
+                expectedKinds[phaseIndex], plannedMs[phaseIndex]!!, phases[phaseIndex].phaseIdentityJson
+            ), facts.stepFacts)
+        }
+    }
+
+    @Test
+    fun compositionCanonicalFactsRejectMismatchedFrozenIdentity() {
+        val block = bridgedCompositionBlock(
+            warmupSec = 0, cooldownSec = 0, rounds = 1, restBetweenRoundsSec = 0,
+            stageGroups = listOf(stageGroup(
+                id = "group-a", targets = listOf(actionTarget(id = "a", durationSec = 4))
+            ))
+        )
+        val plan = workoutPlan(block)
+        val frozen = WorkoutPlanSnapshot(
+            planId = plan.id, title = plan.title, mode = plan.mode, blocks = plan.blocks,
+            preferences = plan.preferences, followAlong = plan.followAlong
+        )
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(
+            frozen.toStorageJson(), frozen.mode
+        ) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val foreignBlock = block.copy(stageGroups = listOf(stageGroup(
+            id = "group-a", targets = listOf(actionTarget(id = "foreign-a", durationSec = 4))
+        )))
+        val foreignSnapshot = frozen.copy(blocks = listOf(foreignBlock))
+        val timelines = foreignSnapshot.blocks.filterIsInstance<TimedCompositionBlock>()
+            .map(TimedCompositionTimelineAdapter::expand)
+        val before = TimedWorkoutEngine.create(foreignSnapshot, sessionId = "a2-mismatch")
+        val result = TimedWorkoutEngine.dispatch(before, WorkoutCommand.StartSession)
+        val error = assertThrows(RecorderValidationException::class.java) {
+            compositionTimedTransitionFactsV1(
+                prepared, timelines, before, result, Instant.parse("2026-09-11T00:00:00Z")
+            )
+        }
+        assertEquals("invalid_phase_identity", error.code)
     }
 
     private fun activeStateAt(

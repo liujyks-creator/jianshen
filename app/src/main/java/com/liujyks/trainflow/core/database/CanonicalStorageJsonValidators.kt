@@ -507,7 +507,7 @@ object PhaseIdentityV1Validator {
     ): List<CompositionSnapshotStep>? {
         val blockId = block.id
         val rounds = block.rounds?.toInt() ?: return null
-        val groups = block.compositionGroups
+        val groups = block.compositionGroups.sortedBy { it.order }
         val result = mutableListOf<CompositionSnapshotStep>()
         var stageInstanceIndex0 = 0L
         var targetInstanceIndex0 = 0L
@@ -547,10 +547,8 @@ object PhaseIdentityV1Validator {
         repeat(rounds) { roundIndex0 ->
             groups.forEachIndexed { groupIndex0, group ->
                 val groupId = group.id
-                if (group.order != groupIndex0.toLong()) return null
                 val stageId = "$blockId:r${roundIndex0 + 1}:g${groupIndex0 + 1}:$groupId"
-                group.targets.forEachIndexed { targetIndex0, target ->
-                    if (target.order != targetIndex0.toLong()) return null
+                group.targets.sortedBy { it.order }.forEachIndexed { targetIndex0, target ->
                     val kind = target.kind
                     add(
                         "stage_group_$kind",
