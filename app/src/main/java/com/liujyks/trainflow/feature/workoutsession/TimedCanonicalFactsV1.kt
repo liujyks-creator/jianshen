@@ -1,10 +1,14 @@
 package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1ValidationResult
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
 import com.liujyks.trainflow.core.data.RecorderValidationException
 import com.liujyks.trainflow.core.database.CanonicalJsonValue
 import com.liujyks.trainflow.core.database.CanonicalValidationResult
 import com.liujyks.trainflow.core.database.PhaseIdentityV1Validator
+import com.liujyks.trainflow.core.database.parseCanonicalJson
 import com.liujyks.trainflow.core.database.renderCanonicalJson
 import com.liujyks.trainflow.core.engine.TimedSessionStep
 import com.liujyks.trainflow.core.engine.TimedSessionStepKind
@@ -16,7 +20,212 @@ import com.liujyks.trainflow.core.model.TimedCompositionTimeline
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineStageKind
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WorkoutEvent
+import com.liujyks.trainflow.core.model.WorkoutMode
+import java.math.BigDecimal
 import java.time.Instant
+import java.util.Collections
+
+internal data class TimedFocusPhaseV1(
+    val sessionId: String,
+    val phaseSequence: Long,
+    val phaseKind: String,
+    val plannedDurationMs: Long?,
+    val phaseIdentityJson: String
+)
+
+internal sealed interface TimedStructureResolutionV1 {
+    data class Resolved(val structure: TimedResolvedStructureV1) : TimedStructureResolutionV1
+    data class InvalidSnapshot(val result: PlanSnapshotStorageV1ValidationResult) : TimedStructureResolutionV1
+    data class InvalidPhase(val result: CanonicalValidationResult) : TimedStructureResolutionV1
+    data class InvalidInput(val reason: String) : TimedStructureResolutionV1
+}
+
+internal data class TimedResolvedStructureV1(
+    val sessionId: String,
+    val family: String,
+    val structureDigestHexLowercase: String,
+    val phases: List<TimedResolvedFocusPhaseV1>,
+    val hasTrueWork: Boolean,
+    val hasTrueRest: Boolean,
+    val focusEligible: Boolean
+)
+
+internal data class TimedResolvedFocusPhaseV1(
+    val phaseSequence: Long,
+    val blockId: String?,
+    val roundIndex0: Long?,
+    val trueWork: Boolean,
+    val trueRest: Boolean
+)
+
+internal data class TimedFocusIdentityV1(
+    val focusContractVersion: Int,
+    val sessionId: String,
+    val family: String,
+    val structureDigestHexLowercase: String,
+    val focusKind: String,
+    val legacyBlockId: String?,
+    val compositionBlockId: String?,
+    val roundIndex0: Long?,
+    val phaseSequence: Long?
+)
+
+internal sealed interface TimedFocusValidationV1 {
+    data class Valid(val identity: TimedFocusIdentityV1) : TimedFocusValidationV1
+    data object Invalid : TimedFocusValidationV1 {
+        val code: String = "invalid_timed_focus_identity"
+    }
+}
+
+internal fun resolveTimedStructureV1(
+    sessionId: String,
+    family: String,
+    snapshotJson: String,
+    phases: List<TimedFocusPhaseV1>
+): TimedStructureResolutionV1 {
+    val prepared = when (val result = PlanSnapshotStorageV1Validator.prepare(snapshotJson, WorkoutMode.TIMED)) {
+        is PreparedPlanSnapshotStorageV1Result.Valid -> result.prepared
+        is PreparedPlanSnapshotStorageV1Result.Invalid ->
+            return TimedStructureResolutionV1.InvalidSnapshot(result.result)
+    }
+    if (family != "legacy_timed_v1" && family != "timed_composition_v2") {
+        return TimedStructureResolutionV1.InvalidInput("unsupported_family")
+    }
+    val context = PhaseIdentityV1Validator.prepareContext(prepared)
+        ?: return TimedStructureResolutionV1.InvalidPhase(
+            CanonicalValidationResult.Invalid("invalid_phase_identity")
+        )
+    val resolved = phases.map { phase ->
+        if (phase.sessionId != sessionId) {
+            return TimedStructureResolutionV1.InvalidInput("session_mismatch")
+        }
+        val validation = PhaseIdentityV1Validator.validatePrepared(
+            phase.phaseIdentityJson, context, phase.phaseKind
+        )
+        if (validation != CanonicalValidationResult.Valid) {
+            return TimedStructureResolutionV1.InvalidPhase(validation)
+        }
+        val envelope = parseCanonicalJson(phase.phaseIdentityJson) as CanonicalJsonValue.Obj
+        val actualFamily = (envelope.fields.getValue("family") as CanonicalJsonValue.Str).value
+        if (actualFamily != family) {
+            return TimedStructureResolutionV1.InvalidInput("family_mismatch")
+        }
+        val payload = envelope.fields.getValue("payload") as CanonicalJsonValue.Obj
+        val variant = (payload.fields.getValue("variant") as CanonicalJsonValue.Str).value
+        val duration = phase.plannedDurationMs
+        val trueWork = when (actualFamily) {
+            "legacy_timed_v1" -> when (variant) {
+                "circuit_item_work" ->
+                    (payload.fields.getValue("legacyStageType") as CanonicalJsonValue.Str).value in
+                        setOf("work", "custom") && duration!! > 0
+                else -> false
+            }
+            else -> when (variant) {
+                "stage_group_action" -> duration!! > 0
+                "stage_group_custom" -> duration!! > 0
+                else -> false
+            }
+        }
+        val trueRest = when (actualFamily) {
+            "legacy_timed_v1" -> when (variant) {
+                "circuit_item_rest" -> duration!! > 0
+                "circuit_rest_after_item" -> duration!! > 0
+                "between_round_rest" -> duration!! > 0
+                else -> false
+            }
+            else -> when (variant) {
+                "stage_group_rest" -> duration!! > 0
+                "between_round_rest" -> duration!! > 0
+                else -> false
+            }
+        }
+        val blockKey = if (actualFamily == "legacy_timed_v1") "blockId" else "compositionBlockId"
+        TimedResolvedFocusPhaseV1(
+            phaseSequence = phase.phaseSequence,
+            blockId = (payload.fields.getValue(blockKey) as? CanonicalJsonValue.Str)?.value,
+            roundIndex0 = (payload.fields.getValue("roundIndex0") as? CanonicalJsonValue.Num)
+                ?.value?.longValueExact(),
+            trueWork = trueWork,
+            trueRest = trueRest
+        )
+    }
+    val hasTrueWork = resolved.any { it.trueWork }
+    val hasTrueRest = resolved.any { it.trueRest }
+    return TimedStructureResolutionV1.Resolved(TimedResolvedStructureV1(
+        sessionId, family, prepared.orderedStructureDigestHexLowercase(),
+        Collections.unmodifiableList(resolved), hasTrueWork, hasTrueRest, hasTrueWork && hasTrueRest
+    ))
+}
+
+internal fun validateTimedFocusV1(
+    structure: TimedResolvedStructureV1,
+    focusJson: String
+): TimedFocusValidationV1 {
+    val invalid = TimedFocusValidationV1.Invalid
+    val fields = (parseCanonicalJson(focusJson) as? CanonicalJsonValue.Obj)?.fields ?: return invalid
+    if (fields.keys != setOf(
+            "focusContractVersion", "sessionId", "family", "structureDigestHexLowercase", "focusKind",
+            "legacyBlockId", "compositionBlockId", "roundIndex0", "phaseSequence"
+        )) return invalid
+    val version = (fields.getValue("focusContractVersion") as? CanonicalJsonValue.Num)?.value
+        ?: return invalid
+    if (version.compareTo(BigDecimal.ONE) != 0) return invalid
+    val sessionId = (fields.getValue("sessionId") as? CanonicalJsonValue.Str)?.value ?: return invalid
+    val family = (fields.getValue("family") as? CanonicalJsonValue.Str)?.value ?: return invalid
+    val digest = (fields.getValue("structureDigestHexLowercase") as? CanonicalJsonValue.Str)?.value
+        ?: return invalid
+    val kind = (fields.getValue("focusKind") as? CanonicalJsonValue.Str)?.value ?: return invalid
+    if (sessionId != structure.sessionId || family != structure.family ||
+        digest != structure.structureDigestHexLowercase) return invalid
+    for (key in listOf("legacyBlockId", "compositionBlockId")) {
+        val value = fields.getValue(key)
+        if (value !is CanonicalJsonValue.Str && value != CanonicalJsonValue.Null) return invalid
+    }
+    for (key in listOf("roundIndex0", "phaseSequence")) {
+        val value = fields.getValue(key)
+        if (value == CanonicalJsonValue.Null) continue
+        if (value !is CanonicalJsonValue.Num || value.value < BigDecimal.ZERO ||
+            value.value > Long.MAX_VALUE.toBigDecimal() ||
+            value.value.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0) return invalid
+    }
+    val legacyBlockId = (fields.getValue("legacyBlockId") as? CanonicalJsonValue.Str)?.value
+    val compositionBlockId = (fields.getValue("compositionBlockId") as? CanonicalJsonValue.Str)?.value
+    val round = (fields.getValue("roundIndex0") as? CanonicalJsonValue.Num)?.value?.longValueExact()
+    val sequence = (fields.getValue("phaseSequence") as? CanonicalJsonValue.Num)?.value?.longValueExact()
+    val blockId = if (family == "legacy_timed_v1") {
+        if (compositionBlockId != null) return invalid
+        legacyBlockId
+    } else {
+        if (legacyBlockId != null) return invalid
+        compositionBlockId
+    }
+    when (kind) {
+        "whole" -> if (blockId != null || round != null || sequence != null) return invalid
+        "round" -> if (blockId == null || round == null || sequence != null ||
+            structure.phases.none { it.blockId == blockId && it.roundIndex0 == round }) return invalid
+        "work", "rest" -> {
+            if (blockId == null || round == null || sequence == null) return invalid
+            val phase = structure.phases.singleOrNull { it.phaseSequence == sequence } ?: return invalid
+            if (phase.blockId != blockId || phase.roundIndex0 != round ||
+                !(if (kind == "work") phase.trueWork else phase.trueRest)) return invalid
+        }
+        else -> return invalid
+    }
+    return TimedFocusValidationV1.Valid(TimedFocusIdentityV1(
+        1, sessionId, family, digest, kind, legacyBlockId, compositionBlockId, round, sequence
+    ))
+}
+
+internal fun restoreTimedFocusV1(
+    structure: TimedResolvedStructureV1,
+    focusJson: String
+): TimedFocusIdentityV1 = when (val result = validateTimedFocusV1(structure, focusJson)) {
+    is TimedFocusValidationV1.Valid -> result.identity
+    TimedFocusValidationV1.Invalid -> TimedFocusIdentityV1(
+        1, structure.sessionId, structure.family, structure.structureDigestHexLowercase,
+        "whole", null, null, null, null
+    )
+}
 
 internal data class TimedCanonicalStepFactsV1(
     val sourceStepId: String,
