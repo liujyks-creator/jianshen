@@ -12,6 +12,8 @@ import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SessionStepRecord
+import com.liujyks.trainflow.core.model.TimedCompositionTimeline
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineStageKind
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import java.time.Instant
@@ -266,6 +268,137 @@ private fun validatedLegacyIdentityJsonV1(
         "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
         "family" to CanonicalJsonValue.Str("legacy_timed_v1"),
         "payloadVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+        "mode" to CanonicalJsonValue.Str("timed"),
+        "phaseKind" to CanonicalJsonValue.Str(phaseKind),
+        "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
+            "signatureContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+            "algorithm" to CanonicalJsonValue.Str("sha256"),
+            "digestHexLowercase" to CanonicalJsonValue.Str(snapshot.orderedStructureDigestHexLowercase())
+        )),
+        "payload" to payload
+    )).renderCanonicalJson()
+    if (PhaseIdentityV1Validator.validate(identity, snapshot.storage(), phaseKind) != CanonicalValidationResult.Valid) {
+        throw RecorderValidationException("invalid_phase_identity")
+    }
+    return identity
+}
+
+internal fun compositionTimedTransitionFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    timelines: List<TimedCompositionTimeline>,
+    before: TimedWorkoutEngineState,
+    result: TimedWorkoutEngineResult,
+    startedAt: Instant
+): LegacyTimedTransitionFactsV1 {
+    val state = result.state
+    val phaseStarts = result.events.mapNotNull { event ->
+        val stepId = when (event) {
+            is WorkoutEvent.TimedWorkStarted -> event.stepId
+            is WorkoutEvent.RestStarted -> event.stepId
+            is WorkoutEvent.SessionResumed -> state.currentStep!!.id
+            is WorkoutEvent.SessionPaused -> {
+                val payload = CanonicalJsonValue.Obj(linkedMapOf(
+                    "variant" to CanonicalJsonValue.Str("paused"),
+                    "compositionVersion" to CanonicalJsonValue.Num(2.toBigDecimal()),
+                    "compositionBlockId" to CanonicalJsonValue.Null,
+                    "timelineStageId" to CanonicalJsonValue.Null,
+                    "timelineStageKind" to CanonicalJsonValue.Null,
+                    "stageGroupId" to CanonicalJsonValue.Null,
+                    "targetId" to CanonicalJsonValue.Null,
+                    "targetKind" to CanonicalJsonValue.Null,
+                    "roundIndex0" to CanonicalJsonValue.Null,
+                    "stageGroupIndex0" to CanonicalJsonValue.Null,
+                    "targetIndex0" to CanonicalJsonValue.Null,
+                    "stageInstanceIndex0" to CanonicalJsonValue.Null,
+                    "targetInstanceIndex0" to CanonicalJsonValue.Null,
+                    "stepIndex0" to CanonicalJsonValue.Null
+                ))
+                return@mapNotNull TimedCanonicalPhaseFactsV1(
+                    sourceStep = null,
+                    phaseKind = "paused",
+                    plannedDurationMs = null,
+                    phaseIdentityJson = validatedCompositionIdentityJsonV1(snapshot, "paused", payload)
+                )
+            }
+            else -> return@mapNotNull null
+        }
+        val step = state.steps.single { it.id == stepId }
+        val facts = compositionTimedStepFactsV1(snapshot, timelines, step)
+        TimedCanonicalPhaseFactsV1(step, facts.phaseKind, facts.plannedDurationMs, facts.phaseIdentityJson)
+    }
+    val completedSteps = state.toTimedSessionStepRecords(startedAt)
+        .drop(before.stepHistory.count { it.actualDurationSec != null })
+        .map { record ->
+            val step = state.steps.single { it.id == record.stepId }
+            LegacyTimedCompletedStepFactsV1(record, compositionTimedStepFactsV1(snapshot, timelines, step))
+        }
+    val restExtensions = state.toTimedRestExtensionRecords()
+        .drop(before.restExtensionHistory.size)
+        .map { record ->
+            val step = state.steps[record.stepIndex]
+            LegacyTimedRestExtensionFactsV1(record, compositionTimedStepFactsV1(snapshot, timelines, step))
+        }
+    return LegacyTimedTransitionFactsV1(
+        phaseStarts = phaseStarts,
+        completedSteps = completedSteps,
+        restExtensions = restExtensions,
+        terminalStatus = state.status.takeIf { state.isTerminal && !before.isTerminal }
+    )
+}
+
+private fun compositionTimedStepFactsV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    timelines: List<TimedCompositionTimeline>,
+    step: TimedSessionStep
+): TimedCanonicalStepFactsV1 {
+    val timeline = timelines.singleOrNull { it.compositionBlockId == step.blockId }
+        ?: throw RecorderValidationException("invalid_phase_identity")
+    val stepIndex0 = timeline.steps.indexOfFirst { it.id == step.id }
+    if (stepIndex0 < 0) throw RecorderValidationException("invalid_phase_identity")
+    val metadata = timeline.steps[stepIndex0]
+    val variant = when (metadata.timelineStageKind) {
+        TimedCompositionTimelineStageKind.STAGE_GROUP -> "stage_group_${metadata.targetKind.contractValue}"
+        else -> metadata.timelineStageKind.contractValue
+    }
+    val phaseKind = when (step.kind) {
+        TimedSessionStepKind.WORK -> "timed_work"
+        TimedSessionStepKind.REST -> "timed_rest"
+    }
+    val payload = CanonicalJsonValue.Obj(linkedMapOf(
+        "variant" to CanonicalJsonValue.Str(variant),
+        "compositionVersion" to CanonicalJsonValue.Num(metadata.compositionVersion.toBigDecimal()),
+        "compositionBlockId" to CanonicalJsonValue.Str(metadata.compositionBlockId),
+        "timelineStageId" to CanonicalJsonValue.Str(metadata.timelineStageId),
+        "timelineStageKind" to CanonicalJsonValue.Str(metadata.timelineStageKind.contractValue),
+        "stageGroupId" to CanonicalJsonValue.Str(metadata.stageGroupId),
+        "targetId" to CanonicalJsonValue.Str(metadata.targetId),
+        "targetKind" to CanonicalJsonValue.Str(metadata.targetKind.contractValue),
+        "roundIndex0" to (metadata.roundIndex?.let { CanonicalJsonValue.Num((it - 1).toBigDecimal()) }
+            ?: CanonicalJsonValue.Null),
+        "stageGroupIndex0" to (metadata.stageGroupIndex?.let { CanonicalJsonValue.Num((it - 1).toBigDecimal()) }
+            ?: CanonicalJsonValue.Null),
+        "targetIndex0" to CanonicalJsonValue.Num((metadata.targetIndex - 1).toBigDecimal()),
+        "stageInstanceIndex0" to CanonicalJsonValue.Num((metadata.stageInstanceIndex - 1).toBigDecimal()),
+        "targetInstanceIndex0" to CanonicalJsonValue.Num((metadata.targetInstanceIndex - 1).toBigDecimal()),
+        "stepIndex0" to CanonicalJsonValue.Num(stepIndex0.toBigDecimal())
+    ))
+    return TimedCanonicalStepFactsV1(
+        sourceStepId = step.id,
+        phaseKind = phaseKind,
+        plannedDurationMs = step.durationSec.toLong() * 1000L,
+        phaseIdentityJson = validatedCompositionIdentityJsonV1(snapshot, phaseKind, payload)
+    )
+}
+
+private fun validatedCompositionIdentityJsonV1(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    phaseKind: String,
+    payload: CanonicalJsonValue.Obj
+): String {
+    val identity = CanonicalJsonValue.Obj(linkedMapOf(
+        "phaseIdentityContractVersion" to CanonicalJsonValue.Num(1.toBigDecimal()),
+        "family" to CanonicalJsonValue.Str("timed_composition_v2"),
+        "payloadVersion" to CanonicalJsonValue.Num(2.toBigDecimal()),
         "mode" to CanonicalJsonValue.Str("timed"),
         "phaseKind" to CanonicalJsonValue.Str(phaseKind),
         "orderedStructureSignature" to CanonicalJsonValue.Obj(linkedMapOf(
