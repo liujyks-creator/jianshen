@@ -29,6 +29,9 @@ stepsCompleted:
 本轮 accepted base `74c25fac9c728baf2aa44b9e05b5f7bece615fca` 已包含正式文档及 S01–S04。用户已接受实时记录收窄，来源 V2 F.69.2/P01–P08（757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`），当前冲突条款按正式计划 F.8.4 窄替代；历史正文不追改。单 session 一次原子初始化、持续实时提交、正常终态真实 cut 保留；停止后不续录/补造，重开只处理 durable。Saved/read-ready 与 Released 独立，正常导航不等 binding 清理；clear 只同步停接输入/新写，不再拥有后台补终结职责。Repository 唯一准入，无共享完成扫描 cache，故障后不恢复同进程写资格；原事务/原错/exact 隔离保持。本 docs 候选待独立 Planning Review，S05 未 PASS/未合并，后续 Writer 不解锁。
 
 下方 V11/早期E17的旧编号、分解、顺序和当前候选/派发措辞在冲突范围内由新入口替代。原schema/数学/typed定义与CS-03/CS-04A/CS-05/CS-04B等已合并资产保留；旧lease机制只按正式计划 D/F.27 窄替代，不恢复04C、旧CS-06或第二owner。真实写入失败、原始错误、事务全回滚、诚实保存与释放状态不删除；M1/final证据链保持。
+**首版竖屏声明与 S07L 当前边界（2026-09-13）：** 用户已接受首版为现有 MainActivity 在 Manifest 声明 `android:screenOrientation="portrait"`，覆盖当前 App 页面；不随训练进入/离场切换 `requestedOrientation`，不恢复 `UNSPECIFIED`。这是系统竖屏请求，不承诺所有设备锁定竖屏：项目 targetSdk=36，Android 16 对 targetSdk>=36 且最小宽度>=600dp 大屏忽略该限制，厂商也可能覆盖声明（[Android 官方文档](https://developer.android.com/guide/topics/manifest/activity-element#screen)，2026-09-13 已查证）。不加 opt-out、兼容代码或设备过滤，不降 targetSdk。胶囊仅显示数据与点击展开/收起，没有设置入口，不接导航；训练期间切换系统语言续训不属于首版要求。横屏/旋转及原 retained 恢复方向留后续，当前未适配、未实现或验证；旧 retained/L02=`DEFERRED_NOT_IMPLEMENTED`，不提供稳定 owner/配置重建状态保留，S07B 原相关前提仍未满足，不自动转移实现责任。原训练/保存/反馈代码保持。
+
+S07L 当前 accepted base=`0897d0b61669c19ca6283f4807897a279f0717b8`，已含 S06A/S06B/S07A，其原完成结论及证据保持。生产只改 Manifest 一个属性，同步正式计划、本文件和 decision-log；验证仅 V1 XML/唯一 MainActivity portrait/单属性 diff 与 V2 三文档条款 diff/四文件 `git diff --check`，不证明合并 Manifest 或设备效果，测试/build/设备/性能/人工门禁为零。总1/完成0/剩余1，当前 `IMPLEMENTED_CANDIDATE_AWAITING_REVIEW`；批准集合实现、静态验证、独立 Review PASS 及同 Reviewer 同任务机械集成后才完成1/剩余0。旧状态与生命周期条款仅在本次范围内按上述准确边界限定，不改历史或新增包，CS04C=HELD。
 <!-- E18-E22-PLAN-LANDING:END -->
 
 
@@ -242,7 +245,8 @@ WorkoutEngine
 
 - Compose 页面只展示 `UiState` 并发出用户意图。
 - 训练中按钮不直接改 session 数据，而是发 `WorkoutCommand`。
-- 配置重建从同一 retained entry/engine/clock/保存状态恢复 UI；进程停止不恢复 engine 续跑。新增记录持续提交到同 session，重开只读取 durable 事实，不以重开时间补结束。
+- 首版方向仅为现有 MainActivity Manifest `android:screenOrientation="portrait"` 声明，覆盖当前页面；不动态切换 requestedOrientation/恢复 UNSPECIFIED，受当前入口说明的 Android 16 大屏限制约束，不保证所有设备锁定竖屏。胶囊仅数据显示与点击展开/收起，无设置入口；训练中切换系统语言续训不属首版要求，横屏/旋转适配留后续，当前未完成。
+- 原配置重建从同一 retained entry/engine/clock/保存状态恢复 UI 的方向保留后续；S07L 的 retained/L02=`DEFERRED_NOT_IMPLEMENTED`，本次不实施或验证，不作为 S07B 稳定 owner 前提已满足的证据，不自动并入 S07B。原训练/保存/反馈代码保持；进程停止不恢复 engine 续跑。新增记录持续提交到同 session，重开只读取 durable 事实，不以重开时间补结束。
 
 ### 5.2 Domain 层
 
