@@ -127,7 +127,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     private var stopCause: Throwable? = null
     private var terminal: Input.Terminal? = null
     private var clearRequested = false
-    private var cleanupFinished = false
+    private var terminalCleanupClaimed = false
 
     // Only the worker advances these cursors. Confirmed state comes exclusively from S03.
     private lateinit var device: CanonicalHeartRateDeviceState
@@ -185,7 +185,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     }
 
     fun clear() = synchronized(lock) {
-        if (!clearRequested && !cleanupFinished) {
+        if (!clearRequested && !terminalCleanupClaimed) {
             clearRequested = true
             closeInput(CancellationException("recorder_owner_cleared"))
             repository.beginOwnerClearHandoff(admission.ownerToken, session.id)
@@ -314,16 +314,15 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         val saved = repository.finalizeCanonicalSession(admission.ownerToken, request)
         currentCoroutineContext().ensureActive()
         input.saved.complete(saved)
+        synchronized(lock) { terminalCleanupClaimed = true }
         try {
             currentCoroutineContext().ensureActive()
             repository.releaseRecorderAfterTerminal(admission.ownerToken, session.id, runtime)
             synchronized(lock) {
-                cleanupFinished = true
                 input.released.complete(Unit)
             }
         } catch (cause: Throwable) {
             synchronized(lock) {
-                cleanupFinished = true
                 input.released.completeExceptionally(cause)
             }
             if (cause is CancellationException) throw cause
