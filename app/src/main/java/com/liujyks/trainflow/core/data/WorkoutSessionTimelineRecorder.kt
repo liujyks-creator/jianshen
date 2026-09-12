@@ -6,6 +6,8 @@ import com.liujyks.trainflow.core.database.RecordingHeaderV1Validator
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
+import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
+import com.liujyks.trainflow.core.database.entity.StrengthSetRecordEntity
 import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
@@ -50,6 +52,36 @@ internal data class RecorderActivityConfirmation(
     val openedPhase: WorkoutPhaseIntervalEntity?
 )
 
+internal enum class RecorderTerminalKind { COMPLETED, USER_ABANDONED }
+
+internal class RecorderTerminalInput(
+    val elapsedRealtimeMs: Long,
+    val kind: RecorderTerminalKind,
+    val endedAt: String,
+    val totalElapsedSec: Int?,
+    val effectiveElapsedSec: Int?,
+    val pausedElapsedSec: Int?,
+    val sessionDisplayMetadataJson: String,
+    stepRecords: List<SessionStepRecordEntity>,
+    restExtensions: List<TimedRestExtensionRecordEntity>,
+    strengthSets: List<StrengthSetRecordEntity>,
+    val snapshotCreatedAt: String
+) {
+    val stepRecords: List<SessionStepRecordEntity> = java.util.Collections.unmodifiableList(stepRecords.toList())
+    val restExtensions: List<TimedRestExtensionRecordEntity> = java.util.Collections.unmodifiableList(restExtensions.toList())
+    val strengthSets: List<StrengthSetRecordEntity> = java.util.Collections.unmodifiableList(strengthSets.toList())
+}
+
+internal class RecorderTerminalOperation(
+    val saved: Deferred<CanonicalFinalizationResult>,
+    val released: Deferred<Unit>
+)
+
+internal sealed interface RecorderTerminalSubmission {
+    data class Accepted(val operation: RecorderTerminalOperation) : RecorderTerminalSubmission
+    data class Closed(val originalCause: Throwable?) : RecorderTerminalSubmission
+}
+
 internal sealed interface RecorderSubmission {
     data class Accepted(val completion: Deferred<RecorderActivityConfirmation>) : RecorderSubmission
     data class Closed(val originalCause: Throwable?) : RecorderSubmission
@@ -68,7 +100,8 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     private val session: WorkoutSessionEntity,
     private val initialPhase: WorkoutPhaseIntervalEntity,
     private val initialRecording: HeartRateRecordingEntity?,
-    private val admission: RecorderAdmission
+    private val admission: RecorderAdmission,
+    private val runtime: HeartRateRuntimeOwner
 ) {
     private sealed interface Input {
         data class Observation(val value: HeartRateObservation) : Input
@@ -76,6 +109,11 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             val value: RecorderActivityInput,
             val completion: CompletableDeferred<RecorderActivityConfirmation>
         ) : Input
+        class Terminal(val value: RecorderTerminalInput) : Input {
+            val saved = CompletableDeferred<CanonicalFinalizationResult>()
+            val released = CompletableDeferred<Unit>()
+            val submission = RecorderTerminalSubmission.Accepted(RecorderTerminalOperation(saved, released))
+        }
     }
 
     private val lock = Any()
@@ -87,6 +125,9 @@ internal class WorkoutSessionTimelineRecorder private constructor(
     private var startCompletion: CompletableDeferred<RecorderExpectedState>? = null
     private var startRequest: FrozenCanonicalStartRequest? = null
     private var stopCause: Throwable? = null
+    private var terminal: Input.Terminal? = null
+    private var clearRequested = false
+    private var terminalCleanupClaimed = false
 
     // Only the worker advances these cursors. Confirmed state comes exclusively from S03.
     private lateinit var device: CanonicalHeartRateDeviceState
@@ -117,6 +158,8 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             if (cause is CancellationException) synchronized(lock) {
                 closeInput(cause)
                 completion.completeExceptionally(cause)
+                terminal?.saved?.completeExceptionally(cause)
+                terminal?.released?.completeExceptionally(cause)
             }
         }
         completion
@@ -130,8 +173,20 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         RecorderSubmission.Accepted(completion)
     }
 
+    fun freezeTerminal(input: RecorderTerminalInput): RecorderTerminalSubmission = synchronized(lock) {
+        terminal?.let { return@synchronized it.submission }
+        if (!accepting()) return@synchronized RecorderTerminalSubmission.Closed(stopCause)
+        check(startRequest != null) { "freezeStart must precede terminal" }
+        val pending = Input.Terminal(input)
+        terminal = pending
+        queue.trySend(pending).getOrThrow()
+        mutableProgress.value = mutableProgress.value.copy(inputClosed = true)
+        pending.submission
+    }
+
     fun clear() = synchronized(lock) {
-        if (!mutableProgress.value.inputClosed) {
+        if (!clearRequested && !terminalCleanupClaimed) {
+            clearRequested = true
             closeInput(CancellationException("recorder_owner_cleared"))
             repository.beginOwnerClearHandoff(admission.ownerToken, session.id)
         }
@@ -143,6 +198,10 @@ internal class WorkoutSessionTimelineRecorder private constructor(
 
     /** Called under lock, including immediately before each repository call. */
     private fun accepting(): Boolean {
+        return processing() && !mutableProgress.value.inputClosed
+    }
+
+    private fun processing(): Boolean {
         if (!sessionJob.isActive) {
             try {
                 sessionJob.ensureActive()
@@ -150,7 +209,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 closeInput(cause)
             }
         }
-        return !mutableProgress.value.inputClosed
+        return stopCause == null
     }
 
     private fun closeInput(cause: Throwable) {
@@ -165,6 +224,10 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         while (true) {
             val pending = queue.tryReceive().getOrNull() ?: break
             if (pending is Input.Activity) pending.completion.completeExceptionally(requireNotNull(stopCause))
+            if (pending is Input.Terminal) {
+                pending.saved.completeExceptionally(requireNotNull(stopCause))
+                pending.released.completeExceptionally(requireNotNull(stopCause))
+            }
         }
     }
 
@@ -175,7 +238,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
         var active: Input.Activity? = null
         try {
             currentCoroutineContext().ensureActive()
-            synchronized(lock) { if (!accepting()) throw requireNotNull(stopCause) }
+            synchronized(lock) { if (!processing()) throw requireNotNull(stopCause) }
             val confirmed = repository.startCanonicalSession(admission.ownerToken, request)
             currentCoroutineContext().ensureActive()
             device = CanonicalHeartRateObservationMapper.map(
@@ -203,10 +266,14 @@ internal class WorkoutSessionTimelineRecorder private constructor(
             for (input in queue) {
                 active = input as? Input.Activity
                 currentCoroutineContext().ensureActive()
-                synchronized(lock) { if (!accepting()) throw requireNotNull(stopCause) }
+                synchronized(lock) { if (!processing()) throw requireNotNull(stopCause) }
                 val result = when (input) {
                     is Input.Observation -> consumeObservation(input.value)
                     is Input.Activity -> consumeActivity(input.value)
+                    is Input.Terminal -> {
+                        consumeTerminal(input)
+                        return
+                    }
                 }
                 active?.completion?.complete(result)
                 active = null
@@ -216,6 +283,8 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 closeInput(cause)
                 initialization.completeExceptionally(cause)
                 active?.completion?.completeExceptionally(cause)
+                terminal?.saved?.completeExceptionally(cause)
+                terminal?.released?.completeExceptionally(cause)
             }
             throw cause
         } catch (cause: Throwable) {
@@ -224,7 +293,39 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 repository.reportRecorderActivityFailure(admission.ownerToken, session.id, cause)
                 initialization.completeExceptionally(cause)
                 active?.completion?.completeExceptionally(cause)
+                terminal?.saved?.completeExceptionally(cause)
+                terminal?.released?.completeExceptionally(cause)
             }
+        }
+    }
+
+    private suspend fun consumeTerminal(input: Input.Terminal) {
+        val value = input.value
+        val expected = requireNotNull(progress.value.confirmedState)
+        val request = FrozenCanonicalFinalizationRequest(expected,
+            Math.subtractExact(value.elapsedRealtimeMs, binding.anchorElapsedRealtimeMs),
+            if (value.kind == RecorderTerminalKind.COMPLETED) "completed" else "abandoned",
+            if (value.kind == RecorderTerminalKind.COMPLETED) "completed" else "user_abandoned",
+            value.endedAt, value.totalElapsedSec, value.effectiveElapsedSec, value.pausedElapsedSec,
+            value.sessionDisplayMetadataJson, value.stepRecords, value.restExtensions, value.strengthSets,
+            value.snapshotCreatedAt.takeIf { expected.recordingId != null })
+        currentCoroutineContext().ensureActive()
+        synchronized(lock) { if (!processing()) throw requireNotNull(stopCause) }
+        val saved = repository.finalizeCanonicalSession(admission.ownerToken, request)
+        currentCoroutineContext().ensureActive()
+        input.saved.complete(saved)
+        synchronized(lock) { terminalCleanupClaimed = true }
+        try {
+            currentCoroutineContext().ensureActive()
+            repository.releaseRecorderAfterTerminal(admission.ownerToken, session.id, runtime)
+            synchronized(lock) {
+                input.released.complete(Unit)
+            }
+        } catch (cause: Throwable) {
+            synchronized(lock) {
+                input.released.completeExceptionally(cause)
+            }
+            if (cause is CancellationException) throw cause
         }
     }
 
@@ -306,7 +407,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
 
     private suspend fun commit(request: CanonicalActivityRequest): RecorderActivityConfirmation {
         currentCoroutineContext().ensureActive()
-        synchronized(lock) { if (!accepting()) throw requireNotNull(stopCause) }
+        synchronized(lock) { if (!processing()) throw requireNotNull(stopCause) }
         val confirmed = repository.applyCanonicalActivity(admission.ownerToken, request)
         currentCoroutineContext().ensureActive()
         synchronized(lock) { mutableProgress.value = mutableProgress.value.copy(confirmedState = confirmed) }
@@ -337,7 +438,7 @@ internal class WorkoutSessionTimelineRecorder private constructor(
                 0, null, 0, null, 1, initialPhase.phaseKind, initialPhase.phaseIdentityJson)
             val admission = repository.admitRecorder(entryId, session, phase)
             try {
-                val recorder = WorkoutSessionTimelineRecorder(repository, scope, session, phase, recording, admission)
+                val recorder = WorkoutSessionTimelineRecorder(repository, scope, session, phase, recording, admission, runtime)
                 withContext(Dispatchers.Main.immediate) {
                     sessionJob.ensureActive()
                     recorder.binding = when (val result = runtime.bindObservations(admission.bindingId, recorder::observe)) {

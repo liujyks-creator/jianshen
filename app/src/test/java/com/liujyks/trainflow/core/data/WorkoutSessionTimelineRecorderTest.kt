@@ -17,17 +17,22 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
+import com.liujyks.trainflow.core.database.AnalysisSnapshotV1Validator
+import com.liujyks.trainflow.core.database.CanonicalValidationResult
 import com.liujyks.trainflow.core.database.CanonicalTuple
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
+import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
 import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.health.E17GattShadow
 import com.liujyks.trainflow.core.health.E17ScannerShadow
+import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
+import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
@@ -47,8 +52,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.first
@@ -67,6 +74,7 @@ import org.robolectric.annotation.LooperMode
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowBluetoothDevice
 import org.robolectric.shadows.ShadowBluetoothGatt
+import org.robolectric.shadows.ShadowPausedLooper
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], shadows = [E17GattShadow::class, E17ScannerShadow::class])
@@ -81,6 +89,7 @@ class WorkoutSessionTimelineRecorderTest {
     private var anchor = 0L
     private val scopes = mutableListOf<CoroutineScope>()
     private val writes = Collections.synchronizedList(mutableListOf<String>())
+    private var terminalReadbackMutation: ((String) -> Unit)? = null
 
     @Before
     fun setUp() {
@@ -357,6 +366,664 @@ class WorkoutSessionTimelineRecorderTest {
         }
     }
 
+    @Test
+    fun frozenTerminalDrainsAcceptedPrefixAndKeepsOriginalSaved() = runRecorderTest {
+        val cut = SqlCut("start")
+        reset(cut)
+        val repository = WorkoutSessionRepository(database)
+        val connection = connect()
+        bind(recording(), repository = repository)
+        val bindingId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+            as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+        val installed = runtime.queryObservationBinding(bindingId)
+        val steps = listOf(SessionStepRecordEntity(
+            id = "execution-step", sessionId = SESSION_ID, stepId = "block:warmup:target",
+            kind = "timed_work", blockId = "block", itemId = null, setPlanId = null,
+            exerciseId = null, startedAt = "2026-09-06T16:30:00Z",
+            endedAt = "2026-09-06T16:30:01Z", skipped = false,
+            actualDurationSec = 1, plannedDurationSec = 10))
+        val input = RecorderTerminalInput(anchor + 1000, RecorderTerminalKind.COMPLETED,
+            "2026-09-06T16:30:01Z", 1, 1, 0, VALID_DISPLAY_METADATA,
+            steps, emptyList(), emptyList(), "2026-09-06T16:30:01Z")
+        connection.notify(88)
+        connection.notify(88)
+        val initialization = recorder.freezeStart()
+        lateinit var submission: RecorderTerminalSubmission.Accepted
+        try {
+            assertTrue(cut.entered.await(5, TimeUnit.SECONDS))
+            at(100)
+            connection.notify(91)
+            at(1000)
+            submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+            assertSame(submission, recorder.freezeTerminal(RecorderTerminalInput(anchor + 1100,
+                RecorderTerminalKind.COMPLETED, "2099-01-01T00:00:00Z", 99, 1, 0,
+                VALID_DISPLAY_METADATA, steps, emptyList(), emptyList(), "2099-01-01T00:00:00Z")))
+            at(1100)
+            connection.notify(99)
+            assertTrue(recorder.offer(RecorderActivityInput(anchor + 1100)) is RecorderSubmission.Closed)
+        } finally {
+            cut.release.countDown()
+        }
+        await(initialization)
+        val operation = submission.operation
+        val saved = await(operation.saved)
+        assertEquals(CanonicalFinalizationResult(SESSION_ID, RECORDING_ID, CanonicalTuple(1000, 5), 1), saved)
+        val main = awaitCleanupDispatch(operation)
+        val rows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows(SESSION_ID))
+        val recorded = rows.recordings.single()
+        val graph = CanonicalSessionGraphV1(rows.session, rows.phases, recorded.recording,
+            recorded.acquisitions, recorded.samples, recorded.snapshots)
+        val prefix = prefixGraph()
+        val expected = prefix.copy(
+            session = session().copy(status = "completed", endedAt = "2026-09-06T16:30:01Z",
+                totalElapsedSec = 1, effectiveElapsedSec = 1, pausedElapsedSec = 0,
+                lastDurableOffsetMs = 1000, lastMutationSequence = 5,
+                trustedEndOffsetMs = 1000, terminalReason = "completed"),
+            phases = listOf(phase().copy(endOffsetMs = 1000, endMutationSequence = 5, openMarker = null)),
+            recording = recording().copy(status = "terminal", endedOffsetMs = 1000,
+                endedMutationSequence = 5, originalAnalysisVersion = 1),
+            acquisitions = prefix.acquisitions.dropLast(1) + prefix.acquisitions.last().copy(
+                endOffsetMs = 1000, endMutationSequence = 5, openMarker = null),
+            samples = prefix.samples + HeartRateSampleEntity(RECORDING_ID, 2, 100, 4, 91),
+            snapshots = graph.snapshots)
+        assertEquals(expected, graph)
+        assertEquals(3, graph.samples.size)
+        assertEquals("2026-09-06T16:30:01Z", graph.snapshots.single().createdAt)
+        assertEquals(CanonicalValidationResult.Valid,
+            AnalysisSnapshotV1Validator.validate(graph, graph.snapshots.single()))
+        assertEquals(steps, database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
+        val durable = databaseSnapshot()
+        assertEquals(installed, runtime.queryObservationBinding(bindingId))
+        val admission = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.admitRecorder("s06b-next-entry",
+                session().copy(id = "s06b-next-session"), phase().copy(id = "s06b-next-session:phase:0",
+                    sessionId = "s06b-next-session"))
+        }
+        val cancellation = CancellationException("s06b_admission_probe_cancelled")
+        try {
+            assertFalse(admission.isCompleted)
+            admission.cancel(cancellation)
+            val cause = failure(admission)
+            assertTrue(generateSequence(cause) { it.cause }.any { it === cancellation })
+        } finally {
+            admission.cancel(cancellation)
+        }
+        assertEquals(installed, runtime.queryObservationBinding(bindingId))
+        assertEquals(durable, databaseSnapshot())
+        main.idle()
+        await(operation.released)
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(bindingId))
+        assertEquals(durable, databaseSnapshot())
+        assertSame(submission, recorder.freezeTerminal(input))
+        assertSame(saved, await(operation.saved))
+        assertEquals(durable, databaseSnapshot())
+        assertEquals(1, writes.count { it == "terminal" })
+    }
+
+    @Test
+    fun noRecordingAndZeroSampleTerminalsKeepExactGraphs() = runRecorderTest {
+        for (enabled in listOf(false, true)) {
+            if (enabled) reset()
+            bind(if (enabled) recording() else null)
+            val bindingId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+                as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+            val installed = runtime.queryObservationBinding(bindingId)
+            await(recorder.freezeStart())
+            assertGraph(zeroGraph(enabled))
+            val input = RecorderTerminalInput(anchor,
+                if (enabled) RecorderTerminalKind.USER_ABANDONED else RecorderTerminalKind.COMPLETED,
+                "2026-09-06T16:30:00Z", 0, 0, 0, VALID_DISPLAY_METADATA,
+                emptyList(), emptyList(), emptyList(), "2026-09-06T16:30:00Z")
+            val operation = (recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted).operation
+            val saved = await(operation.saved)
+            assertEquals(CanonicalFinalizationResult(SESSION_ID, if (enabled) RECORDING_ID else null,
+                CanonicalTuple(0, 1), if (enabled) 1 else null), saved)
+            val main = awaitCleanupDispatch(operation)
+            val rows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows(SESSION_ID))
+            assertEquals(if (enabled) 1 else 0, rows.recordings.size)
+            val recorded = rows.recordings.singleOrNull()
+            val graph = CanonicalSessionGraphV1(rows.session, rows.phases, recorded?.recording,
+                recorded?.acquisitions.orEmpty(), recorded?.samples.orEmpty(), recorded?.snapshots.orEmpty())
+            val expected = CanonicalSessionGraphV1(
+                session().copy(status = if (enabled) "abandoned" else "completed",
+                    endedAt = "2026-09-06T16:30:00Z", totalElapsedSec = 0, effectiveElapsedSec = 0,
+                    pausedElapsedSec = 0, lastMutationSequence = 1, trustedEndOffsetMs = 0,
+                    terminalReason = if (enabled) "user_abandoned" else "completed"),
+                listOf(phase().copy(endOffsetMs = 0, endMutationSequence = 1, openMarker = null)),
+                if (enabled) recording().copy(status = "terminal", endedOffsetMs = 0,
+                    endedMutationSequence = 1, originalAnalysisVersion = 1) else null,
+                if (enabled) listOf(acquisition(0, 0, 0, "not_observing")
+                    .copy(endOffsetMs = 0, endMutationSequence = 1, openMarker = null)) else emptyList(),
+                emptyList(), if (enabled) graph.snapshots else emptyList())
+            assertEquals(expected, graph)
+            assertEquals(emptyList<Any>(), database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+            assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+            assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
+            if (enabled) {
+                assertEquals("2026-09-06T16:30:00Z", graph.snapshots.single().createdAt)
+                assertEquals(CanonicalValidationResult.Valid,
+                    AnalysisSnapshotV1Validator.validate(graph, graph.snapshots.single()))
+            }
+            val durable = databaseSnapshot()
+            assertEquals(installed, runtime.queryObservationBinding(bindingId))
+            main.idle()
+            await(operation.released)
+            assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(bindingId))
+            assertEquals(durable, databaseSnapshot())
+        }
+    }
+
+    @Test
+    fun activityFailurePreventsQueuedTerminal() = runRecorderTest {
+        val cut = SqlCut("activity")
+        reset(cut)
+        val repository = WorkoutSessionRepository(database)
+        val connection = connect()
+        bind(recording(), repository = repository)
+        connection.notify(88)
+        connection.notify(88)
+        await(recorder.freezeStart())
+        assertGraph(prefixGraph())
+        val confirmed = recorder.progress.value.confirmedState
+        val before = databaseSnapshot()
+        trigger("s06b_activity_original_failure")
+        val input = RecorderTerminalInput(anchor + 2, RecorderTerminalKind.COMPLETED,
+            "2026-09-06T16:30:00.002Z", 0, 0, 0, VALID_DISPLAY_METADATA,
+            emptyList(), emptyList(), emptyList(), "2026-09-06T16:30:00.002Z")
+        val pause = recorder.offer(pause(1)) as RecorderSubmission.Accepted
+        lateinit var submission: RecorderTerminalSubmission.Accepted
+        try {
+            assertTrue(cut.entered.await(5, TimeUnit.SECONDS))
+            submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+        } finally {
+            cut.release.countDown()
+        }
+        val cause = failure(pause.completion)
+        assertTrue(cause is SQLiteConstraintException)
+        assertTrue(cause.message.orEmpty().contains("s06b_activity_original_failure"))
+        assertSame(cause, failure(submission.operation.saved))
+        assertSame(cause, failure(submission.operation.released))
+        assertSame(cause, recorder.progress.value.originalCause)
+        assertEquals(confirmed, recorder.progress.value.confirmedState)
+        joinWorker()
+        assertEquals(0, writes.count { it == "terminal" })
+        assertEquals(before, databaseSnapshot())
+        dropTrigger()
+        assertSame(submission, recorder.freezeTerminal(input))
+        assertSame(cause, failure(submission.operation.saved))
+        assertSame(cause, failure(submission.operation.released))
+        assertEquals(before, databaseSnapshot())
+        assertEquals(0, writes.count { it == "terminal" })
+    }
+
+    @Test
+    fun terminalReadbackFailureRollsBackWithoutRetry() = runRecorderTest {
+        val repository = WorkoutSessionRepository(database)
+        val connection = connect()
+        bind(recording(), repository = repository)
+        connection.notify(88)
+        connection.notify(88)
+        await(recorder.freezeStart())
+        assertGraph(prefixGraph())
+        val bindingId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+            as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+        val installed = runtime.queryObservationBinding(bindingId)
+        val steps = listOf(SessionStepRecordEntity(
+            id = "execution-step", sessionId = SESSION_ID, stepId = "block:warmup:target",
+            kind = "timed_work", blockId = "block", itemId = null, setPlanId = null,
+            exerciseId = null, startedAt = "2026-09-06T16:30:00Z",
+            endedAt = "2026-09-06T16:30:01Z", skipped = false,
+            actualDurationSec = 1, plannedDurationSec = 10))
+        val input = RecorderTerminalInput(anchor + 1000, RecorderTerminalKind.COMPLETED,
+            "2026-09-06T16:30:01Z", 1, 1, 0, VALID_DISPLAY_METADATA,
+            steps, emptyList(), emptyList(), "2026-09-06T16:30:01Z")
+        val before = databaseSnapshot()
+        val bindingReached = AtomicBoolean(false)
+        val fired = AtomicBoolean(false)
+        terminalReadbackMutation = { sql ->
+            if (sql.contains("SET original_analysis_version = 1")) bindingReached.set(true)
+            if (bindingReached.get() && sql.startsWith("SELECT * FROM session_step_records") &&
+                fired.compareAndSet(false, true)) {
+                terminalReadbackMutation = null
+                database.openHelper.writableDatabase.execSQL(
+                    "UPDATE session_step_records SET actual_duration_sec=99 WHERE id='execution-step'")
+            }
+        }
+        at(1000)
+        val submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+        val cause = failure(submission.operation.saved)
+        assertTrue(fired.get())
+        assertTrue(cause is RecorderValidationException)
+        assertEquals("terminal_graph_changed_during_write", (cause as RecorderValidationException).code)
+        assertSame(cause, failure(submission.operation.released))
+        joinWorker()
+        assertEquals(before, databaseSnapshot())
+        assertEquals(installed, runtime.queryObservationBinding(bindingId))
+        assertSame(submission, recorder.freezeTerminal(input))
+        assertSame(cause, failure(submission.operation.saved))
+        assertSame(cause, failure(submission.operation.released))
+        assertEquals(before, databaseSnapshot())
+        assertEquals(1, writes.count { it == "terminal" })
+    }
+
+    @Test
+    fun clearKeepsOnlyAlreadyInFlightTerminal() = runRecorderTest {
+        val queuedCut = SqlCut("activity")
+        reset(queuedCut)
+        val repository = WorkoutSessionRepository(database)
+        val connection = connect()
+        bind(recording(), repository = repository)
+        connection.notify(88)
+        connection.notify(88)
+        await(recorder.freezeStart())
+        assertGraph(prefixGraph())
+        val input = RecorderTerminalInput(anchor + 2, RecorderTerminalKind.COMPLETED,
+            "2026-09-06T16:30:00.002Z", 0, 0, 0, VALID_DISPLAY_METADATA,
+            emptyList(), emptyList(), emptyList(), "2026-09-06T16:30:00.002Z")
+        val pause = recorder.offer(pause(1)) as RecorderSubmission.Accepted
+        lateinit var queued: RecorderTerminalSubmission.Accepted
+        try {
+            assertTrue(queuedCut.entered.await(5, TimeUnit.SECONDS))
+            queued = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+            recorder.clear()
+            assertTrue(recorder.offer(RecorderActivityInput(anchor + 2)) is RecorderSubmission.Closed)
+            recorder.clear()
+        } finally {
+            queuedCut.release.countDown()
+        }
+        await(pause.completion)
+        assertTrue(failure(queued.operation.saved) is CancellationException)
+        assertTrue(failure(queued.operation.released) is CancellationException)
+        joinWorker()
+        val prefix = prefixGraph()
+        val paused = prefix.copy(
+            session = session().copy(status = "paused", lastDurableOffsetMs = 1, lastMutationSequence = 4),
+            phases = listOf(phase().copy(endOffsetMs = 1, endMutationSequence = 4, openMarker = null),
+                phase(1, 1, 4, "paused", VALID_PAUSED_PHASE_IDENTITY)),
+            acquisitions = prefix.acquisitions.dropLast(1) + listOf(
+                prefix.acquisitions.last().copy(endOffsetMs = 1, endMutationSequence = 4, openMarker = null),
+                acquisition(2, 1, 4, "live", enabled = false)))
+        assertGraph(paused)
+        assertEquals(0, writes.count { it == "terminal" })
+
+        for (rollback in listOf(false, true)) {
+            val cut = SqlCut("terminal")
+            reset(cut)
+            val repository = WorkoutSessionRepository(database)
+            val connection = connect()
+            bind(recording(), repository = repository)
+            connection.notify(88)
+            connection.notify(88)
+            await(recorder.freezeStart())
+            assertGraph(prefixGraph())
+            val bindingId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+                as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+            val installed = runtime.queryObservationBinding(bindingId)
+            val steps = listOf(SessionStepRecordEntity(
+                id = "execution-step", sessionId = SESSION_ID, stepId = "block:warmup:target",
+                kind = "timed_work", blockId = "block", itemId = null, setPlanId = null,
+                exerciseId = null, startedAt = "2026-09-06T16:30:00Z",
+                endedAt = "2026-09-06T16:30:01Z", skipped = false,
+                actualDurationSec = 1, plannedDurationSec = 10))
+            val input = RecorderTerminalInput(anchor + 1000, RecorderTerminalKind.COMPLETED,
+                "2026-09-06T16:30:01Z", 1, 1, 0, VALID_DISPLAY_METADATA,
+                steps, emptyList(), emptyList(), "2026-09-06T16:30:01Z")
+            val before = databaseSnapshot()
+            if (rollback) database.openHelper.writableDatabase.execSQL(
+                "CREATE TRIGGER fail_terminal_clear BEFORE INSERT ON heart_rate_analysis_snapshots BEGIN SELECT RAISE(ABORT,'s06b_terminal_clear_rollback'); END")
+            at(1000)
+            val submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+            try {
+                assertTrue(cut.entered.await(5, TimeUnit.SECONDS))
+                recorder.clear()
+                assertTrue(recorder.offer(RecorderActivityInput(anchor + 1000)) is RecorderSubmission.Closed)
+                recorder.clear()
+            } finally {
+                cut.release.countDown()
+            }
+            if (rollback) {
+                val cause = failure(submission.operation.saved)
+                assertTrue(cause is SQLiteConstraintException)
+                assertTrue(cause.message.orEmpty().contains("s06b_terminal_clear_rollback"))
+                assertSame(cause, failure(submission.operation.released))
+                joinWorker()
+                assertEquals(before, databaseSnapshot())
+            } else {
+                val saved = await(submission.operation.saved)
+                assertEquals(CanonicalFinalizationResult(SESSION_ID, RECORDING_ID, CanonicalTuple(1000, 4), 1), saved)
+                val main = awaitCleanupDispatch(submission.operation)
+                val rows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows(SESSION_ID))
+                val recorded = rows.recordings.single()
+                val graph = CanonicalSessionGraphV1(rows.session, rows.phases, recorded.recording,
+                    recorded.acquisitions, recorded.samples, recorded.snapshots)
+                val prefix = prefixGraph()
+                val expected = prefix.copy(
+                    session = session().copy(status = "completed", endedAt = "2026-09-06T16:30:01Z",
+                        totalElapsedSec = 1, effectiveElapsedSec = 1, pausedElapsedSec = 0,
+                        lastDurableOffsetMs = 1000, lastMutationSequence = 4,
+                        trustedEndOffsetMs = 1000, terminalReason = "completed"),
+                    phases = listOf(phase().copy(endOffsetMs = 1000, endMutationSequence = 4, openMarker = null)),
+                    recording = recording().copy(status = "terminal", endedOffsetMs = 1000,
+                        endedMutationSequence = 4, originalAnalysisVersion = 1),
+                    acquisitions = prefix.acquisitions.dropLast(1) + prefix.acquisitions.last().copy(
+                        endOffsetMs = 1000, endMutationSequence = 4, openMarker = null),
+                    samples = prefix.samples,
+                    snapshots = graph.snapshots)
+                assertEquals(expected, graph)
+                assertEquals(2, graph.samples.size)
+                assertEquals("2026-09-06T16:30:01Z", graph.snapshots.single().createdAt)
+                assertEquals(CanonicalValidationResult.Valid,
+                    AnalysisSnapshotV1Validator.validate(graph, graph.snapshots.single()))
+                assertEquals(steps, database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+                assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+                assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
+                val durable = databaseSnapshot()
+                assertEquals(installed, runtime.queryObservationBinding(bindingId))
+                main.idle()
+                await(submission.operation.released)
+                assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(bindingId))
+                assertEquals(durable, databaseSnapshot())
+            }
+            assertEquals(1, writes.count { it == "terminal" })
+        }
+    }
+
+    @Test
+    fun cancelledScopeKeepsTerminalAtomicWithoutNewWork() = runRecorderTest {
+        for (inFlight in listOf(false, true)) {
+            val cut = SqlCut(if (inFlight) "terminal" else "activity")
+            reset(cut)
+            val repository = WorkoutSessionRepository(database)
+            val connection = connect()
+            bind(recording(), repository = repository)
+            connection.notify(88)
+            connection.notify(88)
+            await(recorder.freezeStart())
+            assertGraph(prefixGraph())
+            val bindingId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+                as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+            val installed = runtime.queryObservationBinding(bindingId)
+            val steps = listOf(SessionStepRecordEntity(
+                id = "execution-step", sessionId = SESSION_ID, stepId = "block:warmup:target",
+                kind = "timed_work", blockId = "block", itemId = null, setPlanId = null,
+                exerciseId = null, startedAt = "2026-09-06T16:30:00Z",
+                endedAt = "2026-09-06T16:30:01Z", skipped = false,
+                actualDurationSec = 1, plannedDurationSec = 10))
+            val input = RecorderTerminalInput(anchor + 1000, RecorderTerminalKind.COMPLETED,
+                "2026-09-06T16:30:01Z", 1, 1, 0, VALID_DISPLAY_METADATA,
+                steps, emptyList(), emptyList(), "2026-09-06T16:30:01Z")
+            val before = databaseSnapshot()
+            val cancellation = CancellationException("s06b_scope_cancelled")
+            val pause = if (inFlight) null else recorder.offer(pause(1)) as RecorderSubmission.Accepted
+            lateinit var submission: RecorderTerminalSubmission.Accepted
+            if (inFlight) {
+                at(1000)
+                submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+            }
+            try {
+                assertTrue(cut.entered.await(5, TimeUnit.SECONDS))
+                if (!inFlight) submission = recorder.freezeTerminal(RecorderTerminalInput(anchor + 2,
+                    RecorderTerminalKind.COMPLETED, "2026-09-06T16:30:00.002Z", 0, 0, 0,
+                    VALID_DISPLAY_METADATA, emptyList(), emptyList(), emptyList(),
+                    "2026-09-06T16:30:00.002Z")) as RecorderTerminalSubmission.Accepted
+                scope.cancel(cancellation)
+            } finally {
+                cut.release.countDown()
+            }
+            val savedFailure = failure(submission.operation.saved)
+            val releasedFailure = failure(submission.operation.released)
+            assertTrue(savedFailure is CancellationException)
+            assertTrue(releasedFailure is CancellationException)
+            assertTrue(generateSequence(savedFailure) { it.cause }.any { it === cancellation })
+            assertTrue(generateSequence(releasedFailure) { it.cause }.any { it === cancellation })
+            if (pause != null) assertTrue(failure(pause.completion) is CancellationException)
+            joinWorker()
+            assertEquals(if (inFlight) 1 else 0, writes.count { it == "terminal" })
+            if (databaseSnapshot() != before) {
+                if (inFlight) {
+                    val rows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows(SESSION_ID))
+                    val recorded = rows.recordings.single()
+                    val graph = CanonicalSessionGraphV1(rows.session, rows.phases, recorded.recording,
+                        recorded.acquisitions, recorded.samples, recorded.snapshots)
+                    val prefix = prefixGraph()
+                    val expected = prefix.copy(
+                        session = session().copy(status = "completed", endedAt = "2026-09-06T16:30:01Z",
+                            totalElapsedSec = 1, effectiveElapsedSec = 1, pausedElapsedSec = 0,
+                            lastDurableOffsetMs = 1000, lastMutationSequence = 4,
+                            trustedEndOffsetMs = 1000, terminalReason = "completed"),
+                        phases = listOf(phase().copy(endOffsetMs = 1000, endMutationSequence = 4, openMarker = null)),
+                        recording = recording().copy(status = "terminal", endedOffsetMs = 1000,
+                            endedMutationSequence = 4, originalAnalysisVersion = 1),
+                        acquisitions = prefix.acquisitions.dropLast(1) + prefix.acquisitions.last().copy(
+                            endOffsetMs = 1000, endMutationSequence = 4, openMarker = null),
+                        samples = prefix.samples,
+                        snapshots = graph.snapshots)
+                    assertEquals(expected, graph)
+                    assertEquals(2, graph.samples.size)
+                    assertEquals("2026-09-06T16:30:01Z", graph.snapshots.single().createdAt)
+                    assertEquals(CanonicalValidationResult.Valid,
+                        AnalysisSnapshotV1Validator.validate(graph, graph.snapshots.single()))
+                    assertEquals(steps, database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+                    assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+                    assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
+                } else {
+                    val prefix = prefixGraph()
+                    val paused = prefix.copy(
+                        session = session().copy(status = "paused", lastDurableOffsetMs = 1, lastMutationSequence = 4),
+                        phases = listOf(phase().copy(endOffsetMs = 1, endMutationSequence = 4, openMarker = null),
+                            phase(1, 1, 4, "paused", VALID_PAUSED_PHASE_IDENTITY)),
+                        acquisitions = prefix.acquisitions.dropLast(1) + listOf(
+                            prefix.acquisitions.last().copy(endOffsetMs = 1, endMutationSequence = 4, openMarker = null),
+                            acquisition(2, 1, 4, "live", enabled = false)))
+                    assertGraph(paused)
+                }
+            }
+            val durable = databaseSnapshot()
+            assertEquals(installed, runtime.queryObservationBinding(bindingId))
+            assertSame(submission, recorder.freezeTerminal(input))
+            assertTrue(recorder.offer(RecorderActivityInput(anchor + 1100)) is RecorderSubmission.Closed)
+            assertEquals(durable, databaseSnapshot())
+            assertEquals(if (inFlight) 1 else 0, writes.count { it == "terminal" })
+        }
+    }
+
+    @Test
+    fun savedCleanupFailureKeepsOriginalAndBlocksAdmission() = runRecorderTest {
+        for (cancelCleanup in listOf(false, true)) {
+            val cut = SqlCut("terminal")
+            reset(cut)
+            val repository = WorkoutSessionRepository(database)
+            val connection = connect()
+            bind(recording(), repository = repository)
+            connection.notify(88)
+            connection.notify(88)
+            await(recorder.freezeStart())
+            assertGraph(prefixGraph())
+            val steps = listOf(SessionStepRecordEntity(
+                id = "execution-step", sessionId = SESSION_ID, stepId = "block:warmup:target",
+                kind = "timed_work", blockId = "block", itemId = null, setPlanId = null,
+                exerciseId = null, startedAt = "2026-09-06T16:30:00Z",
+                endedAt = "2026-09-06T16:30:01Z", skipped = false,
+                actualDurationSec = 1, plannedDurationSec = 10))
+            val input = RecorderTerminalInput(anchor + 1000, RecorderTerminalKind.COMPLETED,
+                "2026-09-06T16:30:01Z", 1, 1, 0, VALID_DISPLAY_METADATA,
+                steps, emptyList(), emptyList(), "2026-09-06T16:30:01Z")
+            val foreignId = HeartRateObservationBindingId()
+            lateinit var observedId: HeartRateObservationBindingId
+            lateinit var installed: HeartRateBindingDisposition
+            at(1000)
+            val submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+            try {
+                assertTrue(cut.entered.await(5, TimeUnit.SECONDS))
+                val originalId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+                    as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+                if (cancelCleanup) {
+                    observedId = originalId
+                    installed = runtime.queryObservationBinding(originalId)
+                } else {
+                    runtime.unbindObservations(originalId)
+                    observedId = foreignId
+                    installed = runtime.bindObservations(foreignId) {}
+                }
+            } finally {
+                cut.release.countDown()
+            }
+            val saved = await(submission.operation.saved)
+            assertEquals(CanonicalFinalizationResult(SESSION_ID, RECORDING_ID, CanonicalTuple(1000, 4), 1), saved)
+            val main = awaitCleanupDispatch(submission.operation)
+            val rows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows(SESSION_ID))
+            val recorded = rows.recordings.single()
+            val graph = CanonicalSessionGraphV1(rows.session, rows.phases, recorded.recording,
+                recorded.acquisitions, recorded.samples, recorded.snapshots)
+            val prefix = prefixGraph()
+            val expected = prefix.copy(
+                session = session().copy(status = "completed", endedAt = "2026-09-06T16:30:01Z",
+                    totalElapsedSec = 1, effectiveElapsedSec = 1, pausedElapsedSec = 0,
+                    lastDurableOffsetMs = 1000, lastMutationSequence = 4,
+                    trustedEndOffsetMs = 1000, terminalReason = "completed"),
+                phases = listOf(phase().copy(endOffsetMs = 1000, endMutationSequence = 4, openMarker = null)),
+                recording = recording().copy(status = "terminal", endedOffsetMs = 1000,
+                    endedMutationSequence = 4, originalAnalysisVersion = 1),
+                acquisitions = prefix.acquisitions.dropLast(1) + prefix.acquisitions.last().copy(
+                    endOffsetMs = 1000, endMutationSequence = 4, openMarker = null),
+                samples = prefix.samples,
+                snapshots = graph.snapshots)
+            assertEquals(expected, graph)
+            assertEquals(2, graph.samples.size)
+            assertEquals("2026-09-06T16:30:01Z", graph.snapshots.single().createdAt)
+            assertEquals(CanonicalValidationResult.Valid,
+                AnalysisSnapshotV1Validator.validate(graph, graph.snapshots.single()))
+            assertEquals(steps, database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+            assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+            assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
+            val durable = databaseSnapshot()
+            assertEquals(installed, runtime.queryObservationBinding(observedId))
+            val cancellation = CancellationException("s06b_scope_cancelled")
+            if (cancelCleanup) scope.cancel(cancellation)
+            main.idle()
+            val cause = failure(submission.operation.released)
+            if (cancelCleanup) {
+                assertTrue(cause is CancellationException)
+                assertTrue(generateSequence(cause) { it.cause }.any { it === cancellation })
+            } else {
+                assertTrue(cause is RecorderBindingConflictException)
+                assertEquals("recorder_binding_conflict", cause.message)
+            }
+            joinWorker()
+            assertSame(saved, await(submission.operation.saved))
+            assertNull(recorder.progress.value.originalCause)
+            assertEquals(installed, runtime.queryObservationBinding(observedId))
+            val busy = runCatching { repository.admitRecorder("s06b-next-entry",
+                session().copy(id = "s06b-next-session"), phase().copy(id = "s06b-next-session:phase:0",
+                    sessionId = "s06b-next-session")) }.exceptionOrNull()
+            assertTrue(busy is RecorderOwnerBusyException)
+            assertEquals(RecorderOwnerDisposition.OWNER_BLOCKED, (busy as RecorderOwnerBusyException).disposition)
+            assertSame(submission, recorder.freezeTerminal(input))
+            assertSame(saved, await(submission.operation.saved))
+            val repeatedCause = failure(submission.operation.released)
+            assertEquals(cause.javaClass, repeatedCause.javaClass)
+            assertEquals(cause.message, repeatedCause.message)
+            assertSame(
+                generateSequence(cause) { it.cause }.last(),
+                generateSequence(repeatedCause) { it.cause }.last()
+            )
+            assertEquals(durable, databaseSnapshot())
+            assertEquals(installed, runtime.queryObservationBinding(observedId))
+            assertEquals(1, writes.count { it == "terminal" })
+        }
+    }
+
+    @Test
+    fun releasedOldRecorderCannotChangeNextOwner() = runRecorderTest {
+        val repository = WorkoutSessionRepository(database)
+        val connection = connect()
+        bind(recording(), repository = repository)
+        connection.notify(88)
+        connection.notify(88)
+        await(recorder.freezeStart())
+        assertGraph(prefixGraph())
+        val bindingId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+            as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+        val installed = runtime.queryObservationBinding(bindingId)
+        val steps = listOf(SessionStepRecordEntity(
+            id = "execution-step", sessionId = SESSION_ID, stepId = "block:warmup:target",
+            kind = "timed_work", blockId = "block", itemId = null, setPlanId = null,
+            exerciseId = null, startedAt = "2026-09-06T16:30:00Z",
+            endedAt = "2026-09-06T16:30:01Z", skipped = false,
+            actualDurationSec = 1, plannedDurationSec = 10))
+        val input = RecorderTerminalInput(anchor + 1000, RecorderTerminalKind.COMPLETED,
+            "2026-09-06T16:30:01Z", 1, 1, 0, VALID_DISPLAY_METADATA,
+            steps, emptyList(), emptyList(), "2026-09-06T16:30:01Z")
+        at(1000)
+        val submission = recorder.freezeTerminal(input) as RecorderTerminalSubmission.Accepted
+        val saved = await(submission.operation.saved)
+        assertEquals(CanonicalFinalizationResult(SESSION_ID, RECORDING_ID, CanonicalTuple(1000, 4), 1), saved)
+        val main = awaitCleanupDispatch(submission.operation)
+        val rows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows(SESSION_ID))
+        val recorded = rows.recordings.single()
+        val graph = CanonicalSessionGraphV1(rows.session, rows.phases, recorded.recording,
+            recorded.acquisitions, recorded.samples, recorded.snapshots)
+        val prefix = prefixGraph()
+        val expected = prefix.copy(
+            session = session().copy(status = "completed", endedAt = "2026-09-06T16:30:01Z",
+                totalElapsedSec = 1, effectiveElapsedSec = 1, pausedElapsedSec = 0,
+                lastDurableOffsetMs = 1000, lastMutationSequence = 4,
+                trustedEndOffsetMs = 1000, terminalReason = "completed"),
+            phases = listOf(phase().copy(endOffsetMs = 1000, endMutationSequence = 4, openMarker = null)),
+            recording = recording().copy(status = "terminal", endedOffsetMs = 1000,
+                endedMutationSequence = 4, originalAnalysisVersion = 1),
+            acquisitions = prefix.acquisitions.dropLast(1) + prefix.acquisitions.last().copy(
+                endOffsetMs = 1000, endMutationSequence = 4, openMarker = null),
+            samples = prefix.samples,
+            snapshots = graph.snapshots)
+        assertEquals(expected, graph)
+        assertEquals(2, graph.samples.size)
+        assertEquals("2026-09-06T16:30:01Z", graph.snapshots.single().createdAt)
+        assertEquals(CanonicalValidationResult.Valid,
+            AnalysisSnapshotV1Validator.validate(graph, graph.snapshots.single()))
+        assertEquals(steps, database.workoutSessionDao().stepRecordsForSession(SESSION_ID))
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession(SESSION_ID))
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession(SESSION_ID))
+        val savedGraph = databaseSnapshot()
+        assertEquals(installed, runtime.queryObservationBinding(bindingId))
+        main.idle()
+        await(submission.operation.released)
+        assertEquals(HeartRateBindingDisposition.KnownAbsent, runtime.queryObservationBinding(bindingId))
+        assertEquals(savedGraph, databaseSnapshot())
+        val nextScope = CoroutineScope(currentCoroutineContext() + Job(currentCoroutineContext()[Job]))
+        scopes += nextScope
+        val nextSession = session().copy(id = "s06b-next-session")
+        val nextRecorder = withContext(nextScope.coroutineContext) {
+            WorkoutSessionTimelineRecorder.admitAndBind(repository, runtime, nextScope, "s06b-next-entry",
+                nextSession, RecorderPhaseInput("timed_work", VALID_PHASE_IDENTITY), null)
+        }
+        val nextConfirmed = await(nextRecorder.freezeStart())
+        assertEquals(RecorderExpectedState("s06b-next-session", "active", CanonicalTuple(0, 0),
+            "s06b-next-session:phase:0"), nextConfirmed)
+        val nextRows = requireNotNull(database.canonicalTimelineHeartRateDao().canonicalGraphRows("s06b-next-session"))
+        assertEquals(nextSession, nextRows.session)
+        assertEquals(listOf(phase().copy(id = "s06b-next-session:phase:0", sessionId = "s06b-next-session")), nextRows.phases)
+        assertTrue(nextRows.recordings.isEmpty())
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().stepRecordsForSession("s06b-next-session"))
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().restExtensionRecordsForSession("s06b-next-session"))
+        assertEquals(emptyList<Any>(), database.workoutSessionDao().strengthSetRecordsForSession("s06b-next-session"))
+        val nextId = (runtime.queryObservationBinding(HeartRateObservationBindingId())
+            as HeartRateBindingDisposition.ConflictingInstalled).observedBindingId
+        val nextBinding = runtime.queryObservationBinding(nextId)
+        assertTrue(nextBinding is HeartRateBindingDisposition.MatchingInstalled)
+        val durable = databaseSnapshot()
+        val priorWrites = writes.toList()
+        assertSame(submission, recorder.freezeTerminal(input))
+        assertSame(saved, await(submission.operation.saved))
+        recorder.clear()
+        assertTrue(recorder.offer(RecorderActivityInput(anchor + 1100)) is RecorderSubmission.Closed)
+        assertEquals(nextBinding, runtime.queryObservationBinding(nextId))
+        assertEquals(durable, databaseSnapshot())
+        assertEquals(priorWrites, writes.toList())
+    }
+
     private fun runRecorderTest(block: suspend CoroutineScope.() -> Unit) = runBlocking {
         try {
             block()
@@ -369,12 +1036,13 @@ class WorkoutSessionTimelineRecorderTest {
     private suspend fun bind(
         recording: HeartRateRecordingEntity?,
         session: WorkoutSessionEntity = session(),
-        phase: RecorderPhaseInput = RecorderPhaseInput("timed_work", VALID_PHASE_IDENTITY)
+        phase: RecorderPhaseInput = RecorderPhaseInput("timed_work", VALID_PHASE_IDENTITY),
+        repository: WorkoutSessionRepository = WorkoutSessionRepository(database)
     ) {
         scope = CoroutineScope(currentCoroutineContext() + Job(currentCoroutineContext()[Job]))
         scopes += scope
         recorder = withContext(scope.coroutineContext) {
-            WorkoutSessionTimelineRecorder.admitAndBind(WorkoutSessionRepository(database), runtime, scope,
+            WorkoutSessionTimelineRecorder.admitAndBind(repository, runtime, scope,
                 "s06a-entry", session, phase, recording)
         }
         anchor = SystemClock.elapsedRealtime()
@@ -397,6 +1065,7 @@ class WorkoutSessionTimelineRecorderTest {
                 val stage = when {
                     sql.contains("INSERT OR IGNORE INTO `workout_sessions`") -> "start"
                     sql.contains("UPDATE workout_sessions") && sql.contains("SET last_durable_offset_ms") -> "activity"
+                    sql.lowercase().contains("update workout_sessions") && sql.lowercase().contains("set ended_at =") -> "terminal"
                     else -> null
                 }
                 if (stage != null) {
@@ -406,6 +1075,7 @@ class WorkoutSessionTimelineRecorderTest {
                         check(cut.release.await(5, TimeUnit.SECONDS))
                     }
                 }
+                terminalReadbackMutation?.invoke(sql)
             }, Executor { it.run() }).build()
 
     private class SqlCut(val stage: String) {
@@ -419,6 +1089,18 @@ class WorkoutSessionTimelineRecorderTest {
     }
 
     private suspend fun <T> await(result: Deferred<T>): T = withTimeout(5000) { result.await() }
+
+    private fun awaitCleanupDispatch(operation: RecorderTerminalOperation): ShadowPausedLooper {
+        assertSame(Looper.getMainLooper().thread, Thread.currentThread())
+        val before = SystemClock.elapsedRealtime()
+        assertFalse(operation.released.isCompleted)
+        val main = shadowOf(Looper.getMainLooper()) as ShadowPausedLooper
+        main.poll(5000L)
+        assertFalse(main.isIdle)
+        assertFalse(operation.released.isCompleted)
+        assertEquals(before, SystemClock.elapsedRealtime())
+        return main
+    }
 
     private suspend fun failure(result: Deferred<*>): Throwable {
         val cause = runCatching { await(result) }.exceptionOrNull()
