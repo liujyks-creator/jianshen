@@ -19,6 +19,11 @@
 本轮只窄替代 D5/F8/F9/F11 的冲突条款及其直接消费者，准确 old→new 见正式计划 F.8.4；D-008/D-013/D-014/D-051/D-059 等历史记录不重写。原 UI、三模式 engine、同场实际值/plan/恢复建议关联、旧历史与非 HR 趋势保持。仅已迁移模式同时切换 Start 与终态，未迁移模式沿旧保存。OpenTracks 固定源码对照仅用于记录/导出分离及同场点序列理由，不引入其过滤/GPS/恢复/存储栈或依赖。S05 旧候选未 PASS/未合并，Review3/4 上限不刷新；文档通过后仍须主管理完成 exact readiness，后续 Writer 不自动解锁。
 
 D-079–D-084 的历史接受事实与有效保证保持；旧 E17/CS 编号、分解、实施顺序和当前派发状态在冲突范围内由正式计划 B–D、F.1、F.37 窄替代。D-082 的 owner/eligibility、普通通知/FGS、M1/final 证据责任继续按新 selector 承接；不恢复 D-078、04C 或旧 CS-06。N001 只更正 kind 数量为九，literal 不变；不重开 P001–P003。
+**首版全 App 竖屏范围纠正（2026-09-13，用户已接受）：** F142 明确首版整个 App 的竖屏方向，取代仅训练页动态锁定/离场恢复方向的错误建议。准确实现为现有 MainActivity Manifest `android:screenOrientation="portrait"` 声明，覆盖当前 App 页面，不写动态 requestedOrientation 控制。这是竖屏请求，不承诺所有设备强制竖屏：项目 targetSdk=36，Android 16 对 targetSdk>=36 且最小宽度>=600dp 大屏会忽略该限制，厂商也可能覆盖声明（[Android 官方文档](https://developer.android.com/guide/topics/manifest/activity-element#screen)，2026-09-13 已查证）。不加 opt-out、大屏兼容代码、设备过滤或降低 targetSdk。胶囊只显示数据、点击展开/收起，没有设置入口/按钮，不补接也不清理回调；首版不要求训练期间切换系统语言后续训。横屏/旋转适配留后续，当前未完成，未来导出/图表横屏产品方向保留。
+
+用户已接受 F143.4/F143.5 经上述平台限制准确覆盖的最小合同；S07L 按一个方向声明、正式计划/architecture/本文件三文档同步及 V1/V2 静态验证交付。旧 retained/L02=`DEFERRED_NOT_IMPLEMENTED`，不提供稳定 owner/配置重建状态保留；S07B 原相关前提不因本包完成自动满足，不自动把旧迁移并入 S07B。原计时/保存/其他模式代码不改，不增包或设施。accepted base=`0897d0b61669c19ca6283f4807897a279f0717b8` 已含 S06A/S06B/S07A，原完成结论和证据保留，不重跑其测试；CS04C=HELD，D-079/D-083 及其他历史决定不重写。
+
+当前 S07L 总1/完成0/剩余1，状态 `IMPLEMENTED_CANDIDATE_AWAITING_REVIEW`；批准集合实现、V1/V2 静态验证、独立 Review PASS 并由同 Reviewer 同任务机械集成后，才记完成1/剩余0。V1 仅 UTF-8 XML/唯一 MainActivity portrait/单属性 diff，V2 仅三文档准确条款 diff 及四文件 `git diff --check`；继承 baseline，不跑实施前 RED，不新增测试/断言/设施，测试/build/设备/性能/人工门禁为零，不证明合并 Manifest 或设备旋转效果。此条只限定本次 S07L 的旧当前措辞，不重开历史规划或增加集成/收尾包。
 <!-- E18-E22-PLAN-LANDING:END -->
 
 

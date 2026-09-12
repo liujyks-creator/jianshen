@@ -4,6 +4,12 @@
 
 ## 当前状态、来源与阅读规则
 
+**当前 S07L（2026-09-13）：首版竖屏声明与正式合同同步，`IMPLEMENTED_CANDIDATE_AWAITING_REVIEW`。** 用户已接受 F142 方向决定及 F143.4/F143.5 的准确最小合同处置；本次 accepted base=`0897d0b61669c19ca6283f4807897a279f0717b8`，tree=`b4fdab9e2bf48da264da7d25f74da77febff3c61`，已含 S06A/S06B/S07A，保留其完成结论和原证据，不重复测试。生产仅为现有 MainActivity 的 Manifest 增加 `android:screenOrientation="portrait"`，覆盖当前 App 页面；同步本计划、architecture、decision-log 三文档。旧 retained/L02=`DEFERRED_NOT_IMPLEMENTED`，S07B 所需稳定 owner/同场状态前提仍未满足，不自动转交 S07B。总包数=1、完成=0、剩余=1、当前包=E18-S07L；只有本批准集合实现、V1/V2 静态验证完成、独立 Review PASS 并由同 Reviewer 在同任务机械集成后，才记完成=1、剩余=0。不增加准备、规划 Review、集成或收尾包，CS04C=HELD。
+
+**首版方向与证据限界：** `portrait` 是 MainActivity 的系统竖屏请求，不承诺所有设备锁定竖屏。项目 targetSdk=36；Android 16 对 targetSdk>=36 且最小宽度>=600dp 的大屏会忽略该限制，厂商也可能覆盖声明。复用 [Android 官方 activity / screenOrientation 文档](https://developer.android.com/guide/topics/manifest/activity-element#screen)（2026-09-13 已查证），不加大屏 opt-out、兼容代码或设备过滤，不降 targetSdk。横屏/旋转适配及对应验收留后续，当前未完成适配；胶囊仅显示数据和点击展开/收起，没有设置入口，训练期间切换系统语言后续训不属于首版要求。验证仅 V1：UTF-8 XML 解析、唯一 MainActivity 的 portrait 属性及单属性 diff；V2：三文档准确条款 diff 与四文件 `git diff --check`。继承 baseline、不跑实施前 RED；不新增测试文件/方法/断言/设施，测试/build/设备/性能/人工门禁均为零，不证明合并 Manifest 或设备效果。
+
+以下 E18-CC-P01、旧来源/base、审查与状态记录保留历史语境；当前 S07L 仅按本节及 F.11.2/F.11.3/F.26/F.28.1/F.36/F.37 的准确修订执行，不重开旧规划门禁或追改其他 Story 历史。后文泛化 retained、recreate 与横屏条款不作为本次实施或验证义务，也不构成这些能力已经交付的证据。
+
 **当前节点：E18-CC-P01 文档候选待独立 Planning Review；实时记录收窄决定已获用户接受，修订候选不等于实现 READY。**
 
 E17 以胶囊封口，已合并 CS-03、CS-04A、CS-05、CS-04B 与胶囊资产保留。E18 → E19 → E20 → E21 → E22 的五组成果顺序保持；原 24 Story / 42 边属于此前已审版本，本次受影响拆分以 F.26/F.37 为准，其容量与独立审查不沿用旧 PASS。力量与跟练分别接入、分别验收。
@@ -108,6 +114,8 @@ RES-01–03 的新增 App 内跨场比较和 RES-04 窄进阶提示当前暂缓�
 | 图表投影和页面状态 | 既有 accepted 纯 `HeartRateChartProjector` 责任 + analysis ViewModel/SavedState | canonical 分析仍由 CS-05；竖/横/聚焦共用投影、raw scrub 查真实点；同 Activity 显式横屏，不新增横屏 Activity。大屏方向政策限制仍需对应 UI 证据。 |
 | 普通通知/FGS | 现有 `ActiveWorkoutNotificationController` contract 的 Application 唯一协调实例 + connectedDevice Service | 同一 session identity、ID 7200、单 writer 有序交接；Service 不接管 engine/GATT。D-082 有资格的后台断联保留 FGS 并恢复；START_NOT_STICKY，合法启动边界与通知拒绝分支保持。 |
 | 导出文件/系统交付 | 一个统一导出 capability，由一个导出页面状态 owner 消费；系统只读 FileProvider / 保存入口 | 单场与批量同格式；每场事务而非整批长事务，逐场写文件，Android JsonWriter/JsonReader 可流式处理。文件全成且验证后交付，24h 清理规则按 B。无新库安装/复制授权。 |
+
+当前首版边界：上表“训练行为与入口”的 Activity-retained 与跨配置保留属于原后续生命周期方向，本次 S07L 不实施该迁移，方向实现仅为现有 MainActivity Manifest portrait 声明，并受页首 Android 16 大屏限制约束。未来导出/图表等横屏条款保留为后续需求，不作为当前首版实施/验收门禁，不永久删除产品方向；横屏/旋转适配当前未完成。
 
 ### C.1 版本与时间真值
 
@@ -844,31 +852,33 @@ old→new：现有engine/adapter的阶段和执行记录没有完整canonical id
 
 候选生产位置采用D5已经定位的 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedCanonicalFactsV1.kt`（拟新增，未创建/未读取04C）；直接mapping消费者为同目录已存在 `WorkoutSessionRecordMappers.kt`。现有 `core/engine/TimedWorkoutEngine.kt` 和 `core/model/TimedCompositionTimelineAdapter.kt` 是只读输入边界，除非发现现有真实事件无法表达合同事实且已明确批准因果范围，不默认重写engine/adapter。正式新增测试literal path与所有variant逐条索引仍须F7绑定。
 
-#### F.11.2 配置保留 S07L 与计时生产切换 S07B
+#### F.11.2 首版竖屏声明 S07L 与计时生产切换 S07B
 
-F.67.7/L 固定为 `E18-S07L`，I 保留标签 `E18-S07B` 但收窄为完整生产切换；旧 S07B 合同中保留原会话与切换记录链不再必须同一 Story。两者仍使用同 Activity retained ViewModel 和同一原 session/plan/engine/clock，不按文件拆 owner。以下接口在实现前已经固定，不由 Writer 猜测新数据职责。
+原 retained 设计历史：F.67.7/L 固定为 `E18-S07L`，I 保留标签 `E18-S07B` 但收窄为完整生产切换；旧 S07B 合同中保留原会话与切换记录链不再必须同一 Story。原设计使用同 Activity retained ViewModel 和同一原 session/plan/engine/clock，不按文件拆 owner。当前 S07L 已由用户接受的首版方向声明合同窄替代；旧迁移按下方 L02 明确延期且未实现，不下放 Writer，不把方向声明当作旧生命周期合同完成。
 
 | 单元 | 独立结果/前置 | 非目标/直接消费者/最小证据 |
 |---|---|---|
-| S07L 原会话配置保留 | P 与既有 App 为前置；原 entry/plan/engine/clock/原保存状态迁到既定 Activity-retained ViewModel，仍以原保存链完成训练 | 不接 canonical Start/Recorder，不改三模式 engine/UI/原存储错误策略；输出同 session 的命令/事件/时间/保存状态供 S07B。真 Activity recreate、训练内设置往返、同 session 倒计时/暂停及原保存完整；MainActivity/shell/Route/ViewModel 同一单元闭合 |
+| S07L 首版竖屏声明与正式合同同步 | 同一个包仅为现有 MainActivity 的 Manifest 增加 `android:screenOrientation="portrait"`，覆盖当前 App 页面；这是竖屏请求，受页首 Android 16/targetSdk>=36/最小宽度>=600dp 大屏忽略限制及厂商覆盖约束，不承诺所有设备锁定竖屏 | 胶囊仅数据显示和点击展开/收起，不新增设置入口；训练期间切换系统语言后续训不属首版要求。横屏/旋转支持与验收留后续，当前未适配；不实现 retained 状态迁移，不改原计时/保存/反馈链。最小证据仅页首 V1/V2 静态核对；L02 延期及 S07B 前提未满足见下文 |
 | S07B 计时生产切换 | S07L、S07A、S06A、S06B、S08B 为前置；同一模式的真实 Start/事实流/终态和 read-ready 消费一次接通 | 仅已迁移计时场次以 S04 替换旧 upsert 终态；未迁移力量/跟练沿旧链。保留原 recap、正常返回、恢复建议 session 关联；不新增故障向导/重试恢复。真 Activity→engine→S02→Room→历史；两 family/no-HR/zero-sample、clear/relaunch、原停止确认与 UI 用户验收 |
 
-S07L 输出的真实 entry identity 不因重组/配置重建替换；S07B 在同命令 cut 捕获 before/result/events/after 和单调时刻，交 S07A/S06A；终态冻结原实际结果交 S06B，不从 UI 最终状态反推。S07B 必须同时替换本场 MainActivity 的通用 upsert 回调、Route 的 `TerminalWorkoutSessionRecordWriter` 消费及 shell 的入口移除条件，不保留 canonical Start + legacy terminal 的条件性冲突，不用空回调伪装接通。未迁移模式继续使用旧 writer，不全局删除。
+原 retained 设计要求真实 entry identity 不因重组/配置重建替换；当前 S07L 不提供此输出，S07B 相关前提按 L02 保持未满足。S07B 在同命令 cut 捕获 before/result/events/after 和单调时刻，交 S07A/S06A；终态冻结原实际结果交 S06B，不从 UI 最终状态反推。S07B 必须同时替换本场 MainActivity 的通用 upsert 回调、Route 的 `TerminalWorkoutSessionRecordWriter` 消费及 shell 的入口移除条件，不保留 canonical Start + legacy terminal 的条件性冲突，不用空回调伪装接通。未迁移模式继续使用旧 writer，不全局删除。
 
 | AC / primary | 条件 → 生产可见行为 | oracle |
 |---|---|---|
 | L01 / S07B | 显式 Start 一次准入/原子初始化确认后才成为已开始新链训练；原 session/anchor/时间冻结，重复正常点击不另开；无 HR/无样本合法 | 真 Activity→ViewModel→Recorder→Room；失败按 G02–G07，不伪成功 |
-| L02 / S07L；S07B 补新链回归 | recreate/训练内设置往返保留同 entry/plan/engine/clock/暂停/原保存状态；切换后再保留同 Recorder/token，不重复 Start | 真 ActivityScenario 和生产 identity/状态/Room；不以工厂测试冒充生命周期 |
+| L02 / DEFERRED_NOT_IMPLEMENTED | 原会话 retained 迁移及 recreate/设置往返恢复验收退出本次 S07L；不是由胶囊操作触发的已证用户缺陷。延期不表示能力已实现，也不授权新入口 | S07B 原来期待的稳定 owner/同场状态前提尚未由 S07L 提供，在准确处置前保持未满足，不得因竖屏包完成自动解锁；确需该能力时由明确需求决定实施归属，本次不新增 Story/包，不自动将旧迁移并入 S07B |
 | L03 / S07B | 实际 engine tick/命令的 phase/intent/extra-rest 接 S07A/S06A，zero-sample 也完整 | 两 family 真实轨迹/同毫秒/暂停/额外休息→完整 Room 行；不重写 engine |
 | L04 / S07B | completed/user_abandoned 冻结一次真实 cut；S06B Saved 后原正常返回/恢复建议/回训练主页可移除该 entry，不等待 Released。engine 完成不等于已保存；失败诚实显示，不提供同进程写恢复/重试流程 | 三条 shell 真实 callback、Room/read-ready；Saved 后 cleanup 失败不阻导航，新冲突 Start 仍被 gate 拒绝；late callback 不移除新场 |
 | L05 / S07B | 真正 Activity finish/ViewModel clear 返回前同步停止输入/新写；STARTING/ACTIVE 不补终结，原在途 terminal 可完成自身 | 实际 onCleared 与并发新 Activity/Start；PENDING/BLOCKED 下拒绝新写；不在取消 scope 或新增 scope 补存 |
 | L06 / S07B | force-stop/relaunch 不复活 engine/token/queue；已 terminal 读取原结果，未终结由 CS-04B 按最后 durable 图处理 | 两阶段新进程 persistent DB，重开时间不作 ended_at；旧 APK 证据不复用 |
 | L07 / S07B | 真实记录失败以现有页面最小失败提示表达，保留原 cause；engine 不被 Recorder 控制；掉线与数据库失败分开 | 真失败 consumer/后续 engine 命令；不吞为“本次无数据”/保存成功、不泄露堆栈/设备标识、不加空间/抽象采集故障页面 |
-| L08 / S07L 原链；S07B 切换回归 | 旧 ready gate、倒计时、音振/提醒、暂停、extra-rest、完成/提前结束及停止确认保持 | 各候选直接受影响回归及 UI 人工验收；不加 HIIT 次数/低空间、不冒称 E20 后台或通知已交付 |
+| L08 / S07L 声明；S07B 切换回归 | 原 ready gate、倒计时、音振/提醒、暂停、extra-rest、完成/提前结束、停止确认及保存行为保持，源码不改；S07L 仅改变 Manifest 方向声明 | S07L 只核对准确声明与受影响正式条款，不重跑 engine/保存/音振/停止确认整套回归，不新增 ViewModel、设置入口或恢复测试。S07B 日后真实生产切换的直接回归与 UI 验收责任保留，不沿本次静态检查声称通过；不加 HIIT 次数/低空间、不冒称 E20 后台或通知已交付 |
 
 两个单元的生产 literal 均沿已定位文件：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\app\MainActivity.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\ui\shell\official\TrainFlowApp.kt`、同目录 `OfficialShellState.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionRoute.kt`、已明确拟新增的 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\TimedWorkoutSessionViewModel.kt` 及同目录既有 `WorkoutSessionRecordMappers.kt`。S07L 先迁原保留状态，S07B 后切同场链；没有第二 ViewModel、依赖/SDK 升级授权。测试定位沿 F.28，真实工作区/证据身份须后续 exact 合同绑定。
 
 #### F.11.3 依赖、责任与尚未通过的门禁
+
+**当前 S07L 对上段生产 literal 及下方待闭合说明的准确覆盖：** 生产写集合仅既有 `app/src/main/AndroidManifest.xml` 内 MainActivity 的 portrait 属性；`MainActivity.kt`、`TrainFlowApp.kt`、`OfficialShellState.kt`、`TimedWorkoutSessionRoute.kt`、拟新增 `TimedWorkoutSessionViewModel.kt` 及 mapper 均非本次写集合。上段 retained 设计/设施定位保留历史，按 L02=`DEFERRED_NOT_IMPLEMENTED`，本次不迁 entry/plan/engine/clock/原保存状态，也不要求 Writer 补 retained envelope。用户已批准一个方向声明、三文档同步和 V1/V2 静态验证，当前为候选待独立 Review；不再创建准备或 Planning Review 包。下方关于 S07L 保留原链、待固定 recreate envelope 的旧说明不再是当前 S07L 义务；S07B 对稳定 owner 的前提仍未满足，其他已完成前置结论保留，未满足项不自动放行。
 
 S07A（F）以 P 与原 schema/engine 为前置，独立输出两 family 事实/predicate；S07L（L）以 P 为前置保留原链；窄 S05+S07A→S06A（C）→S06B（T）；L+F+C+T+S08B→S07B（I）；S07B+S08B/C→S09。S08C 与 E22 仍消费唯一 S07A predicate；E20 消费最终 S07B 稳定运行 identity。S08B 仅读已保存图不依赖 Recorder 清理，也不依赖 I，避免循环。
 
@@ -1563,6 +1573,8 @@ Read失败与display unresolved分层：unknown/corrupt plan/header/graph不能�
 
 ### F.26 本轮直接依赖 DAG 与门禁
 
+当前 S07L 节点数量仍为 1，交付含义为现有 MainActivity 首版 portrait 声明及三文档合同同步（平台限制见页首），不因文档/验证/集成增加节点或边。下表 S07L→P 及 S07B 的 S07L/S07A/S06A/S06B/S08B 五前置标签保持；竖屏包完成不证明旧 retained 输出存在，S07B 对该输出的前提按 L02 明确未满足，不自动解锁。其他已满足前置不重审，未满足项不自动放行。
+
 本图是 E18-CC-P01 的当前定义层 DAG，包含本轮文档门禁 P 与其受影响拆分；S01–S04 的已合并身份见页首。P 不是新增产品能力，其完成不自动把下游标 READY。原 24/42、F.13 的 22/36 和更早 21/34 只作历史；技术图不改变五 Epic 成果顺序。新单元尚无 accepted implementation SHA，必须按 F.36/F.37 绑定后才可 handoff。
 
 | 节点 | 直接前置候选 |
@@ -1640,6 +1652,8 @@ S03/B07拥有仓库边界四项时间完整性/来源语义的单一校验定义
 以下 literal 定位沿原合同保留；S01–S04 已存在/已合并资产按页首 base 消费，其余明确拟新增文件仍不代表已实现，未读取任何04C副本。S01/F4、S02/F5+F19、S03/F6、S04/F7、S05/F8、S06A/B/F9、S07A/L/B/F11、S08A/B/C/F25、S09/F12 的完整 base 路径继续适用。S06A/B 共用原 Recorder 文件与测试；S07L/B 共用已定位的 ViewModel/Activity/Route/shell 测试，按各 AC 分阶段验收，不以文件数证明 capacity。exact Writer worktree/envelope 仍须后续绑定。
 
 #### F.28.1 E18直接新增测试与实际生命周期
+
+**当前 S07L 验证定位：** 下列 `TimedWorkoutSessionViewModelTest.kt` / `TimedWorkoutSessionLifecycleContractTest.kt` 及 VM/Activity/Route/shell 测试定位属于原 retained 方向，不用于本次 S07L；不创建文件/方法，不改既有断言。不采用 F139 针对动态方向、虚构设置入口或重建恢复的新测试建议。当前准确验证仅 Manifest 静态 XML/单属性 diff 与正式条款差异核对、四文件 `git diff --check`；无新调度/事务/等待设施，无测试/build/设备/性能/人工门禁。未来生产切换测试须由其准确合同重新绑定，不用本节及 F.27.3 的历史定位增加当前验证。
 
 S05 第四个直接 canonical consumer 为 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\core\data\E17FinalizerPerformanceContractTest.kt`，与下列三个仓库测试一起适配 exact 授权；原完整 finalizer 测量窗口/fixture/预算不变，本轮不运行。该定位来自 F.67.10 的当前 S05 元数据对照，不采纳其候选实现。
 
@@ -2496,7 +2510,7 @@ E20-S02额外按F.15.3/B12–B15使用measurement和final两套身份及先后�
 | E18-S06A | U | U | U | U | U | U | U | U | U | U | NOT_READY；F9 活动 cut/停止输入与在途事务取消证据、S07A→队列接口 exact 签名、活动性能窗口及独立容量未证明；主管理固定→S06B/S07B |
 | E18-S06B | U | U | U | U | U | U | U | U | U | U | NOT_READY；F9 冻结 cut 前输入与终态/clear 顺序、Saved 独立发布/cleanup 证据及单 Writer/Reviewer envelope 未证明；主管理固定→S07B/S08B/S09 |
 | E18-S07A | U | U | U | U | U | U | U | U | U | U | NOT_READY；原 F11 M01–07/PH/PF/FI/predicate 保留；新增 C 的直接消费边界与 exact 当前前置/输入/单元容量需主管理 F8 绑定；不把旧 P 升级为新 PASS→S06A/S07B/S08C/E22 |
-| E18-S07L | U | U | U | U | U | U | U | U | U | U | NOT_READY；F11.2 原 entry/engine/clock/原保存状态的 retained 迁移 envelope、真实 recreate/原保存 oracle 与单 Writer 容量需主管理固定→S07B |
+| E18-S07L | U | U | U | U | U | U | U | U | U | U | 当前按 F142 及用户接受的最小合同：MainActivity Manifest portrait 声明、三文档同步、V1/V2 静态验证，IMPLEMENTED_CANDIDATE_AWAITING_REVIEW；原 retained/L02=DEFERRED_NOT_IMPLEMENTED，S07B 相关前提未满足。十维 U 保留原 retained 合同历史，非新包阻塞或新 PASS；本包总1/完成0/剩余1，完成条件见页首，不新增准备/规划 Review/集成/收尾包；CS04C=HELD |
 | E18-S07B | U | U | U | U | U | U | U | U | U | U | NOT_READY；F11.2 Start/终态全部回调及原恢复建议关联必须一次闭合；S06A/B+S08B 结果消费、clear/lifecycle 与两 family/UI 门禁、精确 envelope/容量待主管理固定→S09/E20 |
 | E18-S08A | U | U | U | U | U | U | U | U | U | U | NOT_READY；F25 原 legacy parser 边界保持；尚无 exact 实现前置/fixture 身份及本单元 handoff，不凭本轮文档宣称可派发→S08B |
 | E18-S08B | U | U | U | U | U | U | U | U | U | U | NOT_READY；F25/H01 新增 Saved 不等 Released 的读取 oracle 与窄 S05 前置，真 Room 并发/绑定/时间校验复用和 exact envelope 待主管理 F8 固定→S07B/S08C/S09/E21/E22 |
@@ -2530,12 +2544,14 @@ E20-S02额外按F.15.3/B12–B15使用measurement和final两套身份及先后�
 
 ### F.37 当前候选包与手工规划审查入口
 
+**当前 selector 的 S07L 狭义更新（2026-09-13）：** 使用 F.11.2/F.11.3 的首版 MainActivity portrait 声明及三文档同步合同；平台限制与 V1/V2 静态证据边界见页首，旧 retained/L02 明确延期且未实现，S07B 稳定 owner/同场状态前提仍未满足。总包数=1、完成=0、剩余=1、当前包=E18-S07L，状态 `IMPLEMENTED_CANDIDATE_AWAITING_REVIEW`；只有批准集合实现、静态验证、独立 Review PASS 及同 Reviewer 同任务机械集成后，才完成=1/剩余=0。下文旧 P 待审、所有单元 NOT_READY、L02 原链路由 S07L 等保留其历史语境，不重启当前 S07L 规划、不把旧迁移转给 S07B、不扩大其他单元范围。其他已完成前置及其证据保持，不重跑 S06A/S06B/S07A；不新增包，CS04C=HELD。
+
 当前 artifact 为本文件在 E18-CC-P01 普通 docs commit 中的 Git blob，candidate/tree/sole parent 由 Writer 报告绑定，不在正文填自引用 hash。accepted base 及 immutable V2 F69.2 身份见页首。当前唯一节点是 P 文档候选待独立审查；以下 selector 是定义层路由，所有受影响实现单元 NOT_READY，不是代码派发权限。
 
 | Epic / 数量 | 当前 selector 与主要合同 |
 |---|---|
 | P / 1 文档门禁 | E18-CC-P01：页首/B.1/C、F8.4/P01–P08传播、F26/F36/F37；独立 Planning Review 后回主管理 |
-| E18 / 14 实现单元 | S01/F4；S02/F5+F19+F35.3；S03/F6；S04/F7（均已合并原资产）；S05/F8；S06A/F9.1+F9.2+R01–04及R06/R08活动部分；S06B/F9.2+R05/R07及R06/R08终态部分；S07A/F11.1+M07/F28；S07L/F11.2原配置/保存链；S07B/F11.2最终生产切换；S08A/F25/H03-plan/H04-parse；S08B/F25/H01–06/H08；S08C/F25/H07；S09/F12.2 |
+| E18 / 14 实现单元 | S01/F4；S02/F5+F19+F35.3；S03/F6；S04/F7（均已合并原资产）；S05/F8；S06A/F9.1+F9.2+R01–04及R06/R08活动部分；S06B/F9.2+R05/R07及R06/R08终态部分；S07A/F11.1+M07/F28；S07L/F11.2首版 MainActivity portrait 声明与三文档同步（原 retained/L02 延期未实现）；S07B/F11.2最终生产切换；S08A/F25/H03-plan/H04-parse；S08B/F25/H01–06/H08；S08C/F25/H07；S09/F12.2 |
 | E19 / 2 | S01/F14.1；S02/F14.2；模式差异及实际接线沿F30/F34，新写链/clear/Saved消费本轮F8/F9/F11，原范围不扩张 |
 | E20 / 2 | S01/F15.1/N01–N09及retained/FGS消费者；S02/F15.2+F15.3/B01–B15，旧S06前置重定向S06B；D-082/F27.3/F28.3/F35.4 measurement/final边界不变 |
 | E21 / 4 | S01/F16.1+F23；S02/F16.2+F27；S03/F16.3；S04/F16.4+F27；F34 IO限界必读 |
