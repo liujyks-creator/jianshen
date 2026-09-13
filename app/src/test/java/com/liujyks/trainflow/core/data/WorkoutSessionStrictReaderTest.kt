@@ -396,6 +396,12 @@ class WorkoutSessionStrictReaderTest {
 
     @Test
     fun concurrentFinalizationExposesOnlyCommittedState() = runBlocking {
+        freshDatabase()
+        val referenceRepository = WorkoutSessionRepository(database)
+        val referenceAdmission = admitFinalizer(referenceRepository)
+        seedActiveRecording()
+        referenceRepository.finalizeCanonicalSession(referenceAdmission.ownerToken, terminalRequest())
+        val expected = terminalExpected(frozen = false)
         for (rollback in listOf(false, true)) {
             freshDatabase()
             val repository = WorkoutSessionRepository(database)
@@ -427,7 +433,7 @@ class WorkoutSessionStrictReaderTest {
                 assertEquals(before, databaseSnapshot())
             } else {
                 assertEquals(CanonicalTuple(2_000, 4), written.getOrThrow().finalTuple)
-                assertCanonical(terminalExpected(frozen = false), result)
+                assertCanonical(expected, result)
             }
         }
     }
