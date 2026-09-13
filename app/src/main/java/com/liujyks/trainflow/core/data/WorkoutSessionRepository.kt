@@ -17,6 +17,7 @@ import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.database.parseCanonicalJson
 import com.liujyks.trainflow.core.database.dao.CanonicalSessionGraphRows
 import com.liujyks.trainflow.core.database.dao.WorkoutSessionWithRecords
+import com.liujyks.trainflow.core.database.dao.WorkoutSessionHeaderRow
 import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
@@ -48,6 +49,7 @@ import com.liujyks.trainflow.core.model.WeightValue
 import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutSession
 import java.time.Instant
+import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Job
@@ -59,6 +61,38 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+internal sealed interface WorkoutSessionStrictReadResult {
+    data class CanonicalTerminal(
+        val graph: CanonicalSessionGraphV1,
+        val planRoot: CanonicalJsonValue.Obj,
+        val execution: StrictSessionExecution
+    ) : WorkoutSessionStrictReadResult
+
+    data class LegacyTerminal(
+        val session: WorkoutSessionEntity,
+        val planRoot: CanonicalJsonValue.Obj,
+        val execution: StrictSessionExecution
+    ) : WorkoutSessionStrictReadResult
+
+    data class Nonterminal(val session: WorkoutSessionEntity, val timelineStatus: String) : WorkoutSessionStrictReadResult
+    data object NotFound : WorkoutSessionStrictReadResult
+    data class Unavailable(val code: String) : WorkoutSessionStrictReadResult
+}
+
+internal data class StrictSessionExecution(
+    val steps: List<SessionStepRecordEntity>,
+    val restExtensions: List<TimedRestExtensionRecordEntity>,
+    val strengthSets: List<StrictStrengthSetRecord>
+)
+
+internal data class StrictStrengthSetRecord(
+    val row: StrengthSetRecordEntity,
+    val plannedWeight: WeightValue?,
+    val plannedRepTarget: RepTarget?,
+    val actualWeight: WeightValue?,
+    val actualReps: Int?
+)
 
 internal data class LegacySessionResidual(
     val sessionId: String,
@@ -1792,6 +1826,98 @@ internal class WorkoutSessionRepository(
         return dao.getSessionsWithRecords().map { row -> row.toDomain() }
     }
 
+    internal suspend fun getSessionHeaders(): List<WorkoutSessionHeaderRow> = dao.sessionHeaders()
+
+    internal suspend fun readSessionStrict(sessionId: String): WorkoutSessionStrictReadResult = database.withTransaction {
+        val session = canonicalDao.sessionById(sessionId)
+            ?: return@withTransaction WorkoutSessionStrictReadResult.NotFound
+        if (session.id.isEmpty()) return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_execution")
+        val mode = WorkoutMode.entries.firstOrNull { it.contractValue == session.mode }
+            ?: return@withTransaction WorkoutSessionStrictReadResult.Unavailable("unsupported_session_mode")
+        if (session.timelineVersion != null && session.timelineVersion != 1) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("unsupported_session_version")
+        }
+        val header = CanonicalSessionHeaderV1Validator.validate(session)
+        if (header is CanonicalSessionHeaderV1Result.Invalid) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_header")
+        }
+        if (listOf(session.totalElapsedSec, session.effectiveElapsedSec, session.pausedElapsedSec).any { it != null && it < 0 }) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_execution")
+        }
+        try {
+            session.startedAt?.let(Instant::parse)
+            session.endedAt?.let(Instant::parse)
+        } catch (_: DateTimeException) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_execution")
+        }
+        if (session.startedAt == null && listOf(session.startLocalDate, session.startZoneId,
+                session.startUtcOffsetSeconds, session.timeMetadataSourceContractVersion).any { it != null }) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_time")
+        }
+        try {
+            validateSessionTimeMetadata(session, requireCollected = false)
+        } catch (_: RecorderValidationException) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_time")
+        } catch (_: DateTimeException) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_time")
+        }
+        val planRoot = if (header is CanonicalSessionHeaderV1Result.Legacy) {
+            val plan = LegacyUnversionedPlanSnapshotReader.read(session.planSnapshotJson, mode)
+            if (plan !is LegacyUnversionedPlanSnapshotReadResult.Valid) {
+                return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_plan_snapshot")
+            }
+            plan.root
+        } else {
+            if (PlanSnapshotStorageV1Validator.validate(session.planSnapshotJson, mode) !is PlanSnapshotStorageV1ValidationResult.Valid) {
+                return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_plan_snapshot")
+            }
+            parseCanonicalJson(session.planSnapshotJson) as CanonicalJsonValue.Obj
+        }
+        val phases = canonicalDao.phaseIntervals(sessionId)
+        val recordings = canonicalDao.recordingsForSession(sessionId)
+        if (recordings.size > 1 || (header is CanonicalSessionHeaderV1Result.Legacy &&
+                (phases.isNotEmpty() || recordings.isNotEmpty()))) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_graph")
+        }
+        val recording = recordings.singleOrNull()
+        val snapshot = if (recording != null && header is CanonicalSessionHeaderV1Result.CanonicalTerminal) {
+            val version = recording.originalAnalysisVersion
+                ?: return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_original_analysis")
+            if (version != 1) return@withTransaction WorkoutSessionStrictReadResult.Unavailable("unsupported_original_analysis_version")
+            canonicalDao.analysisSnapshotByVersion(recording.recordingId, version)
+                ?: return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_original_analysis")
+        } else {
+            if (recording != null && (recording.originalAnalysisVersion != null ||
+                    canonicalDao.hasAnalysisSnapshots(recording.recordingId))) {
+                return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_graph")
+            }
+            null
+        }
+        val graph = CanonicalSessionGraphV1(session, phases, recording,
+            if (recording == null) emptyList() else canonicalDao.acquisitionsInSequence(recording.recordingId),
+            if (recording == null) emptyList() else canonicalDao.samplesInCanonicalOrder(recording.recordingId),
+            if (snapshot == null) emptyList() else listOf(snapshot))
+        if (CanonicalSessionGraphV1Validator.validate(graph) != CanonicalValidationResult.Valid) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_graph")
+        }
+        if (snapshot != null && AnalysisSnapshotV1Validator.validate(graph, snapshot) != CanonicalValidationResult.Valid) {
+            return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_original_analysis")
+        }
+        val execution = strictSessionExecution(sessionId, dao.stepRecordsForSession(sessionId),
+            dao.restExtensionRecordsForSession(sessionId), dao.strengthSetRecordsForSession(sessionId))
+            ?: return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_execution")
+        when (header) {
+            is CanonicalSessionHeaderV1Result.Legacy -> if (session.status in setOf("completed", "abandoned")) {
+                WorkoutSessionStrictReadResult.LegacyTerminal(session, planRoot, execution)
+            } else {
+                WorkoutSessionStrictReadResult.Nonterminal(session, header.timelineStatus)
+            }
+            is CanonicalSessionHeaderV1Result.CanonicalRunning -> WorkoutSessionStrictReadResult.Nonterminal(session, "canonical_v1_running")
+            is CanonicalSessionHeaderV1Result.CanonicalTerminal -> WorkoutSessionStrictReadResult.CanonicalTerminal(graph, planRoot, execution)
+            is CanonicalSessionHeaderV1Result.Invalid -> error("Header already rejected")
+        }
+    }
+
     private companion object {
         const val RECONCILIATION_CONTRACT_VERSION = 1
         const val DISPLAY_METADATA_CONTRACT_VERSION = 1
@@ -2393,6 +2519,93 @@ private data class ActualSetStorage(
     val weight: WeightValue?,
     val reps: Int?
 )
+
+private fun strictSessionExecution(
+    sessionId: String,
+    steps: List<SessionStepRecordEntity>,
+    extensions: List<TimedRestExtensionRecordEntity>,
+    sets: List<StrengthSetRecordEntity>
+): StrictSessionExecution? {
+    val datedSteps = steps.map { row ->
+        if (row.id.isEmpty() || row.sessionId != sessionId || row.stepId.isEmpty() ||
+            SessionStepKind.entries.none { it.contractValue == row.kind } ||
+            row.actualDurationSec?.let { it < 0 } == true || row.plannedDurationSec?.let { it < 0 } == true) return null
+        val start = try {
+            row.endedAt?.let(Instant::parse)
+            Instant.parse(row.startedAt)
+        } catch (_: DateTimeException) {
+            return null
+        }
+        row to start
+    }
+    if (extensions.any { row ->
+            row.id.isEmpty() || row.sessionId != sessionId || row.stepId.isEmpty() || row.restStageTitle.isEmpty() ||
+                row.stepIndex < 0 || row.roundIndex?.let { it <= 0 } == true || row.addedSec <= 0 ||
+                row.plannedRestSec <= 0 || row.restElapsedBeforeExtensionSec < 0 || row.extensionAtRemainingSec < 0 ||
+                row.eventElapsedSec < 0 || row.cumulativeExtraRestSec < row.addedSec
+        }) return null
+    val decodedSets = sets.map { row ->
+        if (row.id.isEmpty() || row.sessionId != sessionId || row.exerciseId.isEmpty() || row.setOrder < 0 ||
+            StrengthSetKind.entries.none { it.contractValue == row.setKind } ||
+            (row.side != null && ExerciseSide.entries.none { it.contractValue == row.side }) ||
+            (row.effort != null && SetEffort.entries.none { it.contractValue == row.effort }) ||
+            row.activeDurationSec?.let { it < 0 } == true || row.actualRestAfterSec?.let { it < 0 } == true) return null
+        val planned = strictSetFields(row.plannedJson, setOf("weight", "rep")) ?: return null
+        val actual = strictSetFields(row.actualJson, setOf("weight", "reps")) ?: return null
+        val plannedWeight = planned["weight"]?.let { strictWeight(it) ?: return null }
+        val actualWeight = actual["weight"]?.let { strictWeight(it) ?: return null }
+        val target = planned["rep"]?.let { text ->
+            val parts = text.split(',')
+            when {
+                parts.size == 2 && parts[0] == "fixed" -> {
+                    val reps = parts[1].toIntOrNull() ?: return null
+                    if (reps !in 1..200) return null
+                    RepTarget.Fixed(reps)
+                }
+                parts.size == 3 && parts[0] == "range" -> {
+                    val min = parts[1].toIntOrNull() ?: return null
+                    val max = parts[2].toIntOrNull() ?: return null
+                    if (min !in 1..200 || max !in 1..200 || min > max) return null
+                    RepTarget.Range(min, max)
+                }
+                else -> return null
+            }
+        }
+        val reps = actual["reps"]?.let { text ->
+            val value = text.toIntOrNull() ?: return null
+            if (value < 0) return null
+            value
+        }
+        StrictStrengthSetRecord(row, plannedWeight, target, actualWeight, reps)
+    }
+    return StrictSessionExecution(
+        datedSteps.sortedWith(compareBy<Pair<SessionStepRecordEntity, Instant>> { it.second }.thenBy { it.first.stepId }).map { it.first },
+        extensions.sortedWith(compareBy<TimedRestExtensionRecordEntity> { it.eventElapsedSec }
+            .thenBy { it.stepIndex }.thenBy { it.cumulativeExtraRestSec }.thenBy { it.id }),
+        decodedSets.sortedWith(compareBy<StrictStrengthSetRecord> { it.row.setOrder }.thenBy { it.row.id })
+    )
+}
+
+private fun strictSetFields(text: String?, allowed: Set<String>): Map<String, String>? {
+    if (text == null) return emptyMap()
+    if (text.isEmpty()) return null
+    val fields = mutableMapOf<String, String>()
+    for (segment in text.split('|')) {
+        val parts = segment.split('=')
+        if (parts.size != 2 || parts[0] !in allowed || parts[1].isEmpty() || parts[0] in fields) return null
+        fields[parts[0]] = parts[1]
+    }
+    return fields
+}
+
+private fun strictWeight(text: String): WeightValue? {
+    val parts = text.split(',')
+    if (parts.size != 2) return null
+    val value = parts[0].toDoubleOrNull() ?: return null
+    if (!value.isFinite() || value < 0) return null
+    val unit = WeightUnit.entries.firstOrNull { it.contractValue == parts[1] } ?: return null
+    return WeightValue(value, unit)
+}
 
 private fun encodePlanned(
     weight: WeightValue?,

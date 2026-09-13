@@ -15,6 +15,12 @@ import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 
 @Dao
 interface CanonicalTimelineHeartRateDao {
+    @Query("SELECT * FROM heart_rate_analysis_snapshots WHERE recording_id = :recordingId AND analysis_version = :analysisVersion")
+    suspend fun analysisSnapshotByVersion(recordingId: String, analysisVersion: Int): HeartRateAnalysisSnapshotEntity?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM heart_rate_analysis_snapshots WHERE recording_id = :recordingId)")
+    suspend fun hasAnalysisSnapshots(recordingId: String): Boolean
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPhaseInterval(interval: WorkoutPhaseIntervalEntity): Long
 
