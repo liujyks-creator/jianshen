@@ -205,3 +205,11 @@ D-079–D-084 的历史接受事实与有效保证保持；旧 E17/CS 编号、�
 ## E18-S08B 严格读取与力量组序号合同（2026-09-13）
 
 接受力量执行setOrder>=0且原值保留，修正旧读取/导出合同positive限制，与现有producer和validator一致。S08B复用现有Room事务、Repository、原validator/S08A完成strict持久化读取，既有宽松编辑器读取不改；不迁移数据、不新建缓存/调度器、不接UI。准确验证边界以本包获批提案为准。
+
+## E18-S08C 冻结历史名称与结构消费合同
+
+接受S08C沿S08B严格冻结输入解析历史显示：exact item labelOverride优先，其次对应冻结metadata；metadata非null customNameAtFirstReference优先，否则displayNameAtFirstReference；strength按actualExerciseId，composition real target按target.name。完整boundary/rest block及无名synthetic/paused阶段的准确字段选择沿正式计划“S08C冻结历史显示与结构解析准确合同”，不新增词表、后缀或当前数据fallback。
+
+名称不存在为missing/null；存在但为空字符串为invalid/null，不回退其他名称；空白但非空字符串原样resolved。不trim或翻译。坏storage/identity仍在strict reader失败，不能经resolver伪造合法terminal。
+
+Resolver仅有同次调用的派生结果，复用原Repository、validators和S07A predicate/focus。计划Long秒到Long毫秒的不可表示值明确返回InvalidPlannedDuration；原S07A失败类型保留，不吞错、不重算/回写分析、不新增缓存、依赖或生命周期owner。准确四路径/API/最小验证和baseline例外以本Story最终批准的实施提案为准。此决定不解锁S07B或提前实施S09/E21/E22。

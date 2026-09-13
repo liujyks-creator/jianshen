@@ -2831,3 +2831,19 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 | pinned-main `docs/planning/e17-remainder-epic-story-plan.md` §3–§9 | D、F.22–F.23、F.25、F.27、F.29–F.35 | 保留引用的完整schema/数学/closed JSON/phase/export字段、正交轴、owner与性能合同；v2 root/时间/选择/系统授权和24h清理仅按已接受窄替代消费 |
 | pinned-main D-079–D-084；自动恢复 Correct-course §3/§6/§7；architecture 当前覆盖；E17-3 owner / identity；E17-4 当前矩阵及其绑定的 M1 / release 协议 | B/C/F.1、F.15、F.27.3、F.28.3、F.35.4；F.38/F.39 修正说明 | 胶囊与已合并资产保留；普通/FGS唯一writer、generation分离、release ack/ReleaseUnconfirmed、shared-owner M1→final身份链仍有效；旧编号/顺序不是派发入口 |
 | pinned-main `DESIGN.md` 与 `docs/ui-extension-guide.md` 的训练/复盘边界 | B、F.14、F.17–F.18、F.20、F.30、F.34；按 F.37 归属消费者 | 真实计划/实际记录、完成/提前结束、raw图表及暂停/额外休息区分、冻结胶囊与既有UI边界；不提前宣称视觉或设备门禁通过 |
+
+## E18-S08C 冻结历史显示与结构解析准确合同
+
+本节细化 F25/H07 的同一个 E18-S08C 单元，不新增包或 owner。前置为 S08B 严格读取和 S07A 唯一 timed predicate/focus；S09/E21/E22 消费同一严格输入及本解析结果，不回读当前计划或动作库。Resolver 无状态，不增加 Repository、cache、锁、协调 owner，不重算或回写原分析。
+
+Legacy/follow 的动作及引用动作的 rest-after 阶段优先 exact item 已记录 labelOverride；未记录才查该 exerciseId 的冻结 metadata。Metadata 非 null customNameAtFirstReference 优先，否则 displayNameAtFirstReference。Strength 四种非 paused set phase 以 actualExerciseId 取名，不以 planned 名称或 block title 替代。Composition real action/custom/rest 只用 exact target.name。
+
+完整 boundary block 阶段使用该 block.title；完整 rest block 使用 label，未记录才用该 block.title。Legacy 的独立 rest item 只用其 labelOverride。Between-round、composition synthetic warmup/cooldown/between-round 及 paused 没有专用历史名称字段时返回 missing/null，不能借 circuit/composition/group title。不得新增词表、轮/组/休息后缀、trim、翻译或改写原名；本合同不决定下游页面最终呈现。
+
+所选名称字段/entry不存在为 unresolved_missing_metadata，label=null；存在但为""为 unresolved_invalid_metadata，label=null，不回退其他名称；非空字符串（包括空白字符串）为 resolved，label保持原值。Display只有displayContractVersion=1、locale、resolutionStatus、label四属性，locale等于本次displayLocale；机器identity完整保留。
+
+F34.2的前层失败边界保持：坏metadata整体shape/version在strict reader失败，坏identity/未知identity版本或plan/mode/signature错在graph校验失败；不得构造成功terminal绕过前层。这不排除shape合法但所需entry缺失或名称为空的display级结果。unresolved_invalid_identity、unsupported_identity_version保留为原export格式词汇，不要求本成功链制造生产分支。Legacy不从旧step hints合成canonical phase/version。
+
+Phase按原sequence保留，包括无sample、pause和零实际宽度。Timed计划秒数只从已绑定冻结block/item/target字段取值，合法范围转为毫秒后调用S07A唯一predicate；不以实际区间、HR或completed step替代。秒数大于Long.MAX_VALUE/1000返回明确InvalidPlannedDuration，不溢出或降级为0。不同timed family按首次出现顺序分别调用原owner，保留全局phaseSequence和block-local round；不normalized、不重新展开timeline，不重算signature。
+
+Nonterminal/NotFound/Unavailable原typed对象转发；S07A非Resolved原typed结果作为InvalidTimedStructure原样携带，不伪装resolved或whole。Focus验证和restore使用S07A原九字段方法，不另设owner。source中的原执行、时间、区间与analysis对象不改写。完整API、固定literal输入/expected、七个最小方法和准确执行次数，以本Story最终获用户批准的identity-bound实施提案为准；该提案批准前不实施或运行。后续Review和机械集成仍属于原单包，不增加交付单元。
