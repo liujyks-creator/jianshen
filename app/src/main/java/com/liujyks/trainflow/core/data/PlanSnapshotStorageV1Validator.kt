@@ -237,7 +237,7 @@ object PlanSnapshotStorageV1Validator {
         )
     }
 
-    private fun canonicalBlock(value: CanonicalJsonValue): CanonicalJsonValue.Obj? {
+    internal fun canonicalBlock(value: CanonicalJsonValue): CanonicalJsonValue.Obj? {
         val block = value as? CanonicalJsonValue.Obj ?: return null
         if (!block.validCommonBlock()) return null
         return when (block.string("kind")) {
@@ -508,7 +508,7 @@ object PlanSnapshotStorageV1Validator {
         }
     }
 
-    private fun canonicalPreferences(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? {
+    internal fun canonicalPreferences(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? {
         if (!value.hasRequiredAndOptionalKeys(emptySet(), setOf("cueSettings", "heartRateDisplay"))) {
             return null
         }
@@ -556,7 +556,7 @@ object PlanSnapshotStorageV1Validator {
         return orderedObject(value, COUNTDOWN_CUE_ORDER)
     }
 
-    private fun canonicalFollowAlong(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? {
+    internal fun canonicalFollowAlong(value: CanonicalJsonValue.Obj): CanonicalJsonValue.Obj? {
         if (!value.hasRequiredAndOptionalKeys(FOLLOW_ALONG_REQUIRED, FOLLOW_ALONG_OPTIONAL) ||
             value.boolean("preset") == null
         ) {
