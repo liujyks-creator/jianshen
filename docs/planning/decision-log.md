@@ -201,3 +201,7 @@ D-079–D-084 的历史接受事实与有效保证保持；旧 E17/CS 编号、�
 35. `docs/planning/e17-3-heart-rate-minimum-architecture.md`
 
 当来源文档改变了已接受的产品或架构方向时，同步更新本决策日志。
+
+## E18-S08B 严格读取与力量组序号合同（2026-09-13）
+
+接受力量执行setOrder>=0且原值保留，修正旧读取/导出合同positive限制，与现有producer和validator一致。S08B复用现有Room事务、Repository、原validator/S08A完成strict持久化读取，既有宽松编辑器读取不改；不迁移数据、不新建缓存/调度器、不接UI。准确验证边界以本包获批提案为准。

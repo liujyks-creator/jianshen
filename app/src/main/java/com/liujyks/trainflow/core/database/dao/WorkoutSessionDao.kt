@@ -1,6 +1,7 @@
 package com.liujyks.trainflow.core.database.dao
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -15,6 +16,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WorkoutSessionDao {
+    @Query("""
+        SELECT id, plan_id, mode, status, started_at, ended_at, total_elapsed_sec,
+            effective_elapsed_sec, paused_elapsed_sec, timeline_version, trusted_end_offset_ms,
+            terminal_reason, start_local_date, start_zone_id, start_utc_offset_seconds,
+            time_metadata_source_contract_version, last_durable_offset_ms
+        FROM workout_sessions ORDER BY COALESCE(ended_at, started_at, '') DESC, id ASC
+    """)
+    suspend fun sessionHeaders(): List<WorkoutSessionHeaderRow>
+
     @Query("SELECT COUNT(*) FROM workout_sessions")
     suspend fun sessionCount(): Int
 
@@ -404,6 +414,26 @@ interface WorkoutSessionDao {
     @Query("SELECT * FROM workout_sessions ORDER BY COALESCE(ended_at, started_at, '') DESC")
     suspend fun getSessionsWithRecords(): List<WorkoutSessionWithRecords>
 }
+
+data class WorkoutSessionHeaderRow(
+    val id: String,
+    @ColumnInfo(name = "plan_id") val planId: String?,
+    val mode: String,
+    val status: String,
+    @ColumnInfo(name = "started_at") val startedAt: String?,
+    @ColumnInfo(name = "ended_at") val endedAt: String?,
+    @ColumnInfo(name = "total_elapsed_sec") val totalElapsedSec: Int?,
+    @ColumnInfo(name = "effective_elapsed_sec") val effectiveElapsedSec: Int?,
+    @ColumnInfo(name = "paused_elapsed_sec") val pausedElapsedSec: Int?,
+    @ColumnInfo(name = "timeline_version") val timelineVersion: Int?,
+    @ColumnInfo(name = "trusted_end_offset_ms") val trustedEndOffsetMs: Long?,
+    @ColumnInfo(name = "terminal_reason") val terminalReason: String?,
+    @ColumnInfo(name = "start_local_date") val startLocalDate: String?,
+    @ColumnInfo(name = "start_zone_id") val startZoneId: String?,
+    @ColumnInfo(name = "start_utc_offset_seconds") val startUtcOffsetSeconds: Long?,
+    @ColumnInfo(name = "time_metadata_source_contract_version") val timeMetadataSourceContractVersion: Long?,
+    @ColumnInfo(name = "last_durable_offset_ms") val lastDurableOffsetMs: Long?
+)
 
 data class WorkoutSessionWithRecords(
     @Embedded val session: WorkoutSessionEntity,
