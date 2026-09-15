@@ -56,6 +56,8 @@ class MainActivity : ComponentActivity() {
                 reduceMotion = reduceMotion
             ) {
                 TrainFlowApp(
+                    workoutSessionRepository = workoutSessionRepository,
+                    heartRateRuntimeOwner = trainFlowApplication.heartRateRuntimeOwner,
                     workoutPlans = workoutPlans,
                     workoutSessions = workoutSessions,
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),

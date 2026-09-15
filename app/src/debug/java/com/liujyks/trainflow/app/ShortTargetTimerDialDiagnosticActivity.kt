@@ -33,7 +33,8 @@ class ShortTargetTimerDialDiagnosticActivity : ComponentActivity() {
                     onBackToPlans = { finish() },
                     onOpenRecoveryRecommendation = {},
                     onReturnToTrainingHome = { finish() },
-                    onRecordWorkoutSession = {}
+                    workoutSessionRepository = null,
+                    heartRateRuntimeOwner = null
                 )
             }
         }

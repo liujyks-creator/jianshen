@@ -1,4 +1,6 @@
 package com.liujyks.trainflow.feature.workoutsession
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -42,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,7 +85,28 @@ import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
-import com.liujyks.trainflow.core.model.WorkoutSession
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
+import com.liujyks.trainflow.core.data.RecorderActivityInput
+import com.liujyks.trainflow.core.data.RecorderPhaseInput
+import com.liujyks.trainflow.core.data.RecorderSubmission
+import com.liujyks.trainflow.core.data.RecorderTerminalInput
+import com.liujyks.trainflow.core.data.RecorderTerminalKind
+import com.liujyks.trainflow.core.data.RecorderTerminalSubmission
+import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
+import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
+import com.liujyks.trainflow.core.data.toPlanSnapshot
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
+import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
+import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.model.TimedCompositionBlock
+import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
+import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
+import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
@@ -102,7 +126,12 @@ import com.liujyks.trainflow.ui.theme.LocalTrainFlowReduceMotion
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
 import com.liujyks.trainflow.ui.theme.isBigType
 import java.time.Instant
+import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 @Composable
 internal fun TimedWorkoutSessionRoute(
@@ -110,12 +139,28 @@ internal fun TimedWorkoutSessionRoute(
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     onReturnToTrainingHome: () -> Unit = onBackToPlans,
-    onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
+    workoutSessionRepository: WorkoutSessionRepository? = null,
+    heartRateRuntimeOwner: HeartRateRuntimeOwner? = null,
+    heartRateSettings: HeartRateSettingsUiState = HeartRateSettingsUiState(),
     modifier: Modifier = Modifier
 ) {
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
     var sessionStartedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
-    var recordWriteState by remember(sessionId) { mutableStateOf(TerminalWorkoutSessionRecordWriteState()) }
+    val sessionScope = rememberCoroutineScope()
+    val sessionPlan = remember(sessionId) { plan }
+    val snapshotJson = remember(sessionId) { sessionPlan.toPlanSnapshot().toStorageJson() }
+    val snapshot = remember(sessionId) {
+        (PlanSnapshotStorageV1Validator.prepare(snapshotJson, sessionPlan.mode) as
+            PreparedPlanSnapshotStorageV1Result.Valid).prepared
+    }
+    val compositionTimelines = remember(sessionId) {
+        sessionPlan.blocks.filterIsInstance<TimedCompositionBlock>().map(TimedCompositionTimelineAdapter::expand)
+    }
+    var startRequested by remember(sessionId) { mutableStateOf(false) }
+    var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
+    var saved by remember(sessionId) { mutableStateOf(false) }
+    var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    val displayEntries = remember(sessionId) { linkedMapOf<String, JSONObject>() }
     var restExtensionInteractionState by remember(sessionId) {
         mutableStateOf(TimedRestExtensionInteractionState())
     }
@@ -131,7 +176,106 @@ internal fun TimedWorkoutSessionRoute(
         AndroidActiveWorkoutNotificationController(context.applicationContext)
     }
 
-    fun applyEngineResult(result: TimedWorkoutEngineResult) {
+    fun transitionFacts(before: TimedWorkoutEngineState, result: TimedWorkoutEngineResult): LegacyTimedTransitionFactsV1 {
+        val startedAt = requireNotNull(sessionStartedAt)
+        return if (compositionTimelines.isEmpty()) {
+            legacyTimedTransitionFactsV1(snapshot, before, result, startedAt)
+        } else {
+            compositionTimedTransitionFactsV1(snapshot, compositionTimelines, before, result, startedAt)
+        }
+    }
+
+    fun displayMetadata(phase: TimedCanonicalPhaseFactsV1? = null): String {
+        phase?.sourceStep?.let { step ->
+            step.exerciseId?.let { exerciseId ->
+                if (exerciseId !in displayEntries) {
+                    val exercise = FirstActionExerciseFixtures.entries.firstOrNull { it.exercise.id == exerciseId }?.exercise
+                    displayEntries[exerciseId] = JSONObject()
+                        .put("entityKind", "exercise").put("stableId", exerciseId)
+                        .put("displayNameAtFirstReference", exercise?.name ?: step.title)
+                        .put("customNameAtFirstReference", JSONObject.NULL)
+                        .put("resolutionSource", "plan_snapshot")
+                }
+            }
+        }
+        return JSONObject().put("displayMetadataContractVersion", 1)
+            .put("entries", JSONArray(displayEntries.values.toList())).toString()
+    }
+
+    fun restExtensionEntity(record: TimedRestExtensionRecord) = TimedRestExtensionRecordEntity(
+        id = "$sessionId:${record.id}", sessionId = sessionId, stepId = record.stepId,
+        stepIndex = record.stepIndex, roundIndex = record.roundIndex, restStageId = record.restStageId,
+        restStageTitle = record.restStageTitle, previousStageId = record.previousStageId,
+        previousStageTitle = record.previousStageTitle, addedSec = record.addedSec,
+        plannedRestSec = record.plannedRestSec, restElapsedBeforeExtensionSec = record.restElapsedBeforeExtensionSec,
+        extensionAtRemainingSec = record.extensionAtRemainingSec,
+        cumulativeExtraRestSec = record.cumulativeExtraRestSec, eventElapsedSec = record.eventElapsedSec
+    )
+
+    fun applyEngineResult(result: TimedWorkoutEngineResult, recordTransition: Boolean = true) {
+        val cut = SystemClock.elapsedRealtime()
+        val currentRecorder = recorder
+        if (currentRecorder != null && recordTransition) {
+            val facts = transitionFacts(engineState, result)
+            facts.phaseStarts.forEach { phase ->
+                val submission = currentRecorder.offer(RecorderActivityInput(
+                    elapsedRealtimeMs = cut,
+                    nextPhase = RecorderPhaseInput(phase.phaseKind, phase.phaseIdentityJson),
+                    nextStatus = result.state.status.contractValue,
+                    nextDisplayMetadataJson = displayMetadata(phase)
+                ))
+                if (submission is RecorderSubmission.Closed) saveFailure = requireNotNull(submission.originalCause)
+            }
+            facts.restExtensions.forEach { extension ->
+                val submission = currentRecorder.offer(RecorderActivityInput(
+                    elapsedRealtimeMs = cut, restExtension = restExtensionEntity(extension.record)
+                ))
+                if (submission is RecorderSubmission.Closed) saveFailure = requireNotNull(submission.originalCause)
+            }
+            if (facts.terminalStatus != null) {
+                val endedAt = Instant.now()
+                val record = result.state.toWorkoutSessionRecord(sessionPlan, requireNotNull(sessionStartedAt), endedAt)
+                val submission = currentRecorder.freezeTerminal(RecorderTerminalInput(
+                    elapsedRealtimeMs = cut,
+                    kind = if (facts.terminalStatus == SessionStatus.COMPLETED) RecorderTerminalKind.COMPLETED
+                        else RecorderTerminalKind.USER_ABANDONED,
+                    endedAt = endedAt.toString(), totalElapsedSec = record.totalElapsedSec,
+                    effectiveElapsedSec = record.effectiveElapsedSec, pausedElapsedSec = record.pausedElapsedSec,
+                    sessionDisplayMetadataJson = displayMetadata(),
+                    stepRecords = record.stepHistory.map { step ->
+                        SessionStepRecordEntity(id = "$sessionId:${step.stepId}", sessionId = sessionId,
+                            stepId = step.stepId, kind = step.kind.contractValue, startedAt = step.startedAt,
+                            endedAt = step.endedAt, skipped = step.skipped, actualDurationSec = step.actualDurationSec)
+                    },
+                    restExtensions = record.timedRestExtensionRecords.map(::restExtensionEntity),
+                    strengthSets = emptyList(), snapshotCreatedAt = endedAt.toString()
+                ))
+                when (submission) {
+                    is RecorderTerminalSubmission.Closed -> saveFailure = requireNotNull(submission.originalCause)
+                    is RecorderTerminalSubmission.Accepted -> {
+                        sessionScope.launch {
+                            try {
+                                submission.operation.saved.await()
+                                saved = true
+                            } catch (cause: CancellationException) {
+                                throw cause
+                            } catch (cause: Throwable) {
+                                saveFailure = cause
+                            }
+                        }
+                        sessionScope.launch {
+                            try {
+                                submission.operation.released.await()
+                            } catch (cause: CancellationException) {
+                                throw cause
+                            } catch (cause: Throwable) {
+                                android.util.Log.e("TimedWorkoutSession", "Recorder release failed", cause)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         engineState = result.state
         if (result.shouldDispatchTimedCountdownReminderFeedback()) {
             result.events.dispatchTimedWorkoutFeedback(
@@ -175,10 +319,60 @@ internal fun TimedWorkoutSessionRoute(
     }
 
     fun startSessionFromReadyGate() {
-        if (!engineState.isTimedReadyStartGate()) return
-
+        if (startRequested || !engineState.isTimedReadyStartGate()) return
+        startRequested = true
         sessionStartedAt = Instant.now()
-        dispatch(WorkoutCommand.StartSession)
+        val startResult = TimedWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession)
+        sessionScope.launch {
+            if (workoutSessionRepository != null) {
+                val firstPhase = transitionFacts(engineState, startResult).phaseStarts.single()
+                val startTime = requireNotNull(sessionStartedAt).atZone(ZoneId.systemDefault())
+                val maxBpm = heartRateSettings.personalMaxHeartRateBpm ?: heartRateSettings.ageYears?.let { 220 - it }
+                val maxSource = when {
+                    heartRateSettings.personalMaxHeartRateBpm != null -> "personal_max"
+                    heartRateSettings.ageYears != null -> "age_220_minus_age"
+                    else -> null
+                }
+                val zoneSnapshot = maxBpm?.let {
+                    val bounds = listOf(null to 5000, 5000 to 6000, 6000 to 7000,
+                        7000 to 8000, 8000 to 9000, 9000 to null)
+                    val names = listOf("below_50", "from_50_to_60", "from_60_to_70",
+                        "from_70_to_80", "from_80_to_90", "at_or_above_90")
+                    JSONObject().put("zoneSnapshotContractVersion", 1).put("unit", "bpm")
+                        .put("effectiveMaxBpm", it).put("effectiveMaxSource", maxSource)
+                        .put("zones", JSONArray(bounds.mapIndexed { index, (lower, upper) ->
+                            JSONObject().put("zoneId", names[index])
+                                .put("lowerBoundBasisPointsInclusive", lower ?: JSONObject.NULL)
+                                .put("upperBoundBasisPointsExclusive", upper ?: JSONObject.NULL)
+                        })).toString()
+                }
+                val acquired = WorkoutSessionTimelineRecorder.admitAndBind(
+                    repository = workoutSessionRepository, runtime = requireNotNull(heartRateRuntimeOwner),
+                    scope = sessionScope, entryId = sessionId,
+                    session = WorkoutSessionEntity(id = sessionId, planId = sessionPlan.id,
+                        mode = sessionPlan.mode.contractValue, status = "active", planSnapshotJson = snapshotJson,
+                        startedAt = requireNotNull(sessionStartedAt).toString(), timelineVersion = 1,
+                        lastDurableOffsetMs = 0, lastMutationSequence = 0, displayMetadataContractVersion = 1,
+                        sessionDisplayMetadataJson = displayMetadata(firstPhase),
+                        startLocalDate = startTime.toLocalDate().toString(), startZoneId = startTime.zone.id,
+                        startUtcOffsetSeconds = startTime.offset.totalSeconds.toLong(), timeMetadataSourceContractVersion = 1),
+                    initialPhase = RecorderPhaseInput(firstPhase.phaseKind, firstPhase.phaseIdentityJson),
+                    initialRecording = if (heartRateSettings.enabled) HeartRateRecordingEntity(
+                        recordingId = "$sessionId:heart-rate", sessionId = sessionId, status = "active",
+                        startedOffsetMs = 0, startedMutationSequence = 0, endedOffsetMs = null, endedMutationSequence = null,
+                        sourceContractVersion = 1, sourceKind = "ble_hrs", acquisitionContractVersion = 1,
+                        parameterSnapshotVersion = 1, age = heartRateSettings.ageYears,
+                        personalMaxBpm = heartRateSettings.personalMaxHeartRateBpm, effectiveMaxBpm = maxBpm,
+                        effectiveMaxSource = maxSource, alertThresholdBpm = heartRateSettings.alertThresholdBpm,
+                        zoneSnapshotJson = zoneSnapshot
+                    ) else null
+                )
+                recorder = acquired
+                acquired.freezeStart().await()
+            }
+            timedRouteClockAnchor += 1
+            applyEngineResult(startResult, recordTransition = false)
+        }
     }
 
     val uiState = engineState.toTimedWorkoutSessionScreenState(plan = plan)
@@ -188,13 +382,27 @@ internal fun TimedWorkoutSessionRoute(
         nowMillis = System.currentTimeMillis()
     )
     var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
+    val canRequestEnd = startRequested && !engineState.isTerminal
+    val canLeaveSavedSession = workoutSessionRepository == null || saved
+    val canReturnHome = canLeaveSavedSession || saveFailure != null
+    fun requestEnd() {
+        if (engineState.status == SessionStatus.ACTIVE) dispatch(WorkoutCommand.PauseSession)
+        endConfirmation = endConfirmation.request(canRequestEnd)
+    }
+    BackHandler(enabled = startRequested) {
+        if (engineState.isTerminal) {
+            if (canLeaveSavedSession) onReturnToTrainingHome()
+        } else {
+            requestEnd()
+        }
+    }
     val notificationState = timedActiveWorkoutNotificationState(
         planId = plan.id,
         status = engineState.status,
         uiState = uiState
     )
-    LaunchedEffect(uiState.canEnd) {
-        if (!uiState.canEnd) endConfirmation = endConfirmation.cancel()
+    LaunchedEffect(canRequestEnd) {
+        if (!canRequestEnd) endConfirmation = endConfirmation.cancel()
     }
     LaunchedEffect(engineState.status, engineState.currentStep?.id) {
         restExtensionInteractionState = restExtensionInteractionState.clearForCurrentEngineStep(
@@ -229,18 +437,9 @@ internal fun TimedWorkoutSessionRoute(
     LaunchedEffect(notificationState) {
         activeWorkoutNotifications.update(notificationState)
     }
-    LaunchedEffect(engineState.status, engineState.sessionId) {
-        val startedAt = sessionStartedAt
-        if (engineState.shouldRecordTimedTerminalSession(startedAt) && startedAt != null) {
-            recordWriteState = recordWriteState.recordTerminalSessionOnce(
-                session = engineState.toWorkoutSessionRecord(
-                    plan = plan,
-                    startedAt = startedAt,
-                    endedAt = Instant.now()
-                ),
-                onRecordWorkoutSession = onRecordWorkoutSession
-            )
-        }
+    DisposableEffect(recorder) {
+        val currentRecorder = recorder
+        onDispose { currentRecorder?.clear() }
     }
     DisposableEffect(activeWorkoutNotifications, plan.id) {
         onDispose {
@@ -258,6 +457,7 @@ internal fun TimedWorkoutSessionRoute(
                 uiState = targetReadyGate,
                 onStartSession = ::startSessionFromReadyGate,
                 onBackToPlans = onBackToPlans,
+                showBackToPlans = !startRequested,
                 reduceMotion = reduceMotion,
                 modifier = modifier
             )
@@ -269,21 +469,30 @@ internal fun TimedWorkoutSessionRoute(
                 onSkip = { dispatch(WorkoutCommand.SkipStep) },
                 restExtensionControl = restExtensionControl,
                 onExtendRest = ::onRestExtensionClick,
-                showEndConfirmation = endConfirmation.visible,
-                onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
-                onCancelEnd = { endConfirmation = endConfirmation.cancel() },
-                onConfirmEnd = {
-                    val result = endConfirmation.confirm(uiState.canEnd)
-                    endConfirmation = result.nextState
-                    result.command?.let(::dispatch)
+                onRequestEnd = ::requestEnd,
+                onReturnToTrainingHome = { if (canReturnHome) onReturnToTrainingHome() },
+                onOpenRecoveryRecommendation = { recommendation ->
+                    if (canLeaveSavedSession) onOpenRecoveryRecommendation(recommendation)
                 },
-                onBackToPlans = onBackToPlans,
-                onReturnToTrainingHome = onReturnToTrainingHome,
-                onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                canReturnHome = canReturnHome,
+                canOpenRecovery = canLeaveSavedSession,
+                saveFailure = saveFailure,
                 reduceMotion = reduceMotion,
                 modifier = modifier
             )
         }
+    }
+    if (endConfirmation.visible) {
+        WorkoutEndConfirmationDialog(
+            title = "结束本次计时训练？",
+            text = "训练会提前结束，已完成的阶段会保留在本次总结和本地记录中。",
+            onCancel = { endConfirmation = endConfirmation.cancel() },
+            onConfirm = {
+                val result = endConfirmation.confirm(canRequestEnd)
+                endConfirmation = result.nextState
+                result.command?.let(::dispatch)
+            }
+        )
     }
 }
 
@@ -334,6 +543,7 @@ private fun TimedWorkoutReadyStartGateScreen(
     uiState: TimedReadyStartGateUiState,
     onStartSession: () -> Unit,
     onBackToPlans: () -> Unit,
+    showBackToPlans: Boolean,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -380,11 +590,13 @@ private fun TimedWorkoutReadyStartGateScreen(
                 color = TrainFlowNeutral200
             )
 
-            OutlinedButton(
-                onClick = onBackToPlans,
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(text = "返回计划", color = TrainFlowNeutral200)
+            if (showBackToPlans) {
+                OutlinedButton(
+                    onClick = onBackToPlans,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(text = "返回计划", color = TrainFlowNeutral200)
+                }
             }
         }
     }
@@ -442,13 +654,12 @@ private fun TimedWorkoutSessionScreen(
     onResume: () -> Unit,
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
-    showEndConfirmation: Boolean,
     onRequestEnd: () -> Unit,
-    onCancelEnd: () -> Unit,
-    onConfirmEnd: () -> Unit,
-    onBackToPlans: () -> Unit,
     onReturnToTrainingHome: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    canReturnHome: Boolean,
+    canOpenRecovery: Boolean,
+    saveFailure: Throwable?,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -463,6 +674,9 @@ private fun TimedWorkoutSessionScreen(
                 uiState = uiState,
                 onReturnToTrainingHome = onReturnToTrainingHome,
                 onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                canReturnHome = canReturnHome,
+                canOpenRecovery = canOpenRecovery,
+                saveFailure = saveFailure,
                 reduceMotion = reduceMotion,
                 modifier = Modifier.fillMaxSize()
             )
@@ -475,20 +689,11 @@ private fun TimedWorkoutSessionScreen(
                 onSkip = onSkip,
                 onExtendRest = onExtendRest,
                 onRequestEnd = onRequestEnd,
-                onBackToPlans = onBackToPlans,
                 reduceMotion = reduceMotion,
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        if (showEndConfirmation) {
-            WorkoutEndConfirmationDialog(
-                title = "结束本次计时训练？",
-                text = "训练会提前结束，已完成的阶段会保留在本次总结和本地记录中。",
-                onCancel = onCancelEnd,
-                onConfirm = onConfirmEnd
-            )
-        }
     }
 }
 
@@ -501,7 +706,6 @@ private fun TimedWorkoutExecutionScreen(
     onSkip: () -> Unit,
     onExtendRest: () -> Unit,
     onRequestEnd: () -> Unit,
-    onBackToPlans: () -> Unit,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -630,7 +834,6 @@ private fun TimedWorkoutExecutionScreen(
                 }
                 if (uiState.isPaused || morphProgress > 0f) {
                     PausedBottomActionRow(
-                        onBackToPlans = onBackToPlans,
                         onRequestEnd = onRequestEnd,
                         buttonSize = actionButtonSize,
                         enabled = uiState.isPaused,
@@ -652,6 +855,9 @@ private fun TimedWorkoutCompletionRecapScreen(
     uiState: TimedWorkoutSessionScreenState,
     onReturnToTrainingHome: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    canReturnHome: Boolean,
+    canOpenRecovery: Boolean,
+    saveFailure: Throwable?,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -674,10 +880,14 @@ private fun TimedWorkoutCompletionRecapScreen(
             )
             TimedRecapKeyMetrics(summary = uiState.summary)
             TimedRecapSessionOverview(uiState = uiState)
+            if (saveFailure != null) {
+                Text(text = "训练记录保存失败", color = TrainFlowError)
+            }
             uiState.summary?.let { summary ->
                 TimedSessionSummaryPanel(
                     summary = summary,
                     onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+                    canOpenRecovery = canOpenRecovery,
                     showMetrics = false
                 )
             }
@@ -685,6 +895,7 @@ private fun TimedWorkoutCompletionRecapScreen(
 
         CompletionRecapBottomAction(
             onReturnToTrainingHome = onReturnToTrainingHome,
+            enabled = canReturnHome,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
@@ -884,7 +1095,6 @@ private fun PausedResumeCircle(
 
 @Composable
 private fun PausedBottomActionRow(
-    onBackToPlans: () -> Unit,
     onRequestEnd: () -> Unit,
     buttonSize: Dp,
     enabled: Boolean,
@@ -897,18 +1107,6 @@ private fun PausedBottomActionRow(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        PausedRoundIconButton(
-            contentDescription = "返回阶段设定",
-            onClick = onBackToPlans,
-            contentColor = TrainFlowNeutral50,
-            buttonSize = buttonSize,
-            enabled = enabled
-        ) {
-            PausedBackGlyph(
-                color = TrainFlowNeutral50,
-                modifier = Modifier.size(buttonSize * 0.48f)
-            )
-        }
         PausedRoundIconButton(
             contentDescription = "结束此次计时训练",
             onClick = onRequestEnd,
@@ -1189,6 +1387,7 @@ private fun TimedRecapSessionOverview(uiState: TimedWorkoutSessionScreenState) {
 @Composable
 private fun CompletionRecapBottomAction(
     onReturnToTrainingHome: () -> Unit,
+    enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -1205,6 +1404,7 @@ private fun CompletionRecapBottomAction(
         ) {
             Button(
                 onClick = onReturnToTrainingHome,
+                enabled = enabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),
@@ -1485,6 +1685,7 @@ private fun TimedControlHistoryPanel(uiState: TimedWorkoutSessionScreenState) {
 private fun TimedSessionSummaryPanel(
     summary: TimedWorkoutSummaryUiState,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    canOpenRecovery: Boolean = true,
     showMetrics: Boolean = true
 ) {
     DarkInfoPanel(contentPadding = 16.dp, verticalSpacing = 10.dp) {
@@ -1508,7 +1709,7 @@ private fun TimedSessionSummaryPanel(
         SummaryDetail(label = "休息延长", text = summary.restExtensionSummary)
         SummaryDetail(label = "结束状态", text = summary.earlyEndSummary)
         SummaryDetail(label = "训练部位", text = summary.trainedAreaSummary)
-        RecoveryEntryPanel(summary.recoveryEntry, onOpenRecoveryRecommendation)
+        RecoveryEntryPanel(summary.recoveryEntry, onOpenRecoveryRecommendation, canOpenRecovery)
     }
 }
 
@@ -1603,13 +1804,14 @@ private fun RecoveryEntryPanel(entry: TimedWorkoutRecoveryEntryUiState) {
 @Composable
 private fun RecoveryEntryPanel(
     entry: TimedWorkoutRecoveryEntryUiState,
-    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit
+    onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    canOpenRecovery: Boolean = true
 ) {
     OutlinedButton(
         onClick = {
             entry.recommendation?.let(onOpenRecoveryRecommendation)
         },
-        enabled = entry.enabled,
+        enabled = entry.enabled && canOpenRecovery,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp)
     ) {
