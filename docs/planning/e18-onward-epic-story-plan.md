@@ -4,6 +4,32 @@
 
 ## 当前状态、来源与阅读规则
 
+### 当前 S07B：原 Route 同场生产接线（2026-09-15）
+
+用户已批准一个实施包“计时生产记录全链接入与直接消费者适配”，封闭八路径：MainActivity、TrainFlowApp、TimedWorkoutSessionRoute、debug ShortTargetTimerDialDiagnosticActivity、TimedWorkoutSessionLifecycleContractTest 及 decision-log、本计划、architecture。acceptedBase=`6751aef915c2ce0518e23ea700c30ca08ca163ea`；按提案 §11–§15/§17/§18 及 F173/F174 执行。Story 和实施包总数/完成/剩余均为 **1/0/1**，当前包为 E18-S07B；候选实施不等于独立 Review、集成或 Story 接受。S09=WAITING，CS04C=HELD，不增加交付包。
+
+本段窄覆盖下方 F.11.2 及引用它的旧机制/前提措辞，其他历史及已接受证据保留：
+
+| 条款 | 本包准确责任 |
+|---|---|
+| L01 | 本场状态由原 Route 持有，沿真实 MainActivity→shell→Route→Recorder→Room 接线；同一次 Start 结果经准入/初始化确认后才应用，正常重复点击不另开场，原 snapshot、时间口径及实际值保持。正式全局 HR 关闭也记录 session/阶段，开启按既有心率合同记录。 |
+| L02 | retained/跨配置恢复继续 DEFERRED_NOT_IMPLEMENTED。已批准采用原 Route 同场责任，S07L 的 portrait 不冒称提供 retained，也不要求本包迁移 ViewModel。 |
+| L03 | 原两个计时 family 的 tick/真实命令 cut 使用既有 S07A 事实转换；不重写 engine、facts、时间轴，不把无变化 tick 伪装为阶段事件。 |
+| L04 | 自然完成/user_abandoned 冻结实际终态一次，计时不再走 legacy upsert。Route 消费 Saved 后原回主页/恢复建议开放；同 session、原计划和 recap 实际值关联保留。已 Saved 总结 Back 直接回主页，不重复 End/save，不等 Released。 |
+| L05 | 原 Route dispose 对已持有 Recorder 调 clear，保留通知清理；停止输入/新写并沿已有 Repository handoff，不补终态或跨 scope 补存。此实现不冒称实际销毁/并发验证通过。 |
+| L07 | 明确终态保存失败显示“训练记录保存失败”，允许原回主页按钮离场，原错误和阻塞保留；释放失败不改成保存失败，不撤销 Saved，无重试或新失败页面。未证实的准入/初始化错误不作为正常流程阻塞，不新增“训练未能开始”或 ready 返回恢复。 |
+| L08 | 继承 D-029/030/031/039、UX §2.2/2.5/8.1–8.4/11.1/12.1、UI extension §6 和既有视觉约束。编辑/详情→ready→中心 Start→原运行/暂停/继续/跳过/额外休息→原确认或自然完成→对应复盘；F171 仅窄改开始后返回规则。debug 沿同页面诊断和 finish，不记录、不伪造 Saved。 |
+
+本包唯一运行集合是 `TimedWorkoutSessionLifecycleContractTest#normalTimedStartPauseEndSavedReturnsHome`：真实页面创建默认 composition v2 计划、关闭全局 HR，以同 Application DB/Repository/DataStore 完成 Start→Pause→确认 End；对同 session、原 snapshot、warmup/paused 阶段和 user_abandoned canonical terminal 断言，观察原回主页按钮可用及实际返回前后终态不变。只执行批准的单用例命令一次，不新增 baseline/实施前 RED/回归/独立 build；另按批准定点核对 Saved 按钮消费和导航不重复结束/保存。记录数不证明调用次数，源码不冒称运行。
+
+HR 开启/无连接/样本流、legacy、额外休息、skip/自然完成、系统返回/手势、取消、恢复建议导航、debug、实际销毁/并发准入、保存/释放失败、force-stop/relaunch、配置恢复、声音/性能均未纳入本次运行集合；L06 等旧更广矩阵保留历史及未覆盖事实，不改写为 PASS。准入返回前取消仍未证实且未解决，不加机制或验证。唯一包完成、独立 Review PASS、获授权集成及事实回填后，由主管理判定 Story 完成；本段不预记该结论。
+
+后续本 Writer 对话已批准两次最小滚动补充和各一次重跑，run-1/run-2/run-3 均保留失败原证据；随后批准直接截图点击原正常流程并核对同模拟器数据库。ui-run-1 的 Start→热身→Pause→确认 End→复盘→回主页，以及同 session、snapshot 六项、warmup/paused、user_abandoned、返回前后数据不变已通过，测试数据经原 UI 精确清理。此为直接设备操作与 SQL 证据，不是 JUnit GREEN；原测试暂停控件定位错误仍待处置，严格读取方法返回类型未执行。未重跑已通过流程、未扩展生产范围；准确索引为 Writer ignored `.local/evidence/E18-S07B/ui-run-1/source.json`。本段更新原定验证方式的实际执行记录，不更改 1/0/1 或宣称 Story 已接受。
+
+用户随后明确区分已完成的直接界面/同设备数据库验证与自动脚本定位问题；本候选沿已批准直接证据收尾，不把脚本 GREEN 增列为该产品验证的阻塞门禁。原脚本失败和严格读取调用未执行仍如实披露，不伪称全部验证通过。
+
+下方旧“当前 S07L”是其原候选阶段记录，不替代本段已获批准的 S07B 同场方案。
+
 **当前 S07L（2026-09-13）：首版竖屏声明与正式合同同步，`IMPLEMENTED_CANDIDATE_AWAITING_REVIEW`。** 用户已接受 F142 方向决定及 F143.4/F143.5 的准确最小合同处置；本次 accepted base=`0897d0b61669c19ca6283f4807897a279f0717b8`，tree=`b4fdab9e2bf48da264da7d25f74da77febff3c61`，已含 S06A/S06B/S07A，保留其完成结论和原证据，不重复测试。生产仅为现有 MainActivity 的 Manifest 增加 `android:screenOrientation="portrait"`，覆盖当前 App 页面；同步本计划、architecture、decision-log 三文档。旧 retained/L02=`DEFERRED_NOT_IMPLEMENTED`，S07B 所需稳定 owner/同场状态前提仍未满足，不自动转交 S07B。总包数=1、完成=0、剩余=1、当前包=E18-S07L；只有本批准集合实现、V1/V2 静态验证完成、独立 Review PASS 并由同 Reviewer 在同任务机械集成后，才记完成=1、剩余=0。不增加准备、规划 Review、集成或收尾包，CS04C=HELD。
 
 **首版方向与证据限界：** `portrait` 是 MainActivity 的系统竖屏请求，不承诺所有设备锁定竖屏。项目 targetSdk=36；Android 16 对 targetSdk>=36 且最小宽度>=600dp 的大屏会忽略该限制，厂商也可能覆盖声明。复用 [Android 官方 activity / screenOrientation 文档](https://developer.android.com/guide/topics/manifest/activity-element#screen)（2026-09-13 已查证），不加大屏 opt-out、兼容代码或设备过滤，不降 targetSdk。横屏/旋转适配及对应验收留后续，当前未完成适配；胶囊仅显示数据和点击展开/收起，没有设置入口，训练期间切换系统语言后续训不属于首版要求。验证仅 V1：UTF-8 XML 解析、唯一 MainActivity 的 portrait 属性及单属性 diff；V2：三文档准确条款 diff 与四文件 `git diff --check`。继承 baseline、不跑实施前 RED；不新增测试文件/方法/断言/设施，测试/build/设备/性能/人工门禁均为零，不证明合并 Manifest 或设备效果。

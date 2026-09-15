@@ -92,6 +92,8 @@ import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 
 @Composable
 internal fun TrainFlowApp(
+    workoutSessionRepository: com.liujyks.trainflow.core.data.WorkoutSessionRepository? = null,
+    heartRateRuntimeOwner: com.liujyks.trainflow.core.health.HeartRateRuntimeOwner? = null,
     workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
     workoutSessions: List<WorkoutSession> = emptyList(),
     trainingPreferencesState: TrainingPreferencesScreenState = defaultTrainingPreferencesScreenState(),
@@ -650,6 +652,9 @@ internal fun TrainFlowApp(
                     if (activePlan != null) {
                         TimedWorkoutSessionRoute(
                             plan = activePlan,
+                            workoutSessionRepository = workoutSessionRepository,
+                            heartRateRuntimeOwner = heartRateRuntimeOwner,
+                            heartRateSettings = preferenceHeartRateState,
                             onBackToPlans = {
                                 applyShellState(shellState.finishTimedSession())
                             },
@@ -663,7 +668,6 @@ internal fun TrainFlowApp(
                                         .selectDestination(OfficialShellDestination.TRAINING)
                                 )
                             },
-                            onRecordWorkoutSession = onRecordWorkoutSession,
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {

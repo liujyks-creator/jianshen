@@ -243,6 +243,10 @@ WorkoutEngine
 
 ### 5.1 UI 层
 
+E18-S07B（2026-09-15）已批准窄覆盖下方旧前提：原计时 Route 持有同场 plan/session/engine/clock、开始及保存状态，普通重组沿现有 Compose 生命周期保持；不创建 ViewModel 或第二 owner，不承诺跨配置/进程恢复。MainActivity 将 Application 已有 Repository/HeartRateRuntimeOwner 经 TrainFlowApp 传入正式计时 Route；Application 不成为训练 owner，debug 不提供记录依赖。
+
+继承原 ready、圆盘/即时控制、completed/abandoned 复盘和同场恢复建议。开始保留一次 engine 结果，等待既有 Recorder 初始化确认后应用，原计时与反馈由此开始，记录时间口径不改。F171 隐藏点击开始后的计划/阶段返回，结束与系统返回复用原确认，取消保持暂停。原回主页和恢复建议依 Route 消费的 Saved 开放；已 Saved 总结系统返回直接回主页，不重复 End/save。明确终态保存失败按已批准提示允许原按钮离场，原错误保留；不新增初始化失败交互。旧 retained/L02 仍延期，但本包的原 Route 同场方案已获准确批准。
+
 - Compose 页面只展示 `UiState` 并发出用户意图。
 - 训练中按钮不直接改 session 数据，而是发 `WorkoutCommand`。
 - 首版方向仅为现有 MainActivity Manifest `android:screenOrientation="portrait"` 声明，覆盖当前页面；不动态切换 requestedOrientation/恢复 UNSPECIFIED，受当前入口说明的 Android 16 大屏限制约束，不保证所有设备锁定竖屏。胶囊仅数据显示与点击展开/收起，无设置入口；训练中切换系统语言续训不属首版要求，横屏/旋转适配留后续，当前未完成。
@@ -261,7 +265,10 @@ WorkoutEngine
 
 ### 5.3 Data 层
 
+S07B 的实际 tick/命令统一捕获同次 before/result/events/after 和单调 cut，沿既有 legacy/composition facts 转换提交到本场 Recorder；自然完成和 user_abandoned 冻结原 snapshot、实际执行值及终态。计时原 legacy terminal callback 切断，力量/跟练保持旧链。Saved 与 Released 独立：释放失败不撤销已保存事实，不等待释放才导航，清理未定仍按原 gate 限制新准入。Route dispose 对已持有 Recorder 调用既有 clear，保留通知清理，不发新终态、不增加补存 scope。唯一运行证据限定为正式默认 composition v2、HR 关闭的一场 Start/Pause/确认结束/回主页；debug、其他命令、HR、销毁、错误及恢复等路径按实现责任保留，但本次未运行，不以源码接线宣称其运行通过。
+
 - Repository 输出 domain model，不把 Room entity 暴露给 UI。
+  本次经用户后续批准取得的运行证据为同模拟器截图点击与 DB/WAL 行核对：原正常流程、同场 snapshot 和返回前后终态不变通过。原 JUnit 三次失败原证据保留，严格读取方法的返回类型断言未执行；直接 SQL 不冒称 `readSessionStrict()` 运行或调用次数证据。
 - 新记录链为原 mode engine 的真实事实→同 session Recorder→既有 Repository/Room：一次原子初始化确认后活动提交，正常 cut 冻结实际结束与执行结果→S04 原子终态。Saved 需完整读回，exact unbind/释放单独决定新准入；清理失败不重做分析，不阻止已 Saved 的正常返回。clear 不新发终态，已在途事务仍全提交/全回滚，不添加跨 scope 补存、降级记录或第二 owner。
 - 首版允许对 `PlanBlock`、`WorkoutPlanSnapshot` 使用 JSON 字段保存，以降低多态结构早期建模成本；关键查询字段仍应单独列化。
 - 后续若需要复杂统计，再把 blocks 和 session steps 进一步规范化。

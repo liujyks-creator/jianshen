@@ -1,5 +1,21 @@
 # TrainFlow 决策日志
 
+## E18-S07B 计时生产接线与用户流程（2026-09-15）
+
+本条承接用户批准的 S07B 提案 §11–§15、§17–§18；仅窄覆盖本 Story 对应旧条款，保留历史决定与证据。D-029/D-030/D-031/D-039 的阶段计时器、中心控制、即时可达操作、ready 后显式开始，以及既有 completed/abandoned 复盘和同场恢复建议继续继承，不增加动作库入口或重设计页面。
+
+本场 plan/session/engine/clock、开始和保存状态保留在原 TimedWorkoutSessionRoute。Application 只供应现有 Repository/runtime，依赖经 MainActivity、TrainFlowApp 进入正式 Route；不新增 ViewModel、第二 owner 或恢复机制。旧 retained/L02 仍延期未实现，S07L 不被解释为配置恢复；本次准确同场方案已获批准，不再以旧 retained 输出阻塞 S07B。
+
+Start 先保留同一次 engine 结果，再等待 Recorder 准入和初始化确认，最后应用该结果并开始原计时/反馈。保留原记录时间口径和 canonical anchor；实际 tick/命令使用既有两 family facts，终态切断计时 legacy writer。正式记录采用全局心率意图，关闭仍保存 session/阶段；debug 不提供记录依赖，不调用 Recorder 或旧保存，不伪造 Saved。
+
+F171：点击开始后隐藏返回计划/阶段设定；结束或系统返回先走原确认，取消保持暂停，确认映射 user_abandoned。自然完成与主动结束沿原复盘；原回主页按钮在保存未明确完成时禁用，消费 Saved 后开放正常导航及同场恢复建议。已 Saved 总结的系统返回/手势直接回主页，不再次结束或保存，不等待 Released。明确终态保存失败显示“训练记录保存失败”并允许原回主页按钮离场，保留原错误和 Repository 阻塞，不重试；释放失败不撤销 Saved。“训练未能开始”及初始化失败恢复 ready 返回按钮未获批准，不实施。准入返回前取消仍未证实、未解决，不把理论窗口当作新增产品要求。
+
+已持有 Recorder 的 Route dispose 调用既有 clear 停输入/新写并交接，保留原通知清理；不补终态、不延长 scope 补存。验证仅原批准真实 MainActivity 默认 composition v2、HR 关闭的 Start→Pause→确认 End→同场 canonical/Saved→回主页单用例一次，辅以指定按钮及导航源码核对；其他未覆盖范围见正式计划当前 S07B 条款。本条不宣称运行通过、独立 Review 或集成完成。
+
+本 Writer 对话后续验证批准及实绩：用户分别批准补齐心率设置滚动、返回顶部滚动并各重跑一次；run-1/run-2/run-3 原输出及原生 XML 均保留，三次失败不得改记通过。随后用户批准改为同一既有模拟器上截图识别、正常点击并核对同设备数据，不以原 1000ms 控件等待判定用户流程失败。ui-run-1 已完成一次中心 Start、热身倒计时、暂停、确认结束、复盘及实际返回主页；同设备 DB/WAL 核对同 session、原 snapshot 六项、warmup/paused、user_abandoned，以及返回前后行值不变均通过；测试计划和记录已经原 UI 精确清理，心率两偏好保持原缺省值。证据保存在 Writer ignored `.local/evidence/E18-S07B/`。本轮未修改产品或测试断言；原 JUnit 暂停控件完整描述匹配错误仍待处置，`readSessionStrict()` 返回类型断言未执行，不以直接 SQL 结果冒充该方法运行。原 1/0/1、S09=WAITING、CS04C=HELD 及未覆盖边界保持。
+
+用户随后明确指出：直接点击界面与同设备数据库核对已完成，自动测试脚本定位失败属于测试问题，不是产品代码问题。当前候选以已批准的直接设备流程和数据库核对为本次产品验证证据，脚本未通过及严格读取方法未执行如实披露，不再要求脚本修正或重跑作为当前产品交付门禁；不据此新增产品修改、扩大场景或宣称原 JUnit 通过。
+
 <!-- E18-E22-PLAN-LANDING:BEGIN -->
 ## E18–E22 已接受规划的窄替代记录（2026-09-06）
 
