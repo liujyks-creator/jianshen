@@ -95,12 +95,14 @@ internal fun resolveWorkoutSessionHistorical(
                                 .map { it as CanonicalJsonValue.Obj }
                                 .sortedBy { (it.fields.getValue("order") as CanonicalJsonValue.Num).value }
                             val groupIndex = (payload.fields.getValue("stageGroupIndex0") as CanonicalJsonValue.Num).value.intValueExact()
-                            val targets = (groups[groupIndex].fields.getValue("targets") as CanonicalJsonValue.Arr).values
+                            val group = groups[groupIndex]
+                            val targets = (group.fields.getValue("targets") as CanonicalJsonValue.Arr).values
                                 .map { it as CanonicalJsonValue.Obj }
                                 .sortedBy { (it.fields.getValue("order") as CanonicalJsonValue.Num).value }
                             val targetIndex = (payload.fields.getValue("targetIndex0") as CanonicalJsonValue.Num).value.intValueExact()
                             val target = targets[targetIndex]
-                            name = (target.fields.getValue("name") as CanonicalJsonValue.Str).value
+                            name = "${(group.fields.getValue("name") as CanonicalJsonValue.Str).value} · " +
+                                (target.fields.getValue("name") as CanonicalJsonValue.Str).value
                             plannedSeconds = target.historicalSeconds("durationSec")
                         }
                     }

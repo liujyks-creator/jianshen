@@ -573,6 +573,51 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun deleteSelectedSessionIdsRemovesRelatedRowsAtomically() = runBlocking {
+        repository.upsertSession(timedSession("selected-canonical", SessionStatus.COMPLETED, 75, 60, 15,
+            restExtensionRecords = listOf(restExtensionRecord("selected-extension"))))
+        repository.upsertSession(strengthSession("selected-strength", SessionStatus.COMPLETED,
+            records = listOf(confirmedStrengthRecord("selected-set"))))
+        repository.upsertSession(timedSession("untouched", SessionStatus.COMPLETED, 75, 60, 15))
+        val sql = database.openHelper.writableDatabase
+        sql.execSQL("""
+            INSERT INTO workout_phase_intervals VALUES(
+                'selected-phase', 'selected-canonical', 0, 0, 100, 0, 4, NULL, 'timed_work', '{}')
+        """.trimIndent())
+        sql.execSQL("""
+            INSERT INTO heart_rate_recordings VALUES(
+                'selected-recording', 'selected-canonical', 'terminal', 0, 0, 100, 4,
+                1, 'ble_hrs', 1, 1, NULL, NULL, NULL, NULL, NULL, NULL, 1)
+        """.trimIndent())
+        sql.execSQL("""
+            INSERT INTO heart_rate_acquisition_intervals VALUES(
+                'selected-acquisition', 'selected-recording', 0, 0, 100, 0, 4, NULL,
+                'expected_recording', NULL, 'live', NULL)
+        """.trimIndent())
+        sql.execSQL("INSERT INTO heart_rate_samples VALUES('selected-recording', 0, 10, 1, 120)")
+        sql.execSQL("""
+            INSERT INTO heart_rate_analysis_snapshots VALUES(
+                'selected-recording', 1, '2026-08-25T00:00:00Z', 4,
+                'primary_points_available', 'normal', 'unavailable_no_effective_max',
+                1, 1, 100, 100, 10000, 12000, 120, 120, 10, 1, 0,
+                '{}', NULL, '{}', '{}', '{}')
+        """.trimIndent())
+
+        repository.deleteHistorySessions(setOf("selected-canonical", "selected-strength"))
+
+        assertEquals(listOf("untouched"), database.workoutSessionDao().sessionsForRecorderGate().map { it.id })
+        assertEquals(2, database.workoutSessionDao().stepRecordCount())
+        assertEquals(0, database.workoutSessionDao().strengthSetRecordCount())
+        assertEquals(0, database.workoutSessionDao().timedRestExtensionRecordCount())
+        val canonical = database.canonicalTimelineHeartRateDao()
+        assertEquals(0, canonical.phaseIntervalCount())
+        assertEquals(0, canonical.recordingCount())
+        assertEquals(0, canonical.acquisitionIntervalCount())
+        assertEquals(0, canonical.sampleCount())
+        assertEquals(0, canonical.analysisSnapshotCount())
+    }
+
+    @Test
     fun deleteSessionsForPlanRemovesOnlyThatPlanSessionsAndKeepsWorkoutPlans() = runBlocking {
         val planRepository = WorkoutPlanRepository(database)
         planRepository.upsertPlan(savedPlan("plan-timed"))

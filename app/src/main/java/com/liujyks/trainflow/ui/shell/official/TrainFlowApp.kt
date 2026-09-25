@@ -96,6 +96,7 @@ internal fun TrainFlowApp(
     heartRateRuntimeOwner: com.liujyks.trainflow.core.health.HeartRateRuntimeOwner? = null,
     workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
     workoutSessions: List<WorkoutSession> = emptyList(),
+    historyEntries: List<com.liujyks.trainflow.core.data.HistoryEntry>? = null,
     trainingPreferencesState: TrainingPreferencesScreenState = defaultTrainingPreferencesScreenState(),
     heartRateState: HeartRateState = HeartRateRuntimeFact.Disabled.toHeartRateState(),
     heartRateScanState: BleHeartRateScanState = BleHeartRateScanState.idle(),
@@ -108,9 +109,6 @@ internal fun TrainFlowApp(
     onSaveWorkoutPlan: (WorkoutPlan) -> Unit = {},
     onDeleteWorkoutPlan: (String) -> Unit = {},
     onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
-    onClearAllWorkoutSessions: () -> Unit = {},
-    onClearWorkoutSessionsForPlan: (String) -> Unit = {},
-    onClearWorkoutSessionsStartedOnDate: (String) -> Unit = {},
     onDefaultCountdownThresholdChanged: (Int) -> Unit = {},
     onActionCueEnabledChanged: (Boolean) -> Unit = {},
     onRestCueEnabledChanged: (Boolean) -> Unit = {},
@@ -771,9 +769,12 @@ internal fun TrainFlowApp(
 
                     OfficialShellDestination.RECORDS -> HistoryRoute(
                         sessions = workoutSessions,
-                        onClearAllHistory = onClearAllWorkoutSessions,
-                        onClearPlanHistory = onClearWorkoutSessionsForPlan,
-                        onClearDateHistory = onClearWorkoutSessionsStartedOnDate,
+                        historyEntries = historyEntries,
+                        onReadSession = { id ->
+                            com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical(
+                                requireNotNull(workoutSessionRepository).readSessionStrict(id), "zh-CN")
+                        },
+                        onDeleteSessions = { ids -> requireNotNull(workoutSessionRepository).deleteHistorySessions(ids) },
                         modifier = Modifier.padding(innerPadding)
                     )
 

@@ -1,5 +1,17 @@
 package com.liujyks.trainflow.feature.history
 
+import com.liujyks.trainflow.core.data.HistoryEntry
+import com.liujyks.trainflow.core.data.HistoryEntryClassification
+import com.liujyks.trainflow.core.data.StrictSessionExecution
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
+import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
+import com.liujyks.trainflow.core.database.parseCanonicalJson
+import com.liujyks.trainflow.core.database.CanonicalJsonValue
+import com.liujyks.trainflow.core.database.entity.HeartRateAnalysisSnapshotEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
@@ -32,6 +44,83 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HistoryUiStateTest {
+    @Test
+    fun persistedEntriesKeepFrozenDatesAndSelectionAcrossDelete() {
+        val legacy = strengthSession("legacy", SessionStatus.COMPLETED, "2026-01-01T20:30:00Z",
+            records = emptyList()).copy(startLocalDate = "2026-01-02")
+        val unknownDate = timedSession("unknown-date", SessionStatus.ABANDONED,
+            totalElapsedSec = 60, effectiveElapsedSec = 55, pausedElapsedSec = 5,
+            actualRestSec = 10, extraRestAdds = emptyList(), plannedRestSec = 10)
+        val another = timedSession("another", SessionStatus.COMPLETED,
+            totalElapsedSec = 70, effectiveElapsedSec = 60, pausedElapsedSec = 10,
+            actualRestSec = 10, extraRestAdds = emptyList(), plannedRestSec = 10)
+        val entries = listOf(
+            HistoryEntry("legacy", "2026-01-02", WorkoutMode.STRENGTH, SessionStatus.COMPLETED,
+                legacy, HistoryEntryClassification.Available),
+            HistoryEntry("unknown-date", null, WorkoutMode.TIMED, SessionStatus.ABANDONED,
+                unknownDate, HistoryEntryClassification.Available),
+            HistoryEntry("another", "2026-01-03", WorkoutMode.TIMED, SessionStatus.COMPLETED,
+                another, HistoryEntryClassification.Available),
+            HistoryEntry("running", "2026-01-03", WorkoutMode.TIMED, SessionStatus.ACTIVE,
+                null, HistoryEntryClassification.Nonterminal("canonical_v1_running")),
+            HistoryEntry("broken", null, null, null, null,
+                HistoryEntryClassification.Unavailable("unsupported_session_mode"))
+        )
+        val initial = buildPersistedHistoryScreenState(entries)
+        assertEquals(listOf("2026-01-03", "2026-01-02", "日期未知"), initial.dateGroups.map { it.dateLabel })
+        assertEquals("2026-01-02", initial.dateGroups[1].items.single().dateLabel)
+        assertEquals("日期未知", initial.dateGroups[2].items.first { it.id == "unknown-date" }.dateLabel)
+        assertEquals("力量", initial.applyModeFilter(HistoryModeFilter.STRENGTH).dateGroups.single().items.single().modeBadge)
+        assertEquals(listOf("another", "legacy"), initial.applyStatusFilter(HistoryStatusFilter.COMPLETED)
+            .filteredEntries.map { it.id }.sorted())
+        assertEquals(3, requireNotNull(initial.recordStats).totalCount)
+        assertNotNull(initial.aggregateChartsUiState)
+        assertEquals("未完整结束", initial.dateGroups.first().items.first { it.id == "running" }.statusLabel)
+        assertEquals("不可用", initial.dateGroups.last().items.first { it.id == "broken" }.statusLabel)
+
+        val chosen = initial.startManaging().toggleManagedSession("legacy").toggleManagedSession("another")
+            .requestCleanup(HistoryCleanupTarget.SessionIds(setOf("legacy", "another")))
+        assertEquals(setOf("legacy", "another"), chosen.cancelCleanup().selectedIds)
+        assertEquals(emptySet<String>(), chosen.cancelCleanup().applyModeFilter(HistoryModeFilter.TIMED).selectedIds)
+        assertEquals(emptySet<String>(), chosen.cancelCleanup().finishManaging().selectedIds)
+        assertEquals(emptySet<String>(), chosen.cancelCleanup().leaveHistory().selectedIds)
+        assertEquals(setOf("legacy", "another"),
+            (chosen.confirmCleanup().target as HistoryCleanupTarget.SessionIds).ids)
+        assertEquals(setOf("another"), chosen.cancelCleanup().deletedSessions(setOf("legacy")).selectedIds)
+
+        val selected = initial.selectSession("legacy")
+        val unavailable = selected.withDetailRead("legacy", WorkoutSessionHistoricalResult.Forwarded(
+            WorkoutSessionStrictReadResult.Unavailable("invalid_session_graph")))
+        assertTrue(requireNotNull(unavailable.selectedDetail).rows.single().value.contains("invalid_session_graph"))
+        val missing = selected.withDetailRead("legacy", WorkoutSessionHistoricalResult.Forwarded(
+            WorkoutSessionStrictReadResult.NotFound))
+        assertEquals(null, missing.selectedDetail)
+        assertEquals(WorkoutSessionStrictReadResult.NotFound,
+            (missing.detailRead as WorkoutSessionHistoricalResult.Forwarded).source)
+
+        val row = WorkoutSessionEntity("legacy", mode = "timed", status = "completed",
+            planSnapshotJson = "{\"title\":\"冻结计划\",\"mode\":\"timed\",\"blocks\":[]}")
+        val planRoot = parseCanonicalJson(row.planSnapshotJson) as CanonicalJsonValue.Obj
+        val execution = StrictSessionExecution(emptyList(), emptyList(), emptyList())
+        fun resolved(graph: CanonicalSessionGraphV1) = WorkoutSessionHistoricalResult.Resolved(
+            WorkoutSessionStrictReadResult.CanonicalTerminal(graph, planRoot, execution),
+            "冻结计划", "timed", "zh-CN", emptyList(), emptyList())
+        val noHr = selected.withDetailRead("legacy", resolved(CanonicalSessionGraphV1(row)))
+        assertEquals("未开启心率", noHr.selectedDetail!!.rows.last().value)
+        val recording = HeartRateRecordingEntity("recording", "legacy", "terminal", 0, 0,
+            100, 1, 1, "ble_hrs", 1, 1)
+        val zero = selected.withDetailRead("legacy", resolved(CanonicalSessionGraphV1(row, recording = recording)))
+        assertEquals("零样本", zero.selectedDetail!!.rows.last().value)
+        val snapshot = HeartRateAnalysisSnapshotEntity("recording", 1, "2026-01-01T00:00:00Z", 1,
+            "no_eligible_samples", "none", "unavailable", 1, 0, null, null, null,
+            null, null, null, null, null, null, "{}", null, "{}", "{}", "{}")
+        val noEligible = selected.withDetailRead("legacy", resolved(CanonicalSessionGraphV1(row,
+            recording = recording, samples = listOf(HeartRateSampleEntity("recording", 0, 10, 1, 120)),
+            snapshots = listOf(snapshot))))
+        assertEquals("无可用样本", noEligible.selectedDetail!!.rows.last().value)
+        assertEquals(null, selected.deletedSessions(setOf("legacy")).selectedDetail)
+    }
+
     @Test
     fun historyGroupsSessionsByDateDescending() {
         val state = buildDefaultHistoryScreenState()

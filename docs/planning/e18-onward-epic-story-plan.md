@@ -135,7 +135,7 @@ RES-01–03 的新增 App 内跨场比较和 RES-04 窄进阶提示当前暂缓�
 | 正常化设备状态映射 | `core/data/CanonicalHeartRateObservationMapper.kt` 的单一 mapper 责任 | 保留 accepted state/reason matrix、receipt 与源边界；不合成生产不可达的 watchdog timeout；不把内部诊断落库。上述新文件名来自旧设计定位，不授权采用 04C 候选内容。 |
 | 持久化、准入与事务 | 现有 `WorkoutSessionRepository` + `WorkoutSessionDao` / `CanonicalTimelineHeartRateDao` | 唯一准入边界；新准入扫描与安装在同一序列边界，无共享 completed gate/cache；active/pending/blocked 时不得扫描或放行新场。原始错误、开始原子性、exact 清理及旧 token 隔离保留；Saved 与 Released 分别返回，清理未定不开放冲突写。通用 upsert 继续拒绝 canonical；仅已迁移模式同时切换 Start 与终态，未迁移模式保持旧保存链。 |
 | 终结与原始分析 | 现有 CS-05 `finalizeRecordingSession` / `CanonicalAnalysisV1` / 已有 validators | 同一仓库外层事务可把必要执行/结束信息和已有终结调用一并提交；不复制或重新实现分析/终结 owner。准确同一请求重试识别既有结果。CS-04B 继续负责新进程 durable 封口。 |
-| 时间数据与日历归属 | 现有数据库/entity 增量扩展，仓库写入与严格读取 | 页首 base 已合并 S01 的时间字段增量；不再要求重复迁移。开始信息贯通 entity/domain/read/export，不被结束或旧更新覆盖。日历、筛选、按日删除使用同一冻结日期规则。旧记录未知不回填。 |
+| 时间数据与日历归属 | 现有数据库/entity 增量扩展，仓库写入与严格读取 | 页首 base 已合并 S01 的时间字段增量；不再要求重复迁移。开始信息贯通 entity/domain/read/export，不被结束或旧更新覆盖。记录显示与适用趋势使用冻结当地日；S09 删除仅按所选 ID。旧记录未知不回填。 |
 | 历史/原始分析读取 | 同一仓库提供 version-aware terminal read；复用已有 validator 和 original binding | 新图表/导出不直接用含 fallbackMode 的旧通用读取构造真值。只从当时快照解析名称/结构；每场一致读取，不创建持久化 export snapshot 或第二套原始事实。 |
 | 图表投影和页面状态 | 既有 accepted 纯 `HeartRateChartProjector` 责任 + analysis ViewModel/SavedState | canonical 分析仍由 CS-05；竖/横/聚焦共用投影、raw scrub 查真实点；同 Activity 显式横屏，不新增横屏 Activity。大屏方向政策限制仍需对应 UI 证据。 |
 | 普通通知/FGS | 现有 `ActiveWorkoutNotificationController` contract 的 Application 唯一协调实例 + connectedDevice Service | 同一 session identity、ID 7200、单 writer 有序交接；Service 不接管 engine/GATT。D-082 有资格的后台断联保留 FGS 并恢复；START_NOT_STICKY，合法启动边界与通知拒绝分支保持。 |
@@ -343,7 +343,7 @@ E19 同组理由澄清：两者共享 E18 的 session 时间坐标、原始 HR�
 | E18-S06B 正常终态接合 | 同 Recorder 冻结执行结果→S04→Saved，exact 清理另报 | F.9/R05/R07、R06/R08 终态部分；不启 UI、不建立第二 owner 或跨 scope 补存 | E18-S06A、E18-S04 |
 | E18-S07 计时模式生产接入 | 计时 session/engine/clock 仍由 Route remember 持有，terminal 走普通 legacy mapper/write → Activity-retained 计时状态在真实 Start 接入 Recorder、canonical phase/metadata 和冻结参数，结束后保留真实持久化结果。 | E17-CAP-02/04/07–13、E17-ARCH-22/23/25、CT-04/05/11、E18-R03/07；legacy_timed/composition 的精确 family/index/真实 work-rest predicate、pause/extra-rest、Start gate、配置保持、真实退出及 fresh-process gate。真实 Activity/生产调用证明，不以 helper/barrier 测试代替；不新增动作次数。保留既有倒计时、提醒、音振和终态体验的直接回归。 | E18-S06 |
 | E18-S08 严格历史读取 | 当前通用记录读取含宽松 domain decode，未提供完整 version-aware terminal graph/original binding 读取 → 同一仓库提供 canonical/legacy 严格读取，供历史、导出、图表共同消费。 | E17-CAP-13/21/23、CT-02/03/12、E18-R08/16；canonical 复用已有 strict validator，legacy 保留真实 NULL version且不 fallback/default/mapNotNull 丢项，original binding 不回退 latest、不重算、不回写。每场一致读取、缺失/非法显式区分，删除后不能返回已缓存完整旧 graph。列表不能为展示摘要无条件加载全部历史 raw samples。 | E18-S01、E18-S04；已合并 validator/snapshot 资产 |
-| E18-S09 计时记录历史入口闭合 | 新链记录不能仅证明数据库里有数据 → 现有历史/结束后入口消费严格持久化结果，可查看本场已知时间、执行事实及可信终态；当前计划修改不污染结果。 | E18 的 done、E17-CAP-21/23、E18-R07/08/16；真实生产计时结果进入页面、冻结日期归组与按日删除一致、未知日期不冒充准确当地日、删除后 detail 失效、既有非 HR 趋势与其他模式旧记录保留。这里只补 E18 必需的可用入口，不提前实现 E22 HR 卡/分析曲线。 | E18-S07、E18-S08 |
+| E18-S09 计时记录历史入口闭合 | 新链记录不能仅证明数据库里有数据 → 原复盘与记录页按同一 ID 消费持久化结果；当前计划修改不污染结果。 | E18 的 done、E17-CAP-21/23、E18-R07/08/16；真实生产计时结果进入页面、冻结日期归组，单条/多选按 ID 删除，未知日期独立、已删详情失效、既有非 HR 趋势与其他模式旧记录保留。E22 HR 卡/曲线与 S09B 合并另交付。 | E18-S07、E18-S08 |
 
 S03 与 S04 分别承担开始/活动事务和终结事务；S05 承担其外侧的准入/释放状态，S06 消费这些结果并编排。**不能为了更少节点把 S02–S06 再合成一个共享底座 Story。** 同样不能只按文件把一个原子 Start transaction 拆成多次独立提交；冻结初始化 cut 内的插入与观测折叠是 S03 单一事务义务。
 
@@ -471,7 +471,7 @@ E17 封口资产、04C HELD、旧候选不复用、MANUAL_RELAY 和所有保护�
 | E18-S04 终结 | 结束/执行结果更新保留开始四项及原始开始锚点；保存实际观察结束，unknown actual end与derived endpoint分开。 | 不把可信offset或重启时刻写成实际结束时刻。 |
 | E18-S07、E19-S01/S02 | 真正Start时固定开始Instant、当地日期、ZoneId与该时刻偏移；不是进页面、首次HR启用或结束时才采集；各自配置保留/退出流程不重新定义开始。 | 生产采时与三模式生命周期是各模式的证据。 |
 | E18-S08 | 真实persisted boundary严格区分未采集、合法支持版本、不完整/非法、未知版本；共用约束定义，不容错变成NULL；原始值不回写。已有canonical/legacy计划与analysis验证不由时间映射替代。 | S01四项nullable载体不是完整terminal/legacy strict reader。 |
-| E18-S09、E21选择 | 按已冻结当地日归组/过滤/按日删除；跨午夜归开始日，旧信息未知单独表达，不能用UTC字符串前10位冒充当地日。 | 不在本节点改写历史页面或新增日历。 |
+| E18-S09、E21选择 | 按已冻结当地日归组/适用日期展示；跨午夜归开始日，旧信息未知单独表达，不能用UTC字符串前10位冒充当地日。S09 删除按所选 ID。 | 不在本节点新增日期筛选控件或日历。 |
 | E21-S01编码、E22呈现 | 依D.3输出timeMetadata和来源/派生标记；UI使用同一记录事实。已知开始anchor + offset可生成有标记的派生时刻，不冒称该点另有实际墙钟观测。 | 不生成第二份持久化时间真值，不自行重算分析。 |
 
 后续S03写入完整性和S08读边界必须明确复用同一语义定义/唯一validator责任，不能各自发明版本/NULL解释；若现有validator适配涉及未接受owner变更，返回F5。此项是已接受数据合同的下游闭合工作，不用让S01扩张为全部开始、读、导出和UI实现。
@@ -933,24 +933,15 @@ old→new：通用 `WorkoutSessionWithRecords.toDomain()` 会使用fallbackMode�
 
 完整legacy各block/union及执行字段的正反fixture账本、四类unresolved逐条来源和新增evidence路径尚须F7闭合；H01–08不是宣称该全量ledger已完成。S08依赖S01、S04和S07A明确predicate产品；所有future实现身份保持UNBOUND，不因草案能引用方法名就解锁。
 
-#### F.12.2 S09 必要历史入口与删除日期一致
+#### F.12.2 S09 持久化复盘、历史入口与按条删除（D19/D21 窄替代）
 
-old→new：现有history仅消费通用 `WorkoutSession` / 原日期前缀 → E18真实计时canonical结果经S08进入已有列表/单场详情，显示冻结开始日期/已知起止时间、执行阶段/轮次/暂停/额外休息与可信终态；E22 HR卡/曲线仍后交付。现有history已含统计/非HR图及删除入口，不重建页面、不清除这些已合并资产。
+本节旧“按日/计划/全部清理”和旧验证口径由 D19/D21 替代。父交付固定两包：S09 负责 U01–U06；后继 S09B 负责 B01–B03 的合并关系、展开、整组删除及真实 raw 合并输入。S09B 待 S09 接受后实施；schema 7 和合并结果尚不存在。
 
-本轮源码确认dateGroups基于 `dateKey`，repository按日删除目前使用started_at前10位，相关子表也按同一旧条件删除。因此S09要同时更新新记录的列表分组与按日删除选择条件，不能只改日期标签使用户删到另一天。冻结日期完整的记录用该日；旧不完整的记录单列且不混入精确日期过滤。旧不完整场次仍可通过既有适用plan/all清理以及后续逐场导出选择处理，不擅自增加新的删除产品入口。
+U01：Saved 后原自动复盘及底栏“记录”沿同一 sessionId 读取持久化事实；正常返回不等待 Released。U02：复盘、列表和同页详情沿冻结快照与执行事实呈现，后来修改计划不补写历史。U03：普通记录按保存的开始当地日分组，旧未知日独立；日期继续服务展示与适用的非 HR 趋势，不增日期筛选控件，也不作为删除目标。U04：长按普通卡确认单条删除，或“管理”中勾选任意多条后确认准确 ID 集合；原场、执行子行和既有关联随事务删除，已删详情失效。U05：列表只作 header、时间、快照、执行的轻量 typed 分类，单场详情及后续导出仍用完整 strict；不从无 raw 的列表推断 HR 状态。U06：合法旧模式、mode/status 筛选、非 HR 趋势及取消确认保留选择继续有效；切筛选、完成管理、离页清空选择。旧按日/计划/全部独立清理入口取消，底层旧 SQL 不因本包顺手改写。
 
-| AC | 条件 → 页面/存储可见结果 | oracle |
-|---|---|---|
-| U01 真实闭环 | S07B 完成/用户提前结束且 Saved → 已有历史/结束后入口可查看本场，正常返回不等待 Released，重开仍一致；未终结则按 durable 事实诚实处理。 | 真生产计时→Room→history UI，两 family/no-HR/zero-sample；含 Saved 后 cleanup 未定，不冒充新场可准入 |
-| U02 实际与计划分清 | 计划之后修改/删除或参数改变 → 当时名称、执行与时间不改；计划阶段、实际完成/跳过/休息分别呈现。 | 固定旧场再改计划的生产UI；禁止detail读current plan补数 |
-| U03 统一日期 | 跨午夜、UTC日期不同于本地开始日、后来时区变化 → 固定开始日分组/按日删除同一集合；未知旧记录独立显示。 | 页面选日→真实DAO删除→完整related rows核对；不得substring替代新日期合同 |
-| U04 删除失效 | 当前选中记录被合法清理 → detail失效且无旧cache可继续当真实数据查看；关联raw/snapshot随session cascade。 | 真实删除回调、Room关系和UI刷新；不新增“旧导出勾选还在”的场景 |
-| U05 失败/未知诚实 | not-found、invalid/unsupported、legacy incomplete与no-HR/zero/no-eligible分别可辨，未保存不能标已保存。 | S08 typed结果实际接线，不能所有失败变空列表或模拟sample0 |
-| U06 brownfield保留 | 旧合法记录、其他模式现有写入、mode/status过滤、已有非HR统计和清理确认仍可用；不增加跨场HR比较。 | 现有HistoryUiStateTest/生产history直接回归；只验证受影响行为 |
+S09B 后继 AC：B01 只在现有库增加 group/member 关系、成员独占且不复制原训练或 HR；B02 列表组只计一次、可展开原段、按末段冻结日归组，组删除含所有成员；B03 合并输入保留真实样本时刻、来源、可信截止和段间空档，不补点或将单场算法冒充组算法。组标题为“合并记录（N段）”，只显示各段时长；仅所有成员均匹配 mode/status 时进入该筛选，其余在“全部”可见。图表算法仍属后续 UI/E22。
 
-生产范围定位：F.6 repository/WorkoutSessionDao（日期选择与相关删除条件）、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\history\HistoryUiState.kt`、同目录 `HistoryRoute.kt`，以及F.11已列MainActivity/TrainFlowApp的真实consumer wiring。已有测试定位 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\history\HistoryUiStateTest.kt` 与repository测试。日期查询/删除和页面同属一个用户选择集合的不变量，不能只交helper而让生产SQL仍按旧前缀。
-
-S09依赖S07B/S08；新UI若需改变已接受journey、删除范围或记录失败后的用户选择，先回局部UX，不让Writer发明。当前S08/S09均为 `DRAFT_1_BOUNDARIES_AND_AC_DEFINED / NOT_REVIEWED / NOT_READY`，本轮未运行上述任何测试/设备/性能检查。
+S09 的证据限于已批准方法1/2各一次与一次本场 A、现有 B/C/D 的真实页面及同设备 Room 核对；未运行的步骤不得写为通过。S09B 后续验证单独按其已批准合同执行。
 
 ### F.13 候选依赖图 DRAFT-2（S07细分后机械核对）
 
@@ -968,6 +959,7 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 | E18-S07B | E18-S06、E18-S07A |
 | E18-S08 | E18-S01、E18-S04、E18-S07A |
 | E18-S09 | E18-S07B、E18-S08 |
+| E18-S09B | E18-S09 |
 | E19-S01 | E18-S09 |
 | E19-S02 | E18-S09 |
 | E20-S01 | E18-S07B、E19-S01、E19-S02 |
@@ -1620,6 +1612,7 @@ Read失败与display unresolved分层：unknown/corrupt plan/header/graph不能�
 | E18-S08B | E18-S01、E18-S03、E18-S04、E18-S05、E18-S08A |
 | E18-S08C | E18-S08B、E18-S07A |
 | E18-S09 | E18-S07B、E18-S08B、E18-S08C |
+| E18-S09B | E18-S09 |
 | E19-S01 | E18-S09 |
 | E19-S02 | E18-S09 |
 | E20-S01 | E18-S07B、E19-S01、E19-S02 |

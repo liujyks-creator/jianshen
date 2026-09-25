@@ -370,6 +370,9 @@ interface WorkoutSessionDao {
     @Query("DELETE FROM strength_set_records WHERE session_id = :sessionId")
     suspend fun deleteStrengthSetRecordsForSession(sessionId: String)
 
+    @Query("DELETE FROM workout_sessions WHERE id IN (:sessionIds)")
+    suspend fun deleteSessionsByIds(sessionIds: List<String>)
+
     @Query("DELETE FROM session_step_records")
     suspend fun deleteAllStepRecords()
 

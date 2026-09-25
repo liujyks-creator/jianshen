@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.history
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,9 +31,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -44,6 +47,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.liujyks.trainflow.core.model.WorkoutSession
+import com.liujyks.trainflow.core.data.HistoryEntry
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
 import com.liujyks.trainflow.ui.theme.TrainFlowError
@@ -60,19 +67,28 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 @Composable
 internal fun HistoryRoute(
     sessions: List<WorkoutSession> = emptyList(),
-    onClearAllHistory: () -> Unit = {},
-    onClearPlanHistory: (String) -> Unit = {},
-    onClearDateHistory: (String) -> Unit = {},
+    historyEntries: List<HistoryEntry>? = null,
+    onReadSession: suspend (String) -> WorkoutSessionHistoricalResult = { error("History reader unavailable") },
+    onDeleteSessions: suspend (Set<String>) -> Unit = { error("History deletion unavailable") },
     modifier: Modifier = Modifier
 ) {
-    var uiState by remember(sessions) {
-        mutableStateOf(buildHistoryScreenState(sessions))
+    var uiState by remember {
+        mutableStateOf(if (historyEntries == null) buildHistoryScreenState(sessions)
+            else buildPersistedHistoryScreenState(historyEntries))
+    }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(historyEntries) {
+        if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
     }
 
     HistoryScreen(
         uiState = uiState,
         onSelectSession = { sessionId ->
             uiState = uiState.selectSession(sessionId)
+            if (!uiState.managing && historyEntries != null) scope.launch {
+                val result = onReadSession(sessionId)
+                uiState = uiState.withDetailRead(sessionId, result)
+            }
         },
         onSelectModeFilter = { filter ->
             uiState = uiState.applyModeFilter(filter)
@@ -83,14 +99,23 @@ internal fun HistoryRoute(
         onRequestCleanup = { target ->
             uiState = uiState.requestCleanup(target)
         },
+        onStartManaging = { uiState = uiState.startManaging() },
+        onFinishManaging = { uiState = uiState.finishManaging() },
         onConfirmCleanup = {
             val result = uiState.confirmCleanup()
             uiState = result.state
             when (val target = result.target) {
-                is HistoryCleanupTarget.All -> onClearAllHistory()
-                is HistoryCleanupTarget.Plan -> onClearPlanHistory(target.planId)
-                is HistoryCleanupTarget.Date -> onClearDateHistory(target.dateLabel)
-                null -> Unit
+                is HistoryCleanupTarget.SessionIds -> scope.launch {
+                    try {
+                        onDeleteSessions(target.ids)
+                        uiState = uiState.deletedSessions(target.ids)
+                    } catch (cause: CancellationException) {
+                        throw cause
+                    } catch (cause: Throwable) {
+                        uiState = uiState.copy(statusMessage = "删除失败：${cause.message ?: cause::class.simpleName}")
+                    }
+                }
+                else -> Unit
             }
         },
         onCancelCleanup = {
@@ -107,6 +132,8 @@ private fun HistoryScreen(
     onSelectModeFilter: (HistoryModeFilter) -> Unit,
     onSelectStatusFilter: (HistoryStatusFilter) -> Unit,
     onRequestCleanup: (HistoryCleanupTarget) -> Unit,
+    onStartManaging: () -> Unit = {},
+    onFinishManaging: () -> Unit = {},
     onConfirmCleanup: () -> Unit,
     onCancelCleanup: () -> Unit,
     modifier: Modifier = Modifier
@@ -120,6 +147,21 @@ private fun HistoryScreen(
     ) {
         item {
             HistoryHeader(uiState)
+        }
+        if (!uiState.isEmpty) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (uiState.managing) {
+                        OutlinedButton(onClick = onFinishManaging) { Text("完成") }
+                        Button(onClick = { onRequestCleanup(HistoryCleanupTarget.SessionIds(uiState.selectedIds.toSet())) },
+                            enabled = uiState.selectedIds.isNotEmpty()) {
+                            Text("删除所选（${uiState.selectedIds.size}）")
+                        }
+                    } else {
+                        OutlinedButton(onClick = onStartManaging) { Text("管理") }
+                    }
+                }
+            }
         }
 
         uiState.statusMessage?.let { message ->
@@ -153,7 +195,7 @@ private fun HistoryScreen(
                 )
             }
 
-            if (uiState.filteredSessions.isEmpty()) {
+            if (uiState.filteredEntries.isEmpty()) {
                 item {
                     FilteredEmptyCard(uiState.filtersUiState)
                 }
@@ -168,7 +210,10 @@ private fun HistoryScreen(
                     items(group.items, key = { item -> item.id }) { item ->
                         HistorySessionCard(
                             item = item,
-                            onClick = { onSelectSession(item.id) }
+                            onClick = { onSelectSession(item.id) },
+                            onLongClick = if (uiState.managing) null else {
+                                { onRequestCleanup(HistoryCleanupTarget.SessionIds(setOf(item.id))) }
+                            }
                         )
                     }
                 }
@@ -235,17 +280,6 @@ private fun HistoryScreen(
                 }
             }
 
-            uiState.cleanupUiState?.let { cleanup ->
-                item {
-                    SectionTitle("历史管理")
-                }
-                item {
-                    HistoryCleanupCard(
-                        cleanup = cleanup,
-                        onRequestCleanup = onRequestCleanup
-                    )
-                }
-            }
         }
     }
 
@@ -1166,14 +1200,15 @@ private fun StatsCard(stats: WorkoutRecordStatsUiState) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun HistorySessionCard(
     item: HistorySessionListItemUiState,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(
