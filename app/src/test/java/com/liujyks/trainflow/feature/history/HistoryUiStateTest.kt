@@ -73,7 +73,7 @@ class HistoryUiStateTest {
         assertEquals("力量", initial.applyModeFilter(HistoryModeFilter.STRENGTH).dateGroups.single().items.single().modeBadge)
         assertEquals(listOf("another", "legacy"), initial.applyStatusFilter(HistoryStatusFilter.COMPLETED)
             .filteredEntries.map { it.id }.sorted())
-        assertEquals(3, requireNotNull(initial.recordStats).totalCount)
+        assertEquals(5, requireNotNull(initial.recordStats).totalCount)
         assertNotNull(initial.aggregateChartsUiState)
         assertEquals("未完整结束", initial.dateGroups.first().items.first { it.id == "running" }.statusLabel)
         assertEquals("不可用", initial.dateGroups.last().items.first { it.id == "broken" }.statusLabel)

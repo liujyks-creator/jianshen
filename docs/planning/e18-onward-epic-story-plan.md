@@ -135,7 +135,7 @@ RES-01–03 的新增 App 内跨场比较和 RES-04 窄进阶提示当前暂缓�
 | 正常化设备状态映射 | `core/data/CanonicalHeartRateObservationMapper.kt` 的单一 mapper 责任 | 保留 accepted state/reason matrix、receipt 与源边界；不合成生产不可达的 watchdog timeout；不把内部诊断落库。上述新文件名来自旧设计定位，不授权采用 04C 候选内容。 |
 | 持久化、准入与事务 | 现有 `WorkoutSessionRepository` + `WorkoutSessionDao` / `CanonicalTimelineHeartRateDao` | 唯一准入边界；新准入扫描与安装在同一序列边界，无共享 completed gate/cache；active/pending/blocked 时不得扫描或放行新场。原始错误、开始原子性、exact 清理及旧 token 隔离保留；Saved 与 Released 分别返回，清理未定不开放冲突写。通用 upsert 继续拒绝 canonical；仅已迁移模式同时切换 Start 与终态，未迁移模式保持旧保存链。 |
 | 终结与原始分析 | 现有 CS-05 `finalizeRecordingSession` / `CanonicalAnalysisV1` / 已有 validators | 同一仓库外层事务可把必要执行/结束信息和已有终结调用一并提交；不复制或重新实现分析/终结 owner。准确同一请求重试识别既有结果。CS-04B 继续负责新进程 durable 封口。 |
-| 时间数据与日历归属 | 现有数据库/entity 增量扩展，仓库写入与严格读取 | 页首 base 已合并 S01 的时间字段增量；不再要求重复迁移。开始信息贯通 entity/domain/read/export，不被结束或旧更新覆盖。记录显示与适用趋势使用冻结当地日；S09 删除仅按所选 ID。旧记录未知不回填。 |
+| 时间数据与日历归属 | 现有数据库/entity 增量扩展，仓库写入与严格读取 | 页首 base 已合并 S01 的时间字段增量；不再要求重复迁移。开始信息贯通 entity/domain/read/export，不被结束或旧更新覆盖。记录卡片显示与分组使用冻结当地日，适用趋势继续按既有 UTC 日分桶；S09 删除仅按所选 ID。旧记录未知不回填。 |
 | 历史/原始分析读取 | 同一仓库提供 version-aware terminal read；复用已有 validator 和 original binding | 新图表/导出不直接用含 fallbackMode 的旧通用读取构造真值。只从当时快照解析名称/结构；每场一致读取，不创建持久化 export snapshot 或第二套原始事实。 |
 | 图表投影和页面状态 | 既有 accepted 纯 `HeartRateChartProjector` 责任 + analysis ViewModel/SavedState | canonical 分析仍由 CS-05；竖/横/聚焦共用投影、raw scrub 查真实点；同 Activity 显式横屏，不新增横屏 Activity。大屏方向政策限制仍需对应 UI 证据。 |
 | 普通通知/FGS | 现有 `ActiveWorkoutNotificationController` contract 的 Application 唯一协调实例 + connectedDevice Service | 同一 session identity、ID 7200、单 writer 有序交接；Service 不接管 engine/GATT。D-082 有资格的后台断联保留 FGS 并恢复；START_NOT_STICKY，合法启动边界与通知拒绝分支保持。 |
