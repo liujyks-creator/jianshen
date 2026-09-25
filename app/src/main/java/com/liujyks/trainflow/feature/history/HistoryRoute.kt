@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.feature.history
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
@@ -76,18 +77,30 @@ internal fun HistoryRoute(
         mutableStateOf(if (historyEntries == null) buildHistoryScreenState(sessions)
             else buildPersistedHistoryScreenState(historyEntries))
     }
+    var detailOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(historyEntries) {
         if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
     }
 
-    HistoryScreen(
+    BackHandler(enabled = detailOpen) { detailOpen = false }
+    if (detailOpen) {
+        HistoryDetailScreen(
+            detail = uiState.selectedDetail,
+            readFinished = uiState.detailRead != null || historyEntries == null,
+            onBack = { detailOpen = false },
+            modifier = modifier
+        )
+    } else HistoryScreen(
         uiState = uiState,
         onSelectSession = { sessionId ->
             uiState = uiState.selectSession(sessionId)
-            if (!uiState.managing && historyEntries != null) scope.launch {
-                val result = onReadSession(sessionId)
-                uiState = uiState.withDetailRead(sessionId, result)
+            if (!uiState.managing) {
+                detailOpen = true
+                if (historyEntries != null) scope.launch {
+                    val result = onReadSession(sessionId)
+                    uiState = uiState.withDetailRead(sessionId, result)
+                }
             }
         },
         onSelectModeFilter = { filter ->
@@ -218,15 +231,6 @@ private fun HistoryScreen(
                     }
                 }
 
-                uiState.selectedDetail?.let { detail ->
-                    item {
-                        SectionTitle("选中训练详情")
-                    }
-                    item {
-                        HistoryDetailCard(detail)
-                    }
-                }
-
                 uiState.aggregateChartsUiState?.let { charts ->
                     item {
                         SectionTitle("趋势区")
@@ -289,6 +293,34 @@ private fun HistoryScreen(
             onConfirmCleanup = onConfirmCleanup,
             onCancelCleanup = onCancelCleanup
         )
+    }
+}
+
+@Composable
+private fun HistoryDetailScreen(
+    detail: HistorySessionDetailUiState?,
+    readFinished: Boolean,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize().background(TrainFlowSurfaceMuted)
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            OutlinedButton(onClick = onBack) { Text("返回记录总览") }
+        }
+        item {
+            SectionTitle("单条记录详情")
+        }
+        item {
+            when {
+                detail != null -> HistoryDetailCard(detail)
+                readFinished -> StatusMessageCard("记录已删除")
+                else -> StatusMessageCard("正在读取本场记录…")
+            }
+        }
     }
 }
 

@@ -756,7 +756,7 @@ private fun HistoryScreenState.toFiltersUiState(): HistoryFiltersUiState {
     }
     return HistoryFiltersUiState(
         title = "筛选",
-        description = "筛选只影响最近训练列表和下方趋势；已打开的详情保持，概览摘要始终展示全部本地记录。",
+        description = "筛选只影响最近训练列表和下方趋势；概览摘要始终展示全部本地记录。",
         modeOptions = modeOptions,
         statusOptions = statusOptions,
         resultLabel = "当前筛选 $filteredCount / ${entries.size} 条记录",
