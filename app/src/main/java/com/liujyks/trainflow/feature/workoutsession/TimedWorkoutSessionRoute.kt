@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
+import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendationGenerator
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
@@ -94,6 +95,9 @@ import com.liujyks.trainflow.core.data.RecorderTerminalInput
 import com.liujyks.trainflow.core.data.RecorderTerminalKind
 import com.liujyks.trainflow.core.data.RecorderTerminalSubmission
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
+import com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical
 import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.data.toPlanSnapshot
@@ -133,6 +137,69 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
+private fun Int.savedDurationLabel(): String = if (this >= 60) "${this / 60}分${this % 60}秒" else "${this}秒"
+
+private fun WorkoutSessionHistoricalResult.Resolved.toPersistedTimedRecap(
+    base: TimedWorkoutSessionScreenState
+): TimedWorkoutSessionScreenState {
+    val terminal = source as? WorkoutSessionStrictReadResult.CanonicalTerminal
+        ?: error("Saved timed recap requires a canonical terminal session")
+    val graph = terminal.graph
+    val savedSession = graph.session
+    check(savedSession.mode == "timed") { "Saved recap is not timed: ${savedSession.id}" }
+    val completed = savedSession.status == "completed"
+    val steps = terminal.execution.steps
+    val skipped = steps.filter { it.skipped }
+    val finished = steps.count { it.endedAt != null && !it.skipped }
+    val rest = terminal.execution.restExtensions
+    val total = requireNotNull(savedSession.totalElapsedSec)
+    val effective = requireNotNull(savedSession.effectiveElapsedSec)
+    val paused = requireNotNull(savedSession.pausedElapsedSec)
+    val completedPhaseLabels = phaseDisplays.mapNotNull { it.display.label }.distinct()
+    val exerciseIds = graph.phases.filter { phase ->
+        phase.phaseKind == "timed_work" && phase.endOffsetMs != null &&
+            phase.endOffsetMs > phase.startOffsetMs
+    }.mapNotNull { phase ->
+        JSONObject(phase.phaseIdentityJson).optJSONObject("payload")
+            ?.optString("actualExerciseId")?.takeIf { it.isNotEmpty() }
+    }.distinct()
+    val recovery = BasicRecoveryRecommendationGenerator.fromExerciseIds(savedSession.id, exerciseIds)
+    val recoveryEntry = TimedWorkoutRecoveryEntryUiState(
+        title = "查看恢复建议",
+        description = if (recovery.hasRecommendation) "已根据本次完成动作生成基础放松方向。"
+            else "本次没有可识别的已完成动作，暂不生成恢复建议。",
+        enabled = recovery.hasRecommendation,
+        generated = recovery.hasRecommendation,
+        recommendation = recovery.takeIf { it.hasRecommendation }
+    )
+    val roundCount = timedStructures.flatMap { it.phases }.mapNotNull { it.roundIndex0 }.maxOrNull()?.plus(1)
+    val metrics = listOf(
+        TimedWorkoutSummaryMetricUiState("总时长", total.savedDurationLabel(), "已保存的终态时长"),
+        TimedWorkoutSummaryMetricUiState("完成阶段", "${completedPhaseLabels.size} 段", completedPhaseLabels.joinToString(" · ").ifEmpty { "无阶段名称" }),
+        TimedWorkoutSummaryMetricUiState("步骤进度", "$finished / ${steps.size}", "来自已保存的执行记录"),
+        TimedWorkoutSummaryMetricUiState("轮次进度", roundCount?.let { "已到第 $it 轮" } ?: "无循环轮次", "来自冻结阶段结构"),
+        TimedWorkoutSummaryMetricUiState("跳过内容", "${skipped.size} 步", "来自已保存的执行记录"),
+        TimedWorkoutSummaryMetricUiState("延长休息", rest.sumOf { it.addedSec }.savedDurationLabel(), "${rest.size} 次延长")
+    )
+    val summary = TimedWorkoutSummaryUiState(
+        title = if (completed) "完成复盘" else "提前结束记录",
+        tone = if (completed) TimedWorkoutSummaryTone.COMPLETED else TimedWorkoutSummaryTone.ABANDONED,
+        durationLabel = effective.savedDurationLabel(),
+        durationSemanticsNote = "有效时长与暂停时长来自已保存的本场终态；非墙钟时长。",
+        metricItems = metrics,
+        skippedSummary = if (skipped.isEmpty()) "没有跳过内容。" else "跳过 ${skipped.size} 步：${skipped.take(3).joinToString("、") { it.stepId }}。",
+        restExtensionSummary = if (rest.isEmpty()) "没有延长休息。" else rest.joinToString("；") { "${it.restStageTitle} 延长 ${it.addedSec} 秒" },
+        earlyEndSummary = if (completed) "正常完成。" else "本次训练提前结束。",
+        trainedAreaSummary = recovery.recoveryAreas.joinToString("、") { it.name }.ifEmpty { "暂无可识别训练部位。" },
+        recoveryEntry = recoveryEntry
+    )
+    return base.copy(planTitle = title,
+        statusLabel = if (completed) "已完成" else "已结束",
+        terminalTitle = if (completed) "计时训练完成" else "计时训练已提前结束",
+        terminalSummary = "本场 ${savedSession.id} · 已记录 $finished 步，跳过 ${skipped.size} 步；有效 ${effective.savedDurationLabel()}，暂停 ${paused.savedDurationLabel()}。冻结阶段：${completedPhaseLabels.joinToString("、").ifEmpty { "无" }}。",
+        summary = summary)
+}
+
 @Composable
 internal fun TimedWorkoutSessionRoute(
     plan: WorkoutPlan,
@@ -160,6 +227,8 @@ internal fun TimedWorkoutSessionRoute(
     var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
     var saved by remember(sessionId) { mutableStateOf(false) }
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var persistedRecap by remember(sessionId) { mutableStateOf<TimedWorkoutSessionScreenState?>(null) }
     val displayEntries = remember(sessionId) { linkedMapOf<String, JSONObject>() }
     var restExtensionInteractionState by remember(sessionId) {
         mutableStateOf(TimedRestExtensionInteractionState())
@@ -257,6 +326,18 @@ internal fun TimedWorkoutSessionRoute(
                             try {
                                 submission.operation.saved.await()
                                 saved = true
+                                try {
+                                    val historical = resolveWorkoutSessionHistorical(
+                                        requireNotNull(workoutSessionRepository).readSessionStrict(sessionId), "zh-CN")
+                                    val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
+                                        ?: error("Saved session $sessionId cannot be resolved: $historical")
+                                    persistedRecap = resolved.toPersistedTimedRecap(
+                                        engineState.toTimedWorkoutSessionScreenState(plan = sessionPlan))
+                                } catch (cause: CancellationException) {
+                                    throw cause
+                                } catch (cause: Throwable) {
+                                    recapReadFailure = cause
+                                }
                             } catch (cause: CancellationException) {
                                 throw cause
                             } catch (cause: Throwable) {
@@ -375,7 +456,10 @@ internal fun TimedWorkoutSessionRoute(
         }
     }
 
-    val uiState = engineState.toTimedWorkoutSessionScreenState(plan = plan)
+    val engineUiState = engineState.toTimedWorkoutSessionScreenState(plan = plan)
+    val uiState = persistedRecap ?: if (saved) engineUiState.copy(
+        planTitle = "正在读取已保存记录", terminalSummary = null, summary = null)
+        else engineUiState
     val readyGate = engineState.toTimedReadyStartGateUiState()
     val restExtensionControl = restExtensionInteractionState.toRestExtensionControlUiState(
         engineState = engineState,
@@ -477,6 +561,7 @@ internal fun TimedWorkoutSessionRoute(
                 canReturnHome = canReturnHome,
                 canOpenRecovery = canLeaveSavedSession,
                 saveFailure = saveFailure,
+                recapReadFailure = recapReadFailure,
                 reduceMotion = reduceMotion,
                 modifier = modifier
             )
@@ -660,6 +745,7 @@ private fun TimedWorkoutSessionScreen(
     canReturnHome: Boolean,
     canOpenRecovery: Boolean,
     saveFailure: Throwable?,
+    recapReadFailure: Throwable? = null,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -677,6 +763,7 @@ private fun TimedWorkoutSessionScreen(
                 canReturnHome = canReturnHome,
                 canOpenRecovery = canOpenRecovery,
                 saveFailure = saveFailure,
+                recapReadFailure = recapReadFailure,
                 reduceMotion = reduceMotion,
                 modifier = Modifier.fillMaxSize()
             )
@@ -858,6 +945,7 @@ private fun TimedWorkoutCompletionRecapScreen(
     canReturnHome: Boolean,
     canOpenRecovery: Boolean,
     saveFailure: Throwable?,
+    recapReadFailure: Throwable? = null,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -882,6 +970,9 @@ private fun TimedWorkoutCompletionRecapScreen(
             TimedRecapSessionOverview(uiState = uiState)
             if (saveFailure != null) {
                 Text(text = "训练记录保存失败", color = TrainFlowError)
+            }
+            if (recapReadFailure != null) {
+                Text(text = "已保存记录读取失败：${recapReadFailure.message}", color = TrainFlowError)
             }
             uiState.summary?.let { summary ->
                 TimedSessionSummaryPanel(

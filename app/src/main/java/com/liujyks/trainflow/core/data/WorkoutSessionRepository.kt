@@ -80,6 +80,21 @@ internal sealed interface WorkoutSessionStrictReadResult {
     data class Unavailable(val code: String) : WorkoutSessionStrictReadResult
 }
 
+internal sealed interface HistoryEntryClassification {
+    data object Available : HistoryEntryClassification
+    data class Nonterminal(val timelineStatus: String) : HistoryEntryClassification
+    data class Unavailable(val code: String) : HistoryEntryClassification
+}
+
+internal data class HistoryEntry(
+    val id: String,
+    val frozenDate: String?,
+    val mode: WorkoutMode?,
+    val status: SessionStatus?,
+    val session: WorkoutSession?,
+    val classification: HistoryEntryClassification
+)
+
 internal data class StrictSessionExecution(
     val steps: List<SessionStepRecordEntity>,
     val restExtensions: List<TimedRestExtensionRecordEntity>,
@@ -292,6 +307,9 @@ internal class WorkoutSessionRepository(
 
     val sessions: Flow<List<WorkoutSession>> = dao.observeSessionsWithRecords()
         .map { rows -> rows.map { row -> row.toDomain() } }
+
+    val historyEntries: Flow<List<HistoryEntry>> = dao.observeSessionsWithRecords()
+        .map { rows -> rows.map { row -> row.toHistoryEntry() } }
 
     suspend fun admitRecorder(
         entryId: String, session: WorkoutSessionEntity, initialPhase: WorkoutPhaseIntervalEntity
@@ -1803,6 +1821,18 @@ internal class WorkoutSessionRepository(
         }
     }
 
+    suspend fun deleteHistorySessions(sessionIds: Set<String>) {
+        if (sessionIds.isEmpty()) return
+        database.withTransaction {
+            sessionIds.forEach { id ->
+                dao.deleteStepRecordsForSession(id)
+                dao.deleteTimedRestExtensionRecordsForSession(id)
+                dao.deleteStrengthSetRecordsForSession(id)
+            }
+            dao.deleteSessionsByIds(sessionIds.toList())
+        }
+    }
+
     suspend fun deleteSessionsForPlan(planId: String) {
         database.withTransaction {
             dao.deleteStepRecordsForPlan(planId)
@@ -1861,18 +1891,11 @@ internal class WorkoutSessionRepository(
         } catch (_: DateTimeException) {
             return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_session_time")
         }
-        val planRoot = if (header is CanonicalSessionHeaderV1Result.Legacy) {
-            val plan = LegacyUnversionedPlanSnapshotReader.read(session.planSnapshotJson, mode)
-            if (plan !is LegacyUnversionedPlanSnapshotReadResult.Valid) {
-                return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_plan_snapshot")
-            }
-            plan.root
-        } else {
-            if (PlanSnapshotStorageV1Validator.validate(session.planSnapshotJson, mode) !is PlanSnapshotStorageV1ValidationResult.Valid) {
-                return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_plan_snapshot")
-            }
-            parseCanonicalJson(session.planSnapshotJson) as CanonicalJsonValue.Obj
-        }
+        val planRoot = validatedHistoryPlanRoot(
+            session.planSnapshotJson,
+            mode,
+            header is CanonicalSessionHeaderV1Result.Legacy
+        ) ?: return@withTransaction WorkoutSessionStrictReadResult.Unavailable("invalid_plan_snapshot")
         val phases = canonicalDao.phaseIntervals(sessionId)
         val recordings = canonicalDao.recordingsForSession(sessionId)
         if (recordings.size > 1 || (header is CanonicalSessionHeaderV1Result.Legacy &&
@@ -2456,6 +2479,71 @@ private fun WorkoutSessionWithRecords.toDomain(): WorkoutSession {
             .map { record -> record.toDomain() },
         strengthSetRecords = strengthSetRecords.sortedBy { record -> record.setOrder }.map { record -> record.toDomain() }
     )
+}
+
+private fun validatedHistoryPlanRoot(
+    persistedJson: String,
+    mode: WorkoutMode,
+    legacyHeader: Boolean
+): CanonicalJsonValue.Obj? {
+    val root = parseCanonicalJson(persistedJson) as? CanonicalJsonValue.Obj ?: return null
+    return if (legacyHeader && "planSnapshotStorageContractVersion" !in root.fields) {
+        (LegacyUnversionedPlanSnapshotReader.read(persistedJson, mode) as?
+            LegacyUnversionedPlanSnapshotReadResult.Valid)?.root
+    } else if (PlanSnapshotStorageV1Validator.validate(persistedJson, mode) is PlanSnapshotStorageV1ValidationResult.Valid) {
+        root
+    } else {
+        null
+    }
+}
+
+private fun WorkoutSessionWithRecords.toHistoryEntry(): HistoryEntry {
+    val row = session
+    val mode = WorkoutMode.entries.firstOrNull { it.contractValue == row.mode }
+        ?: return HistoryEntry(row.id, row.startLocalDate, null, null, null,
+            HistoryEntryClassification.Unavailable("unsupported_session_mode"))
+    val status = SessionStatus.entries.firstOrNull { it.contractValue == row.status }
+        ?: return HistoryEntry(row.id, row.startLocalDate, mode, null, null,
+            HistoryEntryClassification.Unavailable("unsupported_session_status"))
+    val header = CanonicalSessionHeaderV1Validator.validate(row)
+    if (header is CanonicalSessionHeaderV1Result.Invalid) {
+        return HistoryEntry(row.id, row.startLocalDate, mode, status, null,
+            HistoryEntryClassification.Unavailable("invalid_session_header"))
+    }
+    if (row.timelineVersion != null && row.timelineVersion != 1) {
+        return HistoryEntry(row.id, row.startLocalDate, mode, status, null,
+            HistoryEntryClassification.Unavailable("unsupported_session_version"))
+    }
+    try {
+        row.startedAt?.let(Instant::parse)
+        row.endedAt?.let(Instant::parse)
+        validateSessionTimeMetadata(row)
+    } catch (_: DateTimeException) {
+        return HistoryEntry(row.id, null, mode, status, null,
+            HistoryEntryClassification.Unavailable("invalid_session_time"))
+    } catch (_: RecorderValidationException) {
+        return HistoryEntry(row.id, null, mode, status, null,
+            HistoryEntryClassification.Unavailable("invalid_session_time"))
+    }
+    if (validatedHistoryPlanRoot(row.planSnapshotJson, mode, header is CanonicalSessionHeaderV1Result.Legacy) == null)
+        return HistoryEntry(row.id, row.startLocalDate, mode, status, null,
+        HistoryEntryClassification.Unavailable("invalid_plan_snapshot"))
+    if (strictSessionExecution(row.id, stepRecords, timedRestExtensionRecords, strengthSetRecords) == null) {
+        return HistoryEntry(row.id, row.startLocalDate, mode, status, null,
+            HistoryEntryClassification.Unavailable("invalid_session_execution"))
+    }
+    val classification = when (header) {
+        is CanonicalSessionHeaderV1Result.Legacy -> if (status in setOf(SessionStatus.COMPLETED, SessionStatus.ABANDONED)) {
+            HistoryEntryClassification.Available
+        } else {
+            HistoryEntryClassification.Nonterminal(header.timelineStatus)
+        }
+        is CanonicalSessionHeaderV1Result.CanonicalRunning -> HistoryEntryClassification.Nonterminal("canonical_v1_running")
+        is CanonicalSessionHeaderV1Result.CanonicalTerminal -> HistoryEntryClassification.Available
+        is CanonicalSessionHeaderV1Result.Invalid -> error("Header already rejected")
+    }
+    return HistoryEntry(row.id, row.startLocalDate, mode, status,
+        if (classification == HistoryEntryClassification.Available) toDomain() else null, classification)
 }
 
 private fun SessionStepRecordEntity.toDomain(): SessionStepRecord {

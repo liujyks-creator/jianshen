@@ -450,13 +450,12 @@ private fun PlanBasicsCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = uiState.title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                OutlinedTextField(
+                    value = uiState.title,
+                    onValueChange = onTitleChanged,
+                    label = { Text("计划名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     text = "热身 + ${uiState.rounds} 轮 x ${uiState.stageGroups.size} 阶段 + ${uiState.rounds - 1} 次轮休 + 放松 · 总阶段 ${uiState.totalTimelineStageCount()}",

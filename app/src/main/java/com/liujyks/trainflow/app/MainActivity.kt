@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
             val workoutPlans by workoutPlanRepository.plans.collectAsState(
                 initial = emptyList()
             )
-            val workoutSessions by workoutSessionRepository.sessions.collectAsState(
+            val historyEntries by workoutSessionRepository.historyEntries.collectAsState(
                 initial = emptyList()
             )
             val scope = rememberCoroutineScope()
@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                     workoutSessionRepository = workoutSessionRepository,
                     heartRateRuntimeOwner = trainFlowApplication.heartRateRuntimeOwner,
                     workoutPlans = workoutPlans,
-                    workoutSessions = workoutSessions,
+                    historyEntries = historyEntries,
                     trainingPreferencesState = preferences.toTrainingPreferencesScreenState(),
                     heartRateState = heartRateState,
                     heartRateScanState = heartRateScanState,
@@ -79,21 +79,6 @@ class MainActivity : ComponentActivity() {
                     },
                     onRecordWorkoutSession = { session ->
                         workoutSessionRepository.upsertSession(session)
-                    },
-                    onClearAllWorkoutSessions = {
-                        scope.launch {
-                            workoutSessionRepository.deleteAllSessions()
-                        }
-                    },
-                    onClearWorkoutSessionsForPlan = { planId ->
-                        scope.launch {
-                            workoutSessionRepository.deleteSessionsForPlan(planId)
-                        }
-                    },
-                    onClearWorkoutSessionsStartedOnDate = { date ->
-                        scope.launch {
-                            workoutSessionRepository.deleteSessionsStartedOnDate(date)
-                        }
                     },
                     onDefaultCountdownThresholdChanged = { seconds ->
                         scope.launch {

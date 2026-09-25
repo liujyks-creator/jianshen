@@ -227,6 +227,10 @@ feature:settings
 | `feature:recovery` | 训练后恢复建议。 |
 | `feature:settings` | 训练偏好、通知偏好和健康数据边界偏好；E17 心率 opt-in、权限说明与用户主动设备操作的 canonical setup 入口。 |
 
+E18-S09 记录读取与删除仍由 `WorkoutSessionRepository` 单一负责：列表的 `observeSessionsWithRecords` 只装配 header、冻结快照与执行关系的轻量 typed 条目，不加载全历史 raw；已选单场和 Saved 后复盘调用 `readSessionStrict(sessionId)` 取得完整 graph，再由历史 resolver 解析冻结标题/阶段。单场 strict 继续服务后续导出。普通按 ID 集合删除在同一 Room 事务清理旧执行子表及 session，canonical HR/快照沿现有 FK cascade；不改 schema、旧日期 SQL 或建立第二 owner。后继 S09B 的 version 7 group/member 关系、整组事务与含真实时刻/来源/空档的合并 raw 结果尚未实施，原训练和 HR/snapshot 将保持原值，不将单场 `CanonicalAnalysisV1` 用于运行段或整组。
+
+D22/D23 的页面纠正只改变 `HistoryRoute` 呈现：总览普通点卡以原 sessionId 进入独立单条详情，页面返回和系统返回回总览；总览筛选与非 HR 趋势不进入详情。完整 strict 读取与 Repository/DAO owner 保持，详情只展示已有本场事实；心率图表、热量、分享及独立趋势页留待后续。
+
 ## 5. 分层数据流
 
 ```text
