@@ -62,25 +62,24 @@ class ActiveWorkoutNotificationUiMapperTest {
     }
 
     @Test
-    fun followAlongSessionMapsCurrentActionSummary() {
-        val plan = buildDefaultFollowAlongScreenState().plans.single().plan
-        val engineState = TimedWorkoutEngine.dispatch(
-            TimedWorkoutEngine.create(plan),
-            WorkoutCommand.StartSession
-        ).state
-        val uiState = engineState.toFollowAlongWorkoutSessionUiState()
+    fun followAlongSessionMapsElapsedSummary() {
+        val uiState = buildFollowAlongWorkoutSessionUiState(elapsedSec = 65, active = true)
 
         val notification = followAlongActiveWorkoutNotificationState(
-            planId = plan.id,
-            status = engineState.status,
+            sessionId = "free-session-1",
+            status = SessionStatus.ACTIVE,
             uiState = uiState
         )
 
-        assertEquals("follow_along:${plan.id}", notification.sessionKey)
+        assertEquals("follow_along:free-session-1", notification.sessionKey)
         assertEquals(WorkoutMode.FOLLOW_ALONG, notification.mode)
-        assertEquals("跟练动作", notification.phaseLabel)
-        assertEquals(uiState.currentActionTitle, notification.primaryText)
-        assertTrue(notification.secondaryText.contains("下一动作"))
+        assertEquals("跟练中", notification.phaseLabel)
+        assertEquals("跟练", notification.primaryText)
+        assertEquals("01:05", notification.timerText)
+        assertEquals("", notification.progressText)
+        assertEquals("整场时间", notification.secondaryText)
+        assertFalse(notification.secondaryText.contains("下一动作"))
+        assertFalse(notification.secondaryText.contains("轮次"))
         assertFalse(notification.secondaryText.contains("语音"))
         assertFalse(notification.secondaryText.contains("媒体播放"))
     }

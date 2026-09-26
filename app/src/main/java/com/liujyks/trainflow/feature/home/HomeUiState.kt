@@ -53,9 +53,9 @@ internal fun buildHomeScreenState(): HomeScreenState {
             ),
             HomeEntryUiState(
                 id = HomeEntryId.FOLLOW_ALONG,
-                title = "基础跟练",
-                description = "雏形体验：从首批可跟练动作进入选择页，复用计时流程与动作短提示。",
-                badge = "雏形体验",
+                title = "自由跟练",
+                description = "在另一设备播放视频或直播，手机前台记录整场时间；心率功能开启时同步记录心率。",
+                badge = "整场记录",
                 status = "查看跟练入口",
                 enabled = true
             ),

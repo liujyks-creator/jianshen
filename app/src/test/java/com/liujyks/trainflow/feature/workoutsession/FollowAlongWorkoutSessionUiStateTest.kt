@@ -1,9 +1,5 @@
 package com.liujyks.trainflow.feature.workoutsession
 
-import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
-import com.liujyks.trainflow.core.model.SessionStatus
-import com.liujyks.trainflow.core.model.WorkoutCommand
-import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,126 +7,58 @@ import org.junit.Test
 
 class FollowAlongWorkoutSessionUiStateTest {
     @Test
-    fun mapsCurrentActionMediaCountdownNextActionCueAndControls() {
-        val plan = buildDefaultFollowAlongScreenState().plans.single().plan
-        val engineState = TimedWorkoutEngine.dispatch(
-            state = TimedWorkoutEngine.create(plan),
-            command = WorkoutCommand.StartSession
-        ).state
-        val uiState = engineState.toFollowAlongWorkoutSessionUiState()
+    fun elapsedTimeAndOnlyStopAreShown() {
+        val state = buildFollowAlongWorkoutSessionUiState(elapsedSec = 65, active = true)
 
-        assertEquals("基础跟练：全身动作提示", uiState.planTitle)
-        assertEquals("跟练中", uiState.statusLabel)
-        assertEquals("跟练动作", uiState.phaseLabel)
-        assertTrue(uiState.currentActionTitle.isNotBlank())
-        assertTrue(uiState.mediaPlaceholderTitle.contains("演示占位"))
-        assertTrue(uiState.mediaPlaceholderDescription.contains("没有可播放媒体"))
-        assertTrue(uiState.mediaPlaceholderDescription.contains("不加载远程资源"))
-        assertEquals("演示占位 · 无真实媒体播放", uiState.demoStatusLabel)
-        assertTrue(uiState.timerText.matches(Regex("\\d{2}:\\d{2}")))
-        assertTrue(uiState.progressLabel.contains("步骤 1 /"))
-        assertTrue(uiState.nextActionLabel.contains("下一动作"))
-        assertTrue(uiState.shortCue.isNotBlank())
-        assertTrue(uiState.progressFraction > 0f)
-        assertTrue(uiState.immediateControls.any { control ->
-            control.role == WorkoutImmediateControlRole.PAUSE_SESSION &&
-                control.placement == WorkoutImmediateControlPlacement.RHYTHM_SURFACE &&
-                control.enabled
-        })
-        assertTrue(uiState.immediateControls.any { control ->
-            control.role == WorkoutImmediateControlRole.SKIP_STEP &&
-                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
-                control.enabled
-        })
-        assertTrue(uiState.immediateControls.any { control ->
-            control.role == WorkoutImmediateControlRole.END_SESSION &&
-                control.placement == WorkoutImmediateControlPlacement.FIXED_BOTTOM &&
-                control.enabled
-        })
-        assertTrue(uiState.endRequiresConfirmation)
+        assertEquals("跟练中", state.statusLabel)
+        assertEquals("01:05", state.timerText)
+        assertTrue(state.canStop)
+        assertTrue(state.endRequiresConfirmation)
+        assertEquals(listOf("停止跟练"), state.immediateControls.map { it.label })
+        assertEquals(listOf(WorkoutImmediateControlRole.END_SESSION), state.immediateControls.map { it.role })
+        assertEquals(listOf(WorkoutImmediateControlPlacement.FIXED_BOTTOM),
+            state.immediateControls.map { it.placement })
+        assertFalse(state.isTerminal)
+        assertFalse(state.canReturn)
     }
 
     @Test
-    fun detailRowsUseFixtureInstructionContent() {
-        val plan = buildDefaultFollowAlongScreenState().plans.single().plan
-        val engineState = TimedWorkoutEngine.dispatch(
-            state = TimedWorkoutEngine.create(plan),
-            command = WorkoutCommand.StartSession
-        ).state
-        val uiState = engineState.toFollowAlongWorkoutSessionUiState()
-        val labels = uiState.detailRows.map { row -> row.label }
-
-        assertTrue(labels.contains("步骤"))
-        assertTrue(labels.contains("要点"))
-        assertTrue(labels.contains("常见错误"))
-        assertTrue(uiState.detailRows.all { row -> row.text.isNotBlank() })
-    }
-
-    @Test
-    fun controlsMapToWorkoutCommands() {
-        assertEquals(WorkoutCommand.PauseSession, FollowAlongWorkoutSessionControl.PAUSE.toWorkoutCommand())
-        assertEquals(WorkoutCommand.ResumeSession, FollowAlongWorkoutSessionControl.RESUME.toWorkoutCommand())
-        assertEquals(WorkoutCommand.SkipStep, FollowAlongWorkoutSessionControl.SKIP.toWorkoutCommand())
-        assertEquals(
-            WorkoutCommand.EndSession(reason = "user_requested"),
-            FollowAlongWorkoutSessionControl.END.toWorkoutCommand()
-        )
-    }
-
-    @Test
-    fun terminalCopyUsesFollowAlongTitlesAndInMemoryBoundary() {
-        val plan = buildDefaultFollowAlongScreenState().plans.single().plan
-        val completedState = TimedWorkoutEngine.tick(
-            state = TimedWorkoutEngine.dispatch(
-                state = TimedWorkoutEngine.create(plan),
-                command = WorkoutCommand.StartSession
-            ).state,
-            seconds = 10_000
-        ).state
-        val completedUi = completedState.toFollowAlongWorkoutSessionUiState()
-
-        assertEquals(SessionStatus.COMPLETED, completedState.status)
-        assertEquals("基础跟练完成", completedUi.terminalTitle)
-        assertTrue(completedUi.terminalSummary.orEmpty().contains("引擎内存态总结"))
-        assertTrue(completedUi.terminalSummary.orEmpty().contains("不写入真实 session records"))
-
-        val abandonedState = TimedWorkoutEngine.dispatch(
-            state = TimedWorkoutEngine.dispatch(
-                state = TimedWorkoutEngine.create(plan),
-                command = WorkoutCommand.StartSession
-            ).state,
-            command = WorkoutCommand.EndSession(reason = "user_requested")
-        ).state
-        val abandonedUi = abandonedState.toFollowAlongWorkoutSessionUiState()
-
-        assertEquals("基础跟练提前结束", abandonedUi.terminalTitle)
-        assertTrue(abandonedUi.terminalSummary.orEmpty().contains("用户主动结束"))
-    }
-
-    @Test
-    fun boundaryCopyDoesNotUseReservedCapabilityAvailabilityHints() {
-        val plan = buildDefaultFollowAlongScreenState().plans.single().plan
-        val engineState = TimedWorkoutEngine.dispatch(
-            state = TimedWorkoutEngine.create(plan),
-            command = WorkoutCommand.StartSession
-        ).state
-        val uiState = engineState.toFollowAlongWorkoutSessionUiState()
-        val copy = listOf(
-            uiState.mediaPlaceholderDescription,
-            uiState.demoStatusLabel,
-            uiState.boundaryCopy
-        ).joinToString(" ")
-        val reservedAvailabilityHints = listOf(
-            "课程平台",
-            "教练库",
-            "AI 纠错已启用",
-            "语音教练",
-            "心率告警",
-            "热量判断"
+    fun savedSummaryUsesPersistedDurationAndHidesStages() {
+        val state = buildFollowAlongWorkoutSessionUiState(
+            elapsedSec = 66,
+            active = false,
+            stopping = true,
+            saved = true,
+            persistedSummary = FollowAlongPersistedSummary(65, "未开启心率")
         )
 
-        reservedAvailabilityHints.forEach { phrase ->
-            assertFalse(copy.contains(phrase))
-        }
+        assertEquals("跟练完成", state.terminalTitle)
+        assertEquals("01:05", state.timerText)
+        assertTrue(state.terminalSummary.orEmpty().contains("65 秒"))
+        assertTrue(state.terminalSummary.orEmpty().contains("未开启心率"))
+        assertFalse(state.terminalSummary.orEmpty().contains("阶段"))
+        assertFalse(state.terminalSummary.orEmpty().contains("动作"))
+        assertFalse(state.terminalSummary.orEmpty().contains("轮次"))
+        assertTrue(state.canReturn)
+    }
+
+    @Test
+    fun savingAndFailureKeepHonestReturnState() {
+        val saving = buildFollowAlongWorkoutSessionUiState(
+            elapsedSec = 65, active = false, stopping = true
+        )
+        assertEquals("正在保存", saving.statusLabel)
+        assertFalse(saving.canReturn)
+        assertFalse(saving.terminalSummary.orEmpty().contains("已保存"))
+
+        val failure = IllegalStateException("原始保存错误")
+        val failed = buildFollowAlongWorkoutSessionUiState(
+            elapsedSec = 65, active = false, stopping = true, saveFailure = failure
+        )
+        assertEquals("保存失败", failed.statusLabel)
+        assertTrue(failed.terminalSummary.orEmpty().contains("原始保存错误"))
+        assertFalse(failed.terminalSummary.orEmpty().contains("已保存"))
+        assertTrue(failed.canReturn)
+        assertTrue(failed.immediateControls.isEmpty())
     }
 }

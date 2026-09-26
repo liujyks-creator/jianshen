@@ -1389,8 +1389,11 @@ roundIndex0
 | `block_rest` | `follow_along_rest` | R | R | `block_rest` | M | M | M |
 | `boundary` | `follow_along_action` | R | R | `boundary` | M | M | M |
 | `paused` | `paused` | M | M | M | M | M | M |
+| `free_session` | `follow_along_action` | M | M | M | M | M | M |
 
 Paused明确保留`variant="paused"`；其余六个字段M。Follow-along不得借用timed family。
+
+E19-S02/P15 的 `free_session` 仅表示用户手动开始到正常停止的一条整场区间；六个位置键必须全部存在且为显式 JSON `null`，缺键或非 NULL 均非法。该 variant 仅绑定 `mode=follow_along`、`blocks=[]` 且签名正确的原 v1 快照；不影响旧 variant 的 block/item 绑定。它不是可展示的动作阶段，历史详情只显示持久化总时长及原有心率状态。
 
 ### 6.5 True work/rest predicate
 

@@ -12,7 +12,7 @@ internal data class OfficialShellState(
     val editingPlanId: String? = null,
     val activeTimedSessionPlan: WorkoutPlan? = null,
     val activeStrengthSessionPlan: WorkoutPlan? = null,
-    val activeFollowAlongSessionPlan: WorkoutPlan? = null,
+    val activeFollowAlongSession: Boolean = false,
     val activeRecoveryRecommendation: BasicRecoveryRecommendation? = null
 ) {
     val showBottomBar: Boolean
@@ -21,7 +21,7 @@ internal data class OfficialShellState(
     private val hasActiveSession: Boolean
         get() = activeTimedSessionPlan != null ||
             activeStrengthSessionPlan != null ||
-            activeFollowAlongSessionPlan != null
+            activeFollowAlongSession
 
     fun selectDestination(destination: OfficialShellDestination): OfficialShellState {
         if (hasActiveSession && destination != currentDestination) {
@@ -45,7 +45,7 @@ internal data class OfficialShellState(
             editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
-            activeFollowAlongSessionPlan = null
+            activeFollowAlongSession = false
         )
     }
 
@@ -55,7 +55,7 @@ internal data class OfficialShellState(
             editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
-            activeFollowAlongSessionPlan = null
+            activeFollowAlongSession = false
         )
     }
 
@@ -66,7 +66,7 @@ internal data class OfficialShellState(
                 editingPlanId = plan.id,
                 activeTimedSessionPlan = null,
                 activeStrengthSessionPlan = null,
-                activeFollowAlongSessionPlan = null
+                activeFollowAlongSession = false
             )
 
             WorkoutMode.STRENGTH -> copy(
@@ -74,7 +74,7 @@ internal data class OfficialShellState(
                 editingPlanId = plan.id,
                 activeTimedSessionPlan = null,
                 activeStrengthSessionPlan = null,
-                activeFollowAlongSessionPlan = null
+                activeFollowAlongSession = false
             )
 
             WorkoutMode.FOLLOW_ALONG -> this
@@ -97,7 +97,7 @@ internal data class OfficialShellState(
             editingPlanId = null,
             activeTimedSessionPlan = plan,
             activeStrengthSessionPlan = null,
-            activeFollowAlongSessionPlan = null,
+            activeFollowAlongSession = false,
             activeRecoveryRecommendation = null
         )
     }
@@ -110,20 +110,18 @@ internal data class OfficialShellState(
             editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = plan,
-            activeFollowAlongSessionPlan = null,
+            activeFollowAlongSession = false,
             activeRecoveryRecommendation = null
         )
     }
 
-    fun startFollowAlongSession(plan: WorkoutPlan): OfficialShellState {
-        if (plan.mode != WorkoutMode.FOLLOW_ALONG || plan.followAlong?.preset != true) return this
-
+    fun startFollowAlongSession(): OfficialShellState {
         return copy(
             currentDestination = OfficialShellDestination.FOLLOW_ALONG_SESSION,
             editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
-            activeFollowAlongSessionPlan = plan,
+            activeFollowAlongSession = true,
             activeRecoveryRecommendation = null
         )
     }
@@ -134,7 +132,7 @@ internal data class OfficialShellState(
             editingPlanId = null,
             activeTimedSessionPlan = null,
             activeStrengthSessionPlan = null,
-            activeFollowAlongSessionPlan = null,
+            activeFollowAlongSession = false,
             activeRecoveryRecommendation = recommendation
         )
     }
@@ -150,7 +148,7 @@ internal data class OfficialShellState(
         return when {
             activeTimedSessionPlan != null -> copy(currentDestination = OfficialShellDestination.TIMED_SESSION)
             activeStrengthSessionPlan != null -> copy(currentDestination = OfficialShellDestination.STRENGTH_SESSION)
-            activeFollowAlongSessionPlan != null -> copy(currentDestination = OfficialShellDestination.FOLLOW_ALONG_SESSION)
+            activeFollowAlongSession -> copy(currentDestination = OfficialShellDestination.FOLLOW_ALONG_SESSION)
             else -> selectDestination(OfficialShellDestination.TRAINING)
         }
     }
@@ -160,7 +158,7 @@ internal data class OfficialShellState(
             currentDestination = OfficialShellDestination.PLANS,
             editingPlanId = null,
             activeTimedSessionPlan = null,
-            activeFollowAlongSessionPlan = null,
+            activeFollowAlongSession = false,
             activeRecoveryRecommendation = null
         )
     }
@@ -170,7 +168,7 @@ internal data class OfficialShellState(
             currentDestination = OfficialShellDestination.PLANS,
             editingPlanId = null,
             activeStrengthSessionPlan = null,
-            activeFollowAlongSessionPlan = null,
+            activeFollowAlongSession = false,
             activeRecoveryRecommendation = null
         )
     }
@@ -179,7 +177,7 @@ internal data class OfficialShellState(
         return copy(
             currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY,
             editingPlanId = null,
-            activeFollowAlongSessionPlan = null,
+            activeFollowAlongSession = false,
             activeRecoveryRecommendation = null
         )
     }

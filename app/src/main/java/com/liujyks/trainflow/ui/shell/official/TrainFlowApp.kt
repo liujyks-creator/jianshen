@@ -223,8 +223,8 @@ internal fun TrainFlowApp(
     var activeStrengthSessionPlan by remember {
         mutableStateOf<WorkoutPlan?>(null)
     }
-    var activeFollowAlongSessionPlan by remember {
-        mutableStateOf<WorkoutPlan?>(null)
+    var activeFollowAlongSession by remember {
+        mutableStateOf(false)
     }
     var activeRecoveryRecommendation by remember {
         mutableStateOf<BasicRecoveryRecommendation?>(null)
@@ -235,7 +235,7 @@ internal fun TrainFlowApp(
         editingPlanId = editingPlanId,
         activeTimedSessionPlan = activeTimedSessionPlan,
         activeStrengthSessionPlan = activeStrengthSessionPlan,
-        activeFollowAlongSessionPlan = activeFollowAlongSessionPlan,
+        activeFollowAlongSession = activeFollowAlongSession,
         activeRecoveryRecommendation = activeRecoveryRecommendation
     )
 
@@ -367,7 +367,7 @@ internal fun TrainFlowApp(
         editingPlanId = nextState.editingPlanId
         activeTimedSessionPlan = nextState.activeTimedSessionPlan
         activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
-        activeFollowAlongSessionPlan = nextState.activeFollowAlongSessionPlan
+        activeFollowAlongSession = nextState.activeFollowAlongSession
         activeRecoveryRecommendation = nextState.activeRecoveryRecommendation
     }
 
@@ -618,27 +618,27 @@ internal fun TrainFlowApp(
                 )
 
                     OfficialShellDestination.FOLLOW_ALONG_ENTRY -> FollowAlongRoute(
-                    onStartFollowAlong = { plan ->
-                        applyShellState(shellState.startFollowAlongSession(plan))
+                    onStartFollowAlong = {
+                        applyShellState(shellState.startFollowAlongSession())
                     },
                     modifier = Modifier.padding(innerPadding)
                 )
 
                     OfficialShellDestination.FOLLOW_ALONG_SESSION -> {
-                    val activePlan = shellState.activeFollowAlongSessionPlan
-                    if (activePlan != null) {
+                    if (shellState.activeFollowAlongSession) {
                         FollowAlongWorkoutSessionRoute(
-                            plan = activePlan,
+                            workoutSessionRepository = requireNotNull(workoutSessionRepository),
+                            heartRateRuntimeOwner = requireNotNull(heartRateRuntimeOwner),
+                            heartRateSettings = preferenceHeartRateState,
                             onBackToFollowAlong = {
                                 applyShellState(shellState.finishFollowAlongSession())
                             },
-                            onRecordWorkoutSession = onRecordWorkoutSession,
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {
                         FollowAlongRoute(
-                            onStartFollowAlong = { plan ->
-                                applyShellState(shellState.startFollowAlongSession(plan))
+                            onStartFollowAlong = {
+                                applyShellState(shellState.startFollowAlongSession())
                             },
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -822,7 +822,7 @@ private fun OfficialShellState.heartRateCapsuleExclusionPolicy(): HeartRateCapsu
             currentDestination == OfficialShellDestination.TIMED_SESSION && activeTimedSessionPlan != null
             ) || (
             currentDestination == OfficialShellDestination.FOLLOW_ALONG_SESSION &&
-                activeFollowAlongSessionPlan != null
+                activeFollowAlongSession
             ) -> HeartRateCapsuleExclusionPolicy.TIMED_SESSION
         showBottomBar -> HeartRateCapsuleExclusionPolicy.BOTTOM_NAV
         else -> HeartRateCapsuleExclusionPolicy.STANDARD

@@ -1128,7 +1128,7 @@ private fun WorkoutSession.keySummary(): String {
             "确认 $setCount 组 · $reps 次 · 替换 $replaced 组$rest"
         }
 
-        WorkoutMode.FOLLOW_ALONG -> "跟练历史后续接入"
+        WorkoutMode.FOLLOW_ALONG -> "整场跟练记录"
     }
 }
 

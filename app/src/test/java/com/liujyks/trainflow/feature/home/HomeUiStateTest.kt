@@ -32,9 +32,7 @@ class HomeUiStateTest {
         assertTrue(strength.enabled)
         assertEquals("编辑力量计划", strength.status)
         assertTrue(followAlong.enabled)
-        assertEquals("雏形体验", followAlong.badge)
         assertEquals("查看跟练入口", followAlong.status)
-        assertTrue(followAlong.description.contains("复用计时流程"))
         assertTrue(exerciseLibrary.enabled)
         assertEquals("打开动作库", exerciseLibrary.status)
     }
