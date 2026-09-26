@@ -160,6 +160,51 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun mergeLegacyNonterminalPreservesUnknownCutWithoutFabricatedSamples() = runBlocking {
+        val planJson = """{"planSnapshotStorageContractVersion":1,"planId":null,"title":"Timed","mode":"timed","blocks":[{"id":"block","kind":"timed_composition","order":0,"compositionVersion":2,"warmupSec":10,"cooldownSec":0,"rounds":1,"restBetweenRoundsSec":0,"stageGroups":[]}],"preferences":null,"followAlong":null}"""
+        val identityJson = """{"phaseIdentityContractVersion":1,"family":"timed_composition_v2","payloadVersion":2,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855"},"payload":{"variant":"warmup","compositionVersion":2,"compositionBlockId":"block","timelineStageId":"block:warmup","timelineStageKind":"warmup","stageGroupId":"block:warmup","targetId":"block:warmup:target","targetKind":"warmup","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}}"""
+        val legacy = WorkoutSessionEntity("legacy-open", mode = "timed", status = "active",
+            planSnapshotJson = planJson, startedAt = "2026-09-01T00:00:00Z")
+        val laterSession = WorkoutSessionEntity("later", mode = "timed", status = "active",
+            planSnapshotJson = planJson, startedAt = "2026-09-02T00:00:00Z", timelineVersion = 1,
+            lastDurableOffsetMs = 1_000, lastMutationSequence = 3, displayMetadataContractVersion = 1,
+            sessionDisplayMetadataJson = """{"displayMetadataContractVersion":1,"entries":[]}""",
+            startLocalDate = "2026-09-02", startZoneId = "UTC", startUtcOffsetSeconds = 0,
+            timeMetadataSourceContractVersion = 1)
+        val sample = HeartRateSampleEntity("recording-later", 0, 0, 0, 120)
+        val later = CanonicalSessionGraphV1(laterSession,
+            listOf(WorkoutPhaseIntervalEntity("phase-later", "later", 0, 0, null, 0, null, 1, "timed_work", identityJson)),
+            HeartRateRecordingEntity("recording-later", "later", "active", 0, 0, null, null,
+                sourceContractVersion = 1, sourceKind = "ble_hrs", acquisitionContractVersion = 1, parameterSnapshotVersion = 1),
+            listOf(HeartRateAcquisitionIntervalEntity("acq-later", "recording-later", 0, 0, null, 0, null, 1,
+                "expected_recording", null, "live", null)), listOf(sample))
+        val sessionDao = database.workoutSessionDao()
+        val canonicalDao = database.canonicalTimelineHeartRateDao()
+        sessionDao.insertSession(legacy)
+        sessionDao.insertSession(later.session)
+        later.phases.forEach { canonicalDao.insertPhaseInterval(it) }
+        canonicalDao.insertRecording(requireNotNull(later.recording))
+        later.acquisitions.forEach { canonicalDao.insertAcquisitionInterval(it) }
+        canonicalDao.insertSample(sample)
+        val before = sessionDao.getSessionsWithRecords()
+
+        val groupId = repository.createMergeGroup(setOf("later", "legacy-open"))
+        val read = repository.readMergedHistory(groupId)
+        assertTrue("$read", read is MergedHistoryReadResult.Available)
+        val input = (read as MergedHistoryReadResult.Available).input
+        assertEquals(groupId, input.groupId)
+        assertEquals(listOf("legacy-open", "later"), input.segments.map { it.sessionId })
+        assertEquals(legacy, input.segments[0].graph.session)
+        assertEquals(null, input.segments[0].trustedCutMs)
+        assertEquals(null, input.segments[0].graph.session.endedAt)
+        assertEquals("legacy_noncanonical_nonterminal", input.segments[0].timelineStatus)
+        assertEquals(later, input.segments[1].graph)
+        assertEquals(listOf(MergedHeartRateSample("later", java.time.Instant.parse("2026-09-02T00:00:00Z"), sample)), input.samples)
+        assertTrue(input.gaps.isEmpty())
+        assertEquals(before, sessionDao.getSessionsWithRecords().map { it.copy(mergeMemberships = emptyList()) })
+    }
+
+    @Test
     fun timeMetadataWrittenByRepositorySurvivesDatabaseCloseAndReopen() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         database.close()

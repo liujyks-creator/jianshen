@@ -2040,9 +2040,9 @@ internal class WorkoutSessionRepository(
         }.sortedBy { it.actualTime }
         val gaps = segments.zipWithNext { first, second ->
             val end = first.trustedCutMs?.let { first.startedAt.plusMillis(it) }
-                ?: Instant.parse(first.graph.session.endedAt)
-            MergedHeartRateGap(first.sessionId, second.sessionId, end, second.startedAt)
-        }
+                ?: first.graph.session.endedAt?.let(Instant::parse)
+            end?.let { MergedHeartRateGap(first.sessionId, second.sessionId, it, second.startedAt) }
+        }.filterNotNull()
         MergedHistoryReadResult.Available(MergedHeartRateInput(groupId, segments, samples, gaps))
     }
 
