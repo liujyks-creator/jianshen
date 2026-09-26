@@ -1,6 +1,10 @@
 package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
+import com.liujyks.trainflow.core.data.toPlanSnapshot
+import com.liujyks.trainflow.core.database.CanonicalJsonValue
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendation
 import com.liujyks.trainflow.core.domain.recovery.BasicRecoveryRecommendationGenerator
 import com.liujyks.trainflow.core.engine.StrengthSessionSetStep
@@ -14,6 +18,104 @@ import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.SetEffort
 import com.liujyks.trainflow.core.model.StrengthSetRecord
 import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.WorkoutMode
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.ExerciseSide
+
+internal fun WorkoutSessionHistoricalResult.Resolved.toPersistedStrengthSummary(): StrengthWorkoutSummaryUiState {
+    val terminal = source as WorkoutSessionStrictReadResult.CanonicalTerminal
+    val session = terminal.graph.session
+    val records = terminal.execution.strengthSets
+    val blocks = session.planSnapshotJson.toPlanSnapshot(WorkoutMode.STRENGTH)
+        .blocks.filterIsInstance<StrengthExerciseBlock>().sortedBy { it.order }
+    val frozenNames = phaseDisplays.mapNotNull { phase ->
+        val payload = phase.phaseIdentity.fields.getValue("payload") as CanonicalJsonValue.Obj
+        val id = (payload.fields["actualExerciseId"] as? CanonicalJsonValue.Str)?.value
+        id?.let { it to (phase.display.label ?: it) }
+    }.toMap()
+    val completed = session.status == "completed"
+    val skippedIds = blocks.flatMap { block ->
+        block.sets.filter { set ->
+            records.none { it.row.sourceSetPlanId == set.id } &&
+                terminal.execution.steps.any {
+                    it.skipped && it.stepId in listOf(
+                        "${block.id}-${set.id}-prepare", "${block.id}-${set.id}-active",
+                        "${block.id}-${set.id}-confirm")
+                }
+        }.map { it.id }
+    }.toSet()
+    val recordedRest = records.sumOf { it.row.actualRestAfterSec ?: 0 }
+    val missingRest = records.count { it.row.actualRestAfterSec == null }
+    val weightDifferences = records.count { it.actualWeight != null && it.actualWeight != it.plannedWeight }
+    val repDifferences = records.count { it.actualReps != null && !it.actualReps.matches(it.plannedRepTarget) }
+    val recovery = BasicRecoveryRecommendationGenerator.fromExerciseIds(
+        session.id, records.map { it.row.exerciseId }.distinct())
+    val plannedCount = blocks.sumOf { it.sets.size }
+    val completedActions = blocks.count { block ->
+        block.sets.any { set -> records.any { it.row.sourceSetPlanId == set.id } }
+    }
+    return StrengthWorkoutSummaryUiState(
+        title = if (completed) "力量训练复盘" else "提前结束记录",
+        tone = if (completed) StrengthWorkoutSummaryTone.COMPLETED else StrengthWorkoutSummaryTone.ABANDONED,
+        durationLabel = requireNotNull(session.effectiveElapsedSec).formatSummaryDuration(),
+        durationSemanticsNote = "有效时长、实际组记录与休息来自本场已保存结果；计划值来自冻结快照。",
+        metricItems = listOf(
+            StrengthWorkoutSummaryMetricUiState("动作", "$completedActions / ${blocks.size}", "已确认动作 / 计划动作"),
+            StrengthWorkoutSummaryMetricUiState("组数", "${records.size} / $plannedCount", "已确认组 / 计划组"),
+            StrengthWorkoutSummaryMetricUiState("跳过", "${skippedIds.size} 组", "已保存的跳过记录"),
+            StrengthWorkoutSummaryMetricUiState("替换", "0 次", "本场训练不允许替换动作"),
+            StrengthWorkoutSummaryMetricUiState("组耗时", records.sumOf { it.row.activeDurationSec ?: 0 }.formatSummaryDuration(), "已保存的组耗时"),
+            StrengthWorkoutSummaryMetricUiState("实际休息", recordedRest.formatSummaryDuration(), "$missingRest 组未记录休息")
+        ),
+        planVsActualSummary = if (records.isEmpty()) "暂无已确认组记录。" else
+            "重量差异 $weightDifferences 组，次数差异 $repDifferences 组；只记录实际差异。",
+        restSummary = "已记录实际休息 ${recordedRest.formatSummaryDuration()}；$missingRest 组未记录休息。",
+        replacementSummary = "没有替换动作。",
+        skippedSummary = if (skippedIds.isEmpty()) "没有跳过动作或组。" else "跳过 ${skippedIds.size} 组。",
+        earlyEndSummary = if (completed) "本次已到达完成终态。" else "本次训练提前结束，已确认 ${records.size} 组。",
+        exerciseSummaries = blocks.map { block ->
+            val blockRecords = records.filter { record -> block.sets.any { it.id == record.row.sourceSetPlanId } }
+            val skipped = block.sets.count { it.id in skippedIds }
+            StrengthWorkoutSummaryExerciseUiState(
+                exerciseName = frozenNames[block.exerciseId] ?: block.exerciseId,
+                setProgressLabel = "完成 ${blockRecords.size} / ${block.sets.size} 组",
+                replacementLabel = null,
+                skippedLabel = skipped.takeIf { it > 0 }?.let { "跳过 $it 组" },
+                setItems = block.sets.sortedBy { it.order }.mapIndexed { index, set ->
+                    val record = blockRecords.firstOrNull { it.row.sourceSetPlanId == set.id }
+                    val side = record?.row?.side
+                    val plannedWeight = set.targetWeight ?: block.target?.weight
+                    val plannedReps = set.repTarget ?: block.target?.repTarget
+                    StrengthWorkoutSummarySetUiState(
+                        setLabel = "${set.kind.summaryLabel} · 第 ${index + 1} 组 · ${side.strengthSideLabel()}",
+                        actualExerciseLabel = record?.let { "实际动作：${frozenNames[it.row.exerciseId] ?: it.row.exerciseId}" } ?: "实际动作：未记录",
+                        plannedWeightLabel = plannedWeight.formatWeight(),
+                        actualWeightLabel = record?.actualWeight?.formatWeight() ?: "未记录",
+                        plannedRepLabel = plannedReps.formatRepTarget(),
+                        actualRepLabel = record?.actualReps?.let { "$it 次" } ?: "未记录",
+                        activeDurationLabel = record?.row?.activeDurationSec?.formatSummaryDuration() ?: "未记录",
+                        restAfterLabel = record?.row?.actualRestAfterSec?.formatSummaryDuration() ?: "未记录",
+                        effortLabel = record?.row?.effort?.let { effort -> SetEffort.entries.single { it.contractValue == effort }.summaryLabel } ?: "未记录",
+                        differenceLabel = if (record == null) "未确认记录" else "已保存实际记录"
+                    )
+                }
+            )
+        },
+        recoveryEntry = StrengthWorkoutRecoveryEntryUiState(
+            "查看恢复建议",
+            if (recovery.hasRecommendation) "已根据本场已保存的确认组生成基础放松方向。" else "本次没有可识别的已确认组。",
+            recovery.hasRecommendation, recovery.hasRecommendation, recovery.takeIf { it.hasRecommendation }
+        )
+    )
+}
+
+private fun String?.strengthSideLabel(): String = when (this) {
+    ExerciseSide.BOTH.contractValue -> "双侧"
+    ExerciseSide.LEFT.contractValue -> "左侧"
+    ExerciseSide.RIGHT.contractValue -> "右侧"
+    ExerciseSide.ALTERNATING.contractValue -> "交替"
+    else -> "侧别未记录"
+}
 
 internal data class StrengthWorkoutSummaryUiState(
     val title: String,

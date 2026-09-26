@@ -1,5 +1,35 @@
 package com.liujyks.trainflow.feature.workoutsession
 
+import android.os.SystemClock
+import androidx.compose.runtime.rememberCoroutineScope
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
+import com.liujyks.trainflow.core.data.RecorderActivityInput
+import com.liujyks.trainflow.core.data.RecorderSubmission
+import com.liujyks.trainflow.core.data.RecorderTerminalInput
+import com.liujyks.trainflow.core.data.RecorderTerminalKind
+import com.liujyks.trainflow.core.data.RecorderTerminalSubmission
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
+import com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical
+import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
+import com.liujyks.trainflow.core.data.toEntity
+import com.liujyks.trainflow.core.data.toPlanSnapshot
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
+import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
+import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,7 +88,6 @@ import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
-import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
@@ -86,40 +115,182 @@ internal fun StrengthWorkoutSessionRoute(
     plan: WorkoutPlan,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
-    onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
+    workoutSessionRepository: WorkoutSessionRepository? = null,
+    heartRateRuntimeOwner: HeartRateRuntimeOwner? = null,
+    heartRateSettings: HeartRateSettingsUiState = HeartRateSettingsUiState(),
     modifier: Modifier = Modifier
 ) {
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
-    val sessionStartedAt = remember(sessionId) { Instant.now() }
-    var recordWriteState by remember(sessionId) { mutableStateOf(TerminalWorkoutSessionRecordWriteState()) }
-    var engineState by remember(plan.id, sessionId) {
-        mutableStateOf(StrengthWorkoutEngine.create(plan, sessionId = sessionId))
+    val sessionPlan = remember(sessionId) { plan }
+    val sessionScope = rememberCoroutineScope()
+    val snapshotJson = remember(sessionId) { sessionPlan.toPlanSnapshot().toStorageJson() }
+    val snapshot = remember(sessionId) {
+        (PlanSnapshotStorageV1Validator.prepare(snapshotJson, sessionPlan.mode) as PreparedPlanSnapshotStorageV1Result.Valid).prepared
     }
+    var sessionStartedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
+    var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
+    var saved by remember(sessionId) { mutableStateOf(false) }
+    var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var persistedSummary by remember(sessionId) { mutableStateOf<StrengthWorkoutSummaryUiState?>(null) }
+    var engineState by remember(sessionId) {
+        mutableStateOf(StrengthWorkoutEngine.create(sessionPlan, sessionId = sessionId))
+    }
+    val displayEntries = remember(sessionId) { linkedMapOf<String, JSONObject>() }
     val soundCueController = rememberWorkoutSoundCueController()
     val context = LocalContext.current
     val activeWorkoutNotifications = remember(context) {
         AndroidActiveWorkoutNotificationController(context.applicationContext)
     }
 
-    fun applyEngineResult(
-        result: StrengthWorkoutEngineResult,
-        isTickResult: Boolean = false
-    ) {
+    fun displayMetadata(state: StrengthWorkoutEngineState): String {
+        if (state.status == SessionStatus.ACTIVE) state.currentSet?.let { set ->
+            if (set.exerciseId !in displayEntries) {
+                val exercise = FirstActionExerciseFixtures.entries.firstOrNull { it.exercise.id == set.exerciseId }?.exercise
+                displayEntries[set.exerciseId] = JSONObject()
+                    .put("entityKind", "exercise").put("stableId", set.exerciseId)
+                    .put("displayNameAtFirstReference", exercise?.name ?: set.exerciseId)
+                    .put("customNameAtFirstReference", JSONObject.NULL)
+                    .put("resolutionSource", "plan_snapshot")
+            }
+        }
+        return JSONObject().put("displayMetadataContractVersion", 1)
+            .put("entries", JSONArray(displayEntries.values.toList())).toString()
+    }
+
+    fun applyEngineResult(result: StrengthWorkoutEngineResult, isTickResult: Boolean = false, recordTransition: Boolean = true) {
         val previousState = engineState
+        val cut = SystemClock.elapsedRealtime()
+        val currentRecorder = recorder
+        if (currentRecorder != null && recordTransition) {
+            val facts = strengthTransitionFacts(snapshot, previousState, result)
+            facts.phaseStarts.forEach { phase ->
+                val submission = currentRecorder.offer(RecorderActivityInput(
+                    cut, phase, result.state.status.contractValue,
+                    nextDisplayMetadataJson = displayMetadata(result.state)))
+                if (submission is RecorderSubmission.Closed) saveFailure = requireNotNull(submission.originalCause)
+            }
+            if (facts.terminalStatus != null) {
+                val endedAt = Instant.now()
+                val record = result.state.toWorkoutSessionRecord(sessionPlan, requireNotNull(sessionStartedAt), endedAt)
+                val submission = currentRecorder.freezeTerminal(RecorderTerminalInput(
+                    elapsedRealtimeMs = cut,
+                    kind = if (facts.terminalStatus == SessionStatus.COMPLETED) RecorderTerminalKind.COMPLETED else RecorderTerminalKind.USER_ABANDONED,
+                    endedAt = endedAt.toString(), totalElapsedSec = record.totalElapsedSec,
+                    effectiveElapsedSec = record.effectiveElapsedSec, pausedElapsedSec = record.pausedElapsedSec,
+                    sessionDisplayMetadataJson = displayMetadata(result.state),
+                    stepRecords = record.stepHistory.map { step ->
+                        SessionStepRecordEntity(id = "$sessionId:${step.stepId}", sessionId = sessionId,
+                            stepId = step.stepId, kind = step.kind.contractValue, startedAt = step.startedAt,
+                            endedAt = step.endedAt, skipped = step.skipped, actualDurationSec = step.actualDurationSec)
+                    },
+                    restExtensions = emptyList(),
+                    strengthSets = record.strengthSetRecords.map { it.toEntity(sessionId) },
+                    snapshotCreatedAt = endedAt.toString()
+                ))
+                when (submission) {
+                    is RecorderTerminalSubmission.Closed -> saveFailure = requireNotNull(submission.originalCause)
+                    is RecorderTerminalSubmission.Accepted -> {
+                        sessionScope.launch {
+                            try {
+                                submission.operation.saved.await()
+                                saved = true
+                                try {
+                                    val historical = resolveWorkoutSessionHistorical(requireNotNull(workoutSessionRepository).readSessionStrict(sessionId), "zh-CN")
+                                    val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
+                                        ?: error("Saved strength session $sessionId cannot be resolved: $historical")
+                                    persistedSummary = resolved.toPersistedStrengthSummary()
+                                } catch (cause: CancellationException) {
+                                    throw cause
+                                } catch (cause: Throwable) {
+                                    recapReadFailure = cause
+                                }
+                            } catch (cause: CancellationException) {
+                                throw cause
+                            } catch (cause: Throwable) {
+                                saveFailure = cause
+                            }
+                        }
+                        sessionScope.launch {
+                            try {
+                                submission.operation.released.await()
+                            } catch (cause: CancellationException) {
+                                throw cause
+                            } catch (cause: Throwable) {
+                                android.util.Log.e("StrengthWorkoutSession", "Recorder release failed", cause)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         engineState = result.state
-        val naturalRestTickTransition = isTickResult &&
-            previousState.currentStepKind == SessionStepKind.STRENGTH_REST
+        val naturalRestTickTransition = isTickResult && previousState.currentStepKind == SessionStepKind.STRENGTH_REST
         result.events.dispatchStrengthWorkoutSoundCues(
-            cueSettings = plan.preferences?.cueSettings,
+            cueSettings = sessionPlan.preferences?.cueSettings,
             soundCueController = soundCueController,
             naturalRestTickTransition = naturalRestTickTransition,
-            autoAfterRestTransition = naturalRestTickTransition &&
-                result.state.currentStepKind == SessionStepKind.STRENGTH_ACTIVE_SET
+            autoAfterRestTransition = naturalRestTickTransition && result.state.currentStepKind == SessionStepKind.STRENGTH_ACTIVE_SET
         )
     }
 
-    LaunchedEffect(plan.id) {
-        applyEngineResult(StrengthWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession))
+    LaunchedEffect(sessionId) {
+        sessionStartedAt = Instant.now()
+        val startResult = StrengthWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession)
+        try {
+            if (workoutSessionRepository != null) {
+                val firstPhase = strengthTransitionFacts(snapshot, engineState, startResult).phaseStarts.single()
+                val startTime = requireNotNull(sessionStartedAt).atZone(ZoneId.systemDefault())
+                val maxBpm = heartRateSettings.personalMaxHeartRateBpm ?: heartRateSettings.ageYears?.let { 220 - it }
+                val maxSource = when {
+                    heartRateSettings.personalMaxHeartRateBpm != null -> "personal_max"
+                    heartRateSettings.ageYears != null -> "age_220_minus_age"
+                    else -> null
+                }
+                val zoneSnapshot = maxBpm?.let {
+                    val bounds = listOf(null to 5000, 5000 to 6000, 6000 to 7000,
+                        7000 to 8000, 8000 to 9000, 9000 to null)
+                    val names = listOf("below_50", "from_50_to_60", "from_60_to_70",
+                        "from_70_to_80", "from_80_to_90", "at_or_above_90")
+                    JSONObject().put("zoneSnapshotContractVersion", 1).put("unit", "bpm")
+                        .put("effectiveMaxBpm", it).put("effectiveMaxSource", maxSource)
+                        .put("zones", JSONArray(bounds.mapIndexed { index, (lower, upper) ->
+                            JSONObject().put("zoneId", names[index])
+                                .put("lowerBoundBasisPointsInclusive", lower ?: JSONObject.NULL)
+                                .put("upperBoundBasisPointsExclusive", upper ?: JSONObject.NULL)
+                        })).toString()
+                }
+
+                val acquired = WorkoutSessionTimelineRecorder.admitAndBind(
+                    repository = workoutSessionRepository, runtime = requireNotNull(heartRateRuntimeOwner),
+                    scope = sessionScope, entryId = sessionId,
+                    session = WorkoutSessionEntity(id = sessionId, planId = sessionPlan.id,
+                        mode = sessionPlan.mode.contractValue, status = "active", planSnapshotJson = snapshotJson,
+                        startedAt = requireNotNull(sessionStartedAt).toString(), timelineVersion = 1,
+                        lastDurableOffsetMs = 0, lastMutationSequence = 0, displayMetadataContractVersion = 1,
+                        sessionDisplayMetadataJson = displayMetadata(startResult.state),
+                        startLocalDate = startTime.toLocalDate().toString(), startZoneId = startTime.zone.id,
+                        startUtcOffsetSeconds = startTime.offset.totalSeconds.toLong(), timeMetadataSourceContractVersion = 1),
+                    initialPhase = firstPhase,
+                    initialRecording = if (heartRateSettings.enabled) HeartRateRecordingEntity(
+                        recordingId = "$sessionId:heart-rate", sessionId = sessionId, status = "active",
+                        startedOffsetMs = 0, startedMutationSequence = 0, endedOffsetMs = null, endedMutationSequence = null,
+                        sourceContractVersion = 1, sourceKind = "ble_hrs", acquisitionContractVersion = 1,
+                        parameterSnapshotVersion = 1, age = heartRateSettings.ageYears,
+                        personalMaxBpm = heartRateSettings.personalMaxHeartRateBpm, effectiveMaxBpm = maxBpm,
+                        effectiveMaxSource = maxSource, alertThresholdBpm = heartRateSettings.alertThresholdBpm,
+                        zoneSnapshotJson = zoneSnapshot
+                    ) else null
+                )
+                recorder = acquired
+                acquired.freezeStart().await()
+            }
+            applyEngineResult(startResult, recordTransition = false)
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Throwable) {
+            saveFailure = cause
+        }
         while (true) {
             delay(1000)
             if (engineState.status == SessionStatus.ACTIVE || engineState.status == SessionStatus.PAUSED) {
@@ -132,44 +303,43 @@ internal fun StrengthWorkoutSessionRoute(
         applyEngineResult(StrengthWorkoutEngine.dispatch(engineState, command))
     }
 
-    val uiState = engineState.toStrengthWorkoutSessionScreenState()
-    val notificationState = strengthActiveWorkoutNotificationState(
-        planId = plan.id,
-        status = engineState.status,
-        uiState = uiState
-    )
-    LaunchedEffect(notificationState) {
-        activeWorkoutNotifications.update(notificationState)
-    }
-    LaunchedEffect(engineState.status, engineState.sessionId) {
-        if (engineState.isTerminal) {
-            recordWriteState = recordWriteState.recordTerminalSessionOnce(
-                session = engineState.toWorkoutSessionRecord(
-                    plan = plan,
-                    startedAt = sessionStartedAt,
-                    endedAt = Instant.now()
-                ),
-                onRecordWorkoutSession = onRecordWorkoutSession
-            )
+    val engineUiState = engineState.toStrengthWorkoutSessionScreenState()
+    val uiState = if (engineState.isTerminal && workoutSessionRepository != null) engineUiState.copy(
+        summary = persistedSummary,
+        terminalSummary = when {
+            saveFailure != null -> "保存失败：${saveFailure?.message}"
+            recapReadFailure != null -> "读取已保存记录失败：${recapReadFailure?.message}"
+            !saved -> "正在保存本次训练…"
+            persistedSummary == null -> "正在读取已保存记录…"
+            else -> "本场 $sessionId · 已保存。"
         }
-    }
-    DisposableEffect(activeWorkoutNotifications, plan.id) {
+    ) else engineUiState
+    val canReturn = workoutSessionRepository == null || saved || saveFailure != null
+    val notificationState = strengthActiveWorkoutNotificationState(planId = plan.id, status = engineState.status, uiState = uiState)
+    LaunchedEffect(notificationState) { activeWorkoutNotifications.update(notificationState) }
+    DisposableEffect(activeWorkoutNotifications, sessionId) {
         onDispose {
+            recorder?.clear()
             activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
         }
     }
-    var confirmationInput by remember { mutableStateOf<StrengthSetConfirmationInputState?>(null) }
-    LaunchedEffect(uiState.confirmation?.setKey) {
-        confirmationInput = uiState.confirmation?.initialInputState()
+    val currentSet = engineState.currentSet
+    var repsInput by remember(sessionId, currentSet?.blockId, currentSet?.setPlanId) {
+        mutableStateOf(when (val target = currentSet?.plannedRepTarget) {
+            is RepTarget.Fixed -> target.reps
+            is RepTarget.Range -> target.minReps
+            null -> 8
+        }.toString())
+    }
+    var confirmationInput by remember(sessionId, currentSet?.blockId, currentSet?.setPlanId) {
+        mutableStateOf<StrengthSetConfirmationInputState?>(null)
     }
     val activeConfirmationInput = uiState.confirmation?.let { confirmation ->
-        confirmationInput ?: confirmation.initialInputState()
+        (confirmationInput ?: confirmation.initialInputState()).copy(actualRepsInput = repsInput)
     }
-    var showReplacementOptions by remember { mutableStateOf(false) }
     var showSkipConfirmation by remember { mutableStateOf(false) }
     var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
-    LaunchedEffect(uiState.canReplaceExercise, uiState.canSkipExercise, uiState.currentExerciseName) {
-        if (!uiState.canReplaceExercise) showReplacementOptions = false
+    LaunchedEffect(uiState.canSkipExercise, uiState.currentExerciseName) {
         if (!uiState.canSkipExercise) showSkipConfirmation = false
     }
     LaunchedEffect(uiState.canEnd) {
@@ -179,36 +349,25 @@ internal fun StrengthWorkoutSessionRoute(
     StrengthWorkoutSessionScreen(
         uiState = uiState,
         confirmationInput = activeConfirmationInput,
-        onConfirmationInputChange = { input -> confirmationInput = input },
-        showReplacementOptions = showReplacementOptions,
-        onToggleReplacementOptions = {
-            showReplacementOptions = !showReplacementOptions
-            showSkipConfirmation = false
-        },
-        onReplaceExercise = { exerciseId ->
-            engineState.currentReplaceExerciseCommand(exerciseId)?.let(::dispatch)
-            showReplacementOptions = false
-        },
+        onConfirmationInputChange = { input -> confirmationInput = input; repsInput = input.actualRepsInput },
+        repsInput = repsInput,
+        onRepsInputChange = { repsInput = it },
+        showRepsInput = !engineState.isTerminal && engineState.currentStepKind in setOf(
+            SessionStepKind.STRENGTH_PREPARE_SET, SessionStepKind.STRENGTH_ACTIVE_SET),
+        canReturn = canReturn,
+        saveFailure = saveFailure,
         showSkipConfirmation = showSkipConfirmation,
-        onRequestSkipExercise = {
-            showSkipConfirmation = true
-            showReplacementOptions = false
-        },
+        onRequestSkipExercise = { showSkipConfirmation = true },
         onCancelSkipExercise = { showSkipConfirmation = false },
         onConfirmSkipExercise = {
             engineState.currentSkipExerciseCommand()?.let(::dispatch)
             showSkipConfirmation = false
         },
-        onStartSet = {
-            dispatch(WorkoutCommand.StartStrengthSet(engineState.currentSet?.setPlanId))
-        },
+        onStartSet = { dispatch(WorkoutCommand.StartStrengthSet(engineState.currentSet?.setPlanId)) },
         onCompleteSet = { dispatch(WorkoutCommand.CompleteStrengthSet()) },
         onConfirmSet = {
-            val confirmation = uiState.confirmation
-            val input = confirmation?.let { activeConfirmationInput?.validateFor(it)?.commandInput }
-            if (input != null) {
-                dispatch(WorkoutCommand.ConfirmStrengthSet(input))
-            }
+            val input = uiState.confirmation?.let { activeConfirmationInput?.validateFor(it)?.commandInput }
+            if (input != null) dispatch(WorkoutCommand.ConfirmStrengthSet(input))
         },
         onStartNextDuringRest = { dispatch(WorkoutCommand.StartStrengthSet()) },
         onPause = { dispatch(WorkoutCommand.PauseSession) },
@@ -272,9 +431,11 @@ private fun StrengthWorkoutSessionScreen(
     uiState: StrengthWorkoutSessionScreenState,
     confirmationInput: StrengthSetConfirmationInputState?,
     onConfirmationInputChange: (StrengthSetConfirmationInputState) -> Unit,
-    showReplacementOptions: Boolean,
-    onToggleReplacementOptions: () -> Unit,
-    onReplaceExercise: (String) -> Unit,
+    repsInput: String,
+    onRepsInputChange: (String) -> Unit,
+    showRepsInput: Boolean,
+    canReturn: Boolean,
+    saveFailure: Throwable?,
     showSkipConfirmation: Boolean,
     onRequestSkipExercise: () -> Unit,
     onCancelSkipExercise: () -> Unit,
@@ -319,6 +480,20 @@ private fun StrengthWorkoutSessionScreen(
                 uiState = uiState,
                 onPrimaryToggle = if (uiState.canResume) onResume else onPause
             )
+            if (showRepsInput) {
+                OutlinedTextField(
+                    value = repsInput,
+                    onValueChange = onRepsInputChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("本组次数") },
+                    colors = bigTypeConfirmationFieldColors(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+            }
+            if (!uiState.isTerminal && saveFailure != null) {
+                Text("保存失败：${saveFailure.message}", color = TrainFlowError)
+            }
             if (uiState.confirmation != null && confirmationInput != null && confirmationValidation != null) {
                 StrengthSetConfirmationPanel(
                     confirmation = uiState.confirmation,
@@ -330,9 +505,6 @@ private fun StrengthWorkoutSessionScreen(
             StrengthNextSetPanel(uiState)
             StrengthExerciseAdjustmentPanel(
                 uiState = uiState,
-                showReplacementOptions = showReplacementOptions,
-                onToggleReplacementOptions = onToggleReplacementOptions,
-                onReplaceExercise = onReplaceExercise,
                 showSkipConfirmation = showSkipConfirmation,
                 onRequestSkipExercise = onRequestSkipExercise,
                 onCancelSkipExercise = onCancelSkipExercise,
@@ -351,7 +523,7 @@ private fun StrengthWorkoutSessionScreen(
             }
         }
 
-        if (!uiState.isTerminal) {
+        if (!uiState.isTerminal && saveFailure == null) {
             StrengthSessionControls(
                 uiState = uiState,
                 confirmationValidation = confirmationValidation,
@@ -367,6 +539,7 @@ private fun StrengthWorkoutSessionScreen(
         } else {
             StrengthTerminalReturnAction(
                 onBackToPlans = onBackToPlans,
+                enabled = canReturn,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -851,15 +1024,12 @@ private fun StrengthNextSetPanel(uiState: StrengthWorkoutSessionScreenState) {
 @Composable
 private fun StrengthExerciseAdjustmentPanel(
     uiState: StrengthWorkoutSessionScreenState,
-    showReplacementOptions: Boolean,
-    onToggleReplacementOptions: () -> Unit,
-    onReplaceExercise: (String) -> Unit,
     showSkipConfirmation: Boolean,
     onRequestSkipExercise: () -> Unit,
     onCancelSkipExercise: () -> Unit,
     onConfirmSkipExercise: () -> Unit
 ) {
-    if (uiState.isTerminal || (!uiState.canReplaceExercise && !uiState.canSkipExercise)) return
+    if (uiState.isTerminal || !uiState.canSkipExercise) return
 
     StrengthDarkInfoPanel {
         Row(
@@ -876,7 +1046,7 @@ private fun StrengthExerciseAdjustmentPanel(
                     color = TrainFlowNeutral50
                 )
                 Text(
-                    text = uiState.substitutionSummaryLabel.ifBlank { "设备不可用或状态变化时使用。" },
+                    text = "跳过当前动作剩余未完成组，已确认记录保留。",
                     style = MaterialTheme.typography.bodySmall,
                     color = TrainFlowNeutral200
                 )
@@ -888,19 +1058,10 @@ private fun StrengthExerciseAdjustmentPanel(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (uiState.canReplaceExercise) {
-                OutlinedButton(
-                    onClick = onToggleReplacementOptions,
-                    modifier = if (uiState.canSkipExercise) Modifier.weight(1f) else Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(text = "替换动作", color = TrainFlowNeutral50)
-                }
-            }
             if (uiState.canSkipExercise) {
                 OutlinedButton(
                     onClick = onRequestSkipExercise,
-                    modifier = if (uiState.canReplaceExercise) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(1.dp, TrainFlowError.copy(alpha = 0.55f))
                 ) {
@@ -909,30 +1070,6 @@ private fun StrengthExerciseAdjustmentPanel(
             }
         }
 
-        if (showReplacementOptions) {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                uiState.replacementOptions.forEach { option ->
-                    OutlinedButton(
-                        onClick = { onReplaceExercise(option.exerciseId) },
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, TrainFlowAccent.copy(alpha = 0.55f))
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(text = option.exerciseName, color = TrainFlowNeutral50)
-                            Text(
-                                text = option.summary,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TrainFlowNeutral200
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         if (showSkipConfirmation) {
             Surface(
@@ -1156,6 +1293,7 @@ private fun StrengthTerminalPanel(
 @Composable
 private fun StrengthTerminalReturnAction(
     onBackToPlans: () -> Unit,
+    enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -1174,6 +1312,7 @@ private fun StrengthTerminalReturnAction(
         ) {
             Button(
                 onClick = onBackToPlans,
+                enabled = enabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = controlsSpec.primaryButtonMinHeight),

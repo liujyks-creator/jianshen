@@ -4,6 +4,16 @@
 
 ## 当前状态、来源与阅读规则
 
+### 当前 E19-S01：力量真实记录及实际次数接入（2026-09-26）
+
+本候选绑定 acceptedBase=`0feaa3b777521e7eceb8f0da6667b913239701cc`，继承其中已接受的 S09/S09B。按已批准提案第1–7节及 D01/D02/D04/D05，E19 固定两 Story，完成0、剩余2；S01 一个实施包，完成0、剩余1，当前为力量真实记录及实际次数接入，S02 等待。候选不代表 Review PASS、集成或接受；CS04C=HELD，E20–E22 不解锁。
+
+完整用户流程为：计划新增动作默认固定8且可改，明确计划/组级目标优先；原入口进入力量页自动一次 Start；准备和进行中均可编辑本组次数，确认保留此前输入并可再改重量、次数和感受；最终确认值保存且不回写冻结计划；下一组按自己的目标初始化；原休息/提前开始/跳过/二次结束保持，末组直接完成；Saved 后原复盘及恢复建议读取同场持久化结果，固定“返回计划”回 PLANS；记录总览进入独立详情，两种返回均回总览，后来改计划不污染历史。
+
+D01：原 StrengthRoute 持有当场 plan/session/engine/输入/Recorder scope，不新增 VM、retained 层或配置重建恢复。D02：自动 Start 后所有阶段禁止换动作，engine/UI 均关闭替换；旧替换历史保留。D04：默认固定8、明确12仍12、三阶段输入连续；确认沿用至少1次，0重量合法，历史0/NULL区分。正式 Start 与终态一起切换既有 Recorder/Repository/runtime，跟练旧链保留；schema=7、strict、事务及分析数学不改。Saved 不等待 Released，失败保留原错，不增加重试或故障页面；clear 不补终态。
+
+封闭验证为提案 §6 V01–V11 精确方法一次批次、一次构建/同 APK 安装、U01–U03 各一次及已列准备/观察/清理。实际首批10项通过，V09暴露本轮暂停 payload 缺键；用户批准按既有合同补齐9键（8个无对应值显式 null）、同步错误断言并仅追加 V09 一次，追加结果通过，原10项保留。构建/安装各一次成功。U01/U02证明三阶段次数、持久化复盘/历史与冻结值；U01提前开始漏项经用户批准移至同一 U03，数据库证明 rest 直接进入第二组 active、无 prepare，再执行一次 force-stop/正常启动并保留 durable 非终态。三场及专用计划均经原 UI 精确清理，原记录/计划保留。无独立 baseline 或实施前 RED 批次；方法、模拟器、源码证据分层，主观截图可读性仍待用户判断。候选尚待独立 Review/集成，准确增量见 decision-log 同名节。
+
 ### 当前 S09B：持久合并项与真实合并心率输入（2026-09-26）
 
 D24 已接受 S09，merge=`2c5a50b0672719d5a4579acb612b1b0d1f818d4c`，tree=`fb1591315c975f92066f564599fe17227745469c`。父交付固定2包、已接受1、剩余1，当前第2包 S09B；本候选仍待独立 Review 与授权集成，不增加 schema、测试或收尾包。CS04C=HELD，E19=WAITING。本段覆盖下方历史当前状态，不重开已接受 S09。
@@ -987,6 +997,8 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 
 #### F.14.1 E19-S01 力量模式
 
+本节旧力量 owner/训练替换/默认值和验证条款按页首 E19-S01 及 D01/D02/D04 精确覆盖；其余义务保持。S01/S03 由 V09 的真实 engine→facts→Recorder→Room→strict/summary/history 与 U01/U02 证明；S02 由 V01/V08/V09/V10/V11 及 U01 证明；S04 沿原 Route，U03 只证明进程停止后的 durable 非终态、不补终态、不恢复 engine；S05 由 V02–V09/U01/U02 及获批的 U03 提前开始补项证明已批准操作。配置恢复、额外故障注入和新平台能力不在本次验证集合。
+
 本轮main事实：StrengthRoute在 `remember` 保存session/time/engine，进入页面的LaunchedEffect发Start并tick；已有确认输入、effort选项、实际重量/次数、替换动作、跳过和结束路径。生产迁移保留真实入口体验；不能照搬计时ready页面要求用户多点一次开始，也不能把打开页面的多次composition当多场训练。真正进入已准入训练的单次Start才固定时间，失败不冒认开始成功。
 
 | AC | source → 生产结果 | matching oracle |
@@ -1692,6 +1704,8 @@ S05 第四个直接 canonical consumer 为 `C:\Users\25073\Desktop\jianshen\.loc
 
 #### F.28.2 E19两个真实consumer
 
+力量路径以页首本轮合同替代下方历史 VM/生命周期测试候选：生产为原 StrengthWorkoutSessionRoute、StrengthWorkoutEngine、WorkoutSessionRecordMappers 及直接消费者；方法限定五个既有测试文件中的 V01–V11，不创建 StrengthWorkoutSessionViewModel 或新测试文件。跟练条款不变。
+
 - 力量production ViewModel：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionViewModel.kt`；事实转换沿既有WorkoutSessionRecordMappers.kt及已列StrengthRoute/engine；测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionViewModelTest.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionLifecycleContractTest.kt`。
 - 跟练production ViewModel：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionViewModel.kt`；事实转换沿既有WorkoutSessionRecordMappers.kt及FollowAlongRoute/TimedWorkoutEngine；测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionViewModelTest.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionLifecycleContractTest.kt`。
 
@@ -1791,6 +1805,8 @@ PL root重复/unknown member、wrongmode、非1version、wrongblockkind属于其
 当前PL类型/存在性已从source展开为上述矩阵，F22末尾“仍需逐validator核对PL类型”的断点由本节窄替代。具体golden字节/每个mutation case的测试实现是S08A/E21的实现交付，当前没有创建fixture/test文件、没有宣称测试PASS。
 
 #### F.30.2 非timed导航与restore不套用timed Focus v1
+
+E19-S01 本轮力量 producer 以冻结 blockId/setPlanId、planned/actualExerciseId、0基组索引和 setKind 形成 strength_v1 身份；D02 下新场 actual=planned、substituted=NULL，同组非 pause 身份保持一致。证据仅本轮 V09 和 U01/U02，不实现本节后续图表导航/restore。
 
 E22/V03、W02消费者细化：timed继续使用S07A/M07的main§6.6 focus contract；strength/follow的动作/组/阶段导航直接以已验证phaseSequence定位叶节点，父层级从该phase的frozen family payload取block/set/item/round identity。力量至少以blockId及set identity区分同名/同exercise重复块；跟练以blockId/item及可有round区分重复动作。已接受的按动作/组/阶段查看保留，不给两个模式伪造timed true-work/rest toggle或新round UUID。
 
@@ -2412,6 +2428,8 @@ Root phaseIdentity.payload的各field由PH32个source variant行逐key R/N/M/lit
 本节原可行性/合同细化绑定历史 immutable main，未运行代码或新设备验证。时间元数据唯一语义 validator 仍归已合并 S03，S08B 直接消费，不新建 validator。本轮图以 F.26 的 27 节点/54 边为准；本节 S06 与 S07B 的直接消费者按 F.37 分责重定向。
 
 #### F.34.1 engine → 模式producer → Recorder
+
+力量本轮按 D01 在原 Route 捕获真实命令/tick cut 并调用 WorkoutSessionRecordMappers 的力量事实映射；不采用下方历史“模式 ViewModel”作为力量实施要求。D02 禁止换动作，保留 skip；D04 同组次数输入连续。普通 tick、声音与未到达的跳过组不造 phase；AUTO_AFTER_REST 直接进入 active，不补 prepare。力量验证限定页首准确集合。
 
 本轮直接读取的exact源码：
 

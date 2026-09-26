@@ -169,7 +169,7 @@ class StrengthPlanEditorUiStateTest {
         val target = requireNotNull(firstBlock.target)
         assertEquals(20.0, requireNotNull(target.weight).value, 0.0)
         assertEquals(WeightUnit.KG, requireNotNull(target.weight).unit)
-        assertTrue(requireNotNull(target.repTarget) is RepTarget.Range)
+        assertEquals(RepTarget.Fixed(8), target.repTarget)
         assertEquals(90, target.restAfterSetSec)
     }
 
@@ -282,21 +282,22 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
-    fun defaultsStrengthRepTargetToEightToTwelveWhenAddingActions() {
+    fun defaultsStrengthRepTargetToEightWhenAddingActions() {
         val state = buildDefaultStrengthPlanEditorState()
             .addExercise("barbell-bench-press")
         val bench = state.exercises.first { it.exerciseId == "barbell-bench-press" }
         val block = state.toWorkoutPlan().blocks
             .filterIsInstance<StrengthExerciseBlock>()
             .first { it.exerciseId == "barbell-bench-press" }
-        val reps = requireNotNull(block.target?.repTarget) as RepTarget.Range
+        val reps = requireNotNull(block.target?.repTarget) as RepTarget.Fixed
 
-        assertEquals(StrengthRepTargetKind.RANGE, bench.repTarget.kind)
-        assertEquals(8, reps.minReps)
-        assertEquals(12, reps.maxReps)
+        assertEquals(StrengthRepTargetKind.FIXED, bench.repTarget.kind)
+        assertEquals(8, reps.reps)
         assertEquals(bench.totalSets, block.sets.size)
         assertEquals(bench.warmupSets, block.sets.count { it.kind == StrengthSetKind.WARMUP })
-        assertTrue(block.sets.filter { it.kind == StrengthSetKind.WORKING }.all { it.repTarget is RepTarget.Range })
+        assertTrue(block.sets.filter { it.kind == StrengthSetKind.WORKING }.all { it.repTarget == RepTarget.Fixed(8) })
+        val edited = state.updateFixedReps(bench.id, 12).toWorkoutPlan().toStrengthPlanEditorState()
+        assertEquals(RepTarget.Fixed(12), edited.exercises.first { it.exerciseId == "barbell-bench-press" }.repTarget.toRepTarget())
     }
 
     @Test

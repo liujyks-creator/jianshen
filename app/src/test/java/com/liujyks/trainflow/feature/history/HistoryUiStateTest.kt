@@ -3,6 +3,10 @@ package com.liujyks.trainflow.feature.history
 import com.liujyks.trainflow.core.data.HistoryEntry
 import com.liujyks.trainflow.core.data.HistoryEntryClassification
 import com.liujyks.trainflow.core.data.StrictSessionExecution
+import com.liujyks.trainflow.core.data.StrictStrengthSetRecord
+import com.liujyks.trainflow.core.data.toEntity
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
@@ -44,6 +48,51 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HistoryUiStateTest {
+    @Test
+    fun strictStrengthDetailPreservesActualValuesMissingValuesAndLegacySubstitution() {
+        val snapshot = WorkoutPlanSnapshot("legacy-strength-plan", "旧力量记录", WorkoutMode.STRENGTH,
+            listOf(StrengthExerciseBlock("bench", 1, "barbell-bench-press",
+                listOf(
+                    StrengthSetPlan("bench-1", 1, StrengthSetKind.WORKING, ExerciseSide.LEFT,
+                        WeightValue(20.0, WeightUnit.KG), RepTarget.Fixed(12)),
+                    StrengthSetPlan("bench-2", 2, StrengthSetKind.WORKING,
+                        targetWeight = WeightValue(20.0, WeightUnit.KG), repTarget = RepTarget.Fixed(12))
+                ))))
+        val first = StrengthSetRecord("first", "incline-push-up", "bench-1", 1,
+            StrengthSetKind.WORKING, ExerciseSide.LEFT, WeightValue(20.0, WeightUnit.KG),
+            RepTarget.Fixed(12), WeightValue(0.0, WeightUnit.KG), 0, 2, 3,
+            SetEffort.FORM_BREAKDOWN, "barbell-bench-press")
+        val second = StrengthSetRecord("second", "barbell-bench-press", "bench-2", 2,
+            StrengthSetKind.WORKING, plannedWeight = WeightValue(20.0, WeightUnit.KG),
+            plannedRepTarget = RepTarget.Fixed(12))
+        val source = WorkoutSessionStrictReadResult.LegacyTerminal(
+            WorkoutSessionEntity(id = "legacy-strength", mode = "strength", status = "completed",
+                planSnapshotJson = snapshot.toStorageJson(), startedAt = "2026-09-06T16:30:00Z",
+                endedAt = "2026-09-06T16:30:05Z", totalElapsedSec = 5,
+                effectiveElapsedSec = 5, pausedElapsedSec = 0),
+            parseCanonicalJson(snapshot.toStorageJson()) as CanonicalJsonValue.Obj,
+            StrictSessionExecution(emptyList(), emptyList(), listOf(
+                StrictStrengthSetRecord(first.toEntity("legacy-strength"), first.plannedWeight,
+                    first.plannedRepTarget, first.actualWeight, first.actualReps),
+                StrictStrengthSetRecord(second.toEntity("legacy-strength"), second.plannedWeight,
+                    second.plannedRepTarget, second.actualWeight, second.actualReps)))
+        )
+        val resolved = WorkoutSessionHistoricalResult.Resolved(source, "旧力量记录", "strength", "zh-CN",
+            emptyList(), emptyList())
+        val rows = requireNotNull(HistoryScreenState(emptyList(), selectedSessionId = "legacy-strength",
+            historyEntries = emptyList(), detailRead = resolved).selectedDetail).rows
+        assertEquals(listOf("0 kg", "未记录重量"), rows.filter { it.label == "实际重量" }.map { it.value })
+        assertEquals(listOf("0 次", "未记录次数"), rows.filter { it.label == "实际次数" }.map { it.value })
+        assertEquals(listOf("20 kg", "20 kg"), rows.filter { it.label == "计划重量" }.map { it.value })
+        assertEquals(listOf("12 次", "12 次"), rows.filter { it.label == "计划次数" }.map { it.value })
+        assertEquals(listOf("左侧", "未记录侧别"), rows.filter { it.label == "侧别" }.map { it.value })
+        assertEquals(listOf("动作变形", "未记录感受"), rows.filter { it.label == "感受" }.map { it.value })
+        assertEquals(listOf("2 秒", "未记录"), rows.filter { it.label == "组耗时" }.map { it.value })
+        assertEquals(listOf("3 秒", "未记录"), rows.filter { it.label == "实际休息" }.map { it.value })
+        assertEquals("barbell-bench-press", rows.single { it.label == "替换来源" }.value)
+        assertEquals("incline-push-up", rows.first { it.label == "力量组" }.value)
+    }
+
     @Test
     fun mergedEntriesUseLastDateAndCountOnce() {
         val first = strengthSession("first", SessionStatus.COMPLETED, "2026-01-01T20:30:00Z", records = emptyList())

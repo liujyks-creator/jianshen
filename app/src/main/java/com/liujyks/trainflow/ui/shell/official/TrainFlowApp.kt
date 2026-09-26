@@ -707,7 +707,9 @@ internal fun TrainFlowApp(
                             onOpenRecoveryRecommendation = { recommendation ->
                                 applyShellState(shellState.openRecoveryRecommendation(recommendation))
                             },
-                            onRecordWorkoutSession = onRecordWorkoutSession,
+                            workoutSessionRepository = workoutSessionRepository,
+                            heartRateRuntimeOwner = heartRateRuntimeOwner,
+                            heartRateSettings = preferenceHeartRateState,
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {

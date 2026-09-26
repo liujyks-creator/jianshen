@@ -222,12 +222,12 @@ internal data class StrengthExerciseOptionUiState(
 )
 
 internal data class StrengthRepTargetUiState(
-    val kind: StrengthRepTargetKind = StrengthRepTargetKind.RANGE,
+    val kind: StrengthRepTargetKind = StrengthRepTargetKind.FIXED,
     val minReps: Int = RepTarget.Range.DEFAULT_MIN_REPS,
     val minRepsRawText: String? = null,
     val maxReps: Int = RepTarget.Range.DEFAULT_MAX_REPS,
     val maxRepsRawText: String? = null,
-    val fixedReps: Int = RepTarget.Range.DEFAULT_MAX_REPS,
+    val fixedReps: Int = 8,
     val fixedRepsRawText: String? = null
 ) {
     val minRepsText: String

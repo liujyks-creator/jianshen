@@ -5,6 +5,7 @@ import com.liujyks.trainflow.core.data.HistoryEntryClassification
 import com.liujyks.trainflow.core.data.HistoryItemKey
 import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
+import com.liujyks.trainflow.core.database.CanonicalJsonValue
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.RestBlock
 import com.liujyks.trainflow.core.model.SessionStatus
@@ -872,8 +873,36 @@ private fun WorkoutSessionHistoricalResult.toHistoryDetailState(expectedId: Stri
                 add(HistorySummaryRowUiState("延长休息", "${rest.restStageTitle} · ${rest.addedSec} 秒", rest.stepId))
             }
             execution?.strengthSets?.forEach { set ->
-                add(HistorySummaryRowUiState("力量组", set.row.exerciseId,
-                    "第 ${set.row.setOrder} 组 · ${set.actualReps ?: 0} 次"))
+                val row = set.row
+                val name = phaseDisplays.firstOrNull { phase ->
+                    val payload = phase.phaseIdentity.fields.getValue("payload") as CanonicalJsonValue.Obj
+                    (payload.fields["actualExerciseId"] as? CanonicalJsonValue.Str)?.value == row.exerciseId
+                }?.display?.label ?: row.exerciseId
+                val group = "第 ${row.setOrder} 组"
+                add(HistorySummaryRowUiState("力量组", name, "$group · ${row.setKind}"))
+                add(HistorySummaryRowUiState("计划重量", set.plannedWeight.formatWeight(), group))
+                add(HistorySummaryRowUiState("实际重量", set.actualWeight.formatWeight(), group))
+                add(HistorySummaryRowUiState("计划次数", set.plannedRepTarget?.formatRepTarget() ?: "未记录次数", group))
+                add(HistorySummaryRowUiState("实际次数", set.actualReps?.let { "$it 次" } ?: "未记录次数", group))
+                add(HistorySummaryRowUiState("侧别", when (row.side) {
+                    "both" -> "双侧"
+                    "left" -> "左侧"
+                    "right" -> "右侧"
+                    "alternating" -> "交替"
+                    else -> "未记录侧别"
+                }, group))
+                add(HistorySummaryRowUiState("感受", when (row.effort) {
+                    "easy" -> "轻松"
+                    "good" -> "刚好"
+                    "hard" -> "很吃力"
+                    "form_breakdown" -> "动作变形"
+                    else -> "未记录感受"
+                }, group))
+                add(HistorySummaryRowUiState("组耗时", row.activeDurationSec?.let { "$it 秒" } ?: "未记录", group))
+                add(HistorySummaryRowUiState("实际休息", row.actualRestAfterSec?.let { "$it 秒" } ?: "未记录", group))
+                row.substitutedFromExerciseId?.let { original ->
+                    add(HistorySummaryRowUiState("替换来源", original, "$group · 实际动作 $name"))
+                }
             }
             if (source is WorkoutSessionStrictReadResult.CanonicalTerminal) {
                 val graph = source.graph

@@ -2519,7 +2519,7 @@ private fun SessionStepRecord.toEntity(sessionId: String): SessionStepRecordEnti
     )
 }
 
-private fun StrengthSetRecord.toEntity(sessionId: String): StrengthSetRecordEntity {
+internal fun StrengthSetRecord.toEntity(sessionId: String): StrengthSetRecordEntity {
     return StrengthSetRecordEntity(
         id = "$sessionId:$id",
         sessionId = sessionId,
