@@ -175,7 +175,8 @@ class WorkoutSessionStrictReaderTest {
             database.workoutSessionDao().insertSession(session)
             val before = databaseSnapshot()
             assertEquals(WorkoutSessionStrictReadResult.Nonterminal(session,
-                if (status == "ready") "legacy_incomplete_nonterminal" else "legacy_noncanonical_nonterminal"),
+                if (status == "ready") "legacy_incomplete_nonterminal" else "legacy_noncanonical_nonterminal",
+                CanonicalSessionGraphV1(session), EMPTY_EXECUTION),
                 WorkoutSessionRepository(database).readSessionStrict("legacy"))
             assertEquals(before, databaseSnapshot())
         }
@@ -184,10 +185,34 @@ class WorkoutSessionStrictReaderTest {
             seedActiveRecording(hr = false)
             sql("UPDATE workout_sessions SET status='$status'")
             val before = databaseSnapshot()
-            assertEquals(WorkoutSessionStrictReadResult.Nonterminal(activeSession().copy(status = status), "canonical_v1_running"),
+            assertEquals(WorkoutSessionStrictReadResult.Nonterminal(activeSession().copy(status = status), "canonical_v1_running",
+                CanonicalSessionGraphV1(activeSession().copy(status = status), listOf(activePhase())), EMPTY_EXECUTION),
                 WorkoutSessionRepository(database).readSessionStrict(SESSION_ID))
             assertEquals(before, databaseSnapshot())
         }
+    }
+
+    @Test
+    fun runningCanonicalGraphExposesOnlyPersistedRawForMerge() = runBlocking {
+        freshDatabase()
+        seedActiveRecording()
+        freezeStartMetadata()
+        val expectedSession = activeSession().copy(startedAt = START, startLocalDate = "2026-09-08",
+            startZoneId = "Asia/Shanghai", startUtcOffsetSeconds = 28_800, timeMetadataSourceContractVersion = 1)
+        val expectedGraph = CanonicalSessionGraphV1(expectedSession, listOf(activePhase()), activeRecording(),
+            listOf(activeAcquisition()), listOf(HeartRateSampleEntity(RECORDING_ID, 0, 0, 0, 120)))
+        val result = WorkoutSessionRepository(database).readSessionStrict(SESSION_ID)
+        assertEquals(WorkoutSessionStrictReadResult.Nonterminal(expectedSession, "canonical_v1_running",
+            expectedGraph, EMPTY_EXECUTION), result)
+        val running = result as WorkoutSessionStrictReadResult.Nonterminal
+        assertEquals(1_000L, running.session.lastDurableOffsetMs)
+        assertEquals(3L, running.session.lastMutationSequence)
+        assertTrue(running.graph.samples.all { it.offsetMs <= 1_000 && it.mutationSequence <= 3 })
+        assertNull(running.session.endedAt)
+        assertNull(running.session.trustedEndOffsetMs)
+        assertNull(running.session.terminalReason)
+        assertEquals("active", running.session.status)
+        assertEquals(emptyList<HeartRateAnalysisSnapshotEntity>(), running.graph.snapshots)
     }
 
     @Test
@@ -429,7 +454,9 @@ class WorkoutSessionStrictReaderTest {
             intercept = null
             if (rollback) {
                 assertTrue(written.exceptionOrNull() is SQLiteConstraintException)
-                assertEquals(WorkoutSessionStrictReadResult.Nonterminal(activeSession(), "canonical_v1_running"), result)
+                assertEquals(WorkoutSessionStrictReadResult.Nonterminal(activeSession(), "canonical_v1_running",
+                    CanonicalSessionGraphV1(activeSession(), listOf(activePhase()), activeRecording(),
+                        listOf(activeAcquisition()), listOf(HeartRateSampleEntity(RECORDING_ID, 0, 0, 0, 120))), EMPTY_EXECUTION), result)
                 assertEquals(before, databaseSnapshot())
             } else {
                 assertEquals(CanonicalTuple(2_000, 4), written.getOrThrow().finalTuple)

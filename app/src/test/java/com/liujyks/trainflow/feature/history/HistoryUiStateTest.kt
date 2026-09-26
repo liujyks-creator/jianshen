@@ -45,6 +45,39 @@ import org.junit.Test
 
 class HistoryUiStateTest {
     @Test
+    fun mergedEntriesUseLastDateAndCountOnce() {
+        val first = strengthSession("first", SessionStatus.COMPLETED, "2026-01-01T20:30:00Z", records = emptyList())
+        val second = defaultHistorySessions().first { it.mode == WorkoutMode.TIMED }.copy(
+            id = "second", status = SessionStatus.ABANDONED, startedAt = "2026-01-02T20:30:00Z")
+        val other = first.copy(id = "other", startedAt = "2026-01-03T20:30:00Z")
+        val initial = buildPersistedHistoryScreenState(listOf(
+            HistoryEntry(second.id, "2026-01-03", second.mode, second.status, second,
+                HistoryEntryClassification.Available, mergeGroupId = "group"),
+            HistoryEntry(first.id, "2026-01-02", first.mode, first.status, first,
+                HistoryEntryClassification.Available, mergeGroupId = "group"),
+            HistoryEntry(other.id, "2026-01-04", other.mode, other.status, other, HistoryEntryClassification.Available)
+        ))
+        assertEquals(2, requireNotNull(initial.recordStats).totalCount)
+        assertEquals(listOf("other", "group"), initial.dateGroups.flatMap { it.items }.map { it.id })
+        val group = initial.dateGroups.last().items.single()
+        assertEquals("2026-01-03", group.dateLabel)
+        assertEquals("合并记录（2段）", group.title)
+        assertTrue(initial.expandedGroupIds.isEmpty())
+        val expanded = initial.toggleGroup("group")
+        assertEquals(setOf("group"), expanded.expandedGroupIds)
+        assertEquals(listOf("first", "second"), expanded.topLevelEntries.single { it.isGroup }.members.map { it.id })
+        assertEquals(2, requireNotNull(expanded.recordStats).totalCount)
+        assertTrue(initial.applyModeFilter(HistoryModeFilter.TIMED).visibleEntries.isEmpty())
+        assertEquals(listOf("other"), initial.applyModeFilter(HistoryModeFilter.STRENGTH).visibleEntries.map { it.id })
+        assertTrue(initial.applyStatusFilter(HistoryStatusFilter.ABANDONED).visibleEntries.isEmpty())
+        assertEquals(listOf("other"), initial.applyStatusFilter(HistoryStatusFilter.COMPLETED).visibleEntries.map { it.id })
+        val selected = initial.startManaging().toggleManagedSession("group")
+        val requested = selected.requestCleanup(selected.cleanupItems(selected.selectedIds))
+        assertTrue(requireNotNull(requested.pendingCleanupDialog).message.contains("合并记录及其 2 段原始记录"))
+        assertEquals(setOf("first", "second"), (requested.confirmCleanup().target as HistoryCleanupTarget.Items).sessionIds)
+    }
+
+    @Test
     fun persistedEntriesKeepFrozenDatesAndSelectionAcrossDelete() {
         val legacy = strengthSession("legacy", SessionStatus.COMPLETED, "2026-01-01T20:30:00Z",
             records = emptyList()).copy(startLocalDate = "2026-01-02")

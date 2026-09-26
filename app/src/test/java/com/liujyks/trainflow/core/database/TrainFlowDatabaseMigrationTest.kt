@@ -147,7 +147,7 @@ class TrainFlowDatabaseMigrationTest {
     }
 
     @Test
-    fun versionFiveUpgradeAndFreshInstallHaveIdenticalVersionSixSchema() {
+    fun versionFiveUpgradeAndFreshInstallHaveIdenticalVersionSevenSchema() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val path = context.getDatabasePath(TrainFlowDatabase.DATABASE_NAME).absolutePath
         helper.createDatabase(path, 5).close()
@@ -157,9 +157,9 @@ class TrainFlowDatabaseMigrationTest {
             .allowMainThreadQueries().build()
         try {
             val sql = upgraded.openHelper.writableDatabase
-            assertEquals(6, sql.version)
+            assertEquals(7, sql.version)
             val freshSql = fresh.openHelper.writableDatabase
-            assertEquals(6, freshSql.version)
+            assertEquals(7, freshSql.version)
             sql.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('android_metadata', 'room_master_table') ORDER BY name").use { tables ->
                 var count = 0
                 while (tables.moveToNext()) {
@@ -174,7 +174,7 @@ class TrainFlowDatabaseMigrationTest {
                     assertEquals("table, constraints and indexes: $name", expected, actual)
                     count++
                 }
-                assertEquals(13, count)
+                assertEquals(15, count)
             }
             val columns = sql.query("PRAGMA table_info(workout_sessions)").use { cursor ->
                 buildMap {
@@ -189,6 +189,43 @@ class TrainFlowDatabaseMigrationTest {
             ).forEach { (name, type) ->
                 val column = requireNotNull(columns[name])
                 assertEquals(listOf(type, "0", "NULL"), column)
+            }
+        } finally {
+            upgraded.close()
+            fresh.close()
+        }
+    }
+
+    @Test
+    fun versionSixUpgradeAndFreshInstallHaveIdenticalVersionSevenMergeSchema() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val path = context.getDatabasePath("merge-v6-v7").absolutePath
+        helper.createDatabase(path, 6).apply {
+            insertVersion1WorkoutSession()
+            close()
+        }
+        val upgraded = helper.runMigrationsAndValidate(path, 7, true, TrainFlowDatabase.MIGRATION_6_7)
+        val fresh = Room.inMemoryDatabaseBuilder(context, TrainFlowDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val freshSql = fresh.openHelper.writableDatabase
+            for (table in listOf("workout_session_merge_groups", "workout_session_merge_members")) {
+                val actual = androidx.room.util.TableInfo.read(upgraded, table)
+                val expected = androidx.room.util.TableInfo.read(freshSql, table)
+                assertEquals(expected, actual)
+                val primary = if (table.endsWith("groups")) "group_id" else "session_id"
+                assertEquals(1, actual.columns.getValue(primary).primaryKeyPosition)
+            }
+            val members = androidx.room.util.TableInfo.read(upgraded, "workout_session_merge_members")
+            assertEquals(setOf("workout_sessions" to "RESTRICT", "workout_session_merge_groups" to "CASCADE"),
+                members.foreignKeys.map { it.referenceTable to it.onDelete }.toSet())
+            assertEquals(setOf(listOf("group_id")), requireNotNull(members.indices).map { it.columns }.toSet())
+            upgraded.query("SELECT id, started_at, ended_at FROM workout_sessions").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("session-v1", cursor.getString(0))
+                assertEquals("2026-06-07T10:00:00Z", cursor.getString(1))
+                assertEquals("2026-06-07T10:10:00Z", cursor.getString(2))
+                assertEquals(1, cursor.count)
             }
         } finally {
             upgraded.close()

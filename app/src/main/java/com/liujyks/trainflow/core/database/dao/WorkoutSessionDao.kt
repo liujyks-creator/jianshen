@@ -12,10 +12,27 @@ import com.liujyks.trainflow.core.database.entity.SessionStepRecordEntity
 import com.liujyks.trainflow.core.database.entity.StrengthSetRecordEntity
 import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionMergeGroupEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionMergeMemberEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WorkoutSessionDao {
+    @Insert
+    suspend fun insertMergeGroup(group: WorkoutSessionMergeGroupEntity)
+
+    @Insert
+    suspend fun insertMergeMembers(members: List<WorkoutSessionMergeMemberEntity>)
+
+    @Query("SELECT * FROM workout_session_merge_members WHERE group_id = :groupId")
+    suspend fun mergeMembers(groupId: String): List<WorkoutSessionMergeMemberEntity>
+
+    @Query("SELECT * FROM workout_session_merge_members WHERE session_id IN (:sessionIds)")
+    suspend fun memberships(sessionIds: List<String>): List<WorkoutSessionMergeMemberEntity>
+
+    @Query("DELETE FROM workout_session_merge_groups WHERE group_id IN (:groupIds)")
+    suspend fun deleteMergeGroups(groupIds: List<String>)
+
     @Query("""
         SELECT id, plan_id, mode, status, started_at, ended_at, total_elapsed_sec,
             effective_elapsed_sec, paused_elapsed_sec, timeline_version, trusted_end_offset_ms,
@@ -454,5 +471,7 @@ data class WorkoutSessionWithRecords(
         parentColumn = "id",
         entityColumn = "session_id"
     )
-    val strengthSetRecords: List<StrengthSetRecordEntity>
+    val strengthSetRecords: List<StrengthSetRecordEntity>,
+    @Relation(parentColumn = "id", entityColumn = "session_id")
+    val mergeMemberships: List<WorkoutSessionMergeMemberEntity> = emptyList()
 )
