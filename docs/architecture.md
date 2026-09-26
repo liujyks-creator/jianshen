@@ -227,7 +227,11 @@ feature:settings
 | `feature:recovery` | 训练后恢复建议。 |
 | `feature:settings` | 训练偏好、通知偏好和健康数据边界偏好；E17 心率 opt-in、权限说明与用户主动设备操作的 canonical setup 入口。 |
 
-E18-S09 记录读取与删除仍由 `WorkoutSessionRepository` 单一负责：列表的 `observeSessionsWithRecords` 只装配 header、冻结快照与执行关系的轻量 typed 条目，不加载全历史 raw；已选单场和 Saved 后复盘调用 `readSessionStrict(sessionId)` 取得完整 graph，再由历史 resolver 解析冻结标题/阶段。单场 strict 继续服务后续导出。普通按 ID 集合删除在同一 Room 事务清理旧执行子表及 session，canonical HR/快照沿现有 FK cascade；不改 schema、旧日期 SQL 或建立第二 owner。后继 S09B 的 version 7 group/member 关系、整组事务与含真实时刻/来源/空档的合并 raw 结果尚未实施，原训练和 HR/snapshot 将保持原值，不将单场 `CanonicalAnalysisV1` 用于运行段或整组。
+E18-S09 记录读取与删除仍由 `WorkoutSessionRepository` 单一负责：列表的 `observeSessionsWithRecords` 只装配 header、冻结快照与执行关系的轻量 typed 条目，不加载全历史 raw；已选单场和 Saved 后复盘调用 `readSessionStrict(sessionId)` 取得完整 graph，再由历史 resolver 解析冻结标题/阶段。单场 strict 继续服务后续导出。普通按 ID 集合删除在同一 Room 事务清理旧执行子表及 session，canonical HR/快照沿现有 FK cascade；旧日期 SQL 和 owner 不变。
+
+E18-S09B 在同一 Room version 7 仅增加 `workout_session_merge_groups(group_id PK)` 与 `workout_session_merge_members(session_id PK, group_id)`；session 外键 RESTRICT、group 外键 CASCADE，并按 group_id 建索引。建组至少两段，普通 INSERT 与外键/主键在同一事务保证原场存在和成员独占，不使用 REPLACE。原列表关系查询携带轻量成员归属，由现有 MainActivity→Shell→History 通道消费，无第二流/缓存/owner。`deleteHistoryItems` 接收明确 Session/Group 键，事务内展开组成员、与普通ID去重，先删关系，再删原场及关联；普通删除拒绝绕过组边界。
+
+`readSessionStrict.Nonterminal` 保留原分类并返回已验证的 graph/execution，不补 endedAt 或终态。`readMergedHistory` 在事务中按成员完整 strict 读取；Unavailable/NotFound 保留为成员读取失败，不当空段。瞬时 `MergedHeartRateInput` 保存组身份、各段 graph/execution/timelineStatus、开始时刻与可信cut，样本保留原 recordingId/sampleSequence/offset/mutation/bpm及实际时刻；graph 保留来源参数、phase/acquisition和原单场快照。段间空档单独表示，不填零/插值；不调用单场 `CanonicalAnalysisV1` 分析组或运行段，不生成第二份原始存储。日期、时区及UTC偏移继续沿原冻结字段，组归最后段冻结日。schema7通过原exportSchema机制生成，1–6不改。七个定点方法、一次APK与一次同日设备流程的实际证据及安装恢复例外见本包decision-log；后续完整图表/导出仍另行交付。
 
 D22/D23 的页面纠正只改变 `HistoryRoute` 呈现：总览普通点卡以原 sessionId 进入独立单条详情，页面返回和系统返回回总览；总览筛选与非 HR 趋势不进入详情。完整 strict 读取与 Repository/DAO owner 保持，详情只展示已有本场事实；心率图表、热量、分享及独立趋势页留待后续。
 

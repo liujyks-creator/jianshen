@@ -4,6 +4,12 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
+import com.liujyks.trainflow.core.database.CanonicalAnalysisV1
+import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateSampleEntity
+import com.liujyks.trainflow.core.database.entity.HeartRateAcquisitionIntervalEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
@@ -58,6 +64,99 @@ class WorkoutSessionRepositoryTest {
     @After
     fun closeDatabase() {
         database.close()
+    }
+
+    @Test
+    fun mergeGroupPersistsAcrossReopenAndDeletesAllMembers() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database.close()
+        database = TrainFlowDatabase.create(context)
+        repository = WorkoutSessionRepository(database)
+        val planJson = """{"planSnapshotStorageContractVersion":1,"planId":null,"title":"Timed","mode":"timed","blocks":[{"id":"block","kind":"timed_composition","order":0,"compositionVersion":2,"warmupSec":10,"cooldownSec":0,"rounds":1,"restBetweenRoundsSec":0,"stageGroups":[]}],"preferences":null,"followAlong":null}"""
+        val identityJson = """{"phaseIdentityContractVersion":1,"family":"timed_composition_v2","payloadVersion":2,"mode":"timed","phaseKind":"timed_work","orderedStructureSignature":{"signatureContractVersion":1,"algorithm":"sha256","digestHexLowercase":"38376293776bcfc20b092f80441fbde7344ef1b837e0f5ba2c7fc28f6b6a5855"},"payload":{"variant":"warmup","compositionVersion":2,"compositionBlockId":"block","timelineStageId":"block:warmup","timelineStageKind":"warmup","stageGroupId":"block:warmup","targetId":"block:warmup:target","targetKind":"warmup","roundIndex0":null,"stageGroupIndex0":null,"targetIndex0":0,"stageInstanceIndex0":0,"targetInstanceIndex0":0,"stepIndex0":0}}"""
+        val runningSession = WorkoutSessionEntity("running", mode = "timed", status = "active", planSnapshotJson = planJson,
+            startedAt = "2026-09-01T00:00:00Z", timelineVersion = 1, lastDurableOffsetMs = 1_000,
+            lastMutationSequence = 3, displayMetadataContractVersion = 1,
+            sessionDisplayMetadataJson = """{"displayMetadataContractVersion":1,"entries":[]}""",
+            startLocalDate = "2026-09-01", startZoneId = "UTC", startUtcOffsetSeconds = 0,
+            timeMetadataSourceContractVersion = 1)
+        val running = CanonicalSessionGraphV1(runningSession,
+            listOf(WorkoutPhaseIntervalEntity("phase-running", "running", 0, 0, null, 0, null, 1, "timed_work", identityJson)),
+            HeartRateRecordingEntity("recording-running", "running", "active", 0, 0, null, null,
+                sourceContractVersion = 1, sourceKind = "ble_hrs", acquisitionContractVersion = 1, parameterSnapshotVersion = 1),
+            listOf(HeartRateAcquisitionIntervalEntity("acq-running", "recording-running", 0, 0, null, 0, null, 1,
+                "expected_recording", null, "live", null)),
+            listOf(HeartRateSampleEntity("recording-running", 0, 0, 0, 120)))
+        val terminalWithoutSnapshot = CanonicalSessionGraphV1(
+            runningSession.copy(id = "terminal", status = "completed", startedAt = "2026-09-02T00:00:00Z",
+                startLocalDate = "2026-09-02", endedAt = "2026-09-02T00:00:02Z", totalElapsedSec = 2,
+                effectiveElapsedSec = 2, pausedElapsedSec = 0, lastDurableOffsetMs = 2_000,
+                lastMutationSequence = 4, trustedEndOffsetMs = 2_000, terminalReason = "completed"),
+            listOf(running.phases.single().copy(id = "phase-terminal", sessionId = "terminal",
+                endOffsetMs = 2_000, endMutationSequence = 4, openMarker = null)),
+            requireNotNull(running.recording).copy(recordingId = "recording-terminal", sessionId = "terminal",
+                status = "terminal", endedOffsetMs = 2_000, endedMutationSequence = 4, originalAnalysisVersion = 1),
+            listOf(running.acquisitions.single().copy(id = "acq-terminal", recordingId = "recording-terminal",
+                endOffsetMs = 2_000, endMutationSequence = 4, openMarker = null)),
+            listOf(HeartRateSampleEntity("recording-terminal", 0, 0, 0, 130)))
+        val terminal = terminalWithoutSnapshot.copy(snapshots = listOf(
+            CanonicalAnalysisV1.derive(terminalWithoutSnapshot, "2026-09-02T00:00:02Z")))
+        for (graph in listOf(running, terminal)) {
+            database.workoutSessionDao().insertSession(graph.session)
+            val dao = database.canonicalTimelineHeartRateDao()
+            graph.phases.forEach { dao.insertPhaseInterval(it) }
+            dao.insertRecording(requireNotNull(graph.recording))
+            graph.acquisitions.forEach { dao.insertAcquisitionInterval(it) }
+            graph.samples.forEach { dao.insertSample(it) }
+            graph.snapshots.forEach { dao.insertAnalysisSnapshot(it) }
+        }
+        repository.upsertSession(timedSession("ordinary", SessionStatus.COMPLETED, 75, 60, 15,
+            restExtensionRecords = listOf(restExtensionRecord("ordinary-extension"))))
+        repository.upsertSession(strengthSession("untouched", SessionStatus.COMPLETED,
+            records = listOf(confirmedStrengthRecord("untouched-set"))))
+        val before = database.workoutSessionDao().getSessionsWithRecords()
+        val groupId = repository.createMergeGroup(setOf("terminal", "running"))
+        database.close()
+        database = TrainFlowDatabase.create(context)
+        repository = WorkoutSessionRepository(database)
+        assertEquals(setOf("running", "terminal"), database.workoutSessionDao().mergeMembers(groupId).map { it.sessionId }.toSet())
+        val conflict = runCatching { repository.createMergeGroup(setOf("running", "ordinary")) }
+        assertTrue(conflict.exceptionOrNull() is android.database.sqlite.SQLiteConstraintException)
+        val read = repository.readMergedHistory(groupId)
+        assertTrue("$read", read is MergedHistoryReadResult.Available)
+        val input = (read as MergedHistoryReadResult.Available).input
+        assertEquals(groupId, input.groupId)
+        assertEquals(listOf("running", "terminal"), input.segments.map { it.sessionId })
+        assertEquals(listOf(running, terminal), input.segments.map { it.graph })
+        assertEquals(listOf(1_000L, 2_000L), input.segments.map { it.trustedCutMs })
+        assertEquals(listOf(StrictSessionExecution(emptyList(), emptyList(), emptyList()),
+            StrictSessionExecution(emptyList(), emptyList(), emptyList())), input.segments.map { it.execution })
+        assertEquals(listOf("canonical_v1_running", "canonical_v1_terminal"), input.segments.map { it.timelineStatus })
+        assertEquals(listOf("running", "terminal"), input.samples.map { it.sessionId })
+        assertEquals(listOf(running.samples.single(), terminal.samples.single()), input.samples.map { it.raw })
+        assertEquals(listOf("2026-09-01T00:00:00Z", "2026-09-02T00:00:00Z"), input.samples.map { it.actualTime.toString() })
+        assertEquals(listOf(MergedHeartRateGap("running", "terminal", java.time.Instant.parse("2026-09-01T00:00:01Z"),
+            java.time.Instant.parse("2026-09-02T00:00:00Z"))), input.gaps)
+        assertFalse(input.samples.any { it.actualTime > input.gaps.single().start && it.actualTime < input.gaps.single().end })
+        val after = database.workoutSessionDao().getSessionsWithRecords()
+        assertEquals(before, after.map { it.copy(mergeMemberships = emptyList()) })
+        repository.deleteHistoryItems(setOf(HistoryItemKey.Group(groupId), HistoryItemKey.Session("ordinary")))
+        assertTrue(database.workoutSessionDao().mergeMembers(groupId).isEmpty())
+        assertEquals(MergedHistoryReadResult.NotFound, repository.readMergedHistory(groupId))
+        assertEquals(listOf(before.single { it.session.id == "untouched" }), database.workoutSessionDao().getSessionsWithRecords())
+        val dao = database.canonicalTimelineHeartRateDao()
+        assertEquals(0, dao.phaseIntervalCount())
+        assertEquals(0, dao.recordingCount())
+        assertEquals(0, dao.acquisitionIntervalCount())
+        assertEquals(0, dao.sampleCount())
+        assertEquals(0, dao.analysisSnapshotCount())
+        assertEquals(0, database.workoutSessionDao().stepRecordCount())
+        assertEquals(0, database.workoutSessionDao().timedRestExtensionRecordCount())
+        assertEquals(1, database.workoutSessionDao().strengthSetRecordCount())
+        database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM workout_session_merge_groups").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
     }
 
     @Test

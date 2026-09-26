@@ -2,6 +2,7 @@ package com.liujyks.trainflow.feature.history
 
 import com.liujyks.trainflow.core.data.HistoryEntry
 import com.liujyks.trainflow.core.data.HistoryEntryClassification
+import com.liujyks.trainflow.core.data.HistoryItemKey
 import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
 import com.liujyks.trainflow.core.model.RepTarget
@@ -40,7 +41,9 @@ internal data class HistoryScreenState(
     val historyEntries: List<HistoryEntry>? = null,
     val detailRead: WorkoutSessionHistoricalResult? = null,
     val managing: Boolean = false,
-    val selectedIds: Set<String> = emptySet()
+    val selectedIds: Set<String> = emptySet(),
+    val merging: Boolean = false,
+    val expandedGroupIds: Set<String> = emptySet()
 ) {
     val entries: List<HistoryEntry>
         get() = historyEntries ?: sessions.map { session ->
@@ -50,8 +53,19 @@ internal data class HistoryScreenState(
 
     val isEmpty: Boolean get() = entries.isEmpty()
 
+    val topLevelEntries: List<HistoryListEntry>
+        get() = entries.filter { it.mergeGroupId == null }.map { HistoryListEntry(it.id, listOf(it), false) } +
+            entries.filter { it.mergeGroupId != null }.groupBy { requireNotNull(it.mergeGroupId) }.map { (id, members) ->
+                HistoryListEntry(id, members.sortedBy { java.time.Instant.parse(it.startedAt) }, true)
+            }
+
+    val visibleEntries: List<HistoryListEntry>
+        get() = topLevelEntries.filter { entry ->
+            if (merging) !entry.isGroup else entry.matches(modeFilter, statusFilter)
+        }
+
     val filteredEntries: List<HistoryEntry>
-        get() = entries.filter { entry -> modeFilter.matches(entry) && statusFilter.matches(entry) }
+        get() = visibleEntries.flatMap { it.members }
 
     val filteredSessions: List<WorkoutSession>
         get() = filteredEntries.mapNotNull { it.session }
@@ -60,14 +74,14 @@ internal data class HistoryScreenState(
         get() = toFiltersUiState()
 
     val dateGroups: List<HistoryDateGroupUiState>
-        get() = filteredEntries
-            .sortedWith(compareByDescending<HistoryEntry> { it.frozenDate ?: "" }.thenByDescending { it.session?.startedAt ?: "" })
+        get() = visibleEntries
+            .sortedWith(compareByDescending<HistoryListEntry> { it.frozenDate ?: "" }.thenByDescending { it.members.last().startedAt ?: "" })
             .groupBy { entry -> entry.frozenDate ?: "日期未知" }
             .map { (date, entriesOnDate) ->
                 HistoryDateGroupUiState(
                     dateLabel = date,
                     items = entriesOnDate.map { entry ->
-                        entry.toListItem(selected = if (managing) entry.id in selectedIds else entry.id == selectedSessionId)
+                        entry.toListItem(selected = if (managing || merging) entry.id in selectedIds else entry.id == selectedSessionId)
                     }
                 )
             }
@@ -78,7 +92,7 @@ internal data class HistoryScreenState(
 
     val recordStats: WorkoutRecordStats?
         get() = if (recordSource == HistoryRecordSource.PERSISTED && entries.isNotEmpty()) {
-            sessions.toWorkoutRecordStats().copy(totalCount = entries.size)
+            sessions.toWorkoutRecordStats().copy(totalCount = topLevelEntries.size)
         } else {
             null
         }
@@ -138,7 +152,7 @@ internal data class HistoryScreenState(
         get() = if (isEmpty) {
             emptyStateDescription
         } else {
-            "${entries.size} 条本地记录 · 先看概览，再按筛选查看最近训练、详情和趋势"
+            "${topLevelEntries.size} 条本地记录 · 先看概览，再按筛选查看最近训练、详情和趋势"
         }
 
     val boundaryNote: String
@@ -149,6 +163,19 @@ internal data class HistoryScreenState(
 
     private val selectedSession: WorkoutSession?
         get() = filteredSessions.firstOrNull { session -> session.id == selectedSessionId } ?: if (historyEntries == null) filteredSessions.firstOrNull() else null
+}
+
+internal data class HistoryListEntry(val id: String, val members: List<HistoryEntry>, val isGroup: Boolean) {
+    val frozenDate: String? get() = members.last().frozenDate
+    val key: HistoryItemKey get() = if (isGroup) HistoryItemKey.Group(id) else HistoryItemKey.Session(id)
+    fun matches(mode: HistoryModeFilter, status: HistoryStatusFilter): Boolean =
+        members.all { mode.matches(it) && status.matches(it) }
+
+    fun toListItem(selected: Boolean): HistorySessionListItemUiState = if (!isGroup) members.single().toListItem(selected)
+        else HistorySessionListItemUiState(id, frozenDate ?: "日期未知", "合并", "合并记录",
+            "合并记录（${members.size}段）", "${members.size} 段原始记录", HistoryTone.NEUTRAL,
+            members.joinToString(" · ") { it.toListItem(false).durationLabel },
+            "展开查看各段原始记录", emptyList(), selected)
 }
 
 internal enum class HistoryRecordSource {
@@ -217,6 +244,12 @@ internal sealed interface HistoryCleanupTarget {
 
     data class SessionIds(val ids: Set<String>) : HistoryCleanupTarget {
         override val count: Int get() = ids.size
+    }
+
+    data class Items(val entries: List<HistoryListEntry>) : HistoryCleanupTarget {
+        override val count: Int get() = entries.size
+        val keys: Set<HistoryItemKey> get() = entries.map { it.key }.toSet()
+        val sessionIds: Set<String> get() = entries.flatMap { it.members }.map { it.id }.toSet()
     }
 
     data class All(
@@ -542,25 +575,38 @@ internal fun buildPersistedHistoryScreenState(entries: List<HistoryEntry>): Hist
 
 internal fun HistoryScreenState.withHistoryEntries(updated: List<HistoryEntry>): HistoryScreenState {
     val ids = updated.map { it.id }.toSet()
-    return copy(sessions = updated.mapNotNull { it.session }, historyEntries = updated,
+    val next = copy(sessions = updated.mapNotNull { it.session }, historyEntries = updated,
         selectedSessionId = selectedSessionId?.takeIf { it in ids },
-        detailRead = detailRead.takeIf { selectedSessionId?.let { it in ids } == true },
-        selectedIds = selectedIds.intersect(ids))
+        detailRead = detailRead.takeIf { selectedSessionId?.let { it in ids } == true })
+    return next.copy(selectedIds = selectedIds.intersect(next.visibleEntries.map { it.id }.toSet()))
 }
 
 internal fun HistoryScreenState.withDetailRead(id: String, result: WorkoutSessionHistoricalResult): HistoryScreenState =
     if (selectedSessionId == id) copy(detailRead = result) else this
 
 internal fun HistoryScreenState.startManaging(): HistoryScreenState =
-    copy(managing = true, selectedIds = emptySet(), selectedSessionId = null, detailRead = null)
+    copy(managing = true, merging = false, selectedIds = emptySet(), selectedSessionId = null, detailRead = null)
 
 internal fun HistoryScreenState.finishManaging(): HistoryScreenState =
-    copy(managing = false, selectedIds = emptySet(), pendingCleanupTarget = null)
+    copy(managing = false, merging = false, selectedIds = emptySet(), pendingCleanupTarget = null)
+
+internal fun HistoryScreenState.startMerging(): HistoryScreenState =
+    copy(merging = true, managing = false, selectedIds = emptySet(), statusMessage = null)
+
+internal fun HistoryScreenState.toggleMergeSession(id: String): HistoryScreenState =
+    if (!merging || visibleEntries.none { it.id == id }) this
+    else copy(selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id)
+
+internal fun HistoryScreenState.toggleGroup(id: String): HistoryScreenState =
+    copy(expandedGroupIds = if (id in expandedGroupIds) expandedGroupIds - id else expandedGroupIds + id)
+
+internal fun HistoryScreenState.cleanupItems(ids: Set<String>): HistoryCleanupTarget.Items =
+    HistoryCleanupTarget.Items(topLevelEntries.filter { it.id in ids })
 
 internal fun HistoryScreenState.leaveHistory(): HistoryScreenState = finishManaging()
 
 internal fun HistoryScreenState.toggleManagedSession(id: String): HistoryScreenState =
-    if (!managing || entries.none { it.id == id }) this
+    if (!managing || topLevelEntries.none { it.id == id }) this
     else copy(selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id)
 
 internal fun HistoryScreenState.deletedSessions(ids: Set<String>): HistoryScreenState =
@@ -735,13 +781,13 @@ private fun HistoryEntry.toListItem(selected: Boolean): HistorySessionListItemUi
 }
 
 private fun HistoryScreenState.toFiltersUiState(): HistoryFiltersUiState {
-    val filteredCount = filteredEntries.size
+    val filteredCount = visibleEntries.size
     val modeOptions = HistoryModeFilter.entries.map { filter ->
         HistoryModeFilterOptionUiState(
             filter = filter,
             label = filter.label,
             helper = filter.helper,
-            count = entries.count { entry -> filter.matches(entry) },
+            count = topLevelEntries.count { entry -> entry.matches(filter, HistoryStatusFilter.ALL) },
             selected = filter == modeFilter
         )
     }
@@ -750,7 +796,7 @@ private fun HistoryScreenState.toFiltersUiState(): HistoryFiltersUiState {
             filter = filter,
             label = filter.label,
             helper = filter.helper,
-            count = entries.count { entry -> modeFilter.matches(entry) && filter.matches(entry) },
+            count = topLevelEntries.count { entry -> entry.matches(modeFilter, filter) },
             selected = filter == statusFilter
         )
     }
@@ -759,7 +805,7 @@ private fun HistoryScreenState.toFiltersUiState(): HistoryFiltersUiState {
         description = "筛选只影响最近训练列表和下方趋势；概览摘要始终展示全部本地记录。",
         modeOptions = modeOptions,
         statusOptions = statusOptions,
-        resultLabel = "当前筛选 $filteredCount / ${entries.size} 条记录",
+        resultLabel = "当前筛选 $filteredCount / ${topLevelEntries.size} 条记录",
         emptyMessage = if (entries.isNotEmpty() && filteredCount == 0) {
             "当前筛选没有匹配训练；不会补假记录或假趋势。"
         } else {
@@ -2046,6 +2092,14 @@ private fun List<WorkoutSession>.toHistoryCleanupUiState(): HistoryCleanupUiStat
 
 private fun HistoryCleanupTarget.toDialogUiState(): HistoryCleanupDialogUiState {
     return when (this) {
+        is HistoryCleanupTarget.Items -> HistoryCleanupDialogUiState(
+            title = "删除所选训练记录",
+            message = "确认删除：" + entries.joinToString("；") { entry ->
+                if (entry.isGroup) "合并记录及其 ${entry.members.size} 段原始记录"
+                else entry.toListItem(false).title
+            } + "及其关联数据？",
+            confirmLabel = "确认删除"
+        )
         is HistoryCleanupTarget.SessionIds -> HistoryCleanupDialogUiState(
             title = "删除所选训练记录",
             message = "确认删除所选 $count 条训练记录及其关联数据？",

@@ -71,6 +71,8 @@ internal fun HistoryRoute(
     historyEntries: List<HistoryEntry>? = null,
     onReadSession: suspend (String) -> WorkoutSessionHistoricalResult = { error("History reader unavailable") },
     onDeleteSessions: suspend (Set<String>) -> Unit = { error("History deletion unavailable") },
+    onDeleteItems: suspend (Set<com.liujyks.trainflow.core.data.HistoryItemKey>) -> Unit = { error("History deletion unavailable") },
+    onMergeSessions: suspend (Set<String>) -> Unit = { error("History merging unavailable") },
     modifier: Modifier = Modifier
 ) {
     var uiState by remember {
@@ -94,8 +96,14 @@ internal fun HistoryRoute(
     } else HistoryScreen(
         uiState = uiState,
         onSelectSession = { sessionId ->
-            uiState = uiState.selectSession(sessionId)
-            if (!uiState.managing) {
+            if (uiState.merging) {
+                uiState = uiState.toggleMergeSession(sessionId)
+            } else if (uiState.managing) {
+                uiState = uiState.toggleManagedSession(sessionId)
+            } else if (uiState.topLevelEntries.any { it.id == sessionId && it.isGroup }) {
+                uiState = uiState.toggleGroup(sessionId)
+            } else {
+                uiState = uiState.selectSession(sessionId)
                 detailOpen = true
                 if (historyEntries != null) scope.launch {
                     val result = onReadSession(sessionId)
@@ -113,11 +121,36 @@ internal fun HistoryRoute(
             uiState = uiState.requestCleanup(target)
         },
         onStartManaging = { uiState = uiState.startManaging() },
+        onStartMerging = { uiState = uiState.startMerging() },
+        onConfirmMerge = {
+            val ids = uiState.selectedIds.toSet()
+            scope.launch {
+                try {
+                    onMergeSessions(ids)
+                    uiState = uiState.finishManaging()
+                } catch (cause: CancellationException) {
+                    throw cause
+                } catch (cause: Throwable) {
+                    uiState = uiState.copy(statusMessage = "合并失败：${cause.message ?: cause::class.simpleName}")
+                }
+            }
+        },
         onFinishManaging = { uiState = uiState.finishManaging() },
         onConfirmCleanup = {
             val result = uiState.confirmCleanup()
             uiState = result.state
             when (val target = result.target) {
+                is HistoryCleanupTarget.Items -> scope.launch {
+                    try {
+                        onDeleteItems(target.keys)
+                        uiState = uiState.deletedSessions(target.sessionIds).copy(
+                            selectedIds = uiState.selectedIds - target.entries.map { it.id }.toSet())
+                    } catch (cause: CancellationException) {
+                        throw cause
+                    } catch (cause: Throwable) {
+                        uiState = uiState.copy(statusMessage = "删除失败：${cause.message ?: cause::class.simpleName}")
+                    }
+                }
                 is HistoryCleanupTarget.SessionIds -> scope.launch {
                     try {
                         onDeleteSessions(target.ids)
@@ -146,6 +179,8 @@ private fun HistoryScreen(
     onSelectStatusFilter: (HistoryStatusFilter) -> Unit,
     onRequestCleanup: (HistoryCleanupTarget) -> Unit,
     onStartManaging: () -> Unit = {},
+    onStartMerging: () -> Unit = {},
+    onConfirmMerge: () -> Unit = {},
     onFinishManaging: () -> Unit = {},
     onConfirmCleanup: () -> Unit,
     onCancelCleanup: () -> Unit,
@@ -164,14 +199,20 @@ private fun HistoryScreen(
         if (!uiState.isEmpty) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (uiState.managing) {
+                    if (uiState.merging) {
+                        OutlinedButton(onClick = onFinishManaging) { Text("取消合并") }
+                        Button(onClick = onConfirmMerge, enabled = uiState.selectedIds.size >= 2) {
+                            Text("确认合并（${uiState.selectedIds.size}段）")
+                        }
+                    } else if (uiState.managing) {
                         OutlinedButton(onClick = onFinishManaging) { Text("完成") }
-                        Button(onClick = { onRequestCleanup(HistoryCleanupTarget.SessionIds(uiState.selectedIds.toSet())) },
+                        Button(onClick = { onRequestCleanup(uiState.cleanupItems(uiState.selectedIds.toSet())) },
                             enabled = uiState.selectedIds.isNotEmpty()) {
                             Text("删除所选（${uiState.selectedIds.size}）")
                         }
                     } else {
                         OutlinedButton(onClick = onStartManaging) { Text("管理") }
+                        OutlinedButton(onClick = onStartMerging) { Text("合并记录") }
                     }
                 }
             }
@@ -188,7 +229,7 @@ private fun HistoryScreen(
                 EmptyHistoryCard(uiState)
             }
         } else {
-            uiState.overviewUiState?.let { overview ->
+            uiState.overviewUiState?.takeUnless { uiState.merging }?.let { overview ->
                 item {
                     SectionTitle("概览摘要")
                 }
@@ -197,10 +238,10 @@ private fun HistoryScreen(
                 }
             }
 
-            item {
+            if (!uiState.merging) item {
                 SectionTitle("筛选区")
             }
-            item {
+            if (!uiState.merging) item {
                 HistoryFiltersCard(
                     filters = uiState.filtersUiState,
                     onSelectModeFilter = onSelectModeFilter,
@@ -224,14 +265,24 @@ private fun HistoryScreen(
                         HistorySessionCard(
                             item = item,
                             onClick = { onSelectSession(item.id) },
-                            onLongClick = if (uiState.managing) null else {
-                                { onRequestCleanup(HistoryCleanupTarget.SessionIds(setOf(item.id))) }
+                            onLongClick = if (uiState.managing || uiState.merging) null else {
+                                { onRequestCleanup(uiState.cleanupItems(setOf(item.id))) }
                             }
                         )
+                        val entry = uiState.visibleEntries.first { it.id == item.id }
+                        if (entry.isGroup && entry.id in uiState.expandedGroupIds && !uiState.managing) {
+                            entry.members.forEach { member ->
+                                HistorySessionCard(
+                                    item = HistoryListEntry(member.id, listOf(member), false).toListItem(false),
+                                    onClick = { onSelectSession(member.id) },
+                                    onLongClick = null
+                                )
+                            }
+                        }
                     }
                 }
 
-                uiState.aggregateChartsUiState?.let { charts ->
+                uiState.aggregateChartsUiState?.takeUnless { uiState.merging }?.let { charts ->
                     item {
                         SectionTitle("趋势区")
                     }

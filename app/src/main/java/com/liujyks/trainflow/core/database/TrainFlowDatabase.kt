@@ -24,12 +24,16 @@ import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPlanEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionMergeGroupEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionMergeMemberEntity
 
 @Database(
     entities = [
         ExerciseEntity::class,
         WorkoutPlanEntity::class,
         WorkoutSessionEntity::class,
+        WorkoutSessionMergeGroupEntity::class,
+        WorkoutSessionMergeMemberEntity::class,
         SessionStepRecordEntity::class,
         TimedRestExtensionRecordEntity::class,
         StrengthSetRecordEntity::class,
@@ -41,7 +45,7 @@ import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
         HeartRateSampleEntity::class,
         HeartRateAnalysisSnapshotEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class TrainFlowDatabase : RoomDatabase() {
@@ -59,8 +63,16 @@ abstract class TrainFlowDatabase : RoomDatabase() {
                 context = context.applicationContext,
                 klass = TrainFlowDatabase::class.java,
                 name = DATABASE_NAME
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workout_session_merge_groups` (`group_id` TEXT NOT NULL, PRIMARY KEY(`group_id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workout_session_merge_members` (`session_id` TEXT NOT NULL, `group_id` TEXT NOT NULL, PRIMARY KEY(`session_id`), FOREIGN KEY(`session_id`) REFERENCES `workout_sessions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`group_id`) REFERENCES `workout_session_merge_groups`(`group_id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_session_merge_members_group_id` ON `workout_session_merge_members` (`group_id`)")
+            }
         }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {

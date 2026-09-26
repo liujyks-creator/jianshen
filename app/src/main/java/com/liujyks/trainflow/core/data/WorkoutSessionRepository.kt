@@ -27,6 +27,8 @@ import com.liujyks.trainflow.core.database.entity.StrengthSetRecordEntity
 import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionMergeGroupEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionMergeMemberEntity
 import com.liujyks.trainflow.core.health.HeartRateObservation
 import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
@@ -75,7 +77,12 @@ internal sealed interface WorkoutSessionStrictReadResult {
         val execution: StrictSessionExecution
     ) : WorkoutSessionStrictReadResult
 
-    data class Nonterminal(val session: WorkoutSessionEntity, val timelineStatus: String) : WorkoutSessionStrictReadResult
+    data class Nonterminal(
+        val session: WorkoutSessionEntity,
+        val timelineStatus: String,
+        val graph: CanonicalSessionGraphV1,
+        val execution: StrictSessionExecution
+    ) : WorkoutSessionStrictReadResult
     data object NotFound : WorkoutSessionStrictReadResult
     data class Unavailable(val code: String) : WorkoutSessionStrictReadResult
 }
@@ -92,8 +99,51 @@ internal data class HistoryEntry(
     val mode: WorkoutMode?,
     val status: SessionStatus?,
     val session: WorkoutSession?,
-    val classification: HistoryEntryClassification
+    val classification: HistoryEntryClassification,
+    val startedAt: String? = session?.startedAt,
+    val mergeGroupId: String? = null
 )
+
+internal sealed interface HistoryItemKey {
+    data class Session(val sessionId: String) : HistoryItemKey
+    data class Group(val groupId: String) : HistoryItemKey
+}
+
+internal data class MergedHeartRateSegment(
+    val graph: CanonicalSessionGraphV1,
+    val execution: StrictSessionExecution,
+    val timelineStatus: String
+) {
+    val sessionId: String get() = graph.session.id
+    val startedAt: Instant get() = Instant.parse(graph.session.startedAt)
+    val trustedCutMs: Long? get() = graph.session.trustedEndOffsetMs ?: graph.session.lastDurableOffsetMs
+}
+
+internal data class MergedHeartRateSample(
+    val sessionId: String,
+    val actualTime: Instant,
+    val raw: HeartRateSampleEntity
+)
+
+internal data class MergedHeartRateGap(
+    val precedingSessionId: String,
+    val followingSessionId: String,
+    val start: Instant,
+    val end: Instant
+)
+
+internal data class MergedHeartRateInput(
+    val groupId: String,
+    val segments: List<MergedHeartRateSegment>,
+    val samples: List<MergedHeartRateSample>,
+    val gaps: List<MergedHeartRateGap>
+)
+
+internal sealed interface MergedHistoryReadResult {
+    data class Available(val input: MergedHeartRateInput) : MergedHistoryReadResult
+    data object NotFound : MergedHistoryReadResult
+    data class MemberUnavailable(val sessionId: String, val result: WorkoutSessionStrictReadResult) : MergedHistoryReadResult
+}
 
 internal data class StrictSessionExecution(
     val steps: List<SessionStepRecordEntity>,
@@ -309,7 +359,10 @@ internal class WorkoutSessionRepository(
         .map { rows -> rows.map { row -> row.toDomain() } }
 
     val historyEntries: Flow<List<HistoryEntry>> = dao.observeSessionsWithRecords()
-        .map { rows -> rows.map { row -> row.toHistoryEntry() } }
+        .map { rows -> rows.map { row -> row.toHistoryEntry().copy(
+            startedAt = row.session.startedAt,
+            mergeGroupId = row.mergeMemberships.singleOrNull()?.groupId
+        ) } }
 
     suspend fun admitRecorder(
         entryId: String, session: WorkoutSessionEntity, initialPhase: WorkoutPhaseIntervalEntity
@@ -1822,6 +1875,30 @@ internal class WorkoutSessionRepository(
     }
 
     suspend fun deleteHistorySessions(sessionIds: Set<String>) {
+        deleteHistoryItems(sessionIds.map { HistoryItemKey.Session(it) }.toSet())
+    }
+
+    internal suspend fun createMergeGroup(sessionIds: Set<String>): String = database.withTransaction {
+        require(sessionIds.size >= 2) { "合并至少需要两条记录" }
+        val groupId = java.util.UUID.randomUUID().toString()
+        dao.insertMergeGroup(WorkoutSessionMergeGroupEntity(groupId))
+        // PK/FK enforce exclusive membership and existing source sessions in this transaction.
+        dao.insertMergeMembers(sessionIds.map { WorkoutSessionMergeMemberEntity(it, groupId) })
+        groupId
+    }
+
+    internal suspend fun deleteHistoryItems(items: Set<HistoryItemKey>) {
+        val groupIds = items.filterIsInstance<HistoryItemKey.Group>().map { it.groupId }
+        val ordinaryIds = items.filterIsInstance<HistoryItemKey.Session>().map { it.sessionId }
+        database.withTransaction {
+            require(dao.memberships(ordinaryIds).isEmpty()) { "合并组内记录只能整组删除" }
+            val sessionIds = (ordinaryIds + groupIds.flatMap { id -> dao.mergeMembers(id).map { it.sessionId } }).toSet()
+            dao.deleteMergeGroups(groupIds)
+            deleteUngroupedHistorySessions(sessionIds)
+        }
+    }
+
+    private suspend fun deleteUngroupedHistorySessions(sessionIds: Set<String>) {
         if (sessionIds.isEmpty()) return
         database.withTransaction {
             sessionIds.forEach { id ->
@@ -1933,12 +2010,40 @@ internal class WorkoutSessionRepository(
             is CanonicalSessionHeaderV1Result.Legacy -> if (session.status in setOf("completed", "abandoned")) {
                 WorkoutSessionStrictReadResult.LegacyTerminal(session, planRoot, execution)
             } else {
-                WorkoutSessionStrictReadResult.Nonterminal(session, header.timelineStatus)
+                WorkoutSessionStrictReadResult.Nonterminal(session, header.timelineStatus, graph, execution)
             }
-            is CanonicalSessionHeaderV1Result.CanonicalRunning -> WorkoutSessionStrictReadResult.Nonterminal(session, "canonical_v1_running")
+            is CanonicalSessionHeaderV1Result.CanonicalRunning -> WorkoutSessionStrictReadResult.Nonterminal(session, "canonical_v1_running", graph, execution)
             is CanonicalSessionHeaderV1Result.CanonicalTerminal -> WorkoutSessionStrictReadResult.CanonicalTerminal(graph, planRoot, execution)
             is CanonicalSessionHeaderV1Result.Invalid -> error("Header already rejected")
         }
+    }
+
+    internal suspend fun readMergedHistory(groupId: String): MergedHistoryReadResult = database.withTransaction {
+        val members = dao.mergeMembers(groupId)
+        if (members.isEmpty()) return@withTransaction MergedHistoryReadResult.NotFound
+        val segments = members.map { member ->
+            when (val result = readSessionStrict(member.sessionId)) {
+                is WorkoutSessionStrictReadResult.CanonicalTerminal -> MergedHeartRateSegment(
+                    result.graph, result.execution, "canonical_v1_terminal")
+                is WorkoutSessionStrictReadResult.LegacyTerminal -> MergedHeartRateSegment(
+                    CanonicalSessionGraphV1(result.session), result.execution, "legacy_incomplete")
+                is WorkoutSessionStrictReadResult.Nonterminal -> MergedHeartRateSegment(
+                    result.graph, result.execution, result.timelineStatus)
+                is WorkoutSessionStrictReadResult.Unavailable, WorkoutSessionStrictReadResult.NotFound ->
+                    return@withTransaction MergedHistoryReadResult.MemberUnavailable(member.sessionId, result)
+            }
+        }.sortedBy { it.startedAt }
+        val samples = segments.flatMap { segment ->
+            segment.graph.samples.map { sample ->
+                MergedHeartRateSample(segment.sessionId, segment.startedAt.plusMillis(sample.offsetMs), sample)
+            }
+        }.sortedBy { it.actualTime }
+        val gaps = segments.zipWithNext { first, second ->
+            val end = first.trustedCutMs?.let { first.startedAt.plusMillis(it) }
+                ?: Instant.parse(first.graph.session.endedAt)
+            MergedHeartRateGap(first.sessionId, second.sessionId, end, second.startedAt)
+        }
+        MergedHistoryReadResult.Available(MergedHeartRateInput(groupId, segments, samples, gaps))
     }
 
     private companion object {
