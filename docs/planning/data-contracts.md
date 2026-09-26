@@ -792,6 +792,8 @@ interface SessionFeedback {
 
 计划快照很重要：用户后来改计划，不应污染历史训练记录。
 
+E19-S01 的 D02/D04：新增力量动作默认固定8次且可编辑；明确组级目标优先于动作目标，用户设置12则保持12，既有显式 Range 不改。准备/进行中/确认共享本组次数文本，最后确认值进入原 StrengthSetRecord，下一组独立初始化；训练输入不回写已保存计划或冻结快照。确认沿用次数至少1、0重量合法；历史中的0与NULL严格区分。自动 Start 后禁止替换动作，新场 actualExerciseId=plannedExerciseId、substitutedFromExerciseId=NULL；旧替换记录的原动作来源与冻结读取保留，不迁移/重写历史或改变schema、严格校验与分析数学。
+
 E10.4 约定：
 
 - `WorkoutSession.planId` 继续作为查询字段保存计划 ID；`WorkoutPlanSnapshot.planId` 也可保存同一计划 ID，方便历史记录只看快照时仍能识别来源。

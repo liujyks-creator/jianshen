@@ -398,12 +398,13 @@ class StrengthWorkoutEngineTest {
     }
 
     @Test
-    fun replaceExerciseKeepsOriginalExerciseReferenceInConfirmedRecords() {
+    fun replaceExerciseCannotChangeStartedStrengthSession() {
         var result = StrengthWorkoutEngine.dispatch(
             state = StrengthWorkoutEngine.create(twoSetPlan(restAfterFirstSetSec = 0)),
             command = WorkoutCommand.StartSession
         )
 
+        val beforeReplacement = result.state
         result = StrengthWorkoutEngine.dispatch(
             result.state,
             WorkoutCommand.ReplaceExercise(
@@ -411,6 +412,8 @@ class StrengthWorkoutEngineTest {
                 toExerciseId = "incline-push-up"
             )
         )
+        assertEquals(beforeReplacement, result.state)
+        assertTrue(result.events.isEmpty())
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.StartStrengthSet())
         result = StrengthWorkoutEngine.tick(result.state, seconds = 6)
         result = StrengthWorkoutEngine.dispatch(result.state, WorkoutCommand.CompleteStrengthSet())
@@ -420,14 +423,9 @@ class StrengthWorkoutEngineTest {
         )
 
         val record = result.state.strengthSetRecords.single()
-        assertEquals("incline-push-up", record.exerciseId)
-        assertEquals("barbell-bench-press", record.substitutedFromExerciseId)
-        assertEquals(
-            StrengthWorkoutControlHistoryType.REPLACE_EXERCISE,
-            result.state.controlHistory.last { event ->
-                event.type == StrengthWorkoutControlHistoryType.REPLACE_EXERCISE
-            }.type
-        )
+        assertEquals("barbell-bench-press", record.exerciseId)
+        assertNull(record.substitutedFromExerciseId)
+        assertTrue(result.state.controlHistory.none { it.type == StrengthWorkoutControlHistoryType.REPLACE_EXERCISE })
     }
 
     @Test

@@ -2,6 +2,11 @@ package com.liujyks.trainflow.feature.workoutsession
 
 import com.liujyks.trainflow.core.engine.StrengthSessionStepHistoryStatus
 import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineState
+import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1
+import com.liujyks.trainflow.core.data.RecorderPhaseInput
+import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.engine.TimedSessionStepHistoryStatus
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngineState
 import com.liujyks.trainflow.core.model.SessionStepRecord
@@ -11,6 +16,55 @@ import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
 import com.liujyks.trainflow.core.model.WorkoutSession
 import java.time.Duration
 import java.time.Instant
+import org.json.JSONObject
+
+internal data class StrengthTransitionFacts(
+    val phaseStarts: List<RecorderPhaseInput>,
+    val terminalStatus: SessionStatus?
+)
+
+internal fun strengthTransitionFacts(
+    snapshot: PreparedPlanSnapshotStorageV1,
+    before: StrengthWorkoutEngineState,
+    result: StrengthWorkoutEngineResult
+): StrengthTransitionFacts {
+    val after = result.state
+    val terminal = after.status.takeIf { after.isTerminal && !before.isTerminal }
+    if (after.isTerminal || after.status == SessionStatus.READY ||
+        (before.status == after.status && before.currentSetIndex == after.currentSetIndex &&
+            before.currentStepKind == after.currentStepKind)) {
+        return StrengthTransitionFacts(emptyList(), terminal)
+    }
+    val paused = after.status == SessionStatus.PAUSED
+    val kind = if (paused) "paused" else requireNotNull(after.currentStepKind).contractValue
+    val variant = if (paused) "paused" else when (after.currentStepKind) {
+        SessionStepKind.STRENGTH_PREPARE_SET -> "prepare_set"
+        SessionStepKind.STRENGTH_ACTIVE_SET -> "active_set"
+        SessionStepKind.STRENGTH_CONFIRM_SET -> "confirm_set"
+        SessionStepKind.STRENGTH_REST -> "rest"
+        else -> error("Not a strength phase: ${after.currentStepKind}")
+    }
+    val payload = JSONObject().put("variant", variant)
+    if (paused) {
+        payload.put("blockId", JSONObject.NULL).put("setPlanId", JSONObject.NULL)
+            .put("plannedExerciseId", JSONObject.NULL).put("actualExerciseId", JSONObject.NULL)
+            .put("exerciseSetIndex0", JSONObject.NULL).put("globalSetIndex0", JSONObject.NULL)
+            .put("setKind", JSONObject.NULL).put("substitutedFromExerciseId", JSONObject.NULL)
+    } else {
+        val set = requireNotNull(after.currentSet)
+        payload.put("blockId", set.blockId).put("setPlanId", set.setPlanId)
+            .put("plannedExerciseId", set.exerciseId).put("actualExerciseId", set.exerciseId)
+            .put("exerciseSetIndex0", set.exerciseSetIndex).put("globalSetIndex0", set.globalSetIndex)
+            .put("setKind", set.setKind.contractValue).put("substitutedFromExerciseId", JSONObject.NULL)
+    }
+    val identity = JSONObject().put("phaseIdentityContractVersion", 1)
+        .put("family", "strength_v1").put("payloadVersion", 1).put("mode", "strength")
+        .put("phaseKind", kind).put("orderedStructureSignature", JSONObject()
+            .put("signatureContractVersion", 1).put("algorithm", "sha256")
+            .put("digestHexLowercase", snapshot.orderedStructureDigestHexLowercase()))
+        .put("payload", payload).toString()
+    return StrengthTransitionFacts(listOf(RecorderPhaseInput(kind, identity)), terminal)
+}
 
 internal fun TimedWorkoutEngineState.toWorkoutSessionRecord(
     plan: WorkoutPlan,

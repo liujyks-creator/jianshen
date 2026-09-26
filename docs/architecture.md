@@ -19,6 +19,12 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
+## E19-S01 力量同场接线（2026-09-26）
+
+用户 D01 批准力量沿原 StrengthWorkoutSessionRoute 持有 plan/session/engine、输入与 coroutine scope，复用既有 Repository/Recorder/Application HeartRateRuntimeOwner；依赖由现有 TrainFlowApp 供应。进入页自动 Start，先固定同次 engine 结果，等准入/freezeStart 确认后应用并 tick；实际命令 cut 经现有 mapper 文件生成 strength_v1 phase。Start 与终态一起迁移，力量不再调用旧 upsert，未迁移跟练保持旧链。
+
+终态实际组复用既有 toEntity 编码，schema=7/事务/strict/分析不变。Saved 后 strict 读回供原复盘/恢复建议/历史；Saved 与 Released 分开，dispose clear 不补终态。D02 禁训练换动作，D04 同组次数三阶段连续输入且不回写冻结计划。配置重建/retained 恢复继续延期，本候选不提供或宣称该能力；不新增 owner、重试、后台或其他模式改动。
+
 <!-- E18-E22-PLAN-LANDING:BEGIN -->
 ## E18–E22 已接受架构的当前入口（2026-09-06）
 

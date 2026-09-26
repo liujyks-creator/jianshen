@@ -250,7 +250,7 @@ class StrengthWorkoutSessionUiStateTest {
     }
 
     @Test
-    fun replacementCandidatesOnlyIncludeStrengthCapableExercises() {
+    fun startedStrengthSessionExposesNoReplacementCandidates() {
         val plan = buildDefaultPlanManagementState().plans[1]
         val started = StrengthWorkoutEngine.dispatch(
             StrengthWorkoutEngine.create(plan),
@@ -258,43 +258,29 @@ class StrengthWorkoutSessionUiStateTest {
         ).state
         val uiState = started.toStrengthWorkoutSessionScreenState()
 
-        assertTrue(uiState.canReplaceExercise)
-        assertTrue(uiState.replacementOptions.isNotEmpty())
-        assertFalse(uiState.replacementOptions.any { option ->
-            option.exerciseId == started.currentSet?.exerciseId
-        })
-        assertTrue(uiState.replacementOptions.none { option ->
-            option.exerciseId == "jumping-jacks" || option.exerciseId == "forearm-plank"
-        })
+        assertFalse(uiState.canReplaceExercise)
+        assertTrue(uiState.replacementOptions.isEmpty())
     }
 
     @Test
-    fun currentReplaceAndSkipActionsBuildWorkoutCommandsForRouteDispatch() {
+    fun startedStrengthSessionRejectsReplacementAndKeepsSkipCommand() {
         val plan = buildDefaultPlanManagementState().plans[1]
         val started = StrengthWorkoutEngine.dispatch(
             StrengthWorkoutEngine.create(plan),
             WorkoutCommand.StartSession
         ).state
-        val uiState = started.toStrengthWorkoutSessionScreenState()
-        val replacement = uiState.replacementOptions.first()
-
-        assertEquals(
-            WorkoutCommand.ReplaceExercise(
-                fromExerciseId = requireNotNull(started.currentSet).exerciseId,
-                toExerciseId = replacement.exerciseId
-            ),
-            started.currentReplaceExerciseCommand(replacement.exerciseId)
-        )
+        assertNull(started.currentReplaceExerciseCommand("incline-push-up"))
         assertEquals(WorkoutCommand.SkipStep, started.currentSkipExerciseCommand())
     }
 
     @Test
-    fun substitutedExerciseMapsOriginalSourceLabel() {
+    fun attemptedReplacementKeepsOriginalExerciseAndSkip() {
         val plan = buildDefaultPlanManagementState().plans[1]
         var state = StrengthWorkoutEngine.dispatch(
             StrengthWorkoutEngine.create(plan),
             WorkoutCommand.StartSession
         ).state
+        val originalExerciseName = state.toStrengthWorkoutSessionScreenState().currentExerciseName
         state = StrengthWorkoutEngine.dispatch(
             state,
             WorkoutCommand.ReplaceExercise(
@@ -304,8 +290,8 @@ class StrengthWorkoutSessionUiStateTest {
         ).state
         val uiState = state.toStrengthWorkoutSessionScreenState()
 
-        assertTrue(uiState.currentExerciseName.contains("上斜俯卧撑"))
-        assertTrue(uiState.substitutionSummaryLabel.contains("替换"))
+        assertEquals(originalExerciseName, uiState.currentExerciseName)
+        assertTrue(uiState.substitutionSummaryLabel.isEmpty())
         assertTrue(uiState.canSkipExercise)
     }
 
@@ -416,7 +402,7 @@ class StrengthWorkoutSessionUiStateTest {
     }
 
     @Test
-    fun strengthSummaryMapsReplacementAndSkippedSets() {
+    fun strengthSummaryKeepsOriginalExerciseAndSkippedSets() {
         val plan = replacementAndSkipPlan()
         var state = StrengthWorkoutEngine.dispatch(
             StrengthWorkoutEngine.create(plan),
@@ -438,16 +424,15 @@ class StrengthWorkoutSessionUiStateTest {
 
         val summary = requireNotNull(state.toStrengthWorkoutSessionScreenState().summary)
 
-        assertTrue(summary.replacementSummary.contains("替换 1 次"))
-        assertTrue(summary.replacementSummary.contains("->"))
+        assertEquals("没有替换动作。", summary.replacementSummary)
         assertTrue(summary.skippedSummary, summary.skippedSummary.contains("跳过 1 组"))
         assertTrue(summary.earlyEndSummary.contains("包含主动跳过"))
-        assertTrue(summary.exerciseSummaries.first().replacementLabel.orEmpty().contains("替换为"))
+        assertNull(summary.exerciseSummaries.first().replacementLabel)
         assertEquals("跳过 1 组", summary.exerciseSummaries[1].skippedLabel)
     }
 
     @Test
-    fun strengthSummaryKeepsPlannedExerciseCardWhenLaterSetIsReplaced() {
+    fun strengthSummaryKeepsPlannedExerciseWhenLaterReplacementIsRejected() {
         val plan = twoSetSummaryPlan()
         var state = StrengthWorkoutEngine.dispatch(
             StrengthWorkoutEngine.create(plan),
@@ -474,10 +459,10 @@ class StrengthWorkoutSessionUiStateTest {
         val exerciseSummary = summary.exerciseSummaries.single()
 
         assertEquals("杠铃卧推", exerciseSummary.exerciseName)
-        assertTrue(exerciseSummary.replacementLabel.orEmpty().contains("上斜俯卧撑"))
+        assertNull(exerciseSummary.replacementLabel)
         assertEquals("实际动作：杠铃卧推", exerciseSummary.setItems[0].actualExerciseLabel)
-        assertEquals("实际动作：上斜俯卧撑（替换自 杠铃卧推）", exerciseSummary.setItems[1].actualExerciseLabel)
-        assertEquals("barbell-bench-press", state.strengthSetRecords[1].substitutedFromExerciseId)
+        assertEquals("实际动作：杠铃卧推", exerciseSummary.setItems[1].actualExerciseLabel)
+        assertNull(state.strengthSetRecords[1].substitutedFromExerciseId)
     }
 
     @Test

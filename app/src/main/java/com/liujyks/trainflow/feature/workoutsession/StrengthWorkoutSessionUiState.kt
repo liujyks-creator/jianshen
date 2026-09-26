@@ -165,14 +165,6 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
             draft = draft
         )
     }
-    val replacementOptions = buildReplacementOptions(
-        current = current,
-        exerciseById = exerciseById,
-        exercises = exercises
-    )
-    val canReplace = status == SessionStatus.ACTIVE &&
-        stepKind in replaceableStrengthUiSteps &&
-        replacementOptions.isNotEmpty()
     val canSkip = status == SessionStatus.ACTIVE &&
         stepKind in skippableStrengthUiSteps &&
         current != null
@@ -226,8 +218,8 @@ internal fun StrengthWorkoutEngineState.toStrengthWorkoutSessionScreenState(
         totalSetCount = totalSets,
         historySummaryLabel = historySummaryLabel,
         lastControlLabel = controlHistory.lastOrNull()?.toLabel().orEmpty(),
-        replacementOptions = replacementOptions,
-        canReplaceExercise = canReplace,
+        replacementOptions = emptyList(),
+        canReplaceExercise = false,
         canSkipExercise = canSkip,
         substitutionSummaryLabel = current.substitutionSummaryLabel(exerciseById),
         immediateControls = buildStrengthImmediateControls(
@@ -316,17 +308,10 @@ private fun buildStrengthImmediateControls(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun StrengthWorkoutEngineState.currentReplaceExerciseCommand(
     toExerciseId: String
-): WorkoutCommand.ReplaceExercise? {
-    val current = currentSet ?: return null
-    if (status != SessionStatus.ACTIVE || currentStepKind !in replaceableStrengthUiSteps) return null
-    if (current.exerciseId == toExerciseId) return null
-    return WorkoutCommand.ReplaceExercise(
-        fromExerciseId = current.exerciseId,
-        toExerciseId = toExerciseId
-    )
-}
+): WorkoutCommand.ReplaceExercise? = null
 
 internal fun StrengthWorkoutEngineState.currentSkipExerciseCommand(): WorkoutCommand? {
     val current = currentSet ?: return null
@@ -442,54 +427,6 @@ private fun StrengthWorkoutEngineState.nextDisplaySet(): StrengthSessionSetStep?
     return setSteps.getOrNull(nextIndex)
 }
 
-private fun buildReplacementOptions(
-    current: StrengthSessionSetStep?,
-    exerciseById: Map<String, Exercise>,
-    exercises: List<Exercise>
-): List<StrengthExerciseReplacementOptionUiState> {
-    val set = current ?: return emptyList()
-    val exerciseSubstitutions = listOfNotNull(
-        exerciseById[set.exerciseId],
-        set.substitutedFromExerciseId?.let { exerciseId -> exerciseById[exerciseId] }
-    ).flatMap { exercise ->
-        exercise.substitutions.map { substitution -> substitution.exerciseId }
-    }
-    val explicitCandidates = (
-        set.substitutionExerciseIds +
-            exerciseSubstitutions
-        ).distinct()
-    val fallbackCandidates = exercises
-        .filter { exercise -> exercise.isStrengthCapable() }
-        .map { exercise -> exercise.id }
-    val candidateIds = (explicitCandidates + fallbackCandidates).distinct()
-
-    return candidateIds
-        .asSequence()
-        .filter { exerciseId -> exerciseId != set.exerciseId }
-        .mapNotNull { exerciseId -> exerciseById[exerciseId] }
-        .filter { exercise -> exercise.isStrengthCapable() }
-        .map { exercise ->
-            StrengthExerciseReplacementOptionUiState(
-                exerciseId = exercise.id,
-                exerciseName = exercise.name,
-                summary = exercise.replacementSummary()
-            )
-        }
-        .toList()
-}
-
-private fun Exercise.isStrengthCapable(): Boolean {
-    return capabilities.supportsReps || capabilities.supportsWeight
-}
-
-private fun Exercise.replacementSummary(): String {
-    val load = when {
-        capabilities.supportsWeight -> "可记录重量"
-        capabilities.supportsReps -> "可记录次数"
-        else -> "力量可用"
-    }
-    return "$load · ${equipment.joinToString(" / ") { equipment -> equipment.contractValue }}"
-}
 
 private fun String?.toEarlyEndReasonSummary(): String {
     val reasonText = when (this?.trim()) {
@@ -620,11 +557,6 @@ private fun SessionStatus.toStatusLabel(): String {
     }
 }
 
-private val replaceableStrengthUiSteps = setOf(
-    SessionStepKind.STRENGTH_PREPARE_SET,
-    SessionStepKind.STRENGTH_ACTIVE_SET,
-    SessionStepKind.STRENGTH_CONFIRM_SET
-)
 
 private val skippableStrengthUiSteps = setOf(
     SessionStepKind.STRENGTH_PREPARE_SET,

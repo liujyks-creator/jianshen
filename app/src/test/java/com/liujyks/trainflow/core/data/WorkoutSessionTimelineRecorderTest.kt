@@ -29,6 +29,24 @@ import com.liujyks.trainflow.core.database.entity.TimedRestExtensionRecordEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutPhaseIntervalEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
+import com.liujyks.trainflow.core.engine.StrengthWorkoutEngine
+import com.liujyks.trainflow.core.engine.StrengthWorkoutEngineResult
+import com.liujyks.trainflow.core.model.StrengthExerciseBlock
+import com.liujyks.trainflow.core.model.StrengthSetPlan
+import com.liujyks.trainflow.core.model.StrengthSetKind
+import com.liujyks.trainflow.core.model.StrengthSetTimerMode
+import com.liujyks.trainflow.core.model.StrengthSetCompletionInput
+import com.liujyks.trainflow.core.model.RepTarget
+import com.liujyks.trainflow.core.model.SetEffort
+import com.liujyks.trainflow.core.model.WeightValue
+import com.liujyks.trainflow.core.model.WeightUnit
+import com.liujyks.trainflow.core.model.WorkoutPlan
+import com.liujyks.trainflow.core.model.SessionStatus
+import com.liujyks.trainflow.feature.workoutsession.strengthTransitionFacts
+import com.liujyks.trainflow.feature.workoutsession.toPersistedStrengthSummary
+import com.liujyks.trainflow.feature.workoutsession.toWorkoutSessionRecord
+import com.liujyks.trainflow.feature.history.HistoryScreenState
+import org.json.JSONObject
 import com.liujyks.trainflow.core.health.E17GattShadow
 import com.liujyks.trainflow.core.health.E17ScannerShadow
 import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
@@ -81,6 +99,132 @@ import org.robolectric.shadows.ShadowPausedLooper
 @LooperMode(LooperMode.Mode.PAUSED)
 @Suppress("DEPRECATION")
 class WorkoutSessionTimelineRecorderTest {
+    @Test
+    fun strengthEngineFactsPersistActualSetsAndSeparateRawFromPrimaryAnalysis() = runRecorderTest {
+        val connection = connect()
+        connection.notify(80)
+        connection.notify(80)
+        val plan = WorkoutPlan(id = "e19-strength-plan", title = "力量记录", mode = WorkoutMode.STRENGTH,
+            createdAt = "2026-09-06T16:30:00Z", updatedAt = "2026-09-06T16:30:00Z",
+            blocks = listOf(StrengthExerciseBlock(id = "bench", order = 1, exerciseId = "barbell-bench-press",
+                setTimerMode = StrengthSetTimerMode.AUTO_AFTER_REST,
+                sets = listOf(
+                    StrengthSetPlan("bench-1", 1, StrengthSetKind.WORKING,
+                        targetWeight = WeightValue(20.0, WeightUnit.KG), repTarget = RepTarget.Fixed(8), restAfterSec = 1),
+                    StrengthSetPlan("bench-2", 2, StrengthSetKind.WORKING,
+                        targetWeight = WeightValue(20.0, WeightUnit.KG), repTarget = RepTarget.Fixed(12))
+                ))))
+        val snapshotJson = plan.toPlanSnapshot().toStorageJson()
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(snapshotJson, WorkoutMode.STRENGTH)
+            as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val metadata = """{"displayMetadataContractVersion":1,"entries":[{"entityKind":"exercise","stableId":"barbell-bench-press","displayNameAtFirstReference":"杠铃卧推","customNameAtFirstReference":null,"resolutionSource":"plan_snapshot"}]}"""
+        val startedAt = Instant.parse("2026-09-06T16:30:00Z")
+        var state = StrengthWorkoutEngine.create(plan, SESSION_ID)
+        val start = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartSession)
+        val first = strengthTransitionFacts(prepared, state, start).phaseStarts.single()
+        val repository = WorkoutSessionRepository(database)
+        bind(recording(), session().copy(planId = plan.id, mode = "strength",
+            planSnapshotJson = snapshotJson, sessionDisplayMetadataJson = metadata), first, repository)
+        await(recorder.freezeStart())
+        state = start.state
+        suspend fun apply(result: StrengthWorkoutEngineResult) {
+            val facts = strengthTransitionFacts(prepared, state, result)
+            facts.phaseStarts.forEach { phase ->
+                submit(RecorderActivityInput(now(), phase, result.state.status.contractValue))
+            }
+            state = result.state
+        }
+        at(100); connection.notify(90)
+        at(1000); apply(StrengthWorkoutEngine.dispatch(state, WorkoutCommand.StartStrengthSet()))
+        at(1100); connection.notify(120)
+        at(3000); apply(StrengthWorkoutEngine.tick(state, 2))
+        apply(StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()))
+        at(3100); connection.notify(110)
+        at(4000); apply(StrengthWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession))
+        at(4100); connection.notify(180)
+        at(5000); apply(StrengthWorkoutEngine.tick(state, 1))
+        apply(StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ResumeSession))
+        at(6000); apply(StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ConfirmStrengthSet(
+            StrengthSetCompletionInput(WeightValue(0.0, WeightUnit.KG), 11, SetEffort.FORM_BREAKDOWN))))
+        at(6100); connection.notify(100)
+        at(7000); apply(StrengthWorkoutEngine.tick(state))
+        at(9000); apply(StrengthWorkoutEngine.tick(state, 2))
+        apply(StrengthWorkoutEngine.dispatch(state, WorkoutCommand.CompleteStrengthSet()))
+        at(10000)
+        val end = StrengthWorkoutEngine.dispatch(state, WorkoutCommand.ConfirmStrengthSet(
+            StrengthSetCompletionInput(WeightValue(20.0, WeightUnit.KG), 13, SetEffort.GOOD)))
+        val terminalFacts = strengthTransitionFacts(prepared, state, end)
+        assertEquals(SessionStatus.COMPLETED, terminalFacts.terminalStatus)
+        assertTrue(terminalFacts.phaseStarts.isEmpty())
+        val record = end.state.toWorkoutSessionRecord(plan, startedAt, startedAt.plusSeconds(10))
+        val submission = recorder.freezeTerminal(RecorderTerminalInput(
+            now(), RecorderTerminalKind.COMPLETED, record.endedAt!!, record.totalElapsedSec,
+            record.effectiveElapsedSec, record.pausedElapsedSec, metadata,
+            record.stepHistory.map { step -> SessionStepRecordEntity(
+                id = "$SESSION_ID:${step.stepId}", sessionId = SESSION_ID, stepId = step.stepId,
+                kind = step.kind.contractValue, startedAt = step.startedAt, endedAt = step.endedAt,
+                skipped = step.skipped, actualDurationSec = step.actualDurationSec) },
+            emptyList(), record.strengthSetRecords.map { it.toEntity(SESSION_ID) }, record.endedAt
+        )) as RecorderTerminalSubmission.Accepted
+        await(submission.operation.saved)
+        val main = awaitCleanupDispatch(submission.operation)
+        val strict = repository.readSessionStrict(SESSION_ID)
+        assertTrue(strict.toString(), strict is WorkoutSessionStrictReadResult.CanonicalTerminal)
+        strict as WorkoutSessionStrictReadResult.CanonicalTerminal
+        val graph = strict.graph
+        assertEquals(listOf("strength_prepare_set", "strength_active_set", "strength_confirm_set", "paused",
+            "strength_confirm_set", "strength_rest", "strength_active_set", "strength_confirm_set"),
+            graph.phases.map { it.phaseKind })
+        graph.phases.forEachIndexed { index, phase ->
+            val payload = JSONObject(phase.phaseIdentityJson).getJSONObject("payload")
+            if (index == 3) {
+                val positionKeys = setOf("blockId", "setPlanId", "plannedExerciseId", "actualExerciseId",
+                    "exerciseSetIndex0", "globalSetIndex0", "setKind", "substitutedFromExerciseId")
+                assertEquals(positionKeys + "variant", payload.keys().asSequence().toSet())
+                assertEquals("paused", payload.getString("variant"))
+                assertTrue(positionKeys.all(payload::isNull))
+            } else {
+                val second = index >= 6
+                assertEquals("bench", payload.getString("blockId"))
+                assertEquals(if (second) "bench-2" else "bench-1", payload.getString("setPlanId"))
+                assertEquals("barbell-bench-press", payload.getString("plannedExerciseId"))
+                assertEquals("barbell-bench-press", payload.getString("actualExerciseId"))
+                assertEquals(if (second) 1 else 0, payload.getInt("exerciseSetIndex0"))
+                assertEquals(if (second) 1 else 0, payload.getInt("globalSetIndex0"))
+                assertEquals("working", payload.getString("setKind"))
+                assertTrue(payload.isNull("substitutedFromExerciseId"))
+            }
+        }
+        assertEquals(listOf(90, 120, 110, 180, 100), graph.samples.map { it.bpm })
+        assertEquals(listOf(100L, 1100L, 3100L, 4100L, 6100L), graph.samples.map { it.offsetMs })
+        val analysis = graph.snapshots.single()
+        assertEquals(5L, analysis.canonicalSampleCount)
+        assertEquals(3L, analysis.primaryPointSampleCount)
+        assertEquals(120, analysis.observedMaxBpm)
+        val sets = strict.execution.strengthSets.sortedBy { it.row.setOrder }
+        assertEquals(2, sets.size)
+        assertTrue(sets.all { it.row.sessionId == SESSION_ID && it.row.id.startsWith("$SESSION_ID:") })
+        assertEquals(listOf(RepTarget.Fixed(8), RepTarget.Fixed(12)), sets.map { it.plannedRepTarget })
+        assertEquals(listOf(11, 13), sets.map { it.actualReps })
+        assertEquals(listOf(WeightValue(0.0, WeightUnit.KG), WeightValue(20.0, WeightUnit.KG)), sets.map { it.actualWeight })
+        assertEquals(listOf("form_breakdown", "good"), sets.map { it.row.effort })
+        assertEquals(1, sets.first().row.actualRestAfterSec)
+        assertEquals(1, writes.count { it == "terminal" })
+        val resolved = resolveWorkoutSessionHistorical(strict, "zh-CN") as WorkoutSessionHistoricalResult.Resolved
+        val summary = resolved.toPersistedStrengthSummary()
+        val summarySets = summary.exerciseSummaries.single().setItems
+        assertEquals(listOf("11 次", "13 次"), summarySets.map { it.actualRepLabel })
+        assertEquals(listOf("8 次", "12 次"), summarySets.map { it.plannedRepLabel })
+        assertEquals("0 kg", summarySets.first().actualWeightLabel)
+        assertEquals("动作变形", summarySets.first().effortLabel)
+        val detail = requireNotNull(HistoryScreenState(emptyList(), selectedSessionId = SESSION_ID,
+            historyEntries = emptyList(), detailRead = resolved).selectedDetail)
+        assertEquals(listOf("11 次", "13 次"), detail.rows.filter { it.label == "实际次数" }.map { it.value })
+        assertEquals(listOf("0 kg", "20 kg"), detail.rows.filter { it.label == "实际重量" }.map { it.value })
+        main.idle()
+        await(submission.operation.released)
+    }
+
     private lateinit var application: Application
     private lateinit var database: TrainFlowDatabase
     private lateinit var runtime: HeartRateRuntimeOwner
