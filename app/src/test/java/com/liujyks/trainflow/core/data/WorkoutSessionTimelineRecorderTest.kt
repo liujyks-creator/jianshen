@@ -45,6 +45,9 @@ import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.feature.workoutsession.strengthTransitionFacts
 import com.liujyks.trainflow.feature.workoutsession.toPersistedStrengthSummary
 import com.liujyks.trainflow.feature.workoutsession.toWorkoutSessionRecord
+import com.liujyks.trainflow.feature.workoutsession.freeFollowAlongSnapshot
+import com.liujyks.trainflow.feature.workoutsession.freeFollowAlongPhase
+import com.liujyks.trainflow.feature.workoutsession.toPersistedFreeFollowAlongSummary
 import com.liujyks.trainflow.feature.history.HistoryScreenState
 import org.json.JSONObject
 import com.liujyks.trainflow.core.health.E17GattShadow
@@ -223,6 +226,113 @@ class WorkoutSessionTimelineRecorderTest {
         assertEquals(listOf("0 kg", "20 kg"), detail.rows.filter { it.label == "实际重量" }.map { it.value })
         main.idle()
         await(submission.operation.released)
+    }
+
+    @Test
+    fun freeFollowAlongRawSamplesUseExistingRealtimeSaveAndCanonicalRead() = runRecorderTest {
+        val connection = connect()
+        connection.notify(80)
+        connection.notify(80)
+        val snapshotJson = freeFollowAlongSnapshot().toStorageJson()
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(snapshotJson, WorkoutMode.FOLLOW_ALONG)
+            as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val phase = freeFollowAlongPhase(prepared)
+        val metadata = """{"displayMetadataContractVersion":1,"entries":[]}"""
+        val repository = WorkoutSessionRepository(database)
+        bind(recording(), session().copy(planId = null, mode = "follow_along",
+            planSnapshotJson = snapshotJson, sessionDisplayMetadataJson = metadata), phase, repository)
+        await(recorder.freezeStart())
+
+        at(100); connection.notify(90)
+        at(1100); connection.notify(100)
+        at(2100); connection.notify(120)
+        submit(RecorderActivityInput(now()))
+        val before = repository.readSessionStrict(SESSION_ID) as WorkoutSessionStrictReadResult.Nonterminal
+        assertEquals(listOf(90, 100, 120), before.graph.samples.map { it.bpm })
+        assertEquals(listOf(100L, 1100L, 2100L), before.graph.samples.map { it.offsetMs })
+        assertEquals(2100L, before.session.lastDurableOffsetMs)
+
+        at(3000)
+        val operation = (recorder.freezeTerminal(RecorderTerminalInput(
+            now(), RecorderTerminalKind.COMPLETED, "2026-09-06T16:30:03Z",
+            3, 3, 0, metadata, emptyList(), emptyList(), emptyList(),
+            "2026-09-06T16:30:03Z"
+        )) as RecorderTerminalSubmission.Accepted).operation
+        await(operation.saved)
+        val main = awaitCleanupDispatch(operation)
+        val strict = repository.readSessionStrict(SESSION_ID) as WorkoutSessionStrictReadResult.CanonicalTerminal
+        val graph = strict.graph
+        assertEquals("completed", graph.session.status)
+        assertEquals(3, graph.session.totalElapsedSec)
+        assertEquals(3, graph.session.effectiveElapsedSec)
+        assertEquals(0, graph.session.pausedElapsedSec)
+        assertEquals(3000L, graph.phases.single().endOffsetMs)
+        assertEquals(0L, graph.phases.single().startOffsetMs)
+        assertEquals("follow_along_action", graph.phases.single().phaseKind)
+        val identity = JSONObject(graph.phases.single().phaseIdentityJson)
+        assertEquals("follow_along_v1", identity.getString("family"))
+        assertEquals(1, identity.getInt("payloadVersion"))
+        val payload = identity.getJSONObject("payload")
+        assertEquals(setOf("variant", "blockId", "stepIndex0", "followAlongStepKind",
+            "itemId", "exerciseId", "roundIndex0"), payload.keys().asSequence().toSet())
+        assertEquals("free_session", payload.getString("variant"))
+        listOf("blockId", "stepIndex0", "followAlongStepKind", "itemId", "exerciseId",
+            "roundIndex0").forEach { assertTrue(payload.isNull(it)) }
+        assertEquals(listOf(90, 100, 120), graph.samples.map { it.bpm })
+        assertEquals(listOf(100L, 1100L, 2100L), graph.samples.map { it.offsetMs })
+        assertEquals(3L, graph.snapshots.single().canonicalSampleCount)
+        assertEquals(3L, graph.snapshots.single().primaryPointSampleCount)
+        assertEquals(120, graph.snapshots.single().observedMaxBpm)
+        assertTrue(strict.execution.steps.isEmpty())
+        assertTrue(strict.execution.restExtensions.isEmpty())
+        assertTrue(strict.execution.strengthSets.isEmpty())
+        assertEquals(1, writes.count { it == "start" })
+        assertEquals(1, writes.count { it == "terminal" })
+        val resolved = resolveWorkoutSessionHistorical(strict, "zh-CN") as WorkoutSessionHistoricalResult.Resolved
+        assertTrue(resolved.phaseDisplays.isEmpty())
+        val summary = resolved.toPersistedFreeFollowAlongSummary()
+        assertEquals(3, summary.totalElapsedSec)
+        assertEquals("3 个原始样本", summary.heartRateStatus)
+        val detail = requireNotNull(HistoryScreenState(emptyList(), selectedSessionId = SESSION_ID,
+            historyEntries = emptyList(), detailRead = resolved).selectedDetail)
+        assertEquals("3 秒", detail.rows.single { it.label == "总时长" }.value)
+        assertTrue(detail.rows.none { it.label.startsWith("阶段") || it.label.contains("动作") ||
+            it.label.contains("轮次") })
+        main.idle()
+        await(operation.released)
+    }
+
+    @Test
+    fun freeFollowAlongWithoutHeartRateCompletesWithOneInterval() = runRecorderTest {
+        val snapshotJson = freeFollowAlongSnapshot().toStorageJson()
+        val prepared = (PlanSnapshotStorageV1Validator.prepare(snapshotJson, WorkoutMode.FOLLOW_ALONG)
+            as PreparedPlanSnapshotStorageV1Result.Valid).prepared
+        val metadata = """{"displayMetadataContractVersion":1,"entries":[]}"""
+        val repository = WorkoutSessionRepository(database)
+        bind(null, session().copy(planId = null, mode = "follow_along",
+            planSnapshotJson = snapshotJson, sessionDisplayMetadataJson = metadata),
+            freeFollowAlongPhase(prepared), repository)
+        await(recorder.freezeStart())
+        at(3000)
+        val operation = (recorder.freezeTerminal(RecorderTerminalInput(
+            now(), RecorderTerminalKind.COMPLETED, "2026-09-06T16:30:03Z",
+            3, 3, 0, metadata, emptyList(), emptyList(), emptyList(),
+            "2026-09-06T16:30:03Z"
+        )) as RecorderTerminalSubmission.Accepted).operation
+        await(operation.saved)
+        val main = awaitCleanupDispatch(operation)
+        val strict = repository.readSessionStrict(SESSION_ID) as WorkoutSessionStrictReadResult.CanonicalTerminal
+        assertEquals("completed", strict.graph.session.status)
+        assertEquals(3, strict.graph.session.totalElapsedSec)
+        assertEquals(0L, strict.graph.phases.single().startOffsetMs)
+        assertEquals(3000L, strict.graph.phases.single().endOffsetMs)
+        assertEquals(null, strict.graph.recording)
+        assertTrue(strict.graph.samples.isEmpty())
+        assertTrue(strict.graph.snapshots.isEmpty())
+        val resolved = resolveWorkoutSessionHistorical(strict, "zh-CN") as WorkoutSessionHistoricalResult.Resolved
+        assertEquals("未开启心率", resolved.toPersistedFreeFollowAlongSummary().heartRateStatus)
+        main.idle()
+        await(operation.released)
     }
 
     private lateinit var application: Application

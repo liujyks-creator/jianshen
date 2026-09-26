@@ -195,16 +195,6 @@ class OfficialShellStateTest {
     }
 
     @Test
-    fun followAlongPlanEditDoesNotOpenFakeEditor() {
-        val initial = OfficialShellState(currentDestination = OfficialShellDestination.PLANS)
-        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
-        val afterEdit = initial.editPlan(preset)
-
-        assertEquals(initial.currentDestination, afterEdit.currentDestination)
-        assertEquals(null, afterEdit.editingPlanId)
-    }
-
-    @Test
     fun timedEditorDraftStartsTimedSessionDestination() {
         val initial = OfficialShellState(currentDestination = OfficialShellDestination.TIMED_PLAN_EDITOR)
         val editorPlan = buildDefaultTimedPlanEditorState()
@@ -270,13 +260,12 @@ class OfficialShellStateTest {
     }
 
     @Test
-    fun followAlongPresetStartsFollowAlongSessionDestination() {
+    fun followAlongStartOpensSessionWithoutPlan() {
         val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
-        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
-        val sessionState = initial.startFollowAlongSession(preset)
+        val sessionState = initial.startFollowAlongSession()
 
         assertEquals(OfficialShellDestination.FOLLOW_ALONG_SESSION, sessionState.currentDestination)
-        assertEquals(preset.id, sessionState.activeFollowAlongSessionPlan?.id)
+        assertTrue(sessionState.activeFollowAlongSession)
         assertEquals(null, sessionState.activeTimedSessionPlan)
         assertEquals(null, sessionState.activeStrengthSessionPlan)
     }
@@ -284,35 +273,23 @@ class OfficialShellStateTest {
     @Test
     fun followAlongSessionHidesBottomBarAndRejectsBottomNavigationSelection() {
         val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
-        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
-        val sessionState = initial.startFollowAlongSession(preset)
+        val sessionState = initial.startFollowAlongSession()
         val afterBottomNavigation = sessionState.selectDestination(OfficialShellDestination.PLANS)
 
         assertFalse(sessionState.showBottomBar)
         assertEquals(OfficialShellDestination.FOLLOW_ALONG_SESSION, afterBottomNavigation.currentDestination)
-        assertEquals(preset.id, afterBottomNavigation.activeFollowAlongSessionPlan?.id)
+        assertTrue(afterBottomNavigation.activeFollowAlongSession)
     }
 
     @Test
-    fun timedPlanDoesNotStartFollowAlongSessionDestination() {
+    fun finishingFollowAlongSessionReturnsToEntryAndClearsSession() {
         val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
-        val timedPlan = initial.planManagementState.plans.first()
-        val sessionState = initial.startFollowAlongSession(timedPlan)
-
-        assertEquals(initial.currentDestination, sessionState.currentDestination)
-        assertEquals(null, sessionState.activeFollowAlongSessionPlan)
-    }
-
-    @Test
-    fun finishingFollowAlongSessionReturnsToFollowAlongEntryAndClearsActivePlan() {
-        val initial = OfficialShellState(currentDestination = OfficialShellDestination.FOLLOW_ALONG_ENTRY)
-        val preset = buildDefaultFollowAlongScreenState().plans.single().plan
         val finished = initial
-            .startFollowAlongSession(preset)
+            .startFollowAlongSession()
             .finishFollowAlongSession()
 
         assertEquals(OfficialShellDestination.FOLLOW_ALONG_ENTRY, finished.currentDestination)
-        assertEquals(null, finished.activeFollowAlongSessionPlan)
+        assertFalse(finished.activeFollowAlongSession)
         assertTrue(finished.showBottomBar)
     }
 

@@ -76,6 +76,7 @@ internal fun resolveWorkoutSessionHistorical(
         val family = (identity.fields.getValue("family") as CanonicalJsonValue.Str).value
         val payload = identity.fields.getValue("payload") as CanonicalJsonValue.Obj
         val variant = (payload.fields.getValue("variant") as CanonicalJsonValue.Str).value
+        if (family == "follow_along_v1" && variant == "free_session") continue
         var name: String? = null
         var plannedSeconds: Long? = null
         if (variant != "paused") {

@@ -880,6 +880,45 @@ class CanonicalStorageJsonValidatorsTest {
     }
 
     @Test
+    fun freeFollowAlongPayloadBindsOnlyToEmptySnapshot() {
+        val snapshotJson =
+            """{"planSnapshotStorageContractVersion":1,"planId":null,"title":"跟练","mode":"follow_along","blocks":[],"preferences":null,"followAlong":null}"""
+        val empty = (PlanSnapshotStorageV1Validator.validate(snapshotJson, WorkoutMode.FOLLOW_ALONG) as
+            PlanSnapshotStorageV1ValidationResult.Valid).storage
+        val emptyProjection = """{"signatureInputContractVersion":1,"mode":"follow_along","blocks":[]}"""
+        val emptyDigest = testSha256(emptyProjection.toByteArray(Charsets.UTF_8))
+        val payload =
+            """{"variant":"free_session","blockId":null,"stepIndex0":null,"followAlongStepKind":null,"itemId":null,"exerciseId":null,"roundIndex0":null}"""
+        val valid = envelope("follow_along_v1", 1, "follow_along",
+            "follow_along_action", payload, emptyDigest)
+        assertValid(PhaseIdentityV1Validator.validate(valid, empty, "follow_along_action"))
+
+        val missingBlock = payload.replace("\"blockId\":null,", "")
+        assertInvalid(PhaseIdentityV1Validator.validate(
+            envelope("follow_along_v1", 1, "follow_along",
+                "follow_along_action", missingBlock, emptyDigest),
+            empty, "follow_along_action"))
+        val fakeBlock = payload.replace("\"blockId\":null", "\"blockId\":\"fake\"")
+        assertInvalid(PhaseIdentityV1Validator.validate(
+            envelope("follow_along_v1", 1, "follow_along",
+                "follow_along_action", fakeBlock, emptyDigest),
+            empty, "follow_along_action"))
+
+        val nonempty = (PlanSnapshotStorageV1Validator.validate(
+            WorkoutPlanSnapshot(title = "跟练", mode = WorkoutMode.FOLLOW_ALONG,
+                blocks = listOf(WarmupBlock("warmup", 0, durationSec = 10))).toStorageJson(),
+            WorkoutMode.FOLLOW_ALONG
+        ) as PlanSnapshotStorageV1ValidationResult.Valid).storage
+        val nonemptyProjection =
+            """{"signatureInputContractVersion":1,"mode":"follow_along","blocks":[{"blockId":"warmup","blockKind":"warmup","order":0,"durationSec":10,"items":[]}]}"""
+        val nonemptyDigest = testSha256(nonemptyProjection.toByteArray(Charsets.UTF_8))
+        assertInvalid(PhaseIdentityV1Validator.validate(
+            envelope("follow_along_v1", 1, "follow_along",
+                "follow_along_action", payload, nonemptyDigest),
+            nonempty, "follow_along_action"))
+    }
+
+    @Test
     fun followActionAndRestAfterActionRequireAnActionSnapshotItem() {
         fun validated(snapshot: WorkoutPlanSnapshot) =
             (PlanSnapshotStorageV1Validator.validate(snapshot.toStorageJson(), snapshot.mode) as

@@ -4,6 +4,14 @@
 
 ## 当前状态、来源与阅读规则
 
+### 当前 E19-S02：自由跟练完整记录闭环（P15）
+
+acceptedBase=`3ce26a63dd715cf1e5e3beae27997263b44ab697`。P15 批准的 `.local/planning/E19-S02-IMPLEMENTATION-PROPOSAL.md` §14.1–14.8 窄覆盖下方 F.14.2/F.28.2/F.34.1/F.37 的旧 preset、动作阶段、ViewModel 与证据文字。E19 固定 2/1/1，S02 唯一包 E19-S02-P1 为 1/0/1；候选实施不等于 Review PASS 或接受，CS04C=HELD，E20–E22 不解锁。
+
+用户从训练首页进原跟练入口，点击唯一“开始跟练”后手机前台整场向上计时并沿既有心率设置记录；停止二次确认，取消继续同场，确认以 completed 保存。Saved 后从 strict 同场读回总结，“返回跟练”到入口；记录卡进入独立详情，页面及系统返回均回记录总览。另一设备播放视频或直播。本次无动作、阶段、轮次、暂停、跳过、选课或媒体位。意外中断只保留 durable 事实，后续新场沿既有合并，不补中断空白。
+
+跟练沿原 Route composition scope、Application runtime/Repository 和 Recorder 持场；`follow_along_v1`/`payloadVersion=1` 新增 `free_session` 七键六显式 NULL、空 snapshot 与单区间。正常停止真实截止点，total/effective 整场、paused=0、执行结构空。Saved 与 Released 分离，保存/读回失败保留原错；clear 不补终态。准确 26 路径、14 方法、一次构建/安装和 U01 以已批准提案 §14.4–14.6 为准；不新建 VM、v2、checkpoint 或恢复机制。
+
 ### 当前 E19-S01：力量真实记录及实际次数接入（2026-09-26）
 
 本候选绑定 acceptedBase=`0feaa3b777521e7eceb8f0da6667b913239701cc`，继承其中已接受的 S09/S09B。按已批准提案第1–7节及 D01/D02/D04/D05，E19 固定两 Story，完成0、剩余2；S01 一个实施包，完成0、剩余1，当前为力量真实记录及实际次数接入，S02 等待。候选不代表 Review PASS、集成或接受；CS04C=HELD，E20–E22 不解锁。
@@ -1013,6 +1021,8 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 
 #### F.14.2 E19-S02 跟练模式
 
+本小节旧动作 preset 合同已由页首 P15 的自由跟练七步用户流程替代；旧表仅保留决策演变，不作为本次 Writer 的动作/阶段或新增测试要求。
+
 本轮main事实：FollowAlongRoute复用 `TimedWorkoutEngine`，进入页面LaunchedEffect发Start并tick，session/time/engine仍remember；不是力量组确认流。该模式的domain family必须是follow_along_v1，不能因为用了计时engine就持久化成timed family或力量set。
 
 | AC | source → 生产结果 | matching oracle |
@@ -1704,7 +1714,7 @@ S05 第四个直接 canonical consumer 为 `C:\Users\25073\Desktop\jianshen\.loc
 
 #### F.28.2 E19两个真实consumer
 
-力量路径以页首本轮合同替代下方历史 VM/生命周期测试候选：生产为原 StrengthWorkoutSessionRoute、StrengthWorkoutEngine、WorkoutSessionRecordMappers 及直接消费者；方法限定五个既有测试文件中的 V01–V11，不创建 StrengthWorkoutSessionViewModel 或新测试文件。跟练条款不变。
+力量路径以页首 S01 合同替代下方历史 VM/生命周期测试候选：生产为原 StrengthWorkoutSessionRoute、StrengthWorkoutEngine、WorkoutSessionRecordMappers 及直接消费者；方法限定五个既有测试文件中的 V01–V11，不创建 StrengthWorkoutSessionViewModel 或新测试文件。跟练路径按页首 S02 的 P15 合同使用原 FollowAlongWorkoutSessionRoute 与既有 Recorder/Repository/runtime，14 个既有测试方法准确处置，不创建跟练 VM 或新测试文件。
 
 - 力量production ViewModel：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionViewModel.kt`；事实转换沿既有WorkoutSessionRecordMappers.kt及已列StrengthRoute/engine；测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionViewModelTest.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\workoutsession\StrengthWorkoutSessionLifecycleContractTest.kt`。
 - 跟练production ViewModel：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionViewModel.kt`；事实转换沿既有WorkoutSessionRecordMappers.kt及FollowAlongRoute/TimedWorkoutEngine；测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionViewModelTest.kt`、`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\feature\workoutsession\FollowAlongWorkoutSessionLifecycleContractTest.kt`。
@@ -2429,6 +2439,8 @@ Root phaseIdentity.payload的各field由PH32个source variant行逐key R/N/M/lit
 
 #### F.34.1 engine → 模式producer → Recorder
 
+E19-S02 的当前 producer 已由页首 P15 改为自由跟练 Route：唯一 Start 后一次 Recorder 准入与 `free_session` open 区间，停止确认直接冻结 completed 并读回同场；无 TimedWorkoutEngine 动作轨迹。下方旧 E19-S02 行只作历史。
+
 力量本轮按 D01 在原 Route 捕获真实命令/tick cut 并调用 WorkoutSessionRecordMappers 的力量事实映射；不采用下方历史“模式 ViewModel”作为力量实施要求。D02 禁止换动作，保留 skip；D04 同组次数输入连续。普通 tick、声音与未到达的跳过组不造 phase；AUTO_AFTER_REST 直接进入 active，不补 prepare。力量验证限定页首准确集合。
 
 本轮直接读取的exact源码：
@@ -2595,7 +2607,7 @@ E20-S02额外按F.15.3/B12–B15使用measurement和final两套身份及先后�
 |---|---|
 | P / 1 文档门禁 | E18-CC-P01：页首/B.1/C、F8.4/P01–P08传播、F26/F36/F37；独立 Planning Review 后回主管理 |
 | E18 / 14 实现单元 | S01/F4；S02/F5+F19+F35.3；S03/F6；S04/F7（均已合并原资产）；S05/F8；S06A/F9.1+F9.2+R01–04及R06/R08活动部分；S06B/F9.2+R05/R07及R06/R08终态部分；S07A/F11.1+M07/F28；S07L/F11.2首版 MainActivity portrait 声明与三文档同步（原 retained/L02 延期未实现）；S07B/F11.2最终生产切换；S08A/F25/H03-plan/H04-parse；S08B/F25/H01–06/H08；S08C/F25/H07；S09/F12.2 |
-| E19 / 2 | S01/F14.1；S02/F14.2；模式差异及实际接线沿F30/F34，新写链/clear/Saved消费本轮F8/F9/F11，原范围不扩张 |
+| E19 / 2 | S01/F14.1 已接受；S02 按页首 P15 的自由跟练单包、F30 同 family 与 F34 当前 producer 接线；2/1/1，候选待 Review/集成，CS04C=HELD |
 | E20 / 2 | S01/F15.1/N01–N09及retained/FGS消费者；S02/F15.2+F15.3/B01–B15，旧S06前置重定向S06B；D-082/F27.3/F28.3/F35.4 measurement/final边界不变 |
 | E21 / 4 | S01/F16.1+F23；S02/F16.2+F27；S03/F16.3；S04/F16.4+F27；F34 IO限界必读 |
 | E22 / 4 | S01–S04/F17；F18.2/F20/F30与页首DOCS-P001/P002补充同读；F27.3最终整合performance gate保留 |

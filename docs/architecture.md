@@ -19,6 +19,12 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
+## E19-S02 自由跟练同场接线（P15）
+
+当前跟练由原 `FollowAlongWorkoutSessionRoute` 的 composition scope 持有唯一 session、计时、Recorder 与保存状态；`TrainFlowApp` 供应同一 Application 的 Repository、HeartRateRuntimeOwner 和当前心率设置。用户在入口点击一次 Start 后，Route 准入并 `freezeStart` 确认；运行期 UI 按单调时钟向上显示整场时间，原心率观察由 Recorder 实时持久化。停止二次确认的有效命令直接冻结 `COMPLETED`，单条 `free_session` 区间结束于同次真实 cut，total/effective 为整场、paused=0、执行 steps/rest/sets 为空。
+
+Saved 后沿 strict/historical 同场读取持久化总结，Released 独立；保存与读取失败保留原错。Route dispose 仅 clear 停止新输入/新写并清理原通知，不补终态。旧跟练 TimedWorkoutEngine/preset/legacy upsert 与候选新 VM 均不作为当前生产路径；配置重建/进程续训、后台精度及新合并 owner 继续延期。下方 S01 和 S07B 中“跟练保持旧链”的文字仅表示其当时状态。
+
 ## E19-S01 力量同场接线（2026-09-26）
 
 用户 D01 批准力量沿原 StrengthWorkoutSessionRoute 持有 plan/session/engine、输入与 coroutine scope，复用既有 Repository/Recorder/Application HeartRateRuntimeOwner；依赖由现有 TrainFlowApp 供应。进入页自动 Start，先固定同次 engine 结果，等准入/freezeStart 确认后应用并 tick；实际命令 cut 经现有 mapper 文件生成 strength_v1 phase。Start 与终态一起迁移，力量不再调用旧 upsert，未迁移跟练保持旧链。

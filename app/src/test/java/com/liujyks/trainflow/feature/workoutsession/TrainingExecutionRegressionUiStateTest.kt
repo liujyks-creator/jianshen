@@ -239,56 +239,23 @@ class TrainingExecutionRegressionUiStateTest {
     }
 
     @Test
-    fun followAlongExecutionKeepsPauseSkipAndEndImmediatelyReachable() {
-        val plan = com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState()
-            .plans
-            .single()
-            .plan
-        val state = TimedWorkoutEngine.dispatch(
-            TimedWorkoutEngine.create(plan),
-            WorkoutCommand.StartSession
-        ).state
-        val active = state.toFollowAlongWorkoutSessionUiState()
-
-        assertTrue(active.canPause)
-        assertTrue(active.canSkip)
-        assertTrue(active.canEnd)
-        assertImmediateControl(
-            controls = active.immediateControls,
-            role = WorkoutImmediateControlRole.PAUSE_SESSION,
-            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
-        )
-        assertImmediateControl(
-            controls = active.immediateControls,
-            role = WorkoutImmediateControlRole.PAUSE_SESSION,
-            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
-        )
-        assertImmediateControl(
-            controls = active.immediateControls,
-            role = WorkoutImmediateControlRole.SKIP_STEP,
-            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
-        )
+    fun followAlongExecutionKeepsStopImmediatelyReachable() {
+        val active = buildFollowAlongWorkoutSessionUiState(elapsedSec = 65, active = true)
+        assertTrue(active.canStop)
+        assertEquals(1, active.immediateControls.size)
         assertImmediateControl(
             controls = active.immediateControls,
             role = WorkoutImmediateControlRole.END_SESSION,
             placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
         )
         assertTrue(active.endRequiresConfirmation)
-
-        val paused = TimedWorkoutEngine.dispatch(state, WorkoutCommand.PauseSession)
-            .state
-            .toFollowAlongWorkoutSessionUiState()
-        assertImmediateControl(
-            controls = paused.immediateControls,
-            role = WorkoutImmediateControlRole.RESUME_SESSION,
-            placement = WorkoutImmediateControlPlacement.RHYTHM_SURFACE
-        )
-        assertImmediateControl(
-            controls = paused.immediateControls,
-            role = WorkoutImmediateControlRole.RESUME_SESSION,
-            placement = WorkoutImmediateControlPlacement.FIXED_BOTTOM
-        )
-        assertTrue(paused.endRequiresConfirmation)
+        var confirmation = WorkoutEndConfirmationUiState().request(active.canStop)
+        assertTrue(confirmation.visible)
+        confirmation = confirmation.cancel()
+        assertEquals(null, confirmation.confirm(active.canStop).command)
+        confirmation = confirmation.request(active.canStop)
+        assertEquals(WorkoutCommand.EndSession(reason = "user_requested"),
+            confirmation.confirm(active.canStop).command)
     }
 
     @Test
@@ -410,12 +377,17 @@ class TrainingExecutionRegressionUiStateTest {
             assertTrue(source.contains("trainingExecutionBottomControlsSpec()"))
             assertTrue(source.contains("bottomControlsSpec.fixedBottomContentReserve"))
             assertTrue(source.contains(".navigationBarsPadding()"))
-            assertTrue(source.contains("controlsSpec.primaryButtonMinHeight"))
-            assertTrue(source.contains("controlsSpec.secondaryButtonMinHeight"))
-            assertTrue(source.contains("controlsSpec.verticalPadding"))
-            assertTrue(source.contains("controlsSpec.rowSpacing"))
             assertFalse(source.contains("bottom = if (uiState.isTerminal) 22.dp else skin.tokens.executionControlReserveDp.dp"))
         }
+
+        assertTrue(followAlongSource.contains("停止跟练"))
+        assertTrue(followAlongSource.contains("bottomControlsSpec.primaryButtonMinHeight"))
+        assertTrue(followAlongSource.contains("bottomControlsSpec.verticalPadding"))
+        assertTrue(followAlongSource.contains("bottomControlsSpec.rowSpacing"))
+        assertTrue(strengthSource.contains("controlsSpec.primaryButtonMinHeight"))
+        assertTrue(strengthSource.contains("controlsSpec.secondaryButtonMinHeight"))
+        assertTrue(strengthSource.contains("controlsSpec.verticalPadding"))
+        assertTrue(strengthSource.contains("controlsSpec.rowSpacing"))
 
         assertFalse(strengthSource.contains("if (skin.isBigType) {\n                            Modifier.heightIn"))
     }

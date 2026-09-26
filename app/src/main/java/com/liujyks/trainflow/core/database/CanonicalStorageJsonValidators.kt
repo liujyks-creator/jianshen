@@ -231,6 +231,8 @@ internal class PreparedPhaseIdentityV1Context private constructor(
 
     internal fun firstBlockById(id: String): PhaseSnapshotBlockBindingV1? = firstBlockById[id]
 
+    internal fun hasNoBlocks(): Boolean = blocksById.isEmpty()
+
     internal companion object {
         internal fun fromValidated(
             factoryProof: Any,
@@ -622,6 +624,7 @@ object PhaseIdentityV1Validator {
         context: PreparedPhaseIdentityV1Context
     ): Boolean {
         if (payload.string("variant") == "paused") return true
+        if (payload.string("variant") == "free_session") return context.hasNoBlocks()
         val blockId = payload.string("blockId") ?: return false
         val blockView = context.uniqueBlockById(blockId) ?: return false
         val roundIndex = payload.int("roundIndex0")
@@ -880,6 +883,9 @@ object PhaseIdentityV1Validator {
         val variant = payload.string("variant") ?: return false
         if (variant == "paused") {
             return phaseKind == "paused" && FOLLOW_POSITION_KEYS.all(payload::isNull)
+        }
+        if (variant == "free_session") {
+            return phaseKind == "follow_along_action" && FOLLOW_POSITION_KEYS.all(payload::isNull)
         }
         if (!payload.requiredNonEmptyStrings("blockId") || !payload.isNonNegativeInteger("stepIndex0")) {
             return false

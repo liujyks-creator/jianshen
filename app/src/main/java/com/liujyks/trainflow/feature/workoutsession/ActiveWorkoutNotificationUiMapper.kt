@@ -49,23 +49,21 @@ internal fun strengthActiveWorkoutNotificationState(
 }
 
 internal fun followAlongActiveWorkoutNotificationState(
-    planId: String,
+    sessionId: String,
     status: SessionStatus,
     uiState: FollowAlongWorkoutSessionUiState
 ): ActiveWorkoutNotificationState {
     return ActiveWorkoutNotificationState(
-        sessionKey = "follow_along:$planId",
+        sessionKey = "follow_along:$sessionId",
         mode = WorkoutMode.FOLLOW_ALONG,
-        planTitle = uiState.planTitle,
+        planTitle = uiState.title,
         status = status,
-        phaseLabel = uiState.phaseLabel,
-        primaryText = uiState.currentActionTitle,
+        phaseLabel = uiState.statusLabel,
+        primaryText = "跟练",
         timerText = uiState.timerText,
-        progressText = uiState.progressLabel,
-        secondaryText = when {
-            uiState.isTerminal -> "基础跟练已结束，活跃训练状态通知会清理。"
-            uiState.isPaused -> "时间已冻结；这不是后台精确计时承诺。"
-            else -> uiState.nextActionLabel
-        }
+        progressText = "",
+        secondaryText = if (uiState.isTerminal)
+            "跟练已结束，活跃训练状态通知会清理。"
+        else "整场时间"
     )
 }

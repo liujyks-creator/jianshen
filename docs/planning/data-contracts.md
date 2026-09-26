@@ -721,6 +721,10 @@ const strengthBlockExample: StrengthExerciseBlock = {
 
 ## 8. 跟练雏形计划元数据
 
+E19-S02/P15 当前生产跟练已改为自由记录：从原入口直接开始，无计划、动作、阶段或轮次输入；另一设备播放视频/直播，手机前台只记录整场时间和既有心率事实。下方预置计划/媒体元数据描述保留早期演变，不作为当前新场的生产输入。
+
+新场 `WorkoutPlanSnapshot` 为 `planId=null`、`title="跟练"`、`mode=follow_along`、`blocks=[]`、`preferences=null`、`followAlong=null`；仍用原 `follow_along_v1`/`payloadVersion=1`，`free_session` 七键中六个位置键显式 NULL，一条 `follow_along_action` 内部整场区间，不向用户显示为阶段。正常停止确认后以 completed 保存，`totalElapsedSec=effectiveElapsedSec` 为整场实际秒数，`pausedElapsedSec=0`，steps/rest/sets 为空。Saved 后 strict 读回供同场总结和历史；中断只保留 durable 事实，后续新场沿既有合并，不补空白或周期写无心率计时。保存与读取错误分别呈现原因。
+
 跟练首版不单独发明完全不同的训练计划引擎。  
 建议使用 `WorkoutPlan`，并通过跟练元数据和媒体提示增加展示能力。
 

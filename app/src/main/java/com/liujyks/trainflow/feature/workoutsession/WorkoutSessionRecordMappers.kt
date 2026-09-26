@@ -13,6 +13,7 @@ import com.liujyks.trainflow.core.model.SessionStepRecord
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.WorkoutPlanSnapshot
+import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.model.WorkoutSession
 import java.time.Duration
 import java.time.Instant
@@ -22,6 +23,41 @@ internal data class StrengthTransitionFacts(
     val phaseStarts: List<RecorderPhaseInput>,
     val terminalStatus: SessionStatus?
 )
+
+internal fun freeFollowAlongSnapshot(): WorkoutPlanSnapshot = WorkoutPlanSnapshot(
+    planId = null,
+    title = "跟练",
+    mode = WorkoutMode.FOLLOW_ALONG,
+    blocks = emptyList(),
+    preferences = null,
+    followAlong = null
+)
+
+internal fun freeFollowAlongPhase(snapshot: PreparedPlanSnapshotStorageV1): RecorderPhaseInput {
+    val payload = JSONObject()
+        .put("variant", "free_session")
+        .put("blockId", JSONObject.NULL)
+        .put("stepIndex0", JSONObject.NULL)
+        .put("followAlongStepKind", JSONObject.NULL)
+        .put("itemId", JSONObject.NULL)
+        .put("exerciseId", JSONObject.NULL)
+        .put("roundIndex0", JSONObject.NULL)
+    val identity = JSONObject()
+        .put("phaseIdentityContractVersion", 1)
+        .put("family", "follow_along_v1")
+        .put("payloadVersion", 1)
+        .put("mode", "follow_along")
+        .put("phaseKind", "follow_along_action")
+        .put("orderedStructureSignature", JSONObject()
+            .put("signatureContractVersion", 1)
+            .put("algorithm", "sha256")
+            .put("digestHexLowercase", snapshot.orderedStructureDigestHexLowercase()))
+        .put("payload", payload)
+    return RecorderPhaseInput("follow_along_action", identity.toString())
+}
+
+internal fun freeFollowAlongElapsedSeconds(startedAt: Instant, endedAt: Instant): Int =
+    totalElapsedSec(startedAt, endedAt, 0, 0)
 
 internal fun strengthTransitionFacts(
     snapshot: PreparedPlanSnapshotStorageV1,

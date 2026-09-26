@@ -1,150 +1,277 @@
 package com.liujyks.trainflow.feature.workoutsession
 
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.liujyks.trainflow.core.engine.TimedWorkoutEngine
-import com.liujyks.trainflow.core.engine.TimedWorkoutEngineResult
+import com.liujyks.trainflow.core.data.PlanSnapshotStorageV1Validator
+import com.liujyks.trainflow.core.data.PreparedPlanSnapshotStorageV1Result
+import com.liujyks.trainflow.core.data.RecorderPhaseInput
+import com.liujyks.trainflow.core.data.RecorderTerminalInput
+import com.liujyks.trainflow.core.data.RecorderTerminalKind
+import com.liujyks.trainflow.core.data.RecorderTerminalSubmission
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
+import com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical
+import com.liujyks.trainflow.core.data.toStorageJson
+import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
 import com.liujyks.trainflow.core.model.SessionStatus
-import com.liujyks.trainflow.core.model.WorkoutCommand
-import com.liujyks.trainflow.core.model.WorkoutPlan
-import com.liujyks.trainflow.core.model.WorkoutSession
+import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
-import com.liujyks.trainflow.feature.followalong.buildDefaultFollowAlongScreenState
-import com.liujyks.trainflow.ui.theme.TrainFlowAccent
-import com.liujyks.trainflow.ui.theme.TrainFlowAction
-import com.liujyks.trainflow.ui.theme.TrainFlowError
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
-import com.liujyks.trainflow.ui.theme.TrainFlowNeutral500
-import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
-import com.liujyks.trainflow.ui.theme.TrainFlowSecondary
-import com.liujyks.trainflow.ui.theme.TrainFlowTheme
+import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
 import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
 import com.liujyks.trainflow.ui.theme.LocalTrainFlowSkin
+import com.liujyks.trainflow.ui.theme.TrainFlowAccent
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral50
+import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
+import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 import com.liujyks.trainflow.ui.theme.isBigType
 import java.time.Instant
+import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 @Composable
 internal fun FollowAlongWorkoutSessionRoute(
-    plan: WorkoutPlan,
+    workoutSessionRepository: WorkoutSessionRepository,
+    heartRateRuntimeOwner: HeartRateRuntimeOwner,
+    heartRateSettings: HeartRateSettingsUiState,
     onBackToFollowAlong: () -> Unit,
-    onRecordWorkoutSession: suspend (WorkoutSession) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
-    val sessionStartedAt = remember(sessionId) { Instant.now() }
-    var recordWriteState by remember(sessionId) { mutableStateOf(TerminalWorkoutSessionRecordWriteState()) }
-    var engineState by remember(plan.id, sessionId) {
-        mutableStateOf(TimedWorkoutEngine.create(plan, sessionId = sessionId))
+    val sessionId = remember { "follow-along-${System.currentTimeMillis()}" }
+    val scope = rememberCoroutineScope()
+    val snapshotJson = remember(sessionId) { freeFollowAlongSnapshot().toStorageJson() }
+    val snapshot = remember(sessionId) {
+        (PlanSnapshotStorageV1Validator.prepare(snapshotJson, WorkoutMode.FOLLOW_ALONG) as
+            PreparedPlanSnapshotStorageV1Result.Valid).prepared
     }
+    val initialPhase = remember(sessionId) { freeFollowAlongPhase(snapshot) }
+    val metadataJson = remember(sessionId) {
+        JSONObject().put("displayMetadataContractVersion", 1).put("entries", JSONArray()).toString()
+    }
+    var startedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
+    var startClock by remember(sessionId) { mutableStateOf<Long?>(null) }
+    var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
+    var active by remember(sessionId) { mutableStateOf(false) }
+    var stopping by remember(sessionId) { mutableStateOf(false) }
+    var elapsedSec by remember(sessionId) { mutableStateOf(0) }
+    var saved by remember(sessionId) { mutableStateOf(false) }
+    var persistedSummary by remember(sessionId) { mutableStateOf<FollowAlongPersistedSummary?>(null) }
+    var initializationFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var endConfirmation by remember(sessionId) { mutableStateOf(WorkoutEndConfirmationUiState()) }
     val context = LocalContext.current
     val activeWorkoutNotifications = remember(context) {
         AndroidActiveWorkoutNotificationController(context.applicationContext)
     }
 
-    fun applyEngineResult(result: TimedWorkoutEngineResult) {
-        engineState = result.state
+    LaunchedEffect(sessionId) {
+        val actualStart = Instant.now()
+        startedAt = actualStart
+        val startTime = actualStart.atZone(ZoneId.systemDefault())
+        val maxBpm = heartRateSettings.personalMaxHeartRateBpm ?: heartRateSettings.ageYears?.let { 220 - it }
+        val maxSource = when {
+            heartRateSettings.personalMaxHeartRateBpm != null -> "personal_max"
+            heartRateSettings.ageYears != null -> "age_220_minus_age"
+            else -> null
+        }
+        val zoneSnapshot = maxBpm?.let {
+            val bounds = listOf(null to 5000, 5000 to 6000, 6000 to 7000,
+                7000 to 8000, 8000 to 9000, 9000 to null)
+            val names = listOf("below_50", "from_50_to_60", "from_60_to_70",
+                "from_70_to_80", "from_80_to_90", "at_or_above_90")
+            JSONObject().put("zoneSnapshotContractVersion", 1).put("unit", "bpm")
+                .put("effectiveMaxBpm", it).put("effectiveMaxSource", maxSource)
+                .put("zones", JSONArray(bounds.mapIndexed { index, (lower, upper) ->
+                    JSONObject().put("zoneId", names[index])
+                        .put("lowerBoundBasisPointsInclusive", lower ?: JSONObject.NULL)
+                        .put("upperBoundBasisPointsExclusive", upper ?: JSONObject.NULL)
+                })).toString()
+        }
+        try {
+            val acquired = WorkoutSessionTimelineRecorder.admitAndBind(
+                repository = workoutSessionRepository,
+                runtime = heartRateRuntimeOwner,
+                scope = scope,
+                entryId = sessionId,
+                session = WorkoutSessionEntity(
+                    id = sessionId, planId = null, mode = "follow_along", status = "active",
+                    planSnapshotJson = snapshotJson, startedAt = actualStart.toString(),
+                    timelineVersion = 1, lastDurableOffsetMs = 0, lastMutationSequence = 0,
+                    displayMetadataContractVersion = 1, sessionDisplayMetadataJson = metadataJson,
+                    startLocalDate = startTime.toLocalDate().toString(), startZoneId = startTime.zone.id,
+                    startUtcOffsetSeconds = startTime.offset.totalSeconds.toLong(),
+                    timeMetadataSourceContractVersion = 1
+                ),
+                initialPhase = initialPhase,
+                initialRecording = if (heartRateSettings.enabled) HeartRateRecordingEntity(
+                    recordingId = "$sessionId:heart-rate", sessionId = sessionId, status = "active",
+                    startedOffsetMs = 0, startedMutationSequence = 0,
+                    endedOffsetMs = null, endedMutationSequence = null,
+                    sourceContractVersion = 1, sourceKind = "ble_hrs", acquisitionContractVersion = 1,
+                    parameterSnapshotVersion = 1, age = heartRateSettings.ageYears,
+                    personalMaxBpm = heartRateSettings.personalMaxHeartRateBpm, effectiveMaxBpm = maxBpm,
+                    effectiveMaxSource = maxSource, alertThresholdBpm = heartRateSettings.alertThresholdBpm,
+                    zoneSnapshotJson = zoneSnapshot
+                ) else null
+            )
+            recorder = acquired
+            acquired.freezeStart().await()
+            startClock = SystemClock.elapsedRealtime()
+            active = true
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Throwable) {
+            initializationFailure = cause
+        }
     }
 
-    fun dispatch(command: WorkoutCommand) {
-        applyEngineResult(TimedWorkoutEngine.dispatch(engineState, command))
-    }
-
-    LaunchedEffect(plan.id) {
-        applyEngineResult(TimedWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession))
-        while (true) {
-            delay(1000)
-            if (engineState.status == SessionStatus.ACTIVE || engineState.status == SessionStatus.PAUSED) {
-                applyEngineResult(TimedWorkoutEngine.tick(engineState))
+    LaunchedEffect(active, stopping) {
+        val clock = startClock
+        if (active && !stopping && clock != null) {
+            while (true) {
+                delay(1000)
+                elapsedSec = ((SystemClock.elapsedRealtime() - clock) / 1000).toInt()
             }
         }
     }
 
-    val uiState = engineState.toFollowAlongWorkoutSessionUiState()
+    fun stopConfirmedSession() {
+        val cut = SystemClock.elapsedRealtime()
+        val end = Instant.now()
+        val duration = freeFollowAlongElapsedSeconds(requireNotNull(startedAt), end)
+        elapsedSec = duration
+        active = false
+        stopping = true
+        val submission = requireNotNull(recorder).freezeTerminal(RecorderTerminalInput(
+            elapsedRealtimeMs = cut,
+            kind = RecorderTerminalKind.COMPLETED,
+            endedAt = end.toString(),
+            totalElapsedSec = duration,
+            effectiveElapsedSec = duration,
+            pausedElapsedSec = 0,
+            sessionDisplayMetadataJson = metadataJson,
+            stepRecords = emptyList(),
+            restExtensions = emptyList(),
+            strengthSets = emptyList(),
+            snapshotCreatedAt = end.toString()
+        ))
+        when (submission) {
+            is RecorderTerminalSubmission.Closed -> saveFailure = requireNotNull(submission.originalCause)
+            is RecorderTerminalSubmission.Accepted -> {
+                scope.launch {
+                    try {
+                        submission.operation.saved.await()
+                        saved = true
+                        try {
+                            val historical = resolveWorkoutSessionHistorical(
+                                workoutSessionRepository.readSessionStrict(sessionId), "zh-CN")
+                            val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
+                                ?: error("Saved follow-along session $sessionId cannot be resolved: $historical")
+                            persistedSummary = resolved.toPersistedFreeFollowAlongSummary()
+                        } catch (cause: CancellationException) {
+                            throw cause
+                        } catch (cause: Throwable) {
+                            recapReadFailure = cause
+                        }
+                    } catch (cause: CancellationException) {
+                        throw cause
+                    } catch (cause: Throwable) {
+                        saveFailure = cause
+                    }
+                }
+                scope.launch {
+                    try {
+                        submission.operation.released.await()
+                    } catch (cause: CancellationException) {
+                        throw cause
+                    } catch (cause: Throwable) {
+                        android.util.Log.e("FollowAlongSession", "Recorder release failed", cause)
+                    }
+                }
+            }
+        }
+    }
+
+    val uiState = buildFollowAlongWorkoutSessionUiState(
+        elapsedSec, active, stopping, saved, persistedSummary,
+        saveFailure, recapReadFailure, initializationFailure
+    )
+    BackHandler {
+        when {
+            uiState.canReturn -> onBackToFollowAlong()
+            uiState.canStop -> endConfirmation = endConfirmation.request(true)
+        }
+    }
     val notificationState = followAlongActiveWorkoutNotificationState(
-        planId = plan.id,
-        status = engineState.status,
+        sessionId = sessionId,
+        status = if (stopping || saved) SessionStatus.COMPLETED
+            else if (active) SessionStatus.ACTIVE else SessionStatus.READY,
         uiState = uiState
     )
     LaunchedEffect(notificationState) {
-        activeWorkoutNotifications.update(notificationState)
+        if (active || stopping) activeWorkoutNotifications.update(notificationState)
     }
-    LaunchedEffect(engineState.status, engineState.sessionId) {
-        if (engineState.isTerminal) {
-            recordWriteState = recordWriteState.recordTerminalSessionOnce(
-                session = engineState.toWorkoutSessionRecord(
-                    plan = plan,
-                    startedAt = sessionStartedAt,
-                    endedAt = Instant.now()
-                ),
-                onRecordWorkoutSession = onRecordWorkoutSession
-            )
-        }
-    }
-    DisposableEffect(activeWorkoutNotifications, plan.id) {
+    DisposableEffect(recorder, activeWorkoutNotifications, sessionId) {
+        val currentRecorder = recorder
         onDispose {
+            currentRecorder?.clear()
             activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
         }
-    }
-    var endConfirmation by remember { mutableStateOf(WorkoutEndConfirmationUiState()) }
-    LaunchedEffect(uiState.canEnd) {
-        if (!uiState.canEnd) endConfirmation = endConfirmation.cancel()
     }
 
     FollowAlongWorkoutSessionScreen(
         uiState = uiState,
-        onPause = { dispatch(FollowAlongWorkoutSessionControl.PAUSE.toWorkoutCommand()) },
-        onResume = { dispatch(FollowAlongWorkoutSessionControl.RESUME.toWorkoutCommand()) },
-        onSkip = { dispatch(FollowAlongWorkoutSessionControl.SKIP.toWorkoutCommand()) },
         showEndConfirmation = endConfirmation.visible,
-        onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canEnd) },
+        onRequestEnd = { endConfirmation = endConfirmation.request(uiState.canStop) },
         onCancelEnd = { endConfirmation = endConfirmation.cancel() },
         onConfirmEnd = {
-            val result = endConfirmation.confirm(uiState.canEnd)
+            val result = endConfirmation.confirm(uiState.canStop)
             endConfirmation = result.nextState
-            result.command?.let(::dispatch)
+            if (result.command != null) stopConfirmedSession()
         },
         onBackToFollowAlong = onBackToFollowAlong,
         modifier = modifier
@@ -154,9 +281,6 @@ internal fun FollowAlongWorkoutSessionRoute(
 @Composable
 private fun FollowAlongWorkoutSessionScreen(
     uiState: FollowAlongWorkoutSessionUiState,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onSkip: () -> Unit,
     showEndConfirmation: Boolean,
     onRequestEnd: () -> Unit,
     onCancelEnd: () -> Unit,
@@ -166,57 +290,71 @@ private fun FollowAlongWorkoutSessionScreen(
 ) {
     val skin = LocalTrainFlowSkin.current
     val bottomControlsSpec = trainingExecutionBottomControlsSpec()
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(skin.tokens.primary)
-    ) {
+    Box(modifier = modifier.fillMaxSize().background(skin.tokens.primary)) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = currentPageHorizontalPadding())
-                .padding(
-                    top = if (skin.isBigType) 14.dp else 22.dp,
-                    bottom = if (uiState.isTerminal) 22.dp else bottomControlsSpec.fixedBottomContentReserve
-                ),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(top = if (skin.isBigType) 14.dp else 22.dp,
+                    bottom = if (uiState.isTerminal) 22.dp else bottomControlsSpec.fixedBottomContentReserve),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            FollowAlongSessionHeader(uiState)
-            FollowAlongMediaPanel(uiState)
-            FollowAlongCountdownPanel(
-                uiState = uiState,
-                onPrimaryToggle = if (uiState.canResume) onResume else onPause
-            )
-            FollowAlongNextPanel(uiState)
-            FollowAlongDetailPanel(uiState.detailRows)
-            FollowAlongBoundaryPanel(uiState.boundaryCopy)
-
+            Text(uiState.title, style = MaterialTheme.typography.headlineLarge, color = TrainFlowNeutral50)
+            Text(uiState.statusLabel, style = MaterialTheme.typography.bodyLarge, color = TrainFlowNeutral200)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(currentCardCorner()),
+                colors = CardDefaults.cardColors(containerColor = skin.tokens.secondary),
+                border = BorderStroke(1.dp, TrainFlowNeutral100)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("本场时间", style = MaterialTheme.typography.titleMedium, color = TrainFlowNeutral200)
+                    Text(uiState.timerText, fontSize = 68.sp, lineHeight = 70.sp,
+                        fontWeight = FontWeight.ExtraBold, color = TrainFlowNeutral50)
+                }
+            }
             if (uiState.isTerminal) {
-                FollowAlongTerminalPanel(uiState, onBackToFollowAlong)
-            } else if (uiState.lastControlLabel.isNotBlank()) {
-                Text(
-                    text = uiState.lastControlLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TrainFlowNeutral500
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = skin.tokens.secondary)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(uiState.terminalTitle.orEmpty(), style = MaterialTheme.typography.headlineSmall,
+                            color = TrainFlowNeutral50)
+                        Text(uiState.terminalSummary.orEmpty(), style = MaterialTheme.typography.bodyMedium,
+                            color = TrainFlowNeutral200)
+                        Button(onClick = onBackToFollowAlong, enabled = uiState.canReturn,
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text("返回跟练")
+                        }
+                    }
+                }
             }
         }
-
-        if (!uiState.isTerminal) {
-            FollowAlongControls(
-                uiState = uiState,
-                onPause = onPause,
-                onResume = onResume,
-                onSkip = onSkip,
-                onEnd = onRequestEnd,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+        if (uiState.canStop) {
+            Surface(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                color = skin.tokens.primary,
+                shadowElevation = 12.dp
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                        .padding(horizontal = currentPageHorizontalPadding(),
+                            vertical = bottomControlsSpec.verticalPadding),
+                    verticalArrangement = Arrangement.spacedBy(bottomControlsSpec.rowSpacing)
+                ) {
+                    Button(
+                        onClick = onRequestEnd,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = bottomControlsSpec.primaryButtonMinHeight)
+                    ) {
+                        Text("停止跟练", fontSize = if (skin.isBigType) 20.sp else 14.sp)
+                    }
+                }
+            }
         }
         if (showEndConfirmation) {
             WorkoutEndConfirmationDialog(
-                title = "结束本次基础跟练？",
-                text = "训练会提前结束，并保留当前内存态进度用于本次总结。",
+                title = "停止本次跟练？",
+                text = "确认后完成并保存本场记录；取消则继续计时。",
                 onCancel = onCancelEnd,
                 onConfirm = onConfirmEnd
             )
@@ -224,315 +362,16 @@ private fun FollowAlongWorkoutSessionScreen(
     }
 }
 
-@Composable
-private fun FollowAlongSessionHeader(uiState: FollowAlongWorkoutSessionUiState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = uiState.planTitle,
-                style = MaterialTheme.typography.titleLarge,
-                color = TrainFlowNeutral50
-            )
-            Text(
-                text = uiState.progressLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TrainFlowNeutral200
-            )
-        }
-        FollowAlongPill(text = uiState.statusLabel)
-    }
-}
-
-@Composable
-private fun FollowAlongMediaPanel(uiState: FollowAlongWorkoutSessionUiState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = TrainFlowSecondary),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = uiState.mediaPlaceholderTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = TrainFlowNeutral50
-                )
-                FollowAlongPill(
-                    text = uiState.demoStatusLabel,
-                    containerColor = TrainFlowAccent,
-                    contentColor = TrainFlowPrimary
-                )
-            }
-            Text(
-                text = uiState.mediaPlaceholderDescription,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TrainFlowNeutral200
-            )
-        }
-    }
-}
-
-@Composable
-private fun FollowAlongCountdownPanel(
-    uiState: FollowAlongWorkoutSessionUiState,
-    onPrimaryToggle: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = uiState.canPause || uiState.canResume) {
-                onPrimaryToggle()
-            },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            FollowAlongPill(
-                text = uiState.phaseLabel,
-                containerColor = if (uiState.phaseLabel == "休息") TrainFlowAccent else TrainFlowAction,
-                contentColor = TrainFlowPrimary
-            )
-            Text(
-                text = uiState.currentActionTitle,
-                style = MaterialTheme.typography.headlineMedium,
-                color = TrainFlowNeutral50
-            )
-            Text(
-                text = uiState.timerText,
-                fontSize = 68.sp,
-                lineHeight = 70.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TrainFlowNeutral50
-            )
-            LinearProgressIndicator(
-                progress = { uiState.progressFraction.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth(),
-                color = TrainFlowAccent,
-                trackColor = Color.White.copy(alpha = 0.12f)
-            )
-            Text(
-                text = uiState.shortCue,
-                style = MaterialTheme.typography.bodyLarge,
-                color = TrainFlowNeutral100
-            )
-        }
-    }
-}
-
-@Composable
-private fun FollowAlongNextPanel(uiState: FollowAlongWorkoutSessionUiState) {
-    FollowAlongDarkPanel {
-        Text(
-            text = uiState.nextActionLabel,
-            style = MaterialTheme.typography.titleMedium,
-            color = TrainFlowNeutral50
-        )
-    }
-}
-
-@Composable
-private fun FollowAlongDetailPanel(rows: List<FollowAlongWorkoutDetailRowUiState>) {
-    FollowAlongDarkPanel {
-        Text(
-            text = "动作详情",
-            style = MaterialTheme.typography.titleMedium,
-            color = TrainFlowNeutral50
-        )
-        rows.forEach { row ->
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = row.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = TrainFlowNeutral200
-                )
-                Text(
-                    text = row.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TrainFlowNeutral100
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FollowAlongBoundaryPanel(copy: String) {
-    FollowAlongDarkPanel {
-        Text(
-            text = "当前边界",
-            style = MaterialTheme.typography.labelLarge,
-            color = TrainFlowNeutral200
-        )
-        Text(
-            text = copy,
-            style = MaterialTheme.typography.bodySmall,
-            color = TrainFlowNeutral500
-        )
-    }
-}
-
-@Composable
-private fun FollowAlongControls(
-    uiState: FollowAlongWorkoutSessionUiState,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onSkip: () -> Unit,
-    onEnd: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val skin = LocalTrainFlowSkin.current
-    val controlsSpec = trainingExecutionBottomControlsSpec()
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = skin.tokens.primary,
-        shadowElevation = 12.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = currentPageHorizontalPadding(), vertical = controlsSpec.verticalPadding),
-            verticalArrangement = Arrangement.spacedBy(controlsSpec.rowSpacing)
-        ) {
-            Button(
-                onClick = if (uiState.canResume) onResume else onPause,
-                enabled = uiState.canResume || uiState.canPause,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = controlsSpec.primaryButtonMinHeight),
-                shape = RoundedCornerShape(currentCardCorner()),
-                colors = ButtonDefaults.buttonColors(containerColor = skin.tokens.action)
-            ) {
-                Text(
-                    text = if (uiState.canResume) "继续训练" else "暂停训练",
-                    fontSize = if (skin.isBigType) 20.sp else 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TrainFlowNeutral50
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onSkip,
-                    enabled = uiState.canSkip,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = controlsSpec.secondaryButtonMinHeight),
-                    shape = RoundedCornerShape(currentCardCorner())
-                ) {
-                    Text(
-                        text = "跳过 / 下一步",
-                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                        color = TrainFlowNeutral50
-                    )
-                }
-                TextButton(
-                    onClick = onEnd,
-                    enabled = uiState.canEnd,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = controlsSpec.secondaryButtonMinHeight)
-                ) {
-                    Text(
-                        text = "结束训练",
-                        fontSize = if (skin.isBigType) 17.sp else 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TrainFlowError
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FollowAlongTerminalPanel(
-    uiState: FollowAlongWorkoutSessionUiState,
-    onBackToFollowAlong: () -> Unit
-) {
-    FollowAlongDarkPanel {
-        Text(
-            text = uiState.terminalTitle.orEmpty(),
-            style = MaterialTheme.typography.headlineSmall,
-            color = TrainFlowNeutral50
-        )
-        Text(
-            text = uiState.terminalSummary.orEmpty(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = TrainFlowNeutral200
-        )
-        Button(
-            onClick = onBackToFollowAlong,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrainFlowAccent)
-        ) {
-            Text(text = "返回基础跟练", color = TrainFlowPrimary)
-        }
-    }
-}
-
-@Composable
-private fun FollowAlongDarkPanel(content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun FollowAlongPill(
-    text: String,
-    containerColor: Color = Color.White.copy(alpha = 0.1f),
-    contentColor: Color = TrainFlowNeutral50
-) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = containerColor
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = contentColor
-        )
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
-private fun FollowAlongWorkoutSessionRoutePreview() {
+private fun FollowAlongWorkoutSessionPreview() {
     TrainFlowTheme {
-        FollowAlongWorkoutSessionRoute(
-            plan = buildDefaultFollowAlongScreenState().plans.single().plan,
+        FollowAlongWorkoutSessionScreen(
+            uiState = buildFollowAlongWorkoutSessionUiState(elapsedSec = 65, active = true),
+            showEndConfirmation = false,
+            onRequestEnd = {},
+            onCancelEnd = {},
+            onConfirmEnd = {},
             onBackToFollowAlong = {}
         )
     }
