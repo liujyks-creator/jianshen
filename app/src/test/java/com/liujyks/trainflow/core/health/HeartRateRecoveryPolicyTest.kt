@@ -21,9 +21,7 @@ class HeartRateRecoveryPolicyTest {
             baseline.copy(bluetoothEnabled = false) to
                 HeartRateRecoveryStopReason.BLUETOOTH_OFF,
             baseline.copy(manuallySuppressed = true) to
-                HeartRateRecoveryStopReason.MANUAL_SUPPRESSION,
-            baseline.copy(appVisible = false, activeTrainingFgsActive = false) to
-                HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS
+                HeartRateRecoveryStopReason.MANUAL_SUPPRESSION
         )
 
         ineligible.forEach { (input, expectedReason) ->
@@ -31,13 +29,16 @@ class HeartRateRecoveryPolicyTest {
             assertFalse(decision.eligible)
             assertEquals(expectedReason, decision.stopReason)
         }
+        assertTrue(evaluateHeartRateRecoveryEligibility(
+            baseline.copy(appVisible = false, activeTrainingFgsActive = false)
+        ).eligible)
     }
 
     @Test
-    fun activeTrainingFgsEligibilityCanReplaceForegroundVisibilityOnly() {
+    fun backgroundEligibilityDoesNotDependOnTrainingFgs() {
         val input = eligibleInput().copy(
             appVisible = false,
-            activeTrainingFgsActive = true
+            activeTrainingFgsActive = false
         )
 
         val decision = evaluateHeartRateRecoveryEligibility(input)
@@ -76,7 +77,7 @@ class HeartRateRecoveryPolicyTest {
                                         activeTrainingFgsActive = fgs
                                     )
                                     val expected = optedIn && hasTarget && permission &&
-                                        bluetooth && !suppressed && (visible || fgs)
+                                        bluetooth && !suppressed
 
                                     assertEquals(
                                         "Unexpected decision for $input",

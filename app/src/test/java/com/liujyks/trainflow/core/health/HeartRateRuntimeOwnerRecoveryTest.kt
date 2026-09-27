@@ -96,8 +96,7 @@ class HeartRateRuntimeOwnerRecoveryTest {
             eligibleInput().copy(manuallySuppressed = true) to HeartRateObservationCause.NOT_OBSERVING,
             eligibleInput().copy(savedTargetIdentifier = null) to HeartRateObservationCause.NO_SOURCE_SELECTED,
             eligibleInput().copy(permissionGranted = false) to HeartRateObservationCause.PERMISSION_REVOKED,
-            eligibleInput().copy(bluetoothEnabled = false) to HeartRateObservationCause.BLUETOOTH_OFF,
-            eligibleInput().copy(appVisible = false) to HeartRateObservationCause.DISCONNECTED
+            eligibleInput().copy(bluetoothEnabled = false) to HeartRateObservationCause.BLUETOOTH_OFF
         )
         cases.forEach { (input, expected) ->
             E17ScannerShadow.resetFailures()
@@ -115,6 +114,17 @@ class HeartRateRuntimeOwnerRecoveryTest {
             assertEquals(before, ledger)
         }
         E17ScannerShadow.resetFailures()
+        owner = HeartRateRuntimeOwner(application, scanWindowMillis = SCAN_WINDOW_MS, recoveryIntervalMillis = RECOVERY_INTERVAL_MS)
+        val backgroundLedger = mutableListOf<HeartRateObservation>()
+        owner.bindObservations(HeartRateObservationBindingId(), backgroundLedger::add)
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        val beforeBackground = backgroundLedger.toList()
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(
+            eligibleInput().copy(appVisible = false)
+        ))
+        idleMain()
+        assertEquals(beforeBackground, backgroundLedger)
     }
 
     @Test
@@ -198,9 +208,7 @@ class HeartRateRuntimeOwnerRecoveryTest {
             eligibleInput().copy(bluetoothEnabled = false) to
                 HeartRateRecoveryStopReason.BLUETOOTH_OFF,
             eligibleInput().copy(manuallySuppressed = true) to
-                HeartRateRecoveryStopReason.MANUAL_SUPPRESSION,
-            eligibleInput().copy(appVisible = false) to
-                HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS
+                HeartRateRecoveryStopReason.MANUAL_SUPPRESSION
         )
 
         contexts.forEach { (context, expectedReason) ->
@@ -216,6 +224,13 @@ class HeartRateRuntimeOwnerRecoveryTest {
             idleFor(SCAN_WINDOW_MS + RECOVERY_INTERVAL_MS)
             assertTrue(shadowScanner.scanCallbacks.isEmpty())
         }
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(eligibleInput()))
+        idleMain()
+        owner.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(
+            eligibleInput().copy(appVisible = false)
+        ))
+        idleMain()
+        assertEquals(HeartRateRecoveryPhase.SEARCHING, owner.recoveryState.value.phase)
     }
 
     @Test

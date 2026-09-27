@@ -57,8 +57,6 @@ internal fun evaluateHeartRateRecoveryEligibility(
         target == null -> HeartRateRecoveryStopReason.NO_SAVED_TARGET
         !input.permissionGranted -> HeartRateRecoveryStopReason.PERMISSION_UNAVAILABLE
         !input.bluetoothEnabled -> HeartRateRecoveryStopReason.BLUETOOTH_OFF
-        !input.appVisible && !input.activeTrainingFgsActive ->
-            HeartRateRecoveryStopReason.BACKGROUND_WITHOUT_FGS
         else -> null
     }
     return if (reason == null) {

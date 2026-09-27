@@ -17,11 +17,14 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
 import android.os.SystemClock
+import android.os.Process
+import android.util.Log
 import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.HeartRateTechnicalFailure
 import java.time.Instant
@@ -60,6 +63,7 @@ internal class HeartRateRuntimeOwner(
     private val freshnessConfig: HeartRateFreshnessConfig = HeartRateFreshnessConfig()
 ) : HeartRateProvider, AutoCloseable {
     private val appContext = context.applicationContext
+    private val evidenceEnabled = appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     private val freshnessPolicy = HeartRateFreshnessPolicy(freshnessConfig)
     private val mutableHeartRateState = MutableStateFlow(
         HeartRateRuntimeFact.Disabled.toHeartRateState()
@@ -124,6 +128,7 @@ internal class HeartRateRuntimeOwner(
         observationBinding = binding
         observationSink = sink
         observationReceipt = 0L
+        evidence("bindingInstalled anchor=$anchor binding=${System.identityHashCode(bindingId)}")
         return HeartRateBindingDisposition.MatchingInstalled(binding)
     }
 
@@ -144,6 +149,7 @@ internal class HeartRateRuntimeOwner(
         if (binding.bindingId !== bindingId) return HeartRateUnbindDisposition.CONFLICTING_INSTALLED
         observationBinding = null
         observationSink = null
+        evidence("bindingRemoved binding=${System.identityHashCode(bindingId)}")
         return HeartRateUnbindDisposition.REMOVED
     }
 
@@ -745,6 +751,7 @@ internal class HeartRateRuntimeOwner(
             phase = AttemptPhase.CONNECTING
         )
         activeAttempt = attempt
+        evidence("attemptStarted attempt=$attemptId origin=$origin target=$identifier", attempt)
         val callback = AttemptGattCallback(
             attemptId = attemptId,
             ownerGeneration = attempt.ownerGeneration,
@@ -800,6 +807,7 @@ internal class HeartRateRuntimeOwner(
             gatt
         ) ?: return
         if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            evidence("gattDisconnected status=$status phase=${attempt.phase}", attempt, gatt)
             cleanup(
                 if (attempt.phase == AttemptPhase.CONNECTING) {
                     HeartRateRuntimeFact.TechnicalFailure(
@@ -989,6 +997,7 @@ internal class HeartRateRuntimeOwner(
         }
         val nowElapsed = SystemClock.elapsedRealtime()
         attempt.phase = AttemptPhase.WAITING_FIRST_DATA
+        evidence("subscriptionReady elapsedMs=$nowElapsed", attempt, gatt)
         attempt.timeline = HeartRateFreshnessTimeline().notifyEnabled(nowElapsed)
         publish(HeartRateRuntimeFact.WaitingFirstData(attempt.source))
         publishRecovery(
@@ -1015,19 +1024,25 @@ internal class HeartRateRuntimeOwner(
             targetIdentifier,
             gatt
         ) ?: return
-        if (characteristic !== attempt.measurement) return
+        if (characteristic !== attempt.measurement) {
+            evidence("notifyIgnoredCharacteristic", attempt, gatt)
+            return
+        }
         if (attempt.phase != AttemptPhase.WAITING_FIRST_DATA &&
             attempt.phase != AttemptPhase.LIVE &&
             attempt.phase != AttemptPhase.DATA_INTERRUPTED
         ) {
+            evidence("notifyIgnoredPhase phase=${attempt.phase}", attempt, gatt)
             return
         }
         val nowElapsed = SystemClock.elapsedRealtime()
         val measurement = HeartRateMeasurementParser.parse(value)
         if (measurement == null || measurement.bpm <= 0) {
+            evidence("notifyMalformed elapsedMs=$nowElapsed", attempt, gatt)
             attempt.timeline = attempt.timeline.malformedSample()
             return
         }
+        evidence("notifyValid elapsedMs=$nowElapsed bpm=${measurement.bpm}", attempt, gatt)
         attempt.timeline = attempt.timeline.validSample(
             atElapsedMs = nowElapsed,
             bpm = measurement.bpm,
@@ -1200,6 +1215,7 @@ internal class HeartRateRuntimeOwner(
 
         val detachedScan = activeScan
         val detachedAttempt = activeAttempt
+        evidence("cleanup requested=${requestedFact.javaClass.simpleName}", detachedAttempt, detachedAttempt?.gatt)
         activeScan = null
         activeAttempt = null
         candidateDevices.clear()
@@ -1248,6 +1264,7 @@ internal class HeartRateRuntimeOwner(
         } else {
             requestedCause
         })
+        evidence("cleanupFinished actual=${finalFact.javaClass.simpleName}")
         if (!ownerClosed) {
             val decision = evaluateHeartRateRecoveryEligibility(recoveryEligibilityInput)
             if (decision.eligible) {
@@ -1470,8 +1487,26 @@ internal class HeartRateRuntimeOwner(
         val binding = observationBinding ?: return
         val receipt = Math.incrementExact(observationReceipt)
         observationReceipt = receipt
-        requireNotNull(observationSink).invoke(
-            HeartRateObservation(binding.bindingId, receipt, SystemClock.elapsedRealtime(), payload)
+        val observation = HeartRateObservation(
+            binding.bindingId, receipt, SystemClock.elapsedRealtime(), payload
+        )
+        requireNotNull(observationSink).invoke(observation)
+        if (payload is HeartRateObservationPayload.ValidMeasurement) {
+            evidence(
+                "sampleSubmitted binding=${System.identityHashCode(binding.bindingId)} " +
+                    "anchor=${binding.anchorElapsedRealtimeMs} receipt=$receipt " +
+                    "elapsedMs=${observation.elapsedRealtimeMs} bpm=${payload.bpm}"
+            )
+        }
+    }
+
+    private fun evidence(event: String, attempt: ActiveAttempt? = activeAttempt, gatt: BluetoothGatt? = attempt?.gatt) {
+        if (!evidenceEnabled) return
+        Log.d(
+            "TrainFlowHrEvidence",
+            "pid=${Process.myPid()} owner=${System.identityHashCode(this)} " +
+                "generation=$scanGeneration attempt=${attempt?.id} gatt=${gatt?.let(System::identityHashCode)} " +
+                "elapsedMs=${SystemClock.elapsedRealtime()} $event"
         )
     }
 
