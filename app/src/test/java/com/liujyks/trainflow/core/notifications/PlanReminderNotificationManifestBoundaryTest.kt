@@ -22,8 +22,7 @@ class PlanReminderNotificationManifestBoundaryTest {
                 manifest.contains("android:name=\"$permission\"")
             )
         }
-        assertTrue(manifest.contains("PlanReminderNotificationReceiver"))
-        assertTrue(manifest.contains("android:exported=\"false\""))
+        assertFalse(manifest.contains("PlanReminderNotificationReceiver"))
         assertFalse(manifest.contains("android.permission.SCHEDULE_EXACT_ALARM"))
         assertFalse(manifest.contains("android.permission.USE_EXACT_ALARM"))
         assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
@@ -47,19 +46,6 @@ class PlanReminderNotificationManifestBoundaryTest {
         assertFalse(manifest.contains("ActiveWorkoutForegroundService"))
         assertFalse(activeAndroid.contains("startForeground"))
         assertFalse(activeAndroid.contains("ServiceCompat.startForeground"))
-    }
-
-    @Test
-    fun androidSchedulerDoesNotUseExactAlarmOrForegroundServiceBoundary() {
-        val source = File(
-            "src/main/java/com/liujyks/trainflow/core/notifications/AndroidPlanReminderNotifications.kt"
-        ).readText()
-
-        assertTrue(source.contains("alarmManager.set("))
-        assertFalse(source.contains("setExact"))
-        assertFalse(source.contains("setAlarmClock"))
-        assertFalse(source.contains("startForeground"))
-        assertFalse(source.contains("ForegroundService"))
     }
 
     private companion object {

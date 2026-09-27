@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liujyks.trainflow.R
 import com.liujyks.trainflow.core.model.PermissionPrivacySection
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationPermissionState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral100
 import com.liujyks.trainflow.ui.theme.TrainFlowNeutral200
@@ -75,6 +76,8 @@ import com.liujyks.trainflow.ui.theme.isTileFlow
 @Composable
 internal fun SettingsRoute(
     uiState: TrainingPreferencesScreenState,
+    notificationPermissionState: ActiveWorkoutNotificationPermissionState? = null,
+    onOpenNotificationSettings: () -> Unit = {},
     onBackToTraining: () -> Unit,
     onDefaultCountdownThresholdChanged: (Int) -> Unit,
     onActionCueEnabledChanged: (Boolean) -> Unit,
@@ -170,7 +173,11 @@ internal fun SettingsRoute(
         }
 
         item {
-            PermissionPrivacyCard(uiState.permissionPrivacySections)
+            PermissionPrivacyCard(
+                sections = uiState.permissionPrivacySections,
+                notificationPermissionState = notificationPermissionState,
+                onOpenNotificationSettings = onOpenNotificationSettings
+            )
         }
     }
 }
@@ -719,7 +726,11 @@ private fun SkinPreferencesCard(
 }
 
 @Composable
-private fun PermissionPrivacyCard(sections: List<PermissionPrivacySection>) {
+private fun PermissionPrivacyCard(
+    sections: List<PermissionPrivacySection>,
+    notificationPermissionState: ActiveWorkoutNotificationPermissionState?,
+    onOpenNotificationSettings: () -> Unit
+) {
     SettingsCard {
         SectionTitle(text = "权限与隐私")
         Text(
@@ -729,6 +740,15 @@ private fun PermissionPrivacyCard(sections: List<PermissionPrivacySection>) {
         )
         sections.forEach { section ->
             BoundaryTextRow(section)
+        }
+        if (notificationPermissionState != null) {
+            StatusBlock(
+                title = "训练通知",
+                body = notificationPermissionState.rationale
+            )
+            Button(onClick = onOpenNotificationSettings) {
+                Text("通知设置")
+            }
         }
     }
 }

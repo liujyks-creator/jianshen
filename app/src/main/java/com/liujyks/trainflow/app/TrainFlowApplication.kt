@@ -11,6 +11,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
+import com.liujyks.trainflow.core.data.WorkoutPlanRepository
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
@@ -18,6 +19,9 @@ import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
 import com.liujyks.trainflow.core.health.HeartRateRecoveryEligibilityInput
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.clearLegacyPlanReminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,6 +46,9 @@ class TrainFlowApplication : Application() {
     internal lateinit var workoutSessionRepository: WorkoutSessionRepository
         private set
 
+    internal lateinit var activeWorkoutNotifications: ActiveWorkoutNotificationController
+        private set
+
     private var latestPreferences = TrainFlowPreferences()
     private var visibilityFact = ProcessVisibilityFact.UNKNOWN
     private val mutableProcessVisibility = MutableStateFlow(ProcessVisibilityFact.UNKNOWN)
@@ -59,6 +66,11 @@ class TrainFlowApplication : Application() {
         super.onCreate()
         trainFlowDatabase = TrainFlowDatabase.create(this)
         workoutSessionRepository = WorkoutSessionRepository(trainFlowDatabase)
+        activeWorkoutNotifications = AndroidActiveWorkoutNotificationController(applicationContext)
+        activeWorkoutNotifications.initialize()
+        applicationScope.launch {
+            clearLegacyPlanReminders(applicationContext, WorkoutPlanRepository(trainFlowDatabase))
+        }
         heartRateRuntimeOwner = HeartRateRuntimeOwner(this)
         preferencesDataSource = TrainFlowPreferencesDataSource(trainFlowPreferencesDataStore)
         ProcessVisibilityTracker(this) { fact ->

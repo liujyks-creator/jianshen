@@ -72,7 +72,6 @@ internal data class StrengthPlanEditorScreenState(
                     setTimerMode = strengthSetTimerMode
                 )
             },
-            reminder = originalPlanMetadata?.reminder,
             preferences = preferences,
             createdAt = originalPlanMetadata?.createdAt ?: sourceCreatedAt ?: timestamp,
             updatedAt = timestamp

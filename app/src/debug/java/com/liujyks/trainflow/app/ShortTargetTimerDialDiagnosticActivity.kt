@@ -30,6 +30,7 @@ class ShortTargetTimerDialDiagnosticActivity : ComponentActivity() {
             TrainFlowTheme(reduceMotion = reduceMotion) {
                 TimedWorkoutSessionRoute(
                     plan = shortTargetTimerDialDiagnosticPlan(),
+                    activeWorkoutNotifications = (application as TrainFlowApplication).activeWorkoutNotifications,
                     onBackToPlans = { finish() },
                     onOpenRecoveryRecommendation = {},
                     onReturnToTrainingHome = { finish() },

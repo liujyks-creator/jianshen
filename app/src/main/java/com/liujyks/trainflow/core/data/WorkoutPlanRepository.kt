@@ -30,6 +30,8 @@ internal class WorkoutPlanRepository(
     suspend fun getPlan(planId: String): WorkoutPlan? {
         return dao.getPlan(planId)?.toDomain()
     }
+
+    suspend fun clearLegacyReminders(): Int = dao.clearLegacyReminders()
 }
 
 private fun WorkoutPlan.toEntity(): WorkoutPlanEntity {
@@ -39,7 +41,7 @@ private fun WorkoutPlan.toEntity(): WorkoutPlanEntity {
         title = title,
         description = description,
         blocksJson = blocks.toPlanBlocksStorageJson(),
-        reminderJson = reminder?.toStorageJson(),
+        reminderJson = null,
         preferencesJson = preferences?.toStorageJson(),
         followAlongJson = followAlong?.toStorageJson(),
         createdAt = createdAt,
@@ -54,7 +56,6 @@ private fun WorkoutPlanEntity.toDomain(): WorkoutPlan {
         title = title,
         description = description,
         blocks = blocksJson.toPlanBlocksStorage(),
-        reminder = reminderJson?.toPlanReminderStorage(),
         preferences = preferencesJson?.toPlanPreferencesStorage(),
         followAlong = followAlongJson?.toFollowAlongMetaStorage(),
         createdAt = createdAt,

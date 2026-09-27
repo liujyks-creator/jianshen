@@ -1,9 +1,18 @@
 package com.liujyks.trainflow.core.data
 
+import android.app.AlarmManager
+import android.app.Application
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
+import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
+import com.liujyks.trainflow.core.notifications.clearLegacyPlanReminders
 import com.liujyks.trainflow.core.model.CooldownBlock
 import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
@@ -33,6 +42,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -164,15 +174,55 @@ class WorkoutPlanRepositoryTest {
     }
 
     @Test
-    fun disabledReminderRoundTripsAsDisabledLocalPlanSetting() = runBlocking {
-        val plan = customTimedPlan().copy(
-            reminder = com.liujyks.trainflow.core.model.PlanReminder(enabled = false)
-        )
-
+    @Config(sdk = [35], application = Application::class)
+    fun clearingLegacyRemindersPreservesPlanAndSessionData() = runBlocking {
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val plan = customTimedPlan().copy(id = "p")
         repository.upsertPlan(plan)
+        val planDao = database.workoutPlanDao()
+        val oldJson = """{"enabled":true,"scheduleAt":"2026-06-16T11:30:00Z","repeatRule":"weekly"}"""
+        planDao.upsertPlan(requireNotNull(planDao.getPlan("p")).copy(reminderJson = oldJson))
+        val session = WorkoutSessionEntity(
+            id = "history-p", planId = "p", mode = "timed", status = "completed",
+            planSnapshotJson = plan.toPlanSnapshot().toStorageJson(),
+            startedAt = "2026-06-16T11:30:00Z", endedAt = "2026-06-16T11:32:00Z"
+        )
+        val sessionDao = database.workoutSessionDao()
+        sessionDao.insertSession(session)
+        val beforePlan = requireNotNull(planDao.getPlan("p"))
+        val beforeSession = sessionDao.sessionsForRecorderGate().single()
 
-        assertFalse(requireNotNull(repository.getPlan(plan.id)?.reminder).enabled)
-        assertNull(repository.getPlan(plan.id)?.reminder?.scheduleAt)
+        val alarms = application.getSystemService(AlarmManager::class.java)
+        val oldIntent = Intent("com.liujyks.trainflow.PLAN_REMINDER").setClassName(
+            application, "com.liujyks.trainflow.core.notifications.PlanReminderNotificationReceiver"
+        )
+        val pending = PendingIntent.getBroadcast(
+            application, 112, oldIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarms.set(AlarmManager.RTC_WAKEUP, 1_900_000_000_000L, pending)
+        assertTrue(shadowOf(alarms).scheduledAlarms.any { it.operation == pending })
+
+        val notifications = application.getSystemService(NotificationManager::class.java)
+        notifications.createNotificationChannel(NotificationChannel("trainflow_plan_reminders", "训练提醒", NotificationManager.IMPORTANCE_DEFAULT))
+        notifications.createNotificationChannel(NotificationChannel("trainflow_active_workout", "训练进行中", NotificationManager.IMPORTANCE_LOW))
+        notifications.notify(112, Notification.Builder(application, "trainflow_plan_reminders")
+            .setSmallIcon(com.liujyks.trainflow.R.drawable.ic_launcher_foreground)
+            .setContentText("旧预约").build())
+        notifications.notify(7200, Notification.Builder(application, "trainflow_active_workout")
+            .setSmallIcon(com.liujyks.trainflow.R.drawable.ic_launcher_foreground)
+            .setContentText("当前训练").build())
+
+        clearLegacyPlanReminders(application, repository)
+
+        assertFalse(shadowOf(alarms).scheduledAlarms.any { it.operation == pending })
+        assertNull(shadowOf(notifications).getNotification(112))
+        assertEquals("当前训练", shadowOf(notifications).getNotification(7200)
+            .extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        assertEquals(beforePlan.copy(reminderJson = null), planDao.getPlan("p"))
+        assertEquals(beforeSession, sessionDao.sessionsForRecorderGate().single())
+        val restored = requireNotNull(repository.getPlan("p"))
+        repository.upsertPlan(restored)
+        assertNull(planDao.getPlan("p")?.reminderJson)
     }
 
     private fun customTimedPlan(): WorkoutPlan {

@@ -23,6 +23,9 @@ interface WorkoutPlanDao {
     @Query("DELETE FROM workout_plans WHERE id = :planId")
     suspend fun deletePlan(planId: String)
 
+    @Query("UPDATE workout_plans SET reminder_json = NULL WHERE reminder_json IS NOT NULL")
+    suspend fun clearLegacyReminders(): Int
+
     @Query("SELECT COUNT(*) FROM workout_plans")
     suspend fun count(): Int
 }

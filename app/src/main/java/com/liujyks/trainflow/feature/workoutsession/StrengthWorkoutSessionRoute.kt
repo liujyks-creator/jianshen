@@ -88,8 +88,8 @@ import com.liujyks.trainflow.core.model.SessionStepKind
 import com.liujyks.trainflow.core.model.WorkoutCommand
 import com.liujyks.trainflow.core.model.WorkoutEvent
 import com.liujyks.trainflow.core.model.WorkoutPlan
-import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
-import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationProducer
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -113,6 +113,7 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun StrengthWorkoutSessionRoute(
     plan: WorkoutPlan,
+    activeWorkoutNotifications: ActiveWorkoutNotificationController? = null,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     workoutSessionRepository: WorkoutSessionRepository? = null,
@@ -129,6 +130,8 @@ internal fun StrengthWorkoutSessionRoute(
     }
     var sessionStartedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
     var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
+    var notificationProducer by remember(sessionId) { mutableStateOf<ActiveWorkoutNotificationProducer?>(null) }
+    var notificationVersion by remember(sessionId) { mutableStateOf(0L) }
     var saved by remember(sessionId) { mutableStateOf(false) }
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
@@ -139,9 +142,6 @@ internal fun StrengthWorkoutSessionRoute(
     val displayEntries = remember(sessionId) { linkedMapOf<String, JSONObject>() }
     val soundCueController = rememberWorkoutSoundCueController()
     val context = LocalContext.current
-    val activeWorkoutNotifications = remember(context) {
-        AndroidActiveWorkoutNotificationController(context.applicationContext)
-    }
 
     fun displayMetadata(state: StrengthWorkoutEngineState): String {
         if (state.status == SessionStatus.ACTIVE) state.currentSet?.let { set ->
@@ -225,6 +225,18 @@ internal fun StrengthWorkoutSessionRoute(
             }
         }
         engineState = result.state
+        notificationProducer?.let { producer ->
+            notificationVersion += 1
+            activeWorkoutNotifications?.update(
+                producer,
+                notificationVersion,
+                strengthActiveWorkoutNotificationState(
+                    sessionId = sessionId,
+                    status = result.state.status,
+                    uiState = result.state.toStrengthWorkoutSessionScreenState()
+                )
+            )
+        }
         val naturalRestTickTransition = isTickResult && previousState.currentStepKind == SessionStepKind.STRENGTH_REST
         result.events.dispatchStrengthWorkoutSoundCues(
             cueSettings = sessionPlan.preferences?.cueSettings,
@@ -235,6 +247,7 @@ internal fun StrengthWorkoutSessionRoute(
     }
 
     LaunchedEffect(sessionId) {
+        notificationProducer = activeWorkoutNotifications?.beginSession(sessionId)
         sessionStartedAt = Instant.now()
         val startResult = StrengthWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession)
         try {
@@ -287,8 +300,10 @@ internal fun StrengthWorkoutSessionRoute(
             }
             applyEngineResult(startResult, recordTransition = false)
         } catch (cause: CancellationException) {
+            notificationProducer?.let { activeWorkoutNotifications?.release(it) }
             throw cause
         } catch (cause: Throwable) {
+            notificationProducer?.let { activeWorkoutNotifications?.release(it) }
             saveFailure = cause
         }
         while (true) {
@@ -315,12 +330,10 @@ internal fun StrengthWorkoutSessionRoute(
         }
     ) else engineUiState
     val canReturn = workoutSessionRepository == null || saved || saveFailure != null
-    val notificationState = strengthActiveWorkoutNotificationState(planId = plan.id, status = engineState.status, uiState = uiState)
-    LaunchedEffect(notificationState) { activeWorkoutNotifications.update(notificationState) }
     DisposableEffect(activeWorkoutNotifications, sessionId) {
         onDispose {
             recorder?.clear()
-            activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
+            notificationProducer?.let { activeWorkoutNotifications?.release(it) }
         }
     }
     val currentSet = engineState.currentSet
@@ -1594,6 +1607,7 @@ private fun StrengthSessionPill(
 private fun StrengthWorkoutSessionRoutePreview() {
     TrainFlowTheme {
         StrengthWorkoutSessionRoute(
+            activeWorkoutNotifications = null,
             plan = buildDefaultPlanManagementState().plans[1],
             onBackToPlans = {},
             onOpenRecoveryRecommendation = {}

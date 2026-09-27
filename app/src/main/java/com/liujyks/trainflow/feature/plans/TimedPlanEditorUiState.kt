@@ -138,7 +138,6 @@ internal data class TimedPlanEditorScreenState(
             title = title.trim(),
             description = description.ifBlank { "本地保存的纯间歇计时器计划" },
             blocks = blocks,
-            reminder = originalPlanMetadata?.reminder,
             preferences = preferences,
             createdAt = originalPlanMetadata?.createdAt ?: sourceCreatedAt ?: timestamp,
             updatedAt = timestamp

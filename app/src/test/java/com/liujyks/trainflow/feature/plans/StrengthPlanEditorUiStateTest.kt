@@ -3,7 +3,6 @@ package com.liujyks.trainflow.feature.plans
 import com.liujyks.trainflow.core.model.ExerciseSide
 import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
 import com.liujyks.trainflow.core.model.PlanPreferences
-import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.RepTarget
 import com.liujyks.trainflow.core.model.StrengthExerciseBlock
 import com.liujyks.trainflow.core.model.StrengthSetKind
@@ -81,15 +80,10 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
-    fun editingSavedStrengthPlanKeepsReminderAndPreferences() {
+    fun editingSavedStrengthPlanKeepsPreferences() {
         val savedPlan = buildDefaultStrengthPlanEditorState()
             .toWorkoutPlan(planId = "saved-strength", timestamp = "2026-06-14T01:00:00Z")
             .copy(
-                reminder = PlanReminder(
-                    enabled = true,
-                    scheduleAt = "2026-06-16T11:30:00Z",
-                    repeatRule = "weekly"
-                ),
                 preferences = PlanPreferences(
                     heartRateDisplay = HeartRateDisplayPreference(
                         enabled = false,
@@ -105,10 +99,8 @@ class StrengthPlanEditorUiStateTest {
             .savedPlan
             .let(::requireNotNull)
 
-        assertEquals(savedPlan.reminder, editedPlan.reminder)
         assertEquals(savedPlan.preferences?.heartRateDisplay, editedPlan.preferences?.heartRateDisplay)
         assertNotNull(editedPlan.preferences?.cueSettings)
-        assertEquals("weekly", editedPlan.reminder?.repeatRule)
         assertEquals("力量保留提醒", editedPlan.title)
     }
 
@@ -174,7 +166,7 @@ class StrengthPlanEditorUiStateTest {
     }
 
     @Test
-    fun createModeStrengthPlanKeepsReminderEmptyAndAppliesCueDefaults() {
+    fun createModeStrengthPlanAppliesCueDefaults() {
         val plan = buildDefaultStrengthPlanEditorState(
             defaults = PlanEditorDefaults(
                 restCueEnabled = true,
@@ -184,7 +176,6 @@ class StrengthPlanEditorUiStateTest {
         ).toWorkoutPlan()
         val cues = requireNotNull(plan.preferences?.cueSettings)
 
-        assertNull(plan.reminder)
         assertEquals(7, cues.actionEnding?.thresholdSec)
         assertEquals(7, cues.restEnding?.thresholdSec)
         assertFalse(requireNotNull(cues.restEnding).soundEnabled)

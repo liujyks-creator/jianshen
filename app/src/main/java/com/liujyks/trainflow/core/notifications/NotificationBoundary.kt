@@ -1,9 +1,9 @@
 package com.liujyks.trainflow.core.notifications
 
 /**
- * Package boundary for plan reminders and future active-workout notifications.
+ * Package boundary for active-workout notifications and legacy reminder cleanup.
  *
- * E7.1 only implements ordinary plan reminder notifications. Ongoing workout
- * notifications and foreground service behavior remain deferred.
+ * The application owns the ordinary active-workout notification controller.
+ * Foreground service handoff and background heart-rate recording belong to E20-S02.
  */
 internal object NotificationBoundary
