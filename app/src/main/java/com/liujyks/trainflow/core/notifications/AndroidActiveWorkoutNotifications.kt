@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import com.liujyks.trainflow.R
+import com.liujyks.trainflow.app.MainActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -176,12 +177,9 @@ private fun ActiveWorkoutNotificationContent.toActiveWorkoutNotification(
 }
 
 private fun trainFlowLaunchPendingIntent(context: Context): PendingIntent? {
-    val launchIntent = context.packageManager
-        .getLaunchIntentForPackage(context.packageName)
-        ?.apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        ?: return null
+    val launchIntent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    }
 
     return PendingIntent.getActivity(
         context,
