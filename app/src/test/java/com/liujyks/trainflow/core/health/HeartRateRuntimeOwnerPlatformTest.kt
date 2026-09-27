@@ -623,7 +623,7 @@ class HeartRateRuntimeOwnerPlatformTest {
     fun waitingFirstDataInterruptsAtExactBoundaryWithoutTechnicalFailure() {
         connect("AA:BB:CC:DD:EE:35")
 
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_999))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(15_499))
         assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
 

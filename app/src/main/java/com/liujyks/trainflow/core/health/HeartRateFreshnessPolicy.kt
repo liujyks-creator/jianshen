@@ -1,11 +1,10 @@
 package com.liujyks.trainflow.core.health
 
 /**
- * Provisional foreground-manual thresholds derived from the 2026-07-19 Band 9 M0 measurement.
- * E17-9 M1 lock-screen/background evidence must replace or confirm these values.
+ * Band 9 M0/M1 measured boundaries for first valid data and ongoing valid samples.
  */
 internal data class HeartRateFreshnessConfig(
-    val firstSampleWaitingBoundaryMs: Long = 3_000L,
+    val firstSampleWaitingBoundaryMs: Long = 15_500L,
     val liveFreshnessBoundaryMs: Long = 2_500L
 )
 

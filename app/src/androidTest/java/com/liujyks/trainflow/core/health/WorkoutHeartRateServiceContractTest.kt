@@ -4,8 +4,8 @@ import android.Manifest
 import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Context
+import android.os.Bundle
 import android.os.Process
-import android.util.Log
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -154,24 +154,31 @@ class WorkoutHeartRateServiceContractTest {
             val recording = recordings.singleOrNull()
             val samples = recording?.let { dao.samplesInCanonicalOrder(it.recordingId) }.orEmpty()
             val acquisitions = recording?.let { dao.acquisitionsInSequence(it.recordingId) }.orEmpty()
+            val readbackLines = mutableListOf<String>()
             var line = 0
-            Log.i(READBACK_TAG, "line=${line++} BEGIN mode=$mode session=$sessionId " +
+            readbackLines += "line=${line++} BEGIN mode=$mode session=$sessionId " +
                 "recording=${recording?.recordingId ?: "NONE"} anchor=$anchor " +
-                "from=$from to=$to status=${session.status}")
+                "from=$from to=$to status=${session.status}"
             samples.forEach { sample ->
-                Log.i(READBACK_TAG, "line=${line++} SAMPLE session=$sessionId " +
+                readbackLines += "line=${line++} SAMPLE session=$sessionId " +
                     "sequence=${sample.sampleSequence} offsetMs=${sample.offsetMs} " +
-                    "mutationSequence=${sample.mutationSequence} bpm=${sample.bpm}")
+                    "mutationSequence=${sample.mutationSequence} bpm=${sample.bpm}"
             }
             acquisitions.forEach { acquisition ->
-                Log.i(READBACK_TAG, "line=${line++} ACQUISITION session=$sessionId " +
+                readbackLines += "line=${line++} ACQUISITION session=$sessionId " +
                     "sequence=${acquisition.sequence} startOffsetMs=${acquisition.startOffsetMs} " +
                     "endOffsetMs=${acquisition.endOffsetMs} deviceState=${acquisition.deviceState} " +
                     "deviceReason=${acquisition.deviceReason} " +
-                    "recordingIntent=${acquisition.recordingIntent} intentReason=${acquisition.intentReason}")
+                    "recordingIntent=${acquisition.recordingIntent} intentReason=${acquisition.intentReason}"
             }
-            Log.i(READBACK_TAG, "line=$line END session=$sessionId " +
-                "sampleCount=${samples.size} acquisitionCount=${acquisitions.size}")
+            readbackLines += "line=$line END session=$sessionId " +
+                "sampleCount=${samples.size} acquisitionCount=${acquisitions.size}"
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            readbackLines.chunked(10).forEach { chunk ->
+                instrumentation.sendStatus(2, Bundle().apply {
+                    putString("stream", chunk.joinToString("\n", postfix = "\n") { "$READBACK_TAG: $it" })
+                })
+            }
         }
     }
 

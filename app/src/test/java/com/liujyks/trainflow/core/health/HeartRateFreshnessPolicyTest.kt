@@ -175,6 +175,34 @@ class HeartRateFreshnessPolicyTest {
     }
 
     @Test
+    fun finalDefaultBoundariesMatchApprovedMeasurementLiterals() {
+        val default = HeartRateFreshnessConfig()
+        val finalPolicy = HeartRateFreshnessPolicy()
+        val waiting = HeartRateFreshnessTimeline().notifyEnabled(atElapsedMs = 1_000)
+        val live = waiting.validSample(atElapsedMs = 2_000, bpm = 88, measuredAt = "wall-A")
+
+        assertEquals(15_500L, default.firstSampleWaitingBoundaryMs)
+        assertEquals(2_500L, default.liveFreshnessBoundaryMs)
+        assertEquals(HeartRateFreshnessKind.WAITING, finalPolicy.evaluate(16_499, waiting).kind)
+        for (now in listOf(16_500L, 16_501L)) {
+            val decision = finalPolicy.evaluate(now, waiting)
+            assertEquals(HeartRateFreshnessKind.DATA_INTERRUPTED, decision.kind)
+            assertEquals(HeartRateFreshnessReason.FIRST_SAMPLE_INTERRUPTED, decision.reason)
+            assertNull(decision.bpm)
+        }
+        val beforeLiveDeadline = finalPolicy.evaluate(4_499, live)
+        assertEquals(HeartRateFreshnessKind.LIVE, beforeLiveDeadline.kind)
+        assertEquals(88, beforeLiveDeadline.bpm)
+        for (now in listOf(4_500L, 4_501L)) {
+            val decision = finalPolicy.evaluate(now, live)
+            assertEquals(HeartRateFreshnessKind.DATA_INTERRUPTED, decision.kind)
+            assertEquals(HeartRateFreshnessReason.SAMPLE_INTERRUPTED, decision.reason)
+            assertNull(decision.bpm)
+            assertNull(decision.measuredAt)
+        }
+    }
+
+    @Test
     fun invalidConfigurationFailsClosedAndContainsNoE16Thresholds() {
         val timeline = sampleTimeline(sampleAt = 2_000, bpm = 88)
         val invalidPolicy = HeartRateFreshnessPolicy(
