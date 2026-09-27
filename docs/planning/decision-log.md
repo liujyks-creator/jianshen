@@ -1,5 +1,11 @@
 # TrainFlow 决策日志
 
+## E20-S01 训练通知与预约退出（E20-S01-C1，2026-09-27）
+
+已批准提案 `.local/planning/E20-S01-IMPLEMENTATION-PROPOSAL.md` §26–30、§31 整体批准及 §32 D13 分工：E20 固定 2/0/2，S01 唯一实施包 1/0/1。原计时/力量/自由跟练入口、Start、控制、停止确认、Saved/返回及声音震动保留；Application 的现有 `ActiveWorkoutNotificationController` 成为普通通知唯一实例，三 Route 用真实 sessionId、producer token、递增 version 直接提交状态，终态和真正 Route dispose 清理。较晚 Route 持场/配置恢复延期覆盖 F15.1 旧 retained/rotate/重接窗口前提；切 App 且同场存活不释放，点击通知不重新 Start。新进程先清旧 ordinary `7200`，权限取系统真实总开关、POST_NOTIFICATIONS 与训练 channel，设置权限卡进入系统通知页；`VISIBILITY_SECRET` 隐藏锁屏运动通知，系统设置有最终控制。
+
+计划预约入口、Receiver、调度与回写退出；新版启动先按旧 PendingIntent 身份撤销排程，再按旧 channel 清预约通知，最后只清 `reminder_json`。数据库 schema 7/列、计划其余字段及时间、训练结构和历史记录保留；不接日历。S02 继续消费同一 controller 的有效场身份/latest desired，扩展 ordinary/FGS 单一 `7200` writer 交接及合法后台 HR 写入；S01 不预实现 Service、FGS 或后台保证。Writer 仅执行批准的 17 方法一次批次、条件限定重验及一份 APK；用户在现有手机覆盖安装一次并做 U01–U04 一轮，可反馈截图或文字。候选不等于人工通过、独立 Review PASS 或集成。
+
 ## E19-S02 自由跟练批准边界（P15，2026-09-26）
 
 用户已批准 `.local/planning/E19-S02-IMPLEMENTATION-PROPOSAL.md` §14.1–14.8：D02-A 在另一设备播放视频或直播，手机前台一次开始；D03 以自由跟练替换旧 preset 入口；D04 整场向上计时、停止二次确认，取消继续同场，确认即 completed。D07 复用既有实时 HR 持久化、正常停止真实截止点，意外中断仅保留 durable 事实；新场沿既有合并，不补中断空白。D05/D06 的 v2、双格式维护和无 HR checkpoint 建议已撤回。

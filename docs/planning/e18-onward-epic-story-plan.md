@@ -4,6 +4,10 @@
 
 ## 当前状态、来源与阅读规则
 
+### 当前 E20-S01：训练通知统一协调与预约提醒退出（E20-S01-C1）
+
+已批准 `.local/planning/E20-S01-IMPLEMENTATION-PROPOSAL.md` §26–30、§31 整体批准及 §32 D13 分工窄覆盖下方 F.15.1 的旧 retained/rotate/重接窗口前提。E20 固定 2/0/2；S01 唯一实施包 1/0/1，S02 等待。三模式原用户流程、训练结构/声音震动/记录保留；S01 只完成 ordinary `7200` 唯一发布、设置真实权限入口、锁屏 SECRET 及旧预约退出。Writer 的自动测试/一份 APK 与用户一轮 U01–U04 人工验收分层；候选不等于 Review PASS、集成或 S02 后台 HR 通过。
+
 ### 当前 E19-S02：自由跟练完整记录闭环（P15）
 
 acceptedBase=`3ce26a63dd715cf1e5e3beae27997263b44ab697`。P15 批准的 `.local/planning/E19-S02-IMPLEMENTATION-PROPOSAL.md` §14.1–14.8 窄覆盖下方 F.14.2/F.28.2/F.34.1/F.37 的旧 preset、动作阶段、ViewModel 与证据文字。E19 固定 2/1/1，S02 唯一包 E19-S02-P1 为 1/0/1；候选实施不等于 Review PASS 或接受，CS04C=HELD，E20–E22 不解锁。
@@ -1040,28 +1044,23 @@ F.11变更后，本轮在内存重建完整候选标签图并检查：22节点�
 
 直接authority：同一main `docs/planning/decision-log.md` 的D-081及较晚D-082；本轮为核对真实eligibility和通知consumer额外读取 `C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\docs\planning\e17-auto-reconnect-and-personal-parameters-correct-course.md` §3/§6–7，SHA256=`BFC124C79064141411371660589F0D169977D20D09D8485DDB3DC2CF06B3D6DC`。只承接已接受行为/owner，旧编号、旧未实施状态及“当前不含Room”范围不覆盖本次Git事实/重排。本文件须计入未来Planner inputDocuments总数，分类为accepted main行为来源，不当作新candidate。
 
-#### F.15.1 E20-S01 Application唯一普通通知协调
+#### F.15.1 E20-S01 Application唯一普通通知协调（E20-S01-C1 当前覆盖）
 
-当前三个Route各创建 `AndroidActiveWorkoutNotificationController` 并在dispose时clear；existing contract只有update/clear。old→new为Application进程内唯一实例消费三模式retained entry的最新状态，ID7200单writer且能拒绝旧producer/version，不把planId当一次训练identity。
+用户在原计划页进入计时或力量训练，或在跟练入口点击一次 Start；同一存活场次切 App 后普通通知继续展示训练实际状态，点击返回当前场，终态立即移除通知。设置页“权限与隐私”提供“通知设置”进入系统本 App 页面，返回读取总开关与训练 channel；锁屏默认隐藏运动通知，解锁通知栏可见。训练动作、休息、声音震动、保存和历史保持原流程。计划预约入口、调度和回写退出，旧系统排程/预约通知及 `reminder_json` 定向清理，计划其他字段和历史保留。准确实施与验证边界见已批准 E20-S01-C1 §26–32。
 
-| AC | 条件 → 可观察结果 | oracle |
+| 义务 | S01 当前责任 | 证据边界 |
 |---|---|---|
-| N01 identity唯一 | sessionId+producer token+单调stateVersion匹配才更新；相同计划下一场、旧页面迟到update/clear不扰动当前场。 | 唯一production coordinator和两个真实producer的有序/乱序fixture；Android notification实际状态 |
-| N02 页面不是owner | rotate、临时去设置、Route移除但retained训练producer仍ACTIVE/PAUSED → 同一producer/token/version连续，不因dispose进入producer detach或清通知。真正terminal及N06/N08的真实失联/新进程清理分别处理，不能把清理限定成只可能terminal。 | 三模式真实路由/Activity配置重建证据：同entry/token、不中断提交、不重复Start、不清当前通知；不能只测policy/helper |
-| N03 既有普通通知 | 无HR或未具备FGS条件时沿ordinary通知内容/权限；permission拒绝不伪报已发布。 | 既有ActiveWorkoutNotificationContracts及真实平台permission分支；不扩展为FGS PASS |
-| N04 单一实例生产接线 | Application唯一实例，全部三模式提交retained状态；不创建第三核心notification interface或旁路notify/cancel。 | Application/Route/Service前置source ownership与平台调用ledger；不得无生产consumer |
-| N05 前后场清理 | 同token重复terminal幂等，旧token不能清掉新场7200；pending handoff的合法后续状态不会被旧状态回滚。terminal使该producer的pending detach/reattach失效，晚到超时或重接不能恢复已结束场。 | 实际coordinator生产并发+结果检查；terminal/detach/replacement/下一场乱序，旧清理最多处置其原身份，不清新场；为S02交付writer边界，不预实现FGS |
-| N06 真正producer脱离 | 脱离指retained训练producer与Application coordinator的当前提交关系真实解除，不是Route dispose、ON_STOP、静默心率、pause或正常无新状态。存在同场重接的真实脱离时，在有限、确定性、可由既有测试时间控制的窗口内保持最后active通知；匹配重接按N07。到界仍未重接或当前脱离身份无法匹配时，fail-closed使该身份失效并将ordinary转NONE，最多clear一次；不无限等待或猜归属。已知terminal沿N05立即收束，不人为等待窗口。 | 生产coordinator明确detach→保持→匹配重接或到界/不匹配的固定序列；窗口前/到界/重复触发及晚到事件用独立期望；实际三模式接线证明只有真实producer脱离能触发。无变化但仍attached的producer不触发超时；不加周期心跳、watchdog或为测试新增scheduler抽象 |
-| N07 重接与版本连续 | 窗口内同session/token重新attached，保留已接收version floor；同session确需replacement时，由同coordinator受控替换并原子使旧token失效，replacement继承已接受的version floor，不能以version归零覆盖最新状态。普通旧token submit/reattach不能冒充replacement请求，也不能清当前有效producer。已terminal/过期身份不能靠迟到reattach复活。 | 按固定输入断言：同token重接、同场受控replacement、旧token晚到/旧version/重复请求、到界与重接竞争；各线性化结果唯一，通知不回退、不清新场。正常配置重建仍按N02同token路径，不为了覆盖replacement而人为替换retained owner |
-| N08 新进程清理 | 新Application不恢复旧session/token/stateVersion内存事实；既有进程中断政策不续跑engine。确认无可恢复active-training事实时，由同coordinator幂等清旧ordinary7200一次，不以本进程内存尚未发布过通知为由跳过。启动清理须在接纳本进程新producer发布前完成协调，迟到/重复初始化不能清新场；不创建持久化producer恢复库或第二清理owner。 | 独立的平台遗留ordinary7200初始状态→新Application初始化→清旧一次；重复初始化/立即新Start/晚到旧清理不清新场。真实进程重建与Android通知证据分开绑定，若force-stop自身清通知，不能用空通知状态冒称已证明App清理分支 |
-| N09 ordinary权限失败 | 普通POST_NOTIFICATIONS被拒绝时不notify；如存在旧ordinary通知，按当前身份幂等清一次，训练继续；保留实际平台错误信号，不吞为成功。此结果不替代S02的FGS权限处理。 | 当前ordinary→permission denied、重复通知输入、下一场的真实平台分支；调用结果与系统显示分别取证，不将FGS的build/submit分支当ordinary发布成功 |
+| N01 | 真实 `sessionId` + producer token + 严格递增 version；同计划下一场独立，旧提交不能占有新场。 | VADD01、三模式真实接线与人工流程。 |
+| N02 | 较晚 Route 持场及配置恢复延期覆盖旧 retained/rotate 前提；切 App 且场仍存活不释放，真正 Route dispose 同步释放。 | Route 源码、VADD02、U02–U04；不承诺进程续训。 |
+| N03 | 普通通知无 HR 亦可显示；权限拒绝不伪报 Posted，不等于 FGS。 | VADD03、权限原方法、U01。 |
+| N04 | Application 唯一现有 controller；三 Route 直接提交真实结果状态，不经 Compose 通知 effect，无旁路发布。 | Application/Route 接线、VADD01–03、U02–U04。 |
+| N05 | 终态和旧 token 清理不影响新场；通知移除不伪造 Recorder 终态。 | VADD01/02、U02–U04。 |
+| N06 | 当前真实 producer 随 Route 存在；真正释放立即清理。旧 retained 重接的有界窗口本期不实现。 | dispose 接线与 VADD02。 |
+| N07 | 严格 version 和旧 token 失效；同场 replacement/rotate 版本继承随配置恢复延期，不制造入口。 | VADD01/02；不把旧未运行时序冒称通过。 |
+| N08 | Application 初始化先清平台遗留 ordinary `7200`，重复初始化不清新场。 | VADD02 平台预置及启动顺序源码。 |
+| N09 | 真实系统权限关闭不 notify，已发布 ordinary 清理，训练继续；平台错误保留原 cause。 | VADD03、U01；FGS 权限由 S02 处理。 |
 
-S02接入FGS时，N01/N05–N09的workout producer identity仍独立存在；不能将它复用为handoffGeneration。coordinator对真实脱离的有界处置只关闭通知提交/发布权，不伪造workout completed/abandoned，不替Recorder保存、释放或停止engine/BLE。S02负责将这些最新身份/目标状态消费到F.15.3/B09–B11：当前FGS或release未确认时，不由ordinary路径旁路cancel7200或恢复notify；清理诉求由既有交接协议处理，Service release ack后coordinator只记相应NONE，不重复clear。合法active/paused后台意外BLE断连不等于producer detach，仍按D-082保持FGS并恢复。
-
-retained架构下的窄适用：F.11.2/L02及F.14已保证配置重建保留producer，N06不能把旧Route-owned承载方式恢复回来。真实owner clear沿L05同步停止Recorder输入/新写（不补终结），通知producer解除须同步交给现有coordinator，不能依赖已取消viewModelScope后续发送；已知terminal走N05，其余确有pending重接的脱离按N06收束。N07是受控同场替换的既有协议保证，不要求增加用户可触发的替换功能。有限窗口的具体本地数值/任务组织属于既有coordinator内可逆实现细节，必须可确定结束并可测；不能借此新建owner、心跳服务或scheduler接口。若实际接线需要改变上述已接受生命周期或撤销保证，先回主管理与用户讨论，不由Writer自行决定。
-
-定位：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\notifications\AndroidActiveWorkoutNotifications.kt`、同目录 `ActiveWorkoutNotificationContracts.kt`、Application及三mode生产consumer。复用existing contract；此Story不实现Service/Manifest FGS、BLE策略、Recorder或history/export。
-
+S02 直接消费同一 controller 保存的有效场身份、version、latest desired 和终态/释放语义，并扩展同一 `7200` 的 ordinary/FGS 交接。producer 身份不等于 handoffGeneration；FGS 持发布权或 release 未确认时 ordinary 不旁路 notify/cancel；合法 ack 后只记录相应 NONE；pending 目标只取最新有效场，旧 ack 不覆盖新场。S02 另负责合法后台/锁屏 HR 继续写入原 Recorder；S01 普通通知与本轮手机观察不证明后台 HR。
 #### F.15.2 E20-S02 connectedDevice FGS与后台恢复接线
 
 S01的普通writer与Service的FGS writer按同一ID7200交接，Service不是engine/GATT owner。后台HR资格沿D-082：opt-in+saved exact target+permission+Bluetooth+无manual suppression，并且App明确visible或active/paused训练能合法使用FGS。合法性失败不宣称后台持续采集；普通ON_STOP本身不等于训练终结或清理。

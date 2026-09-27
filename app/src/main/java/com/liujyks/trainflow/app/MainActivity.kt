@@ -1,6 +1,8 @@
 package com.liujyks.trainflow.app
 
 import android.os.Bundle
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +19,11 @@ import com.liujyks.trainflow.ui.theme.rememberTrainFlowReduceMotion
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        (application as TrainFlowApplication).activeWorkoutNotifications.refreshPermission()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -29,6 +36,8 @@ class MainActivity : ComponentActivity() {
                 WorkoutPlanRepository(trainFlowDatabase)
             }
             val workoutSessionRepository = trainFlowApplication.workoutSessionRepository
+            val activeWorkoutNotifications = trainFlowApplication.activeWorkoutNotifications
+            val notificationPermissionState by activeWorkoutNotifications.permissionState.collectAsState()
             val preferences by preferencesDataSource.preferences.collectAsState(
                 initial = TrainFlowPreferences()
             )
@@ -56,6 +65,13 @@ class MainActivity : ComponentActivity() {
                 reduceMotion = reduceMotion
             ) {
                 TrainFlowApp(
+                    activeWorkoutNotifications = activeWorkoutNotifications,
+                    notificationPermissionState = notificationPermissionState,
+                    onOpenNotificationSettings = {
+                        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                        })
+                    },
                     workoutSessionRepository = workoutSessionRepository,
                     heartRateRuntimeOwner = trainFlowApplication.heartRateRuntimeOwner,
                     workoutPlans = workoutPlans,

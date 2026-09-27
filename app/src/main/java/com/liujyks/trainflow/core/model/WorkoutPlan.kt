@@ -6,17 +6,10 @@ data class WorkoutPlan(
     val title: String,
     val description: String? = null,
     val blocks: List<PlanBlock>,
-    val reminder: PlanReminder? = null,
     val preferences: PlanPreferences? = null,
     val followAlong: FollowAlongPlanMeta? = null,
     val createdAt: String,
     val updatedAt: String
-)
-
-data class PlanReminder(
-    val enabled: Boolean,
-    val scheduleAt: String? = null,
-    val repeatRule: String? = null
 )
 
 data class PlanPreferences(

@@ -2,10 +2,10 @@ package com.liujyks.trainflow.core.model
 
 internal object PermissionPrivacyCopy {
     const val NOTIFICATION_PERMISSION: String =
-        "通知用于计划提醒和训练中状态提示；关闭后训练仍可正常使用，只是不弹通知。普通通知可能被系统延迟，不是闹钟级强提醒。"
+        "通知用于训练中状态提示；关闭后训练仍可正常使用，只是不显示训练通知。普通通知可能被系统延迟，不是闹钟级强提醒。"
 
     const val ACTIVE_WORKOUT_NOTIFICATION: String =
-        "活跃训练通知只是训练状态摘要，不是 foreground service，不保证后台可靠计时或进程死亡恢复。"
+        "活跃训练通知只是训练状态摘要，不是 foreground service，不保证后台可靠计时或进程死亡恢复；锁屏默认隐藏，解锁后可在通知栏查看。"
 
     const val HEALTH_DATA: String =
         "当前首版不显示心率、不录入心率、不统计心率，也未接入真实设备、手环、手表或健康数据；未来健康数据不得做医疗告警、危险判断或训练强度判断。"

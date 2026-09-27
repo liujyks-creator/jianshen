@@ -406,7 +406,9 @@ stateDiagram-v2
 
 首版采用普通训练提醒，不把闹铃级强提醒作为 MVP 硬依赖。
 
-- 计划提醒：通过通知调度实现，允许系统延迟。
+- E20-S01 当前覆盖：计划预约入口、调度和回写退出。新版启动按旧 PendingIntent 精确撤销旧排程，按旧 channel 清预约通知，最后只清 `workout_plans.reminder_json`；列与 schema 7 保留，计划其他字段及历史不改。
+- E20-S01 的 Application 创建唯一现有通知 controller 并在新进程接收 Start 前清旧 ordinary `7200`。计时、力量、自由跟练 Route 从真实 Start 获得本场 producer，状态变化直接提交 `sessionId`、token 与递增 version；终态立即清通知，真正 Route dispose 释放。切 App 不等于释放，同一存活场的通知点击返回不重启训练。
+- 设置页权限卡通过系统本 App 通知设置页读取实际总开关与训练 channel；不在训练开始自动请求权限。普通通知使用 `VISIBILITY_SECRET`，解锁通知栏可查看；用户系统设置有最终控制。本 S01 不实现下列 S02 的 FGS、Service 或后台 HR 保证。
 - 普通活跃训练：沿用 D-027 / E7.2 ordinary ongoing notification，摘要来自训练 UI state 或 engine state，不反向进入训练执行引擎；active / paused 本身不普遍变成 FGS，也不承诺普通训练后台精确计时。
 - D-081 窄例外：只有 active / paused training 的合法心率连接或 D-082 bounded recovery 使用 `connectedDevice` FGS；background / lockscreen unexpected disconnect 且 eligibility 仍成立时不得退回 ordinary，FGS 与 ID `7200` writer保持 active、content显示 reconnecting，同一 Application owner以新 generation / attempt恢复。只有 eligibility 失败、显式断开 / opt-out / target clear、training terminal、FGS legality failure，或明确 foreground 不再需要 FGS 时才退回 ordinary。
 - 不新增第三个核心 notification interface。适配现有 `ActiveWorkoutNotificationController` contract，使其 production instance 成为 Application / 进程级唯一协调者；Route 只提交训练状态。固定 ID `7200` 概念上只有 `NONE`、`ORDINARY_WORKOUT_NOTIFICATION`、`HEART_RATE_FOREGROUND_SERVICE` 三种模式，任一时刻只有一个 writer，不产生第二条常驻通知。

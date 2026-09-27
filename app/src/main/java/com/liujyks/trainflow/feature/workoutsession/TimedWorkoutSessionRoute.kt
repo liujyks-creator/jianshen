@@ -111,8 +111,8 @@ import com.liujyks.trainflow.core.model.TimedCompositionBlock
 import com.liujyks.trainflow.core.model.TimedCompositionTimelineAdapter
 import com.liujyks.trainflow.core.model.TimedRestExtensionRecord
 import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
-import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
-import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationProducer
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
 import com.liujyks.trainflow.ui.theme.TrainFlowAccent
 import com.liujyks.trainflow.ui.theme.TrainFlowAction
@@ -203,6 +203,7 @@ private fun WorkoutSessionHistoricalResult.Resolved.toPersistedTimedRecap(
 @Composable
 internal fun TimedWorkoutSessionRoute(
     plan: WorkoutPlan,
+    activeWorkoutNotifications: ActiveWorkoutNotificationController? = null,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     onReturnToTrainingHome: () -> Unit = onBackToPlans,
@@ -224,6 +225,8 @@ internal fun TimedWorkoutSessionRoute(
         sessionPlan.blocks.filterIsInstance<TimedCompositionBlock>().map(TimedCompositionTimelineAdapter::expand)
     }
     var startRequested by remember(sessionId) { mutableStateOf(false) }
+    var notificationProducer by remember(sessionId) { mutableStateOf<ActiveWorkoutNotificationProducer?>(null) }
+    var notificationVersion by remember(sessionId) { mutableStateOf(0L) }
     var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
     var saved by remember(sessionId) { mutableStateOf(false) }
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
@@ -241,9 +244,6 @@ internal fun TimedWorkoutSessionRoute(
     val hapticFeedbackSink = rememberCountdownReminderHapticFeedbackSink()
     val context = LocalContext.current
     val reduceMotion = LocalTrainFlowReduceMotion.current
-    val activeWorkoutNotifications = remember(context) {
-        AndroidActiveWorkoutNotificationController(context.applicationContext)
-    }
 
     fun transitionFacts(before: TimedWorkoutEngineState, result: TimedWorkoutEngineResult): LegacyTimedTransitionFactsV1 {
         val startedAt = requireNotNull(sessionStartedAt)
@@ -358,6 +358,18 @@ internal fun TimedWorkoutSessionRoute(
             }
         }
         engineState = result.state
+        notificationProducer?.let { producer ->
+            notificationVersion += 1
+            activeWorkoutNotifications?.update(
+                producer,
+                notificationVersion,
+                timedActiveWorkoutNotificationState(
+                    sessionId = sessionId,
+                    status = result.state.status,
+                    uiState = result.state.toTimedWorkoutSessionScreenState(plan = sessionPlan)
+                )
+            )
+        }
         if (result.shouldDispatchTimedCountdownReminderFeedback()) {
             result.events.dispatchTimedWorkoutFeedback(
                 state = result.state,
@@ -404,7 +416,9 @@ internal fun TimedWorkoutSessionRoute(
         startRequested = true
         sessionStartedAt = Instant.now()
         val startResult = TimedWorkoutEngine.dispatch(engineState, WorkoutCommand.StartSession)
+        notificationProducer = activeWorkoutNotifications?.beginSession(sessionId)
         sessionScope.launch {
+            try {
             if (workoutSessionRepository != null) {
                 val firstPhase = transitionFacts(engineState, startResult).phaseStarts.single()
                 val startTime = requireNotNull(sessionStartedAt).atZone(ZoneId.systemDefault())
@@ -453,6 +467,10 @@ internal fun TimedWorkoutSessionRoute(
             }
             timedRouteClockAnchor += 1
             applyEngineResult(startResult, recordTransition = false)
+            } catch (cause: Throwable) {
+                notificationProducer?.let { activeWorkoutNotifications?.release(it) }
+                throw cause
+            }
         }
     }
 
@@ -480,11 +498,6 @@ internal fun TimedWorkoutSessionRoute(
             requestEnd()
         }
     }
-    val notificationState = timedActiveWorkoutNotificationState(
-        planId = plan.id,
-        status = engineState.status,
-        uiState = uiState
-    )
     LaunchedEffect(canRequestEnd) {
         if (!canRequestEnd) endConfirmation = endConfirmation.cancel()
     }
@@ -518,16 +531,13 @@ internal fun TimedWorkoutSessionRoute(
             )
         }
     }
-    LaunchedEffect(notificationState) {
-        activeWorkoutNotifications.update(notificationState)
-    }
     DisposableEffect(recorder) {
         val currentRecorder = recorder
         onDispose { currentRecorder?.clear() }
     }
-    DisposableEffect(activeWorkoutNotifications, plan.id) {
+    DisposableEffect(activeWorkoutNotifications, sessionId) {
         onDispose {
-            activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
+            notificationProducer?.let { activeWorkoutNotifications?.release(it) }
         }
     }
 
@@ -2067,6 +2077,7 @@ private fun TimedWorkoutSessionRoutePreview() {
     TrainFlowTheme {
         TimedWorkoutSessionRoute(
             plan = buildDefaultPlanManagementState().plans.first(),
+            activeWorkoutNotifications = null,
             onBackToPlans = {},
             onOpenRecoveryRecommendation = {}
         )

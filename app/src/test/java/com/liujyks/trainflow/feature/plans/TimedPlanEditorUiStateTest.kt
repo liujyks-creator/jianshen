@@ -5,7 +5,6 @@ import com.liujyks.trainflow.core.model.CountdownCue
 import com.liujyks.trainflow.core.model.CueSettings
 import com.liujyks.trainflow.core.model.HeartRateDisplayPreference
 import com.liujyks.trainflow.core.model.PlanPreferences
-import com.liujyks.trainflow.core.model.PlanReminder
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedStageType
 import com.liujyks.trainflow.core.model.WarmupBlock
@@ -73,16 +72,11 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
-    fun editingSavedTimedPlanKeepsReminderAndNonCuePreferencesWhileReplacingCueSettings() {
+    fun editingSavedTimedPlanKeepsNonCuePreferencesWhileReplacingCueSettings() {
         val savedPlan = buildDefaultTimedPlanEditorState()
             .updateActionCueThreshold(8)
             .toWorkoutPlan(planId = "saved-timed", timestamp = "2026-06-14T01:00:00Z")
             .copy(
-                reminder = PlanReminder(
-                    enabled = true,
-                    scheduleAt = "2026-06-16T11:30:00Z",
-                    repeatRule = "weekly"
-                ),
                 preferences = PlanPreferences(
                     cueSettings = CueSettings(
                         actionEnding = CountdownCue(thresholdSec = 8),
@@ -103,14 +97,12 @@ class TimedPlanEditorUiStateTest {
             .savedPlan
             .let(::requireNotNull)
 
-        assertEquals(savedPlan.reminder, editedPlan.reminder)
         assertEquals(
             savedPlan.preferences?.heartRateDisplay,
             editedPlan.preferences?.heartRateDisplay
         )
         assertEquals(3, editedPlan.preferences?.cueSettings?.actionEnding?.thresholdSec)
         assertEquals(2, editedPlan.preferences?.cueSettings?.restEnding?.thresholdSec)
-        assertEquals("weekly", editedPlan.reminder?.repeatRule)
     }
 
     @Test
@@ -175,10 +167,9 @@ class TimedPlanEditorUiStateTest {
     }
 
     @Test
-    fun createModeTimedPlanDoesNotInventReminderOrNonCuePreferences() {
+    fun createModeTimedPlanDoesNotInventNonCuePreferences() {
         val plan = buildDefaultTimedPlanEditorState().toWorkoutPlan()
 
-        assertNull(plan.reminder)
         assertNotNull(plan.preferences?.cueSettings)
         assertNull(plan.preferences?.heartRateDisplay)
     }

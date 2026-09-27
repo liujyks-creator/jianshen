@@ -9,6 +9,32 @@ import org.junit.Test
 
 class ActiveWorkoutNotificationContractsTest {
     @Test
+    fun android13PermissionStateMapsGrantedDeniedAndNotRequired() {
+        val granted = ActiveWorkoutNotificationPermissionState.resolve(
+            sdkInt = 33,
+            postNotificationsGranted = true
+        )
+        val denied = ActiveWorkoutNotificationPermissionState.resolve(
+            sdkInt = 33,
+            postNotificationsGranted = false
+        )
+        val notRequired = ActiveWorkoutNotificationPermissionState.resolve(
+            sdkInt = 32,
+            postNotificationsGranted = false
+        )
+
+        assertEquals(ActiveWorkoutNotificationPermissionStatus.GRANTED, granted.status)
+        assertTrue(granted.canPostNotifications)
+        assertEquals(ActiveWorkoutNotificationPermissionStatus.DENIED, denied.status)
+        assertFalse(denied.canPostNotifications)
+        assertTrue(denied.rationale.contains("Android 13+"))
+        assertTrue(denied.rationale.contains("训练仍可正常使用"))
+        assertTrue(denied.rationale.contains("训练中状态通知"))
+        assertEquals(ActiveWorkoutNotificationPermissionStatus.NOT_REQUIRED, notRequired.status)
+        assertTrue(notRequired.canPostNotifications)
+    }
+
+    @Test
     fun activeWorkoutContentShowsSummaryWithoutPreciseBackgroundPromise() {
         val content = ActiveWorkoutNotificationContentFactory.create(
             state = state(status = SessionStatus.ACTIVE)
@@ -75,7 +101,7 @@ class ActiveWorkoutNotificationContractsTest {
     fun policyIgnoresPermissionDeniedWithoutBlockingTraining() {
         val result = ActiveWorkoutNotificationPolicy.evaluate(
             state = state(status = SessionStatus.ACTIVE),
-            permissionState = PlanReminderNotificationPermissionState.resolve(
+            permissionState = ActiveWorkoutNotificationPermissionState.resolve(
                 sdkInt = 33,
                 postNotificationsGranted = false
             )
@@ -84,7 +110,7 @@ class ActiveWorkoutNotificationContractsTest {
         val ignored = result as ActiveWorkoutNotificationUpdateResult.Ignored
         assertEquals(ActiveWorkoutNotificationIgnoredReason.NOTIFICATION_PERMISSION_DENIED, ignored.reason)
         assertTrue(ignored.message.contains("训练仍可正常执行"))
-        assertTrue(ignored.message.contains("计划提醒"))
+        assertFalse(ignored.message.contains("计划提醒"))
     }
 
     @Test
@@ -102,7 +128,7 @@ class ActiveWorkoutNotificationContractsTest {
         secondaryText: String = "下一步 · 深蹲"
     ): ActiveWorkoutNotificationState {
         return ActiveWorkoutNotificationState(
-            sessionKey = "timed:plan-1",
+            sessionId = "session-1",
             mode = WorkoutMode.TIMED,
             planTitle = "全身计时循环",
             status = status,
@@ -114,8 +140,8 @@ class ActiveWorkoutNotificationContractsTest {
         )
     }
 
-    private fun grantedPermission(): PlanReminderNotificationPermissionState {
-        return PlanReminderNotificationPermissionState.resolve(
+    private fun grantedPermission(): ActiveWorkoutNotificationPermissionState {
+        return ActiveWorkoutNotificationPermissionState.resolve(
             sdkInt = 33,
             postNotificationsGranted = true
         )

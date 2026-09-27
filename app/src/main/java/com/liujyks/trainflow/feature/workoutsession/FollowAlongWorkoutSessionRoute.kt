@@ -52,8 +52,8 @@ import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutMode
-import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationClearReason
-import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationProducer
 import com.liujyks.trainflow.feature.settings.HeartRateSettingsUiState
 import com.liujyks.trainflow.ui.designsystem.currentCardCorner
 import com.liujyks.trainflow.ui.designsystem.currentPageHorizontalPadding
@@ -74,6 +74,7 @@ import org.json.JSONObject
 
 @Composable
 internal fun FollowAlongWorkoutSessionRoute(
+    activeWorkoutNotifications: ActiveWorkoutNotificationController,
     workoutSessionRepository: WorkoutSessionRepository,
     heartRateRuntimeOwner: HeartRateRuntimeOwner,
     heartRateSettings: HeartRateSettingsUiState,
@@ -94,6 +95,8 @@ internal fun FollowAlongWorkoutSessionRoute(
     var startedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
     var startClock by remember(sessionId) { mutableStateOf<Long?>(null) }
     var recorder by remember(sessionId) { mutableStateOf<WorkoutSessionTimelineRecorder?>(null) }
+    var notificationProducer by remember(sessionId) { mutableStateOf<ActiveWorkoutNotificationProducer?>(null) }
+    var notificationVersion by remember(sessionId) { mutableStateOf(0L) }
     var active by remember(sessionId) { mutableStateOf(false) }
     var stopping by remember(sessionId) { mutableStateOf(false) }
     var elapsedSec by remember(sessionId) { mutableStateOf(0) }
@@ -103,12 +106,26 @@ internal fun FollowAlongWorkoutSessionRoute(
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var endConfirmation by remember(sessionId) { mutableStateOf(WorkoutEndConfirmationUiState()) }
-    val context = LocalContext.current
-    val activeWorkoutNotifications = remember(context) {
-        AndroidActiveWorkoutNotificationController(context.applicationContext)
+    fun submitNotification(status: SessionStatus) {
+        notificationProducer?.let { producer ->
+            notificationVersion += 1
+            activeWorkoutNotifications.update(
+                producer,
+                notificationVersion,
+                followAlongActiveWorkoutNotificationState(
+                    sessionId = sessionId,
+                    status = status,
+                    uiState = buildFollowAlongWorkoutSessionUiState(
+                        elapsedSec, active, stopping, saved, persistedSummary,
+                        saveFailure, recapReadFailure, initializationFailure
+                    )
+                )
+            )
+        }
     }
 
     LaunchedEffect(sessionId) {
+        notificationProducer = activeWorkoutNotifications.beginSession(sessionId)
         val actualStart = Instant.now()
         startedAt = actualStart
         val startTime = actualStart.atZone(ZoneId.systemDefault())
@@ -162,9 +179,12 @@ internal fun FollowAlongWorkoutSessionRoute(
             acquired.freezeStart().await()
             startClock = SystemClock.elapsedRealtime()
             active = true
+            submitNotification(SessionStatus.ACTIVE)
         } catch (cause: CancellationException) {
+            notificationProducer?.let(activeWorkoutNotifications::release)
             throw cause
         } catch (cause: Throwable) {
+            notificationProducer?.let(activeWorkoutNotifications::release)
             initializationFailure = cause
         }
     }
@@ -175,6 +195,7 @@ internal fun FollowAlongWorkoutSessionRoute(
             while (true) {
                 delay(1000)
                 elapsedSec = ((SystemClock.elapsedRealtime() - clock) / 1000).toInt()
+                submitNotification(SessionStatus.ACTIVE)
             }
         }
     }
@@ -186,6 +207,7 @@ internal fun FollowAlongWorkoutSessionRoute(
         elapsedSec = duration
         active = false
         stopping = true
+        submitNotification(SessionStatus.COMPLETED)
         val submission = requireNotNull(recorder).freezeTerminal(RecorderTerminalInput(
             elapsedRealtimeMs = cut,
             kind = RecorderTerminalKind.COMPLETED,
@@ -246,21 +268,12 @@ internal fun FollowAlongWorkoutSessionRoute(
             uiState.canStop -> endConfirmation = endConfirmation.request(true)
         }
     }
-    val notificationState = followAlongActiveWorkoutNotificationState(
-        sessionId = sessionId,
-        status = if (stopping || saved) SessionStatus.COMPLETED
-            else if (active) SessionStatus.ACTIVE else SessionStatus.READY,
-        uiState = uiState
-    )
-    LaunchedEffect(notificationState) {
-        if (active || stopping) activeWorkoutNotifications.update(notificationState)
-    }
-    DisposableEffect(recorder, activeWorkoutNotifications, sessionId) {
+    DisposableEffect(recorder) {
         val currentRecorder = recorder
-        onDispose {
-            currentRecorder?.clear()
-            activeWorkoutNotifications.clear(ActiveWorkoutNotificationClearReason.ROUTE_DISPOSED)
-        }
+        onDispose { currentRecorder?.clear() }
+    }
+    DisposableEffect(activeWorkoutNotifications, sessionId) {
+        onDispose { notificationProducer?.let(activeWorkoutNotifications::release) }
     }
 
     FollowAlongWorkoutSessionScreen(

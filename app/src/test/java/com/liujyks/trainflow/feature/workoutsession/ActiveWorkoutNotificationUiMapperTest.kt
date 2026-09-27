@@ -23,12 +23,12 @@ class ActiveWorkoutNotificationUiMapperTest {
         val uiState = engineState.toTimedWorkoutSessionScreenState()
 
         val notification = timedActiveWorkoutNotificationState(
-            planId = plan.id,
+            sessionId = "timed-session-1",
             status = engineState.status,
             uiState = uiState
         )
 
-        assertEquals("timed:${plan.id}", notification.sessionKey)
+        assertEquals("timed-session-1", notification.sessionId)
         assertEquals(WorkoutMode.TIMED, notification.mode)
         assertEquals(SessionStatus.ACTIVE, notification.status)
         assertEquals(uiState.currentTitle, notification.primaryText)
@@ -48,12 +48,12 @@ class ActiveWorkoutNotificationUiMapperTest {
         val uiState = engineState.toStrengthWorkoutSessionScreenState()
 
         val notification = strengthActiveWorkoutNotificationState(
-            planId = plan.id,
+            sessionId = "strength-session-1",
             status = engineState.status,
             uiState = uiState
         )
 
-        assertEquals("strength:${plan.id}", notification.sessionKey)
+        assertEquals("strength-session-1", notification.sessionId)
         assertEquals(WorkoutMode.STRENGTH, notification.mode)
         assertEquals("本组进行中", notification.phaseLabel)
         assertEquals(uiState.currentExerciseName, notification.primaryText)
@@ -71,7 +71,7 @@ class ActiveWorkoutNotificationUiMapperTest {
             uiState = uiState
         )
 
-        assertEquals("follow_along:free-session-1", notification.sessionKey)
+        assertEquals("free-session-1", notification.sessionId)
         assertEquals(WorkoutMode.FOLLOW_ALONG, notification.mode)
         assertEquals("跟练中", notification.phaseLabel)
         assertEquals("跟练", notification.primaryText)
@@ -97,7 +97,7 @@ class ActiveWorkoutNotificationUiMapperTest {
         val uiState = completed.toTimedWorkoutSessionScreenState()
 
         val notification = timedActiveWorkoutNotificationState(
-            planId = plan.id,
+            sessionId = "timed-session-2",
             status = completed.status,
             uiState = uiState
         )

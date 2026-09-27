@@ -55,8 +55,8 @@ import com.liujyks.trainflow.core.model.WorkoutSession
 import com.liujyks.trainflow.core.model.WorkoutPlan
 import com.liujyks.trainflow.core.model.HeartRateState
 import com.liujyks.trainflow.core.model.HeartRateFact
-import com.liujyks.trainflow.core.notifications.AndroidPlanReminderScheduler
-import com.liujyks.trainflow.core.notifications.resolvePlanReminderPermissionState
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationPermissionState
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
@@ -67,7 +67,6 @@ import com.liujyks.trainflow.feature.plans.PlanManagementScreenState
 import com.liujyks.trainflow.feature.plans.StrengthPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.TimedPlanEditorRoute
 import com.liujyks.trainflow.feature.plans.buildDefaultPlanManagementState
-import com.liujyks.trainflow.feature.plans.dispatchPlanReminderReplacementForEditedPlan
 import com.liujyks.trainflow.feature.plans.upsertPlan
 import com.liujyks.trainflow.feature.plans.withPlans
 import com.liujyks.trainflow.feature.recovery.RecoveryRoute
@@ -92,6 +91,9 @@ import com.liujyks.trainflow.ui.theme.TrainFlowPrimary
 
 @Composable
 internal fun TrainFlowApp(
+    activeWorkoutNotifications: ActiveWorkoutNotificationController? = null,
+    notificationPermissionState: ActiveWorkoutNotificationPermissionState? = null,
+    onOpenNotificationSettings: () -> Unit = {},
     workoutSessionRepository: com.liujyks.trainflow.core.data.WorkoutSessionRepository? = null,
     heartRateRuntimeOwner: com.liujyks.trainflow.core.health.HeartRateRuntimeOwner? = null,
     workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
@@ -129,9 +131,6 @@ internal fun TrainFlowApp(
     onUiSkinChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val planReminderScheduler = remember(context) {
-        AndroidPlanReminderScheduler(context.applicationContext)
-    }
     var heartRateBlePermissionStatus by rememberSaveable {
         mutableStateOf(HeartRateBlePermissionStatus.NOT_REQUESTED)
     }
@@ -371,15 +370,6 @@ internal fun TrainFlowApp(
         activeRecoveryRecommendation = nextState.activeRecoveryRecommendation
     }
 
-    fun refreshEditedPlanReminder(plan: WorkoutPlan) {
-        dispatchPlanReminderReplacementForEditedPlan(
-            plan = plan,
-            wasEditingExistingPlan = shellState.editingPlanId == plan.id,
-            permissionState = context.resolvePlanReminderPermissionState(),
-            scheduler = planReminderScheduler
-        )
-    }
-
     Surface {
         Scaffold(
             bottomBar = {
@@ -433,7 +423,6 @@ internal fun TrainFlowApp(
                     },
                     onSaveTimedPlan = { plan ->
                         onSaveWorkoutPlan(plan)
-                        refreshEditedPlanReminder(plan)
                         val nextPlanManagementState = shellState.planManagementState.upsertPlan(plan)
                         applyShellState(
                             shellState.finishPlanEdit(nextPlanManagementState)
@@ -459,7 +448,6 @@ internal fun TrainFlowApp(
                     },
                     onSaveStrengthPlan = { plan ->
                         onSaveWorkoutPlan(plan)
-                        refreshEditedPlanReminder(plan)
                         val nextPlanManagementState = shellState.planManagementState.upsertPlan(plan)
                         applyShellState(
                             shellState.finishPlanEdit(nextPlanManagementState)
@@ -474,6 +462,8 @@ internal fun TrainFlowApp(
 
                     OfficialShellDestination.SETTINGS -> SettingsRoute(
                     uiState = settingsState,
+                    notificationPermissionState = notificationPermissionState,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
                     onBackToTraining = {
                         applyShellState(shellState.returnFromSettings())
                     },
@@ -627,6 +617,7 @@ internal fun TrainFlowApp(
                     OfficialShellDestination.FOLLOW_ALONG_SESSION -> {
                     if (shellState.activeFollowAlongSession) {
                         FollowAlongWorkoutSessionRoute(
+                            activeWorkoutNotifications = requireNotNull(activeWorkoutNotifications),
                             workoutSessionRepository = requireNotNull(workoutSessionRepository),
                             heartRateRuntimeOwner = requireNotNull(heartRateRuntimeOwner),
                             heartRateSettings = preferenceHeartRateState,
@@ -649,6 +640,7 @@ internal fun TrainFlowApp(
                     val activePlan = shellState.activeTimedSessionPlan
                     if (activePlan != null) {
                         TimedWorkoutSessionRoute(
+                            activeWorkoutNotifications = activeWorkoutNotifications,
                             plan = activePlan,
                             workoutSessionRepository = workoutSessionRepository,
                             heartRateRuntimeOwner = heartRateRuntimeOwner,
@@ -700,6 +692,7 @@ internal fun TrainFlowApp(
                     val activePlan = shellState.activeStrengthSessionPlan
                     if (activePlan != null) {
                         StrengthWorkoutSessionRoute(
+                            activeWorkoutNotifications = activeWorkoutNotifications,
                             plan = activePlan,
                             onBackToPlans = {
                                 applyShellState(shellState.finishStrengthSession())

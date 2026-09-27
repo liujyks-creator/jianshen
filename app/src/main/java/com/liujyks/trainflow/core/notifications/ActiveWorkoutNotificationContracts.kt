@@ -1,5 +1,6 @@
 package com.liujyks.trainflow.core.notifications
 
+import android.os.Build
 import com.liujyks.trainflow.core.model.PermissionPrivacyCopy
 import com.liujyks.trainflow.core.model.SessionStatus
 import com.liujyks.trainflow.core.model.WorkoutMode
@@ -11,7 +12,7 @@ internal const val ActiveWorkoutNotificationChannelDescription =
 internal const val ActiveWorkoutNotificationId = 7_200
 
 internal data class ActiveWorkoutNotificationState(
-    val sessionKey: String,
+    val sessionId: String,
     val mode: WorkoutMode,
     val planTitle: String,
     val status: SessionStatus,
@@ -21,6 +22,48 @@ internal data class ActiveWorkoutNotificationState(
     val progressText: String,
     val secondaryText: String
 )
+
+internal data class ActiveWorkoutNotificationProducer(val sessionId: String, val token: Long)
+
+internal data class ActiveWorkoutNotificationPermissionState(
+    val status: ActiveWorkoutNotificationPermissionStatus,
+    val rationale: String,
+    val appNotificationsEnabled: Boolean = true,
+    val channelNotificationsEnabled: Boolean = true
+) {
+    val canPostNotifications: Boolean
+        get() = status != ActiveWorkoutNotificationPermissionStatus.DENIED &&
+            appNotificationsEnabled && channelNotificationsEnabled
+
+    companion object {
+        fun resolve(
+            sdkInt: Int = Build.VERSION.SDK_INT,
+            postNotificationsGranted: Boolean,
+            appNotificationsEnabled: Boolean = true,
+            channelNotificationsEnabled: Boolean = true
+        ): ActiveWorkoutNotificationPermissionState {
+            val status = when {
+                sdkInt < Build.VERSION_CODES.TIRAMISU -> ActiveWorkoutNotificationPermissionStatus.NOT_REQUIRED
+                postNotificationsGranted -> ActiveWorkoutNotificationPermissionStatus.GRANTED
+                else -> ActiveWorkoutNotificationPermissionStatus.DENIED
+            }
+            val rationale = when {
+                status == ActiveWorkoutNotificationPermissionStatus.DENIED ->
+                    "Android 13+ 通知权限关闭，训练仍可正常使用；训练中状态通知暂不会显示。"
+                !appNotificationsEnabled || !channelNotificationsEnabled ->
+                    "系统通知已关闭，训练仍可正常使用；训练中状态通知暂不会显示。"
+                status == ActiveWorkoutNotificationPermissionStatus.NOT_REQUIRED ->
+                    "当前 Android 版本不需要单独授予通知权限。"
+                else -> "通知已开启，可接收训练中状态提示。"
+            }
+            return ActiveWorkoutNotificationPermissionState(
+                status, rationale, appNotificationsEnabled, channelNotificationsEnabled
+            )
+        }
+    }
+}
+
+internal enum class ActiveWorkoutNotificationPermissionStatus { GRANTED, DENIED, NOT_REQUIRED }
 
 internal data class ActiveWorkoutNotificationContent(
     val channelId: String,
@@ -56,7 +99,10 @@ internal enum class ActiveWorkoutNotificationClearReason {
 }
 
 internal enum class ActiveWorkoutNotificationIgnoredReason {
-    NOTIFICATION_PERMISSION_DENIED
+    NOTIFICATION_PERMISSION_DENIED,
+    STALE_PRODUCER,
+    SESSION_MISMATCH,
+    STALE_VERSION
 }
 
 internal object ActiveWorkoutNotificationContentFactory {
@@ -89,7 +135,7 @@ internal object ActiveWorkoutNotificationContentFactory {
 internal object ActiveWorkoutNotificationPolicy {
     fun evaluate(
         state: ActiveWorkoutNotificationState,
-        permissionState: PlanReminderNotificationPermissionState
+        permissionState: ActiveWorkoutNotificationPermissionState
     ): ActiveWorkoutNotificationUpdateResult {
         if (state.status != SessionStatus.ACTIVE && state.status != SessionStatus.PAUSED) {
             return ActiveWorkoutNotificationUpdateResult.Cleared(
@@ -100,7 +146,7 @@ internal object ActiveWorkoutNotificationPolicy {
         if (!permissionState.canPostNotifications) {
             return ActiveWorkoutNotificationUpdateResult.Ignored(
                 reason = ActiveWorkoutNotificationIgnoredReason.NOTIFICATION_PERMISSION_DENIED,
-                message = "通知权限关闭，训练仍可正常执行；计划提醒和活跃训练状态通知暂不会显示。"
+                message = "通知权限关闭，训练仍可正常执行；训练中状态通知暂不会显示。"
             )
         }
 

@@ -5,12 +5,12 @@ import com.liujyks.trainflow.core.model.WorkoutMode
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationState
 
 internal fun timedActiveWorkoutNotificationState(
-    planId: String,
+    sessionId: String,
     status: SessionStatus,
     uiState: TimedWorkoutSessionScreenState
 ): ActiveWorkoutNotificationState {
     return ActiveWorkoutNotificationState(
-        sessionKey = "timed:$planId",
+        sessionId = sessionId,
         mode = WorkoutMode.TIMED,
         planTitle = uiState.planTitle,
         status = status,
@@ -27,12 +27,12 @@ internal fun timedActiveWorkoutNotificationState(
 }
 
 internal fun strengthActiveWorkoutNotificationState(
-    planId: String,
+    sessionId: String,
     status: SessionStatus,
     uiState: StrengthWorkoutSessionScreenState
 ): ActiveWorkoutNotificationState {
     return ActiveWorkoutNotificationState(
-        sessionKey = "strength:$planId",
+        sessionId = sessionId,
         mode = WorkoutMode.STRENGTH,
         planTitle = uiState.planTitle,
         status = status,
@@ -54,7 +54,7 @@ internal fun followAlongActiveWorkoutNotificationState(
     uiState: FollowAlongWorkoutSessionUiState
 ): ActiveWorkoutNotificationState {
     return ActiveWorkoutNotificationState(
-        sessionKey = "follow_along:$sessionId",
+        sessionId = sessionId,
         mode = WorkoutMode.FOLLOW_ALONG,
         planTitle = uiState.title,
         status = status,

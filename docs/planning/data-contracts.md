@@ -242,6 +242,8 @@ interface ContentSourceMeta {
 
 ### 5.1 计划公共字段
 
+E20-S01 当前覆盖：`WorkoutPlan` 不再携带预约字段；Room schema 7 的 `workout_plans.reminder_json` 列为旧数据兼容保留，新版启动清空旧值，此后保存计划始终写 `NULL`。`blocks`、`preferences`、`followAlong`、ID、创建/更新时间及既有 `WorkoutSession.planSnapshot` 和历史记录不随退出预约改写。
+
 ```ts
 interface WorkoutPlan {
   id: string;
@@ -249,17 +251,10 @@ interface WorkoutPlan {
   title: string;
   description?: string;
   blocks: PlanBlock[];
-  reminder?: PlanReminder;
   preferences?: PlanPreferences;
   followAlong?: FollowAlongPlanMeta;
   createdAt: string;
   updatedAt: string;
-}
-
-interface PlanReminder {
-  enabled: boolean;
-  scheduleAt?: string;
-  repeatRule?: string;
 }
 
 interface PlanPreferences {
