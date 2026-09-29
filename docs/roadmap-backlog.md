@@ -31,6 +31,8 @@ stepsCompleted:
 | E21 | 日历选择与完整数据导出 | 4 |
 | E22 | 单场复盘与心率图表 | 4 |
 
+E20-S02-P1 当前用户批准的边界：进程存活、心率功能开启且目标连接时，训练中或未训练、前台或后台继续接收；未训练不新增持续通知。训练仍使用同一 `7200` ordinary/connectedDevice FGS 交接，训练终态仅结束训练通知与本场记录。旧 E17 行中“非训练后台停止”和已订阅连接“必须新 generation/attempt 恢复”的冲突部分已被窄替代：意外断链及重连失败回调保留同一 GATT 再次 `connect()`。M1、final AVD、Band 9 原三场及后续获批的两轮修复版后台恢复已有分层证据；旧版 U01 失败仍保留，新版 U01 未新增保存读回。首轮 Review 请求修正文档；修订后的交付状态须由 Review PASS、准确候选的 main 祖先关系及远端同步共同确定，不用本段证据陈述代替集成事实。
+
 成果验收顺序为 E18 → E19 → E20 → E21 → E22。F.26 的42条唯一依赖约束实现前置，技术根不改变成果验收顺序；F.37 给出24个当前 Story selector，本表不复制或改写 AC。
 
 本计划文档 candidate 尚未通过独立 Review 并成为同步 main 的祖先时，tracked landing 为 pending；满足这些条件后 landed，E18-S01 进入 F8 完成步骤；这不自动解锁代码 Writer 或把未来 Story 标 done。

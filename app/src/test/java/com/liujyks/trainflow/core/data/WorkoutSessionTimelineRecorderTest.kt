@@ -55,6 +55,7 @@ import com.liujyks.trainflow.core.health.E17ScannerShadow
 import com.liujyks.trainflow.core.health.HeartRateBindingDisposition
 import com.liujyks.trainflow.core.health.HeartRateObservationBindingId
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
+import com.liujyks.trainflow.core.health.HeartRateRecoveryEligibilityInput
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
 import com.liujyks.trainflow.core.model.TimedCircuitBlock
 import com.liujyks.trainflow.core.model.TimedExerciseItem
@@ -451,6 +452,74 @@ class WorkoutSessionTimelineRecorderTest {
                 acquisition(3, 2530, 6, "stale", "sample_stale_timeout")),
             listOf(HeartRateSampleEntity(RECORDING_ID, 0, 30, 3, 88), HeartRateSampleEntity(RECORDING_ID, 1, 30, 4, 88))
         ), listOf(extension))
+    }
+
+    @Test
+    fun backgroundCleanupProducesDisconnectedGapWithoutChangingRecordingIdentity() = runRecorderTest {
+        val first = connect()
+        bind(recording())
+        await(recorder.freezeStart())
+        first.notify(90)
+        withTimeout(5000) {
+            database.invalidationTracker.createFlow("heart_rate_samples", emitInitialState = true)
+                .first {
+                    database.canonicalTimelineHeartRateDao().samplesInCanonicalOrder(RECORDING_ID)
+                        .map { sample -> sample.bpm } == listOf(90)
+                }
+        }
+        at(10)
+        runtime.submit(HeartRateRuntimeAction.BackgroundCleanup)
+        shadowOf(Looper.getMainLooper()).idle()
+        withTimeout(5000) {
+            database.invalidationTracker.createFlow(
+                "heart_rate_acquisition_intervals", emitInitialState = true
+            ).first {
+                database.canonicalTimelineHeartRateDao().acquisitionsInSequence(RECORDING_ID)
+                    .any { interval ->
+                        interval.deviceState == "disconnected" &&
+                            interval.recordingIntent == "expected_recording" &&
+                            interval.intentReason == null
+                    }
+            }
+        }
+
+        val afterCleanup = requireNotNull(database.canonicalTimelineHeartRateDao()
+            .canonicalGraphRows(SESSION_ID)).recordings.single()
+        assertEquals(RECORDING_ID, afterCleanup.recording.recordingId)
+        assertEquals(listOf(90), afterCleanup.samples.map { it.bpm })
+        assertTrue(afterCleanup.acquisitions.any {
+            it.deviceState == "disconnected" && it.recordingIntent == "expected_recording" &&
+                it.intentReason == null
+        })
+
+        runtime.submit(HeartRateRuntimeAction.UpdateRecoveryEligibility(
+            HeartRateRecoveryEligibilityInput(
+                optedIn = true,
+                savedTargetIdentifier = "AA:BB:CC:DD:EE:71",
+                permissionGranted = true,
+                bluetoothEnabled = true,
+                manuallySuppressed = false,
+                appVisible = true,
+                activeTrainingFgsActive = false
+            )
+        ))
+        shadowOf(Looper.getMainLooper()).idle()
+        val recovered = connect()
+        recovered.notify(92)
+        withTimeout(5000) {
+            database.invalidationTracker.createFlow("heart_rate_samples", emitInitialState = true)
+                .first {
+                    database.canonicalTimelineHeartRateDao().samplesInCanonicalOrder(RECORDING_ID)
+                        .map { sample -> sample.bpm } == listOf(90, 92)
+                }
+        }
+        val afterRecovery = requireNotNull(database.canonicalTimelineHeartRateDao()
+            .canonicalGraphRows(SESSION_ID)).recordings.single()
+        assertEquals(RECORDING_ID, afterRecovery.recording.recordingId)
+        assertEquals(listOf(90, 92), afterRecovery.samples.map { it.bpm })
+        assertTrue(afterRecovery.acquisitions.any {
+            it.deviceState == "disconnected" && it.recordingIntent == "expected_recording"
+        })
     }
 
     @Test

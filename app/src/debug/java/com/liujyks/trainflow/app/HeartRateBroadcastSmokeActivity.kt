@@ -15,6 +15,7 @@ import android.widget.TextView
 class HeartRateBroadcastSmokeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val owner = (application as TrainFlowApplication).heartRateRuntimeOwner
         setContentView(
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -25,6 +26,12 @@ class HeartRateBroadcastSmokeActivity : Activity() {
                 })
                 addView(TextView(context).apply {
                     text = "此入口已停止独立持有蓝牙资源。请使用 TrainFlow 设置页测试同一个 Application 心率连接。"
+                    textSize = 16f
+                })
+                addView(TextView(context).apply {
+                    text = "Application owner=${System.identityHashCode(owner)}\n" +
+                        "心率=${owner.heartRateState.value.fact}\n" +
+                        "恢复=${owner.recoveryState.value.phase}"
                     textSize = 16f
                 })
             }

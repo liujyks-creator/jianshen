@@ -25,6 +25,18 @@ internal data class ActiveWorkoutNotificationState(
 
 internal data class ActiveWorkoutNotificationProducer(val sessionId: String, val token: Long)
 
+internal enum class ActiveWorkoutForegroundPhase {
+    NONE, STARTING, ACTIVE, RELEASING, RELEASE_UNCONFIRMED
+}
+
+internal data class ActiveWorkoutForegroundState(
+    val phase: ActiveWorkoutForegroundPhase = ActiveWorkoutForegroundPhase.NONE,
+    val generation: Long? = null,
+    val failure: Throwable? = null
+) {
+    val active: Boolean get() = phase == ActiveWorkoutForegroundPhase.ACTIVE
+}
+
 internal data class ActiveWorkoutNotificationPermissionState(
     val status: ActiveWorkoutNotificationPermissionStatus,
     val rationale: String,
@@ -78,6 +90,7 @@ internal data class ActiveWorkoutNotificationContent(
 )
 
 internal sealed interface ActiveWorkoutNotificationUpdateResult {
+    data class Deferred(val phase: ActiveWorkoutForegroundPhase) : ActiveWorkoutNotificationUpdateResult
     data class Posted(
         val content: ActiveWorkoutNotificationContent
     ) : ActiveWorkoutNotificationUpdateResult
@@ -128,6 +141,18 @@ internal object ActiveWorkoutNotificationContentFactory {
             subText = "普通状态提示",
             bigText = "$safePlanTitle · ${state.phaseLabel}\n$text\n$progressLine\n$secondary\n普通状态提示，不是 foreground service，不保证后台可靠计时。",
             ongoing = state.status == SessionStatus.ACTIVE || state.status == SessionStatus.PAUSED
+        )
+    }
+
+    fun createForeground(
+        state: ActiveWorkoutNotificationState,
+        heartRateText: String
+    ): ActiveWorkoutNotificationContent {
+        val ordinary = create(state)
+        return ordinary.copy(
+            subText = heartRateText,
+            bigText = "${state.planTitle.trim().ifBlank { "训练" }} · ${state.phaseLabel}\n" +
+                "${ordinary.text}\n${state.progressText}\n$heartRateText"
         )
     }
 }

@@ -19,8 +19,10 @@ import com.liujyks.trainflow.core.datastore.trainFlowPreferencesDataStore
 import com.liujyks.trainflow.core.health.HeartRateRecoveryEligibilityInput
 import com.liujyks.trainflow.core.health.HeartRateRuntimeAction
 import com.liujyks.trainflow.core.health.HeartRateRuntimeOwner
+import com.liujyks.trainflow.core.model.HeartRateFact
 import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationController
 import com.liujyks.trainflow.core.notifications.AndroidActiveWorkoutNotificationController
+import com.liujyks.trainflow.core.notifications.ActiveWorkoutForegroundPhase
 import com.liujyks.trainflow.core.notifications.clearLegacyPlanReminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,16 +75,25 @@ class TrainFlowApplication : Application() {
         }
         heartRateRuntimeOwner = HeartRateRuntimeOwner(this)
         preferencesDataSource = TrainFlowPreferencesDataSource(trainFlowPreferencesDataStore)
+        applicationScope.launch {
+            activeWorkoutNotifications.currentTraining.collectLatest { applyHeartRateContext() }
+        }
+        applicationScope.launch {
+            activeWorkoutNotifications.foregroundState.collectLatest { applyHeartRateContext() }
+        }
+        applicationScope.launch {
+            heartRateRuntimeOwner.heartRateState.collectLatest { refreshForegroundContent() }
+        }
+        applicationScope.launch {
+            heartRateRuntimeOwner.recoveryState.collectLatest { refreshForegroundContent() }
+        }
         ProcessVisibilityTracker(this) { fact ->
             visibilityFact = fact
             mutableProcessVisibility.value = fact
             when (fact) {
                 ProcessVisibilityFact.VISIBLE -> applyHeartRateContext()
                 ProcessVisibilityFact.BACKGROUND,
-                ProcessVisibilityFact.UNKNOWN -> {
-                    heartRateRuntimeOwner.submit(HeartRateRuntimeAction.BackgroundCleanup)
-                    applyHeartRateContext()
-                }
+                ProcessVisibilityFact.UNKNOWN -> applyHeartRateContext()
                 ProcessVisibilityFact.CONFIGURATION_TRANSITION -> Unit
             }
         }
@@ -171,6 +182,7 @@ class TrainFlowApplication : Application() {
 
     private fun applyHeartRateContext() {
         if (!::heartRateRuntimeOwner.isInitialized) return
+        val activeTrainingFgsActive = refreshForegroundContent()
         if (latestPreferences.heartRateDisplayEnabled) {
             heartRateRuntimeOwner.submit(HeartRateRuntimeAction.Enable)
         } else {
@@ -185,10 +197,38 @@ class TrainFlowApplication : Application() {
                     bluetoothEnabled = isBluetoothEnabled(),
                     manuallySuppressed = latestPreferences.heartRateManualSuppressed,
                     appVisible = visibilityFact == ProcessVisibilityFact.VISIBLE,
-                    activeTrainingFgsActive = false
+                    activeTrainingFgsActive = activeTrainingFgsActive
                 )
             )
         )
+    }
+
+    private fun refreshForegroundContent(): Boolean {
+        if (!::heartRateRuntimeOwner.isInitialized) return false
+        val training = activeWorkoutNotifications.currentTraining.value
+        val permissions = hasHeartRatePermissions()
+        val bluetooth = isBluetoothEnabled()
+        val eligible = training != null && latestPreferences.heartRateDisplayEnabled &&
+            !latestPreferences.bleHeartRateDeviceIdentifier.isNullOrBlank() &&
+            !latestPreferences.heartRateManualSuppressed && permissions && bluetooth
+        val visible = visibilityFact == ProcessVisibilityFact.VISIBLE
+        val foreground = activeWorkoutNotifications.foregroundState.value
+        val desired = eligible && (
+            visible || foreground.active ||
+                foreground.phase == ActiveWorkoutForegroundPhase.STARTING
+            )
+        val heartRate = heartRateRuntimeOwner.heartRateState.value
+        val text = when (heartRate.fact) {
+            HeartRateFact.LIVE -> "心率 ${requireNotNull(heartRate.bpm)} bpm"
+            HeartRateFact.LINK_DISCONNECTED,
+            HeartRateFact.SCANNING,
+            HeartRateFact.CONNECTING -> "正在重新连接"
+            HeartRateFact.WAITING_FIRST_DATA,
+            HeartRateFact.DATA_INTERRUPTED -> "等待心率数据"
+            else -> "心率暂不可用"
+        }
+        activeWorkoutNotifications.setForegroundDesired(desired, visible, text)
+        return desired && activeWorkoutNotifications.foregroundState.value.active
     }
 
     private fun hasHeartRatePermissions(): Boolean {

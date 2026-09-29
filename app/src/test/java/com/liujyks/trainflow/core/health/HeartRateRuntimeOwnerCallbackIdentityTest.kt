@@ -225,6 +225,116 @@ class HeartRateRuntimeOwnerCallbackIdentityTest {
         assertTrue(Shadow.extract<ShadowBluetoothGatt>(connected.gatt).isClosed)
     }
 
+    @Test
+    fun liveBackgroundDisconnectReconnectsSameGattAndResubscribes() {
+        val connected = connectWaiting("AA:BB:CC:DD:EE:08", "Saved HRS")
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 96)
+        )
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryEligibility(
+                HeartRateRecoveryEligibilityInput(
+                    optedIn = true,
+                    savedTargetIdentifier = connected.gatt.device.address,
+                    permissionGranted = true,
+                    bluetoothEnabled = true,
+                    manuallySuppressed = false,
+                    appVisible = false,
+                    activeTrainingFgsActive = false
+                )
+            )
+        )
+        idleMain()
+
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+        idleMain()
+
+        assertFalse(Shadow.extract<ShadowBluetoothGatt>(connected.gatt).isClosed)
+        assertEquals(
+            1,
+            Shadow.extract<ShadowBluetoothDevice>(connected.gatt.device).bluetoothGatts.size
+        )
+        assertEquals(HeartRateFact.WAITING_FIRST_DATA, owner.heartRateState.value.fact)
+        assertEquals(
+            listOf(
+                HeartRateObservationCause.UNEXPECTED_DISCONNECT,
+                HeartRateObservationCause.RECOVERY_CONNECT,
+                HeartRateObservationCause.RECOVERY_WAIT
+            ),
+            observationLedger.mapNotNull {
+                (it.payload as? HeartRateObservationPayload.RuntimeTransition)?.cause
+            }.takeLast(3)
+        )
+
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 97)
+        )
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+        assertEquals((1L..observationLedger.size.toLong()).toList(), observationLedger.map { it.receipt })
+    }
+
+    @Test
+    fun failedReconnectAfterLiveSubscriptionKeepsGattForAnotherConnect() {
+        val connected = connectWaiting("AA:BB:CC:DD:EE:09", "Saved HRS")
+        connected.callback.onCharacteristicChanged(
+            connected.gatt,
+            connected.characteristic,
+            byteArrayOf(0x00, 96)
+        )
+        assertEquals(HeartRateFact.LIVE, owner.heartRateState.value.fact)
+
+        owner.submit(
+            HeartRateRuntimeAction.UpdateRecoveryEligibility(
+                HeartRateRecoveryEligibilityInput(
+                    optedIn = true,
+                    savedTargetIdentifier = connected.gatt.device.address,
+                    permissionGranted = true,
+                    bluetoothEnabled = true,
+                    manuallySuppressed = false,
+                    appVisible = false,
+                    activeTrainingFgsActive = false
+                )
+            )
+        )
+        idleMain()
+
+        val shadowGatt = Shadow.extract<ShadowBluetoothGatt>(connected.gatt)
+        var platformConnectRequests = 0
+        shadowGatt.setGattCallback(object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) platformConnectRequests += 1
+            }
+        })
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            19,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+        connected.callback.onConnectionStateChange(
+            connected.gatt,
+            147,
+            BluetoothProfile.STATE_DISCONNECTED
+        )
+
+        assertEquals(2, platformConnectRequests)
+        assertEquals(HeartRateFact.CONNECTING, owner.heartRateState.value.fact)
+        assertFalse(shadowGatt.isClosed)
+        assertEquals(
+            1,
+            Shadow.extract<ShadowBluetoothDevice>(connected.gatt.device).bluetoothGatts.size
+        )
+    }
+
     private fun connectWaiting(address: String, name: String): ConnectedGatt {
         return connectWaiting(scanDevice(address, name))
     }
