@@ -808,6 +808,47 @@ internal class HeartRateRuntimeOwner(
         ) ?: return
         if (newState == BluetoothProfile.STATE_DISCONNECTED) {
             evidence("gattDisconnected status=$status phase=${attempt.phase}", attempt, gatt)
+            val retryingSubscribedGatt = attempt.phase == AttemptPhase.CONNECTING &&
+                attempt.hasSubscribed
+            if (retryingSubscribedGatt ||
+                attempt.phase == AttemptPhase.WAITING_FIRST_DATA ||
+                attempt.phase == AttemptPhase.LIVE ||
+                attempt.phase == AttemptPhase.DATA_INTERRUPTED
+            ) {
+                if (!retryingSubscribedGatt) {
+                    cancelFreshness()
+                    attempt.measurement = null
+                    attempt.cccd = null
+                    attempt.timeline = HeartRateFreshnessTimeline()
+                    attempt.phase = AttemptPhase.CONNECTING
+                    attempt.origin = ScanOrigin.RECOVERY
+                    publish(HeartRateRuntimeFact.LinkDisconnected(attempt.source))
+                    publish(HeartRateRuntimeFact.Connecting(attempt.source))
+                    publishRecovery(
+                        HeartRateRecoveryState(
+                            phase = HeartRateRecoveryPhase.CONNECTING_OR_CONNECTED,
+                            targetIdentifier = attempt.targetIdentifier
+                        )
+                    )
+                }
+                val reconnectStarted = try {
+                    gatt.connect()
+                } catch (_: SecurityException) {
+                    cleanup(HeartRateRuntimeFact.PermissionRequired(attempt.source))
+                    return
+                }
+                if (!reconnectStarted) {
+                    cleanup(
+                        HeartRateRuntimeFact.TechnicalFailure(
+                            HeartRateTechnicalFailure.CONNECT_FAILED,
+                            attempt.source
+                        )
+                    )
+                } else {
+                    evidence("gattReconnectRequested", attempt, gatt)
+                }
+                return
+            }
             cleanup(
                 if (attempt.phase == AttemptPhase.CONNECTING) {
                     HeartRateRuntimeFact.TechnicalFailure(
@@ -996,6 +1037,7 @@ internal class HeartRateRuntimeOwner(
             return
         }
         val nowElapsed = SystemClock.elapsedRealtime()
+        attempt.hasSubscribed = true
         attempt.phase = AttemptPhase.WAITING_FIRST_DATA
         evidence("subscriptionReady elapsedMs=$nowElapsed", attempt, gatt)
         attempt.timeline = HeartRateFreshnessTimeline().notifyEnabled(nowElapsed)
@@ -1725,12 +1767,13 @@ internal class HeartRateRuntimeOwner(
         val ownerGeneration: Long,
         val targetIdentifier: String,
         val source: HeartRateSourceHint,
-        val origin: ScanOrigin,
+        var origin: ScanOrigin,
         var phase: AttemptPhase,
         var callback: BluetoothGattCallback? = null,
         var gatt: BluetoothGatt? = null,
         var measurement: BluetoothGattCharacteristic? = null,
         var cccd: BluetoothGattDescriptor? = null,
+        var hasSubscribed: Boolean = false,
         var timeline: HeartRateFreshnessTimeline = HeartRateFreshnessTimeline()
     )
 
