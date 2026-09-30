@@ -1112,7 +1112,7 @@ E20当前 `DRAFT_2_COMPLETE_F9_BATCH_REPAIR_PENDING_FRESH_REVIEW / NOT_READY`；
 | J04 legacy/时间 | 无版本旧场保留unknown/legacy时区状态，实际endedAt未知和trusted derived终点分开；输出没选某场不能表示那天没训练。 | canonical/legacy正交矩阵、unknown-date、跨午夜/改时区、process_interrupted fixture |
 | J05 失败/隐私 | unknown/corrupt/mismatched strict输入整份失败；不降精度、截断、兜底、输出设备地址/GATT或原始诊断。旧notes排除仍保持。 | 非法输入输出不可发布；独立字段allowlist与隐私negative，不能用writer自己枚举字段证明无遗漏 |
 
-完整dataDictionary具体实例、各field path/枚举序列化literal、独立consumer问题集和golden文件literal路径仍待F7闭合，不能以本表代替。新encoder归C的统一export capability；不新增serialization库，既有Android JsonWriter可行性已读，resolved dependency/schema接口按formal base重绑。
+E21-S01-P1 按已批准的 `E21-S01-IMPLEMENTATION-PROPOSAL.md` §9/§11/§12 将完整字段字典固定在唯一生产 encoder 中，独立字段 literal、golden、mutation 与 IC01–10 固定在同一测试文件；本段早期“仍待F7闭合”仅记述当时状态。encoder 接收真实 `readSessionStrict` 的 terminal 结果并复用历史 resolver；严格合法性、整场读取一致性和历史解析仍分别归 S08B/S08C。free_session 只在导出内以冻结整场标题形成 display，不改公共 resolver。S01 不负责文件 ready、选择页面或系统交付；S02 逐场驱动同一 encoder，S03 提供冻结选择，S04 连接单场和日期/模式/计划入口。新 encoder 归 C 的统一 export capability，不新增 serialization 库。
 
 #### F.16.2 E21-S02 原子完整文件准备与生命周期
 
@@ -1403,7 +1403,7 @@ Focus单列FI-W、FI-LR、FI-LW、FI-LRest、FI-CR、FI-CW、FI-CRest：展开ma
 
 ### F.23 新v2包装、时间与字典表示合同 DRAFT-1
 
-本节是D已接受字段/语义的可判定序列化草案，不新增产品字段类别、不改变数据库或analysis版本、不冒称已经接受了正式export schema。Primary E21-S01/J01/J03/J04；S08负责可信输入，S02文件与S04系统交付消费同一encoder输出。以下新literal/结构在正式规划接受前保持candidate；不要求Writer自行选择隐含语义。
+本节是 D 已接受字段/语义的可判定序列化合同；其 E21-S01 部分由已批准的 `E21-S01-IMPLEMENTATION-PROPOSAL.md` §4/§9/§11 窄覆盖早期 candidate 措辞，不新增产品字段类别，不改变数据库或 analysis 版本。Primary E21-S01/J01/J03/J04；S08 负责可信输入，S02 文件与 S04 系统交付消费同一 encoder 输出。
 
 #### F.23.1 外层、selection与时间表示
 
@@ -1433,7 +1433,7 @@ Focus单列FI-W、FI-LR、FI-LW、FI-LRest、FI-CR、FI-CW、FI-CRest：展开ma
 `dataDictionary` candidate exact keys为`dictionaryContractVersion=1`、`language="zh-CN"`、`pathNotation`、`fields`、`rules`。这是export v2内的解释合同版本，不改变持久化版本。
 
 - `pathNotation`为文件内non-empty string，完整说明：普通字段用JSON路径，`[]`表示数组元素；`::json`表示先将左侧string解析为JSON再访问右侧路径；variant由entry适用条件约束。不得要求消费者打开外部文档理解记号。
-- `fields`为entry数组，按`path + condition`固定字典序；每entry required exact keys为`path/name/type/unit/provenance/purpose/condition/presence/nullMeaning/enumValues/relations`。path/name/type/provenance/purpose/condition/presence为non-empty string；unit/nullMeaning为string或显式NULL；enumValues为literal解释对象数组（每项exact `value/meaning`），非enum为空；relations为说明string数组，無关系时为空。`presence`仅`required_non_null/required_nullable/optional_non_null`，embedded schema合法optional缺失的意义写入purpose/condition，不能称它是0。
+- `fields`为entry数组，按`path + condition`固定字典序；每entry required exact keys为`path/name/type/unit/provenance/purpose/condition/presence/nullMeaning/enumValues/relations`。path/name/type/provenance/purpose/condition/presence为non-empty string；unit/nullMeaning为string或显式NULL；enumValues为literal解释对象数组（每项exact `value/meaning`），非enum为空；relations为说明string数组，無关系时为空。`presence`为`required_non_null/required_nullable/optional_non_null`，另仅 legacy_unversioned root 的`planId/preferences/followAlong`三项允许`optional_nullable`，按提案 Q04 保留缺失、显式 NULL、有值三态。embedded schema合法optional缺失的意义写入purpose/condition，不能称它是0。
 - `provenance`明确指出用户计划、用户实际输入、平台测量、runtime已接受事实、冻结参数、已绑定派生分析、导出操作描述或字典解释元数据。单个字段同时关联多个来源时用清楚句子逐一注明，不用“系统数据”掩盖计划/实际差异。
 - `condition`始终存在；无条件写`always`；union下说明exact discriminator及适用schema/version。enumValues解释每个合法literal，包括nullable分支的含义，不把schema合法但本版runtime未生产的connection_timeout描述为已交付watchdog。
 - `rules`为required exact `id/description/relatedPaths`的数组，固定id升序、id唯一。它承载跨字段公式、关联及禁止推断（含同毫秒排序、三个正交轴不可相加、actual/derived wall区别、whole/phase阈值和缺数据≠0），不以每个field重复整套数学制造另一真源。
@@ -1727,6 +1727,8 @@ S05 第四个直接 canonical consumer 为 `C:\Users\25073\Desktop\jianshen\.loc
 - final阈值及边界测试分别为 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/app/src/main/java/com/liujyks/trainflow/core/health/HeartRateFreshnessPolicy.kt` 和 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/app/src/test/java/com/liujyks/trainflow/core/health/HeartRateFreshnessPolicyTest.kt`；若需要APK内debug-only source identity，只能窄改 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/app/build.gradle.kts` 对应debug field，不增依赖或改变production策略。当前代码3000/2500 ms标为provisional；本修正未把它们宣布final。上述路径仅规划delta定位，尚未授权实施或设备执行。
 
 #### F.28.4 E21同一导出capability
+
+E21-S01-P1 的正式实施 checkout 为 `C:/Users/25073/.codex/worktrees/e21-s01-export-v2/jianshen`；下列 Integration 路径仅为接受后定位，不是本 Writer 的写入目标。S01 仅写同名生产 encoder、同名测试及本段和架构说明，golden、consumer、字典 literal 都承载在两份新源文件，不另建 tracked fixture/schema。
 
 - encoder/dictionary：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\data\WorkoutSessionExport.kt`；独立golden/mutation/consumer测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionExportTest.kt`。Golden literal可放此测试资源内，future handoff若使用外部fixture文件必须逐路径列明，不用生产encoder生成expected。
 - 文件生命周期：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\main\java\com\liujyks\trainflow\core\data\WorkoutSessionExportFiles.kt`；真实文件状态测试：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\test\java\com\liujyks\trainflow\core\data\WorkoutSessionExportFilesTest.kt`；性能：`C:\Users\25073\Desktop\jianshen\.local\worktrees\main-integration\app\src\androidTest\java\com\liujyks\trainflow\core\data\E17ExportPerformanceContractTest.kt`。

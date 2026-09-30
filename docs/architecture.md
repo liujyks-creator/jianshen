@@ -241,6 +241,8 @@ feature:settings
 
 E18-S09 记录读取与删除仍由 `WorkoutSessionRepository` 单一负责：列表的 `observeSessionsWithRecords` 只装配 header、冻结快照与执行关系的轻量 typed 条目，不加载全历史 raw；已选单场和 Saved 后复盘调用 `readSessionStrict(sessionId)` 取得完整 graph，再由历史 resolver 解析冻结标题/阶段。单场 strict 继续服务后续导出。普通按 ID 集合删除在同一 Room 事务清理旧执行子表及 session，canonical HR/快照沿现有 FK cascade；旧日期 SQL 和 owner 不变。
 
+E21-S01-P1 在 `core/data/WorkoutSessionExport.kt` 提供唯一自描述 Export v2 内容 encoder：逐场消费 `readSessionStrict` 的 terminal 结果和既有历史 resolver，保持原计划文本、执行行、HR raw 与原 analysis，并输出固定字段字典。S08B 仍独占持久化严格合法性及一致读取，S08C 仍独占历史解析；仅 free_session 的整场 display 在导出内以冻结 title 映射，不更改公共 resolver。encoder 不接 Repository、不持有文件路径或 Job/Scope，也不关闭调用方 Writer。S02 负责逐场读取、驱动 encoder、flush/sync/close、完整文件校验及 ready；S03 冻结用户选择；S04 使单场与日期/模式/计划入口复用 S02 并执行系统交付。当前 S01 尚不构成可在手机保存或分享的导出功能。
+
 E18-S09B 在同一 Room version 7 仅增加 `workout_session_merge_groups(group_id PK)` 与 `workout_session_merge_members(session_id PK, group_id)`；session 外键 RESTRICT、group 外键 CASCADE，并按 group_id 建索引。建组至少两段，普通 INSERT 与外键/主键在同一事务保证原场存在和成员独占，不使用 REPLACE。原列表关系查询携带轻量成员归属，由现有 MainActivity→Shell→History 通道消费，无第二流/缓存/owner。`deleteHistoryItems` 接收明确 Session/Group 键，事务内展开组成员、与普通ID去重，先删关系，再删原场及关联；普通删除拒绝绕过组边界。
 
 `readSessionStrict.Nonterminal` 保留原分类并返回已验证的 graph/execution，不补 endedAt 或终态。`readMergedHistory` 在事务中按成员完整 strict 读取；Unavailable/NotFound 保留为成员读取失败，不当空段。瞬时 `MergedHeartRateInput` 保存组身份、各段 graph/execution/timelineStatus、开始时刻与可信cut，样本保留原 recordingId/sampleSequence/offset/mutation/bpm及实际时刻；graph 保留来源参数、phase/acquisition和原单场快照。段间空档单独表示，不填零/插值；不调用单场 `CanonicalAnalysisV1` 分析组或运行段，不生成第二份原始存储。日期、时区及UTC偏移继续沿原冻结字段，组归最后段冻结日。schema7通过原exportSchema机制生成，1–6不改。七个定点方法、一次APK与一次同日设备流程的实际证据及安装恢复例外见本包decision-log；后续完整图表/导出仍另行交付。
