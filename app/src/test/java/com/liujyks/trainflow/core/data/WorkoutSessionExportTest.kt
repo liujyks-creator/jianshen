@@ -958,6 +958,73 @@ class WorkoutSessionExportTest {
             this["modeFilter"] = listOf("timed"); this["planFilter"] = listOf("plan-old")
         }
         goldens["FORMAT-FILTER"] = jsonText(filterGolden).toByteArray(Charsets.UTF_8)
+
+        // Reader-only vocabulary samples: never seed Room or call the production encoder with them.
+        val compatibilityDocument = mutableCopy(parse(samples.getValue("C")))
+        val compatibilitySession = mutableObject(at(compatibilityDocument,
+            listOf("trainFlowSessionExport", "sessions", 0, "session")))
+        val compatibilityPlan = mutableCopy(parse(compatibilitySession["planSnapshotJson"] as String))
+        for (pointer in listOf(listOf("blocks", 0), listOf("blocks", 0, "stageGroups", 0),
+            listOf("blocks", 0, "stageGroups", 0, "targets", 0))) {
+            mutableObject(at(compatibilityPlan, pointer))["compatibility"] = linkedMapOf(
+                "sourceVersion" to "composition_v2", "legacyBlockId" to "old-block",
+                "legacyItemId" to "old-item", "convertedAt" to "legacy conversion text",
+                "legacyStageType" to "work")
+        }
+        mutableObject(compatibilityPlan)["preferences"] = linkedMapOf("heartRateDisplay" to
+            linkedMapOf("enabled" to true, "showDisconnectedPlaceholder" to false))
+        compatibilitySession["planSnapshotJson"] = jsonText(compatibilityPlan)
+        samples["PL11-PL20"] = jsonText(compatibilityDocument).toByteArray(Charsets.UTF_8)
+        val compatibilityGolden = mutableCopy(parse(goldens.getValue("C")))
+        val compatibilityGoldenSession = mutableObject(at(compatibilityGolden,
+            listOf("trainFlowSessionExport", "sessions", 0, "session")))
+        val compatibilityGoldenPlan = mutableCopy(parse(compatibilityGoldenSession["planSnapshotJson"] as String))
+        for (pointer in listOf(listOf("blocks", 0), listOf("blocks", 0, "stageGroups", 0),
+            listOf("blocks", 0, "stageGroups", 0, "targets", 0))) {
+            mutableObject(at(compatibilityGoldenPlan, pointer))["compatibility"] = parse(
+                """{"sourceVersion":"composition_v2","legacyBlockId":"old-block","legacyItemId":"old-item","convertedAt":"legacy conversion text","legacyStageType":"work"}""")
+        }
+        mutableObject(compatibilityGoldenPlan)["preferences"] = parse(
+            """{"heartRateDisplay":{"enabled":true,"showDisconnectedPlaceholder":false}}""")
+        compatibilityGoldenSession["planSnapshotJson"] = jsonText(compatibilityGoldenPlan)
+        goldens["PL11-PL20"] = jsonText(compatibilityGolden).toByteArray(Charsets.UTF_8)
+
+        val fixedTargetDocument = mutableCopy(parse(samples.getValue("S")))
+        val fixedTargetSession = mutableObject(at(fixedTargetDocument,
+            listOf("trainFlowSessionExport", "sessions", 0, "session")))
+        val fixedTargetPlan = mutableCopy(parse(fixedTargetSession["planSnapshotJson"] as String))
+        mutableObject(at(fixedTargetPlan, listOf("blocks", 0)))["target"] = linkedMapOf(
+            "weight" to linkedMapOf("value" to BigDecimal("12.5"), "unit" to "kg"),
+            "repTarget" to linkedMapOf("kind" to "fixed", "reps" to BigDecimal(8)),
+            "restAfterSetSec" to BigDecimal(30))
+        fixedTargetSession["planSnapshotJson"] = jsonText(fixedTargetPlan)
+        samples["PL13-FIXED"] = jsonText(fixedTargetDocument).toByteArray(Charsets.UTF_8)
+        val fixedTargetGolden = mutableCopy(parse(goldens.getValue("S")))
+        val fixedTargetGoldenSession = mutableObject(at(fixedTargetGolden,
+            listOf("trainFlowSessionExport", "sessions", 0, "session")))
+        val fixedTargetGoldenPlan = mutableCopy(parse(fixedTargetGoldenSession["planSnapshotJson"] as String))
+        mutableObject(at(fixedTargetGoldenPlan, listOf("blocks", 0)))["target"] = parse(
+            """{"weight":{"value":12.5,"unit":"kg"},"repTarget":{"kind":"fixed","reps":8},"restAfterSetSec":30}""")
+        fixedTargetGoldenSession["planSnapshotJson"] = jsonText(fixedTargetGoldenPlan)
+        goldens["PL13-FIXED"] = jsonText(fixedTargetGolden).toByteArray(Charsets.UTF_8)
+
+        val rangeTargetDocument = mutableCopy(parse(samples.getValue("S")))
+        val rangeTargetSession = mutableObject(at(rangeTargetDocument,
+            listOf("trainFlowSessionExport", "sessions", 0, "session")))
+        val rangeTargetPlan = mutableCopy(parse(rangeTargetSession["planSnapshotJson"] as String))
+        mutableObject(at(rangeTargetPlan, listOf("blocks", 0)))["target"] = linkedMapOf(
+            "repTarget" to linkedMapOf("kind" to "range", "minReps" to BigDecimal(6),
+                "maxReps" to BigDecimal(10)))
+        rangeTargetSession["planSnapshotJson"] = jsonText(rangeTargetPlan)
+        samples["PL13-RANGE"] = jsonText(rangeTargetDocument).toByteArray(Charsets.UTF_8)
+        val rangeTargetGolden = mutableCopy(parse(goldens.getValue("S")))
+        val rangeTargetGoldenSession = mutableObject(at(rangeTargetGolden,
+            listOf("trainFlowSessionExport", "sessions", 0, "session")))
+        val rangeTargetGoldenPlan = mutableCopy(parse(rangeTargetGoldenSession["planSnapshotJson"] as String))
+        mutableObject(at(rangeTargetGoldenPlan, listOf("blocks", 0)))["target"] = parse(
+            """{"repTarget":{"kind":"range","minReps":6,"maxReps":10}}""")
+        rangeTargetGoldenSession["planSnapshotJson"] = jsonText(rangeTargetGoldenPlan)
+        goldens["PL13-RANGE"] = jsonText(rangeTargetGolden).toByteArray(Charsets.UTF_8)
         samples.forEach { (id, bytes) -> readFixedFormat(bytes, goldens.getValue(id)) }
         val optionalOmitted = mutableCopy(parse(samples.getValue("PL21-CUE")))
         val optionalSession = mutableObject(at(optionalOmitted,
@@ -1064,6 +1131,11 @@ class WorkoutSessionExportTest {
             val golden = goldens.getValue(id)
             probe(bytes, golden, parse(golden), emptyList(), "$")
         }
+        val repairPlanRoot = "$.trainFlowSessionExport.sessions[].session.planSnapshotJson::json"
+        val repairPlanPaths = listOf("$repairPlanRoot.blocks[].compatibility",
+            "$repairPlanRoot.blocks[].stageGroups[].compatibility",
+            "$repairPlanRoot.blocks[].stageGroups[].targets[].compatibility",
+            "$repairPlanRoot.blocks[].target", "$repairPlanRoot.preferences.heartRateDisplay")
         fun probePlan(sample: ByteArray, golden: ByteArray, node: Any?, pointer: List<Any>, path: String,
             ancestors: List<Map<String, Any?>> = emptyList()) {
             when (node) {
@@ -1090,6 +1162,29 @@ class WorkoutSessionExportTest {
                             if (!legacyTriple && presence.none { it.startsWith("optional") }) {
                                 val id = "V07-PL-MISSING-${++count}"
                                 failedPaths[id] = fixedPlanMutation(id, sample, golden, pointer) { it.remove(key) }
+                            }
+                            if (presence.single() == "optional_non_null" && repairPlanPaths.any {
+                                memberPath == it || memberPath.startsWith("$it.")
+                            }) {
+                                val omittedDocument = mutableCopy(parse(sample))
+                                val omittedSession = mutableObject(at(omittedDocument,
+                                    listOf("trainFlowSessionExport", "sessions", 0, "session")))
+                                val omittedPlan = mutableCopy(parse(omittedSession["planSnapshotJson"] as String))
+                                mutableObject(at(omittedPlan, pointer)).remove(key)
+                                omittedSession["planSnapshotJson"] = jsonText(omittedPlan)
+                                readFixedFormat(jsonText(omittedDocument).toByteArray(Charsets.UTF_8), golden)
+                                println("V07_PL_ACCEPT|OMITTED|$memberPath")
+                                if (memberPath.endsWith(".compatibility") ||
+                                    memberPath == "$repairPlanRoot.blocks[].target") {
+                                    val emptyDocument = mutableCopy(parse(sample))
+                                    val emptySession = mutableObject(at(emptyDocument,
+                                        listOf("trainFlowSessionExport", "sessions", 0, "session")))
+                                    val emptyPlan = mutableCopy(parse(emptySession["planSnapshotJson"] as String))
+                                    mutableObject(at(emptyPlan, pointer))[key] = linkedMapOf<String, Any?>()
+                                    emptySession["planSnapshotJson"] = jsonText(emptyPlan)
+                                    readFixedFormat(jsonText(emptyDocument).toByteArray(Charsets.UTF_8), golden)
+                                    println("V07_PL_ACCEPT|EMPTY|$memberPath")
+                                }
                             }
                             if (value != null) {
                                 val id = "V07-PL-TYPE-${++count}"
