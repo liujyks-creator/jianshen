@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
+import com.liujyks.trainflow.core.data.WorkoutSessionExportFiles
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.data.WorkoutPlanRepository
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 class TrainFlowApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -46,6 +49,9 @@ class TrainFlowApplication : Application() {
         private set
 
     internal lateinit var workoutSessionRepository: WorkoutSessionRepository
+        private set
+
+    internal lateinit var workoutSessionExportFiles: WorkoutSessionExportFiles
         private set
 
     internal lateinit var activeWorkoutNotifications: ActiveWorkoutNotificationController
@@ -68,6 +74,14 @@ class TrainFlowApplication : Application() {
         super.onCreate()
         trainFlowDatabase = TrainFlowDatabase.create(this)
         workoutSessionRepository = WorkoutSessionRepository(trainFlowDatabase)
+        workoutSessionExportFiles = WorkoutSessionExportFiles(
+            filesDir, workoutSessionRepository, applicationScope, Instant.now()
+        )
+        applicationScope.launch {
+            workoutSessionExportFiles.startupCleanup.await().failures.forEach {
+                Log.w("SessionExport", "Startup cleanup failed for ${it.file}", it.cause)
+            }
+        }
         activeWorkoutNotifications = AndroidActiveWorkoutNotificationController(applicationContext)
         activeWorkoutNotifications.initialize()
         applicationScope.launch {
