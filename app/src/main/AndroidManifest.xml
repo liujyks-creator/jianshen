@@ -18,6 +18,8 @@
     <application
         android:name=".app.TrainFlowApplication"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/session_export_backup_rules"
+        android:dataExtractionRules="@xml/session_export_data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
