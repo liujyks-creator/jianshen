@@ -69,6 +69,7 @@ import com.liujyks.trainflow.ui.theme.TrainFlowTheme
 internal fun HistoryRoute(
     sessions: List<WorkoutSession> = emptyList(),
     historyEntries: List<HistoryEntry>? = null,
+    exportViewModel: WorkoutSessionExportViewModel? = null,
     onReadSession: suspend (String) -> WorkoutSessionHistoricalResult = { error("History reader unavailable") },
     onDeleteSessions: suspend (Set<String>) -> Unit = { error("History deletion unavailable") },
     onDeleteItems: suspend (Set<com.liujyks.trainflow.core.data.HistoryItemKey>) -> Unit = { error("History deletion unavailable") },
@@ -85,6 +86,11 @@ internal fun HistoryRoute(
     val scope = rememberCoroutineScope()
     LaunchedEffect(historyEntries) {
         if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
+    }
+
+    if (exportViewModel?.isSelectionOpen == true) {
+        WorkoutSessionExportRoute(exportViewModel, modifier)
+        return
     }
 
     repairMenuTarget?.let { target ->
@@ -124,6 +130,7 @@ internal fun HistoryRoute(
         )
     } else HistoryScreen(
         uiState = uiState,
+        onExport = exportViewModel?.let { { scope.launch { it.enterSelection() }; Unit } },
         onSelectSession = { sessionId ->
             if (uiState.merging) {
                 uiState = uiState.toggleMergeSession(sessionId)
@@ -204,6 +211,7 @@ internal fun HistoryRoute(
 @Composable
 private fun HistoryScreen(
     uiState: HistoryScreenState,
+    onExport: (() -> Unit)? = null,
     onSelectSession: (String) -> Unit,
     onSelectModeFilter: (HistoryModeFilter) -> Unit,
     onSelectStatusFilter: (HistoryStatusFilter) -> Unit,
@@ -226,6 +234,7 @@ private fun HistoryScreen(
     ) {
         item {
             HistoryHeader(uiState)
+            if (onExport != null) OutlinedButton(onClick = onExport) { Text("导出记录") }
         }
         if (!uiState.isEmpty) {
             item {

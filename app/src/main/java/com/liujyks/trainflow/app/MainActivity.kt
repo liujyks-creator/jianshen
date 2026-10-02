@@ -6,6 +6,8 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.ViewModelProvider
+import com.liujyks.trainflow.feature.history.WorkoutSessionExportViewModel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -19,6 +21,8 @@ import com.liujyks.trainflow.ui.theme.rememberTrainFlowReduceMotion
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    internal lateinit var workoutSessionExportViewModel: WorkoutSessionExportViewModel
+        private set
     override fun onResume() {
         super.onResume()
         (application as TrainFlowApplication).activeWorkoutNotifications.refreshPermission()
@@ -26,6 +30,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        workoutSessionExportViewModel = ViewModelProvider(this, WorkoutSessionExportViewModel.Factory(
+            (application as TrainFlowApplication).workoutSessionRepository))[WorkoutSessionExportViewModel::class.java]
         enableEdgeToEdge()
         setContent {
             val trainFlowApplication = application as TrainFlowApplication
@@ -73,6 +79,7 @@ class MainActivity : ComponentActivity() {
                         })
                     },
                     workoutSessionRepository = workoutSessionRepository,
+                    workoutSessionExportViewModel = workoutSessionExportViewModel,
                     heartRateRuntimeOwner = trainFlowApplication.heartRateRuntimeOwner,
                     workoutPlans = workoutPlans,
                     historyEntries = historyEntries,

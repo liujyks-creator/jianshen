@@ -24,6 +24,14 @@ stepsCompleted:
 底栏记录→总览未完成普通卡长按→修复/删除。HistoryUiState 通过原 historyEntries 终态原因识别资格；HistoryRoute 沿原 composition scope 调用 TrainFlowApp 供应的 Application 唯一 WorkoutSessionRepository.repairInterruptedHistorySession。成功后原 Room Flow 刷新同 ID；详情沿原 strict/historical 读取显示“用户手动结束”，返回行为保持。原合法卡/组卡删除确认及合并保持；失败沿原 statusMessage 保留原因，取消沿原协程/Room事务，不增加重试。
 
 Repository 同 Room.withTransaction 严格读原 canonical abandoned/process_interrupted 图，不调用活动 owner finalizer、Recorder 或 BLE。先 guarded 更新原分析唯一 quality_reasons_json 字段，仅移除 sessionReasons 的 process_interrupted 结束提示，再按原状态/原因/可信与 durable tuple guarded 更新 terminal_reason。原 DAO/JSON parser-renderer/validators 复用，失败全回滚；无第二 owner、schema、修复标记、全量重算或生产 test seam。原末端/时间/计划/执行/采样/分析数值保持。P01只负责修复；导出选择页与保存分享分别归后续P02/S04。
+## E21-S03-P02 选择页与唯一 owner
+
+记录总览标题下“导出记录”进入 WorkoutSessionExportRoute；HistoryRoute 保留普通原详情、组展开原段、返回及 P01 长按修复/删除。MainActivity 用 Activity 的 ViewModelProvider/ViewModelStore 与仅注入 Application 既有 Repository 的小型 Factory 取得唯一 WorkoutSessionExportViewModel，传经 TrainFlowApp 到 HistoryRoute/选择页。配置重建保留该实例及月份、日期输入/错误、筛选、排除、展开和冻结结果；shell 的实际 App 导航及选择页页面/系统返回调用同 owner 的 leaveSelection，清空后重入读取 historyEntries 最新首个数据库结果。没有 onDispose/ON_STOP 离场判断、第二历史仓库或 operation owner。
+
+VM 在页内持有轻量审阅集合：普通单位逐场、组单位含全部原 ID，按冻结日/代表开始时间降序及 ID 升序，组成员按开始时间/ID 升序。日历计真实展示单位与三模式数量，未处理单独 process_interrupted 只从导出预览隐藏、仍计未完成；异常成员合并后整体可选，不改原段。日期格与严格年月日输入共用含首尾 LocalDate，模式/历史冻结计划支持单/多/全部，全部为 null，最后具体选项取消回全部。有效筛选重置排除并提示重新确认。
+
+确认仅发布现有 WorkoutSessionExportSelection：source=calendar、有序原 ID、成对日期或双 null、筛选副本、unknown 空集合；已发布旧批不随之后选择改变。S03 固定 P01→P02 两包，P01 已接受，本包只是选择候选；CUI01–04 真实 Application DB/MainActivity 页面链证明选择职责，截图不是像素 oracle。S04 后续扩同一 VM 消费冻结请求并接唯一 Files 的生成/保存/分享，当前无生成 Job、文件写入或系统交付。
+
 
 ## E19-S02 自由跟练同场接线（P15）
 
