@@ -73,6 +73,7 @@ internal fun HistoryRoute(
     onDeleteSessions: suspend (Set<String>) -> Unit = { error("History deletion unavailable") },
     onDeleteItems: suspend (Set<com.liujyks.trainflow.core.data.HistoryItemKey>) -> Unit = { error("History deletion unavailable") },
     onMergeSessions: suspend (Set<String>) -> Unit = { error("History merging unavailable") },
+    onRepairSession: suspend (String) -> Unit = { error("History repair unavailable") },
     modifier: Modifier = Modifier
 ) {
     var uiState by remember {
@@ -80,9 +81,37 @@ internal fun HistoryRoute(
             else buildPersistedHistoryScreenState(historyEntries))
     }
     var detailOpen by remember { mutableStateOf(false) }
+    var repairMenuTarget by remember { mutableStateOf<HistoryListEntry?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(historyEntries) {
         if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
+    }
+
+    repairMenuTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { repairMenuTarget = null },
+            title = { Text("未完成记录") },
+            confirmButton = {
+                TextButton(onClick = {
+                    repairMenuTarget = null
+                    scope.launch {
+                        try {
+                            onRepairSession(target.id)
+                        } catch (cause: CancellationException) {
+                            throw cause
+                        } catch (cause: Throwable) {
+                            uiState = uiState.copy(statusMessage = "修复失败：${cause.message ?: cause::class.simpleName}")
+                        }
+                    }
+                }) { Text("修复") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    repairMenuTarget = null
+                    uiState = uiState.requestCleanup(uiState.cleanupItems(setOf(target.id)))
+                }) { Text("删除") }
+            }
+        )
     }
 
     BackHandler(enabled = detailOpen) { detailOpen = false }
@@ -120,6 +149,7 @@ internal fun HistoryRoute(
         onRequestCleanup = { target ->
             uiState = uiState.requestCleanup(target)
         },
+        onRequestRepairMenu = { target -> repairMenuTarget = target },
         onStartManaging = { uiState = uiState.startManaging() },
         onStartMerging = { uiState = uiState.startMerging() },
         onConfirmMerge = {
@@ -178,6 +208,7 @@ private fun HistoryScreen(
     onSelectModeFilter: (HistoryModeFilter) -> Unit,
     onSelectStatusFilter: (HistoryStatusFilter) -> Unit,
     onRequestCleanup: (HistoryCleanupTarget) -> Unit,
+    onRequestRepairMenu: (HistoryListEntry) -> Unit,
     onStartManaging: () -> Unit = {},
     onStartMerging: () -> Unit = {},
     onConfirmMerge: () -> Unit = {},
@@ -266,7 +297,11 @@ private fun HistoryScreen(
                             item = item,
                             onClick = { onSelectSession(item.id) },
                             onLongClick = if (uiState.managing || uiState.merging) null else {
-                                { onRequestCleanup(uiState.cleanupItems(setOf(item.id))) }
+                                {
+                                    val target = uiState.visibleEntries.first { it.id == item.id }
+                                    if (target.canRepair) onRequestRepairMenu(target)
+                                    else onRequestCleanup(uiState.cleanupItems(setOf(item.id)))
+                                }
                             }
                         )
                         val entry = uiState.visibleEntries.first { it.id == item.id }
@@ -1603,6 +1638,7 @@ private fun HistoryRoutePreview() {
             onSelectModeFilter = {},
             onSelectStatusFilter = {},
             onRequestCleanup = {},
+            onRequestRepairMenu = {},
             onConfirmCleanup = {},
             onCancelCleanup = {},
             modifier = Modifier

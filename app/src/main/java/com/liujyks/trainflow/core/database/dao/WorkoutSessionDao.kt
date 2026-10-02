@@ -60,6 +60,18 @@ interface WorkoutSessionDao {
     @Query("SELECT * FROM workout_sessions ORDER BY id")
     suspend fun sessionsForRecorderGate(): List<WorkoutSessionEntity>
 
+    @Query("""
+        UPDATE workout_sessions SET terminal_reason = 'user_abandoned'
+        WHERE id = :sessionId AND timeline_version = 1
+          AND status = 'abandoned' AND terminal_reason = 'process_interrupted'
+          AND trusted_end_offset_ms = :trustedEndOffsetMs
+          AND last_durable_offset_ms = :durableOffsetMs
+          AND last_mutation_sequence = :mutationSequence
+    """)
+    suspend fun repairInterruptedHistoryReason(
+        sessionId: String, trustedEndOffsetMs: Long, durableOffsetMs: Long, mutationSequence: Long
+    ): Int
+
     @Query(
         """
         UPDATE workout_sessions

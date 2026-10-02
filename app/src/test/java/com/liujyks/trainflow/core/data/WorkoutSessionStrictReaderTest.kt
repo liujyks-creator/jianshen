@@ -8,6 +8,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.liujyks.trainflow.core.database.CanonicalJsonValue
+import com.liujyks.trainflow.core.database.AnalysisSnapshotV1Validator
+import com.liujyks.trainflow.core.database.CanonicalValidationResult
+import com.liujyks.trainflow.core.database.renderCanonicalJson
 import com.liujyks.trainflow.core.database.CanonicalSessionGraphV1
 import com.liujyks.trainflow.core.database.CanonicalTuple
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
@@ -80,6 +83,100 @@ class WorkoutSessionStrictReaderTest {
             assertCanonical(expected, repository.readSessionStrict(SESSION_ID))
             assertEquals(before, databaseSnapshot())
         }
+    }
+
+    @Test
+    fun repairsInterruptedHeartRateSessionAsUserEnded() = runBlocking {
+        val repository = interruptedRepairFixture(hr = true)
+        val before = repository.readSessionStrict(SESSION_ID) as WorkoutSessionStrictReadResult.CanonicalTerminal
+        val rowsBefore = databaseSnapshot()
+        val snapshot = before.graph.snapshots.single()
+        val root = parseCanonicalJson(snapshot.qualityReasonsJson) as CanonicalJsonValue.Obj
+        val reasons = (root.fields.getValue("sessionReasons") as CanonicalJsonValue.Arr).values
+        val interrupted = reasons.single { reason ->
+            ((reason as CanonicalJsonValue.Obj).fields.getValue("reasonCode") as CanonicalJsonValue.Str).value == "process_interrupted"
+        }
+        val expectedFields = LinkedHashMap(root.fields)
+        expectedFields["sessionReasons"] = CanonicalJsonValue.Arr(reasons - interrupted)
+        val expectedQuality = CanonicalJsonValue.Obj(expectedFields).renderCanonicalJson()
+        val expectedGraph = before.graph.copy(session = before.graph.session.copy(terminalReason = "user_abandoned"),
+            snapshots = listOf(snapshot.copy(qualityReasonsJson = expectedQuality)))
+
+        repository.repairInterruptedHistorySession(SESSION_ID)
+
+        val after = repository.readSessionStrict(SESSION_ID)
+        assertEquals(before.copy(graph = expectedGraph), after)
+        assertEquals(CanonicalValidationResult.Valid, AnalysisSnapshotV1Validator.validate(expectedGraph, expectedGraph.snapshots.single()))
+        assertEquals(repairedRowsExpected(rowsBefore, expectedQuality), databaseSnapshot())
+        println("R01 id=$SESSION_ID before=${before.graph} after=$after expected=$expectedGraph fullRowComparison=PASS")
+    }
+
+    @Test
+    fun repairsInterruptedNoHeartRateSessionWithoutInventingFacts() = runBlocking {
+        val repository = interruptedRepairFixture(hr = false)
+        val before = repository.readSessionStrict(SESSION_ID) as WorkoutSessionStrictReadResult.CanonicalTerminal
+        val rowsBefore = databaseSnapshot()
+        val expected = before.copy(graph = before.graph.copy(session = before.graph.session.copy(terminalReason = "user_abandoned")))
+
+        repository.repairInterruptedHistorySession(SESSION_ID)
+
+        val after = repository.readSessionStrict(SESSION_ID)
+        assertEquals(expected, after)
+        assertNull(expected.graph.session.endedAt)
+        assertNull(expected.graph.recording)
+        assertEquals(emptyList<HeartRateAnalysisSnapshotEntity>(), expected.graph.snapshots)
+        assertEquals(repairedRowsExpected(rowsBefore), databaseSnapshot())
+        println("R02 id=$SESSION_ID before=${before.graph} after=$after expected=$expected fullRowComparison=PASS")
+    }
+
+    @Test
+    fun rollsBackInterruptedRepairWhenReasonWriteFails() = runBlocking {
+        val repository = interruptedRepairFixture(hr = true)
+        val before = repository.readSessionStrict(SESSION_ID)
+        val rowsBefore = databaseSnapshot()
+        sql("CREATE TRIGGER e21_s03_repair_reason_abort BEFORE UPDATE OF terminal_reason ON workout_sessions " +
+            "WHEN OLD.id='$SESSION_ID' AND NEW.terminal_reason='user_abandoned' " +
+            "BEGIN SELECT RAISE(ABORT,'e21_s03_repair_abort'); END")
+
+        val failure = runCatching { repository.repairInterruptedHistorySession(SESSION_ID) }.exceptionOrNull()
+
+        assertNotNull(failure)
+        val causes = generateSequence(failure) { it.cause }.toList()
+        assertTrue(causes.toString(), causes.any { it is SQLiteConstraintException && it.message?.contains("e21_s03_repair_abort") == true })
+        assertEquals(rowsBefore, databaseSnapshot())
+        assertEquals(before, repository.readSessionStrict(SESSION_ID))
+        println("R03 id=$SESSION_ID originalSqlCause=$failure allRowsRollback=PASS before=$before")
+    }
+
+    private suspend fun interruptedRepairFixture(hr: Boolean): WorkoutSessionRepository {
+        freshDatabase()
+        seedActiveRecording(hr = hr)
+        freezeStartMetadata()
+        val repository = WorkoutSessionRepository(database)
+        assertTrue(repository.prepareRecorder() is RecorderReconciliationResult.Succeeded)
+        val original = repository.readSessionStrict(SESSION_ID)
+        assertTrue(original.toString(), original is WorkoutSessionStrictReadResult.CanonicalTerminal)
+        original as WorkoutSessionStrictReadResult.CanonicalTerminal
+        assertEquals("abandoned", original.graph.session.status)
+        assertEquals("process_interrupted", original.graph.session.terminalReason)
+        assertEquals(1_000L, original.graph.session.trustedEndOffsetMs)
+        assertNull(original.graph.session.endedAt)
+        return repository
+    }
+
+    private fun repairedRowsExpected(before: List<List<List<Any?>>>, quality: String? = null): List<List<List<Any?>>> {
+        val reasonColumn = database.openHelper.writableDatabase.query("SELECT * FROM workout_sessions LIMIT 0").use {
+            it.getColumnIndexOrThrow("terminal_reason")
+        }
+        val expected = before.toMutableList()
+        expected[0] = before[0].map { row -> row.toMutableList().apply { this[reasonColumn] = "user_abandoned" } }
+        if (quality != null) {
+            val qualityColumn = database.openHelper.writableDatabase.query("SELECT * FROM heart_rate_analysis_snapshots LIMIT 0").use {
+                it.getColumnIndexOrThrow("quality_reasons_json")
+            }
+            expected[5] = before[5].map { row -> row.toMutableList().apply { this[qualityColumn] = quality } }
+        }
+        return expected
     }
 
     @Test

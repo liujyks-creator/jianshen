@@ -19,6 +19,12 @@ stepsCompleted:
 
 # TrainFlow Android 首版架构
 
+## E21-S03-P01 历史手动修复
+
+底栏记录→总览未完成普通卡长按→修复/删除。HistoryUiState 通过原 historyEntries 终态原因识别资格；HistoryRoute 沿原 composition scope 调用 TrainFlowApp 供应的 Application 唯一 WorkoutSessionRepository.repairInterruptedHistorySession。成功后原 Room Flow 刷新同 ID；详情沿原 strict/historical 读取显示“用户手动结束”，返回行为保持。原合法卡/组卡删除确认及合并保持；失败沿原 statusMessage 保留原因，取消沿原协程/Room事务，不增加重试。
+
+Repository 同 Room.withTransaction 严格读原 canonical abandoned/process_interrupted 图，不调用活动 owner finalizer、Recorder 或 BLE。先 guarded 更新原分析唯一 quality_reasons_json 字段，仅移除 sessionReasons 的 process_interrupted 结束提示，再按原状态/原因/可信与 durable tuple guarded 更新 terminal_reason。原 DAO/JSON parser-renderer/validators 复用，失败全回滚；无第二 owner、schema、修复标记、全量重算或生产 test seam。原末端/时间/计划/执行/采样/分析数值保持。P01只负责修复；导出选择页与保存分享分别归后续P02/S04。
+
 ## E19-S02 自由跟练同场接线（P15）
 
 当前跟练由原 `FollowAlongWorkoutSessionRoute` 的 composition scope 持有唯一 session、计时、Recorder 与保存状态；`TrainFlowApp` 供应同一 Application 的 Repository、HeartRateRuntimeOwner 和当前心率设置。用户在入口点击一次 Start 后，Route 准入并 `freezeStart` 确认；运行期 UI 按单调时钟向上显示整场时间，原心率观察由 Recorder 实时持久化。停止二次确认的有效命令直接冻结 `COMPLETED`，单条 `free_session` 区间结束于同次真实 cut，total/effective 为整场、paused=0、执行 steps/rest/sets 为空。

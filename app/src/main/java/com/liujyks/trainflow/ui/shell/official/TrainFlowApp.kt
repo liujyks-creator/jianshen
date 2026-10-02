@@ -771,6 +771,7 @@ internal fun TrainFlowApp(
                         },
                         onDeleteSessions = { ids -> requireNotNull(workoutSessionRepository).deleteHistorySessions(ids) },
                         onDeleteItems = { items -> requireNotNull(workoutSessionRepository).deleteHistoryItems(items) },
+                        onRepairSession = { id -> requireNotNull(workoutSessionRepository).repairInterruptedHistorySession(id) },
                         onMergeSessions = { ids -> requireNotNull(workoutSessionRepository).createMergeGroup(ids); Unit },
                         modifier = Modifier.padding(innerPadding)
                     )
