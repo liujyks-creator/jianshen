@@ -15,6 +15,7 @@ import com.liujyks.trainflow.core.database.PhaseIdentityV1Validator
 import com.liujyks.trainflow.core.database.SessionDisplayMetadataV1Validator
 import com.liujyks.trainflow.core.database.TrainFlowDatabase
 import com.liujyks.trainflow.core.database.parseCanonicalJson
+import com.liujyks.trainflow.core.database.renderCanonicalJson
 import com.liujyks.trainflow.core.database.dao.CanonicalSessionGraphRows
 import com.liujyks.trainflow.core.database.dao.WorkoutSessionWithRecords
 import com.liujyks.trainflow.core.database.dao.WorkoutSessionHeaderRow
@@ -101,7 +102,8 @@ internal data class HistoryEntry(
     val session: WorkoutSession?,
     val classification: HistoryEntryClassification,
     val startedAt: String? = session?.startedAt,
-    val mergeGroupId: String? = null
+    val mergeGroupId: String? = null,
+    val terminalReason: String? = null
 )
 
 internal sealed interface HistoryItemKey {
@@ -361,6 +363,7 @@ internal class WorkoutSessionRepository(
     val historyEntries: Flow<List<HistoryEntry>> = dao.observeSessionsWithRecords()
         .map { rows -> rows.map { row -> row.toHistoryEntry().copy(
             startedAt = row.session.startedAt,
+            terminalReason = row.session.terminalReason,
             mergeGroupId = row.mergeMemberships.singleOrNull()?.groupId
         ) } }
 
@@ -1876,6 +1879,36 @@ internal class WorkoutSessionRepository(
 
     suspend fun deleteHistorySessions(sessionIds: Set<String>) {
         deleteHistoryItems(sessionIds.map { HistoryItemKey.Session(it) }.toSet())
+    }
+
+    suspend fun repairInterruptedHistorySession(sessionId: String) {
+        database.withTransaction {
+            val result = readSessionStrict(sessionId)
+            val terminal = result as? WorkoutSessionStrictReadResult.CanonicalTerminal
+                ?: throw RecorderValidationException(
+                    if (result is WorkoutSessionStrictReadResult.Unavailable) result.code
+                    else "invalid_interrupted_history_session")
+            val graph = terminal.graph
+            val session = graph.session
+            if (session.status != "abandoned" || session.terminalReason != "process_interrupted") {
+                throw RecorderValidationException("invalid_interrupted_history_session")
+            }
+            graph.recording?.let {
+                val snapshot = graph.snapshots.single()
+                val quality = parseCanonicalJson(snapshot.qualityReasonsJson) as CanonicalJsonValue.Obj
+                val reasons = quality.fields.getValue("sessionReasons") as CanonicalJsonValue.Arr
+                val repaired = CanonicalJsonValue.Obj(LinkedHashMap(quality.fields).apply { put("sessionReasons",
+                    CanonicalJsonValue.Arr(reasons.values.filterNot { reason ->
+                        ((reason as CanonicalJsonValue.Obj).fields.getValue("reasonCode") as
+                            CanonicalJsonValue.Str).value == "process_interrupted"
+                    })) }).renderCanonicalJson()
+                requireExactlyOne("repair_history_quality", canonicalDao.repairInterruptedQualityReasons(
+                    snapshot.recordingId, snapshot.analysisVersion, snapshot.qualityReasonsJson, repaired))
+            }
+            requireExactlyOne("repair_history_reason", dao.repairInterruptedHistoryReason(
+                session.id, requireNotNull(session.trustedEndOffsetMs),
+                requireNotNull(session.lastDurableOffsetMs), requireNotNull(session.lastMutationSequence)))
+        }
     }
 
     internal suspend fun createMergeGroup(sessionIds: Set<String>): String = database.withTransaction {

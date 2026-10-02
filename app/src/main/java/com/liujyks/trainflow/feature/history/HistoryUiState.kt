@@ -167,6 +167,10 @@ internal data class HistoryScreenState(
 }
 
 internal data class HistoryListEntry(val id: String, val members: List<HistoryEntry>, val isGroup: Boolean) {
+    val canRepair: Boolean get() = !isGroup && members.single().let {
+        it.classification == HistoryEntryClassification.Available &&
+            it.status == SessionStatus.ABANDONED && it.terminalReason == "process_interrupted"
+    }
     val frozenDate: String? get() = members.last().frozenDate
     val key: HistoryItemKey get() = if (isGroup) HistoryItemKey.Group(id) else HistoryItemKey.Session(id)
     fun matches(mode: HistoryModeFilter, status: HistoryStatusFilter): Boolean =
@@ -853,7 +857,9 @@ private fun WorkoutSessionHistoricalResult.toHistoryDetailState(expectedId: Stri
     val rows = when (this) {
         is WorkoutSessionHistoricalResult.Resolved -> buildList {
             add(HistorySummaryRowUiState("训练 ID", expectedId, "已保存的原场身份"))
-            add(HistorySummaryRowUiState("执行结果", session?.status ?: "未知", "来自完整单场持久化读取"))
+            add(HistorySummaryRowUiState("执行结果",
+                if (session?.terminalReason == "user_abandoned") "用户手动结束" else session?.status ?: "未知",
+                "来自完整单场持久化读取"))
             add(HistorySummaryRowUiState("总时长", session?.totalElapsedSec?.let { "${it} 秒" } ?: "未知", "持久化终态"))
             phaseDisplays.forEach { phase ->
                 add(HistorySummaryRowUiState("阶段 ${phase.sequence}",

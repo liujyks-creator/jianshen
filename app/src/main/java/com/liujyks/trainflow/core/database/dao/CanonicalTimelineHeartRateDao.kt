@@ -21,6 +21,15 @@ interface CanonicalTimelineHeartRateDao {
     @Query("SELECT EXISTS(SELECT 1 FROM heart_rate_analysis_snapshots WHERE recording_id = :recordingId)")
     suspend fun hasAnalysisSnapshots(recordingId: String): Boolean
 
+    @Query("""
+        UPDATE heart_rate_analysis_snapshots SET quality_reasons_json = :repairedJson
+        WHERE recording_id = :recordingId AND analysis_version = :analysisVersion
+          AND quality_reasons_json = :originalJson
+    """)
+    suspend fun repairInterruptedQualityReasons(
+        recordingId: String, analysisVersion: Int, originalJson: String, repairedJson: String
+    ): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPhaseInterval(interval: WorkoutPhaseIntervalEntity): Long
 

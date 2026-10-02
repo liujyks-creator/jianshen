@@ -13,6 +13,12 @@ stepsCompleted:
 
 # TrainFlow 数据与接口标准草案
 
+## E21-S03-P01 历史未完成记录手动修复
+
+记录总览中，已由 reconciliation 闭合的单条 canonical abandoned/process_interrupted 原场可手动修复。原 Repository 在同一 Room 事务中仅将 terminal_reason 改为 user_abandoned；有心率时先将原 recordingId/originalAnalysisVersion 对应 quality_reasons_json.sessionReasons 中的 process_interrupted 结束提示移除，再 guarded 更新原因。任一步失败保留原错误并全回滚，原严格 validator 不放宽。
+
+这仅是 original analysis 不可变规则的结束状态关联提示窄例外：phaseReasons、其他 sessionReasons、数值、config、版本、createdAt、input tuple、其他 JSON、采样和已闭合区间保持。status 仍为 abandoned，冻结计划/当地日/时区、startedAt/endedAt、trustedEndOffsetMs、durable tuple 及执行事实均不改；未知实际 endedAt 仍未知，不补训练或心率、不把修复时间作为结束。详情显示“用户手动结束”，可信末端由持久化对照保持，不新增可信结束点页面行。
+
 ## E18 实时记录当前合同入口（E18-CC-P01）
 
 当前产品合同为 [E18 正式计划](e18-onward-epic-story-plan.md#current-status)，本轮 accepted base=`74c25fac9c728baf2aa44b9e05b5f7bece615fca`，已包含 S01–S04。V2 F.69.2/P01–P08（757211 bytes，SHA256=`EC37A27512A540905D4DCF8B4588151718EECBBD275C1A4D09736B7F9B4A6112`）承载已接受的新决定；相冲突的 D5 恢复/cache/clear 补终结承诺按正式计划 F.8.4 逐条窄替代，旧历史不改。原字段、版本、时间来源、实际值、原子事务和原始错误继续保留，本轮无 outcome/schema/migration 或第二数据库。
