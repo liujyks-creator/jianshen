@@ -60,6 +60,7 @@ import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationPermiss
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
+import com.liujyks.trainflow.feature.history.WorkoutSessionExportViewModel
 import com.liujyks.trainflow.feature.home.HomeRoute
 import com.liujyks.trainflow.feature.plans.PlanEditorDefaults
 import com.liujyks.trainflow.feature.plans.PlanManagementRoute
@@ -95,6 +96,7 @@ internal fun TrainFlowApp(
     notificationPermissionState: ActiveWorkoutNotificationPermissionState? = null,
     onOpenNotificationSettings: () -> Unit = {},
     workoutSessionRepository: com.liujyks.trainflow.core.data.WorkoutSessionRepository? = null,
+    workoutSessionExportViewModel: WorkoutSessionExportViewModel? = null,
     heartRateRuntimeOwner: com.liujyks.trainflow.core.health.HeartRateRuntimeOwner? = null,
     workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
     workoutSessions: List<WorkoutSession> = emptyList(),
@@ -361,6 +363,10 @@ internal fun TrainFlowApp(
     }
 
     fun applyShellState(nextState: OfficialShellState) {
+        if (nextState.currentDestination != OfficialShellDestination.RECORDS &&
+            workoutSessionExportViewModel?.isSelectionOpen == true) {
+            workoutSessionExportViewModel.leaveSelection()
+        }
         currentDestination = nextState.currentDestination
         planManagementState = nextState.planManagementState
         editingPlanId = nextState.editingPlanId
@@ -763,6 +769,7 @@ internal fun TrainFlowApp(
                     )
 
                     OfficialShellDestination.RECORDS -> HistoryRoute(
+                        exportViewModel = workoutSessionExportViewModel,
                         sessions = workoutSessions,
                         historyEntries = historyEntries,
                         onReadSession = { id ->

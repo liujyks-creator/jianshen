@@ -1130,6 +1130,10 @@ S02保存ready文件及准备状态所需最少事实，不建立持久化export
 
 #### F.16.3 E21-S03 日历/日期/模式/计划/逐场选择页面
 
+**E21-S03 当前窄覆盖：** 已批准固定两包 P01 历史手动修复→P02 真实选择页；P01=REVIEWED_MERGED，当前 2/1/1，P02 仅候选，独立接受后才 2/2/0。E21 当前仍 4/2/2，CS04C=HELD。P01 修复原原因及结束质量提示窄例外已接受，详情只显示“用户手动结束”，原可信末端保持且不增加页面字段。P02 真实入口/筛选/整体组/有序冻结/唯一 Activity VM 与主动离场清空按 UX §11.3；CUI01–04 是本包准确四方法，P01/R01–04 不重跑。
+
+下表 C03 的“逐场”对普通场保留，合并组改为整体勾选/取消、展开仅审阅，冻结全部原 ID，组 ID 不作 sessionId；已接受同日/同模式/同计划成员，不扩展跨日合并。单独未处理 process_interrupted 在可选预览隐藏但保留日历计数/未完成数量，修复及合法组可选。C04 按全新安装边界本轮 N/A，includedUnknownDateSessionIds=[]，不删除上游兼容能力。C06 本 S03 只发布既有 Selection 的不变 ID/筛选副本并显示原记录数；生成期间、重复 operation、子场失败及系统交付仍归 S04，当前不调用 encoder/Files/保存分享。
+
 页面实现B的E18-R04–08/12，直接消费S08/S09当时记录身份/冻结日期，不从今天计划表还原历史。日历上同日多mode分别显示种类和数量，无记录日只表示无记录。支持日历点选及弹出起止年月日、跨月跨年/含首尾，单/多/全部mode及单/多plan，然后预览/取消勾选具体场次；不因abandoned或无HR自动排除它。
 
 | AC | 情况 → 用户可观察结果 | oracle |
@@ -1727,6 +1731,8 @@ S05 第四个直接 canonical consumer 为 `C:\Users\25073\Desktop\jianshen\.loc
 - final阈值及边界测试分别为 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/app/src/main/java/com/liujyks/trainflow/core/health/HeartRateFreshnessPolicy.kt` 和 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/app/src/test/java/com/liujyks/trainflow/core/health/HeartRateFreshnessPolicyTest.kt`；若需要APK内debug-only source identity，只能窄改 `C:/Users/25073/Desktop/jianshen/.local/worktrees/main-integration/app/build.gradle.kts` 对应debug field，不增依赖或改变production策略。当前代码3000/2500 ms标为provisional；本修正未把它们宣布final。上述路径仅规划delta定位，尚未授权实施或设备执行。
 
 #### F.28.4 E21同一导出capability
+
+S03-P02 的唯一选择 owner 为 MainActivity 的 ViewModelStore 中 WorkoutSessionExportViewModel，经 shell/HistoryRoute 同实例接线；enterSelection 读取既有 historyEntries 最新首个结果，leaveSelection 只在真实 App 导航/页面或系统返回清空，配置重建不清空。日历/双日期/模式和冻结历史计划/普通及整组审阅在 WorkoutSessionExportRoute，freezeSelection 发布现有 WorkoutSessionExportSelection（source=calendar、有序原 ID、成对日期/null、真实筛选副本、unknown=[]）。S03 两包 P01→P02 边界固定；S04 扩同一 VM 持有生成/系统交付，不另建 operation owner。当前选择候选不代表文件生成或手机保存分享已交付。
 
 E21-S01-P1 的正式实施 checkout 为 `C:/Users/25073/.codex/worktrees/e21-s01-export-v2/jianshen`；下列 Integration 路径仅为接受后定位，不是本 Writer 的写入目标。S01 仅写同名生产 encoder、同名测试及本段和架构说明，golden、consumer、字典 literal 都承载在两份新源文件，不另建 tracked fixture/schema。
 
