@@ -2,16 +2,20 @@ package com.liujyks.trainflow.app
 
 import android.os.Bundle
 import android.content.Intent
+import android.content.ClipData
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
 import com.liujyks.trainflow.feature.history.WorkoutSessionExportViewModel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import com.liujyks.trainflow.core.data.WorkoutPlanRepository
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferences
 import com.liujyks.trainflow.core.datastore.TrainFlowPreferencesDataSource
@@ -23,6 +27,9 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     internal lateinit var workoutSessionExportViewModel: WorkoutSessionExportViewModel
         private set
+    private val exportDirectoryLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        workoutSessionExportViewModel.selectExternalTarget(uri)
+    }
     override fun onResume() {
         super.onResume()
         (application as TrainFlowApplication).activeWorkoutNotifications.refreshPermission()
@@ -31,9 +38,26 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         workoutSessionExportViewModel = ViewModelProvider(this, WorkoutSessionExportViewModel.Factory(
-            (application as TrainFlowApplication).workoutSessionRepository))[WorkoutSessionExportViewModel::class.java]
+            (application as TrainFlowApplication).workoutSessionRepository,
+            (application as TrainFlowApplication).workoutSessionExportFiles,
+            application.contentResolver))[WorkoutSessionExportViewModel::class.java]
         enableEdgeToEdge()
         setContent {
+            LaunchedEffect(workoutSessionExportViewModel.delivery.pendingShare) {
+                val export = workoutSessionExportViewModel.claimPendingShare() ?: return@LaunchedEffect
+                val cause = try {
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.sessionexports", export.file)
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri("TrainFlow 导出", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(send, "分享训练记录"))
+                    null
+                } catch (failure: Exception) { failure }
+                workoutSessionExportViewModel.reportShareLaunchResult(export.operationId, cause)
+            }
             val trainFlowApplication = application as TrainFlowApplication
             val preferencesDataSource: TrainFlowPreferencesDataSource =
                 trainFlowApplication.preferencesDataSource
@@ -80,6 +104,7 @@ class MainActivity : ComponentActivity() {
                     },
                     workoutSessionRepository = workoutSessionRepository,
                     workoutSessionExportViewModel = workoutSessionExportViewModel,
+                    onChooseExportDirectory = { exportDirectoryLauncher.launch(null) },
                     heartRateRuntimeOwner = trainFlowApplication.heartRateRuntimeOwner,
                     workoutPlans = workoutPlans,
                     historyEntries = historyEntries,

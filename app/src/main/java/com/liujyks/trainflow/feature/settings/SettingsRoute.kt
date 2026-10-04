@@ -103,6 +103,7 @@ internal fun SettingsRoute(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    var exportInstructionsOpen by remember { mutableStateOf(false) }
     val heartRateItemIndex = remember { 4 }
     LaunchedEffect(heartRateFocusRequestKey) {
         if (heartRateFocusRequestKey > 0) {
@@ -178,6 +179,21 @@ internal fun SettingsRoute(
                 notificationPermissionState = notificationPermissionState,
                 onOpenNotificationSettings = onOpenNotificationSettings
             )
+        }
+        item {
+            SettingsCard {
+                TextButton(onClick = { exportInstructionsOpen = !exportInstructionsOpen }) {
+                    Text(if (exportInstructionsOpen) "收起导出使用说明" else "导出使用说明")
+                }
+                if (exportInstructionsOpen) {
+                    Text("在记录详情保存或分享单场；在导出记录页按日期、模式、计划及勾选场次导出。")
+                    Text("JSON含自定义名称、训练时间、参数及已记录的心率事实；单场也使用sessions数组，勾选导出仅含所选子集。")
+                    Text("保存默认在App内部生成临时文件，也可选择本次外部目录。内部文件在下次启动或生成时按既有规则清理，已分享副本超过24小时才自动清理。")
+                    Text("分享由你在系统面板自行选择软件；App仅确认已交给系统，不确认接收软件保存或上传成功，不自动上传。")
+                    Text("生成导出文件时，请保持在当前页面，不要离开或切换到其他 App。系统目录选择器和分享面板属于正常导出步骤，请按提示完成。")
+                    Text("记录总览的清理导出缓存只清内部副本，不删除训练记录、配置或外部已保存文件。")
+                }
+            }
         }
     }
 }

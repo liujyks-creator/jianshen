@@ -25,6 +25,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.TrainFlow">
+        <provider
+            android:name=".app.SessionExportFileProvider"
+            android:authorities="${applicationId}.sessionexports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/session_export_paths" />
+        </provider>
         <activity
             android:name=".app.MainActivity"
             android:screenOrientation="portrait"

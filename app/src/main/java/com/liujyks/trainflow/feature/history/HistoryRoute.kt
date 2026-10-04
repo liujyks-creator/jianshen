@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -70,6 +71,7 @@ internal fun HistoryRoute(
     sessions: List<WorkoutSession> = emptyList(),
     historyEntries: List<HistoryEntry>? = null,
     exportViewModel: WorkoutSessionExportViewModel? = null,
+    onChooseExportDirectory: () -> Unit = {},
     onReadSession: suspend (String) -> WorkoutSessionHistoricalResult = { error("History reader unavailable") },
     onDeleteSessions: suspend (Set<String>) -> Unit = { error("History deletion unavailable") },
     onDeleteItems: suspend (Set<com.liujyks.trainflow.core.data.HistoryItemKey>) -> Unit = { error("History deletion unavailable") },
@@ -84,12 +86,26 @@ internal fun HistoryRoute(
     var detailOpen by remember { mutableStateOf(false) }
     var repairMenuTarget by remember { mutableStateOf<HistoryListEntry?>(null) }
     val scope = rememberCoroutineScope()
+    val displayLocale = LocalConfiguration.current.locales[0].toLanguageTag()
     LaunchedEffect(historyEntries) {
         if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
     }
 
-    if (exportViewModel?.isSelectionOpen == true) {
-        WorkoutSessionExportRoute(exportViewModel, modifier)
+    LaunchedEffect(exportViewModel?.isExportFlowOpen, exportViewModel?.delivery?.origin) {
+        val origin = if (exportViewModel?.isExportFlowOpen == true) exportViewModel.delivery.origin
+            else exportViewModel?.takeReturnTarget()
+        when (origin) {
+            is SessionExportOrigin.Single -> {
+                uiState = uiState.selectSession(origin.sessionId)
+                detailOpen = true
+                uiState = uiState.withDetailRead(origin.sessionId, onReadSession(origin.sessionId))
+            }
+            SessionExportOrigin.Batch -> detailOpen = false
+            null -> Unit
+        }
+    }
+    if (exportViewModel?.isExportFlowOpen == true) {
+        WorkoutSessionExportRoute(exportViewModel, modifier, onChooseExportDirectory)
         return
     }
 
@@ -126,11 +142,21 @@ internal fun HistoryRoute(
             detail = uiState.selectedDetail,
             readFinished = uiState.detailRead != null || historyEntries == null,
             onBack = { detailOpen = false },
+            onDeliver = exportViewModel?.let { vm ->
+                val entry = historyEntries?.firstOrNull { it.id == uiState.selectedSessionId }
+                if (entry?.classification == com.liujyks.trainflow.core.data.HistoryEntryClassification.Available &&
+                    uiState.selectedDetail != null) { action: SessionExportAction ->
+                    vm.enterSingleSession(entry.id, entry.frozenDate == null, action)
+                    if (action == SessionExportAction.Share) vm.confirmSave(displayLocale)
+                } else null
+            },
             modifier = modifier
         )
     } else HistoryScreen(
         uiState = uiState,
         onExport = exportViewModel?.let { { scope.launch { it.enterSelection() }; Unit } },
+        onCleanupExportCache = exportViewModel?.let { it::cleanupExportCache },
+        exportCleanupResult = exportViewModel?.cacheCleanupResult,
         onSelectSession = { sessionId ->
             if (uiState.merging) {
                 uiState = uiState.toggleMergeSession(sessionId)
@@ -212,6 +238,8 @@ internal fun HistoryRoute(
 private fun HistoryScreen(
     uiState: HistoryScreenState,
     onExport: (() -> Unit)? = null,
+    onCleanupExportCache: (() -> Unit)? = null,
+    exportCleanupResult: com.liujyks.trainflow.core.data.WorkoutSessionExportCleanupResult? = null,
     onSelectSession: (String) -> Unit,
     onSelectModeFilter: (HistoryModeFilter) -> Unit,
     onSelectStatusFilter: (HistoryStatusFilter) -> Unit,
@@ -235,6 +263,11 @@ private fun HistoryScreen(
         item {
             HistoryHeader(uiState)
             if (onExport != null) OutlinedButton(onClick = onExport) { Text("导出记录") }
+            if (onCleanupExportCache != null) TextButton(onClick = onCleanupExportCache) { Text("清理导出缓存") }
+            exportCleanupResult?.let { result ->
+                Text("已清理 ${result.deletedFiles.size} 个内部导出文件")
+                result.failures.forEach { Text("清理失败：${it.cause.message ?: it.cause::class.simpleName}") }
+            }
         }
         if (!uiState.isEmpty) {
             item {
@@ -396,6 +429,7 @@ private fun HistoryDetailScreen(
     detail: HistorySessionDetailUiState?,
     readFinished: Boolean,
     onBack: () -> Unit,
+    onDeliver: ((SessionExportAction) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -408,6 +442,10 @@ private fun HistoryDetailScreen(
         }
         item {
             SectionTitle("单条记录详情")
+            if (onDeliver != null) {
+                Button(onClick = { onDeliver(SessionExportAction.Save) }) { Text("保存") }
+                OutlinedButton(onClick = { onDeliver(SessionExportAction.Share) }) { Text("分享") }
+            }
         }
         item {
             when {
