@@ -110,149 +110,294 @@ class WorkoutSessionExportContractTest {
 
     @Test
     fun calendarAndDateInputShareInclusiveRange() = withSelectionFixture("CUI02") {
-        openRecords(); enterExport()
-        showMonth("2025-12")
-        clickDay("2025-12-31")
-        showMonth("2026-01")
-        clickDay("2026-01-02")
+        s04Method = "calendarAndDateInputShareInclusiveRange"
+        s04Tap("记录"); s04Enter()
+        fun month(value: String) {
+            val difference = java.time.temporal.ChronoUnit.MONTHS.between(vm().state.month, YearMonth.parse(value)).toInt()
+            repeat(kotlin.math.abs(difference)) { s04Tap(if (difference < 0) "上个月" else "下个月", scrollUp = false) }
+        }
+        month("2025-12"); s04Tap(vm().state.dayDescription(LocalDate.parse("2025-12-31")), scrollUp = false)
+        month("2026-01"); s04Tap(vm().state.dayDescription(LocalDate.parse("2026-01-02")), scrollUp = false)
         val calendar = confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0"))
         assertEquals(LocalDate.parse("2025-12-31"), calendar.startDateInclusive)
         assertEquals(LocalDate.parse("2026-01-02"), calendar.endDateInclusive)
-        inputDates(listOf("2025", "12", "31", "2026", "1", "2"))
-        clickText("应用日期")
+        s04Return(); s04Enter()
+        s04Dates(listOf("2025", "12", "31", "2026", "1", "2")); s04Tap("应用日期")
         assertEquals(calendar, confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0")))
-        inputDates(listOf("2026", "1", "1", "2026", "1", "1"))
-        clickText("应用日期")
+        s04Return(); s04Enter()
+        s04Dates(listOf("2026", "1", "1", "2026", "1", "1")); s04Tap("应用日期")
         confirmIds(listOf("G1", "G2", "G3", "T1", "S1", "F1"))
-        inputDates(listOf("2026", "2", "30", "2026", "3", "1"))
-        compose.onNode(hasText("请输入有效日期") and hasAnyAncestor(isDialog())).assertIsDisplayed()
-        compose.onNodeWithText("应用日期").assertIsNotEnabled()
-        assertEquals("30", vm().state.dateFields[2])
-        assertFalse(vm().state.canConfirm)
-        replaceDateFields(listOf("2026", "1", "2", "2026", "1", "1"))
-        compose.onNode(hasText("结束日期不能早于开始日期") and hasAnyAncestor(isDialog())).assertIsDisplayed()
-        compose.onNodeWithText("应用日期").assertIsNotEnabled()
+        s04Return(); s04Enter()
+        s04Dates(listOf("2026", "2", "30", "2026", "3", "1"))
+        assertEquals("请输入有效日期", vm().state.dateError)
+        assertFalse(requireNotNull(s04Find("应用日期")).isEnabled)
+        assertEquals("30", vm().state.dateFields[2]); assertFalse(vm().state.canConfirm)
+        s04ReplaceDates(listOf("2026", "1", "2", "2026", "1", "1"))
+        assertEquals("结束日期不能早于开始日期", vm().state.dateError)
+        assertFalse(requireNotNull(s04Find("应用日期")).isEnabled)
         assertEquals(listOf("2026", "1", "2", "2026", "1", "1"), vm().state.dateFields)
-        replaceDateFields(listOf("2026", "1", "1", "2026", "1", "2"))
-        compose.onNodeWithText("应用日期").assertIsEnabled().performClick()
+        s04ReplaceDates(listOf("2026", "1", "1", "2026", "1", "2")); s04Tap("应用日期")
         confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1"))
-        val previousFrozen = vm().frozenSelection
-        val stateA = vm().state
-        val frozenA = stateA.frozenSelection
-        println("CUI02_DIAG stage=A stateStart=${stateA.startDate} stateEnd=${stateA.endDate} selectedIds=${stateA.selectedUnits.flatMap { it.members.map { member -> member.id } }} frozenStart=${frozenA?.startDateInclusive} frozenEnd=${frozenA?.endDateInclusive} frozenIds=${frozenA?.includedSessionIds} sameAsA=${frozenA === previousFrozen}")
-        clickText("不限日期")
-        val stateB = vm().state
-        val frozenB = stateB.frozenSelection
-        println("CUI02_DIAG stage=B stateStart=${stateB.startDate} stateEnd=${stateB.endDate} selectedIds=${stateB.selectedUnits.flatMap { it.members.map { member -> member.id } }} frozenStart=${frozenB?.startDateInclusive} frozenEnd=${frozenB?.endDateInclusive} frozenIds=${frozenB?.includedSessionIds} sameAsA=${frozenB === previousFrozen}")
-        val expected = listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0")
-        val matcher = hasText("确认选择") and hasClickAction()
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(matcher)
-        val node = compose.onNode(matcher)
-        println("CUI02_CLICK matchedNodes=${compose.onAllNodes(matcher).fetchSemanticsNodes().size}")
-        val target = node.fetchSemanticsNode()
-        val rootBounds = target.boundsInRoot
-        val windowBounds = target.boundsInWindow
-        val disabled = SemanticsProperties.Disabled in target.config
-        println("CUI02_CLICK enabled=${!disabled} disabled=$disabled boundsInRoot=$rootBounds boundsInWindow=$windowBounds expectedCenterInRoot=${rootBounds.center} expectedCenterInWindow=${windowBounds.center} coordinates=physicalPixels_clippedVisibleBounds_rootAndWindowOrigins expectedCenter=sourceCalculated_notCapturedMotionEvent")
-        screenshot("CUI02-before-final-confirm.png")
-        node.performClick()
-        val frozenC = vm().frozenSelection
-        val stateC = vm().state
-        println("CUI02_DIAG stage=C stateStart=${stateC.startDate} stateEnd=${stateC.endDate} selectedIds=${stateC.selectedUnits.flatMap { it.members.map { member -> member.id } }} frozenStart=${frozenC?.startDateInclusive} frozenEnd=${frozenC?.endDateInclusive} frozenIds=${frozenC?.includedSessionIds} sameAsA=${frozenC === previousFrozen}")
-        compose.runOnIdle {
-            val stateD = vm().state
-            val frozenD = vm().frozenSelection
-            println("CUI02_DIAG stage=D stateStart=${stateD.startDate} stateEnd=${stateD.endDate} selectedIds=${stateD.selectedUnits.flatMap { it.members.map { member -> member.id } }} frozenStart=${frozenD?.startDateInclusive} frozenEnd=${frozenD?.endDateInclusive} frozenIds=${frozenD?.includedSessionIds} sameAsA=${frozenD === previousFrozen} sameAsC=${frozenD === frozenC}")
-            val actual = requireNotNull(frozenD)
-            assertEquals(expected.map { "e21-s03-ui-$it" }, actual.includedSessionIds)
-            assertEquals("calendar", actual.source)
-            assertTrue(actual.includedUnknownDateSessionIds.isEmpty())
-            println("CUI_FROZEN expected=${expected.map { "e21-s03-ui-$it" }} actual=$actual")
-            val all = actual
-            assertNull(all.startDateInclusive); assertNull(all.endDateInclusive)
-        }
-        screenshot("CUI02-date-range.png")
+        s04Return(); s04Enter(); s04Tap("不限日期", scrollUp = false)
+        s04Screenshot("CUI02-before-save")
+        val all = confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0"))
+        assertNull(all.startDateInclusive); assertNull(all.endDateInclusive)
+        s04Screenshot("CUI02-position")
+        s04Return()
     }
 
     @Test
     fun filtersAndWholeMergeGroupFreezeOriginalIds() = withSelectionFixture("CUI03") {
-        openRecords(); enterExport()
-        confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0"))
-        clickText("计时")
-        val timed = confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "T0"))
+        s04Method = "filtersAndWholeMergeGroupFreezeOriginalIds"
+        s04Tap("记录")
+        fun capture(names: List<String>, setup: () -> Unit = {}): WorkoutSessionExportSelection {
+            s04Enter(); setup()
+            val result = confirmIds(names)
+            s04Return()
+            return result
+        }
+        capture(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0"))
+        val timed = capture(listOf("T2", "G1", "G2", "G3", "T1", "T0")) { s04Tap("计时") }
         assertEquals(setOf("timed"), timed.modeFilter)
-        clickText("力量")
-        assertEquals(setOf("timed", "strength"), confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "T0")).modeFilter)
-        clickText("全部模式")
-        clickText("计时新名（e21-s03-ui-PT）")
-        assertEquals(setOf("e21-s03-ui-PT"), confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "T0")).planFilter)
-        clickText("力量历史名（e21-s03-ui-PS）")
-        assertEquals(setOf("e21-s03-ui-PT", "e21-s03-ui-PS"), confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "T0")).planFilter)
-        clickText("全部计划")
-        val all = confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0"))
+        assertEquals(setOf("timed", "strength"), capture(listOf("T2", "G1", "G2", "G3", "T1", "S1", "T0")) {
+            s04Tap("计时"); s04Tap("力量")
+        }.modeFilter)
+        assertEquals(setOf("e21-s03-ui-PT"), capture(listOf("T2", "G1", "G2", "G3", "T1", "T0")) {
+            s04Tap("计时新名（e21-s03-ui-PT）")
+        }.planFilter)
+        assertEquals(setOf("e21-s03-ui-PT", "e21-s03-ui-PS"), capture(listOf("T2", "G1", "G2", "G3", "T1", "S1", "T0")) {
+            s04Tap("计时新名（e21-s03-ui-PT）"); s04Tap("力量历史名（e21-s03-ui-PS）")
+        }.planFilter)
+        val all = capture(listOf("T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0")) {
+            s04Tap("计时新名（e21-s03-ui-PT）"); s04Tap("力量历史名（e21-s03-ui-PS）")
+            s04Tap("全部计划", scrollUp = false)
+        }
         assertNull(all.modeFilter); assertNull(all.planFilter)
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription("选择原记录 e21-s03-ui-T0"))
-        compose.onNodeWithContentDescription("选择原记录 e21-s03-ui-T0").assertIsOn()
+        s04Enter()
+        assertTrue(s04Visible("选择原记录 e21-s03-ui-T0").isChecked)
         compose.onNodeWithText("计时旧名").assertIsDisplayed()
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription("选择原记录 e21-s03-ui-T1"))
-        compose.onNodeWithContentDescription("选择原记录 e21-s03-ui-T1").assertIsOn()
+        assertTrue(s04Visible("选择原记录 e21-s03-ui-T1", scrollUp = false).isChecked)
         assertEquals("计时新名", vm().state.visibleUnits.first { it.key == "e21-s03-ui-T1" }.representative.session!!.planSnapshot.title)
-        clickText("审阅原段")
+        s04Tap("审阅原段", scrollUp = false)
         assertTrue(vm().state.expandedKeys.isNotEmpty())
         for (id in listOf("G1", "G2", "G3")) {
             assertTrue(repository().readSessionStrict("e21-s03-ui-$id") is WorkoutSessionStrictReadResult.CanonicalTerminal)
             assertTrue(compose.onAllNodesWithContentDescription("选择原记录 e21-s03-ui-$id").fetchSemanticsNodes().isEmpty())
         }
-        clickDescription("选择合并记录（3段）")
-        confirmIds(listOf("T2", "T1", "S1", "F1", "T0"))
-        clickDescription("选择原记录 e21-s03-ui-T1")
-        confirmIds(listOf("T2", "S1", "F1", "T0"))
+        s04Tap("选择合并记录（3段）")
+        confirmIds(listOf("T2", "T1", "S1", "F1", "T0")); s04Return()
+        capture(listOf("T2", "S1", "F1", "T0")) {
+            s04Tap("选择合并记录（3段）"); s04Tap("选择原记录 e21-s03-ui-T1")
+        }
         assertTrue(repository().readSessionStrict("e21-s03-ui-T1") is WorkoutSessionStrictReadResult.CanonicalTerminal)
-        clickText("计时")
-        compose.onNodeWithText("筛选已更新，请重新确认场次").assertIsDisplayed()
+        s04Enter(); s04Tap("计时")
+        assertNotNull(s04Find("筛选已更新，请重新确认场次"))
         val old = confirmIds(listOf("T2", "G1", "G2", "G3", "T1", "T0"))
-        assertEquals("calendar", old.source)
-        assertEquals(setOf("timed"), old.modeFilter); assertNull(old.planFilter)
-        assertTrue(old.includedUnknownDateSessionIds.isEmpty())
-        clickDescription("选择原记录 e21-s03-ui-T1")
+        assertEquals("calendar", old.source); assertEquals(setOf("timed"), old.modeFilter)
+        assertNull(old.planFilter); assertTrue(old.includedUnknownDateSessionIds.isEmpty())
+        val sameVm = vm()
+        compose.activityRule.scenario.recreate(); s04Await("保存位置")
+        assertSame(sameVm, vm()); assertSame(old, vm().frozenSelection)
+        s04Screenshot("CUI03-frozen-position")
+        s04Return(); s04Enter(); s04Tap("计时"); s04Tap("选择原记录 e21-s03-ui-T1")
+        confirmIds(listOf("T2", "G1", "G2", "G3", "T0"))
         assertEquals(ids("T2", "G1", "G2", "G3", "T1", "T0"), old.includedSessionIds)
-        assertSame(old, vm().frozenSelection)
-        screenshot("CUI03-frozen-selection.png")
+        s04Return(); assertNull(vm().frozenSelection)
     }
 
     @Test
     fun selectionSurvivesRecreationAndReloadsAfterAppNavigation() = withSelectionFixture("CUI04", includeNew = true) {
-        openRecords(); enterExport()
-        showMonth("2026-01"); clickDay("2026-01-01"); clickDay("2026-01-01")
-        clickDescription("选择原记录 e21-s03-ui-T1")
-        clickText("审阅原段")
-        val frozen = confirmIds(listOf("G1", "G2", "G3", "S1", "F1"))
+        s04Method = "selectionSurvivesRecreationAndReloadsAfterAppNavigation"
+        s04Tap("记录"); s04Enter()
+        s04Dates(listOf("2026", "1", "1", "2026", "1", "1")); s04Tap("应用日期")
+        s04Tap("选择原记录 e21-s03-ui-T1"); s04Tap("审阅原段", scrollUp = false)
         val before = vm().state
-        compose.activityRule.scenario.recreate()
-        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
-        waitText("导出选择")
+        compose.activityRule.scenario.recreate(); s04Await("导出选择")
         assertEquals(before, vm().state)
-        assertSame(frozen, vm().frozenSelection)
-        clickDescription("选择原记录 e21-s03-ui-T1", click = false)
-        compose.onNodeWithContentDescription("选择原记录 e21-s03-ui-T1").assertIsOff()
-        clickText("收起原段", click = false)
-        compose.onNodeWithText("收起原段").assertIsDisplayed()
-        screenshot("CUI04-recreated-selection.png")
-        compose.onNodeWithContentDescription("训练").performClick()
-        compose.runOnIdle {
-            assertFalse(vm().isSelectionOpen); assertNull(vm().frozenSelection)
-            assertTrue(vm().state.units.isEmpty())
-        }
+        assertTrue("e21-s03-ui-T1" in vm().state.excludedKeys)
+        assertNotNull(s04Find("收起原段"))
+        s04Screenshot("CUI04-recreated-selection")
+        val frozen = confirmIds(listOf("G1", "G2", "G3", "S1", "F1"))
+        val sameVm = vm()
+        compose.activityRule.scenario.recreate(); s04Await("保存位置")
+        assertSame(sameVm, vm()); assertSame(frozen, vm().frozenSelection)
+        s04Tap("训练", capture = true)
+        assertFalse(vm().isExportFlowOpen); assertNull(vm().frozenSelection); assertTrue(vm().state.units.isEmpty())
         insertSelectionSessions(listOf("N1"))
-        openRecords(); enterExport()
+        s04Tap("记录"); s04Enter()
         val reentered = confirmIds(listOf("N1", "T2", "G1", "G2", "G3", "T1", "S1", "F1", "T0"))
         assertNull(reentered.startDateInclusive); assertNull(reentered.endDateInclusive)
         assertNull(reentered.modeFilter); assertNull(reentered.planFilter)
         assertFalse(vm().state.visibleUnits.flatMap { it.members }.any { it.id == "e21-s03-ui-I1" })
-        clickText("返回记录总览"); assertFalse(vm().isSelectionOpen)
-        enterExport(); systemBack(); assertFalse(vm().isSelectionOpen)
-        clickText("导出记录", click = false)
-        compose.onNodeWithText("导出记录").assertIsDisplayed()
+        s04Return(); assertFalse(vm().isExportFlowOpen)
+        s04Enter(); s04Key(android.view.KeyEvent.KEYCODE_BACK, capture = true)
+        s04Await("导出记录"); assertFalse(vm().isExportFlowOpen)
+    }
+
+
+    private var s04Method = ""
+    private var s04Event = 0
+    private val s04Instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    private val s04Automation get() = s04Instrumentation.uiAutomation
+    private val s04Package get() = s04Instrumentation.targetContext.packageName
+    private fun s04Folder(): File = File(s04Instrumentation.targetContext.filesDir,
+        "e21-s04-ui/$s04Method").apply { check(mkdirs() || isDirectory) }
+    private fun s04Nodes(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> =
+        listOf(node) + (0 until node.childCount).flatMap { node.getChild(it)?.let(::s04Nodes).orEmpty() }
+    private fun s04Find(label: String, packageName: String = s04Package,
+        editable: Boolean = false, byId: Boolean = false): android.view.accessibility.AccessibilityNodeInfo? {
+        s04Automation.serviceInfo = s04Automation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+        }
+        val windows = s04Automation.windows
+        val candidates = windows.flatMap { window ->
+            val root = window.root ?: return@flatMap emptyList()
+            if (root.packageName?.toString() != packageName) return@flatMap emptyList()
+            val windowBounds = android.graphics.Rect().also { window.getBoundsInScreen(it) }
+            s04Nodes(root).filter { node ->
+                val text = node.text?.toString().orEmpty()
+                val description = node.contentDescription?.toString().orEmpty()
+                val match = if (byId) node.viewIdResourceName?.endsWith(":id/$label") == true
+                    else if (editable) node.isEditable && (text.contains(label) || description.contains(label) ||
+                        node.hintText?.toString()?.contains(label) == true)
+                    else text == label || description == label
+                val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
+                match && (!editable || node.isEditable) && node.isVisibleToUser && bounds.intersect(windowBounds) &&
+                    windows.none { overlay ->
+                        overlay.layer > window.layer && android.graphics.Rect().also { overlay.getBoundsInScreen(it) }
+                            .contains(bounds.centerX(), bounds.centerY())
+                    }
+            }
+        }
+        check(candidates.size <= 1) { "Ambiguous visible control $label: ${candidates.size}" }
+        return candidates.singleOrNull()
+    }
+    private fun s04Await(label: String, packageName: String = s04Package, byId: Boolean = false):
+        android.view.accessibility.AccessibilityNodeInfo {
+        compose.waitUntil(5_000) { s04Find(label, packageName, byId = byId) != null }
+        return requireNotNull(s04Find(label, packageName, byId = byId))
+    }
+    private fun s04Dump(name: String) {
+        val writer = java.io.StringWriter()
+        val xml = android.util.Xml.newSerializer()
+        xml.setOutput(writer); xml.startDocument("UTF-8", true); xml.startTag(null, "windows")
+        for (window in s04Automation.windows) {
+            xml.startTag(null, "window"); xml.attribute(null, "id", window.id.toString())
+            xml.attribute(null, "layer", window.layer.toString())
+            val root = window.root
+            if (root != null) for (node in s04Nodes(root)) {
+                xml.startTag(null, "node")
+                xml.attribute(null, "package", node.packageName?.toString().orEmpty())
+                xml.attribute(null, "text", node.text?.toString().orEmpty())
+                xml.attribute(null, "description", node.contentDescription?.toString().orEmpty())
+                xml.attribute(null, "id", node.viewIdResourceName.orEmpty())
+                xml.attribute(null, "bounds", android.graphics.Rect().also { node.getBoundsInScreen(it) }.toShortString())
+                xml.attribute(null, "enabled", node.isEnabled.toString())
+                xml.attribute(null, "visible", node.isVisibleToUser.toString())
+                xml.endTag(null, "node")
+            }
+            xml.endTag(null, "window")
+        }
+        xml.endTag(null, "windows"); xml.endDocument()
+        val file = File(s04Folder(), "$name.xml")
+        check(file.createNewFile())
+        file.writeText(writer.toString(), Charsets.UTF_8)
+        println("S04_XML=files/e21-s04-ui/$s04Method/${file.name}")
+    }
+    private fun s04Screenshot(name: String) {
+        val bitmap = requireNotNull(s04Automation.takeScreenshot())
+        val file = File(s04Folder(), "$name.png")
+        check(file.createNewFile())
+        file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        bitmap.recycle()
+        println("S04_SCREENSHOT=files/e21-s04-ui/$s04Method/${file.name}")
+    }
+    private fun s04Motion(action: Int, down: Long, time: Long, x: Float, y: Float) {
+        val event = android.view.MotionEvent.obtain(down, time, action, x, y, 0)
+        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+        val injected = s04Automation.injectInputEvent(event, true)
+        println("S04_MOTION method=$s04Method action=$action down=$down time=$time x=$x y=$y injected=$injected")
+        event.recycle(); check(injected)
+    }
+    private fun s04Idle() { compose.waitForIdle(); s04Automation.waitForIdle(500, 5_000) }
+    private fun s04Touch(node: android.view.accessibility.AccessibilityNodeInfo, capture: Boolean = false) {
+        check(node.isEnabled && node.isVisibleToUser)
+        val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
+        val windows = s04Automation.windows
+        val window = windows.single { it.id == node.windowId }
+        check(bounds.intersect(android.graphics.Rect().also { window.getBoundsInScreen(it) }))
+        check(windows.none { overlay -> overlay.layer > window.layer &&
+            android.graphics.Rect().also { overlay.getBoundsInScreen(it) }.contains(bounds.centerX(), bounds.centerY()) })
+        val label = node.text?.toString() ?: node.contentDescription?.toString()
+        val number = ++s04Event
+        if (capture) s04Dump("$number-before")
+        println("S04_TARGET package=${node.packageName} text=$label id=${node.viewIdResourceName} bounds=$bounds")
+        val time = android.os.SystemClock.uptimeMillis()
+        s04Motion(android.view.MotionEvent.ACTION_DOWN, time, time, bounds.exactCenterX(), bounds.exactCenterY())
+        s04Motion(android.view.MotionEvent.ACTION_UP, time, time + 50, bounds.exactCenterX(), bounds.exactCenterY())
+        s04Idle()
+        if (capture) s04Dump("$number-after")
+    }
+    private fun s04Swipe(up: Boolean, packageName: String = s04Package) {
+        val root = s04Automation.windows.sortedByDescending { it.layer }.mapNotNull { it.root }
+            .first { it.packageName?.toString() == packageName }
+        val bounds = android.graphics.Rect().also { root.getBoundsInScreen(it) }
+        val x = bounds.exactCenterX()
+        val start = bounds.top + bounds.height() * (if (up) 0.72f else 0.30f)
+        val end = bounds.top + bounds.height() * (if (up) 0.30f else 0.72f)
+        val time = android.os.SystemClock.uptimeMillis()
+        s04Motion(android.view.MotionEvent.ACTION_DOWN, time, time, x, start)
+        for (i in 1..8) s04Motion(android.view.MotionEvent.ACTION_MOVE, time, time + i * 30, x, start + (end - start) * i / 8)
+        s04Motion(android.view.MotionEvent.ACTION_UP, time, time + 250, x, end)
+        s04Idle()
+    }
+    private fun s04Visible(label: String, scrollUp: Boolean = true,
+        packageName: String = s04Package, byId: Boolean = false): android.view.accessibility.AccessibilityNodeInfo {
+        var node = s04Find(label, packageName, byId = byId)
+        var scrolls = 0
+        while (node == null && scrolls < 12) {
+            s04Swipe(scrollUp, packageName); scrolls++
+            node = s04Find(label, packageName, byId = byId)
+        }
+        return requireNotNull(node) { "Visible control not found after $scrolls scrolls: $label" }
+    }
+    private fun s04Tap(label: String, capture: Boolean = false, scrollUp: Boolean = true,
+        packageName: String = s04Package, byId: Boolean = false) {
+        s04Touch(s04Visible(label, scrollUp, packageName, byId), capture)
+    }
+    private fun s04Key(code: Int, meta: Int = 0, capture: Boolean = false) {
+        val number = ++s04Event
+        if (capture) s04Dump("$number-before-key")
+        val time = android.os.SystemClock.uptimeMillis()
+        for (action in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) {
+            val accepted = s04Automation.injectInputEvent(android.view.KeyEvent(time, time, action, code, 0, meta), true)
+            println("S04_KEY code=$code action=$action meta=$meta time=$time injected=$accepted")
+            check(accepted)
+        }
+        s04Idle()
+        if (capture) s04Dump("$number-after-key")
+    }
+    private fun s04Dates(values: List<String>) {
+        s04Tap("输入起止日期", scrollUp = false)
+        s04ReplaceDates(values)
+    }
+    private fun s04ReplaceDates(values: List<String>) {
+        for ((index, label) in listOf("开始年", "开始月", "开始日", "结束年", "结束月", "结束日").withIndex()) {
+            s04Touch(requireNotNull(s04Find(label, editable = true)))
+            s04Key(android.view.KeyEvent.KEYCODE_A, android.view.KeyEvent.META_CTRL_ON)
+            s04Key(android.view.KeyEvent.KEYCODE_DEL)
+            for (digit in values[index]) s04Key(android.view.KeyEvent.KEYCODE_0 + digit.digitToInt())
+        }
+        s04Key(android.view.KeyEvent.KEYCODE_BACK)
+    }
+    private fun s04Enter() {
+        s04Tap("导出记录", capture = true, scrollUp = false)
+        s04Await("导出选择")
+    }
+    private fun s04Return() {
+        s04Tap("返回记录总览", capture = true, scrollUp = false)
+        s04Await("导出记录")
     }
 
     private fun vm() = compose.activity.workoutSessionExportViewModel
@@ -355,7 +500,8 @@ class WorkoutSessionExportContractTest {
         }
     }
     private fun confirmIds(expected: List<String>): WorkoutSessionExportSelection {
-        clickText("确认选择")
+        s04Tap("保存", capture = true)
+        s04Await("保存位置")
         val actual = requireNotNull(vm().frozenSelection)
         assertEquals(expected.map { "e21-s03-ui-$it" }, actual.includedSessionIds)
         assertEquals("calendar", actual.source)
@@ -363,6 +509,7 @@ class WorkoutSessionExportContractTest {
         println("CUI_FROZEN expected=${expected.map { "e21-s03-ui-$it" }} actual=$actual")
         return actual
     }
+
     private fun systemBack() {
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()

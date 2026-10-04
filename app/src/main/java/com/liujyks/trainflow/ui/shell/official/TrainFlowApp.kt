@@ -97,6 +97,7 @@ internal fun TrainFlowApp(
     onOpenNotificationSettings: () -> Unit = {},
     workoutSessionRepository: com.liujyks.trainflow.core.data.WorkoutSessionRepository? = null,
     workoutSessionExportViewModel: WorkoutSessionExportViewModel? = null,
+    onChooseExportDirectory: () -> Unit = {},
     heartRateRuntimeOwner: com.liujyks.trainflow.core.health.HeartRateRuntimeOwner? = null,
     workoutPlans: List<WorkoutPlan> = buildDefaultPlanManagementState().plans,
     workoutSessions: List<WorkoutSession> = emptyList(),
@@ -364,8 +365,9 @@ internal fun TrainFlowApp(
 
     fun applyShellState(nextState: OfficialShellState) {
         if (nextState.currentDestination != OfficialShellDestination.RECORDS &&
-            workoutSessionExportViewModel?.isSelectionOpen == true) {
-            workoutSessionExportViewModel.leaveSelection()
+            workoutSessionExportViewModel?.isExportFlowOpen == true) {
+            workoutSessionExportViewModel.leaveExportFlow()
+            workoutSessionExportViewModel.takeReturnTarget()
         }
         currentDestination = nextState.currentDestination
         planManagementState = nextState.planManagementState
@@ -770,6 +772,7 @@ internal fun TrainFlowApp(
 
                     OfficialShellDestination.RECORDS -> HistoryRoute(
                         exportViewModel = workoutSessionExportViewModel,
+                        onChooseExportDirectory = onChooseExportDirectory,
                         sessions = workoutSessions,
                         historyEntries = historyEntries,
                         onReadSession = { id ->
