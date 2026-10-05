@@ -157,7 +157,7 @@ internal fun WorkoutSessionAnalysisRoute(
                 if (projection != null && readFailure == null) {
                     item {
                         if (projection.recording.startedOffsetMs > 0) {
-                            AnalysisText("开始前未记录/尚未开始：0:00–${HeartRateChartProjector.formatElapsed(projection.recording.startedOffsetMs)}")
+                            AnalysisText("心率记录尚未开始：0:00–${HeartRateChartProjector.formatElapsed(projection.recording.startedOffsetMs)}")
                         }
                         if (projection.raw.isNotEmpty()) {
                             HeartRateAnalysisChart(projection, selectedPhase, selectedPhases, leftPadding, bottomPadding,
@@ -338,7 +338,9 @@ private fun HeartRateAnalysisChart(
         .pointerInput(projection.source, leftPadding) {
             fun time(x: Float): Long {
                 val domain = latestProjection.domain
-                val fraction = ((x - leftPadding) / (size.width - leftPadding).coerceAtLeast(1)).coerceIn(0f, 1f)
+                val left = leftPadding.toFloat()
+                val right = size.width - 8.dp.toPx()
+                val fraction = ((x - left) / (right - left).coerceAtLeast(1f)).coerceIn(0f, 1f)
                 return domain.startOffsetMs + (fraction * (domain.endOffsetMs - domain.startOffsetMs)).roundToLong()
             }
             awaitEachGesture {
