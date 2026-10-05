@@ -1,5 +1,8 @@
 package com.liujyks.trainflow.core.data
 
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCardUiState
+import com.liujyks.trainflow.feature.history.buildWorkoutSessionHeartRateCardUiState
+
 import android.Manifest
 import android.app.Application
 import android.bluetooth.BluetoothGatt
@@ -293,7 +296,9 @@ class WorkoutSessionTimelineRecorderTest {
         assertTrue(resolved.phaseDisplays.isEmpty())
         val summary = resolved.toPersistedFreeFollowAlongSummary()
         assertEquals(3, summary.totalElapsedSec)
-        assertEquals("3 个原始样本", summary.heartRateStatus)
+        assertEquals("已记录样本数 3",
+            (buildWorkoutSessionHeartRateCardUiState(resolved) as WorkoutSessionHeartRateCardUiState.Content)
+                .facts.single { it.startsWith("已记录样本数 ") })
         val detail = requireNotNull(HistoryScreenState(emptyList(), selectedSessionId = SESSION_ID,
             historyEntries = emptyList(), detailRead = resolved).selectedDetail)
         assertEquals("3 秒", detail.rows.single { it.label == "总时长" }.value)
@@ -331,7 +336,7 @@ class WorkoutSessionTimelineRecorderTest {
         assertTrue(strict.graph.samples.isEmpty())
         assertTrue(strict.graph.snapshots.isEmpty())
         val resolved = resolveWorkoutSessionHistorical(strict, "zh-CN") as WorkoutSessionHistoricalResult.Resolved
-        assertEquals("未开启心率", resolved.toPersistedFreeFollowAlongSummary().heartRateStatus)
+        assertEquals(WorkoutSessionHeartRateCardUiState.Hidden, buildWorkoutSessionHeartRateCardUiState(resolved))
         main.idle()
         await(operation.released)
     }

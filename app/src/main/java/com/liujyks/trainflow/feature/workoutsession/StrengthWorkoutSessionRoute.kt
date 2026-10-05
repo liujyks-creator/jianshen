@@ -13,6 +13,9 @@ import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
 import com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCard
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCardUiState
+import com.liujyks.trainflow.feature.history.buildWorkoutSessionHeartRateCardUiState
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.data.toEntity
 import com.liujyks.trainflow.core.data.toPlanSnapshot
@@ -135,6 +138,7 @@ internal fun StrengthWorkoutSessionRoute(
     var saved by remember(sessionId) { mutableStateOf(false) }
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var recapSource by remember(sessionId) { mutableStateOf<WorkoutSessionHistoricalResult?>(null) }
     var persistedSummary by remember(sessionId) { mutableStateOf<StrengthWorkoutSummaryUiState?>(null) }
     var engineState by remember(sessionId) {
         mutableStateOf(StrengthWorkoutEngine.create(sessionPlan, sessionId = sessionId))
@@ -156,6 +160,24 @@ internal fun StrengthWorkoutSessionRoute(
         }
         return JSONObject().put("displayMetadataContractVersion", 1)
             .put("entries", JSONArray(displayEntries.values.toList())).toString()
+    }
+
+    suspend fun readSavedRecap() {
+        recapSource = null
+        recapReadFailure = null
+        persistedSummary = null
+        try {
+            val historical = resolveWorkoutSessionHistorical(
+                requireNotNull(workoutSessionRepository).readSessionStrict(sessionId), "zh-CN")
+            recapSource = historical
+            val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
+                ?: error("Saved strength session $sessionId cannot be resolved: $historical")
+            persistedSummary = resolved.toPersistedStrengthSummary()
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Throwable) {
+            recapReadFailure = cause
+        }
     }
 
     fun applyEngineResult(result: StrengthWorkoutEngineResult, isTickResult: Boolean = false, recordTransition: Boolean = true) {
@@ -195,16 +217,7 @@ internal fun StrengthWorkoutSessionRoute(
                             try {
                                 submission.operation.saved.await()
                                 saved = true
-                                try {
-                                    val historical = resolveWorkoutSessionHistorical(requireNotNull(workoutSessionRepository).readSessionStrict(sessionId), "zh-CN")
-                                    val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
-                                        ?: error("Saved strength session $sessionId cannot be resolved: $historical")
-                                    persistedSummary = resolved.toPersistedStrengthSummary()
-                                } catch (cause: CancellationException) {
-                                    throw cause
-                                } catch (cause: Throwable) {
-                                    recapReadFailure = cause
-                                }
+                                readSavedRecap()
                             } catch (cause: CancellationException) {
                                 throw cause
                             } catch (cause: Throwable) {
@@ -395,6 +408,8 @@ internal fun StrengthWorkoutSessionRoute(
         },
         onBackToPlans = onBackToPlans,
         onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
+        heartRateCard = buildWorkoutSessionHeartRateCardUiState(recapSource, recapReadFailure),
+        onRetryHeartRate = { sessionScope.launch { readSavedRecap() } },
         modifier = modifier
     )
 }
@@ -465,6 +480,8 @@ private fun StrengthWorkoutSessionScreen(
     onConfirmEnd: () -> Unit,
     onBackToPlans: () -> Unit,
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
+    heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
+    onRetryHeartRate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -525,6 +542,7 @@ private fun StrengthWorkoutSessionScreen(
             )
             if (uiState.isTerminal) {
                 StrengthTerminalPanel(uiState, onOpenRecoveryRecommendation)
+                WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate)
             } else if (!skin.isBigType) {
                 StrengthSecondaryControlsPanel(
                     uiState = uiState,

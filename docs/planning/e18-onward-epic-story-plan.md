@@ -4,6 +4,12 @@
 
 ## 当前状态、来源与阅读规则
 
+### 当前 E22-S02-P01：单场心率文字卡及三模式/历史接线（2026-10-05）
+
+本包仍总1/完成0/剩余1，14路径（7生产/5测试/2文档），S02/E22计数待Review及集成后更新。用户窄批准原生1272×2772验收视口；取消TalkBack，后续明确只用人工测试，取消剩余V2自动检查和同host的H1演示。两个V2失败历史保留，5个获准单元方法及独立B/I通过；实际生产APK已再次装回供人工操作，未重跑有效单元或独立构建。用户明确反馈计时、力量、跟练人工测试均通过，不要求重做；收尾同场sessionId及原定落盘证据因手机断开尚待回收。特殊状态/TalkBack未验证，不宣称原自动矩阵或全部可访问性通过。曲线/分析入口仍属S03；旧记录页工程字段清理及图表前移只是讨论建议，尚未改变本次范围。尚未提交、Review或合入，CS04C=HELD。
+
+执行后续：同一手机重连后原DB/WAL及三模式sessionId/原落盘字段已回收；用户明确“接受”正常完成计时（151秒、暂停0）替代原暂停后提前结束U-T，原提前结束流程未验证。三模式人工PASS沿用户结论，不追加测试；Writer仅提交/普通推送该14路径候选，独立Review/集成仍待主管理手工交接，计数不提前增加。
+
 ### 当前 E20-S01：训练通知统一协调与预约提醒退出（E20-S01-C1）
 
 已批准 `.local/planning/E20-S01-IMPLEMENTATION-PROPOSAL.md` §26–30、§31 整体批准及 §32 D13 分工窄覆盖下方 F.15.1 的旧 retained/rotate/重接窗口前提。E20 固定 2/0/2；S01 唯一实施包 1/0/1，S02 等待。三模式原用户流程、训练结构/声音震动/记录保留；S01 只完成 ordinary `7200` 唯一发布、设置真实权限入口、锁屏 SECRET 及旧预约退出。Writer 的自动测试/一份 APK 与用户一轮 U01–U04 人工验收分层；候选不等于 Review PASS、集成或 S02 后台 HR 通过。
@@ -1173,6 +1179,14 @@ E21的exact新source/test/evidence文件、完整字典、public API/URI/cleanup
 S01全部算法细目和S02–04完整S4–S7状态/微文案仍以既有来源为准，上表是primary责任/AC索引，不是删除未列微条款的授权。确切Projector/AnalysisViewModel/Route/test/evidence literal路径、mandatory anchor完整ledger、visual provenance和各state oracle继续在F7闭合。原E17末尾evidence-only项的必要cross-layer身份复核分配到这些实际交付的acceptance，不新增一个末尾大Story来补前面缺证。
 
 当前 `DRAFT_1_SINGLE_SESSION_PROJECTOR_AND_UI_AC_DEFINED / NOT_REVIEWED / NOT_READY`。候选依赖图仍F.13的22/36，但source义务和formal合同/evidence尚未全部绑定；不能把这些表当正式Planning Review PASS。
+
+#### E22-S02-P01 本期交付边界（2026-10-05）
+
+用户已批准总1包P01、原13路径及固定证据范围。三模式原结束复盘和历史同场详情共用独立“主要训练心率”卡，直接消费原 strict/historical source、StatusProjectionV1 和 original snapshot；不重算统计。无 HR identity 隐藏整卡，读取失败与合法空结果分开并提供同 sessionId 显式重试，不改变原 Saved/Released、一般总结、恢复建议和返回目的地。暂停与额外休息分别取原事实，历史旧 HR 行及跟练旧 HR 摘要文案移入独立卡。
+
+首次V1测试编译发现两个旧Recorder测试消费者仍引用已移除字段；用户批准仅增加WorkoutSessionTimelineRecorderTest一个测试路径、迁移两处原HR断言及必要imports，V1过滤复验一次和两个既有方法合并过滤各一次，原输入/等待及其他断言保持。当前14路径、总1包，其余验证范围/额度不增；不将编译失败称行为RED，不覆盖首次失败证据。
+
+D-S02-001/002 窄限定本期：S02 暂不显示“查看心率分析”，整场已观测事实与主要不足持续可见；S03 交付真实页面时承接该入口及阶段差异文字摘要。S03/S04 完整图表、交互、质量详情和横屏、最终性能及二期HRR不前移。80/50/70、三轴与NULL规则保持。实施候选不表示验证、人工验收、Review或合入；V1–V4/B/I、三真实模式链及同次V2/H1分别证明自身边界。
 
 ### F.18 F7细粒度核对：S02 cause来源、旧UX和排除项
 
@@ -2783,6 +2797,8 @@ P001/P002在上述版本由独立Reviewer判定RESOLVED，仅关闭规划合同�
 <a id="ux-sup-01"></a>
 
 ### UX-SUP-01 — S4 HR 卡顺序与返回失败隔离
+
+2026-10-05 D-S02-001 的本期窄覆盖：S02 交付状态/覆盖短句、已观察平均/最高及整场记录事实，暂不显示下述分析入口；S03 页面交付时恢复并接通入口。D-S02-002 将阶段差异自动文字摘要留 S03，本期卡只呈现整场事实及不足。下述原合同及其余状态/返回约束保留。
 
 - S4 recap 的 HR 卡信息顺序固定为：**状态/覆盖短句 → 已观察平均/最高 → “查看心率分析”**。无 HR identity 时整卡不出现；zero-sample 显示事实但不画空图。平均/最高的覆盖限定同时按 UX-SUP-03 消费。
 - **已 Saved 的结果页上，HR 卡失败不能阻塞底部“返回训练首页”**；HR 卡读取失败时仍可使用该返回入口。按本轮 P03/F.11/L04，Saved 由终态事务与完整读回证明，正常返回/恢复推荐/回训练主页不等待 Released；binding 清理未定只阻塞新冲突写。终态未确认不能以 HR 卡失败冒称已保存，HR 读取失败也不转成 zero-sample。

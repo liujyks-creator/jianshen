@@ -46,6 +46,9 @@ import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
 import com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCard
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCardUiState
+import com.liujyks.trainflow.feature.history.buildWorkoutSessionHeartRateCardUiState
 import com.liujyks.trainflow.core.data.toStorageJson
 import com.liujyks.trainflow.core.database.entity.HeartRateRecordingEntity
 import com.liujyks.trainflow.core.database.entity.WorkoutSessionEntity
@@ -105,6 +108,7 @@ internal fun FollowAlongWorkoutSessionRoute(
     var initializationFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var recapSource by remember(sessionId) { mutableStateOf<WorkoutSessionHistoricalResult?>(null) }
     var endConfirmation by remember(sessionId) { mutableStateOf(WorkoutEndConfirmationUiState()) }
     fun submitNotification(status: SessionStatus) {
         notificationProducer?.let { producer ->
@@ -200,6 +204,24 @@ internal fun FollowAlongWorkoutSessionRoute(
         }
     }
 
+    suspend fun readSavedRecap() {
+        recapSource = null
+        recapReadFailure = null
+        persistedSummary = null
+        try {
+            val historical = resolveWorkoutSessionHistorical(
+                workoutSessionRepository.readSessionStrict(sessionId), "zh-CN")
+            recapSource = historical
+            val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
+                ?: error("Saved follow-along session $sessionId cannot be resolved: $historical")
+            persistedSummary = resolved.toPersistedFreeFollowAlongSummary()
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Throwable) {
+            recapReadFailure = cause
+        }
+    }
+
     fun stopConfirmedSession() {
         val cut = SystemClock.elapsedRealtime()
         val end = Instant.now()
@@ -228,17 +250,7 @@ internal fun FollowAlongWorkoutSessionRoute(
                     try {
                         submission.operation.saved.await()
                         saved = true
-                        try {
-                            val historical = resolveWorkoutSessionHistorical(
-                                workoutSessionRepository.readSessionStrict(sessionId), "zh-CN")
-                            val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
-                                ?: error("Saved follow-along session $sessionId cannot be resolved: $historical")
-                            persistedSummary = resolved.toPersistedFreeFollowAlongSummary()
-                        } catch (cause: CancellationException) {
-                            throw cause
-                        } catch (cause: Throwable) {
-                            recapReadFailure = cause
-                        }
+                        readSavedRecap()
                     } catch (cause: CancellationException) {
                         throw cause
                     } catch (cause: Throwable) {
@@ -287,6 +299,8 @@ internal fun FollowAlongWorkoutSessionRoute(
             if (result.command != null) stopConfirmedSession()
         },
         onBackToFollowAlong = onBackToFollowAlong,
+        heartRateCard = buildWorkoutSessionHeartRateCardUiState(recapSource, recapReadFailure),
+        onRetryHeartRate = { scope.launch { readSavedRecap() } },
         modifier = modifier
     )
 }
@@ -299,6 +313,8 @@ private fun FollowAlongWorkoutSessionScreen(
     onCancelEnd: () -> Unit,
     onConfirmEnd: () -> Unit,
     onBackToFollowAlong: () -> Unit,
+    heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
+    onRetryHeartRate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -326,6 +342,7 @@ private fun FollowAlongWorkoutSessionScreen(
                 }
             }
             if (uiState.isTerminal) {
+                WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = skin.tokens.secondary)

@@ -41,6 +41,7 @@ internal data class HistoryScreenState(
     val statusMessage: String? = null,
     val historyEntries: List<HistoryEntry>? = null,
     val detailRead: WorkoutSessionHistoricalResult? = null,
+    val detailReadFailure: Throwable? = null,
     val managing: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
     val merging: Boolean = false,
@@ -582,15 +583,22 @@ internal fun HistoryScreenState.withHistoryEntries(updated: List<HistoryEntry>):
     val ids = updated.map { it.id }.toSet()
     val next = copy(sessions = updated.mapNotNull { it.session }, historyEntries = updated,
         selectedSessionId = selectedSessionId?.takeIf { it in ids },
-        detailRead = detailRead.takeIf { selectedSessionId?.let { it in ids } == true })
+        detailRead = detailRead.takeIf { selectedSessionId?.let { it in ids } == true },
+        detailReadFailure = detailReadFailure.takeIf { selectedSessionId?.let { it in ids } == true })
     return next.copy(selectedIds = selectedIds.intersect(next.visibleEntries.map { it.id }.toSet()))
 }
 
 internal fun HistoryScreenState.withDetailRead(id: String, result: WorkoutSessionHistoricalResult): HistoryScreenState =
-    if (selectedSessionId == id) copy(detailRead = result) else this
+    if (selectedSessionId == id) copy(detailRead = result, detailReadFailure = null) else this
+
+internal fun HistoryScreenState.startDetailRead(id: String): HistoryScreenState =
+    if (selectedSessionId == id) copy(detailRead = null, detailReadFailure = null) else this
+
+internal fun HistoryScreenState.withDetailReadFailure(id: String, cause: Throwable): HistoryScreenState =
+    if (selectedSessionId == id) copy(detailRead = null, detailReadFailure = cause) else this
 
 internal fun HistoryScreenState.startManaging(): HistoryScreenState =
-    copy(managing = true, merging = false, selectedIds = emptySet(), selectedSessionId = null, detailRead = null)
+    copy(managing = true, merging = false, selectedIds = emptySet(), selectedSessionId = null, detailRead = null, detailReadFailure = null)
 
 internal fun HistoryScreenState.finishManaging(): HistoryScreenState =
     copy(managing = false, merging = false, selectedIds = emptySet(), pendingCleanupTarget = null)
@@ -618,12 +626,13 @@ internal fun HistoryScreenState.deletedSessions(ids: Set<String>): HistoryScreen
     copy(selectedIds = selectedIds - ids,
         selectedSessionId = selectedSessionId?.takeUnless { it in ids },
         detailRead = detailRead.takeUnless { selectedSessionId?.let { it in ids } == true },
+        detailReadFailure = detailReadFailure.takeUnless { selectedSessionId?.let { it in ids } == true },
         statusMessage = "已删除 ${ids.size} 条训练记录。")
 
 internal fun HistoryScreenState.selectSession(sessionId: String): HistoryScreenState {
     if (entries.none { entry -> entry.id == sessionId }) return this
     return if (managing) toggleManagedSession(sessionId)
-        else copy(selectedSessionId = sessionId, detailRead = null)
+        else copy(selectedSessionId = sessionId, detailRead = null, detailReadFailure = null)
 }
 
 internal fun HistoryScreenState.applyModeFilter(filter: HistoryModeFilter): HistoryScreenState {
@@ -909,15 +918,6 @@ private fun WorkoutSessionHistoricalResult.toHistoryDetailState(expectedId: Stri
                 row.substitutedFromExerciseId?.let { original ->
                     add(HistorySummaryRowUiState("替换来源", original, "$group · 实际动作 $name"))
                 }
-            }
-            if (source is WorkoutSessionStrictReadResult.CanonicalTerminal) {
-                val graph = source.graph
-                add(HistorySummaryRowUiState("心率记录", when {
-                    graph.recording == null -> "未开启心率"
-                    graph.samples.isEmpty() -> "零样本"
-                    graph.snapshots.singleOrNull()?.primaryPointSampleCount == 0L -> "无可用样本"
-                    else -> "${graph.samples.size} 个原始样本"
-                }, "来自完整单场读取；列表不推断心率分类"))
             }
         }
         is WorkoutSessionHistoricalResult.Forwarded -> listOf(
