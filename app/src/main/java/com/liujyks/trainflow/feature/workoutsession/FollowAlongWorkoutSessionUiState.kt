@@ -4,8 +4,7 @@ import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
 
 internal data class FollowAlongPersistedSummary(
-    val totalElapsedSec: Int,
-    val heartRateStatus: String
+    val totalElapsedSec: Int
 )
 
 internal data class FollowAlongWorkoutSessionUiState(
@@ -25,12 +24,7 @@ internal fun WorkoutSessionHistoricalResult.Resolved.toPersistedFreeFollowAlongS
     val source = this.source as WorkoutSessionStrictReadResult.CanonicalTerminal
     val graph = source.graph
     return FollowAlongPersistedSummary(
-        totalElapsedSec = requireNotNull(graph.session.totalElapsedSec),
-        heartRateStatus = when {
-            graph.recording == null -> "未开启心率"
-            graph.samples.isEmpty() -> "零样本"
-            else -> "${graph.samples.size} 个原始样本"
-        }
+        totalElapsedSec = requireNotNull(graph.session.totalElapsedSec)
     )
 }
 
@@ -51,7 +45,7 @@ internal fun buildFollowAlongWorkoutSessionUiState(
         saveFailure != null -> "保存失败：${saveFailure.message}"
         recapReadFailure != null -> "读取已保存记录失败：${recapReadFailure.message}"
         persistedSummary != null ->
-            "本次跟练 ${persistedSummary.totalElapsedSec} 秒 · ${persistedSummary.heartRateStatus}"
+            "本次跟练 ${persistedSummary.totalElapsedSec} 秒"
         saved -> "正在读取已保存记录…"
         stopping -> "正在保存本次跟练…"
         else -> null

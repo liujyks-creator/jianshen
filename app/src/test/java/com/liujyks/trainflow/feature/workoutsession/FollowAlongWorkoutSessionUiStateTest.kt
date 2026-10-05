@@ -29,13 +29,13 @@ class FollowAlongWorkoutSessionUiStateTest {
             active = false,
             stopping = true,
             saved = true,
-            persistedSummary = FollowAlongPersistedSummary(65, "未开启心率")
+            persistedSummary = FollowAlongPersistedSummary(65)
         )
 
         assertEquals("跟练完成", state.terminalTitle)
         assertEquals("01:05", state.timerText)
         assertTrue(state.terminalSummary.orEmpty().contains("65 秒"))
-        assertTrue(state.terminalSummary.orEmpty().contains("未开启心率"))
+        assertFalse(state.terminalSummary.orEmpty().contains("未开启心率"))
         assertFalse(state.terminalSummary.orEmpty().contains("阶段"))
         assertFalse(state.terminalSummary.orEmpty().contains("动作"))
         assertFalse(state.terminalSummary.orEmpty().contains("轮次"))

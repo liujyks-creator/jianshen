@@ -98,6 +98,9 @@ import com.liujyks.trainflow.core.data.WorkoutSessionRepository
 import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
 import com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult
 import com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCard
+import com.liujyks.trainflow.feature.history.WorkoutSessionHeartRateCardUiState
+import com.liujyks.trainflow.feature.history.buildWorkoutSessionHeartRateCardUiState
 import com.liujyks.trainflow.core.data.WorkoutSessionTimelineRecorder
 import com.liujyks.trainflow.core.data.fixture.FirstActionExerciseFixtures
 import com.liujyks.trainflow.core.data.toPlanSnapshot
@@ -231,6 +234,7 @@ internal fun TimedWorkoutSessionRoute(
     var saved by remember(sessionId) { mutableStateOf(false) }
     var saveFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
     var recapReadFailure by remember(sessionId) { mutableStateOf<Throwable?>(null) }
+    var recapSource by remember(sessionId) { mutableStateOf<WorkoutSessionHistoricalResult?>(null) }
     var persistedRecap by remember(sessionId) { mutableStateOf<TimedWorkoutSessionScreenState?>(null) }
     val displayEntries = remember(sessionId) { linkedMapOf<String, JSONObject>() }
     var restExtensionInteractionState by remember(sessionId) {
@@ -281,6 +285,25 @@ internal fun TimedWorkoutSessionRoute(
         cumulativeExtraRestSec = record.cumulativeExtraRestSec, eventElapsedSec = record.eventElapsedSec
     )
 
+    suspend fun readSavedRecap() {
+        recapSource = null
+        recapReadFailure = null
+        persistedRecap = null
+        try {
+            val historical = resolveWorkoutSessionHistorical(
+                requireNotNull(workoutSessionRepository).readSessionStrict(sessionId), "zh-CN")
+            recapSource = historical
+            val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
+                ?: error("Saved session $sessionId cannot be resolved: $historical")
+            persistedRecap = resolved.toPersistedTimedRecap(
+                engineState.toTimedWorkoutSessionScreenState(plan = sessionPlan))
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Throwable) {
+            recapReadFailure = cause
+        }
+    }
+
     fun applyEngineResult(result: TimedWorkoutEngineResult, recordTransition: Boolean = true) {
         val cut = SystemClock.elapsedRealtime()
         val currentRecorder = recorder
@@ -326,18 +349,7 @@ internal fun TimedWorkoutSessionRoute(
                             try {
                                 submission.operation.saved.await()
                                 saved = true
-                                try {
-                                    val historical = resolveWorkoutSessionHistorical(
-                                        requireNotNull(workoutSessionRepository).readSessionStrict(sessionId), "zh-CN")
-                                    val resolved = historical as? WorkoutSessionHistoricalResult.Resolved
-                                        ?: error("Saved session $sessionId cannot be resolved: $historical")
-                                    persistedRecap = resolved.toPersistedTimedRecap(
-                                        engineState.toTimedWorkoutSessionScreenState(plan = sessionPlan))
-                                } catch (cause: CancellationException) {
-                                    throw cause
-                                } catch (cause: Throwable) {
-                                    recapReadFailure = cause
-                                }
+                                readSavedRecap()
                             } catch (cause: CancellationException) {
                                 throw cause
                             } catch (cause: Throwable) {
@@ -572,6 +584,8 @@ internal fun TimedWorkoutSessionRoute(
                 canOpenRecovery = canLeaveSavedSession,
                 saveFailure = saveFailure,
                 recapReadFailure = recapReadFailure,
+                heartRateCard = buildWorkoutSessionHeartRateCardUiState(recapSource, recapReadFailure),
+                onRetryHeartRate = { sessionScope.launch { readSavedRecap() } },
                 reduceMotion = reduceMotion,
                 modifier = modifier
             )
@@ -756,6 +770,8 @@ private fun TimedWorkoutSessionScreen(
     canOpenRecovery: Boolean,
     saveFailure: Throwable?,
     recapReadFailure: Throwable? = null,
+    heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
+    onRetryHeartRate: () -> Unit = {},
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -774,6 +790,8 @@ private fun TimedWorkoutSessionScreen(
                 canOpenRecovery = canOpenRecovery,
                 saveFailure = saveFailure,
                 recapReadFailure = recapReadFailure,
+                heartRateCard = heartRateCard,
+                onRetryHeartRate = onRetryHeartRate,
                 reduceMotion = reduceMotion,
                 modifier = Modifier.fillMaxSize()
             )
@@ -956,6 +974,8 @@ private fun TimedWorkoutCompletionRecapScreen(
     canOpenRecovery: Boolean,
     saveFailure: Throwable?,
     recapReadFailure: Throwable? = null,
+    heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
+    onRetryHeartRate: () -> Unit = {},
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -984,6 +1004,7 @@ private fun TimedWorkoutCompletionRecapScreen(
             if (recapReadFailure != null) {
                 Text(text = "已保存记录读取失败：${recapReadFailure.message}", color = TrainFlowError)
             }
+            WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate)
             uiState.summary?.let { summary ->
                 TimedSessionSummaryPanel(
                     summary = summary,

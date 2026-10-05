@@ -188,18 +188,18 @@ class HistoryUiStateTest {
             WorkoutSessionStrictReadResult.CanonicalTerminal(graph, planRoot, execution),
             "冻结计划", "timed", "zh-CN", emptyList(), emptyList())
         val noHr = selected.withDetailRead("legacy", resolved(CanonicalSessionGraphV1(row)))
-        assertEquals("未开启心率", noHr.selectedDetail!!.rows.last().value)
+        assertTrue(noHr.selectedDetail!!.rows.none { it.label == "心率记录" })
         val recording = HeartRateRecordingEntity("recording", "legacy", "terminal", 0, 0,
             100, 1, 1, "ble_hrs", 1, 1)
         val zero = selected.withDetailRead("legacy", resolved(CanonicalSessionGraphV1(row, recording = recording)))
-        assertEquals("零样本", zero.selectedDetail!!.rows.last().value)
+        assertTrue(zero.selectedDetail!!.rows.none { it.label == "心率记录" })
         val snapshot = HeartRateAnalysisSnapshotEntity("recording", 1, "2026-01-01T00:00:00Z", 1,
             "no_eligible_samples", "none", "unavailable", 1, 0, null, null, null,
             null, null, null, null, null, null, "{}", null, "{}", "{}", "{}")
         val noEligible = selected.withDetailRead("legacy", resolved(CanonicalSessionGraphV1(row,
             recording = recording, samples = listOf(HeartRateSampleEntity("recording", 0, 10, 1, 120)),
             snapshots = listOf(snapshot))))
-        assertEquals("无可用样本", noEligible.selectedDetail!!.rows.last().value)
+        assertTrue(noEligible.selectedDetail!!.rows.none { it.label == "心率记录" })
         assertEquals(null, selected.deletedSessions(setOf("legacy")).selectedDetail)
     }
 

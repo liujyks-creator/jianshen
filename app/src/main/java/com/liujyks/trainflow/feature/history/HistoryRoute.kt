@@ -87,6 +87,16 @@ internal fun HistoryRoute(
     var repairMenuTarget by remember { mutableStateOf<HistoryListEntry?>(null) }
     val scope = rememberCoroutineScope()
     val displayLocale = LocalConfiguration.current.locales[0].toLanguageTag()
+    suspend fun readDetail(sessionId: String) {
+        uiState = uiState.startDetailRead(sessionId)
+        try {
+            uiState = uiState.withDetailRead(sessionId, onReadSession(sessionId))
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Throwable) {
+            uiState = uiState.withDetailReadFailure(sessionId, cause)
+        }
+    }
     LaunchedEffect(historyEntries) {
         if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
     }
@@ -98,7 +108,7 @@ internal fun HistoryRoute(
             is SessionExportOrigin.Single -> {
                 uiState = uiState.selectSession(origin.sessionId)
                 detailOpen = true
-                uiState = uiState.withDetailRead(origin.sessionId, onReadSession(origin.sessionId))
+                readDetail(origin.sessionId)
             }
             SessionExportOrigin.Batch -> detailOpen = false
             null -> Unit
@@ -141,6 +151,9 @@ internal fun HistoryRoute(
         HistoryDetailScreen(
             detail = uiState.selectedDetail,
             readFinished = uiState.detailRead != null || historyEntries == null,
+            readFailed = uiState.detailReadFailure != null,
+            heartRateCard = buildWorkoutSessionHeartRateCardUiState(uiState.detailRead, uiState.detailReadFailure),
+            onRetryHeartRate = { uiState.selectedSessionId?.let { id -> scope.launch { readDetail(id) } } },
             onBack = { detailOpen = false },
             onDeliver = exportViewModel?.let { vm ->
                 val entry = historyEntries?.firstOrNull { it.id == uiState.selectedSessionId }
@@ -168,8 +181,7 @@ internal fun HistoryRoute(
                 uiState = uiState.selectSession(sessionId)
                 detailOpen = true
                 if (historyEntries != null) scope.launch {
-                    val result = onReadSession(sessionId)
-                    uiState = uiState.withDetailRead(sessionId, result)
+                    readDetail(sessionId)
                 }
             }
         },
@@ -428,6 +440,9 @@ private fun HistoryScreen(
 private fun HistoryDetailScreen(
     detail: HistorySessionDetailUiState?,
     readFinished: Boolean,
+    readFailed: Boolean,
+    heartRateCard: WorkoutSessionHeartRateCardUiState,
+    onRetryHeartRate: () -> Unit,
     onBack: () -> Unit,
     onDeliver: ((SessionExportAction) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -450,10 +465,12 @@ private fun HistoryDetailScreen(
         item {
             when {
                 detail != null -> HistoryDetailCard(detail)
+                readFailed -> Unit
                 readFinished -> StatusMessageCard("记录已删除")
                 else -> StatusMessageCard("正在读取本场记录…")
             }
         }
+        item { WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate) }
     }
 }
 
