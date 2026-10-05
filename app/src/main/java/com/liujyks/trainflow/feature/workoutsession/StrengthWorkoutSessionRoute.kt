@@ -122,7 +122,8 @@ internal fun StrengthWorkoutSessionRoute(
     workoutSessionRepository: WorkoutSessionRepository? = null,
     heartRateRuntimeOwner: HeartRateRuntimeOwner? = null,
     heartRateSettings: HeartRateSettingsUiState = HeartRateSettingsUiState(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenAnalysis: (String, WorkoutSessionHistoricalResult) -> Unit = { _, _ -> }
 ) {
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
     val sessionPlan = remember(sessionId) { plan }
@@ -410,6 +411,7 @@ internal fun StrengthWorkoutSessionRoute(
         onOpenRecoveryRecommendation = onOpenRecoveryRecommendation,
         heartRateCard = buildWorkoutSessionHeartRateCardUiState(recapSource, recapReadFailure),
         onRetryHeartRate = { sessionScope.launch { readSavedRecap() } },
+        onOpenAnalysis = { onOpenAnalysis(sessionId, requireNotNull(recapSource)) },
         modifier = modifier
     )
 }
@@ -482,6 +484,7 @@ private fun StrengthWorkoutSessionScreen(
     onOpenRecoveryRecommendation: (BasicRecoveryRecommendation) -> Unit,
     heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
     onRetryHeartRate: () -> Unit = {},
+    onOpenAnalysis: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -542,7 +545,7 @@ private fun StrengthWorkoutSessionScreen(
             )
             if (uiState.isTerminal) {
                 StrengthTerminalPanel(uiState, onOpenRecoveryRecommendation)
-                WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate)
+                WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate, onOpenAnalysis = onOpenAnalysis)
             } else if (!skin.isBigType) {
                 StrengthSecondaryControlsPanel(
                     uiState = uiState,

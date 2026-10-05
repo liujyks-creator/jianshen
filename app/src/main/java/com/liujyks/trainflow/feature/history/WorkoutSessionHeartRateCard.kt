@@ -110,7 +110,8 @@ internal fun buildWorkoutSessionHeartRateCardUiState(
 internal fun WorkoutSessionHeartRateCard(
     state: WorkoutSessionHeartRateCardUiState,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenAnalysis: (() -> Unit)? = null
 ) {
     if (state == WorkoutSessionHeartRateCardUiState.Hidden) return
     val fontScale = LocalTrainFlowSkin.current.tokens.fontScale
@@ -132,6 +133,11 @@ internal fun WorkoutSessionHeartRateCard(
                     state.messages.forEach { Text(it, style = body) }
                     state.metrics.forEach { Text(it, style = metric) }
                     state.facts.forEach { Text(it, style = body) }
+                    if (onOpenAnalysis != null) {
+                        Button(onClick = onOpenAnalysis, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("查看心率分析", style = body)
+                        }
+                    }
                 }
             }
         }

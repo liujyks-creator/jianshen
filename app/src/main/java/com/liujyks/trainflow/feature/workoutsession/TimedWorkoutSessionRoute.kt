@@ -213,7 +213,8 @@ internal fun TimedWorkoutSessionRoute(
     workoutSessionRepository: WorkoutSessionRepository? = null,
     heartRateRuntimeOwner: HeartRateRuntimeOwner? = null,
     heartRateSettings: HeartRateSettingsUiState = HeartRateSettingsUiState(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenAnalysis: (String, WorkoutSessionHistoricalResult) -> Unit = { _, _ -> }
 ) {
     val sessionId = remember(plan.id) { "session-${plan.id}-${System.currentTimeMillis()}" }
     var sessionStartedAt by remember(sessionId) { mutableStateOf<Instant?>(null) }
@@ -586,6 +587,7 @@ internal fun TimedWorkoutSessionRoute(
                 recapReadFailure = recapReadFailure,
                 heartRateCard = buildWorkoutSessionHeartRateCardUiState(recapSource, recapReadFailure),
                 onRetryHeartRate = { sessionScope.launch { readSavedRecap() } },
+                onOpenAnalysis = { onOpenAnalysis(sessionId, requireNotNull(recapSource)) },
                 reduceMotion = reduceMotion,
                 modifier = modifier
             )
@@ -772,6 +774,7 @@ private fun TimedWorkoutSessionScreen(
     recapReadFailure: Throwable? = null,
     heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
     onRetryHeartRate: () -> Unit = {},
+    onOpenAnalysis: () -> Unit = {},
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -792,6 +795,7 @@ private fun TimedWorkoutSessionScreen(
                 recapReadFailure = recapReadFailure,
                 heartRateCard = heartRateCard,
                 onRetryHeartRate = onRetryHeartRate,
+                onOpenAnalysis = onOpenAnalysis,
                 reduceMotion = reduceMotion,
                 modifier = Modifier.fillMaxSize()
             )
@@ -976,6 +980,7 @@ private fun TimedWorkoutCompletionRecapScreen(
     recapReadFailure: Throwable? = null,
     heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
     onRetryHeartRate: () -> Unit = {},
+    onOpenAnalysis: () -> Unit = {},
     reduceMotion: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -1004,7 +1009,7 @@ private fun TimedWorkoutCompletionRecapScreen(
             if (recapReadFailure != null) {
                 Text(text = "已保存记录读取失败：${recapReadFailure.message}", color = TrainFlowError)
             }
-            WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate)
+            WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate, onOpenAnalysis = onOpenAnalysis)
             uiState.summary?.let { summary ->
                 TimedSessionSummaryPanel(
                     summary = summary,
