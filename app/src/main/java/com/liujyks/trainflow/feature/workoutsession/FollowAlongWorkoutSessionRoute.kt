@@ -82,7 +82,8 @@ internal fun FollowAlongWorkoutSessionRoute(
     heartRateRuntimeOwner: HeartRateRuntimeOwner,
     heartRateSettings: HeartRateSettingsUiState,
     onBackToFollowAlong: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenAnalysis: (String, WorkoutSessionHistoricalResult) -> Unit = { _, _ -> }
 ) {
     val sessionId = remember { "follow-along-${System.currentTimeMillis()}" }
     val scope = rememberCoroutineScope()
@@ -301,6 +302,7 @@ internal fun FollowAlongWorkoutSessionRoute(
         onBackToFollowAlong = onBackToFollowAlong,
         heartRateCard = buildWorkoutSessionHeartRateCardUiState(recapSource, recapReadFailure),
         onRetryHeartRate = { scope.launch { readSavedRecap() } },
+        onOpenAnalysis = { onOpenAnalysis(sessionId, requireNotNull(recapSource)) },
         modifier = modifier
     )
 }
@@ -315,6 +317,7 @@ private fun FollowAlongWorkoutSessionScreen(
     onBackToFollowAlong: () -> Unit,
     heartRateCard: WorkoutSessionHeartRateCardUiState = WorkoutSessionHeartRateCardUiState.Hidden,
     onRetryHeartRate: () -> Unit = {},
+    onOpenAnalysis: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val skin = LocalTrainFlowSkin.current
@@ -342,7 +345,7 @@ private fun FollowAlongWorkoutSessionScreen(
                 }
             }
             if (uiState.isTerminal) {
-                WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate)
+                WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate, onOpenAnalysis = onOpenAnalysis)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = skin.tokens.secondary)

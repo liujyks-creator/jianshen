@@ -77,7 +77,9 @@ internal fun HistoryRoute(
     onDeleteItems: suspend (Set<com.liujyks.trainflow.core.data.HistoryItemKey>) -> Unit = { error("History deletion unavailable") },
     onMergeSessions: suspend (Set<String>) -> Unit = { error("History merging unavailable") },
     onRepairSession: suspend (String) -> Unit = { error("History repair unavailable") },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    analysisOpen: Boolean = false,
+    onOpenAnalysis: (String, WorkoutSessionHistoricalResult) -> Unit = { _, _ -> }
 ) {
     var uiState by remember {
         mutableStateOf(if (historyEntries == null) buildHistoryScreenState(sessions)
@@ -101,7 +103,8 @@ internal fun HistoryRoute(
         if (historyEntries != null) uiState = uiState.withHistoryEntries(historyEntries)
     }
 
-    LaunchedEffect(exportViewModel?.isExportFlowOpen, exportViewModel?.delivery?.origin) {
+    LaunchedEffect(analysisOpen, exportViewModel?.isExportFlowOpen, exportViewModel?.delivery?.origin) {
+        if (analysisOpen) return@LaunchedEffect
         val origin = if (exportViewModel?.isExportFlowOpen == true) exportViewModel.delivery.origin
             else exportViewModel?.takeReturnTarget()
         when (origin) {
@@ -114,7 +117,7 @@ internal fun HistoryRoute(
             null -> Unit
         }
     }
-    if (exportViewModel?.isExportFlowOpen == true) {
+    if (!analysisOpen && exportViewModel?.isExportFlowOpen == true) {
         WorkoutSessionExportRoute(exportViewModel, modifier, onChooseExportDirectory)
         return
     }
@@ -154,6 +157,9 @@ internal fun HistoryRoute(
             readFailed = uiState.detailReadFailure != null,
             heartRateCard = buildWorkoutSessionHeartRateCardUiState(uiState.detailRead, uiState.detailReadFailure),
             onRetryHeartRate = { uiState.selectedSessionId?.let { id -> scope.launch { readDetail(id) } } },
+            onOpenAnalysis = {
+                onOpenAnalysis(requireNotNull(uiState.selectedSessionId), requireNotNull(uiState.detailRead))
+            },
             onBack = { detailOpen = false },
             onDeliver = exportViewModel?.let { vm ->
                 val entry = historyEntries?.firstOrNull { it.id == uiState.selectedSessionId }
@@ -443,6 +449,7 @@ private fun HistoryDetailScreen(
     readFailed: Boolean,
     heartRateCard: WorkoutSessionHeartRateCardUiState,
     onRetryHeartRate: () -> Unit,
+    onOpenAnalysis: () -> Unit,
     onBack: () -> Unit,
     onDeliver: ((SessionExportAction) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -470,7 +477,7 @@ private fun HistoryDetailScreen(
                 else -> StatusMessageCard("正在读取本场记录…")
             }
         }
-        item { WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate) }
+        item { WorkoutSessionHeartRateCard(heartRateCard, onRetryHeartRate, onOpenAnalysis = onOpenAnalysis) }
     }
 }
 

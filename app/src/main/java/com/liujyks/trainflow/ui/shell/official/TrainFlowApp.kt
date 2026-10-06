@@ -60,6 +60,10 @@ import com.liujyks.trainflow.core.notifications.ActiveWorkoutNotificationPermiss
 import com.liujyks.trainflow.feature.exerciselibrary.ExerciseLibraryRoute
 import com.liujyks.trainflow.feature.followalong.FollowAlongRoute
 import com.liujyks.trainflow.feature.history.HistoryRoute
+import com.liujyks.trainflow.feature.history.WorkoutSessionAnalysisRoute
+import com.liujyks.trainflow.core.data.WorkoutSessionHistoricalResult
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.liujyks.trainflow.feature.history.WorkoutSessionExportViewModel
 import com.liujyks.trainflow.feature.home.HomeRoute
 import com.liujyks.trainflow.feature.plans.PlanEditorDefaults
@@ -134,6 +138,8 @@ internal fun TrainFlowApp(
     onUiSkinChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    var analysisInput by remember { mutableStateOf<Pair<String, WorkoutSessionHistoricalResult>?>(null) }
+    var analysisOrigin by remember { mutableStateOf<OfficialShellDestination?>(null) }
     var heartRateBlePermissionStatus by rememberSaveable {
         mutableStateOf(HeartRateBlePermissionStatus.NOT_REQUESTED)
     }
@@ -376,6 +382,32 @@ internal fun TrainFlowApp(
         activeStrengthSessionPlan = nextState.activeStrengthSessionPlan
         activeFollowAlongSession = nextState.activeFollowAlongSession
         activeRecoveryRecommendation = nextState.activeRecoveryRecommendation
+    }
+
+    fun openAnalysis(sessionId: String, historical: WorkoutSessionHistoricalResult) {
+        analysisOrigin = currentDestination
+        analysisInput = sessionId to historical
+    }
+
+    fun returnAnalysisToRecords() {
+        analysisInput = null
+        analysisOrigin = null
+        if (workoutSessionExportViewModel?.isExportFlowOpen == true) {
+            workoutSessionExportViewModel.leaveExportFlow()
+            workoutSessionExportViewModel.takeReturnTarget()
+        }
+        val sourceState = when (currentDestination) {
+            OfficialShellDestination.TIMED_SESSION -> shellState.finishTimedSession()
+            OfficialShellDestination.STRENGTH_SESSION -> shellState.finishStrengthSession()
+            OfficialShellDestination.FOLLOW_ALONG_SESSION -> shellState.finishFollowAlongSession()
+            else -> shellState
+        }
+        applyShellState(sourceState.selectDestination(OfficialShellDestination.RECORDS))
+    }
+
+    LaunchedEffect(historyEntries, analysisInput?.first) {
+        val id = analysisInput?.first
+        if (id != null && historyEntries?.none { it.id == id } == true) returnAnalysisToRecords()
     }
 
     Surface {
@@ -625,6 +657,7 @@ internal fun TrainFlowApp(
                     OfficialShellDestination.FOLLOW_ALONG_SESSION -> {
                     if (shellState.activeFollowAlongSession) {
                         FollowAlongWorkoutSessionRoute(
+                            onOpenAnalysis = ::openAnalysis,
                             activeWorkoutNotifications = requireNotNull(activeWorkoutNotifications),
                             workoutSessionRepository = requireNotNull(workoutSessionRepository),
                             heartRateRuntimeOwner = requireNotNull(heartRateRuntimeOwner),
@@ -648,6 +681,7 @@ internal fun TrainFlowApp(
                     val activePlan = shellState.activeTimedSessionPlan
                     if (activePlan != null) {
                         TimedWorkoutSessionRoute(
+                            onOpenAnalysis = ::openAnalysis,
                             activeWorkoutNotifications = activeWorkoutNotifications,
                             plan = activePlan,
                             workoutSessionRepository = workoutSessionRepository,
@@ -700,6 +734,7 @@ internal fun TrainFlowApp(
                     val activePlan = shellState.activeStrengthSessionPlan
                     if (activePlan != null) {
                         StrengthWorkoutSessionRoute(
+                            onOpenAnalysis = ::openAnalysis,
                             activeWorkoutNotifications = activeWorkoutNotifications,
                             plan = activePlan,
                             onBackToPlans = {
@@ -771,6 +806,8 @@ internal fun TrainFlowApp(
                     )
 
                     OfficialShellDestination.RECORDS -> HistoryRoute(
+                        analysisOpen = analysisInput != null,
+                        onOpenAnalysis = ::openAnalysis,
                         exportViewModel = workoutSessionExportViewModel,
                         onChooseExportDirectory = onChooseExportDirectory,
                         sessions = workoutSessions,
@@ -814,6 +851,40 @@ internal fun TrainFlowApp(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+        }
+    }
+    analysisInput?.let { (id, historical) ->
+        val exists = historyEntries?.none { it.id == id } != true
+        Dialog(
+            onDismissRequest = {
+                if (workoutSessionExportViewModel?.isExportFlowOpen == true) {
+                    workoutSessionExportViewModel.leaveExportFlow()
+                } else {
+                    analysisInput = null
+                    analysisOrigin = null
+                }
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            WorkoutSessionAnalysisRoute(
+                sessionId = id,
+                historical = historical,
+                sessionExists = exists,
+                unknownDate = historyEntries?.firstOrNull { it.id == id }?.frozenDate == null,
+                exportViewModel = workoutSessionExportViewModel,
+                onChooseExportDirectory = onChooseExportDirectory,
+                onRetry = {
+                    val refreshed = com.liujyks.trainflow.core.data.resolveWorkoutSessionHistorical(
+                        requireNotNull(workoutSessionRepository).readSessionStrict(id), "zh-CN")
+                    if (refreshed is WorkoutSessionHistoricalResult.Forwarded &&
+                        refreshed.source == com.liujyks.trainflow.core.data.WorkoutSessionStrictReadResult.NotFound) {
+                        returnAnalysisToRecords()
+                    } else analysisInput = id to refreshed
+                },
+                returnLabel = if (analysisOrigin == OfficialShellDestination.RECORDS) "返回原记录详情" else "返回原训练复盘",
+                onClose = { analysisInput = null; analysisOrigin = null },
+                onReturnToRecords = ::returnAnalysisToRecords
+            )
         }
     }
 }
