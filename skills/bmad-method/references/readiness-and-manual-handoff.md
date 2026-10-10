@@ -59,7 +59,7 @@ Artifact/hash存在、Planner自评、测试文件存在、此前“全部完成
 
 Tracking适用时，F8消费 F1 planning-status owner 的 fresh read-only `validate`/dry-run report，并把它与 F6 canonical identity/order contract对账：missing/duplicate/illegal/legacy/orphan/unrecognized、unexpected downgrade、write identity与validation结果必须可见。机械结构为 valid 只证明 tracking artifact；F8仍从 accepted sources独立判断 semantic readiness。
 
-需要 status semantic repair时，F8返回最早 F/T gap或 F10，不自行改 status。只有 source-backed proposal经用户确认后，F1 mechanical owner才执行显式 mapping/status/disposition与atomic write；ambiguity、corruption、permission或validation failure保持 `NOT_READY/BLOCKED`。
+需要 status semantic repair时，F8返回最早 F/T gap或 F10，不自行改 status。只有 source-backed proposal经用户确认后，F1 mechanical owner才执行显式 mapping/status/disposition与atomic write；ambiguity、corruption、permission或validation failure未解决时保持 `NOT_READY/BLOCKED`，不冒称通过；该状态不冻结本角色在已批准范围内定位和纠正机械实现错误。只有核实后的真实冲突、业务未决选择或下一动作越界／超出合同／缺少授权时，才请用户决定。
 
 ## Final planning checkpoint
 
@@ -114,7 +114,7 @@ Handoff 必须明确：
 
 ## Writer intake failure
 
-Writer 声称缺决定时，修改代码前停止并报告缺项、影响、已查 sources 与 terminal。
+Writer 声称缺决定时，先定点核对合同、来源和已有决定；普通技术疑问及批准路径内的代码／脚本错误自行定位和修正。只有确认存在主技能定义的真实冲突、业务未决选择，或下一动作越界、超出合同、缺少必要操作授权时，才暂停相关动作并报告准确缺项、影响、已查sources与terminal。
 
 - 答案已在 immutable accepted source：修正引用/完整 prompt 后重新 manual relay；不以聊天零散补充改变 Story。
 - 确实缺少 product/UX/Architecture/owner/evidence 决定：READY 失效，返回最早 F/T 或 Correct Course，形成新的 exact READY identity 后才再 handoff。

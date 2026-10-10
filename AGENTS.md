@@ -1,5 +1,23 @@
 # AGENTS.md
 
+## 批准范围内自行修错与人工决定
+- 批准范围内的代码、脚本、参数、导入、接线和验证载体实现错误，由当前agent自行定位和修正，不请求重新批准，不转交用户修改。使实现恢复到合同规定的行为，不属于新增业务决定。
+- 真实冲突：两条有效要求无法同时满足，例如一条要求“有引用的项目必须保留”，另一条要求“删除时连同引用一起删除”。先定点核对来源和优先级；确实无法依据已有决定解决，才交用户裁定。
+- 业务未决选择：合同缺少一个会影响用户实际结果的规则，必须在不同业务行为之间选择，例如尚未规定“停用项目是否允许新增关联”。已有决定直接沿用；符合相同合同的技术写法由agent自行选择，语法、导入、参数和接线错误不属于业务未决选择。例子只解释标准，不新增当前任务的规则或测试。
+- 越界、超出合同或缺少必要操作授权：下一动作实际超出已批准路径、业务规则、验证内容、运行次数、环境或角色权限，才说明准确增量并请用户决定。不能仅因发生错误、技术方法尚未查清或修复改变了错误结果，就声称缺少授权。
+- 停止失败的执行、保留现场和暂不声称通过，不等于冻结批准范围内的定位与修正。仅暂停依赖未决决定或缺少授权的动作；其他已授权工作继续。恢复、再次执行等动作按原批准内容和次数判断，不自动增加次数、不重跑未受影响通过项。
+- 将载体修正为正确执行原定输入、步骤、断言和编排行为，不算扩大验证；新增或改变这些已批准要求才属于范围变更。不得借修错放宽断言、改输入、增加场景或反复改变编排来绕过失败。本规则不授予Planner实施、Reviewer修改候选或其他角色之外的权限。
+来源：2026-10-11本PubMan主管理对话用户明确决定。本定义优先于旧的无条件暂停、遇到疑问即审批或按失败次数自动升级措辞。
+
+## Story 实施、审查与修复边界
+
+1. **首次Writer完整实现批准的Story**，把范围内的行为和接线做完整。
+2. **首次Reviewer独立完整审查；后续Reviewer只检查当前批准的修复及其明确影响。** 原来通过的审查结论和测试结果按原范围保留，不自动失效、不重复审查或重跑。
+3. **Repair Writer严格按批准内容修改。** 指定的问题、路径和验证范围就是边界；需要改别处或增加验证，先说明并取得批准，不能借“完整原因链”自行越界。
+
+来源：2026-10-08用户决定；2026-10-11用户明确要求同步到jianshen。
+
+
 ## Project
 
 This repository contains the early product baseline and frontend prototype for TrainFlow, an Android-first fitness training assistant with a future iOS path.
@@ -129,6 +147,7 @@ The project uses only the following project-local skill sources. These paths, no
 - `skills/superpowers/test-driven-development/SKILL.md` for behavior changes and bug fixes.
 - `skills/superpowers/systematic-debugging/SKILL.md` only after a failure or unexpected behavior requires root-cause debugging.
 - `skills/superpowers/verification-before-completion/SKILL.md` before a Writer claims completion or commits.
+- `skills/superpowers/reviewing-code/SKILL.md` for independent candidate Review; `skills/superpowers/receiving-code-review/SKILL.md` for checking and repairing an approved finding batch. The user explicitly authorized synchronizing these project-local sources on 2026-10-11.
 - `skills/design-md/SKILL.md` only for `DESIGN.md`, design-system, theme-token, or component-contract work. Broader UI decisions remain governed by the accepted product and UX sources listed above.
 
 Do not load Superpowers orchestration, subagent, brainstorming, worktree, branch-finishing, or Review-dispatch skills for this workflow. A Reviewer follows `CODE_REVIEW_PROMPT_TEMPLATE.md` directly and does not load BMAD or implementation workflow skills. Skills are advisory and cannot override accepted project instructions, the complete filled root role template, decisions, Story scope, validation gates, evidence requirements, or user authority. External/global skill directories are not project sources and MUST NOT be committed.

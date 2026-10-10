@@ -5,6 +5,16 @@ description: Use after a bug, test failure, build failure, or unexpected behavio
 
 # Systematic Debugging
 
+## 批准范围内自行修错与人工决定
+- 批准范围内的代码、脚本、参数、导入、接线和验证载体实现错误，由当前agent自行定位和修正，不请求重新批准，不转交用户修改。使实现恢复到合同规定的行为，不属于新增业务决定。
+- 真实冲突：两条有效要求无法同时满足，例如一条要求“有引用的项目必须保留”，另一条要求“删除时连同引用一起删除”。先定点核对来源和优先级；确实无法依据已有决定解决，才交用户裁定。
+- 业务未决选择：合同缺少一个会影响用户实际结果的规则，必须在不同业务行为之间选择，例如尚未规定“停用项目是否允许新增关联”。已有决定直接沿用；符合相同合同的技术写法由agent自行选择，语法、导入、参数和接线错误不属于业务未决选择。例子只解释标准，不新增当前任务的规则或测试。
+- 越界、超出合同或缺少必要操作授权：下一动作实际超出已批准路径、业务规则、验证内容、运行次数、环境或角色权限，才说明准确增量并请用户决定。不能仅因发生错误、技术方法尚未查清或修复改变了错误结果，就声称缺少授权。
+- 停止失败的执行、保留现场和暂不声称通过，不等于冻结批准范围内的定位与修正。仅暂停依赖未决决定或缺少授权的动作；其他已授权工作继续。恢复、再次执行等动作按原批准内容和次数判断，不自动增加次数、不重跑未受影响通过项。
+- 将载体修正为正确执行原定输入、步骤、断言和编排行为，不算扩大验证；新增或改变这些已批准要求才属于范围变更。不得借修错放宽断言、改输入、增加场景或反复改变编排来绕过失败。本规则不授予Planner实施、Reviewer修改候选或其他角色之外的权限。
+来源：2026-10-11本PubMan主管理对话用户明确决定。本定义优先于旧的无条件暂停、遇到疑问即审批或按失败次数自动升级措辞。
+
+
 ## Purpose and Authority
 
 Debug by moving from evidence to pattern to one falsifiable hypothesis to one causal fix. Do not propose or implement a fix before locating the earliest supported cause.
@@ -19,9 +29,25 @@ This skill is a diagnostic method, not scope, permission, architecture, or evide
 
 If the complete fix needs a new owner, schema, core interface, cross-module responsibility, architecture decision, or unapproved path, stop and return the evidence to the governing workflow.
 
+## Lifecycle and transitions
+
+```text
+OBSERVED -> REPRODUCED -> ROOT_CAUSE_SUPPORTED -> ORACLE_ESTABLISHED
+-> FIX_GREEN -> VERIFIED -> RETURN
+```
+
+- Remain in `OBSERVED` while reproduction is unstable; report the exact unknown instead of guessing.
+- Enter `ROOT_CAUSE_SUPPORTED` only when evidence locates the earliest controllable wrong state and distinguishes it from competing explanations.
+- `ORACLE_ESTABLISHED` is a meaningful failing regression or the accepted real-boundary oracle.
+- `FIX_GREEN` contains one minimum causally complete change at the supported source.
+- `VERIFIED` uses `../verification-before-completion/SKILL.md` with the directly affected risk set.
+- `RETURN` reports evidence and the actual state to the governing role; it does not dispatch, merge, or widen the assignment.
+
+Read-only tracing may cross the expected modification set. A write outside the authorized set requires an explicit causal-expansion permission or exact accepted amendment before editing. A new product, architecture, ownership, schema, migration, dependency, public-interface, security, or evidence decision transitions to `SCOPE_EXPANSION_REQUIRED`; do not route around it with a wrapper, adapter, fallback, duplicate authority, or partial symptom fix.
+
 ## Phase 1 — Evidence and Root Cause
 
-Read the complete relevant error, stack, exit code, warning, and artifact identity. Reproduce the symptom with exact inputs and environment when possible. Check the candidate delta and relevant recent change rather than assuming temporal correlation is causation.
+Read the complete relevant error, stack, exit code, warning, and artifact identity. Reproduce the symptom with exact inputs and environment when possible. Check the candidate delta and relevant recent change rather than assuming temporal correlation is causation. Treat an explanation as a hypothesis until supported, while relying on explicit user decisions and applicable type, database, and framework guarantees. An unproven scenario is not a new requirement or an implementation blocker.
 
 Choose the smallest oracle that reproduces the real failure:
 
@@ -37,7 +63,7 @@ For a deep symptom or suspected test pollution, read [root-cause-tracing.md](roo
 
 ### Boundary Instrumentation
 
-Instrument only boundaries relevant to competing explanations. Capture the minimum safe values needed to show where correct state becomes incorrect. Never log secrets, credentials, personal data, or sensitive health data. Prefer existing logging and runner facilities; do not create a one-use helper, wrapper, script, manager, or monitoring owner for a single investigation.
+Instrument only boundaries relevant to competing explanations. Capture the minimum safe values needed to show where correct state becomes incorrect. Never log secrets, credentials, personal data, or sensitive health data. Prefer existing logging and runner facilities. A function or module may isolate a concrete current responsibility even with one caller; do not invent reusable diagnostic infrastructure for hypothetical later use. New probes, scripts, or test facilities still require the task's exact authorization.
 
 Mark temporary probes as task-owned and remove them after the hypothesis is resolved unless the governing task explicitly adopts them as durable telemetry. The probe's output is evidence, not a production fix.
 
@@ -64,7 +90,7 @@ Run the smallest safe probe and read the result. If rejected, remove or revert o
 
 After a root cause is supported, establish the correct failing regression or other real oracle. For an automated behavior, use strict RED → GREEN → REFACTOR. For a document, artifact, external service, or physical behavior, use the contract's actual oracle and disclose the evidence layer.
 
-Implement one minimum causally complete fix at the earliest controllable source. Do not add unrelated refactors, blanket validation, or any retry, fallback, silent default, broad catch, or future monitoring that the accepted contract does not require. Run the focused oracle and the directly affected regression set.
+Implement the smallest complete fix at the earliest controllable source, including necessary direct consumers. Put checks where data is accepted or a rule is enforced; do not repeat a still-valid guarantee downstream. Reuse accepted error handling, preserve the cause, and perform required cleanup without disguising failure as success, an empty result, or a default. Do not add unrelated refactors, hypothetical reuse, failure screens, retries, or recovery. Run only approved validation; explain each actual failure and do not repeat unchanged runs, alter inputs, weaken assertions, or extend waits to obtain a pass.
 
 Candidate-introduced regressions must be repaired within scope. Prove, preserve, and report pre-existing or unrelated failures; do not fix them or claim the unrun larger suite passed.
 
@@ -86,8 +112,10 @@ Do not blindly implement reviewer wording, fix only the first item, or treat a f
 
 ## Stop Rules and Failure Signals
 
-After each failed local fix attempt, return to Phase 1 with the new evidence. After three evidence-backed local fixes fail, do not attempt a fourth patch. Stop, summarize the attempts and observations, and escalate the architecture, owner, test seam, or problem definition to the governing workflow or Correct Course.
+After each failed local fix attempt, return to Phase 1 with the new evidence. A failed-attempt count alone does not require user approval or architecture escalation. Continue evidence-backed diagnosis and correction within the accepted contract, allowed paths, role permissions, and existing validation budget; do not repeat unchanged commands, invent additional runs, or stack speculative patches. Request a decision only when confirmed valid requirements conflict, a business rule is undecided, or the next action exceeds the contract or lacks authorization. Report actual unresolved limits honestly without treating an ordinary implementation error as a new business decision.
 
 Immediate failure signals are: a proposed fix without root-cause evidence, multiple variables changed in one probe, an unstable oracle represented as fact, temporary instrumentation left behind, a swallowed external error, evidence-layer substitution, or scope expansion.
 
 For timing and flakiness, read [condition-based-waiting.md](condition-based-waiting.md).
+
+Define the minimum diagnostic and verification evidence before running it. One stable reproduction and one discriminating probe are enough when they support the cause. Expand diagnostics or regression coverage only when accepted dependency, ownership, state, persistence, boundary, or observed-failure evidence demonstrates wider propagation; change size and uncertainty alone do not. Do not repeat passing gates, collect unrelated logs, scan the repository for similar issues, or run broad suites merely for confidence. Stop when the root cause is supported, the causal fix is verified by the accepted oracle, and every required gate is satisfied.
