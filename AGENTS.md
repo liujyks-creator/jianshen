@@ -1,5 +1,9 @@
 # AGENTS.md
 
+- 编写或修订任务专属停止条件时，不得自行加入“任何失败都停止后续工作”“每个错误立即交回”等无条件条款，也不得将已有范围内自行纠错权限收紧为逐次审批。程序执行失败、完成声明受阻、某项运行预算耗尽分别只限制其实际影响的动作；其余已授权定位、修正和无依赖工作继续。确需暂停时写明具体条件、受影响动作及已有依据；没有该依据就不得生成停止条款。用户对某项行为有明确停止要求时，仅按其准确范围执行。此规则不授予额外运行、验证范围、环境、写路径或角色权限。
+来源：2026-10-11本PubMan主管理对话对自行添加错误停止触发点的纠正；落实用户既有自行纠错规则，不新增审批或验证门禁。
+
+
 ## Project
 
 This repository contains the early product baseline and frontend prototype for TrainFlow, an Android-first fitness training assistant with a future iOS path.
