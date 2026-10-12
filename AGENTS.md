@@ -256,3 +256,14 @@ $OutputEncoding = [Console]::OutputEncoding
 Read files with explicit UTF-8, for example `Get-Content -Raw -Encoding UTF8 <path>`. Prefer `apply_patch` for code and documentation edits. If PowerShell must write a text file, write UTF-8 without BOM through .NET APIs instead of relying on default `Set-Content` or `Add-Content` behavior.
 
 Do not report routine recoverable console encoding noise to the user. If a file still cannot be read reliably as UTF-8, do not guess or rewrite it; inspect it read-only for BOM or byte-level encoding clues and report the specific file before editing.
+
+## 减少开发返工与执行往返
+
+- 将必要核对放进原有规划、环境准备和实施步骤，只核对当前实际使用的链路；已确认且未变化的来源、源码和结果直接复用。不新增独立检查轮次、清单文件、脚本、报告、测试或审批。
+- 环境交接必须写准工具入口、锁定依赖的完整实物来源及取得权限。在已有准备授权内，首次安装前定点确认这些来源能覆盖原锁文件；缺项集中说明，不能将未确认的路径冒称可用；已获准的取得和安装按合同执行，未经授权不下载、安装或换源。
+- 使用新库或变更库调用前，定点核对准确版本的实际所用API、返回值和资源生命周期；同版本已核实的资料直接复用，不凭相似库经验推断，不泛读整套文档。
+- 首次运行前沿批准流程定点核对共享入口到结果的输入序列化、返回值、事务保存、资源释放及必要直接接线。失败后依据真实原因，在已批准路径内一次修完整同一原因的直接影响；不只修报错行，也不扩大为全Story重审、顺手重构或新增验证。Repair仍限批准的问题、路径及验证。
+- 记录随动作保存：使用已有获准载体记录启动器与实际执行身份、候选、退出状态和所属批次；不同实际调用不复用覆盖日志。记录失败或未知就如实保留，不补造证据，不因记录要求新增探针或运行。
+- 未来Story在接受提案时按实际需要分别说明环境准备恢复、因果修正后的定点复验及必要服务启停权限、次数与各类失败如何计入预算，不机械套用所有任务共用一次续作。具体范围由该Story明确接受；本节不增加当前任务预算，不允许无原因重试、重跑通过项或改变输入、断言、事务、等待及编排。
+
+来源：2026-10-12本PubMan主管理对话复盘E03-S06后，用户批准将以上长期原则、Planner要求及Writer要求落盘并同步GitHub同源副本。

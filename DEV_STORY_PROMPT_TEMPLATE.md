@@ -13,7 +13,7 @@
 - 集成远端名称及目标分支：<准确值或无>
 - Candidate parent / prerequisite full SHAs：<准确列表>
 - Immutable requirement source：<文档/ref>
-- 技能来源与 identity：<逐一填写本角色所需技能的 exact absolute path、bytes、SHA-256；不得只写目录名或“最新版”>
+- 技能来源与 identity：<逐一填写本角色所需技能的 exact absolute path；不得只写目录名或“最新版”。仅任务已明确要求内容身份时填写bytes／SHA-256，不新增技能哈希审计>
 - 技能方法：行为变更或 bug fix 必须完整读取已绑定的 `test-driven-development/SKILL.md`；Repair 必须先读取已绑定的 `receiving-code-review/SKILL.md`；仅出现 unexpected 或 unexplained failure 时读取已绑定的 `systematic-debugging/SKILL.md`；声明完成、commit 或 push 前读取已绑定的 `verification-before-completion/SKILL.md`。模板只绑定角色、authority、scope、权限、证据和转换，不替代技能方法。指定技能缺失或 identity 不匹配时编辑前返回 BLOCKED；不得静默改用模板正文、BMAD、Superpowers 编排/Review-dispatch 技能、全局同名副本或自行发明的方法。Writer 不承担 Reviewer 角色。
 - Write/commit/push 权限：<准确权限>
 - Merge 权限：无；Writer 永远不得 merge 或 push 集成目标分支
@@ -118,6 +118,16 @@ Story实施、审查与修复边界（2026-10-08用户决定）：
 
 首次完整检查应覆盖批准范围内的实际行为和必要直接接线；后续Review只完成当前批准修复及明确影响的审查，继承原范围内已通过的结论和测试。完整提示词、完整报告和fresh Reviewer均不表示重审整个Story或重跑旧测试。
 
+减少开发返工与执行往返：
+- 使用新库或变更库调用前，复用已核实资料，定点确认准确版本实际所用API、返回值和资源取得／转换／关闭方式，不凭相似库经验推断。
+- 在已有环境准备权限内，首次安装前核对原锁所需实物的准确来源；缺项集中说明，已完成的环境与资产核对不重做。
+- 首次批准运行前，在现有源码中沿本次共享入口到结果定点核对输入序列化、返回值、事务、输出／资源生命周期及必要直接调用方。这是原有实施步骤，不新增独立Review、检查清单、脚本、测试、探针或运行；已确认未变化的链路直接复用。
+- 根据真实失败原因，在批准路径内一次修完整同一原因的直接影响，保持Repair问题／路径边界；不只修报错行，也不扩大为全Story重审、无关重构或额外验证。
+- 使用已有获准载体随动作保存候选、实际启动／执行身份及退出状态，每次实际调用保留独立日志；失败和UNKNOWN如实保留，不倒填、不覆盖，不借此新增诊断设施。
+- 准备恢复、定点复验及必要启停仅使用本任务已接受预算；已通过且未受影响的结果保留。仅真实要求冲突、业务未决或下一动作确实缺少授权时讨论，不因普通错误新增停止或审批条款。
+
+来源：2026-10-12本PubMan主管理对话批准的E03-S06复盘改进；长期原则见适用AGENTS.md。
+
 实施：
 - 只实施批准合同；范围外 accepted behavior 保持不变。
 - Repair 开始前先验证 root cause，并把主管理批准的完整 findings 作为一个集合处理；不得修一个、交付一次、再等待下一问题。
@@ -127,7 +137,7 @@ Story实施、审查与修复边界（2026-10-08用户决定）：
 - 实施最小但因果完整的变更：包括所有直接必要的代码、测试、文档、配置和 evidence，不等于文件数最少。
 - 只改必须改的路径，只清理本任务产生的问题；必要直接消费者应完整处理。按上述五项规则判断当前职责与校验位置，不以预想复用或无依据的防御分支扩大Story，也不因函数只调用一次就否定必要的职责划分。
 - Read-only investigation 可按授权范围定位 expected set 外的直接消费者；仅遇到经核实的真实冲突、合同未定的业务规则选择或缺少必要操作授权时，完成最小事实定位即交用户讨论。常识明确且符合既有规则的问题在已有授权内直接落实。necessity 不等于 write authority；额外写路径只有在 Causal-expansion rule 已明确授权或用户批准 exact amendment 后才可编辑。terminal 必须逐路径证明因果必要性；不得用 wrapper、adapter、fallback、duplicate authority 或残缺实现绕过权限边界。
-- Repair 编辑前按 `skills/superpowers/receiving-code-review/SKILL.md` 验证完整 findings、列出准确 production modification set；需要新产品、架构、ownership、数据或 evidence 决定时，在编辑前停止并报告准确 blocker。
+- Repair 编辑前按身份栏已绑定的 `receiving-code-review/SKILL.md` 准确路径验证完整 findings、列出准确 production modification set；需要新产品、架构、ownership、数据或 evidence 决定时，在编辑前停止并报告准确 blocker。
 - 若同一 Story 已连续两次完整 Review 仍有 must-fix，且本次需要改变核心 ownership、架构、数据职责或多个模块边界，停止并建议 scoped Correct Course。
 - 区分 pure logic、platform/injected、AVD、真实设备与人工证据，互不冒充。
 
